@@ -10,6 +10,7 @@ _Noreturn void die(const char* fmt, ...){
 	va_start(args, fmt);
 	fputs("[\e[31;1mFATAL\e[0m] ", stderr);
 	vfprintf(stderr, fmt, args);
+	fputc('\n',stderr);
 	va_end(args);
 	
 	exit(EXIT_FAILURE);

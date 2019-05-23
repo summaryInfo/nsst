@@ -3,5 +3,7 @@
 
 _Noreturn void die(const char* fmt, ...);
 void warn(const char* fmt, ...);
+void info(const char* fmt, ...);
+void fatal(const char* fmt, ...);
 
 #endif 
