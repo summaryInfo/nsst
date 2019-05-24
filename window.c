@@ -34,6 +34,7 @@ void nss_context_init(nss_context_t* con){
     con->con = NULL;
     con->screen = NULL;
     con->vis = NULL;
+    con->start_time = time(NULL);
 }
 
 #define TRUE_COLOR_ALPHA_DEPTH 32
@@ -92,8 +93,13 @@ nss_window_t* nss_window_add(nss_context_t* con, nss_geometry_t *geo){
 
     uint8_t depth = 32;
     uint32_t mask1 = XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
-    uint32_t values1[4] = { 0xff000000, 0xff000000 , XCB_EVENT_MASK_EXPOSURE, con->mid }; 
+    uint32_t values1[4] = { 0xff000000, 0xff000000 , XCB_EVENT_MASK_EXPOSURE | 
+    	XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_FOCUS_CHANGE | 
+    	XCB_EVENT_MASK_STRUCTURE_NOTIFY /*| XCB_EVENT_MASK_RESIZE_REDIRECT*/, con->mid}; 
     xcb_void_cookie_t c;
+
+    win->w = geo->w;
+    win->h = geo->h;
 
     win->wid = xcb_generate_id(con->con);
     c = xcb_create_window_checked(con->con, depth, win->wid, con->screen->root, 
@@ -108,11 +114,14 @@ nss_window_t* nss_window_add(nss_context_t* con, nss_geometry_t *geo){
 	assert_void_cookie(con,c,"Can't create pixmap");
 
 	uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
-	uint32_t values2[3] = { con->screen->white_pixel, con->screen->black_pixel, 0 };
+	uint32_t values2[3] = { 0xff000000, 0xff000000, 0 };
 
 	win->gc = xcb_generate_id(con->con);
 	c = xcb_create_gc_checked(con->con,win->gc,win->pid,mask2, values2);
 	assert_void_cookie(con,c,"Can't create GC");
+
+	xcb_rectangle_t rect = { 0,0,win->w,win->h };
+	xcb_poly_fill_rectangle(con->con,win->pid,win->gc,1,&rect);
     
     return win;
 }
@@ -134,44 +143,86 @@ void nss_context_free(nss_context_t* con){
 
 
 void nss_main_loop(nss_context_t *con){
-	nss_window_t *win = con->first;
-    nss_geometry_t geo = {
-		.x = 0, .y = 0, 
-		.w = 320, .h = 200
-    };
 
     for(nss_window_t *win = con->first; win; win = win->next)
 		xcb_map_window(con->con,win->wid);
 
-    xcb_point_t points[] = {{10, 10}, {10, 20}, {20, 10}, {20, 20}};
+	nss_window_t *win = con->first;
+	xcb_change_gc(con->con,win->gc,XCB_GC_FOREGROUND,&(uint32_t[]){0x12345678});
     xcb_point_t polyline[] = {{50, 10}, { 5, 20}, {25,-20}, {10, 10}};
-	xcb_rectangle_t rect = { 0,0,geo.w,geo.h };
+	xcb_poly_line(con->con,XCB_COORD_MODE_PREVIOUS,win->pid, win->gc, 4, polyline);
 
-	xcb_change_gc_checked(con->con,win->gc,XCB_GC_FOREGROUND,&(uint32_t[]){0xff0000ff});
-	xcb_poly_fill_rectangle_checked(con->con,win->pid,win->gc,1,&rect);
-	xcb_change_gc_checked(con->con,win->gc,XCB_GC_FOREGROUND,&(uint32_t[]){con->screen->white_pixel});
-	xcb_poly_line_checked(con->con,XCB_COORD_MODE_PREVIOUS,win->pid, win->gc, 4, polyline);
-	
 	xcb_flush(con->con);
 
     xcb_generic_event_t* event;
     while((event = xcb_wait_for_event(con->con))){
-        switch(event->response_type & 0x7f){
+        switch(event->response_type &= 0x7f){
         case XCB_EXPOSE:{
+            //_Bool cursor_blink_state = ((con->start_time - time(NULL))/win->conf->blink_interval) & 1;
+            //win->draw_callback(con,win);
 			xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
             nss_window_t *win = nss_window_for_xid(con,ev->window);
 
-			xcb_copy_area(con->con,win->pid,ev->window,win->gc, 0,0,0,0,geo.w,geo.h);
-    		xcb_poly_point (con->con, XCB_COORD_MODE_ORIGIN, ev->window, win->gc, 4, points);
+			xcb_copy_area(con->con,win->pid,win->wid,win->gc, 0,0,0,0, win->w, win->h);
         	xcb_flush(con->con);
 			break;
         }
         case XCB_CONFIGURE_NOTIFY:{
-			//xcb_configure_notify_event_t *cnotify = (xcb_configure_notify_event_t*)event;
+			xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
+			nss_window_t *win = nss_window_for_xid(con, ev->window);
+			if(ev->width != win->w || ev->height != win->h){
+				//Handle resize
+				xcb_pixmap_t new = xcb_generate_id(con->con), old = win->pid;
+				xcb_create_pixmap(con->con, TRUE_COLOR_ALPHA_DEPTH, new, win->wid, ev->width, ev->height);
+
+            	xcb_rectangle_t rectv[2];
+            	size_t rectc= 0;
+            	if(ev->height > win->h){
+                	size_t minw = win->w < ev->width ? win->w : ev->width;
+                	rectv[rectc++] = (xcb_rectangle_t){
+            			.x = 0, 
+            			.y = win->h, 
+            			.width = minw, 
+            			.height = ev->height - win->h
+            		};
+    			}
+            	if(ev->width > win->w){
+                	size_t maxh = win->h > ev->height ? win->h : ev->height;
+                	rectv[rectc++] = (xcb_rectangle_t){
+            			.x = win->w, 
+            			.y = 0, 
+            			.width = ev->width - win->w, 
+            			.height = maxh,
+                	};
+            	}
+    				
+				xcb_poly_fill_rectangle(con->con, new, win->gc, rectc, rectv);
+				xcb_copy_area(con->con, old, new, win->gc, 0, 0, 0, 0, win->w, win->h);
+				win->pid = new;
+				win->w = ev->width;
+				win->h = ev->height;
+				xcb_free_pixmap(con->con, old);
+				xcb_flush(con->con);
+				//win->resize_callback(con,win);
+			}
 			break;
         }
+        case XCB_KEY_RELEASE:{
+            //xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
+			break;
+        }
+        case XCB_FOCUS_IN:
+        case XCB_FOCUS_OUT:{
+            xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
+            nss_window_t *win = nss_window_for_xid(con,ev->event);
+            win->focused = event->response_type == XCB_FOCUS_IN;
+			break;
+        }
+        case XCB_MAP_NOTIFY:
+        case XCB_UNMAP_NOTIFY:
+           break;
         default:
-            warn("Unknown xcb event type: 0x%02hhx", event->response_type);
+            warn("Unknown xcb event type: %02"PRIu8, event->response_type);
         	break;
         }
 		free(event);

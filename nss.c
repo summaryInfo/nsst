@@ -3,6 +3,14 @@
 #include "window.h"
 #include "util.h"
 
+/* TODO:
+	font loading
+	glyph rendering with attributes
+	event handling
+	terminal logic
+	add backend selection
+*/
+
 int main(int argc, char **argv){
     nss_context_t con;
 	nss_context_init(&con);
