@@ -18,7 +18,7 @@ static void assert_void_cookie(nss_context_t *con, xcb_void_cookie_t ck, const c
     	uint32_t c = err->error_code, 
     	         ma = err->major_code, 
     	         mi = err->minor_code;
-    	nss_context_free(con);
+    	nss_win_free_windows(con);
     	die("%s: %"PRIu32" %"PRIu32" %"PRIu32,msg,ma,mi,c);
 	}
 }
@@ -111,7 +111,7 @@ nss_window_t* nss_win_add_window(nss_context_t* con, nss_geometry_t *geo){
 	assert_void_cookie(con,c,"Can't create window");
 
     win->pid = xcb_generate_id(con->con);
-    c = xcb_create_pixmap_checked(con->con, depth, win->pid, win->wid, geo->w, geo->h);
+    c = xcb_create_pixmap_checked(con->con, depth, win->pid, win->wid, win->w, win->h);
 	assert_void_cookie(con,c,"Can't create pixmap");
 
 	uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
@@ -138,7 +138,7 @@ void nss_win_remove_window(nss_context_t* con, nss_window_t* win){
 
 void nss_win_free_windows(nss_context_t* con){
 	while(con->first)
-    	nss_window_remove(con,con->first);
+    	nss_win_remove_window(con,con->first);
 }
 
 
