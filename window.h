@@ -66,11 +66,11 @@ typedef struct nss_window_config {
 } nss_window_config_t;
 */
 
-void nss_context_free(nss_context_t* con);
-void nss_context_init(nss_context_t* con);
+void nss_win_initialize(nss_context_t* con);
+void nss_win_free_windows(nss_context_t* con);
 
-nss_window_t* nss_window_add(nss_context_t *con, nss_geometry_t *geo);
-void nss_window_remove(nss_context_t *con, nss_window_t *win);
+nss_window_t* nss_win_add_window(nss_context_t *con, nss_geometry_t *geo);
+void nss_win_remove_window(nss_context_t *con, nss_window_t *win);
 //nss_window_config_t* nss_window_config(nss_context_t *con, nss_window_t *win, nss_window_config_t *config);
 
 //void nss_window_glyph_render(nss_context_t *con, nss_window_t* win, 
@@ -78,6 +78,6 @@ void nss_window_remove(nss_context_t *con, nss_window_t *win);
 //void nss_window_update(nss_context_t *con, nss_window_t *win);
 //void nss_window_set_render_callback(nss_context_t *con, nss_window_t *win, void(*fn)(nss_context_t *con, nss_window_t* win));
 
-void nss_main_loop(nss_context_t* con);
+void nss_win_run(nss_context_t* con);
 
 #endif

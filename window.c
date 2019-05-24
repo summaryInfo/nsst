@@ -10,6 +10,8 @@
 
 #include <xcb/xcb.h>
 
+#define TRUE_COLOR_ALPHA_DEPTH 32
+
 static void assert_void_cookie(nss_context_t *con, xcb_void_cookie_t ck, const char* msg){
     xcb_generic_error_t *err = xcb_request_check(con->con,ck);
 	if(err){
@@ -28,18 +30,7 @@ static nss_window_t* nss_window_for_xid(nss_context_t* con, xcb_window_t xid){
     return NULL;
 }
 
-void nss_context_init(nss_context_t* con){
-    con->refs = 0;
-    con->first = NULL;
-    con->con = NULL;
-    con->screen = NULL;
-    con->vis = NULL;
-    con->start_time = time(NULL);
-}
-
-#define TRUE_COLOR_ALPHA_DEPTH 32
-
-void nss_context_acquire(nss_context_t *con, nss_window_t *win){
+static void acquire_context(nss_context_t *con, nss_window_t *win){
     win->next = con->first;
     win->prev = NULL;
     if(con->first) con->first->prev = win;
@@ -75,7 +66,8 @@ void nss_context_acquire(nss_context_t *con, nss_window_t *win){
 
 	}
 }
-void nss_context_release(nss_context_t* con, nss_window_t* win){
+
+static void release_context(nss_context_t* con, nss_window_t* win){
     if(win->next)win->next->prev = win->prev;
     if(win->prev)win->prev->next = win->next;
     else con->first =  win->next;
@@ -87,9 +79,18 @@ void nss_context_release(nss_context_t* con, nss_window_t* win){
 	}
 }
 
-nss_window_t* nss_window_add(nss_context_t* con, nss_geometry_t *geo){
+void nss_win_initialize(nss_context_t* con){
+    con->refs = 0;
+    con->first = NULL;
+    con->con = NULL;
+    con->screen = NULL;
+    con->vis = NULL;
+    con->start_time = time(NULL);
+}
+
+nss_window_t* nss_win_add_window(nss_context_t* con, nss_geometry_t *geo){
     nss_window_t* win = malloc(sizeof(nss_window_t));
-    nss_context_acquire(con, win);
+    acquire_context(con, win);
 
     uint8_t depth = 32;
     uint32_t mask1 = XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
@@ -126,23 +127,22 @@ nss_window_t* nss_window_add(nss_context_t* con, nss_geometry_t *geo){
     return win;
 }
 
-void nss_window_remove(nss_context_t* con, nss_window_t* win){
+void nss_win_remove_window(nss_context_t* con, nss_window_t* win){
 	xcb_unmap_window(con->con,win->wid);
     xcb_free_gc(con->con,win->gc);
 	xcb_free_pixmap(con->con,win->pid);
 	xcb_destroy_window(con->con,win->wid);
-	nss_context_release(con, win);
+	release_context(con, win);
 	free(win);
 };
 
-
-void nss_context_free(nss_context_t* con){
+void nss_win_free_windows(nss_context_t* con){
 	while(con->first)
     	nss_window_remove(con,con->first);
 }
 
 
-void nss_main_loop(nss_context_t *con){
+void nss_win_run(nss_context_t *con){
 
     for(nss_window_t *win = con->first; win; win = win->next)
 		xcb_map_window(con->con,win->wid);
