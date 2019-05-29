@@ -31,6 +31,10 @@
 #define CA(c) ((((c) >> 24) & 0xff) * 0x101) 
 #define MAKE_COLOR(c) {.red=CR(c),.green=CG(c),.blue=CB(c),.alpha=CA(c)}
 
+#define MIN(x,y) ((x) < (y) ? (x) : (y))
+#define MAX(x,y) ((x) > (y) ? (x) : (y))
+#define SWAP(T,a,b) {T tmp_ = a; a = b; b = tmp_; }
+
 
 struct nss_window {
     xcb_window_t wid;
@@ -245,10 +249,8 @@ nss_window_t* nss_win_add_window(nss_context_t* con, nss_geometry_t *geo, nss_fo
         }
             
         total += glyphs[0]->x_off + glyphs[0]->x;
-        if(maxd < glyphs[0]->height - glyphs[0]->y)
-            maxd = glyphs[0]->height - glyphs[0]->y;
-        if(maxh < glyphs[0]->y)
-            maxh = glyphs[0]->y;
+        maxd = MAX(maxd, glyphs[0]->height - glyphs[0]->y);
+        maxh = MAX(maxh, glyphs[0]->y);
 
         for(size_t j = 0; j < nss_font_attrib_max; j++)
             free(glyphs[j]);
@@ -261,8 +263,8 @@ nss_window_t* nss_win_add_window(nss_context_t* con, nss_geometry_t *geo, nss_fo
     win->cw = (win->w - 2*win->border_width) / win->char_width;
     win->ch = (win->h - 2*win->border_width) / (win->char_height + win->char_depth);
 
-    if(win->cw < 0) win->cw = 0;
-    if(win->ch < 0) win->ch = 0;
+	win->cw = MAX(win->cw, 1);
+	win->ch = MAX(win->ch, 1);
 
     xcb_rectangle_t rect = { 0, 0, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height) };
 
@@ -271,7 +273,7 @@ nss_window_t* nss_win_add_window(nss_context_t* con, nss_geometry_t *geo, nss_fo
     assert_void_cookie(con,c,"Can't create pixmap");
 
     uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
-    uint32_t values2[3] = { win->foreground, win->background, 0 };
+    uint32_t values2[3] = { win->background, win->background, 0 };
 
     win->gc = xcb_generate_id(con->con);
     c = xcb_create_gc_checked(con->con,win->gc,win->pid,mask2, values2);
@@ -306,18 +308,17 @@ void nss_win_remove_window(nss_context_t* con, nss_window_t* win){
     free(win);
 };
 
-void nss_update_window(nss_context_t *con, nss_window_t *win){
-    const xcb_expose_event_t ev = {
-        .response_type = XCB_EXPOSE,
-        .sequence = 0, //??
-        .window = win->wid,
-        .x = 0,
-        .y = 0,
-        .width = win->w,
-        .height = win->h, 
-        .count = 1, //??
-    };
-    xcb_send_event(con->con, 0, win->wid, XCB_EVENT_MASK_EXPOSURE, (const char *)&ev);
+void nss_update_window_damage(nss_context_t *con, nss_window_t *win, size_t len, xcb_rectangle_t *rects){
+    for(size_t i = 0; i < len; i++){
+        const xcb_expose_event_t ev = {
+            .response_type = XCB_EXPOSE,
+            .sequence = 0, .window = win->wid,
+            .x = rects[i].x, .y = rects[i].y,
+            .width = rects[i].width, .height = rects[i].height, 
+            .count = 1,
+        };
+        xcb_send_event(con->con, 0, win->wid, XCB_EVENT_MASK_EXPOSURE, (const char *)&ev);
+    }
 }
 
 uint16_t nss_win_get_dpi(nss_context_t *con){
@@ -336,7 +337,7 @@ uint16_t nss_win_get_dpi(nss_context_t *con){
     for(; it.rem; xcb_screen_next(&it)){
         if(it.data){
             long new = (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters;
-            if(new > dpi) dpi = new;
+            dpi = MAX(dpi, new);
         }
     }
     if(!dpi){
@@ -379,7 +380,7 @@ void nss_win_render_ucs4(nss_context_t* con, nss_window_t* win, size_t len,  uin
     _Bool blink_state = ((clock() - con->start_time)/BLINK_TIME) & 1;
 
     if(attr->flags & nss_attrib_inverse)
-        fgc = attr->bg, bgc = attr->fg;
+        SWAP(nss_color_t, fgc, bgc);
     if((attr->flags & nss_attrib_blink) && blink_state)
         fgc = bgc;
 
@@ -455,10 +456,27 @@ void nss_win_render_ucs4(nss_context_t* con, nss_window_t* win, size_t len,  uin
     xcb_render_free_picture(con->con, pen);
 }
 
+
+static _Bool intersect_with(xcb_rectangle_t *src, xcb_rectangle_t *dst){
+        xcb_rectangle_t inters = {
+			MAX(src->x, dst->x),
+			MAX(src->y, dst->y),
+			MAX(src->x + src->width, dst->x + dst->width),
+			MAX(src->y = src->height, dst->y + dst->height),
+        };
+        inters.width -= inters.x;
+        inters.height -= inters.y;
+        if(inters.width < 0 || inters.height < 0){
+            *src = (xcb_rectangle_t){0,0,0,0};
+            return 0;
+        } else {
+            *src = inters;
+            return 1;
+        }
+}
+
 //TODO: Periodially update window
 // => Send XCB_EXPOSE from another thread
-//TODO: Resize in grid, render only damage
-//      Render border without XRender
 
 void nss_win_run(nss_context_t *con){
 
@@ -474,36 +492,59 @@ void nss_win_run(nss_context_t *con){
             xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
             nss_window_t *win = nss_window_for_xid(con,ev->window);
 
-            //TODO: Use damage
+            //TODO: Build border rectangles considering damage
             info("Damage: %d %d %d %d", ev->x, ev->y, ev->width, ev->height);
 
             int16_t width = win->cw * win->char_width; 
+            info("CHeight: %d %d", win->cw, win->ch);
             int16_t height = win->ch * (win->char_height + win->char_depth);
-            xcb_rectangle_t borders[4] = {
+            info("Height: %d %d %d %d", width, height, win->w, win->h);
+
+            xcb_rectangle_t damage_rect = {ev->x, ev->y, ev->width, ev->height};
+            xcb_rectangle_t damaged[4], borders[4] = {
                 {0, 0, win->border_width, win->h},
                 {win->border_width, 0, width, win->border_width},
-                {win->border_width, height + win->border_width, width, win->h - height - win->border_width}, //Something Wrong here
+                {win->border_width, height + win->border_width, width, win->h - height - win->border_width},
                 {width + win->border_width, 0, win->w - width - win->border_width, win->h},
             };
-            xcb_copy_area(con->con,win->pid,win->wid,win->gc, 0,0,win->border_width,win->border_width, width, height);
-            xcb_poly_fill_rectangle(con->con, win->wid, win->gc, 4, borders);
+            size_t num_damaged = 0;
+            for(size_t i = 0; i < sizeof(borders)/sizeof(borders[0]); i++)
+                if(intersect_with(&borders[i],&damage_rect))
+                        damaged[num_damaged++] = borders[i];
+            if(num_damaged)
+                xcb_poly_fill_rectangle(con->con, win->wid, win->gc, num_damaged, damaged);
+
+            xcb_rectangle_t inters = { win->border_width, win->border_width, width + win->border_width, height + win->border_width };
+            if(intersect_with(&inters, &damage_rect))
+                xcb_copy_area(con->con,win->pid,win->wid,win->gc, inters.x - win->border_width, inters.y - win->border_width, 
+            	             inters.x, inters.y, inters.width - win->border_width, inters.height - win->border_width);
             xcb_flush(con->con);
             break;
         }
         case XCB_CONFIGURE_NOTIFY:{
             xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
             nss_window_t *win = nss_window_for_xid(con, ev->window);
+
+            _Bool part_update = ev->width < win->w || ev->height < win->h; 
+            _Bool full_update = 0;
+
             if(ev->width != win->w || ev->height != win->h){
                 //Handle resize
 
                 win->w = ev->width;
                 win->h = ev->height;
 
-                int16_t x_inc = (win->w - 2*win->border_width - win->char_width*win->cw)/win->char_width;
-                int16_t y_inc = (win->h - 2*win->border_width - win->char_width*win->ch)/(win->char_height+win->char_depth);
-                if(x_inc || y_inc){
-                    int16_t new_cw = win->cw + x_inc;
-                    int16_t new_ch = win->ch + y_inc;
+                int16_t new_cw = MAX(1,(win->w - 2*win->border_width)/win->char_width);
+                int16_t new_ch = MAX(1,(win->h - 2*win->border_width)/(win->char_height+win->char_depth));
+                int16_t delta_x = new_cw - win->cw;
+                int16_t delta_y = new_ch - win->ch;
+
+				full_update |= new_cw == 1 && delta_x == 0;
+				full_update |= new_ch == 1 && delta_y == 0;
+                
+                if(delta_x || delta_y){
+                    full_update = 1;
+
                     int16_t new_w = new_cw * win->char_width;
                     int16_t new_h = new_ch * (win->char_height + win->char_depth);
                     
@@ -514,33 +555,9 @@ void nss_win_run(nss_context_t *con){
                     uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
                     xcb_render_create_picture(con->con, newp, new, con->pfargb, mask3, values3);
 
-                    xcb_rectangle_t rectv[2];
-                    size_t rectc= 0;
-                    if(y_inc > 0){
-                        size_t mincw = win->cw < new_cw ? win->cw : new_cw;
-                        rectv[rectc++] = (xcb_rectangle_t){
-                            .x = 0,
-                            .y = win->ch*(win->char_height + win->char_depth),
-                            .width = mincw*win->char_width,
-                            .height = y_inc * (win->char_height + win->char_depth)
-                        };
-                    }
-                    if(x_inc > 0){
-                        size_t maxch = win->ch > new_ch ? win->ch : new_ch;
-                        rectv[rectc++] = (xcb_rectangle_t){
-                            .x = win->cw*win->char_width, 
-                            .y = 0, 
-                            .width = x_inc * win->char_width, 
-                            .height = maxch * (win->char_height + win->char_depth),
-                        };
-                    }
-
-                    int16_t common_w = (win->cw < new_cw ? win->cw : new_cw) * win->char_width;
-                    int16_t common_h = (win->ch < new_ch ? win->ch : new_ch) * (win->char_height + win->char_depth);
-
-                    xcb_render_color_t color = MAKE_COLOR(win->background);
+                    int16_t common_w = MIN(win->cw, new_cw) * win->char_width;
+                    int16_t common_h = MIN(win->ch, new_ch) * (win->char_height + win->char_depth);
                     xcb_render_composite(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, 0, newp, 0, 0, 0, 0, 0, 0, common_w, common_h);
-                    xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, newp, color, rectc, rectv);
 
                     xcb_pixmap_t old = win->pid;
                     xcb_render_picture_t oldp  = win->pic;
@@ -551,8 +568,30 @@ void nss_win_run(nss_context_t *con){
                     xcb_free_pixmap(con->con, old);
                     xcb_render_free_picture(con->con, oldp);
 
-
         			// TEST CODE {
+                    xcb_rectangle_t rectv[2];
+                    size_t rectc= 0;
+                    if(delta_y > 0){
+                        size_t mincw = MIN(win->cw, win->cw - delta_x);
+                        rectv[rectc++] = (xcb_rectangle_t){
+                            .x = 0,
+                            .y = (win->ch - delta_y)*(win->char_height + win->char_depth),
+                            .width = mincw*win->char_width,
+                            .height = delta_y * (win->char_height + win->char_depth)
+                        };
+                    }
+                    if(delta_x > 0){
+                        size_t maxch = MAX(win->ch, win->ch - delta_y);
+                        rectv[rectc++] = (xcb_rectangle_t){
+                            .x = (win->cw - delta_x)*win->char_width, 
+                            .y = 0, 
+                            .width = delta_x * win->char_width, 
+                            .height = maxch * (win->char_height + win->char_depth),
+                        };
+                    }
+                    xcb_render_color_t color = MAKE_COLOR(win->background);
+                    xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, newp, color, rectc, rectv);
+
                     uint32_t test[127-33];
                     for(size_t i = 33; i < 127; i++) test[i-33] = i;
 
@@ -561,19 +600,33 @@ void nss_win_run(nss_context_t *con){
                     attr.bg = 0xff000000;
                     attr.flags = nss_attrib_underlined;
                     nss_win_render_ucs4(con, win, sizeof(test)/sizeof(test[0]), test, &attr, 0, 1);
-                    attr.flags |= nss_attrib_strikethrough;
+                    attr.flags = nss_attrib_strikethrough;
                     nss_win_render_ucs4(con, win, sizeof(test)/sizeof(test[0]), test, &attr, 0, 2);
-                    attr.flags |= nss_attrib_underlined | nss_attrib_inverse;
+                    attr.flags = nss_attrib_underlined | nss_attrib_inverse;
                     nss_win_render_ucs4(con, win, sizeof(test)/sizeof(test[0]), test, &attr, 0, 3);
-                    attr.flags |= nss_attrib_blink;
+                    attr.flags = nss_attrib_blink;
                     nss_win_render_ucs4(con, win, sizeof(test)/sizeof(test[0]), test, &attr, 0, 4);
                     attr.flags = 0;
                     uint32_t test2[] = {'F', L'И',' ',L'ч',L'т',L'о','-',L'т',L'о',' ',L'п',L'о','-',L'р',L'у',L'с',L'с',L'к',L'и'};
                     nss_win_render_ucs4(con, win, sizeof(test2)/sizeof(test2[0]), test2, &attr, 0, 5);
-                    xcb_flush(con->con);
                     // } TEST CODE
+
                     xcb_flush(con->con);
-                    nss_update_window(con,win);
+                }
+                if(full_update){
+					//Update everything
+                    nss_update_window_damage(con,win,1,&(xcb_rectangle_t){0,0,win->w,win->h});
+
+                }
+                if(part_update && !full_update){ //Update borders
+                    int16_t width = win->cw * win->char_width;
+                    int16_t height = win->ch*(win->char_height + win->char_depth); 
+                    xcb_rectangle_t damage[2] = {
+                        {win->border_width + width, 0, win->w - win->border_width - width, win->h},
+                        {0, win->border_width + height, win->w, win->h - win->border_width - height}
+                    };
+                    damage[1].width -= damage[0].width;
+                    nss_update_window_damage(con,win,2,damage);
                 }
             }
             break;

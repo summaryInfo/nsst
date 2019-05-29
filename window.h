@@ -40,7 +40,6 @@ void nss_win_free(nss_context_t* con);
 
 nss_window_t* nss_win_add_window(nss_context_t *con, nss_geometry_t *geo, nss_font_t *font);
 void nss_win_remove_window(nss_context_t *con, nss_window_t *win);
-void nss_update_window(nss_context_t *con, nss_window_t *win);
 void nss_win_run(nss_context_t* con);
 
 void nss_win_render_ucs4(nss_context_t* con, nss_window_t* win, size_t len,  uint32_t *ch, nss_text_attrib_t *attr, uint16_t x, uint16_t y);
