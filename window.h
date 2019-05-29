@@ -27,6 +27,7 @@ typedef enum nss_text_attrib_flags {
 	nss_attrib_inverse = 1 << 6, //done
 	nss_attrib_blink = 1 << 7, //done
 	nss_attrib_background = 1 << 8, //done
+	nss_attrib_cursor = 1 << 9,
 } nss_attrib_flags_t;
 
 typedef struct nss_text_attrib {
@@ -34,6 +35,17 @@ typedef struct nss_text_attrib {
 	nss_color_t bg;
 	nss_attrib_flags_t flags;
 } nss_text_attrib_t;
+
+typedef enum nss_cursor_type {
+    nss_cursor_block = 1,
+    nss_cursor_bar = 2,
+    nss_cursor_underline = 3,
+} nss_cursor_type_t;
+
+typedef struct nss_cell {
+    uint32_t ch;
+	uint32_t attr;
+} nss_cell_t;
 
 nss_context_t* nss_win_create(void);
 void nss_win_free(nss_context_t* con);
