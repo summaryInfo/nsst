@@ -4,8 +4,8 @@ PROG=nss
 
 IN=window.c nss.c util.c font.c
 OBJ=$(patsubst %.c,%.o,$(IN))
-LIBS=`pkg-config xcb fontconfig freetype2 --libs`
-INCLUES=`pkg-config xcb fontconfig freetype2 --cflags`
+LIBS=`pkg-config xcb xcb-render xcb-xrm fontconfig freetype2 --libs`
+INCLUES=`pkg-config xcb xcb-render xcb-xrm fontconfig freetype2 --cflags`
 
 all: nss
 

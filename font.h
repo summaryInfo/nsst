@@ -1,6 +1,33 @@
 #ifndef FONT_H_
 #define FONT_H_ 1
 
+#include <stddef.h>
+#include <stdint.h>
+
+// IMPORTANT: Order should be the same as
+// in nss_text_attrib_flags_t
+typedef enum nss_font_attrib {
+    nss_font_attrib_normal = 0,
+	nss_font_attrib_italic = 1 << 0,
+	nss_font_attrib_bold = 1 << 1,
+	nss_font_attrib_mask = 3,
+	nss_font_attrib_max = 4,
+} nss_font_attrib_t;
+
+typedef struct nss_glyph {
+	uint16_t width, height; 
+	int16_t x, y;
+	int16_t x_off, y_off;
+	uint16_t stride;
+	uint8_t data[];
+} nss_glyph_t;
+
+typedef struct nss_font nss_font_t;
+
+nss_font_t *nss_create_font(const char* descr, uint16_t dpi);
+//nss_font_t *nss_font_resize(nss_font_t* font, int16_t inc);
+void nss_free_font(nss_font_t *font);
+nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t face);
 
 #endif
 
