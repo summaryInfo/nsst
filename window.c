@@ -38,20 +38,6 @@
 
 typedef struct nss_term nss_term_t;
 typedef xcb_rectangle_t nss_rect_t;
-struct nss_term {
-    int16_t cursor_x;
-    int16_t cursor_y;
-    void(*callback_redraw_damage)(nss_context_t *con,nss_window_t *win, nss_term_t *term, nss_rect_t *damage);
-    void(*callback_initialize)(nss_context_t *con,nss_window_t *win, nss_term_t *term);
-    void(*callback_free)(nss_context_t *con,nss_window_t *win, nss_term_t *term);
-    void(*callback_get_cursor)(nss_context_t *con,nss_window_t *win, nss_term_t *term, int16_t *cursor_x, int16_t *cursor_y);
-
-    uint32_t *ch_attr;
-    uint32_t *ch_symb;
-    
-    nss_text_attrib_t *attr;
-    nss_rect_t clip;
-};
 
 struct nss_window {
     xcb_window_t wid;
@@ -131,6 +117,20 @@ static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst){
         }
 }
 
+struct nss_term {
+    int16_t cursor_x;
+    int16_t cursor_y;
+    void(*callback_redraw_damage)(nss_context_t *con,nss_window_t *win, nss_term_t *term, nss_rect_t *damage);
+    void(*callback_initialize)(nss_context_t *con,nss_window_t *win, nss_term_t *term);
+    void(*callback_free)(nss_context_t *con,nss_window_t *win, nss_term_t *term);
+    void(*callback_get_cursor)(nss_context_t *con,nss_window_t *win, nss_term_t *term, int16_t *cursor_x, int16_t *cursor_y);
+
+    uint32_t *ch_attr;
+    uint32_t *ch_symb;
+    
+    nss_text_attrib_t *attr;
+    nss_rect_t clip;
+};
 
 void callback_get_cursor(nss_context_t *con,nss_window_t *win, nss_term_t *term, int16_t *cursor_x, int16_t *cursor_y){
     if(cursor_x) *cursor_x = term->cursor_x;
@@ -168,6 +168,9 @@ void callback_redraw_damage(nss_context_t *con,nss_window_t *win, nss_term_t *te
             }
         }
     }
+}
+
+void callback_resize(nss_context_t *con,nss_window_t *win, nss_term_t *term){
 }
 
 void callback_initialize(nss_context_t *con,nss_window_t *win, nss_term_t *term){
@@ -612,6 +615,29 @@ void nss_win_render_ucs4(nss_context_t* con, nss_window_t* win, size_t len,  uin
     xcb_render_free_picture(con->con, pen);
 }
 
+static void redraw_damage(nss_context_t *con, nss_window_t *win, nss_rect_t *damage){
+
+        int16_t width = win->cw * win->char_width;
+        int16_t height = win->ch * (win->char_height + win->char_depth);
+
+        xcb_rectangle_t damaged[4], borders[4] = {
+            {0, 0, win->border_width, win->h},
+            {win->border_width, 0, width, win->border_width},
+            {win->border_width, height + win->border_width, width, win->h - height - win->border_width},
+            {width + win->border_width, 0, win->w - width - win->border_width, win->h},
+        };
+        size_t num_damaged = 0;
+        for(size_t i = 0; i < sizeof(borders)/sizeof(borders[0]); i++)
+            if(intersect_with(&borders[i],damage))
+                    damaged[num_damaged++] = borders[i];
+        if(num_damaged)
+            xcb_poly_fill_rectangle(con->con, win->wid, win->gc, num_damaged, damaged);
+
+        xcb_rectangle_t inters = { win->border_width, win->border_width, width + win->border_width, height + win->border_width };
+        if(intersect_with(&inters, damage))
+            xcb_copy_area(con->con,win->pid,win->wid,win->gc, inters.x - win->border_width, inters.y - win->border_width,
+                          inters.x, inters.y, inters.width - win->border_width, inters.height - win->border_width);
+}
 
 //TODO: Periodially update window
 // => Send XCB_EXPOSE from another thread
@@ -631,30 +657,11 @@ void nss_win_run(nss_context_t *con){
         case XCB_EXPOSE:{
             xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
             nss_window_t *win = nss_window_for_xid(con,ev->window);
+            nss_rect_t damage = {ev->x, ev->y, ev->width, ev->height};
 
-            info("Damage: %d %d %d %d", ev->x, ev->y, ev->width, ev->height);
+            info("Damage: %d %d %d %d", damage.x, damage.y, damage.width, damage.height);
 
-            int16_t width = win->cw * win->char_width;
-            int16_t height = win->ch * (win->char_height + win->char_depth);
-
-            xcb_rectangle_t damage_rect = {ev->x, ev->y, ev->width, ev->height};
-            xcb_rectangle_t damaged[4], borders[4] = {
-                {0, 0, win->border_width, win->h},
-                {win->border_width, 0, width, win->border_width},
-                {win->border_width, height + win->border_width, width, win->h - height - win->border_width},
-                {width + win->border_width, 0, win->w - width - win->border_width, win->h},
-            };
-            size_t num_damaged = 0;
-            for(size_t i = 0; i < sizeof(borders)/sizeof(borders[0]); i++)
-                if(intersect_with(&borders[i],&damage_rect))
-                        damaged[num_damaged++] = borders[i];
-            if(num_damaged)
-                xcb_poly_fill_rectangle(con->con, win->wid, win->gc, num_damaged, damaged);
-
-            xcb_rectangle_t inters = { win->border_width, win->border_width, width + win->border_width, height + win->border_width };
-            if(intersect_with(&inters, &damage_rect))
-                xcb_copy_area(con->con,win->pid,win->wid,win->gc, inters.x - win->border_width, inters.y - win->border_width,
-                              inters.x, inters.y, inters.width - win->border_width, inters.height - win->border_width);
+            redraw_damage(con,win, &damage);
             xcb_flush(con->con);
             break;
         }
@@ -724,6 +731,7 @@ void nss_win_run(nss_context_t *con){
                             .height = maxch * (win->char_height + win->char_depth),
                         };
                     }
+
                     xcb_render_color_t color = MAKE_COLOR(win->background);
                     xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, color, rectc, rectv);
 
@@ -737,21 +745,22 @@ void nss_win_run(nss_context_t *con){
                     }
 
                     full_update = 1;
-                    xcb_flush(con->con);
                 }
                 if(full_update){ //Update everything
-                    update_window_damage(con,win,1,&(xcb_rectangle_t){0,0,win->w,win->h});
+                    xcb_rectangle_t damage = {0,0,win->w, win->h}; 
+                    redraw_damage(con,win, &damage);
                 }
                 if(part_update && !full_update){ //Update borders
                     int16_t width = win->cw * win->char_width;
-                    int16_t height = win->ch*(win->char_height + win->char_depth);
-                                                xcb_rectangle_t damage[2] = {
+                    int16_t height = win->ch * (win->char_height + win->char_depth);
+                    xcb_rectangle_t damage[2] = {
                         {win->border_width + width, 0, win->w - win->border_width - width, win->h},
-                        {0, win->border_width + height, win->w, win->h - win->border_width - height}
+                        {0, win->border_width + height, width + win->border_width, win->h - win->border_width - height}
                     };
-                    damage[1].width -= damage[0].width;
-                    update_window_damage(con,win,2,damage);
+                    redraw_damage(con,win, &damage[0]);
+                    redraw_damage(con,win, &damage[1]);
                 }
+                xcb_flush(con->con);
             }
             break;
         }
