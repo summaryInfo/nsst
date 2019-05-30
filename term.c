@@ -14,7 +14,7 @@ struct nss_term {
     nss_rect_t clip;
 };
 
-nss_term_t *nss_term_create(void){
+nss_term_t *nss_create_term(void){
     nss_term_t *term = malloc(sizeof(nss_term_t));
 
     term->cursor_x = 15;
@@ -41,7 +41,7 @@ nss_term_t *nss_term_create(void){
 	return term;
 }
 
-void nss_term_draw_damage(nss_context_t *con, nss_window_t *win, nss_term_t *term, nss_rect_t damage){
+void nss_term_redraw(nss_context_t *con, nss_window_t *win, nss_term_t *term, nss_rect_t damage){
     //TODO: Better handle groups of same attrib
     //      Preprocess region
     //           Group lines
@@ -65,7 +65,11 @@ void nss_term_draw_damage(nss_context_t *con, nss_window_t *win, nss_term_t *ter
                 if((i > damage.x && term->ch_attr[index-1] != term->ch_attr[index]) || 
                     i == damage.x + damage.width){
                     nss_text_attrib_t cattr = term->attr[term->ch_attr[index - count]];
-                    nss_win_render_ucs4(con, win, count, &term->ch_symb[index - count], &cattr, i-count, j);
+                    nss_window_draw_ucs4(con, win, count, &term->ch_symb[index - count], &cattr, i-count, j);
+                    if(j == term->cursor_y && i - count <= term->cursor_x && i >= term->cursor_y){
+                        cattr.flags |= nss_attrib_cursor;
+                        nss_window_draw_ucs4(con, win, 1, &term->ch_symb[term->cursor_x + term->cursor_y * term->clip.width], &cattr, term->cursor_x, term->cursor_y);
+                    }
 					count = 0;
                 }
                 else count++;
@@ -78,7 +82,7 @@ void nss_term_get_cursor(nss_term_t *term, int16_t *cursor_x, int16_t *cursor_y)
     if(cursor_y) *cursor_y = term->cursor_y;
 }
 
-void nss_term_free(nss_term_t *term){
+void nss_free_term(nss_term_t *term){
     free(term->ch_attr);
     free(term->ch_symb);
     free(term->attr);

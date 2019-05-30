@@ -116,33 +116,7 @@ static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_pate
     }
 }
 
-static void add_font_substitude(nss_font_t *font, nss_face_list_t *faces, FcChar32 ch, const FcPattern *pat){
-    if(!font->subst_chars)
-        font->subst_chars = FcCharSetCreate();
-    FcCharSetAddChar(font->subst_chars, ch);
-
-    FcPattern *chset_pat = pat ? FcPatternDuplicate(pat) : FcPatternCreate();
-    FcPatternAddDouble(chset_pat, FC_DPI, font->dpi);
-    FcPatternAddCharSet(chset_pat, FC_CHARSET, font->subst_chars);
-    FcPatternAddBool(chset_pat, FC_SCALABLE, FcTrue);
-    FcDefaultSubstitute(chset_pat);
-    if(FcConfigSubstitute(NULL, chset_pat, FcMatchPattern) == FcFalse){
-        warn("Can't substitude font config");
-        return;
-    }
-
-    FcResult result;
-    FcPattern *final_pat = FcFontMatch(NULL, chset_pat, &result);
-    if(result != FcResultMatch){
-        warn("Font doesn't match");
-        return;
-    }
-    
-    load_append_fonts(font, faces, (nss_paterns_holder_t){.length = 1, .pats = &final_pat });
-    FcPatternDestroy(final_pat);
-}
-
-#define CAPS_STEP 8
+#define CAPS_STEP 2
 
 static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char *str, nss_font_attrib_t attr, double size){
     char *tmp = strdup(str);
@@ -278,17 +252,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     for(size_t i = 0; !glyph_index && i < faces->length; i++)
         if((glyph_index = FT_Get_Char_Index(faces->faces[i],ch)))
             face = faces->faces[i];
-    if(glyph_index == 0){
-        size_t sz = faces->faces[0]->size->metrics.x_ppem/font->dpi*72.0*64;
-        size_t oldlen = faces->length;
-        //TODO: Clarify pattern here?
-        add_font_substitude(font,faces, ch, NULL);
-        for(size_t i = oldlen; !glyph_index && i < faces->length; i++){
-            FT_Set_Char_Size(faces->faces[i], 0, sz, font->dpi, font->dpi);
-            if((glyph_index = FT_Get_Char_Index(faces->faces[i],ch)))
-                face = faces->faces[i];
-        }
-    }
+    //size_t sz = faces->faces[0]->size->metrics.x_ppem/font->dpi*72.0*64;
 
     FT_Load_Glyph(face, glyph_index, FT_LOAD_NO_BITMAP);
 
@@ -312,8 +276,10 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     glyph->y_off = face->glyph->advance.y/64.;
     glyph->stride = stride;
 
+	/*
     info("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
     info("Num grays: %d", face->glyph->bitmap.num_grays);
+	*/
 
     int pitch = face->glyph->bitmap.pitch;
     uint8_t *src = face->glyph->bitmap.buffer;
@@ -335,6 +301,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
             memcpy(glyph->data + stride*i, src + pitch*i, glyph->width);
     }
 
+	/*
     info("Glyph: %d %d", glyph->width, glyph->height);
     size_t img_width = glyph->width;
     if(lcd) img_width *= 3;
@@ -344,6 +311,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
             fprintf(stderr,"%02x",src[pitch*k+m]);
         putc('\n',stderr);
     }
+    */
 
     return glyph;
 }
