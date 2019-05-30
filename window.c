@@ -16,28 +16,29 @@
 #include "window.h"
 #include "util.h"
 #include "font.h"
+#include "term.h"
 
 #define TRUE_COLOR_ALPHA_DEPTH 32
-#define TRUE_COLOR_DEPTH 24
+
 #define ASCII_MAX 128
 #define ASCII_PRINTABLE_HIGH 127
 #define ASCII_PRINTABLE_LOW 32
-#define CHARS_PER_MESG (254/4)
+
+#define WORDS_IN_MESSAGE 256
+#define HEADER_WORDS ((sizeof(nss_glyph_mesg_t)+sizeof(uint32_t))/sizeof(uint32_t))
+#define CHARS_PER_MESG (WORDS_IN_MESSAGE - HEADER_WORDS)
 #define BLINK_TIME (CLOCKS_PER_SEC/4)
 #define BG_ALPHA 0xffff
+
+//Obviously
+#define NUM_BORDERS 4
 
 #define CR(c) (((c) & 0xff) * 0x101)
 #define CG(c) ((((c) >> 8) & 0xff) * 0x101)
 #define CB(c) ((((c) >> 16) & 0xff) * 0x101)
 #define CA(c) ((((c) >> 24) & 0xff) * 0x101)
+
 #define MAKE_COLOR(c) {.red=CR(c),.green=CG(c),.blue=CB(c),.alpha=CA(c)}
-
-#define MIN(x,y) ((x) < (y) ? (x) : (y))
-#define MAX(x,y) ((x) > (y) ? (x) : (y))
-#define SWAP(T,a,b) {T tmp_ = a; a = b; b = tmp_; }
-
-typedef struct nss_term nss_term_t;
-typedef xcb_rectangle_t nss_rect_t;
 
 struct nss_window {
     xcb_window_t wid;
@@ -96,150 +97,6 @@ typedef struct nss_glyph_mesg {
     int16_t dx, dy;
     uint8_t data[];
 } nss_glyph_mesg_t;
-
-
-
-static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst){
-        nss_rect_t inters = {
-            MAX(src->x, dst->x),
-            MAX(src->y, dst->y),
-            MIN(src->x + src->width, dst->x + dst->width),
-            MIN(src->y + src->height, dst->y + dst->height),
-        };
-        if(inters.width <= inters.x || inters.height <= inters.y){
-            *src = (xcb_rectangle_t){0,0,0,0};
-            return 0;
-        } else {
-            inters.width -= inters.x;
-            inters.height -= inters.y;
-            *src = inters;
-            return 1;
-        }
-}
-
-inline static nss_rect_t rect_scale_up(nss_rect_t rect, int16_t x_factor, int16_t y_factor){
-    rect.x *= x_factor;
-    rect.y *= y_factor;
-    rect.width *= x_factor;
-    rect.height *= y_factor;
-    return rect;
-}
-inline static nss_rect_t rect_scale_down(nss_rect_t rect, int16_t x_factor, int16_t y_factor){
-    rect.x /= x_factor;
-    rect.y /= y_factor;
-    rect.width /= x_factor;
-    rect.height /= y_factor;
-    return rect;
-}
-inline static nss_rect_t rect_shift(nss_rect_t rect, int16_t x_off, int16_t y_off){
-    rect.x += x_off;
-    rect.y += y_off;
-    return rect;
-}
-inline static nss_rect_t rect_resize(nss_rect_t rect, int16_t x_off, int16_t y_off){
-    rect.x += x_off;
-    rect.y += y_off;
-    return rect;
-}
-
-struct nss_term {
-    int16_t cursor_x;
-    int16_t cursor_y;
-    void(*callback_redraw_damage)(nss_context_t *con,nss_window_t *win, nss_term_t *term, nss_rect_t damage);
-    void(*callback_initialize)(nss_context_t *con,nss_window_t *win, nss_term_t *term);
-    void(*callback_free)(nss_context_t *con,nss_window_t *win, nss_term_t *term);
-    void(*callback_get_cursor)(nss_context_t *con,nss_window_t *win, nss_term_t *term, int16_t *cursor_x, int16_t *cursor_y);
-
-    uint32_t *ch_attr;
-    uint32_t *ch_symb;
-    
-    nss_text_attrib_t *attr;
-    nss_rect_t clip;
-};
-
-void callback_get_cursor(nss_context_t *con,nss_window_t *win, nss_term_t *term, int16_t *cursor_x, int16_t *cursor_y){
-    if(cursor_x) *cursor_x = term->cursor_x;
-    if(cursor_y) *cursor_y = term->cursor_y;
-}
-
-void callback_redraw_damage(nss_context_t *con,nss_window_t *win, nss_term_t *term, nss_rect_t damage){
-    //TODO: Better handle groups of same attrib
-    //      Preprocess region
-    //           Group lines
-    //           Group same font foreground
-    //           Group background squares
-
-    // Separate array of chars and attribute indeces
-
-    // Write something like nss_win_multi_draw_text
-    //    - Gets a set of pattern strings with some attributes 
-    //         nss_text_attrib_t *attr;
-    //         size_t length;
-    //         uint32_t *string;
-
-    
-    if(intersect_with(&damage,&term->clip)){
-        for(size_t j = damage.y; j < damage.y + damage.height; j++){
-            size_t index, count = 0;
-            for(size_t i = damage.x; i <= damage.x + damage.width; i++){
-                index = j*term->clip.width+i;
-                if((i > damage.x && term->ch_attr[index-1] != term->ch_attr[index]) || 
-                    i == damage.x + damage.width){
-                    nss_text_attrib_t cattr = term->attr[term->ch_attr[index - count]];
-                    nss_win_render_ucs4(con, win, count, &term->ch_symb[index - count], &cattr, i-count, j);
-					count = 0;
-                }
-                else count++;
-            }
-        }
-    }
-}
-
-void callback_resize(nss_context_t *con,nss_window_t *win, nss_term_t *term){
-}
-
-void callback_initialize(nss_context_t *con,nss_window_t *win, nss_term_t *term){
-    term->cursor_x = 15;
-    term->cursor_y = 4;
-    term->clip = (nss_rect_t){0,0,127-33,5};
-    term->ch_attr = calloc(term->clip.width*term->clip.height,sizeof(uint32_t));
-    term->ch_symb = calloc(term->clip.width*term->clip.height,sizeof(uint32_t));
-    term->attr = malloc(5*sizeof(nss_text_attrib_t));
-
-    term->attr[1-1] = (nss_text_attrib_t){ .fg = 0xffffffff, .bg = 0xff005500, .flags = nss_attrib_italic | nss_attrib_bold };
-    term->attr[2-1] = (nss_text_attrib_t){ .fg = 0xffffffff, .bg = 0xff000000, .flags = nss_attrib_italic | nss_attrib_underlined };
-    term->attr[3-1] = (nss_text_attrib_t){ .fg = 0xffffffff, .bg = 0xff000000, .flags = nss_attrib_strikethrough };
-    term->attr[4-1] = (nss_text_attrib_t){ .fg = 0xffffffff, .bg = 0xff000000, .flags = nss_attrib_underlined | nss_attrib_inverse };
-    term->attr[5-1] = (nss_text_attrib_t){ .fg = 0xffffffff, .bg = 0xff000000, .flags = 0 };
-
-    for(size_t k = 0; k < 5; k++)
-        for(size_t i = 33; i < 127; i++){
-            term->ch_attr[k*term->clip.width+(i-33)] = k;
-            term->ch_symb[k*term->clip.width+(i-33)] = i;
-        }
-
-    term->ch_symb[2*term->clip.width+17] = L'';
-}
-
-void callback_free(nss_context_t *con,nss_window_t *win, nss_term_t *term){
-    free(term->ch_attr);
-    free(term->ch_symb);
-    free(term->attr);
-}
-
-nss_term_t* nss_make_term(void){
-    nss_term_t *term = malloc(sizeof(nss_term_t));
-    term->callback_free = callback_free;
-    term->callback_initialize = callback_initialize;
-    term->callback_redraw_damage = callback_redraw_damage;
-    term->callback_get_cursor = callback_get_cursor;
-    return term;
-}
-
-
-
-
-
 
 static void assert_void_cookie(nss_context_t *con, xcb_void_cookie_t ck, const char* msg){
     xcb_generic_error_t *err = xcb_request_check(con->con,ck);
@@ -454,15 +311,13 @@ nss_window_t* nss_win_add_window(nss_context_t* con, nss_geometry_t *geo, nss_fo
 
     info("Font size: %d %d %d", win->char_height, win->char_depth, win->char_width);
 
-    win->term = nss_make_term();
-    win->term->callback_initialize(con, win, win->term);
+    win->term = nss_term_create();
 
     return win;
 }
 
 void nss_win_remove_window(nss_context_t* con, nss_window_t* win){
-    win->term->callback_free(con,win,win->term);
-    free(win->term);
+    nss_term_free(win->term);
 
     xcb_unmap_window(con->con,win->wid);
     xcb_render_free_picture(con->con,win->pic);
@@ -640,28 +495,117 @@ void nss_win_render_ucs4(nss_context_t* con, nss_window_t* win, size_t len,  uin
     xcb_render_free_picture(con->con, pen);
 }
 
+
 static void redraw_damage(nss_context_t *con, nss_window_t *win, nss_rect_t damage){
 
-        int16_t width = win->cw * win->char_width;
-        int16_t height = win->ch * (win->char_height + win->char_depth);
+        int16_t border = win->border_width;
+        int16_t width = win->cw * win->char_width + border;
+        int16_t height = win->ch * (win->char_height + win->char_depth) + border;
 
-        xcb_rectangle_t damaged[4], borders[4] = {
-            {0, 0, win->border_width, win->h},
-            {win->border_width, 0, width, win->border_width},
-            {win->border_width, height + win->border_width, width, win->h - height - win->border_width},
-            {width + win->border_width, 0, win->w - width - win->border_width, win->h},
-        };
         size_t num_damaged = 0;
-        for(size_t i = 0; i < sizeof(borders)/sizeof(borders[0]); i++)
+        nss_rect_t damaged[NUM_BORDERS], borders[NUM_BORDERS] = {
+            {0, 0, border, height},
+            {border, 0, width, border},
+            {width, border, win->w - width, win->h},
+            {0, height, width, win->h - height},
+        };
+        for(size_t i = 0; i < NUM_BORDERS; i++)
             if(intersect_with(&borders[i],&damage))
                     damaged[num_damaged++] = borders[i];
         if(num_damaged)
-            xcb_poly_fill_rectangle(con->con, win->wid, win->gc, num_damaged, damaged);
+            xcb_poly_fill_rectangle(con->con, win->wid, win->gc, num_damaged, (xcb_rectangle_t*)damaged);
 
-        xcb_rectangle_t inters = { win->border_width, win->border_width, width + win->border_width, height + win->border_width };
-        if(intersect_with(&inters, &damage))
-            xcb_copy_area(con->con,win->pid,win->wid,win->gc, inters.x - win->border_width, inters.y - win->border_width,
+        nss_rect_t inters = { border, border, width, height };
+        if(intersect_with(&inters, &damage)){
+            xcb_copy_area(con->con,win->pid,win->wid,win->gc, inters.x - border, inters.y - border,
                           inters.x, inters.y, inters.width, inters.height);
+        }
+}
+
+static void handle_resize(nss_context_t *con, nss_window_t *win, int16_t width, int16_t height){
+
+    _Bool redraw_borders = width < win->w || height < win->h;
+    _Bool single_line = 0;
+    //Handle resize
+
+    win->w = width;
+    win->h = height;
+
+    int16_t new_cw = MAX(1,(win->w - 2*win->border_width)/win->char_width);
+    int16_t new_ch = MAX(1,(win->h - 2*win->border_width)/(win->char_height+win->char_depth));
+    int16_t delta_x = new_cw - win->cw;
+    int16_t delta_y = new_ch - win->ch;
+    win->cw = new_cw;
+    win->ch = new_ch;
+
+    single_line |= new_cw == 1 && delta_x == 0;
+    single_line |= new_ch == 1 && delta_y == 0;
+
+    if(delta_x || delta_y){
+
+        int16_t width = win->cw * win->char_width;
+        int16_t height = win->ch * (win->char_height + win->char_depth);
+        int16_t common_w = MIN(width, width  - delta_x * win->char_width);
+        int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth)) ;
+
+        xcb_pixmap_t pid = xcb_generate_id(con->con);
+        xcb_create_pixmap(con->con, TRUE_COLOR_ALPHA_DEPTH, pid, win->wid, width, height);
+        xcb_render_picture_t pic = xcb_generate_id(con->con);
+        uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
+        uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
+        xcb_render_create_picture(con->con, pic, pid, con->pfargb, mask3, values3);
+
+        xcb_render_composite(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, 0, pic, 0, 0, 0, 0, 0, 0, common_w, common_h);
+
+		SWAP(xcb_pixmap_t, win->pid, pid);
+		SWAP(xcb_render_picture_t, win->pic, pic);
+        xcb_free_pixmap(con->con, pid);
+        xcb_render_free_picture(con->con, pic);
+
+        nss_rect_t rectv[2];
+        size_t rectc= 0;
+
+        if(delta_y > 0)
+            rectv[rectc++] = (nss_rect_t){ 0, win->ch - delta_y, MIN(win->cw, win->cw - delta_x), delta_y };
+        if(delta_x > 0)
+            rectv[rectc++] = (nss_rect_t){ win->cw - delta_x, 0, delta_x, MAX(win->ch, win->ch - delta_y) };
+
+		for(size_t i = 0; i < rectc; i++)
+			rectv[i] = rect_scale_up(rectv[i], win->char_width, win->char_height+win->char_depth);
+			
+        xcb_render_color_t color = MAKE_COLOR(win->background);
+        xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, color, rectc, (xcb_rectangle_t*)rectv);
+
+		for(size_t i = 0; i < rectc; i++){
+            nss_term_draw_damage(con,win,win->term, 
+                                             rect_scale_down(rectv[i], win->char_width, win->char_height+win->char_depth));
+            redraw_damage(con,win, rect_shift(rectv[i], win->border_width, win->border_width));
+		}
+    }
+
+    if(single_line){ //Update everything
+        redraw_damage(con,win, (nss_rect_t){0,0,win->w, win->h});
+    }
+
+    if(redraw_borders && !single_line){ //Update borders
+        int16_t width = win->cw * win->char_width + win->border_width;
+        int16_t height = win->ch * (win->char_height + win->char_depth) + win->border_width;
+        redraw_damage(con,win, (nss_rect_t){width, 0, win->w - width, win->h});
+        redraw_damage(con,win, (nss_rect_t){0, height, width, win->h - height});
+    }                
+
+}
+
+static void handle_focus(nss_context_t *con, nss_window_t *win, _Bool focused){
+    win->focused = focused;
+
+    nss_rect_t damage = { 0, 0, 1, 1 };
+    nss_term_get_cursor(win->term,&damage.x,&damage.y);
+    nss_term_draw_damage(con,win,win->term, damage);
+
+    damage = rect_scale_up(damage, win->char_width, win->char_height + win->char_depth);
+    xcb_copy_area(con->con,win->pid,win->wid,win->gc, damage.x, damage.y, 
+                  damage.x+win->border_width, damage.y+win->border_width, damage.width, damage.height);
 }
 
 //TODO: Periodially update window
@@ -671,7 +615,7 @@ void nss_win_run(nss_context_t *con){
 
     for(nss_window_t *win = con->first; win; win = win->next){
         xcb_map_window(con->con,win->wid);
-        win->term->callback_redraw_damage(con,win,win->term,(nss_rect_t){0,0,win->cw,win->ch});
+        nss_term_draw_damage(con,win,win->term,(nss_rect_t){0,0,win->cw,win->ch});
     }
 
     xcb_flush(con->con);
@@ -682,8 +626,8 @@ void nss_win_run(nss_context_t *con){
         case XCB_EXPOSE:{
             xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
             nss_window_t *win = nss_window_for_xid(con,ev->window);
-            nss_rect_t damage = {ev->x, ev->y, ev->width, ev->height};
 
+            nss_rect_t damage = {ev->x, ev->y, ev->width, ev->height};
             info("Damage: %d %d %d %d", damage.x, damage.y, damage.width, damage.height);
 
             redraw_damage(con,win, damage);
@@ -694,75 +638,8 @@ void nss_win_run(nss_context_t *con){
             xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
             nss_window_t *win = nss_window_for_xid(con, ev->window);
 
-            _Bool redraw_borders = ev->width < win->w || ev->height < win->h;
-            _Bool single_line = 0;
-
             if(ev->width != win->w || ev->height != win->h){
-                //Handle resize
-
-                win->w = ev->width;
-                win->h = ev->height;
-
-                int16_t new_cw = MAX(1,(win->w - 2*win->border_width)/win->char_width);
-                int16_t new_ch = MAX(1,(win->h - 2*win->border_width)/(win->char_height+win->char_depth));
-                int16_t delta_x = new_cw - win->cw;
-                int16_t delta_y = new_ch - win->ch;
-
-                single_line |= new_cw == 1 && delta_x == 0;
-                single_line |= new_ch == 1 && delta_y == 0;
-
-                if(delta_x || delta_y){
-
-                    int16_t width = new_cw * win->char_width;
-                    int16_t height = new_ch * (win->char_height + win->char_depth);
-                    int16_t common_w = MIN(win->cw, new_cw) * win->char_width;
-                    int16_t common_h = MIN(win->ch, new_ch) * (win->char_height + win->char_depth);
-                    win->cw = new_cw;
-                    win->ch = new_ch;
-
-                    xcb_pixmap_t pid = xcb_generate_id(con->con);
-                    xcb_create_pixmap(con->con, TRUE_COLOR_ALPHA_DEPTH, pid, win->wid, width, height);
-                    xcb_render_picture_t pic = xcb_generate_id(con->con);
-                    uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
-                    uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
-                    xcb_render_create_picture(con->con, pic, pid, con->pfargb, mask3, values3);
-
-                    xcb_render_composite(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, 0, pic, 0, 0, 0, 0, 0, 0, common_w, common_h);
-
-					SWAP(xcb_pixmap_t, win->pid, pid);
-					SWAP(xcb_render_picture_t, win->pic, pic);
-                    xcb_free_pixmap(con->con, pid);
-                    xcb_render_free_picture(con->con, pic);
-
-                    nss_rect_t rectv[2];
-                    size_t rectc= 0;
-
-                    if(delta_y > 0)
-                        rectv[rectc++] = (nss_rect_t){ 0, win->ch - delta_y, MIN(win->cw, win->cw - delta_x), delta_y };
-                    if(delta_x > 0)
-                        rectv[rectc++] = (nss_rect_t){ win->cw - delta_x, 0, delta_x, MAX(win->ch, win->ch - delta_y) };
-
-					for(size_t i = 0; i < rectc; i++)
-    					rectv[i] = rect_scale_up(rectv[i], win->char_width, win->char_height+win->char_depth);
-    					
-                    xcb_render_color_t color = MAKE_COLOR(win->background);
-                    xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, color, rectc, rectv);
-
-					for(size_t i = 0; i < rectc; i++){
-                        win->term->callback_redraw_damage(con,win,win->term, 
-                                                         rect_scale_down(rectv[i], win->char_width, win->char_height+win->char_depth));
-                        redraw_damage(con,win, rect_shift(rectv[i], win->border_width, win->border_width));
-					}
-                }
-                if(single_line){ //Update everything
-                    redraw_damage(con,win, (nss_rect_t){0,0,win->w, win->h});
-                }
-                if(redraw_borders && !single_line){ //Update borders
-                    int16_t width = win->cw * win->char_width + win->border_width;
-                    int16_t height = win->ch * (win->char_height + win->char_depth) + win->border_width;
-                    redraw_damage(con,win, (nss_rect_t){width, 0, win->w - width, win->h});
-                    redraw_damage(con,win, (nss_rect_t){0, height, width, win->h - height});
-                }
+                handle_resize(con,win, ev->width, ev->height);
                 xcb_flush(con->con);
             }
             break;
@@ -775,15 +652,8 @@ void nss_win_run(nss_context_t *con){
         case XCB_FOCUS_OUT:{
             xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
             nss_window_t *win = nss_window_for_xid(con,ev->event);
-            win->focused = event->response_type == XCB_FOCUS_IN;
 
-            nss_rect_t damage = { 0, 0, 1, 1 };
-            win->term->callback_get_cursor(con,win,win->term,&damage.x,&damage.y);
-            win->term->callback_redraw_damage(con,win,win->term, damage);
-
-            damage = rect_scale_up(damage, win->char_width, win->char_height + win->char_depth);
-            xcb_copy_area(con->con,win->pid,win->wid,win->gc, damage.x, damage.y, 
-                          damage.x+win->border_width, damage.y+win->border_width, damage.width, damage.height);
+            handle_focus(con,win,event->response_type == XCB_FOCUS_IN);
             xcb_flush(con->con);
             break;
         }
