@@ -13,9 +13,8 @@
 #include "util.h"
 
 struct nss_font_state {
-    _Bool fc_initialized;
     size_t fonts;
-} global = { 0, 0 };
+} global = { 0 };
 
 typedef struct nss_face_list {
         size_t length;
@@ -48,8 +47,8 @@ void nss_free_font(nss_font_t *font){
     FcCharSetDestroy(font->subst_chars);
     if(--global.fonts == 0){
         FcFini();
-        global.fc_initialized = 0;
     }
+    free(font);
 }
 
 static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_paterns_holder_t pats){
@@ -84,6 +83,7 @@ static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_pate
             else warn("Some error happend loading file: %u", err);
             continue;
         }
+
         if(!faces->faces[faces->length]){
             warn("Empty font face");
             continue;
@@ -96,6 +96,7 @@ static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_pate
             ftmat.yx = (FT_Fixed)(matrix.u.m->yx * 0x10000L);
             ftmat.yy = (FT_Fixed)(matrix.u.m->yy * 0x10000L);
             FT_Set_Transform(faces->faces[faces->length], &ftmat, NULL);
+            FcValueDestroy(matrix);
         }
 
         FcResult res = FcPatternGet(pats.pats[i], FC_PIXEL_SIZE, 0, &pixsize);
@@ -125,7 +126,7 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
         .caps = CAPS_STEP,
         .pats = malloc(sizeof(*pats.pats)*pats.caps)
     };
- 
+
     for(char *tok = strtok(tmp, ","); tok; tok = strtok(NULL, ",")){
         FcPattern *final_pat = NULL;
         FcPattern *pat = FcNameParse((FcChar8*) tok);
@@ -169,16 +170,19 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
 
         FcDefaultSubstitute(pat);
         if(FcConfigSubstitute(NULL, pat, FcMatchPattern) == FcFalse){
+            FcPatternDestroy(pat);
             warn("Can't substitute font config for font: %s", tok);
             continue;
         }
 
         FcResult result;
         final_pat = FcFontMatch(NULL, pat, &result);
+        FcPatternDestroy(pat);
         if(result != FcResultMatch) {
             warn("No match for font: %s", tok);
             continue;
         }
+
 
         if(pats.length + 1 > pats.caps){
             FcPattern **new = realloc(pats.pats,sizeof(*pats.pats)*(pats.caps + CAPS_STEP));
@@ -197,10 +201,11 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
         }
         FcValue fsize;
         if(size < 2 && FcPatternGet(final_pat, FC_SIZE, 0, &fsize) == FcResultMatch){
-            if(fsize.u.d > font->size)
+            if(fsize.u.d > font->size){
                 font->size = fsize.u.d;
+            }
         }
- 
+
         pats.pats[pats.length++] = final_pat;
     }
     free(tmp);
@@ -216,7 +221,6 @@ nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi){
     if(global.fonts++ == 0){
         if(FcInit() == FcFalse)
             die("Can't initialize fontconfig");
-        global.fc_initialized = 1;
     }
 
     nss_font_t *font = calloc(1, sizeof(*font));
@@ -268,7 +272,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     nss_glyph_t *glyph = malloc(sizeof(*glyph) + stride * face->glyph->bitmap.rows);
     glyph->x = -face->glyph->bitmap_left;
     glyph->y = face->glyph->bitmap_top;
- 
+
     glyph->width = face->glyph->bitmap.width;
     if(lcd) glyph->width /= 3;
     glyph->height = face->glyph->bitmap.rows;
@@ -276,10 +280,10 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     glyph->y_off = face->glyph->advance.y/64.;
     glyph->stride = stride;
 
-	/*
+    /*
     info("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
     info("Num grays: %d", face->glyph->bitmap.num_grays);
-	*/
+    */
 
     int pitch = face->glyph->bitmap.pitch;
     uint8_t *src = face->glyph->bitmap.buffer;
@@ -301,7 +305,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
             memcpy(glyph->data + stride*i, src + pitch*i, glyph->width);
     }
 
-	/*
+    /*
     info("Glyph: %d %d", glyph->width, glyph->height);
     size_t img_width = glyph->width;
     if(lcd) img_width *= 3;
@@ -314,4 +318,8 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     */
 
     return glyph;
+}
+
+int16_t nss_font_get_size(nss_font_t *font){
+    return font->size;
 }

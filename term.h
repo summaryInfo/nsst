@@ -1,4 +1,4 @@
-#ifndef TERM_H_ 
+#ifndef TERM_H_
 #define TERM_H_ 1
 
 #include "window.h"
@@ -12,4 +12,3 @@ void nss_term_redraw(nss_context_t *con, nss_window_t *win, nss_term_t *term, ns
 void nss_term_get_cursor(nss_term_t *term, int16_t *cursor_x, int16_t *cursor_y);
 
 #endif
-

@@ -10,10 +10,10 @@
 #define SWAP(T,a,b) {T tmp_ = a; a = b; b = tmp_; }
 
 typedef struct nss_rect {
-	int16_t x;
-	int16_t y;
-	uint16_t width;
-	uint16_t height;
+    int16_t x;
+    int16_t y;
+    uint16_t width;
+    uint16_t height;
 } nss_rect_t;
 
 _Noreturn void die(const char *fmt, ...);
@@ -48,10 +48,10 @@ inline static nss_rect_t rect_resize(nss_rect_t rect, int16_t x_off, int16_t y_o
 
 inline static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst){
         nss_rect_t inters = {
-            MAX(src->x, dst->x),
-            MAX(src->y, dst->y),
-            MIN(src->x + src->width, dst->x + dst->width),
-            MIN(src->y + src->height, dst->y + dst->height),
+            .x = MAX(src->x, dst->x),
+            .y = MAX(src->y, dst->y),
+            .width = MIN(src->x + src->width, dst->x + dst->width),
+            .height = MIN(src->y + src->height, dst->y + dst->height),
         };
         if(inters.width <= inters.x || inters.height <= inters.y){
             *src = (nss_rect_t){0,0,0,0};

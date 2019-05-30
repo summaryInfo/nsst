@@ -12,6 +12,9 @@
 #include <xcb/xcb.h>
 #include <xcb/render.h>
 #include <xcb/xcb_xrm.h>
+#include <xcb/xcb_keysyms.h>
+#include <X11/keysym.h>
+#include <X11/XF86keysym.h>
 
 #include "window.h"
 #include "util.h"
@@ -35,21 +38,23 @@
 #define CA(c) ((((c) >> 24) & 0xff) * 0x101)
 #define MAKE_COLOR(c) {.red=CR(c),.green=CG(c),.blue=CB(c),.alpha=CA(c)}
 
+
 struct nss_window {
     xcb_window_t wid;
     xcb_pixmap_t pid;
     xcb_gcontext_t gc;
     xcb_render_picture_t pic;
 
-    int16_t w,h;
-    int16_t cw,ch;
-    int16_t char_width;
-    int16_t char_depth;
-    int16_t char_height;
+    _Bool focused;
+    _Bool lcd_mode;
+
+    int16_t width;
+    int16_t height;
+    int16_t cw, ch;
     int16_t cursor_width;
     int16_t left_border;
     int16_t top_border;
-    _Bool lcd_mode;
+    int16_t font_size;
 
     nss_color_t background;
     nss_color_t foreground;
@@ -57,17 +62,20 @@ struct nss_window {
     nss_color_t cursor_foreground;
     nss_cursor_type_t cursor_type;
 
-    _Bool focused;
-    _Bool border_centering;
 
     /*     * Glyph encoding:
      *  0xTTUUUUUU, where
      *      * 0xTT - font fase
      *      * 0xUUUUUU - unicode character
      */
+    nss_font_t *font;
     xcb_render_glyphset_t gsid;
     xcb_render_pictformat_t pfglyph;
-    nss_font_t *font;
+    int16_t char_width;
+    int16_t char_depth;
+    int16_t char_height;
+
+    char *font_name;
     nss_term_t *term;
     struct nss_window *prev, *next;
 };
@@ -79,6 +87,7 @@ struct nss_context {
     xcb_screen_t *screen;
     xcb_colormap_t mid;
     xcb_visualtype_t *vis;
+    xcb_key_symbols_t* keysyms;
 
     xcb_render_pictformat_t pfargb;
     xcb_render_pictformat_t pfalpha;
@@ -123,7 +132,7 @@ nss_context_t *nss_create_context(void){
     if(screenp != -1){
         xcb_disconnect(con->con);
         die("Can't find default screen");
-        }
+    }
     con->screen = sit.data;
 
     xcb_depth_iterator_t dit = xcb_screen_allowed_depths_iterator(con->screen);
@@ -195,6 +204,7 @@ nss_context_t *nss_create_context(void){
         die("Can't find suitable picture format");
     }
 
+    con->keysyms = xcb_key_symbols_alloc(con->con);
     return con;
 }
 
@@ -203,6 +213,7 @@ void nss_free_context(nss_context_t *con){
         while(con->first)
             nss_free_window(con,con->first);
         xcb_disconnect(con->con);
+        xcb_key_symbols_free(con->keysyms);
         free(con);
 }
 
@@ -215,36 +226,135 @@ static void register_glyph(nss_context_t *con, nss_window_t *win, uint32_t ch, n
         xcb_render_add_glyphs(con->con, win->gsid, 1, &ch, &spec, glyph->height*glyph->stride, glyph->data);
 }
 
+static void set_config(nss_window_t *win, nss_wc_tag_t tag, uint32_t *values){
+    if(tag & nss_wc_cusror_width)
+        win->cursor_width = *values++;
+    if(tag & nss_wc_left_border)
+        win->left_border = *values++;
+    if(tag & nss_wc_top_border)
+        win->top_border = *values++;
+    if(tag & nss_wc_background)
+        win->background = *values++;
+    if(tag & nss_wc_foreground)
+        win->foreground = *values++;
+    if(tag & nss_wc_cursor_background)
+        win->cursor_background = *values++;
+    if(tag & nss_wc_cursor_foreground)
+        win->cursor_foreground = *values++;
+    if(tag & nss_wc_cursor_type)
+        win->cursor_type = *values++;
+    if(tag & nss_wc_lcd_mode)
+        win->lcd_mode = *values++;
+    if(tag & nss_wc_font_size)
+        win->font_size = *values++;
+}
+
+/* Reload font using win->font_size and win->font_name */
+static void reload_font(nss_context_t *con, nss_window_t *win, _Bool need_free){
+    xcb_void_cookie_t c;
+
+    nss_font_t *new = nss_create_font(win->font_name, win->font_size, nss_context_get_dpi(con));
+    if(!new) {
+        warn("Can't reload font");
+        return;
+    }
+    if(need_free) nss_free_font(win->font);
+
+    win->font = new;
+    win->font_size = nss_font_get_size(new);
+    win->pfglyph = win->lcd_mode ? con->pfargb : con->pfalpha;
+
+    /* TODO: Deduplicate glyphsets between windows */
+    if(need_free) xcb_render_free_glyph_set(con->con,win->gsid);
+    else win->gsid = xcb_generate_id(con->con);
+    xcb_render_create_glyph_set(con->con,win->gsid, win->pfglyph);
+
+    //Preload ASCII
+    int16_t total = 0, maxd = 0, maxh = 0;
+    for(uint32_t i = ' '; i <= '~'; i++){
+        nss_glyph_t *glyphs[nss_font_attrib_max];
+        for(size_t j = 0; j < nss_font_attrib_max; j++){
+            glyphs[j] = nss_font_render_glyph(win->font, i, j, win->lcd_mode);
+            register_glyph(con,win, i | (j << 24),glyphs[j]);
+        }
+
+        total += glyphs[0]->x_off;
+        maxd = MAX(maxd, glyphs[0]->height - glyphs[0]->y);
+        maxh = MAX(maxh, glyphs[0]->y);
+
+        for(size_t j = 0; j < nss_font_attrib_max; j++)
+            free(glyphs[j]);
+    }
+    win->char_width = (total + '~' - ' ') / ('~' - ' ' + 1);
+
+    win->char_height = maxh;
+    win->char_depth = maxd;
+    win->cw = MAX(1,(win->width - 2*win->left_border) / win->char_width);
+    win->ch = MAX(1,(win->height - 2*win->top_border) / (win->char_height + win->char_depth));
+
+    xcb_rectangle_t bound = { 0, 0, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height) };
+
+    if(need_free){
+        xcb_free_pixmap(con->con, win->pid);
+        xcb_free_gc(con->con, win->gc);
+        xcb_render_free_picture(con->con, win->pic);
+    } else {
+        win->pid = xcb_generate_id(con->con);
+        win->gc = xcb_generate_id(con->con);
+        win->pic = xcb_generate_id(con->con);
+    }
+
+    c = xcb_create_pixmap_checked(con->con, TRUE_COLOR_ALPHA_DEPTH, win->pid, win->wid, bound.width, bound.height );
+    assert_void_cookie(con,c,"Can't create pixmap");
+
+    uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
+    uint32_t values2[3] = { win->background, win->background, 0 };
+    c = xcb_create_gc_checked(con->con,win->gc,win->pid,mask2, values2);
+    assert_void_cookie(con,c,"Can't create GC");
+
+    uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
+    uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
+    c = xcb_render_create_picture_checked(con->con,win->pic, win->pid, con->pfargb, mask3, values3);
+    assert_void_cookie(con,c,"Can't create XRender picture");
+
+    xcb_render_color_t color = MAKE_COLOR(win->background);
+    xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, color, 1, &bound);
+
+}
+
 /* Create new window */
-nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, nss_font_t *font){
+nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char *font_name, nss_wc_tag_t tag, uint32_t *values){
     nss_window_t *win = malloc(sizeof(nss_window_t));
     win->next = con->first;
     win->prev = NULL;
     if(con->first) con->first->prev = win;
     con->first = win;
 
-    win->font = font;
-
+    win->cursor_width = 2;
     win->left_border = 8;
     win->top_border = 8;
-    win->cursor_width = 2;
     win->background = 0xff000000;
     win->foreground = 0xffffffff;
     win->cursor_background = 0xff000000;
     win->cursor_foreground = 0xffffffff;
     win->cursor_type = nss_cursor_bar;
-    win->w = rect.width;
-    win->h = rect.height;
     win->lcd_mode = 1;
+    win->font_size = 0;
+    win->font_name = strdup(font_name);
 
-    win->pfglyph = win->lcd_mode ? con->pfargb : con->pfalpha;
+    set_config(win,tag, values);
 
-    uint32_t mask1 = XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
-    uint32_t values1[5] = { win->background, win->background, XCB_GRAVITY_NORTH_WEST,  XCB_EVENT_MASK_EXPOSURE |
-                           XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_FOCUS_CHANGE |
-                           XCB_EVENT_MASK_STRUCTURE_NOTIFY, con->mid};
+
     xcb_void_cookie_t c;
 
+    uint32_t mask1 =  XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
+        XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
+    uint32_t values1[5] = {
+        win->background,  win->background,
+        XCB_GRAVITY_NORTH_WEST, XCB_EVENT_MASK_EXPOSURE |
+        XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_FOCUS_CHANGE |
+        XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_KEY_RELEASE, con->mid
+    };
     win->wid = xcb_generate_id(con->con);
     c = xcb_create_window_checked(con->con, TRUE_COLOR_ALPHA_DEPTH, win->wid, con->screen->root,
                                   rect.x,rect.y, rect.width,rect.height, 1,
@@ -252,56 +362,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, nss_font_t 
                                   con->vis->visual_id, mask1,values1);
     assert_void_cookie(con,c,"Can't create window");
 
-    /* TODO: Deduplicate glyphsets between windows */
-    win->gsid = xcb_generate_id(con->con);
-    xcb_render_create_glyph_set(con->con, win->gsid, win->pfglyph);
-
-    //Preload ASCII
-    int16_t total = 0, maxd = 0, maxh = 0;
-    for(uint32_t i = ASCII_PRINTABLE_LOW; i < ASCII_PRINTABLE_HIGH; i++){
-        nss_glyph_t *glyphs[nss_font_attrib_max];
-        for(size_t j = 0; j < nss_font_attrib_max; j++){
-            glyphs[j] = nss_font_render_glyph(font, i, j, win->lcd_mode);
-            register_glyph(con,win,i | (j << 24),glyphs[j]);
-        }
-
-        total += glyphs[0]->x_off + glyphs[0]->x;
-        maxd = MAX(maxd, glyphs[0]->height - glyphs[0]->y);
-        maxh = MAX(maxh, glyphs[0]->y);
-
-        for(size_t j = 0; j < nss_font_attrib_max; j++)
-            free(glyphs[j]);
-    }
-
-    win->char_width = (total+3*(ASCII_PRINTABLE_HIGH-ASCII_PRINTABLE_LOW)/2) /
-        (ASCII_PRINTABLE_HIGH-ASCII_PRINTABLE_LOW);
-    win->char_height = maxh;
-    win->char_depth = maxd;
-    win->cw = MAX(1,(win->w - 2*win->left_border) / win->char_width);
-    win->ch = MAX(1,(win->h - 2*win->top_border) / (win->char_height + win->char_depth));
-
-    xcb_rectangle_t bound = { 0, 0, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height) };
-
-    win->pid = xcb_generate_id(con->con);
-    c = xcb_create_pixmap_checked(con->con, TRUE_COLOR_ALPHA_DEPTH, win->pid, win->wid, bound.width, bound.height );
-    assert_void_cookie(con,c,"Can't create pixmap");
-
-    uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
-    uint32_t values2[3] = { win->background, win->background, 0 };
-
-    win->gc = xcb_generate_id(con->con);
-    c = xcb_create_gc_checked(con->con,win->gc,win->pid,mask2, values2);
-    assert_void_cookie(con,c,"Can't create GC");
-
-    uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
-    uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
-
-    win->pic = xcb_generate_id(con->con);
-    c = xcb_render_create_picture_checked(con->con,win->pic, win->pid, con->pfargb, mask3, values3);
-    assert_void_cookie(con,c,"Can't create XRender picture");
-
-    xcb_render_color_t color = MAKE_COLOR(win->background);
-    xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, color, 1, &bound);
+    reload_font(con, win, 0);
 
     info("Font size: %d %d %d", win->char_height, win->char_depth, win->char_width);
 
@@ -312,19 +373,23 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, nss_font_t 
 
 /* Free previously created windows */
 void nss_free_window(nss_context_t *con, nss_window_t *win){
-    nss_free_term(win->term);
-
     xcb_unmap_window(con->con,win->wid);
+    xcb_flush(con->con);
+
+    if(win->next)win->next->prev = win->prev;
+    if(win->prev)win->prev->next = win->next;
+    else con->first =  win->next;
+
+    nss_free_term(win->term);
+    nss_free_font(win->font);
+
     xcb_render_free_picture(con->con,win->pic);
     xcb_free_gc(con->con,win->gc);
     xcb_free_pixmap(con->con,win->pid);
     xcb_render_free_glyph_set(con->con,win->gsid);
     xcb_destroy_window(con->con,win->wid);
 
-
-    if(win->next)win->next->prev = win->prev;
-    if(win->prev)win->prev->next = win->next;
-    else con->first =  win->next;
+    free(win->font_name);
     free(win);
 };
 
@@ -353,7 +418,10 @@ uint16_t nss_context_get_dpi(nss_context_t *con){
 }
 
 static xcb_render_picture_t create_pen(nss_context_t *con, nss_window_t *win, xcb_render_color_t *color){
-    xcb_pixmap_t pid = xcb_generate_id(con->con);
+    static xcb_pixmap_t pid = 0;
+
+    if(pid == 0) pid = xcb_generate_id(con->con);
+
     xcb_create_pixmap(con->con, TRUE_COLOR_ALPHA_DEPTH, pid, win->wid, 1, 1);
 
     uint32_t values[1] = { XCB_RENDER_REPEAT_NORMAL };
@@ -441,7 +509,6 @@ void nss_window_draw_ucs4(nss_context_t *con, nss_window_t *win, size_t len,  ui
         msg.dx = msg.dy = 0;
     }
 
-    xcb_void_cookie_t *cookies = malloc(sizeof(xcb_void_cookie_t)*len);
     for(size_t i = 0; i < len; i++){
         if(str[i] > ASCII_MAX){
             nss_glyph_t *glyph = nss_font_render_glyph(win->font, str[i], fattr, win->lcd_mode);
@@ -451,8 +518,6 @@ void nss_window_draw_ucs4(nss_context_t *con, nss_window_t *win, size_t len,  ui
             free(glyph);
         }
     }
-
-    free(cookies);
 
     xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, bg, 1, &rect);
 
@@ -483,8 +548,8 @@ static void redraw_damage(nss_context_t *con, nss_window_t *win, nss_rect_t dama
         nss_rect_t damaged[NUM_BORDERS], borders[NUM_BORDERS] = {
             {0, 0, win->left_border, height},
             {win->left_border, 0, width, win->top_border},
-            {width, win->top_border, win->w - width, win->h},
-            {0, height, width, win->h - height},
+            {width, win->top_border, win->width - width, win->height},
+            {0, height, width, win->height - height},
         };
         for(size_t i = 0; i < NUM_BORDERS; i++)
             if(intersect_with(&borders[i],&damage))
@@ -511,16 +576,25 @@ void nss_window_update(nss_context_t *con, nss_window_t *win, size_t len, nss_re
     }
 }
 
+void nss_window_configure(nss_context_t *con, nss_window_t *win, nss_wc_tag_t tag, uint32_t *values){
+    set_config(win, tag, values);
+    if (tag & (nss_wc_font_size | nss_wc_lcd_mode))
+        reload_font(con, win, 1);
+    nss_term_redraw(con, win, win->term, (nss_rect_t){0,0,win->cw, win->ch});
+    redraw_damage(con, win, (nss_rect_t){0,0,win->width, win->height});
+    xcb_flush(con->con);
+}
+
 static void handle_resize(nss_context_t *con, nss_window_t *win, int16_t width, int16_t height){
 
-    _Bool redraw_borders = width < win->w || height < win->h;
+    _Bool redraw_borders = width < win->width || height < win->height;
     //Handle resize
 
-    win->w = width;
-    win->h = height;
+    win->width = width;
+    win->height = height;
 
-    int16_t new_cw = MAX(1,(win->w - 2*win->left_border)/win->char_width);
-    int16_t new_ch = MAX(1,(win->h - 2*win->top_border)/(win->char_height+win->char_depth));
+    int16_t new_cw = MAX(1,(win->width - 2*win->left_border)/win->char_width);
+    int16_t new_ch = MAX(1,(win->height - 2*win->top_border)/(win->char_height+win->char_depth));
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
     win->cw = new_cw;
@@ -542,8 +616,8 @@ static void handle_resize(nss_context_t *con, nss_window_t *win, int16_t width, 
 
         xcb_render_composite(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, 0, pic, 0, 0, 0, 0, 0, 0, common_w, common_h);
 
-		SWAP(xcb_pixmap_t, win->pid, pid);
-		SWAP(xcb_render_picture_t, win->pic, pic);
+        SWAP(xcb_pixmap_t, win->pid, pid);
+        SWAP(xcb_render_picture_t, win->pic, pic);
         xcb_free_pixmap(con->con, pid);
         xcb_render_free_picture(con->con, pic);
 
@@ -555,23 +629,23 @@ static void handle_resize(nss_context_t *con, nss_window_t *win, int16_t width, 
         if(delta_x > 0)
             rectv[rectc++] = (nss_rect_t){ win->cw - delta_x, 0, delta_x, MAX(win->ch, win->ch - delta_y) };
 
-		for(size_t i = 0; i < rectc; i++)
-			rectv[i] = rect_scale_up(rectv[i], win->char_width, win->char_height+win->char_depth);
-	
+        for(size_t i = 0; i < rectc; i++)
+            rectv[i] = rect_scale_up(rectv[i], win->char_width, win->char_height+win->char_depth);
+
         xcb_render_color_t color = MAKE_COLOR(win->background);
         xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, color, rectc, (xcb_rectangle_t*)rectv);
 
-		for(size_t i = 0; i < rectc; i++){
+        for(size_t i = 0; i < rectc; i++){
             nss_term_redraw(con,win,win->term, rect_scale_down(rectv[i], win->char_width, win->char_height+win->char_depth));
             redraw_damage(con,win, rect_shift(rectv[i], win->left_border, win->top_border));
-		}
+        }
     }
 
     if(redraw_borders){ //Update borders
         int16_t width = win->cw * win->char_width + win->left_border;
         int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
-        redraw_damage(con,win, (nss_rect_t){width, 0, win->w - width, win->h});
-        redraw_damage(con,win, (nss_rect_t){0, height, width, win->h - height});
+        redraw_damage(con,win, (nss_rect_t){width, 0, win->width - width, win->height});
+        redraw_damage(con,win, (nss_rect_t){0, height, width, win->height - height});
         //TIP: May be redraw all borders here
     }
 
@@ -620,14 +694,30 @@ void nss_context_run(nss_context_t *con){
             xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
             nss_window_t *win = nss_window_for_xid(con, ev->window);
 
-            if(ev->width != win->w || ev->height != win->h){
+            if(ev->width != win->width || ev->height != win->height){
                 handle_resize(con,win, ev->width, ev->height);
                 xcb_flush(con->con);
             }
             break;
         }
         case XCB_KEY_RELEASE:{
-            //xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
+            xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
+            nss_window_t *win = nss_window_for_xid(con, ev->event);
+            xcb_key_but_mask_t mask = ev->state;
+            xcb_keysym_t keysym = xcb_key_symbols_get_keysym(con->keysyms, ev->detail, mask);
+            if(keysym == XK_a){
+                uint32_t arg = win->font_size + 2;
+                nss_window_configure(con, win, nss_wc_font_size, &arg);
+            }
+            if(keysym == XK_d){
+                uint32_t arg = win->font_size - 2;
+                nss_window_configure(con, win, nss_wc_font_size, &arg);
+            }
+            if(keysym == XK_w){
+                uint32_t arg = !win->lcd_mode;
+                nss_window_configure(con, win, nss_wc_lcd_mode, &arg);
+            }
+
             break;
         }
         case XCB_FOCUS_IN:

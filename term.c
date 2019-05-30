@@ -38,7 +38,7 @@ nss_term_t *nss_create_term(void){
 
     term->ch_symb[2*term->clip.width+17] = L'';
 
-	return term;
+    return term;
 }
 
 void nss_term_redraw(nss_context_t *con, nss_window_t *win, nss_term_t *term, nss_rect_t damage){
@@ -51,26 +51,26 @@ void nss_term_redraw(nss_context_t *con, nss_window_t *win, nss_term_t *term, ns
     // Separate array of chars and attribute indeces
 
     // Write something like nss_win_multi_draw_text
-    //    - Gets a set of pattern strings with some attributes 
+    //    - Gets a set of pattern strings with some attributes
     //         nss_text_attrib_t *attr;
     //         size_t length;
     //         uint32_t *string;
 
-    
+
     if(intersect_with(&damage,&term->clip)){
         for(size_t j = damage.y; j < damage.y + damage.height; j++){
-            size_t index, count = 0;
+            size_t index = 0, count = 0;
             for(size_t i = damage.x; i <= damage.x + damage.width; i++){
                 index = j*term->clip.width+i;
-                if((i > damage.x && term->ch_attr[index-1] != term->ch_attr[index]) || 
-                    i == damage.x + damage.width){
+                if((i > damage.x && term->ch_attr[index-1] != term->ch_attr[index]) ||
+                    (i == damage.x + damage.width)){
                     nss_text_attrib_t cattr = term->attr[term->ch_attr[index - count]];
                     nss_window_draw_ucs4(con, win, count, &term->ch_symb[index - count], &cattr, i-count, j);
                     if(j == term->cursor_y && i - count <= term->cursor_x && i >= term->cursor_y){
                         cattr.flags |= nss_attrib_cursor;
                         nss_window_draw_ucs4(con, win, 1, &term->ch_symb[term->cursor_x + term->cursor_y * term->clip.width], &cattr, term->cursor_x, term->cursor_y);
                     }
-					count = 0;
+                    count = 0;
                 }
                 else count++;
             }
