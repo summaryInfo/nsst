@@ -745,7 +745,7 @@ void nss_win_run(nss_context_t *con){
 					for(size_t i = 0; i < rectc; i++)
     					rectv[i] = rect_scale_up(rectv[i], win->char_width, win->char_height+win->char_depth);
     					
-                    xcb_render_color_t color = MAKE_COLOR(0xff00ff00);
+                    xcb_render_color_t color = MAKE_COLOR(win->background);
                     xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, color, rectc, rectv);
 
 					for(size_t i = 0; i < rectc; i++){
