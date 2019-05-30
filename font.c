@@ -90,7 +90,7 @@ static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_pate
         }
 
         if(FcPatternGet(pats.pats[i], FC_MATRIX, 0, &matrix) == FcResultMatch){
-            FT_Matrix ftmat; 
+            FT_Matrix ftmat;
             ftmat.xx = (FT_Fixed)(matrix.u.m->xx * 0x10000L);
             ftmat.xy = (FT_Fixed)(matrix.u.m->xy * 0x10000L);
             ftmat.yx = (FT_Fixed)(matrix.u.m->yx * 0x10000L);
@@ -121,11 +121,11 @@ static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_pate
 static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char *str, nss_font_attrib_t attr, double size){
     char *tmp = strdup(str);
     nss_paterns_holder_t pats = {
-        .length = 0, 
+        .length = 0,
         .caps = CAPS_STEP,
         .pats = malloc(sizeof(*pats.pats)*pats.caps)
     };
-    
+ 
     for(char *tok = strtok(tmp, ","); tok; tok = strtok(NULL, ",")){
         FcPattern *final_pat = NULL;
         FcPattern *pat = FcNameParse((FcChar8*) tok);
@@ -137,23 +137,23 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
 
         switch(attr){
         case nss_font_attrib_normal:
-            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Regular"); 
+            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Regular");
             FcPatternAddInteger(pat, FC_WEIGHT, FC_WEIGHT_REGULAR);
             FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ROMAN);
             break;
         case nss_font_attrib_normal | nss_font_attrib_italic:
-            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Italic"); 
+            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Italic");
             FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ITALIC);
             FcPatternAddInteger(pat, FC_WEIGHT, FC_WEIGHT_REGULAR);
             break;
         case nss_font_attrib_bold:
-            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Bold"); 
+            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Bold");
             FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ROMAN);
             FcPatternAddInteger(pat, FC_WEIGHT, FC_WEIGHT_BOLD);
             break;
         case nss_font_attrib_bold | nss_font_attrib_italic:
-            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Bold Italic"); 
-            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "BoldItalic"); 
+            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Bold Italic");
+            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "BoldItalic");
             FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ITALIC);
             FcPatternAddInteger(pat, FC_WEIGHT, FC_WEIGHT_BOLD);
             break;
@@ -200,8 +200,8 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
             if(fsize.u.d > font->size)
                 font->size = fsize.u.d;
         }
-        
-        pats.pats[pats.length++] = final_pat; 
+ 
+        pats.pats[pats.length++] = final_pat;
     }
     free(tmp);
 
@@ -262,13 +262,13 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
         stride = 4*face->glyph->bitmap.width/3;
     } else {
         FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
-        stride = (face->glyph->bitmap.width + 3) & ~3; 
+        stride = (face->glyph->bitmap.width + 3) & ~3;
     }
 
     nss_glyph_t *glyph = malloc(sizeof(*glyph) + stride * face->glyph->bitmap.rows);
     glyph->x = -face->glyph->bitmap_left;
     glyph->y = face->glyph->bitmap_top;
-    
+ 
     glyph->width = face->glyph->bitmap.width;
     if(lcd) glyph->width /= 3;
     glyph->height = face->glyph->bitmap.rows;

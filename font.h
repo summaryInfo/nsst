@@ -15,7 +15,7 @@ typedef enum nss_font_attrib {
 } nss_font_attrib_t;
 
 typedef struct nss_glyph {
-	uint16_t width, height; 
+	uint16_t width, height;
 	int16_t x, y;
 	int16_t x_off, y_off;
 	int16_t stride;
