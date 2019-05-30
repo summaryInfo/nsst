@@ -16,10 +16,10 @@ typedef struct nss_rect {
 	uint16_t height;
 } nss_rect_t;
 
-_Noreturn void die(const char* fmt, ...);
-void warn(const char* fmt, ...);
-void info(const char* fmt, ...);
-void fatal(const char* fmt, ...);
+_Noreturn void die(const char *fmt, ...);
+void warn(const char *fmt, ...);
+void info(const char *fmt, ...);
+void fatal(const char *fmt, ...);
 
 inline static nss_rect_t rect_scale_up(nss_rect_t rect, int16_t x_factor, int16_t y_factor){
     rect.x *= x_factor;

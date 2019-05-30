@@ -6,7 +6,7 @@
 
 #include "util.h"
 
-_Noreturn void die(const char* fmt, ...){
+_Noreturn void die(const char *fmt, ...){
 	va_list args;
 
 	va_start(args, fmt);
@@ -18,7 +18,7 @@ _Noreturn void die(const char* fmt, ...){
 	exit(EXIT_FAILURE);
 }
 
-void fatal(const char* fmt, ...){
+void fatal(const char *fmt, ...){
 	va_list args;
 
 	va_start(args, fmt);
@@ -28,7 +28,7 @@ void fatal(const char* fmt, ...){
 	va_end(args);
 }
 
-void warn(const char* fmt, ...){
+void warn(const char *fmt, ...){
 	va_list args;
 
 	va_start(args, fmt);
@@ -39,7 +39,7 @@ void warn(const char* fmt, ...){
 
 }
 
-void info(const char* fmt, ...){
+void info(const char *fmt, ...){
 	va_list args;
 
 	va_start(args, fmt);
