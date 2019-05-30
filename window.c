@@ -298,6 +298,7 @@ static void reload_font(nss_context_t *con, nss_window_t *win, _Bool need_free){
         xcb_free_pixmap(con->con, win->pid);
         xcb_free_gc(con->con, win->gc);
         xcb_render_free_picture(con->con, win->pic);
+        nss_term_resize(con, win, win->term, win->cw, win->ch);
     } else {
         win->pid = xcb_generate_id(con->con);
         win->gc = xcb_generate_id(con->con);
@@ -366,7 +367,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
 
     info("Font size: %d %d %d", win->char_height, win->char_depth, win->char_width);
 
-    win->term = nss_create_term();
+    win->term = nss_create_term(win->cw, win->ch);
 
     return win;
 }
@@ -576,13 +577,59 @@ void nss_window_update(nss_context_t *con, nss_window_t *win, size_t len, nss_re
     }
 }
 
-void nss_window_configure(nss_context_t *con, nss_window_t *win, nss_wc_tag_t tag, uint32_t *values){
+void nss_window_set(nss_context_t *con, nss_window_t *win, nss_wc_tag_t tag, uint32_t *values){
     set_config(win, tag, values);
     if (tag & (nss_wc_font_size | nss_wc_lcd_mode))
         reload_font(con, win, 1);
     nss_term_redraw(con, win, win->term, (nss_rect_t){0,0,win->cw, win->ch});
     redraw_damage(con, win, (nss_rect_t){0,0,win->width, win->height});
     xcb_flush(con->con);
+}
+
+void nss_window_set_font(nss_context_t *con, nss_window_t *win, const char * name){
+    if(!name) {
+        warn("Empty font name");
+        return;
+    }
+    free(win->font_name);
+    win->font_name = strdup(name);
+    reload_font(con, win, 1);
+    nss_term_redraw(con, win, win->term, (nss_rect_t){0,0,win->cw, win->ch});
+    redraw_damage(con, win, (nss_rect_t){0,0,win->width, win->height});
+    xcb_flush(con->con);
+}
+
+nss_font_t *nss_window_get_font(nss_context_t *con, nss_window_t *win){
+    return win->font;
+}
+
+char *nss_window_get_font_name(nss_context_t *con, nss_window_t *win){
+    return win->font_name;
+}
+
+uint32_t nss_window_get(nss_context_t *con, nss_window_t *win, nss_wc_tag_t tag){
+    if(tag & nss_wc_cusror_width)
+        return win->cursor_width;
+    if(tag & nss_wc_left_border)
+        return win->left_border;
+    if(tag & nss_wc_top_border)
+        return win->top_border;
+    if(tag & nss_wc_background)
+        return win->background;
+    if(tag & nss_wc_foreground)
+        return win->foreground;
+    if(tag & nss_wc_cursor_background)
+        return win->cursor_background;
+    if(tag & nss_wc_cursor_foreground)
+        return win->cursor_foreground;
+    if(tag & nss_wc_cursor_type)
+        return win->cursor_type;
+    if(tag & nss_wc_lcd_mode)
+        return win->lcd_mode;
+    if(tag & nss_wc_font_size)
+        return win->font_size;
+    warn("Invalid option");
+    return 0;
 }
 
 static void handle_resize(nss_context_t *con, nss_window_t *win, int16_t width, int16_t height){
@@ -634,6 +681,8 @@ static void handle_resize(nss_context_t *con, nss_window_t *win, int16_t width, 
 
         xcb_render_color_t color = MAKE_COLOR(win->background);
         xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, color, rectc, (xcb_rectangle_t*)rectv);
+
+        nss_term_resize(con,win,win->term, win->cw, win->ch);
 
         for(size_t i = 0; i < rectc; i++){
             nss_term_redraw(con,win,win->term, rect_scale_down(rectv[i], win->char_width, win->char_height+win->char_depth));
@@ -707,15 +756,15 @@ void nss_context_run(nss_context_t *con){
             xcb_keysym_t keysym = xcb_key_symbols_get_keysym(con->keysyms, ev->detail, mask);
             if(keysym == XK_a){
                 uint32_t arg = win->font_size + 2;
-                nss_window_configure(con, win, nss_wc_font_size, &arg);
+                nss_window_set(con, win, nss_wc_font_size, &arg);
             }
             if(keysym == XK_d){
                 uint32_t arg = win->font_size - 2;
-                nss_window_configure(con, win, nss_wc_font_size, &arg);
+                nss_window_set(con, win, nss_wc_font_size, &arg);
             }
             if(keysym == XK_w){
                 uint32_t arg = !win->lcd_mode;
-                nss_window_configure(con, win, nss_wc_lcd_mode, &arg);
+                nss_window_set(con, win, nss_wc_lcd_mode, &arg);
             }
 
             break;
