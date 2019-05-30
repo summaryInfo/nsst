@@ -44,6 +44,7 @@ typedef enum nss_wc_tag {
     nss_wc_cursor_type = 1 << 7,
     nss_wc_lcd_mode = 1 << 8,
     nss_wc_font_size = 1 << 9,
+    nss_wc_underline_width = 1 << 10,
 } nss_wc_tag_t;
 
 typedef struct nss_window nss_window_t;
@@ -58,6 +59,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
 void nss_free_window(nss_context_t *con, nss_window_t *win);
 void nss_window_draw_ucs4(nss_context_t *con, nss_window_t *win, size_t len,  uint32_t *ch, nss_text_attrib_t *attr, int16_t x, int16_t y);
 void nss_window_update(nss_context_t *con, nss_window_t *win, size_t len, nss_rect_t *damage);
+void nss_window_clear(nss_context_t *con, nss_window_t *win, size_t len, nss_rect_t *damage);
 void nss_window_set(nss_context_t *con, nss_window_t *win, nss_wc_tag_t tag, uint32_t *values);
 void nss_window_set_font(nss_context_t *con, nss_window_t *win, const char * name);
 nss_font_t *nss_window_get_font(nss_context_t *con, nss_window_t *win);

@@ -7,6 +7,8 @@
 struct nss_term {
     int16_t cursor_x;
     int16_t cursor_y;
+    int16_t width;
+    int16_t height;
 
     uint32_t *ch_attr;
     uint32_t *ch_symb;
@@ -17,6 +19,8 @@ struct nss_term {
 nss_term_t *nss_create_term(int16_t width, int16_t height){
     nss_term_t *term = malloc(sizeof(nss_term_t));
 
+    term->width = width;
+    term->height = height;
     term->cursor_x = 15;
     term->cursor_y = 4;
     term->clip = (nss_rect_t){0,0,127-33,5};
@@ -55,7 +59,17 @@ void nss_term_redraw(nss_context_t *con, nss_window_t *win, nss_term_t *term, ns
     //         nss_text_attrib_t *attr;
     //         size_t length;
     //         uint32_t *string;
+    //
 
+	//Clear undefined areas
+	//
+    size_t rectc = 0;
+    nss_rect_t rectv[2];
+    if(term->clip.width < term->width)
+        rectv[rectc++] = (nss_rect_t){term->clip.width, 0, term->width - term->clip.width, MIN(term->clip.height, term->height)};
+    if(term->clip.height < term->height)
+        rectv[rectc++] = (nss_rect_t){0, term->clip.height, MAX(term->clip.width, term->width), term->height - term->clip.height};
+    nss_window_clear(con, win, rectc, rectv);
 
     if(intersect_with(&damage,&term->clip)){
         for(size_t j = damage.y; j < damage.y + damage.height; j++){
@@ -83,7 +97,8 @@ void nss_term_get_cursor(nss_term_t *term, int16_t *cursor_x, int16_t *cursor_y)
 }
 
 void nss_term_resize(nss_context_t *con, nss_window_t *win, nss_term_t *term, int16_t width, int16_t height){
-	//Do nothing
+    term->width = width;
+    term->height = height;
 }
 
 void nss_free_term(nss_term_t *term){
