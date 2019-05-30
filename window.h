@@ -42,11 +42,6 @@ typedef enum nss_cursor_type {
     nss_cursor_underline = 3,
 } nss_cursor_type_t;
 
-typedef struct nss_cell {
-    uint32_t ch;
-	uint32_t attr;
-} nss_cell_t;
-
 nss_context_t* nss_win_create(void);
 void nss_win_free(nss_context_t* con);
 
