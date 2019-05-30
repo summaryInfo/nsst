@@ -28,6 +28,7 @@ struct nss_font {
     FcCharSet *subst_chars;
     uint16_t dpi;
     double pixel_size;
+    double size;
     nss_face_list_t face_types[nss_font_attrib_max];
 };
 
@@ -143,7 +144,7 @@ static void add_font_substitude(nss_font_t *font, nss_face_list_t *faces, FcChar
 
 #define CAPS_STEP 8
 
-static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char *str, nss_font_attrib_t attr){
+static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char *str, nss_font_attrib_t attr, double size){
     char *tmp = strdup(str);
     nss_paterns_holder_t pats = {
         .length = 0, 
@@ -157,19 +158,39 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
         FcPatternAddDouble(pat, FC_DPI, font->dpi);
         FcPatternAddBool(pat, FC_SCALABLE, FcTrue);
         FcPatternDel(pat, FC_STYLE);
+        FcPatternDel(pat, FC_WEIGHT);
+        FcPatternDel(pat, FC_SLANT);
 
-		//TODO: May be add more styles here?
         switch(attr){
         case nss_font_attrib_normal:
-            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Regular"); break;
+            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Regular"); 
+            FcPatternAddInteger(pat, FC_WEIGHT, FC_WEIGHT_REGULAR);
+            FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ROMAN);
+            break;
         case nss_font_attrib_normal | nss_font_attrib_italic:
-            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Italic"); break;
+            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Italic"); 
+            FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ITALIC);
+            FcPatternAddInteger(pat, FC_WEIGHT, FC_WEIGHT_REGULAR);
+            break;
         case nss_font_attrib_bold:
-            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Bold"); break;
+            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Bold"); 
+            FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ROMAN);
+            FcPatternAddInteger(pat, FC_WEIGHT, FC_WEIGHT_BOLD);
+            break;
         case nss_font_attrib_bold | nss_font_attrib_italic:
-            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Bold Italic"); break;
+            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Bold Italic"); 
+            FcPatternAddString(pat, FC_STYLE, (FcChar8*) "BoldItalic"); 
+            FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ITALIC);
+            FcPatternAddInteger(pat, FC_WEIGHT, FC_WEIGHT_BOLD);
+            break;
         default:
             warn("Unknown face type");
+        }
+
+        if(size > 1){
+            FcPatternDel(pat, FC_SIZE);
+            FcPatternDel(pat, FC_PIXEL_SIZE);
+            FcPatternAddDouble(pat, FC_SIZE, size);
         }
 
         FcDefaultSubstitute(pat);
@@ -195,15 +216,17 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
             pats.pats = new;
         }
 
-        font->pixel_size = 0;
-        for(size_t i = 0; i < pats.length; i++){
-            FcValue pixsize;
-            if(FcPatternGet(pats.pats[i], FC_PIXEL_SIZE, 0, &pixsize) == FcResultMatch){
-                if(pixsize.u.d > font->pixel_size)
-                    font->pixel_size = pixsize.u.d;
-            }
+        FcValue pixsize;
+        if(FcPatternGet(final_pat, FC_PIXEL_SIZE, 0, &pixsize) == FcResultMatch){
+            if(pixsize.u.d > font->pixel_size)
+                font->pixel_size = pixsize.u.d;
         }
-
+        FcValue fsize;
+        if(size < 2 && FcPatternGet(final_pat, FC_SIZE, 0, &fsize) == FcResultMatch){
+            if(fsize.u.d > font->size)
+                font->size = fsize.u.d;
+        }
+        
         pats.pats[pats.length++] = final_pat; 
     }
     free(tmp);
@@ -215,7 +238,7 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
     free(pats.pats);
 }
 
-nss_font_t *nss_create_font(const char* descr, uint16_t dpi){
+nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi){
     if(global.fonts++ == 0){
         if(FcInit() == FcFalse)
             die("Can't initialize fontconfig");
@@ -228,7 +251,9 @@ nss_font_t *nss_create_font(const char* descr, uint16_t dpi){
         return NULL;
     }
 
+    font->pixel_size = 0;
     font->dpi = dpi;
+    font->size = size;
 
     if(FT_Init_FreeType(&font->library) != FT_Err_Ok){
         free(font);
@@ -237,7 +262,7 @@ nss_font_t *nss_create_font(const char* descr, uint16_t dpi){
     }
 
     for(size_t i = 0; i < nss_font_attrib_max; i++)
-        load_face_list(font, &font->face_types[i], descr, i);
+        load_face_list(font, &font->face_types[i], descr, i, size);
 
     // If can't find suitable, use 13 by default
     if(font->pixel_size == 0)
@@ -246,7 +271,7 @@ nss_font_t *nss_create_font(const char* descr, uint16_t dpi){
     return font;
 }
 
-nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t attr){
+nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t attr, _Bool lcd){
     nss_face_list_t *faces = &font->face_types[attr];
     int glyph_index = 0;
     FT_Face face = faces->faces[0];
@@ -265,28 +290,60 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
         }
     }
 
-    FT_Load_Glyph(face, glyph_index, FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT);
+    FT_Load_Glyph(face, glyph_index, FT_LOAD_NO_BITMAP);
 
-    size_t stride = (face->glyph->bitmap.width + 3) & ~3; 
+    size_t stride;
+    if(lcd) {
+        FT_Render_Glyph(face->glyph, FT_RENDER_MODE_LCD);
+        stride = 4*face->glyph->bitmap.width/3;
+    } else {
+        FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
+        stride = (face->glyph->bitmap.width + 3) & ~3; 
+    }
+
     nss_glyph_t *glyph = malloc(sizeof(*glyph) + stride * face->glyph->bitmap.rows);
     glyph->x = -face->glyph->bitmap_left;
     glyph->y = face->glyph->bitmap_top;
+    
     glyph->width = face->glyph->bitmap.width;
+    if(lcd) glyph->width /= 3;
     glyph->height = face->glyph->bitmap.rows;
     glyph->x_off = face->glyph->advance.x/64.;
     glyph->y_off = face->glyph->advance.y/64.;
     glyph->stride = stride;
 
+    info("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
+    info("Num grays: %d", face->glyph->bitmap.num_grays);
+
     int pitch = face->glyph->bitmap.pitch;
     uint8_t *src = face->glyph->bitmap.buffer;
 
-    if(pitch < 0) {
-        info("Triggered");
+    if(pitch < 0)
         src -= pitch*(face->glyph->bitmap.rows - 1);
+
+    if(lcd){
+        for(size_t i = 0; i < glyph->height; i++){
+            for(size_t j = 0; j < glyph->width; j++){
+                glyph->data[4*j + stride*i + 0] = src[pitch*i + 3*j + 2];
+                glyph->data[4*j + stride*i + 1] = src[pitch*i + 3*j + 1];
+                glyph->data[4*j + stride*i + 2] = src[pitch*i + 3*j + 0];
+                glyph->data[4*j + stride*i + 3] = 0xff;
+            }
+        }
+    } else {
+        for(size_t i = 0; i < glyph->height; i++)
+            memcpy(glyph->data + stride*i, src + pitch*i, glyph->width);
     }
 
-    for(size_t i = 0; i < glyph->height; i++)
-        memcpy(glyph->data + stride*i, src + pitch*i, glyph->width);
+    info("Glyph: %d %d", glyph->width, glyph->height);
+    size_t img_width = glyph->width;
+    if(lcd) img_width *= 3;
+
+    for(size_t k = 0; k < glyph->height; k++){
+        for(size_t m = 0 ;m < img_width; m++)
+            fprintf(stderr,"%02x",src[pitch*k+m]);
+        putc('\n',stderr);
+    }
 
     return glyph;
 }

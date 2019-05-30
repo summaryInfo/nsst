@@ -18,6 +18,7 @@
 #include "font.h"
 
 #define TRUE_COLOR_ALPHA_DEPTH 32
+#define TRUE_COLOR_DEPTH 24
 #define ASCII_MAX 128
 #define ASCII_PRINTABLE_HIGH 127
 #define ASCII_PRINTABLE_LOW 32
@@ -63,6 +64,7 @@ struct nss_window {
     int16_t char_height;
     int16_t border_width;
     int16_t cursor_width;
+    _Bool lcd_mode;
 
     nss_color_t background;
     nss_color_t foreground;
@@ -72,7 +74,14 @@ struct nss_window {
 
     _Bool focused;
 
+    /*
+     * Glyph encoding:
+     *  0xTTUUUUUU, where
+     *      * 0xTT - font fase
+     *      * 0xUUUUUU - unicode character
+     */
     xcb_render_glyphset_t gsid;
+    xcb_render_pictformat_t pfglyph;
     nss_font_t *font;
     nss_term_t *term;
     struct nss_window *prev, *next;
@@ -86,18 +95,6 @@ struct nss_context {
     xcb_colormap_t mid;
     xcb_visualtype_t* vis;
 
-    /*
-     * Glyph encoding:
-     *  0xTTUUUUUU, where
-     *      *      0xTT - font fase
-     *          0 normal
-     *          1 normal_italic
-     *          2 bold
-     *          3 bold_italic
-     *          4 faint
-     *          5 faint_italic
-     *      0xUUUUUU - unicode character
-     */
     xcb_render_pictformat_t pfargb;
     xcb_render_pictformat_t pfalpha;
 
@@ -141,12 +138,12 @@ void callback_get_cursor(nss_context_t *con,nss_window_t *win, nss_term_t *term,
 void callback_redraw_damage(nss_context_t *con,nss_window_t *win, nss_term_t *term, nss_rect_t *damage){
     if(intersect_with(damage,&term->clip)){
         for(size_t j = damage->y; j < damage->y+damage->height; j++){
-            for(size_t i = damage->x; i < damage->x+damage->width; i++){
-                nss_text_attrib_t cattr = term->attr[term->storage[j*term->clip.width+i].attr];
-                if(term->cursor_x == i  && term->cursor_y == j){
+            for(size_t i = damage->x+damage->width; i > damage->x; i--){
+                nss_text_attrib_t cattr = term->attr[term->storage[j*term->clip.width+i-1].attr];
+                if(term->cursor_x == i - 1  && term->cursor_y == j){
                     cattr.flags |= nss_attrib_cursor;
                 }
-                nss_win_render_ucs4(con, win, 1, &term->storage[j*term->clip.width+i].ch, &cattr, i, j);
+                nss_win_render_ucs4(con, win, 1, &term->storage[j*term->clip.width+i-1].ch, &cattr, i-1, j);
             }
         }
     }
@@ -169,6 +166,7 @@ void callback_initialize(nss_context_t *con,nss_window_t *win, nss_term_t *term)
     for(size_t k = 0; k < 5; k++)
         for(size_t i = 33; i < 127; i++)
             term->storage[k*term->clip.width+(i-33)] = (nss_cell_t){i,k};
+    term->storage[2*term->clip.width+17].ch = L'';
 }
 
 void callback_free(nss_context_t *con,nss_window_t *win, nss_term_t *term){
@@ -307,7 +305,7 @@ static void register_glyph(nss_context_t *con, nss_window_t *win, uint32_t ch, n
             .width = glyph->width, .height = glyph->height,
             .x = glyph->x, .y = glyph->y,
             .x_off = glyph->x_off, .y_off = glyph->y_off
-            };
+        };
         xcb_render_add_glyphs(con->con, win->gsid, 1, &ch, &spec, glyph->height*glyph->stride, glyph->data);
 }
 
@@ -328,7 +326,9 @@ nss_window_t* nss_win_add_window(nss_context_t* con, nss_geometry_t *geo, nss_fo
     win->cursor_type = nss_cursor_bar;
     win->w = geo->w;
     win->h = geo->h;
+    win->lcd_mode = 1;
 
+    win->pfglyph = win->lcd_mode ? con->pfargb : con->pfalpha;
 
     //TODO: Choose gravity depending on padding centering XCB_GRAVITY_CENTER
     uint8_t depth = 32;
@@ -348,14 +348,14 @@ nss_window_t* nss_win_add_window(nss_context_t* con, nss_geometry_t *geo, nss_fo
 
     /* TODO: Deduplicate glyphsets between windows */
     win->gsid = xcb_generate_id(con->con);
-    xcb_render_create_glyph_set(con->con, win->gsid, con->pfalpha);
+    xcb_render_create_glyph_set(con->con, win->gsid, win->pfglyph);
 
     //Preload ASCII
     int16_t total = 0, maxd = 0, maxh = 0;
     for(uint32_t i = ASCII_PRINTABLE_LOW; i < ASCII_PRINTABLE_HIGH; i++){
         nss_glyph_t *glyphs[nss_font_attrib_max];
         for(size_t j = 0; j < nss_font_attrib_max; j++){
-            glyphs[j] = nss_font_render_glyph(font, i, j);
+            glyphs[j] = nss_font_render_glyph(font, i, j, win->lcd_mode);
             register_glyph(con,win,i | (j << 24),glyphs[j]);
         }
 
@@ -482,7 +482,7 @@ static xcb_render_picture_t create_pen(nss_context_t *con, nss_window_t *win, xc
 
 static void draw_cursor(nss_context_t *con, nss_window_t *win, uint16_t x, uint16_t y){
     xcb_rectangle_t rects[4] = {
-        {x,y-win->char_height,1,win->char_height+win->char_depth},
+        {x-1,y-win->char_height,1,win->char_height+win->char_depth},
         {x,y-win->char_height,win->char_width, 1},
         {x+win->char_width-1,y-win->char_height,1,win->char_height+win->char_depth},
         {x,y+win->char_depth-1,win->char_width, 1}
@@ -525,7 +525,7 @@ void nss_win_render_ucs4(nss_context_t* con, nss_window_t* win, size_t len,  uin
     if(attr->flags & nss_attrib_background)
         bg.alpha = BG_ALPHA;
 
-xcb_rectangle_t rect = { .x = x, .y = y-win->char_height,
+    xcb_rectangle_t rect = { .x = x, .y = y-win->char_height,
                         .width = win->char_width*len, .height = win->char_height+win->char_depth  };
     xcb_rectangle_t lines[2] = {
         { .x = x, .y= y + 1, .width = win->char_width*len, .height = 1 },
@@ -554,18 +554,11 @@ xcb_rectangle_t rect = { .x = x, .y = y-win->char_height,
         msg.dx = msg.dy = 0;
     }
 
-xcb_void_cookie_t *cookies = malloc(sizeof(xcb_void_cookie_t)*len);
+    xcb_void_cookie_t *cookies = malloc(sizeof(xcb_void_cookie_t)*len);
     for(size_t i = 0; i < len; i++){
         if(str[i] > ASCII_MAX){
-            nss_glyph_t *glyph = nss_font_render_glyph(win->font, str[i], fattr);
+            nss_glyph_t *glyph = nss_font_render_glyph(win->font, str[i], fattr, win->lcd_mode);
             register_glyph(con,win,str[i] | (fattr << 24), glyph);
-            /*
-            for(size_t i = 0; i < glyph->height; i++){
-                for(size_t j = 0; j < glyph->width; j++)
-                    fprintf(stderr,"%02x",glyph->data[glyph->stride*i+j]);
-                putc('\n',stderr);
-            }
-            */
             free(glyph);
         }
     }
@@ -583,7 +576,7 @@ xcb_void_cookie_t *cookies = malloc(sizeof(xcb_void_cookie_t)*len);
     }
 
     c = xcb_render_composite_glyphs_32_checked(con->con, XCB_RENDER_PICT_OP_OVER,
-                                   pen, win->pic, con->pfalpha, win->gsid,
+                                   pen, win->pic, win->pfglyph, win->gsid,
                                    0, 0, data_len, (uint8_t*)data);
     assert_void_cookie(con, c, "Can't render text");
 
@@ -614,7 +607,6 @@ void nss_win_run(nss_context_t *con){
             xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
             nss_window_t *win = nss_window_for_xid(con,ev->window);
 
-            //TODO: Build border rectangles considering damage
             info("Damage: %d %d %d %d", ev->x, ev->y, ev->width, ev->height);
 
             int16_t width = win->cw * win->char_width;
