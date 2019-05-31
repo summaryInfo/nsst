@@ -1,11 +1,11 @@
 
-CFLAGS=-O2 -Wall -std=c99
+CFLAGS=-Os -Wall -std=c99
 PROG=nss
 
 IN=window.c nss.c util.c font.c term.c
 OBJ=$(patsubst %.c,%.o,$(IN))
-LIBS=`pkg-config xcb xcb-render xcb-xrm fontconfig freetype2 --libs`
-INCLUES=`pkg-config xcb xcb-render xcb-xrm fontconfig freetype2 --cflags`
+LIBS=`pkg-config xcb xcb-keysyms xcb-render xcb-xrm fontconfig freetype2 --libs`
+INCLUES=`pkg-config xcb xcb-keysyms xcb-render xcb-xrm fontconfig freetype2 --cflags`
 
 all: nss
 

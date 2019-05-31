@@ -351,7 +351,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     };
     win->wid = xcb_generate_id(con->con);
     c = xcb_create_window_checked(con->con, TRUE_COLOR_ALPHA_DEPTH, win->wid, con->screen->root,
-                                  rect.x,rect.y, rect.width,rect.height, 1,
+                                  rect.x,rect.y, rect.width, rect.height, 0,
                                   XCB_WINDOW_CLASS_INPUT_OUTPUT,
                                   con->vis->visual_id, mask1,values1);
     assert_void_cookie(con,c,"Can't create window");
@@ -360,7 +360,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
 
     info("Font size: %d %d %d", win->char_height, win->char_depth, win->char_width);
 
-    win->term = nss_create_term(win->cw, win->ch);
+    win->term = nss_create_term(con, win, win->cw, win->ch);
 
     return win;
 }
@@ -582,7 +582,7 @@ void nss_window_set(nss_context_t *con, nss_window_t *win, nss_wc_tag_t tag, uin
     set_config(win, tag, values);
     if (tag & (nss_wc_font_size | nss_wc_lcd_mode))
         reload_font(con, win, 1);
-    nss_term_redraw(con, win, win->term, (nss_rect_t){0,0,win->cw, win->ch});
+    nss_term_redraw(win->term, (nss_rect_t){0,0,win->cw, win->ch});
     redraw_damage(con, win, (nss_rect_t){0,0,win->width, win->height});
     xcb_flush(con->con);
 }
@@ -595,7 +595,7 @@ void nss_window_set_font(nss_context_t *con, nss_window_t *win, const char * nam
     free(win->font_name);
     win->font_name = strdup(name);
     reload_font(con, win, 1);
-    nss_term_redraw(con, win, win->term, (nss_rect_t){0,0,win->cw, win->ch});
+    nss_term_redraw(win->term, (nss_rect_t){0,0,win->cw, win->ch});
     redraw_damage(con, win, (nss_rect_t){0,0,win->width, win->height});
     xcb_flush(con->con);
 }
@@ -670,7 +670,7 @@ static void handle_resize(nss_context_t *con, nss_window_t *win, int16_t width, 
         nss_term_resize(win->term, win->cw, win->ch);
 
         for(size_t i = 0; i < rectc; i++)
-            nss_term_redraw(con,win,win->term, rectv[i]);
+            nss_term_redraw(win->term, rectv[i]);
         nss_window_update(con, win, rectc, rectv);
     }
 
@@ -686,14 +686,6 @@ static void handle_resize(nss_context_t *con, nss_window_t *win, int16_t width, 
 
 static void handle_focus(nss_context_t *con, nss_window_t *win, _Bool focused){
     win->focused = focused;
-
-    nss_rect_t damage = { 0, 0, 1, 1 };
-    nss_term_get_cursor(win->term,&damage.x,&damage.y);
-    nss_term_redraw(con,win,win->term, damage);
-
-    damage = rect_scale_up(damage, win->char_width, win->char_height + win->char_depth);
-    xcb_copy_area(con->con,win->pid,win->wid,win->gc, damage.x, damage.y,
-                  damage.x+win->left_border, damage.y+win->top_border, damage.width, damage.height);
     nss_term_focus(win->term, focused);
 }
 
@@ -705,7 +697,7 @@ void nss_context_run(nss_context_t *con){
 
     for(nss_window_t *win = con->first; win; win = win->next){
         xcb_map_window(con->con,win->wid);
-        nss_term_redraw(con,win,win->term,(nss_rect_t){0,0,win->cw,win->ch});
+        nss_term_redraw(win->term, (nss_rect_t){0,0,win->cw,win->ch});
     }
 
     xcb_flush(con->con);
@@ -758,7 +750,6 @@ void nss_context_run(nss_context_t *con){
         case XCB_FOCUS_OUT:{
             xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
             nss_window_t *win = nss_window_for_xid(con,ev->event);
-
             handle_focus(con,win,event->response_type == XCB_FOCUS_IN);
             xcb_flush(con->con);
             break;
