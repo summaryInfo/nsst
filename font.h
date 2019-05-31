@@ -26,6 +26,7 @@ typedef struct nss_font nss_font_t;
 
 nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi);
 void nss_free_font(nss_font_t *font);
+nss_font_t *nss_font_reference(nss_font_t *font);
 nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t face, _Bool lcd);
 int16_t nss_font_get_size(nss_font_t *font);
 

@@ -14,6 +14,7 @@
 
 struct nss_font_state {
     size_t fonts;
+    FT_Library library;
 } global = { 0 };
 
 typedef struct nss_face_list {
@@ -23,8 +24,7 @@ typedef struct nss_face_list {
 } nss_face_list_t;
 
 struct nss_font {
-    FT_Library library;
-    FcCharSet *subst_chars;
+    size_t refs;
     uint16_t dpi;
     double pixel_size;
     double size;
@@ -38,17 +38,18 @@ typedef struct nss_paterns_holder {
 } nss_paterns_holder_t;
 
 void nss_free_font(nss_font_t *font){
-    for(size_t i = 0; i < nss_font_attrib_max; i++){
-        for(size_t j = 0; j < font->face_types[i].length; j++)
-            FT_Done_Face(font->face_types[i].faces[j]);
-        free(font->face_types[i].faces);
+    if(--font->refs == 0){
+        for(size_t i = 0; i < nss_font_attrib_max; i++){
+            for(size_t j = 0; j < font->face_types[i].length; j++)
+                FT_Done_Face(font->face_types[i].faces[j]);
+            free(font->face_types[i].faces);
+        }
+        if(--global.fonts == 0){
+            FcFini();
+            FT_Done_FreeType(global.library);
+        }
+        free(font);
     }
-    FT_Done_FreeType(font->library);
-    FcCharSetDestroy(font->subst_chars);
-    if(--global.fonts == 0){
-        FcFini();
-    }
-    free(font);
 }
 
 static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_paterns_holder_t pats){
@@ -76,7 +77,7 @@ static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_pate
         }
 
         info("Font file: %s:%d", file.u.s, index.u.i);
-        FT_Error err = FT_New_Face(font->library, (const char*)file.u.s, index.u.i, &faces->faces[faces->length]);
+        FT_Error err = FT_New_Face(global.library, (const char*)file.u.s, index.u.i, &faces->faces[faces->length]);
         if(err != FT_Err_Ok){
             if(err == FT_Err_Unknown_File_Format) warn("Wrong font file format");
             else if(err == FT_Err_Cannot_Open_Resource) warn("Can't open resource");
@@ -221,6 +222,9 @@ nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi){
     if(global.fonts++ == 0){
         if(FcInit() == FcFalse)
             die("Can't initialize fontconfig");
+        if(FT_Init_FreeType(&global.library) != FT_Err_Ok){
+            die("Can't initialize freetype2, error: %s", strerror(errno));
+        }
     }
 
     nss_font_t *font = calloc(1, sizeof(*font));
@@ -229,15 +233,11 @@ nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi){
         return NULL;
     }
 
+	font->refs = 1;
     font->pixel_size = 0;
     font->dpi = dpi;
     font->size = size;
 
-    if(FT_Init_FreeType(&font->library) != FT_Err_Ok){
-        free(font);
-        warn("Error: %s", strerror(errno));
-        return NULL;
-    }
 
     for(size_t i = 0; i < nss_font_attrib_max; i++)
         load_face_list(font, &font->face_types[i], descr, i, size);
@@ -247,6 +247,11 @@ nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi){
         font->pixel_size = 13.0;
 
     return font;
+}
+
+nss_font_t *nss_font_reference(nss_font_t *font){
+	font->refs++;
+	return font;
 }
 
 nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t attr, _Bool lcd){
