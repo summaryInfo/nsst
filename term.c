@@ -10,9 +10,10 @@ struct nss_term {
     int16_t width;
     int16_t height;
     _Bool focused;
+    _Bool visible;
 
-	nss_window_t *win;
-	nss_context_t *con;
+    nss_window_t *win;
+    nss_context_t *con;
 
     uint32_t *ch_attr;
     uint32_t *ch_symb;
@@ -30,6 +31,7 @@ nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width
     term->cursor_x = 15;
     term->cursor_y = 4;
     term->focused = 1;
+    term->visible = 1;
     term->win = win;
     term->con = con;
     term->clip = (nss_rect_t){0,0,127-33,5};
@@ -49,7 +51,7 @@ nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width
             term->ch_symb AT(i-'!', k) = i;
         }
 
-	//Some random char
+    //Some random char
     term->ch_symb AT(17,2) = L'';
 
     return term;
@@ -71,8 +73,9 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage){
     //         uint32_t *string;
     //
 
-	//Clear undefined areas
+    if(!term->visible) return;
 
+    //Clear undefined areas
     size_t rectc = 0;
     nss_rect_t rectv[2];
     if(term->clip.width < term->width)
@@ -111,11 +114,15 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height){
 
 void nss_term_focus(nss_term_t *term, _Bool focused){
     int16_t cx = term->cursor_x, cy = term->cursor_y;
-	term->focused = focused;
+    term->focused = focused;
     nss_text_attrib_t cattr = term->attr[term->ch_attr AT(cx,cy)];
     cattr.flags |= nss_attrib_cursor;
     nss_window_draw_ucs4(term->con, term->win, 1, &term->ch_symb AT(cx, cy), &cattr, cx, cy);
     nss_window_update(term->con, term->win, 1, &(nss_rect_t){term->cursor_x, term->cursor_y, 1, 1});
+}
+
+void nss_term_visibility(nss_term_t *term, _Bool visible) {
+    term->visible = visible;
 }
 
 void nss_free_term(nss_term_t *term){
