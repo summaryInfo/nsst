@@ -10,11 +10,10 @@
 #include <xcb/xcb.h>
 #include <xcb/render.h>
 #include <xcb/xcb_xrm.h>
-#include <xcb/xcb_keysyms.h>
 #include <xcb/xcb_ewmh.h>
-#include <X11/keysym.h>
-#include <X11/XF86keysym.h>
+#include <xkbcommon/xkbcommon-x11.h>
 #include <unistd.h>
+#include <poll.h>
 
 #include "window.h"
 #include "util.h"
@@ -77,6 +76,8 @@ struct nss_window {
     int16_t char_depth;
     int16_t char_height;
 
+    struct xkb_state *xkb_state;
+
     char *font_name;
     nss_term_t *term;
     struct nss_window *prev, *next;
@@ -88,7 +89,6 @@ struct nss_context {
     xcb_screen_t *screen;
     xcb_colormap_t mid;
     xcb_visualtype_t *vis;
-    xcb_key_symbols_t* keysyms;
 
     xcb_render_pictformat_t pfargb;
     xcb_render_pictformat_t pfalpha;
@@ -98,6 +98,12 @@ struct nss_context {
     xcb_atom_t atom_wm_delete_window;
     xcb_atom_t atom_wm_protocols;
     xcb_atom_t atom_utf8_string;
+
+    struct xkb_context *xkb_ctx;
+    struct xkb_keymap *xkb_keymap;
+    int32_t xkb_core_kbd;
+    uint8_t xkb_base_event;
+    uint8_t xkb_base_err;
 nss_window_t *first;
 };
 
@@ -226,7 +232,31 @@ nss_context_t *nss_create_context(void){
         die("Can't find suitable picture format");
     }
 
-    con->keysyms = xcb_key_symbols_alloc(con->con);
+    uint16_t xkb_min = 0, xkb_maj = 0;
+    int res = xkb_x11_setup_xkb_extension(con->con, XKB_X11_MIN_MAJOR_XKB_VERSION, 
+                                          XKB_X11_MIN_MINOR_XKB_VERSION, XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS, 
+                                          &xkb_maj, &xkb_min, &con->xkb_base_event, &con->xkb_base_err);
+    if (!res || xkb_maj < XKB_X11_MIN_MAJOR_XKB_VERSION) {
+        xcb_disconnect(con->con);
+        die("Can't setup XKB extension");
+    }
+    con->xkb_core_kbd = xkb_x11_get_core_keyboard_device_id(con->con);
+    if(con->xkb_core_kbd == -1) {
+        xcb_disconnect(con->con);
+        die("Can't get core keyboard");
+    }
+    
+    con->xkb_ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    if(!con->xkb_ctx) {
+        xcb_disconnect(con->con);
+        die("Can't create XKB context");
+    }
+    con->xkb_keymap = xkb_x11_keymap_new_from_device(con->xkb_ctx, con->con, con->xkb_core_kbd, XKB_KEYMAP_COMPILE_NO_FLAGS);
+    if(!con->xkb_keymap) {
+        xkb_context_unref(con->xkb_ctx);
+        xcb_disconnect(con->con);
+        die("Can't create XKB keymap");
+    }
 
     con->atom_net_wm_pid = intern_atom(con,"_NET_WM_PID");
     con->atom_wm_delete_window = intern_atom(con, "WM_DELETE_WINDOW");
@@ -246,8 +276,9 @@ void nss_window_set_title(nss_context_t *con, nss_window_t *win, const char *tit
 void nss_free_context(nss_context_t *con){
         while(con->first)
             nss_free_window(con,con->first);
+        xkb_keymap_unref(con->xkb_keymap);
+        xkb_context_unref(con->xkb_ctx);
         xcb_disconnect(con->con);
-        xcb_key_symbols_free(con->keysyms);
         free(con);
 }
 
@@ -397,6 +428,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     win->underline_width = 1;
     win->left_border = 8;
     win->top_border = 8;
+    // TODO: Make it use nss_color_alloc
     win->background = 0xff000000;
     win->foreground = 0xffffffff;
     win->cursor_background = 0xff000000;
@@ -425,7 +457,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
                                   rect.x,rect.y, rect.width, rect.height, 0,
                                   XCB_WINDOW_CLASS_INPUT_OUTPUT,
                                   con->vis->visual_id, mask1,values1);
-    if(check_void_cookie(con,c)){
+    if(check_void_cookie(con, c)){
         warn("Can't create window");
         free(win);
         return NULL;
@@ -433,9 +465,19 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
 
     set_wm_props(con,win);
 
+    // TODO: Check if this fails
     reload_font(con, win, 0);
 
     info("Font size: %d %d %d", win->char_height, win->char_depth, win->char_width);
+
+    win->xkb_state = xkb_x11_state_new_from_device(con->xkb_keymap, con->con, con->xkb_core_kbd);
+    if(!win->xkb_state) {
+        warn("Can't get window xkb state");
+        c = xcb_destroy_window(con->con, win->wid);
+        check_void_cookie(con, c);
+        free(win);
+        return NULL;
+    }
 
     win->term = nss_create_term(con, win, win->cw, win->ch);
     nss_term_redraw(win->term, (nss_rect_t){0,0,win->cw,win->ch});
@@ -468,6 +510,8 @@ void nss_free_window(nss_context_t *con, nss_window_t *win){
     xcb_free_pixmap(con->con,win->pid);
     xcb_render_free_glyph_set(con->con,win->gsid);
     xcb_destroy_window(con->con,win->wid);
+
+    xkb_state_unref(win->xkb_state);
 
     free(win->font_name);
     free(win);
@@ -516,9 +560,11 @@ static xcb_render_picture_t create_pen(nss_context_t *con, nss_window_t *win, xc
     return pic;
 }
 
-static void draw_cursor(nss_context_t *con, nss_window_t *win, uint16_t x, uint16_t y){
+void nss_window_draw_cursor(nss_context_t *con, nss_window_t *win, int16_t x, int16_t y){
+    x = x * win->char_width;
+    y = y * (win->char_height + win->char_depth) + win->char_height;
     xcb_rectangle_t rects[4] = {
-        {x-1,y-win->char_height,1,win->char_height+win->char_depth},
+        {x,y-win->char_height,1,win->char_height+win->char_depth},
         {x,y-win->char_height,win->char_width, 1},
         {x+win->char_width-1,y-win->char_height,1,win->char_height+win->char_depth},
         {x,y+win->char_depth-1,win->char_width, 1}
@@ -539,9 +585,94 @@ static void draw_cursor(nss_context_t *con, nss_window_t *win, uint16_t x, uint1
     xcb_render_fill_rectangles(con->con,XCB_RENDER_PICT_OP_OVER, win->pic, c, count, rects + off);
 }
 
+void nss_window_draw(nss_context_t *con, nss_window_t *win, int16_t x, int16_t y, nss_cell_t *cells, size_t len) {
+    x = x * win->char_width;
+    y = y * (win->char_height + win->char_depth) + win->char_height;
+    if (!cells || !len) return;
+
+    for(size_t i = 0; i < len; i++){
+        if(NSS_CELL_CHAR(cells[i]) > ASCII_MAX){
+            uint8_t fattr = NSS_CELL_ATTRS(cells[i]) & nss_font_attrib_mask;
+            nss_glyph_t *glyph = nss_font_render_glyph(win->font, NSS_CELL_CHAR(cells[i]), fattr, win->lcd_mode);
+            //In case of non-monospace fonts
+            glyph->x_off = win->char_width - glyph->x;
+            register_glyph(con, win, NSS_CELL_GLYPH(cells[i]), glyph);
+            free(glyph);
+        }
+    }
+    while (len > 0) {
+        uint8_t attr = cells->attrs;
+        uint8_t fattr = attr & nss_font_attrib_mask;
+        nss_cid_t bgc = cells->bg, fgc = cells->fg;
+
+        if (attr & nss_attrib_inverse)
+            SWAP(nss_cid_t, fgc, bgc);
+
+        xcb_render_color_t fg = MAKE_COLOR(nss_color_get(fgc));
+        xcb_render_color_t bg = MAKE_COLOR(nss_color_get(bgc));
+        xcb_render_picture_t pen = create_pen(con, win, &fg);
+
+        size_t blk_len = 1;
+        while(blk_len < len && NSS_EQCELL(cells[blk_len], cells[blk_len - 1]))
+            blk_len++;
+
+        xcb_rectangle_t rect = {
+            .x = x, .y = y-win->char_height,
+            .width = win->char_width*blk_len,
+            .height = win->char_height+win->char_depth
+        };
+
+        xcb_rectangle_t lines[2] = {
+            { .x = x, .y= y + 1, .width = win->char_width*blk_len, .height = win->underline_width },
+            { .x = x, .y= y - win->char_height/3, .width = win->char_width*blk_len, .height = win->underline_width }
+        };
+        
+        size_t messages = (blk_len + CHARS_PER_MESG - 1)/CHARS_PER_MESG;
+        size_t data_len = messages*sizeof(nss_glyph_mesg_t) + blk_len*sizeof(uint32_t);
+        uint32_t *data = malloc(data_len);
+        uint32_t *off = data;
+        nss_glyph_mesg_t msg = {.dx=x,.dy=y};
+
+        for(size_t msgi = 0,chari = 0; msgi < messages; msgi++, chari += CHARS_PER_MESG){
+                msg.len = (blk_len - chari < CHARS_PER_MESG ? blk_len - chari : CHARS_PER_MESG);
+            memcpy(off, &msg, sizeof(msg));
+            off += sizeof(msg) / sizeof(uint32_t);
+            for(size_t j = 0; j < msg.len; j++)
+                off[j] = NSS_CELL_CHAR(cells[chari + j]) | (fattr << 24);
+            off += msg.len;
+            //Reset for all, except first
+            msg.dx = msg.dy = 0;
+        }
+
+        xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, bg, 1, &rect);
+
+        if(attr & (nss_attrib_underlined|nss_attrib_strikethrough)){
+            size_t count = !!(attr & nss_attrib_underlined) + !!(attr & nss_attrib_strikethrough);
+            size_t offset = !(attr & nss_attrib_underlined) && !!(attr & nss_attrib_strikethrough);
+            xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, fg, count, lines+offset);
+        }
+
+        xcb_render_composite_glyphs_32(con->con, XCB_RENDER_PICT_OP_OVER,
+                                       pen, win->pic, win->pfglyph, win->gsid,
+                                       0, 0, data_len, (uint8_t*)data);
+
+        free(data);
+        xcb_render_free_picture(con->con, pen);
+        cells += blk_len;
+        len -= blk_len;
+        x += blk_len * win->char_width;
+    }
+
+}
+
+void nss_window_draw_commit(nss_context_t *con, nss_window_t *win) {
+    /* Do nothing just for now */
+}
+
+#if 0
 /* Draw UCS4-encoded string of at terminal coordinates (x,y) with attribute set attr */
-void nss_window_draw_ucs4(nss_context_t *con, nss_window_t *win, size_t len, const  uint32_t *str,
-                         const nss_text_attrib_t *attr, int16_t x, int16_t y){
+void nss_window_draw1(nss_context_t *con, nss_window_t *win, size_t len, const  uint32_t *str,
+                         const nss_attrib_t *attr, int16_t x, int16_t y){
     x = x * win->char_width;
     y = y * (win->char_height + win->char_depth) + win->char_height;
 
@@ -611,13 +742,10 @@ void nss_window_draw_ucs4(nss_context_t *con, nss_window_t *win, size_t len, con
                                    pen, win->pic, win->pfglyph, win->gsid,
                                    0, 0, data_len, (uint8_t*)data);
 
-    if(attr->flags & nss_attrib_cursor)
-        draw_cursor(con,win,x,y);
-
     free(data);
     xcb_render_free_picture(con->con, pen);
 }
-
+#endif
 
 static void redraw_damage(nss_context_t *con, nss_window_t *win, nss_rect_t damage){
 
@@ -777,109 +905,115 @@ static void handle_focus(nss_context_t *con, nss_window_t *win, _Bool focused){
     nss_term_focus(win->term, focused);
 }
 
-//TODO: Periodially update window
-// => Send XCB_EXPOSE from another thread
-
 /* Start window logic, handling all windows in context */
 void nss_context_run(nss_context_t *con){
-    xcb_generic_event_t *event;
-    while((event = xcb_wait_for_event(con->con))){
-        switch(event->response_type &= 0x7f){
-        case XCB_EXPOSE:{
-            xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
-            nss_window_t *win = nss_window_for_xid(con,ev->window);
-            if(!win) break;
+    struct pollfd pfds[1] = { 0 };
+    pfds[0].events = POLLIN | POLLHUP;
+    pfds[0].fd = xcb_get_file_descriptor(con->con);
 
-            nss_rect_t damage = {ev->x, ev->y, ev->width, ev->height};
-            info("Damage: %d %d %d %d", damage.x, damage.y, damage.width, damage.height);
+    while(poll(pfds, 1, -1) > 0){
+        if (pfds[0].revents & POLLIN) {
+            xcb_generic_event_t *event;
+            while((event = xcb_poll_for_event(con->con))) {
+                switch(event->response_type &= 0x7f){
+                case XCB_EXPOSE:{
+                    xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
+                    nss_window_t *win = nss_window_for_xid(con,ev->window);
+                    if(!win) break;
 
-            redraw_damage(con,win, damage);
-            xcb_flush(con->con);
-            break;
-        }
-        case XCB_CONFIGURE_NOTIFY:{
-            xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
-            nss_window_t *win = nss_window_for_xid(con, ev->window);
-            if(!win) break;
+                    nss_rect_t damage = {ev->x, ev->y, ev->width, ev->height};
+                    //info("Damage: %d %d %d %d", damage.x, damage.y, damage.width, damage.height);
 
-            if(ev->width != win->width || ev->height != win->height){
-                handle_resize(con,win, ev->width, ev->height);
-                xcb_flush(con->con);
-            }
-            break;
-        }
-        case XCB_KEY_RELEASE:{
-            xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
-            nss_window_t *win = nss_window_for_xid(con, ev->event);
-            if(!win) break;
-
-            xcb_key_but_mask_t mask = ev->state;
-            xcb_keysym_t keysym = xcb_key_symbols_get_keysym(con->keysyms, ev->detail, mask);
-            if(keysym == XK_a){
-                uint32_t arg = win->font_size + 2;
-                nss_window_set(con, win, nss_wc_font_size, &arg);
-            }
-            if(keysym == XK_d){
-                uint32_t arg = win->font_size - 2;
-                nss_window_set(con, win, nss_wc_font_size, &arg);
-            }
-            if(keysym == XK_w){
-                uint32_t arg = !win->lcd_mode;
-                nss_window_set(con, win, nss_wc_lcd_mode, &arg);
-            }
-            if(keysym == XK_s){
-                uint32_t arg = win->font_size;
-                nss_create_window(con,(nss_rect_t){100,100,400,200}, win->font_name, nss_wc_font_size, &arg);
-            }
-            break;
-        }
-        case XCB_FOCUS_IN:
-        case XCB_FOCUS_OUT:{
-            xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
-            nss_window_t *win = nss_window_for_xid(con,ev->event);
-            if(!win) break;
-
-            handle_focus(con,win,event->response_type == XCB_FOCUS_IN);
-            xcb_flush(con->con);
-            break;
-        }
-        case XCB_CLIENT_MESSAGE: {
-            xcb_client_message_event_t *ev = (xcb_client_message_event_t*)event;
-            nss_window_t *win = nss_window_for_xid(con, ev->window);
-            if(!win) break;
-            if(ev->format == 32 && ev->data.data32[0] == con->atom_wm_delete_window){
-                nss_free_window(con, win);
-                if(!con->first && !con->daemon_mode){
-                    free(event);
-                    return;
+                    redraw_damage(con,win, damage);
+                    xcb_flush(con->con);
+                    break;
                 }
+                case XCB_CONFIGURE_NOTIFY:{
+                    xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
+                    nss_window_t *win = nss_window_for_xid(con, ev->window);
+                    if(!win) break;
+
+                    if(ev->width != win->width || ev->height != win->height){
+                        handle_resize(con,win, ev->width, ev->height);
+                        xcb_flush(con->con);
+                    }
+                    break;
+                }
+                case XCB_KEY_RELEASE:{
+                    // TODO: Make it use xkbcommon
+                    xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
+                    nss_window_t *win = nss_window_for_xid(con, ev->event);
+                    if(!win) break;
+                    /*
+                    xcb_key_but_mask_t mask = ev->state;
+                    xcb_keysym_t keysym = xcb_key_symbols_get_keysym(con->keysyms, ev->detail, mask);
+                    if(keysym == XK_a){
+                        uint32_t arg = win->font_size + 2;
+                        nss_window_set(con, win, nss_wc_font_size, &arg);
+                    }
+                    if(keysym == XK_d){
+                        uint32_t arg = win->font_size - 2;
+                        nss_window_set(con, win, nss_wc_font_size, &arg);
+                    }
+                    if(keysym == XK_w){
+                        uint32_t arg = !win->lcd_mode;
+                        nss_window_set(con, win, nss_wc_lcd_mode, &arg);
+                    }
+                    if(keysym == XK_s){
+                        uint32_t arg = win->font_size;
+                        nss_create_window(con,(nss_rect_t){100,100,400,200}, win->font_name, nss_wc_font_size, &arg);
+                    }
+                    */
+                    break;
+                }
+                case XCB_FOCUS_IN:
+                case XCB_FOCUS_OUT:{
+                    xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
+                    nss_window_t *win = nss_window_for_xid(con,ev->event);
+                    if(!win) break;
+
+                    handle_focus(con,win,event->response_type == XCB_FOCUS_IN);
+                    xcb_flush(con->con);
+                    break;
+                }
+                case XCB_CLIENT_MESSAGE: {
+                    xcb_client_message_event_t *ev = (xcb_client_message_event_t*)event;
+                    nss_window_t *win = nss_window_for_xid(con, ev->window);
+                    if(!win) break;
+                    if(ev->format == 32 && ev->data.data32[0] == con->atom_wm_delete_window){
+                        nss_free_window(con, win);
+                        if(!con->first && !con->daemon_mode){
+                            free(event);
+                            return;
+                        }
+                    }
+                    break;
+                }
+                case XCB_VISIBILITY_NOTIFY: {
+                    xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
+                    nss_window_t *win = nss_window_for_xid(con, ev->window);
+                    if(!win) break;
+                    win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
+                    nss_term_visibility(win->term, win->active);
+                    break;
+                }
+                case XCB_MAP_NOTIFY:
+                case XCB_UNMAP_NOTIFY: {
+                    xcb_map_notify_event_t *ev = (xcb_map_notify_event_t *)event;
+                    nss_window_t *win = nss_window_for_xid(con, ev->window);
+                    if(!win) break;
+                    win->active = ev->response_type == XCB_MAP_NOTIFY;
+                    nss_term_visibility(win->term, win->active);
+                    break;
+                } 
+                case XCB_DESTROY_NOTIFY:
+                   break;
+                default:
+                    warn("Unknown xcb event type: %02"PRIu8, event->response_type);
+                    break;
+                }
+                free(event);
             }
-            break;
         }
-        case XCB_VISIBILITY_NOTIFY: {
-            xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
-            nss_window_t *win = nss_window_for_xid(con, ev->window);
-            if(!win) break;
-            win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
-            nss_term_visibility(win->term, win->active);
-            break;
-        }
-        case XCB_MAP_NOTIFY:
-        case XCB_UNMAP_NOTIFY: {
-            xcb_map_notify_event_t *ev = (xcb_map_notify_event_t *)event;
-            nss_window_t *win = nss_window_for_xid(con, ev->window);
-            if(!win) break;
-            win->active = ev->response_type == XCB_MAP_NOTIFY;
-            nss_term_visibility(win->term, win->active);
-            break;
-        } 
-        case XCB_DESTROY_NOTIFY:
-           break;
-        default:
-            warn("Unknown xcb event type: %02"PRIu8, event->response_type);
-            break;
-        }
-        free(event);
     }
 }
-

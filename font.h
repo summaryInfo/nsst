@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 // IMPORTANT: Order should be the same as
-// in nss_text_attrib_flags_t
+// in nss_attrib_flags_t
 typedef enum nss_font_attrib {
     nss_font_attrib_normal = 0,
     nss_font_attrib_italic = 1 << 0,

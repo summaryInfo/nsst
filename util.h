@@ -4,6 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdint.h>
+#include <stdlib.h>
 
 #define MIN(x,y) ((x) < (y) ? (x) : (y))
 #define MAX(x,y) ((x) > (y) ? (x) : (y))
