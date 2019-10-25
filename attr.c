@@ -40,8 +40,8 @@ void nss_free_color(void) {
 }
 
 nss_cid_t nss_color_find(nss_color_t col) {
-    for(size_t i = 0; i < stor.length; i++)
-        if(stor.data[i].refs && stor.data[i].col == col) {
+    for (size_t i = 0; i < stor.length; i++)
+        if (stor.data[i].refs && stor.data[i].col == col) {
             stor.data[i].refs++;
             return i;
         }
@@ -56,7 +56,7 @@ nss_cid_t nss_color_alloc(nss_color_t col) {
     } else {
         if (stor.length + 1 > stor.capacity) {
             nss_attr_storage_element_t *new = realloc(stor.data, CAP_INC_STEP(stor.capacity)*sizeof(stor.data[0]));
-            if(!new) return NSS_CID_NONE;
+            if (!new) return NSS_CID_NONE;
             stor.capacity = CAP_INC_STEP(stor.capacity);
             stor.data = new;
         }

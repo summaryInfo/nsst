@@ -22,40 +22,40 @@ void warn(const char *fmt, ...);
 void info(const char *fmt, ...);
 void fatal(const char *fmt, ...);
 
-inline static nss_rect_t rect_scale_up(nss_rect_t rect, int16_t x_factor, int16_t y_factor){
+inline static nss_rect_t rect_scale_up(nss_rect_t rect, int16_t x_factor, int16_t y_factor) {
     rect.x *= x_factor;
     rect.y *= y_factor;
     rect.width *= x_factor;
     rect.height *= y_factor;
     return rect;
 }
-inline static nss_rect_t rect_scale_down(nss_rect_t rect, int16_t x_factor, int16_t y_factor){
+inline static nss_rect_t rect_scale_down(nss_rect_t rect, int16_t x_factor, int16_t y_factor) {
     rect.x /= x_factor;
     rect.y /= y_factor;
     rect.width /= x_factor;
     rect.height /= y_factor;
     return rect;
 }
-inline static nss_rect_t rect_shift(nss_rect_t rect, int16_t x_off, int16_t y_off){
+inline static nss_rect_t rect_shift(nss_rect_t rect, int16_t x_off, int16_t y_off) {
     rect.x += x_off;
     rect.y += y_off;
     return rect;
 }
-inline static nss_rect_t rect_resize(nss_rect_t rect, int16_t x_off, int16_t y_off){
+inline static nss_rect_t rect_resize(nss_rect_t rect, int16_t x_off, int16_t y_off) {
     rect.x += x_off;
     rect.y += y_off;
     return rect;
 }
 
-inline static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst){
+inline static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst) {
         nss_rect_t inters = {
             .x = MAX(src->x, dst->x),
             .y = MAX(src->y, dst->y),
             .width = MIN(src->x + src->width, dst->x + dst->width),
             .height = MIN(src->y + src->height, dst->y + dst->height),
         };
-        if(inters.width <= inters.x || inters.height <= inters.y){
-            *src = (nss_rect_t){0,0,0,0};
+        if (inters.width <= inters.x || inters.height <= inters.y) {
+            *src = (nss_rect_t) {0,0,0,0};
             return 0;
         } else {
             inters.width -= inters.x;

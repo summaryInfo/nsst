@@ -27,7 +27,7 @@ typedef enum nss_attrs {
 #define NSS_CELL_BG(s,b) (nss_color_get((s)->bg + (b)))
 #define NSS_CELL_ATTRS(s) ((s).attrs)
 #define NSS_CELL_GLYPH(s) ((s).ch & NSS_GLYPH_MASK)
-#define NSS_MKCELL(f, b, l, c) ((nss_cell_t){ .bg = (b), .fg = (f), .ch = (c) | ((l) << 24)})
+#define NSS_MKCELL(f, b, l, c) ((nss_cell_t) { .bg = (b), .fg = (f), .ch = (c) | ((l) << 24)})
 #define NSS_EQCELL(s, z) ((s).fg == (z).fg && (s).bg == (z).bg && (s).attrs == (z).attrs)
 
 typedef struct nss_cell {

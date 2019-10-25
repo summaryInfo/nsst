@@ -45,9 +45,9 @@ nss_line_t *create_line(nss_line_t *prev, nss_line_t *next, size_t width) {
     line->dirty = 1;
 
     line->prev = prev;
-    if(prev) prev->next = line;
+    if (prev) prev->next = line;
     line->next = next;
-    if(next) next->prev = line;
+    if (next) next->prev = line;
     return line; 
 }
 
@@ -57,7 +57,7 @@ void nss_term_write(nss_term_t *term, size_t len, const char* data) {
 
 }
 
-nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width, int16_t height){
+nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width, int16_t height) {
     nss_term_t *term = malloc(sizeof(nss_term_t));
 
     term->width = width;
@@ -68,7 +68,7 @@ nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width
     term->visible = 1;
     term->win = win;
     term->con = con;
-    //term->clip = (nss_rect_t){0,0,127-33,5};
+    //term->clip = (nss_rect_t) {0,0,127-33,5};
 
 
     nss_attrs_t test[] = {
@@ -87,7 +87,7 @@ nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width
     for (size_t k = 0; k < 5; k++) {
         line = create_line(line, NULL, '~' - '!');
         if (!line->prev) term->screen = line;
-        for (size_t i = '!'; i <= '~'; i++){
+        for (size_t i = '!'; i <= '~'; i++) {
             line->cell[i - '!'] = NSS_MKCELL(fg, bg, test[k], i);
         }
     }
@@ -100,20 +100,20 @@ nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width
 
 #define ALLOC_STEP 16
 
-void nss_term_redraw(nss_term_t *term, nss_rect_t damage){
-    if(!term->visible) return;
+void nss_term_redraw(nss_term_t *term, nss_rect_t damage) {
+    if (!term->visible) return;
 
     //Clear undefined areas
     nss_window_clear(term->con, term->win, 1, &damage);
 
     nss_line_t *line = term->screen;
     size_t j = 0;
-    for(; line && j < (size_t)damage.y; j++, line = line->next) {}
-    for(; line && j < (size_t)damage.height + damage.y; j++, line = line->next){
-        if((size_t)damage.x < line->width) {
+    for (; line && j < (size_t)damage.y; j++, line = line->next) {}
+    for (; line && j < (size_t)damage.height + damage.y; j++, line = line->next) {
+        if ((size_t)damage.x < line->width) {
             nss_window_draw(term->con, term->win, damage.x, j, line->cell + damage.x, MIN(line->width - damage.x, damage.width));
             info("Draw: x=%d..%d y=%d", damage.x, damage.x + MIN(line->width - damage.x, damage.width), j);
-            if(line == term->current_line && damage.x <= term->cursor_x && term->cursor_x < damage.x + damage.width) {
+            if (line == term->current_line && damage.x <= term->cursor_x && term->cursor_x < damage.x + damage.width) {
                 nss_window_draw_cursor(term->con, term->win, term->cursor_x, term->cursor_y);
             }
         }
@@ -121,29 +121,29 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage){
     nss_window_draw_commit(term->con, term->win);
 }
 
-void nss_term_resize(nss_term_t *term, int16_t width, int16_t height){
+void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
     term->width = width;
     term->height = height;
     //TODO: Move cursor
 }
 
-void nss_term_focus(nss_term_t *term, _Bool focused){
+void nss_term_focus(nss_term_t *term, _Bool focused) {
     int16_t cx = term->cursor_x, cy = term->cursor_y;
     term->focused = focused;
     nss_window_draw(term->con, term->win, cx, cy, &term->current_line->cell[cx], 1);
     nss_window_draw_cursor(term->con, term->win, cx, cy);
-    nss_window_update(term->con, term->win, 1, &(nss_rect_t){cx, cy, 1, 1});
+    nss_window_update(term->con, term->win, 1, &(nss_rect_t) {cx, cy, 1, 1});
 }
 
 void nss_term_visibility(nss_term_t *term, _Bool visible) {
     term->visible = visible;
 }
 
-void nss_free_term(nss_term_t *term){
+void nss_free_term(nss_term_t *term) {
     nss_line_t *line = term->screen;
-    while(line->prev) 
+    while (line->prev) 
         line = line->prev;
-    while(line) {
+    while (line) {
         nss_line_t *next = line->next;
         // TODO: Deref all attribs in line here
         free(line);
