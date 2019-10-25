@@ -68,8 +68,6 @@ nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width
     term->visible = 1;
     term->win = win;
     term->con = con;
-    //term->clip = (nss_rect_t) {0,0,127-33,5};
-
 
     nss_attrs_t test[] = {
         nss_attrib_italic | nss_attrib_bold,
@@ -79,20 +77,17 @@ nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width
         0
     };
 
-    nss_cid_t fg = nss_color_find(0xffffffff);
-    nss_cid_t bg = nss_color_find(0xff000000);
-    
     nss_line_t *line = NULL;
 
     for (size_t k = 0; k < 5; k++) {
         line = create_line(line, NULL, '~' - '!');
         if (!line->prev) term->screen = line;
         for (size_t i = '!'; i <= '~'; i++) {
-            line->cell[i - '!'] = NSS_MKCELL(fg, bg, test[k], i);
+            line->cell[i - '!'] = NSS_MKCELL(7, 0, test[k], i);
         }
     }
-    line->cell[13] = NSS_MKCELL(nss_color_find(0xffff0000), nss_color_find(0xff00ff00), test[3], 'A');
-    line->prev->cell[16] = NSS_MKCELL(nss_color_find(0xffff0000), nss_color_find(0xff00ff00), test[2], 'A');
+    line->cell[13] = NSS_MKCELL(3, 5, test[3], 'A');
+    line->prev->cell[16] = NSS_MKCELL(4, 6, test[2], 'A');
     term->current_line = term->screen;
 
     return term;

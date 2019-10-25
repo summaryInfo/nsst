@@ -58,10 +58,10 @@ struct nss_window {
     int16_t top_border;
     int16_t font_size;
 
-    nss_color_t background;
-    nss_color_t foreground;
-    nss_color_t cursor_background;
-    nss_color_t cursor_foreground;
+    nss_cid_t bg_cid;
+    nss_cid_t fg_cid;
+    nss_cid_t cursor_fg_cid;
+    nss_cid_t cursor_bg_cid;
     nss_cursor_type_t cursor_type;
 
 
@@ -367,10 +367,10 @@ static void set_config(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *valu
     if (tag & nss_wc_cusror_width) win->cursor_width = *values++;
     if (tag & nss_wc_left_border) win->left_border = *values++;
     if (tag & nss_wc_top_border) win->top_border = *values++;
-    if (tag & nss_wc_background) win->background = *values++;
-    if (tag & nss_wc_foreground) win->foreground = *values++;
-    if (tag & nss_wc_cursor_background) win->cursor_background = *values++;
-    if (tag & nss_wc_cursor_foreground) win->cursor_foreground = *values++;
+    if (tag & nss_wc_background) win->bg_cid = *values++;
+    if (tag & nss_wc_foreground) win->fg_cid = *values++;
+    if (tag & nss_wc_cursor_background) win->cursor_bg_cid = *values++;
+    if (tag & nss_wc_cursor_foreground) win->cursor_fg_cid = *values++;
     if (tag & nss_wc_cursor_type) win->cursor_type = *values++;
     if (tag & nss_wc_lcd_mode) win->lcd_mode = *values++;
     if (tag & nss_wc_font_size) win->font_size = *values++;
@@ -465,8 +465,9 @@ static void reload_font(nss_context_t *con, nss_window_t *win, _Bool need_free) 
         return;
     }
 
+    //@TODO: Recreate gc's on win->*_cid change
     uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
-    uint32_t values2[3] = { win->background, win->background, 0 };
+    uint32_t values2[3] = { nss_color_get(win->bg_cid), nss_color_get(win->bg_cid), 0 };
     c = xcb_create_gc_checked(con->con, win->gc, win->pid, mask2, values2);
     if (check_void_cookie(con,c)) {
         warn("Can't create GC");
@@ -481,7 +482,7 @@ static void reload_font(nss_context_t *con, nss_window_t *win, _Bool need_free) 
         return;
     }
 
-    xcb_render_color_t color = MAKE_COLOR(win->background);
+    xcb_render_color_t color = MAKE_COLOR(nss_color_get(win->bg_cid));
     xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, color, 1, &bound);
 }
 
@@ -500,11 +501,10 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     win->underline_width = 1;
     win->left_border = 8;
     win->top_border = 8;
-    // TODO: Make it use nss_color_alloc
-    win->background = 0xff000000;
-    win->foreground = 0xffffffff;
-    win->cursor_background = 0xff000000;
-    win->cursor_foreground = 0xffffffff;
+    win->bg_cid = 0;
+    win->fg_cid = 7;
+    win->cursor_bg_cid = 0;
+    win->cursor_fg_cid = 7;
     win->cursor_type = nss_cursor_bar;
     win->lcd_mode = 1;
     win->font_size = 0;
@@ -519,7 +519,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     uint32_t mask1 =  XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
         XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
     uint32_t values1[5] = {
-        win->background,  win->background,
+        nss_color_get(win->bg_cid),  nss_color_get(win->bg_cid),
         XCB_GRAVITY_NORTH_WEST, XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_VISIBILITY_CHANGE |
         XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_FOCUS_CHANGE |
         XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_KEY_RELEASE, con->mid
@@ -642,7 +642,7 @@ void nss_window_draw_cursor(nss_context_t *con, nss_window_t *win, int16_t x, in
             rects[3].y -= win->cursor_width - 1;
         }
     }
-    xcb_render_color_t c = MAKE_COLOR(win->cursor_foreground);
+    xcb_render_color_t c = MAKE_COLOR(nss_color_get(win->cursor_fg_cid));
     xcb_render_fill_rectangles(con->con,XCB_RENDER_PICT_OP_OVER, win->pic, c, count, rects + off);
 }
 
@@ -750,7 +750,7 @@ static void redraw_damage(nss_context_t *con, nss_window_t *win, nss_rect_t dama
 
         nss_rect_t inters = { win->left_border, win->top_border, width, height };
         if (intersect_with(&inters, &damage)) {
-            xcb_copy_area(con->con,win->pid,win->wid,win->gc, inters.x - win->left_border, inters.y - win->top_border,
+            xcb_copy_area(con->con, win->pid, win->wid, win->gc, inters.x - win->left_border, inters.y - win->top_border,
                           inters.x, inters.y, inters.width, inters.height);
         }
 }
@@ -761,7 +761,7 @@ void nss_window_update(nss_context_t *con, nss_window_t *win, size_t len, const 
         nss_rect_t rect = damage[i];
         rect = rect_scale_up(rect, win->char_width, win->char_height + win->char_depth);
         rect = rect_shift(rect, win->left_border, win->top_border);
-        xcb_copy_area(con->con,win->pid,win->wid,win->gc,
+        xcb_copy_area(con->con, win->pid, win->wid, win->gc,
                       rect.x - win->left_border, rect.y - win->top_border,
                       rect.x, rect.y, rect.width, rect.height);
     }
@@ -772,7 +772,7 @@ void nss_window_clear(nss_context_t *con, nss_window_t *win, size_t len, const n
     for (size_t i = 0; i < len; i++)
         rects[i] = rect_scale_up(damage[i], win->char_width, win->char_height + win->char_depth);
 
-    xcb_render_color_t color = MAKE_COLOR(win->background);
+    xcb_render_color_t color = MAKE_COLOR(nss_color_get(win->bg_cid));
     xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, color, len, (xcb_rectangle_t*)rects);
     free(rects);
 }
@@ -811,10 +811,10 @@ uint32_t nss_window_get(nss_context_t *con, nss_window_t *win, nss_wc_tag_t tag)
     if (tag & nss_wc_cusror_width) return win->cursor_width;
     if (tag & nss_wc_left_border) return win->left_border;
     if (tag & nss_wc_top_border) return win->top_border;
-    if (tag & nss_wc_background) return win->background;
-    if (tag & nss_wc_foreground) return win->foreground;
-    if (tag & nss_wc_cursor_background) return win->cursor_background;
-    if (tag & nss_wc_cursor_foreground) return win->cursor_foreground;
+    if (tag & nss_wc_background) return win->bg_cid;
+    if (tag & nss_wc_foreground) return win->fg_cid;
+    if (tag & nss_wc_cursor_background) return win->cursor_bg_cid;
+    if (tag & nss_wc_cursor_foreground) return win->cursor_fg_cid;
     if (tag & nss_wc_cursor_type) return win->cursor_type;
     if (tag & nss_wc_lcd_mode) return win->lcd_mode;
     if (tag & nss_wc_font_size) return win->font_size;

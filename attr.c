@@ -1,8 +1,8 @@
 #include <stdlib.h>
 #include "attr.h"
+#include "util.h"
 
 #define CAP_INC_STEP(s) (8*(s)/5)
-#define CAP_ALLOC_INIT 128
 
 typedef struct nss_attr_storage_element {
     union {
@@ -21,14 +21,37 @@ typedef struct nss_attr_storage {
 
 static nss_attr_storage_t stor;
 
+#define CN_BASE 16
+#define CN_EXT (6*6*6)
+#define CN_GRAY (NSS_N_BASE_COLORS - CN_BASE - CN_EXT)
+#define SD28B(x) ((x) ? 0 : 0x37 + 0x28 * (x))
 
-void nss_init_color(nss_color_t dflt) {
-    stor.data = calloc(CAP_ALLOC_INIT, sizeof(stor.data[0]));
-    stor.capacity = CAP_ALLOC_INIT;
+void nss_init_color() {
+    stor.data = calloc(NSS_N_BASE_COLORS, sizeof(stor.data[0]));
+    stor.capacity = NSS_N_BASE_COLORS;
     stor.free = NSS_CID_NONE;
-    stor.length = 1;
-    stor.data[0].col = dflt;
-    stor.data[0].refs = 1;
+    stor.length = NSS_N_BASE_COLORS;
+    // Generate basic palette
+    nss_color_t base[CN_BASE] = {
+        0xff000000, 0xff0000cd, 0xff00cd00, 0xff00cdcd,
+        0xffee0000, 0xffcd00cd, 0xffcdcd00, 0xffe5e5e5,
+        0xff7f7f7f, 0xff0000ff, 0xff00ff00, 0xff00ffff,
+        0xffff5c5c, 0xffff00ff, 0xffffff00, 0xffffffff
+    };
+    for (size_t i = 0; i < CN_BASE; i++) {
+        stor.data[i].col = base[i];
+        stor.data[i].refs = 1;
+    }
+    for (size_t i = 0; i < CN_EXT; i++) {
+        stor.data[CN_BASE + i].col = 0xff000000 +  SD28B((i / 36) % 6) +
+                (SD28B((i / 36) % 6) << 8) + (SD28B((i / 36) % 6) << 16);
+        stor.data[CN_BASE + i].refs = 1;
+    }
+    for (size_t i = 0; i < CN_GRAY; i++) {
+        uint8_t val = MIN(0x08 + 0x0a * i, 0xff);
+        stor.data[CN_BASE + CN_EXT + i].col = 0xff000000 + val * 0x10101;
+        stor.data[CN_BASE + CN_EXT + i].refs = 1;
+    }
 }
 
 void nss_free_color(void) {

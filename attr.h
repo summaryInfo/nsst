@@ -9,6 +9,7 @@ typedef uint32_t nss_color_t;
 
 #define NSS_CID_NONE UINT32_MAX
 #define NSS_CID_DEFAULT 0
+#define NSS_N_BASE_COLORS (256)
 
 // Just 8 bits
 typedef enum nss_attrs {
@@ -42,7 +43,7 @@ typedef struct nss_cell {
         nss_short_cid_t bg;
 } nss_cell_t;
 
-void nss_init_color(nss_color_t dflt);
+void nss_init_color(void);
 nss_cid_t nss_color_alloc(nss_color_t col);
 nss_cid_t nss_color_find(nss_color_t col);
 void nss_color_ref(nss_cid_t idx);
