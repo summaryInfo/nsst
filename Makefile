@@ -4,8 +4,8 @@ PROG=nss
 
 IN=window.c nss.c util.c font.c term.c attr.c
 OBJ=$(patsubst %.c,%.o,$(IN))
-LIBS=`pkg-config xcb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --libs`
-INCLUES=`pkg-config xcb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --cflags`
+LIBS=`pkg-config xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --libs`
+INCLUES=`pkg-config xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --cflags`
 
 all: nss
 
