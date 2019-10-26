@@ -40,7 +40,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
 void nss_free_window(nss_context_t *con, nss_window_t *win);
 void nss_window_draw(nss_context_t *con, nss_window_t *win, int16_t x, int16_t y, nss_cell_t *cells, size_t len);
 void nss_window_draw_commit(nss_context_t *con, nss_window_t *win);
-void nss_window_draw_cursor(nss_context_t *con, nss_window_t *win, int16_t x, int16_t y);
+void nss_window_draw_cursor(nss_context_t *con, nss_window_t *win, int16_t x, int16_t y, nss_cell_t *cell);
 void nss_window_update(nss_context_t *con, nss_window_t *win, size_t len, const nss_rect_t *damage);
 void nss_window_clear(nss_context_t *con, nss_window_t *win, size_t len, const nss_rect_t *damage);
 void nss_window_set(nss_context_t *con, nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values);
