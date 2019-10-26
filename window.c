@@ -170,6 +170,7 @@ static _Bool configure_xkb(nss_context_t *con) {
     int res = xkb_x11_setup_xkb_extension(con->con, XKB_X11_MIN_MAJOR_XKB_VERSION,
                                           XKB_X11_MIN_MINOR_XKB_VERSION, XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
                                           &xkb_maj, &xkb_min, &con->xkb_base_event, &con->xkb_base_err);
+    info("XKB base event: %02"PRIu8, con->xkb_base_event);
     if (!res || xkb_maj < XKB_X11_MIN_MAJOR_XKB_VERSION) {
         warn("Can't get suitable XKB verion");
         return 0;
@@ -505,7 +506,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     win->cursor_bg_cid = 0;
     win->cursor_fg_cid = 7;
     win->cursor_type = nss_cursor_bar;
-    win->lcd_mode = 1;
+    win->lcd_mode = 0;
     win->font_size = 0;
     win->focused = 0;
     win->active = 0;
@@ -520,8 +521,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     uint32_t values1[5] = {
         nss_color_get(win->bg_cid),  nss_color_get(win->bg_cid),
         XCB_GRAVITY_NORTH_WEST, XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_VISIBILITY_CHANGE |
-        XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_FOCUS_CHANGE |
-        XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_KEY_RELEASE, con->mid
+        XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_FOCUS_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY, con->mid
     };
     win->wid = xcb_generate_id(con->con);
     c = xcb_create_window_checked(con->con, TRUE_COLOR_ALPHA_DEPTH, win->wid, con->screen->root,
@@ -728,7 +728,7 @@ void nss_window_draw(nss_context_t *con, nss_window_t *win, int16_t x, int16_t y
 }
 
 void nss_window_draw_commit(nss_context_t *con, nss_window_t *win) {
-    /* Do nothing just for now */
+    xcb_flush(con->con);
 }
 
 static void redraw_damage(nss_context_t *con, nss_window_t *win, nss_rect_t damage) {
@@ -784,6 +784,7 @@ void nss_window_set(nss_context_t *con, nss_window_t *win, nss_wc_tag_t tag, con
         reload_font(con, win, 1);
     if (tag & (nss_wc_cursor_background | nss_wc_cursor_foreground | nss_wc_background | nss_wc_foreground)) {
         //@@TODO Test this
+        // Do this also for nss_color_set
         uint32_t values2[2] = { nss_color_get(win->bg_cid), nss_color_get(win->bg_cid) };
         xcb_change_window_attributes(con->con, win->wid, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL, values2);
         xcb_change_gc(con->con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
@@ -901,6 +902,7 @@ void nss_context_run(nss_context_t *con) {
     pfds[0].events = POLLIN | POLLHUP;
     pfds[0].fd = xcb_get_file_descriptor(con->con);
 
+	//Poll term fds here
     while (poll(pfds, 1, -1) > 0) {
         if (pfds[0].revents & POLLIN) {
             xcb_generic_event_t *event;
@@ -929,7 +931,8 @@ void nss_context_run(nss_context_t *con) {
                     }
                     break;
                 }
-                case XCB_KEY_RELEASE:{
+                case XCB_KEY_RELEASE: /* ignore */ break;
+                case XCB_KEY_PRESS:{
                     xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
                     nss_window_t *win = nss_window_for_xid(con, ev->event);
                     if (!win) break;
@@ -937,25 +940,27 @@ void nss_context_run(nss_context_t *con) {
                     /* That's just a temporal solution */
 
                     xkb_keycode_t keycode = ev->detail;
-                    char buf[8];
-                    size_t sz = xkb_state_key_get_utf8(con->xkb_state, keycode, NULL, 0);
-                    if (sz > 0 && sz < 8) {
-                        xkb_state_key_get_utf8(con->xkb_state, keycode, buf, 7);
-                        info("Got key: '%s'", buf);
-                    }
                     uint32_t rune = xkb_state_key_get_utf32(con->xkb_state, keycode);
-                    if (rune == 'a') {
+                    if (rune == '1') {
                         uint32_t arg = win->font_size + 2;
                         nss_window_set(con, win, nss_wc_font_size, &arg);
-                    } else if (rune == 'd') {
+                    } else if (rune == '2') {
                         uint32_t arg = win->font_size - 2;
                         nss_window_set(con, win, nss_wc_font_size, &arg);
-                    } else if (rune == 'w') {
+                    } else if (rune == '3') {
                         uint32_t arg = !win->lcd_mode;
                         nss_window_set(con, win, nss_wc_lcd_mode, &arg);
-                    } else if (rune == 's') {
+                    } else if (rune == '4') {
                         uint32_t arg = win->font_size;
                         nss_create_window(con,(nss_rect_t) {100,100,400,200}, win->font_name, nss_wc_font_size, &arg);
+                    } else {
+                        uint8_t buf[8];
+                        size_t sz = xkb_state_key_get_utf8(con->xkb_state, keycode, NULL, 0);
+                        if (sz > 0 && sz < 8) {
+                            xkb_state_key_get_utf8(con->xkb_state, keycode, (char *)buf, 7);
+                            info("Got key: '%s'", buf);
+                            nss_term_write(win->term, buf, sz);
+                        }
                     }
                     break;
                 }
