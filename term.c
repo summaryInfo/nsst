@@ -119,7 +119,6 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage) {
 void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
     term->width = width;
     term->height = height;
-    //TODO: Move cursor
 }
 
 void nss_term_focus(nss_term_t *term, _Bool focused) {
@@ -128,6 +127,7 @@ void nss_term_focus(nss_term_t *term, _Bool focused) {
     nss_window_draw(term->con, term->win, cx, cy, &term->current_line->cell[cx], 1);
     nss_window_draw_cursor(term->con, term->win, cx, cy);
     nss_window_update(term->con, term->win, 1, &(nss_rect_t) {cx, cy, 1, 1});
+    nss_window_draw_commit(term->con, term->win);
 }
 
 void nss_term_visibility(nss_term_t *term, _Bool visible) {

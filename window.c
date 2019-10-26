@@ -465,7 +465,6 @@ static void reload_font(nss_context_t *con, nss_window_t *win, _Bool need_free) 
         return;
     }
 
-    //@TODO: Recreate gc's on win->*_cid change
     uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
     uint32_t values2[3] = { nss_color_get(win->bg_cid), nss_color_get(win->bg_cid), 0 };
     c = xcb_create_gc_checked(con->con, win->gc, win->pid, mask2, values2);
@@ -646,6 +645,8 @@ void nss_window_draw_cursor(nss_context_t *con, nss_window_t *win, int16_t x, in
     xcb_render_fill_rectangles(con->con,XCB_RENDER_PICT_OP_OVER, win->pic, c, count, rects + off);
 }
 
+/* Draw line with attributes */
+/* TODO: Implement query caching */
 void nss_window_draw(nss_context_t *con, nss_window_t *win, int16_t x, int16_t y, nss_cell_t *cells, size_t len) {
     x = x * win->char_width;
     y = y * (win->char_height + win->char_depth) + win->char_height;
@@ -781,6 +782,12 @@ void nss_window_set(nss_context_t *con, nss_window_t *win, nss_wc_tag_t tag, con
     set_config(win, tag, values);
     if (tag & (nss_wc_font_size | nss_wc_lcd_mode))
         reload_font(con, win, 1);
+    if (tag & (nss_wc_cursor_background | nss_wc_cursor_foreground | nss_wc_background | nss_wc_foreground)) {
+        //@@TODO Test this
+        uint32_t values2[2] = { nss_color_get(win->bg_cid), nss_color_get(win->bg_cid) };
+        xcb_change_window_attributes(con->con, win->wid, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL, values2);
+        xcb_change_gc(con->con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
+    }
     nss_term_redraw(win->term, (nss_rect_t) {0,0,win->cw, win->ch});
     redraw_damage(con, win, (nss_rect_t) {0,0,win->width, win->height});
     xcb_flush(con->con);
@@ -926,6 +933,8 @@ void nss_context_run(nss_context_t *con) {
                     xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
                     nss_window_t *win = nss_window_for_xid(con, ev->event);
                     if (!win) break;
+
+                    /* That's just a temporal solution */
 
                     xkb_keycode_t keycode = ev->detail;
                     char buf[8];

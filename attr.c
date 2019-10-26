@@ -32,6 +32,7 @@ void nss_init_color() {
     stor.free = NSS_CID_NONE;
     stor.length = NSS_N_BASE_COLORS;
     // Generate basic palette
+    // TODO: Make it  congigurable
     nss_color_t base[CN_BASE] = {
         0xff000000, 0xff0000cd, 0xff00cd00, 0xff00cdcd,
         0xffee0000, 0xffcd00cd, 0xffcdcd00, 0xffe5e5e5,
