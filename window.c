@@ -113,7 +113,7 @@ struct nss_context {
     struct pollfd *pfds;
     size_t pfdn;
     size_t pfdcap;
-nss_window_t *first;
+    nss_window_t *first;
 };
 
 typedef struct nss_glyph_mesg {
@@ -1162,5 +1162,6 @@ void nss_context_run(nss_context_t *con) {
                 }
             }
         }
+        if (!con->daemon_mode && !con->first) break;
     }
 }

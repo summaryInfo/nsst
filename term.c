@@ -312,15 +312,10 @@ static void term_adjscreen(nss_term_t *term, _Bool force) {
         // if cursor on last line -> scroll up
     // else scroll to cursor
 
-    // TODO: Create sceen line index array
-
-    nss_line_t *new_screen = term->cur_line;
-    int16_t new_y = 0;
-    for (size_t i = term->height - 1; i && new_screen->prev; i--) {
-        new_screen = new_screen->prev;
-        new_y++;
-    }
     if (force || term->cur_y > term->height - 1) {
+        nss_line_t *new_screen = term->cur_line;
+        for (size_t i = term->height - 1; i && new_screen->prev; i--)
+            new_screen = new_screen->prev;
         if (term->mode & nss_tm_altscreen) {
             nss_line_t *ln = term->screen->prev;
             while (ln) {
@@ -331,9 +326,13 @@ static void term_adjscreen(nss_term_t *term, _Bool force) {
         }
         if (term->screen != new_screen) {
             term->screen = new_screen;
-            term->cur_y = new_y;
+            term->cur_y = MIN(term->cur_y, term->height - 1);
             nss_term_redraw(term, (nss_rect_t) {0, 0, term->width, term->height}, 1);
         }
+    } else {
+
+        // TODO Fix cursor pos somehow
+
     }
 }
 
@@ -457,11 +456,11 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
             bufs[utf8_encode(ch, bufs)] = '\0';
             if (!utf8_check(ch, start - prev)) ch = UTF_INVAL;
             info("Decoded: 0x%"PRIx32", %s", ch, bufs);
-            nss_term_redraw(term, (nss_rect_t) { term->cur_x, term->cur_y, 1, 1}, 0);
+            nss_term_redraw(term, (nss_rect_t) { MIN(term->cur_x, term->width - 1), term->cur_y, 1, 1}, 0);
             if (ch > 0xff || !term_handle(term, ch))
                 term_putchar(term, ch);
             else
-                nss_term_redraw(term, (nss_rect_t) { term->cur_x, term->cur_y, 1, 1}, 1);
+                nss_term_redraw(term, (nss_rect_t) { MIN(term->cur_x, term->width - 1), term->cur_y, 1, 1}, 1);
             //nss_window_draw_commit(term->con, term->win);
             info("Current line length: %zu", term->cur_line->width);
 
