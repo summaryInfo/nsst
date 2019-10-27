@@ -94,9 +94,9 @@ static void sigchld_fn(int arg) {
         return;
     }
 
-    if(WIFEXITED(status) && WEXITSTATUS(status))
+    if (WIFEXITED(status) && WEXITSTATUS(status))
         warn("Child exited with status: %d", WEXITSTATUS(status));
-    else if(WIFSIGNALED(status))
+    else if (WIFSIGNALED(status))
         warn("Child terminated due to the signal: %d", WTERMSIG(status));
 }
 
@@ -105,7 +105,7 @@ static void exec_shell(char *cmd, char **args) {
     const struct passwd *pw;
     errno = 0;
     if (!(pw = getpwuid(getuid()))) {
-        if(errno) die("getpwuid(): %s", strerror(errno));
+        if (errno) die("getpwuid(): %s", strerror(errno));
         else die("I don't know you");
     }
 
@@ -118,7 +118,7 @@ static void exec_shell(char *cmd, char **args) {
     else cmd = sh;
 
     char *def[] = {cmd, NULL};
-    if(!args) args = def;
+    if (!args) args = def;
 
     unsetenv("COLUMNS");
     unsetenv("LINES");
@@ -149,7 +149,7 @@ int tty_open(nss_term_t *term, char *cmd, char **args) {
     }
 
     pid_t pid;
-    switch((pid = fork())) {
+    switch ((pid = fork())) {
     case -1:
         close(slave);
         close(master);
@@ -182,10 +182,10 @@ int tty_open(nss_term_t *term, char *cmd, char **args) {
 static size_t utf8_encode(uint32_t u, uint8_t *buf) {
     static const uint32_t utf8_min[] = {0x80, 0x800, 0x10000, 0x11000};
     static const uint8_t utf8_mask[] = {0x00, 0xc0, 0xe0, 0xf0};
-    if(u > 0x10ffff) u = UTF_INVAL;
+    if (u > 0x10ffff) u = UTF_INVAL;
     size_t i = 0, j;
-    while(u > utf8_min[i++]);
-    for(j = i; j > 1; j--) {
+    while (u > utf8_min[i++]);
+    for (j = i; j > 1; j--) {
         buf[j - 1] = (u & 0x3f) | 0x80;
         u >>= 6;
     }
@@ -196,13 +196,13 @@ static size_t utf8_encode(uint32_t u, uint8_t *buf) {
 static _Bool utf8_decode(nss_term_t *term, uint32_t *res, const uint8_t **buf) {
     if (**buf >= 0x80 && **buf < 0xc0) {
         uint8_t ch = *(*buf)++;
-        if(!term->utf_rest) {
+        if (!term->utf_rest) {
             *res = UTF_INVAL;
             return 1;
         }
         term->utf_part <<= 6;
         term->utf_part |= ch & ~0xc0;
-        if(!--term->utf_rest) {
+        if (!--term->utf_rest) {
             *res = term->utf_part;
             return 1;
         }
@@ -227,7 +227,7 @@ static _Bool utf8_decode(nss_term_t *term, uint32_t *res, const uint8_t **buf) {
     do {
         term->utf_part &= ~i;
         term->utf_rest++;
-    } while((i /= 2) & term->utf_part);
+    } while ((i /= 2) & term->utf_part);
     info("Rest: %"PRIi8, term->utf_rest);
 
     return 0;
@@ -247,7 +247,11 @@ static nss_line_t *create_line(nss_line_t *prev, nss_line_t *next, size_t width)
         warn("Can't allocate line");
         return NULL;
     }
-    memset(line->cell, 0, width*sizeof(line->cell[0]));
+    for (size_t i = 0; i < width; i++) {
+        line->cell[i].ch = 0;
+        line->cell[i].bg = 0;
+        line->cell[i].fg = 7;
+    }
     line->width = width;
     line->dirty = 1;
 
@@ -265,8 +269,13 @@ static nss_line_t *resize_line(nss_line_t *line, size_t width) {
         warn("Can't allocate line");
     }
     memcpy(new, line, sizeof(nss_line_t) + MIN(width, line->width)*sizeof(line->cell[0]));
-    if (width > line->width)
-        memset(new->cell + line->width, 0, (width - line->width)*sizeof(line->cell[0]));
+    if (width > line->width) {
+        for (size_t i = line->width; i < width; i++) {
+            new->cell[i].ch = 0;
+            new->cell[i].bg = 0;
+            new->cell[i].fg = 7;
+        }
+    }
     new->width = width;
 
     if (line->prev) line->prev->next = new;
@@ -277,74 +286,83 @@ static nss_line_t *resize_line(nss_line_t *line, size_t width) {
     return new;
 }
 
+static void term_moveto(nss_term_t *term, int16_t x, int16_t y) {
+    x = MIN(MAX(x, 0), term->width - 1);
+    y = MIN(MAX(y, 0), term->height - 1);
+    //TODO cursor origin
+    term->cur_x = x;
+    term->cur_y = y;
+}
+
+static void term_adjline(nss_term_t *term) {
+    if (term->cur_line->width < (size_t)term->width) {
+        nss_line_t *line = term->cur_line;
+        term->cur_line = resize_line(line, term->width);
+        if (line == term->screen)
+            term->screen = term->cur_line;
+        if (line == term->altscreen)
+            term->altscreen = term->cur_line;
+    }
+}
+
+static void term_adjscreen(nss_term_t *term, _Bool force) {
+    // Scroll terminal display position to screen
+    // Something messy is happenning
+    // if not force
+        // if cursor on last line -> scroll up
+    // else scroll to cursor
+
+    // TODO: Create sceen line index array
+
+    nss_line_t *new_screen = term->cur_line;
+    int16_t new_y = 0;
+    for (size_t i = term->height - 1; i && new_screen->prev; i--) {
+        new_screen = new_screen->prev;
+        new_y++;
+    }
+    if (force || term->cur_y > term->height - 1) {
+        if (term->mode & nss_tm_altscreen) {
+            nss_line_t *ln = term->screen->prev;
+            while (ln) {
+                nss_line_t *tmp = ln->prev;
+                free(ln);
+                ln = tmp;
+            }
+        }
+        if (term->screen != new_screen) {
+            term->screen = new_screen;
+            term->cur_y = new_y;
+            nss_term_redraw(term, (nss_rect_t) {0, 0, term->width, term->height}, 1);
+        }
+    }
+}
+
 static void term_newline(nss_term_t *term, _Bool cr) {
-    // TODO Scroll
-    term->cur_y++;
-    if(cr) term->cur_x = 0;
     if (!term->cur_line->next) {
         term->cur_line->next = create_line(term->cur_line, NULL, term->width);
-        if(term->mode & nss_tm_altscreen) {
+        if (term->mode & nss_tm_altscreen) {
             nss_line_t *top = term->screen;
-            while(top->prev) top = top->prev;
+            while (top->prev) top = top->prev;
             if (top->next) top->next->prev = NULL;
             if (top == term->screen) term->screen = top->next;
             free(top);
         }
     }
     term->cur_line = term->cur_line->next;
-}
-
-static void term_adjline(nss_term_t *term) {
-    if(term->cur_line->width < (size_t)term->width) {
-        nss_line_t *line = term->cur_line;
-        term->cur_line = resize_line(line, term->width);
-        if(line == term->screen)
-            term->screen = term->cur_line;
-        if(line == term->altscreen)
-            term->altscreen = term->cur_line;
-        free(line);
-    }
-}
-
-static void term_clear_cursor(nss_term_t *term) {
-    int16_t cx = MIN(term->cur_x, term->width - 1);
-    nss_window_draw(term->con, term->win, cx, term->cur_y, &term->cur_line->cell[cx], 1);
-    nss_window_update(term->con, term->win, 1, &(nss_rect_t) {cx, term->cur_y, 1, 1});
-}
-
-static void term_draw_cursor(nss_term_t *term) {
-    int16_t cx = MIN(term->cur_x, term->width - 1);
-    nss_window_draw_cursor(term->con, term->win, cx, term->cur_y, &term->cur_line->cell[cx]);
-    nss_window_update(term->con, term->win, 1, &(nss_rect_t) {cx, term->cur_y, 1, 1});
-}
-
-static void term_draw_single(nss_term_t *term, int16_t x, int16_t y) {
-    nss_window_draw(term->con, term->win, x, y, &term->cur_line->cell[x], 1);
-    nss_window_update(term->con, term->win, 1, &(nss_rect_t) {x, y, 1, 1});
-}
-
-static void term_moveto(nss_term_t *term, int16_t x, int16_t y) {
-    x = MIN(MAX(x, 0), term->width);
-    y = MIN(MAX(y, 0), term->height);
-    //TODO cursor origin
-    term->cur_x = x;
-    term->cur_y = y;
+    term_moveto(term, 0, term->cur_y + 1);
+    term_adjscreen(term, 0);
 }
 
 static void term_putchar(nss_term_t *term, uint32_t ch) {
-    if(term->mode & nss_tm_wrap) {
-        if(term->cur_x == term->width) {
+    if (term->mode & nss_tm_wrap) {
+        if (term->cur_x == term->width)
             term_newline(term, 1);
-            term->cur_x++;
-        } else if ((size_t)term->cur_x++ > term->cur_line->width) {
-            term_adjline(term);
-        }
-    } else if(term->cur_x < term->width) {
-        term_adjline(term);
+        term->cur_x++;
     }
+    term_adjline(term);
 
     term->cur_line->cell[term->cur_x - 1] = NSS_MKCELL(term->cur_fg, term->cur_bg, term->cur_attrs, ch);
-    term_draw_single(term, term->cur_x - 1, term->cur_y);
+    nss_term_redraw(term, (nss_rect_t) {term->cur_x - 1, term->cur_y, 2, 1}, 1);
 }
 
 static _Bool term_handle(nss_term_t *term, uint32_t ch) {
@@ -437,13 +455,15 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
         if (utf8_decode(term, &ch, &start)) {
             uint8_t bufs[5];
             bufs[utf8_encode(ch, bufs)] = '\0';
-            if(!utf8_check(ch, start - prev)) ch = UTF_INVAL;
+            if (!utf8_check(ch, start - prev)) ch = UTF_INVAL;
             info("Decoded: 0x%"PRIx32", %s", ch, bufs);
-            term_clear_cursor(term);
-            if(ch > 0xff || !term_handle(term, ch))
+            nss_term_redraw(term, (nss_rect_t) { term->cur_x, term->cur_y, 1, 1}, 0);
+            if (ch > 0xff || !term_handle(term, ch))
                 term_putchar(term, ch);
-            term_draw_cursor(term);
-            nss_window_draw_commit(term->con, term->win);
+            else
+                nss_term_redraw(term, (nss_rect_t) { term->cur_x, term->cur_y, 1, 1}, 1);
+            //nss_window_draw_commit(term->con, term->win);
+            info("Current line length: %zu", term->cur_line->width);
 
             prev = start;
         }
@@ -464,7 +484,7 @@ ssize_t nss_term_read(nss_term_t *term) {
     ssize_t disp = term_write(term, term->fd_buf, term->fd_buf_pos, 0);
     info("Disp: %zd", disp);
     term->fd_buf_pos -= disp;
-    if(term->fd_buf_pos > 0)
+    if (term->fd_buf_pos > 0)
         memmove(term->fd_buf, term->fd_buf + disp, term->fd_buf_pos);
     return res;
 }
@@ -477,7 +497,7 @@ static void tty_write_raw(nss_term_t *term, const uint8_t *buf, size_t len) {
         .fd = term->fd
     };
     while (len) {
-        if(poll(&pfd, 1, -1) < 0 && errno != EINTR) {
+        if (poll(&pfd, 1, -1) < 0 && errno != EINTR) {
             warn("Can't poll tty");
             close(term->fd);
             term->fd = -1;
@@ -491,7 +511,7 @@ static void tty_write_raw(nss_term_t *term, const uint8_t *buf, size_t len) {
                 term->fd = -1;
             }
 
-            if(res < (ssize_t)len) {
+            if (res < (ssize_t)len) {
                 if (len < lim)
                     lim = nss_term_read(term);
                 len -= res;
@@ -506,22 +526,22 @@ static void tty_write_raw(nss_term_t *term, const uint8_t *buf, size_t len) {
 
 void nss_term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool do_echo) {
     if (term->fd == -1) return;
-    // TODO Scroll terminal display position to screen
+    term_adjscreen(term, 1);
 
     const uint8_t *next;
 
-    if(do_echo && term->mode & nss_tm_echo)
+    if (do_echo && term->mode & nss_tm_echo)
         term_write(term, buf, len, 1);
 
-    if(!(term->mode & nss_tm_crlf))
+    if (!(term->mode & nss_tm_crlf))
         tty_write_raw(term, buf, len);
-    else while(len) {
-        if(*buf == '\r') {
+    else while (len) {
+        if (*buf == '\r') {
             next = buf + 1;
             tty_write_raw(term, (uint8_t *)"\r\n", 2);
         } else {
             next = memchr(buf , '\r', len);
-            if(!next) next = buf + len;
+            if (!next) next = buf + len;
             tty_write_raw(term, buf, next - buf);
         }
         len -= next - buf;
@@ -560,7 +580,6 @@ nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width
     term->cur_bg = 0;
     term->altscreen = create_line(NULL, NULL, width);
 
-
     nss_attrs_t test[] = {
         nss_attrib_italic | nss_attrib_bold,
         nss_attrib_italic | nss_attrib_underlined,
@@ -582,7 +601,7 @@ nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width
     line->prev->cell[16] = NSS_MKCELL(4, 6, test[2], 'A');
     term->cur_line = term->screen;
 
-    if(tty_open(term, "./testcmd", NULL) < 0){
+    if (tty_open(term, "./testcmd", NULL) < 0) {
         warn("Can't create tty");
         nss_free_term(term);
         return NULL;
@@ -593,32 +612,37 @@ nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width
 
 #define ALLOC_STEP 16
 
-void nss_term_redraw(nss_term_t *term, nss_rect_t damage) {
+void nss_term_redraw(nss_term_t *term, nss_rect_t damage, _Bool cursor) {
     if (!(term->mode & nss_tm_visible)) return;
+    if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
+        //Clear undefined areas
+        nss_window_clear(term->con, term->win, 1, &damage);
 
-    //Clear undefined areas
-    nss_window_clear(term->con, term->win, 1, &damage);
-
-    nss_line_t *line = term->screen;
-    size_t j = 0;
-    for (; line && j < (size_t)damage.y; j++, line = line->next);
-    for (; line && j < (size_t)damage.height + damage.y; j++, line = line->next) {
-        if ((size_t)damage.x < line->width) {
-            nss_window_draw(term->con, term->win, damage.x, j, line->cell + damage.x, MIN(line->width - damage.x, damage.width));
-            info("Draw: x=%d..%d y=%d", damage.x, damage.x + MIN(line->width - damage.x, damage.width), j);
-            if (line == term->cur_line && damage.x <= term->cur_x && term->cur_x <= damage.x + damage.width) {
-                term_draw_cursor(term);
+        nss_line_t *line = term->screen;
+        size_t j = 0;
+        for (; line && j < (size_t)damage.y; j++, line = line->next);
+        for (; line && j < (size_t)damage.height + damage.y; j++, line = line->next) {
+            if ((size_t)damage.x < line->width) {
+                nss_window_draw(term->con, term->win, damage.x, j, MIN(line->width - damage.x, damage.width), line->cell + damage.x);
+                if (cursor && line == term->cur_line && damage.x <= term->cur_x && term->cur_x <= damage.x + damage.width) {
+                    int16_t cx = MIN(term->cur_x, term->width - 1);
+                    nss_window_draw_cursor(term->con, term->win, cx, term->cur_y, &term->cur_line->cell[cx]);
+                }
             }
         }
+        nss_window_update(term->con, term->win, 1, &damage);
+        nss_window_draw_commit(term->con, term->win);
     }
-    nss_window_draw_commit(term->con, term->win);
 }
 
 void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
     term->width = width;
     term->height = height;
+    info("Resize: w=%"PRId16" h=%"PRId16, width, height);
+    info("Cursor: x=%"PRId16" y=%"PRId16, term->cur_x, term->cur_y);
 
-    //TODO Do resize
+    //TODO Resize
+    term_adjscreen(term, 0);
 
     // Pixel sizes are unused
     // TODO: Set them correctly
@@ -630,19 +654,21 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
 }
 
 void nss_term_focus(nss_term_t *term, _Bool focused) {
-    if(focused) term->mode |= nss_tm_focused;
+    if (focused) term->mode |= nss_tm_focused;
     else term->mode &= ~nss_tm_focused;
-    term_draw_cursor(term);
+    nss_term_redraw(term, (nss_rect_t) {term->cur_x, term->cur_y, 1, 1}, 1);
     nss_window_draw_commit(term->con, term->win);
 }
 
 void nss_term_visibility(nss_term_t *term, _Bool visible) {
-    if(visible) term->mode |= nss_tm_visible; 
-    else term->mode &= ~nss_tm_visible;
+    if (visible) {
+        term->mode |= nss_tm_visible; 
+        nss_term_redraw(term, (nss_rect_t) {0, 0, term->width, term->height}, 1);
+    } else term->mode &= ~nss_tm_visible;
 }
 
 void nss_free_term(nss_term_t *term) {
-    if(term->fd >= 0) close(term->fd);
+    if (term->fd >= 0) close(term->fd);
     nss_term_hang(term);
     nss_line_t *line = term->screen;
     while (line->prev)

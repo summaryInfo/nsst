@@ -128,7 +128,7 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
         .pats = malloc(sizeof(*pats.pats)*pats.caps)
     };
 
-    for (char *tok = strtok(tmp, ","); tok; tok = strtok(NULL, ",")) {
+    for (char *tok = strtok(tmp, ", "); tok; tok = strtok(NULL, ", ")) {
         FcPattern *final_pat = NULL;
         FcPattern *pat = FcNameParse((FcChar8*) tok);
         FcPatternAddDouble(pat, FC_DPI, font->dpi);
@@ -137,7 +137,7 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
         FcPatternDel(pat, FC_WEIGHT);
         FcPatternDel(pat, FC_SLANT);
 
-        switch(attr) {
+        switch (attr) {
         case nss_font_attrib_normal:
             FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Regular");
             FcPatternAddInteger(pat, FC_WEIGHT, FC_WEIGHT_REGULAR);
@@ -186,7 +186,7 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
 
 
         if (pats.length + 1 > pats.caps) {
-            FcPattern **new = realloc(pats.pats,sizeof(*pats.pats)*(pats.caps + CAPS_STEP));
+            FcPattern **new = realloc(pats.pats, sizeof(*pats.pats)*(pats.caps + CAPS_STEP));
             if (!new) {
                 warn("Out of memory");
                 continue;
@@ -259,7 +259,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     int glyph_index = 0;
     FT_Face face = faces->faces[0];
     for (size_t i = 0; !glyph_index && i < faces->length; i++)
-        if ((glyph_index = FT_Get_Char_Index(faces->faces[i],ch)))
+        if ((glyph_index = FT_Get_Char_Index(faces->faces[i], ch)))
             face = faces->faces[i];
     //size_t sz = faces->faces[0]->size->metrics.x_ppem/font->dpi*72.0*64;
 
@@ -317,8 +317,8 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
 
     for (size_t k = 0; k < glyph->height; k++) {
         for (size_t m = 0 ;m < img_width; m++)
-            fprintf(stderr,"%02x",src[pitch*k+m]);
-        putc('\n',stderr);
+            fprintf(stderr, "%02x", src[pitch*k+m]);
+        putc('\n', stderr);
     }
     */
 

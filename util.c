@@ -12,7 +12,7 @@ _Noreturn void die(const char *fmt, ...) {
     va_start(args, fmt);
     fputs("[\e[31;1mFATAL\e[0m] ", stderr);
     vfprintf(stderr, fmt, args);
-    fputc('\n',stderr);
+    fputc('\n', stderr);
     va_end(args);
 
     exit(EXIT_FAILURE);
@@ -24,7 +24,7 @@ void fatal(const char *fmt, ...) {
     va_start(args, fmt);
     fputs("[\e[31;1mFATAL\e[0m] ", stderr);
     vfprintf(stderr, fmt, args);
-    fputc('\n',stderr);
+    fputc('\n', stderr);
     va_end(args);
 }
 
@@ -34,7 +34,7 @@ void warn(const char *fmt, ...) {
     va_start(args, fmt);
     fputs("[\e[33;1mWARN\e[0m] ", stderr);
     vfprintf(stderr, fmt, args);
-    fputc('\n',stderr);
+    fputc('\n', stderr);
     va_end(args);
 
 }
@@ -45,7 +45,7 @@ void info(const char *fmt, ...) {
     va_start(args, fmt);
     fputs("[\e[32;1mINFO\e[0m] ", stderr);
     vfprintf(stderr, fmt, args);
-    fputc('\n',stderr);
+    fputc('\n', stderr);
     va_end(args);
 
 }

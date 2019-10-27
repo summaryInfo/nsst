@@ -38,7 +38,7 @@
 #define CG(c) ((((c) >> 8) & 0xff) * 0x101)
 #define CB(c) ((((c) >> 16) & 0xff) * 0x101)
 #define CA(c) ((((c) >> 24) & 0xff) * 0x101)
-#define MAKE_COLOR(c) {.red=CR(c),.green=CG(c),.blue=CB(c),.alpha=CA(c)}
+#define MAKE_COLOR(c) {.red=CR(c), .green=CG(c), .blue=CB(c), .alpha=CA(c)}
 
 
 struct nss_window {
@@ -124,9 +124,9 @@ typedef struct nss_glyph_mesg {
 } nss_glyph_mesg_t;
 
 static _Bool check_void_cookie(nss_context_t *con, xcb_void_cookie_t ck) {
-    xcb_generic_error_t *err = xcb_request_check(con->con,ck);
+    xcb_generic_error_t *err = xcb_request_check(con->con, ck);
     if (err) {
-        warn("X11 error: %"PRIu8" %"PRIu16" %"PRIu8,err->major_code,err->minor_code,err->error_code);
+        warn("X11 error: %"PRIu8" %"PRIu16" %"PRIu8, err->major_code, err->minor_code, err->error_code);
         return 1;
     }
     free(err);
@@ -254,14 +254,14 @@ cleanup_context:
 /* Initialize global state object */
 nss_context_t *nss_create_context(void) {
     nss_context_t *con = calloc(1, sizeof(*con));
-    if(!con) die("Can't allocate context");
+    if (!con) die("Can't allocate context");
     con->daemon_mode = 0;
 
     con->pfds = calloc(INIT_PFD_NUM, sizeof(struct pollfd));
-    if(!con->pfds) die("Can't allocate pfds");
+    if (!con->pfds) die("Can't allocate pfds");
     con->pfdn = 1;
     con->pfdcap = INIT_PFD_NUM;
-    for(size_t i = 1; i < INIT_PFD_NUM; i++)
+    for (size_t i = 1; i < INIT_PFD_NUM; i++)
         con->pfds[i].fd = -1;
 
     int screenp;
@@ -300,7 +300,7 @@ nss_context_t *nss_create_context(void) {
     con->mid = xcb_generate_id(con->con);
     xcb_void_cookie_t c = xcb_create_colormap_checked(con->con, XCB_COLORMAP_ALLOC_NONE,
                                        con->mid, con->screen->root, con->vis->visual_id);
-    if (check_void_cookie(con,c)) {
+    if (check_void_cookie(con, c)) {
         nss_free_context(con);
         die("Can't create colormap");
     }
@@ -355,7 +355,7 @@ nss_context_t *nss_create_context(void) {
         die("Can't configure XKB");
     }
 
-    con->atom_net_wm_pid = intern_atom(con,"_NET_WM_PID");
+    con->atom_net_wm_pid = intern_atom(con, "_NET_WM_PID");
     con->atom_wm_delete_window = intern_atom(con, "WM_DELETE_WINDOW");
     con->atom_wm_protocols = intern_atom(con, "WM_PROTOCOLS");
     con->atom_utf8_string = intern_atom(con, "UTF8_STRING");
@@ -372,7 +372,7 @@ void nss_window_set_title(nss_context_t *con, nss_window_t *win, const char *tit
 /* Free all resources */
 void nss_free_context(nss_context_t *con) {
     while (con->first)
-        nss_free_window(con,con->first);
+        nss_free_window(con, con->first);
     xkb_state_unref(con->xkb_state);
     xkb_keymap_unref(con->xkb_keymap);
     xkb_context_unref(con->xkb_ctx);
@@ -454,7 +454,7 @@ static _Bool reload_font(nss_context_t *con, nss_window_t *win, _Bool need_free)
             nss_glyph_t *glyphs[nss_font_attrib_max];
             for (size_t j = 0; j < nss_font_attrib_max; j++) {
                 glyphs[j] = nss_font_render_glyph(win->font, i, j, win->lcd_mode);
-                register_glyph(con, win, i | (j << 24),glyphs[j]);
+                register_glyph(con, win, i | (j << 24), glyphs[j]);
             }
 
             total += glyphs[0]->x_off;
@@ -470,8 +470,8 @@ static _Bool reload_font(nss_context_t *con, nss_window_t *win, _Bool need_free)
         win->char_depth = maxd;
     }
 
-    win->cw = MAX(1,(win->width - 2*win->left_border) / win->char_width);
-    win->ch = MAX(1,(win->height - 2*win->top_border) / (win->char_height + win->char_depth));
+    win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
+    win->ch = MAX(1, (win->height - 2*win->top_border) / (win->char_height + win->char_depth));
 
     xcb_rectangle_t bound = { 0, 0, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height) };
 
@@ -487,7 +487,7 @@ static _Bool reload_font(nss_context_t *con, nss_window_t *win, _Bool need_free)
     }
 
     c = xcb_create_pixmap_checked(con->con, TRUE_COLOR_ALPHA_DEPTH, win->pid, win->wid, bound.width, bound.height );
-    if (check_void_cookie(con,c)) {
+    if (check_void_cookie(con, c)) {
         warn("Can't create pixmap");
         return 0;
     }
@@ -495,15 +495,15 @@ static _Bool reload_font(nss_context_t *con, nss_window_t *win, _Bool need_free)
     uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
     uint32_t values2[3] = { nss_color_get(win->bg_cid), nss_color_get(win->bg_cid), 0 };
     c = xcb_create_gc_checked(con->con, win->gc, win->pid, mask2, values2);
-    if (check_void_cookie(con,c)) {
+    if (check_void_cookie(con, c)) {
         warn("Can't create GC");
         return 0;
     }
 
     uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
     uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
-    c = xcb_render_create_picture_checked(con->con,win->pic, win->pid, con->pfargb, mask3, values3);
-    if (check_void_cookie(con,c)) {
+    c = xcb_render_create_picture_checked(con->con, win->pic, win->pid, con->pfargb, mask3, values3);
+    if (check_void_cookie(con, c)) {
         warn("Can't create XRender picture");
         return 0;
     }
@@ -540,7 +540,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     win->got_configure = 0;
     win->font_name = strdup(font_name);
 
-    set_config(win,tag, values);
+    set_config(win, tag, values);
 
     xcb_void_cookie_t c;
 
@@ -553,16 +553,16 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     };
     win->wid = xcb_generate_id(con->con);
     c = xcb_create_window_checked(con->con, TRUE_COLOR_ALPHA_DEPTH, win->wid, con->screen->root,
-                                  rect.x,rect.y, rect.width, rect.height, 0,
+                                  rect.x, rect.y, rect.width, rect.height, 0,
                                   XCB_WINDOW_CLASS_INPUT_OUTPUT,
-                                  con->vis->visual_id, mask1,values1);
+                                  con->vis->visual_id, mask1, values1);
     if (check_void_cookie(con, c)) {
         warn("Can't create window");
         free(win);
         return NULL;
     }
 
-    set_wm_props(con,win);
+    set_wm_props(con, win);
 
     if (!reload_font(con, win, 0)) {
         warn("Can't create window");
@@ -573,17 +573,17 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     info("Font size: %d %d %d", win->char_height, win->char_depth, win->char_width);
 
     win->term = nss_create_term(con, win, win->cw, win->ch);
-    if(!win->term) {
+    if (!win->term) {
         warn("Can't create term");
-        xcb_render_free_picture(con->con,win->pic);
-        xcb_free_gc(con->con,win->gc);
-        xcb_free_pixmap(con->con,win->pid);
-        xcb_render_free_glyph_set(con->con,win->gsid);
-        xcb_destroy_window(con->con,win->wid);
+        xcb_render_free_picture(con->con, win->pic);
+        xcb_free_gc(con->con, win->gc);
+        xcb_free_pixmap(con->con, win->pid);
+        xcb_render_free_glyph_set(con->con, win->gsid);
+        xcb_destroy_window(con->con, win->wid);
         free(win);
         return NULL;
     }
-    nss_term_redraw(win->term, (nss_rect_t) {0,0,win->cw,win->ch});
+    nss_term_redraw(win->term, (nss_rect_t) {0, 0, win->cw, win->ch}, 1);
 
 
     win->next = con->first;
@@ -591,13 +591,13 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     if (con->first) con->first->prev = win;
     con->first = win;
 
-    xcb_map_window(con->con,win->wid);
+    xcb_map_window(con->con, win->wid);
     xcb_flush(con->con);
 
     if (con->pfdn + 1 > con->pfdcap) {
         struct pollfd *new = realloc(con->pfds, con->pfdcap + INIT_PFD_NUM);
         if (new) {
-            for(size_t i = 0; i < INIT_PFD_NUM; i++) {
+            for (size_t i = 0; i < INIT_PFD_NUM; i++) {
                 con->pfds[i + con->pfdn].fd = -1;
                 con->pfds[i + con->pfdn].events = 0;
             }
@@ -611,7 +611,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     }
     con->pfdn++;
     size_t i = 1;
-    while(con->pfds[i].fd >= 0) i++;
+    while (con->pfds[i].fd >= 0) i++;
     // Because it might become -1 suddenly
     win->term_fd = nss_term_fd(win->term);
     con->pfds[i].events = POLLIN | POLLHUP;
@@ -623,7 +623,7 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
 /* Free previously created windows */
 void nss_free_window(nss_context_t *con, nss_window_t *win) {
     info("Freeing window");
-    xcb_unmap_window(con->con,win->wid);
+    xcb_unmap_window(con->con, win->wid);
     xcb_flush(con->con);
 
     if (win->next)win->next->prev = win->prev;
@@ -631,8 +631,8 @@ void nss_free_window(nss_context_t *con, nss_window_t *win) {
     else con->first =  win->next;
 
     size_t i = 0;
-    while(con->pfds[i].fd != win->term_fd && i < con->pfdcap) i++;
-    if(i < con->pfdcap)
+    while (con->pfds[i].fd != win->term_fd && i < con->pfdcap) i++;
+    if (i < con->pfdcap)
         con->pfds[i].fd = -1;
     else warn("Window fd not found");
     con->pfdn--;
@@ -640,11 +640,11 @@ void nss_free_window(nss_context_t *con, nss_window_t *win) {
     nss_free_term(win->term);
     nss_free_font(win->font);
 
-    xcb_render_free_picture(con->con,win->pic);
-    xcb_free_gc(con->con,win->gc);
-    xcb_free_pixmap(con->con,win->pid);
-    xcb_render_free_glyph_set(con->con,win->gsid);
-    xcb_destroy_window(con->con,win->wid);
+    xcb_render_free_picture(con->con, win->pic);
+    xcb_free_gc(con->con, win->gc);
+    xcb_free_pixmap(con->con, win->pid);
+    xcb_render_free_glyph_set(con->con, win->gsid);
+    xcb_destroy_window(con->con, win->wid);
     xcb_flush(con->con);
 
     free(win->font_name);
@@ -699,10 +699,10 @@ void nss_window_draw_cursor(nss_context_t *con, nss_window_t *win, int16_t x, in
     x = x * win->char_width;
     y = y * (win->char_height + win->char_depth) + win->char_height;
     xcb_rectangle_t rects[4] = {
-        {x,y-win->char_height,1,win->char_height+win->char_depth},
-        {x,y-win->char_height,win->char_width, 1},
-        {x+win->char_width-1,y-win->char_height,1,win->char_height+win->char_depth},
-        {x,y+win->char_depth-1,win->char_width, 1}
+        {x, y-win->char_height, 1, win->char_height+win->char_depth},
+        {x, y-win->char_height, win->char_width, 1},
+        {x+win->char_width-1, y-win->char_height, 1, win->char_height+win->char_depth},
+        {x, y+win->char_depth-1, win->char_width, 1}
     };
     size_t off = 0, count = 4;
     nss_cell_t cel = *cell;
@@ -720,7 +720,7 @@ void nss_window_draw_cursor(nss_context_t *con, nss_window_t *win, int16_t x, in
             cel.attrs ^= nss_attrib_inverse;
         }
     }
-    nss_window_draw(con, win, cx, cy, &cel, 1);
+    nss_window_draw(con, win, cx, cy, 1, &cel);
     xcb_render_color_t c = MAKE_COLOR(nss_color_get(win->cursor_fg_cid));
     xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, c, count, rects + off);
     xcb_flush(con->con);
@@ -728,7 +728,7 @@ void nss_window_draw_cursor(nss_context_t *con, nss_window_t *win, int16_t x, in
 
 /* Draw line with attributes */
 /* TODO: Implement query caching */
-void nss_window_draw(nss_context_t *con, nss_window_t *win, int16_t x, int16_t y, nss_cell_t *cells, size_t len) {
+void nss_window_draw(nss_context_t *con, nss_window_t *win, int16_t x, int16_t y, size_t len, nss_cell_t *cells) {
     x = x * win->char_width;
     y = y * (win->char_height + win->char_depth) + win->char_height;
     if (!cells || !len) return;
@@ -774,9 +774,9 @@ void nss_window_draw(nss_context_t *con, nss_window_t *win, int16_t x, int16_t y
         size_t data_len = messages*sizeof(nss_glyph_mesg_t) + blk_len*sizeof(uint32_t);
         uint32_t *data = malloc(data_len);
         uint32_t *off = data;
-        nss_glyph_mesg_t msg = {.dx=x,.dy=y};
+        nss_glyph_mesg_t msg = {.dx=x, .dy=y};
 
-        for (size_t msgi = 0,chari = 0; msgi < messages; msgi++, chari += CHARS_PER_MESG) {
+        for (size_t msgi = 0, chari = 0; msgi < messages; msgi++, chari += CHARS_PER_MESG) {
                 msg.len = (blk_len - chari < CHARS_PER_MESG ? blk_len - chari : CHARS_PER_MESG);
             memcpy(off, &msg, sizeof(msg));
             off += sizeof(msg) / sizeof(uint32_t);
@@ -825,7 +825,7 @@ static void redraw_damage(nss_context_t *con, nss_window_t *win, nss_rect_t dama
             {0, height, width, win->height - height},
         };
         for (size_t i = 0; i < NUM_BORDERS; i++)
-            if (intersect_with(&borders[i],&damage))
+            if (intersect_with(&borders[i], &damage))
                     damaged[num_damaged++] = borders[i];
         if (num_damaged)
             xcb_poly_fill_rectangle(con->con, win->wid, win->gc, num_damaged, (xcb_rectangle_t*)damaged);
@@ -870,8 +870,8 @@ void nss_window_set(nss_context_t *con, nss_window_t *win, nss_wc_tag_t tag, con
         xcb_change_window_attributes(con->con, win->wid, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL, values2);
         xcb_change_gc(con->con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
     }
-    nss_term_redraw(win->term, (nss_rect_t) {0,0,win->cw, win->ch});
-    redraw_damage(con, win, (nss_rect_t) {0,0,win->width, win->height});
+    nss_term_redraw(win->term, (nss_rect_t) {0, 0, win->cw, win->ch}, 1);
+    redraw_damage(con, win, (nss_rect_t) {0, 0, win->width, win->height});
     xcb_flush(con->con);
 }
 
@@ -883,8 +883,8 @@ void nss_window_set_font(nss_context_t *con, nss_window_t *win, const char * nam
     free(win->font_name);
     win->font_name = strdup(name);
     reload_font(con, win, 1);
-    nss_term_redraw(win->term, (nss_rect_t) {0,0,win->cw, win->ch});
-    redraw_damage(con, win, (nss_rect_t) {0,0,win->width, win->height});
+    nss_term_redraw(win->term, (nss_rect_t) {0, 0, win->cw, win->ch}, 1);
+    redraw_damage(con, win, (nss_rect_t) {0, 0, win->width, win->height});
     xcb_flush(con->con);
 }
 
@@ -919,8 +919,8 @@ static void handle_resize(nss_context_t *con, nss_window_t *win, int16_t width, 
     win->width = width;
     win->height = height;
 
-    int16_t new_cw = MAX(1,(win->width - 2*win->left_border)/win->char_width);
-    int16_t new_ch = MAX(1,(win->height - 2*win->top_border)/(win->char_height+win->char_depth));
+    int16_t new_cw = MAX(1, (win->width - 2*win->left_border)/win->char_width);
+    int16_t new_ch = MAX(1, (win->height - 2*win->top_border)/(win->char_height+win->char_depth));
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
     win->cw = new_cw;
@@ -958,15 +958,15 @@ static void handle_resize(nss_context_t *con, nss_window_t *win, int16_t width, 
         nss_term_resize(win->term, win->cw, win->ch);
 
         for (size_t i = 0; i < rectc; i++)
-            nss_term_redraw(win->term, rectv[i]);
+            nss_term_redraw(win->term, rectv[i], 1);
         nss_window_update(con, win, rectc, rectv);
     }
 
     if (redraw_borders) { //Update borders
         int16_t width = win->cw * win->char_width + win->left_border;
         int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
-        redraw_damage(con,win, (nss_rect_t) {width, 0, win->width - width, win->height});
-        redraw_damage(con,win, (nss_rect_t) {0, height, width, win->height - height});
+        redraw_damage(con, win, (nss_rect_t) {width, 0, win->width - width, win->height});
+        redraw_damage(con, win, (nss_rect_t) {0, height, width, win->height - height});
         //TIP: May be redraw all borders here
     }
 
@@ -977,11 +977,15 @@ static void handle_focus(nss_context_t *con, nss_window_t *win, _Bool focused) {
     nss_term_focus(win->term, focused);
 }
 
+#define POLL_TIMEOUT (1000/60)
 /* Start window logic, handling all windows in context */
 void nss_context_run(nss_context_t *con) {
+    struct timespec tim_cur;
+    clock_gettime(CLOCK_MONOTONIC, &tim_cur);
+    // TODO: Redraw terminals with fixed fps
 
     for (;;) {
-        if(poll(con->pfds, con->pfdcap, -1) < 0 && errno != EINTR)
+        if (poll(con->pfds, con->pfdcap, POLL_TIMEOUT) < 0 && errno != EINTR)
             warn("Poll error: %s", strerror(errno));
         if (con->pfds[0].revents & POLLIN) {
             xcb_generic_event_t *event;
@@ -989,13 +993,13 @@ void nss_context_run(nss_context_t *con) {
                 switch (event->response_type &= 0x7f) {
                 case XCB_EXPOSE:{
                     xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
-                    nss_window_t *win = nss_window_for_xid(con,ev->window);
+                    nss_window_t *win = nss_window_for_xid(con, ev->window);
                     if (!win) break;
 
                     nss_rect_t damage = {ev->x, ev->y, ev->width, ev->height};
                     //info("Damage: %d %d %d %d", damage.x, damage.y, damage.width, damage.height);
 
-                    redraw_damage(con,win, damage);
+                    redraw_damage(con, win, damage);
                     xcb_flush(con->con);
                     break;
                 }
@@ -1005,7 +1009,7 @@ void nss_context_run(nss_context_t *con) {
                     if (!win) break;
 
                     if (ev->width != win->width || ev->height != win->height) {
-                        handle_resize(con,win, ev->width, ev->height);
+                        handle_resize(con, win, ev->width, ev->height);
                         xcb_flush(con->con);
                     }
                     win->got_configure |= 1;
@@ -1017,41 +1021,62 @@ void nss_context_run(nss_context_t *con) {
                     nss_window_t *win = nss_window_for_xid(con, ev->event);
                     if (!win) break;
 
-                    /* That's just a temporal solution */
-
                     xkb_keycode_t keycode = ev->detail;
-                    uint32_t rune = xkb_state_key_get_utf32(con->xkb_state, keycode);
-                    info("Got key: %"PRIx32, rune);
-                    if (rune == '1') {
+                    xkb_keysym_t sym = xkb_state_key_get_one_sym(con->xkb_state, keycode);
+                    xkb_mod_mask_t mods = xkb_state_serialize_mods(con->xkb_state, XKB_STATE_MODS_EFFECTIVE);
+                    _Bool handled = 0;
+
+                    // TODO
+                    //
+                    // 1. Key bindings
+                    switch (sym) {
+                    case XKB_KEY_1: {
                         uint32_t arg = win->font_size + 2;
                         nss_window_set(con, win, nss_wc_font_size, &arg);
-                    } else if (rune == '2') {
+                        handled = 1;
+                        break;
+                    }
+                    case XKB_KEY_2: {
                         uint32_t arg = win->font_size - 2;
                         nss_window_set(con, win, nss_wc_font_size, &arg);
-                    } else if (rune == '3') {
+                        handled = 1;
+                        break;
+                    }
+                    case XKB_KEY_3: {
                         uint32_t arg = !win->lcd_mode;
                         nss_window_set(con, win, nss_wc_lcd_mode, &arg);
-                    } else if (rune == '4') {
+                        handled = 1;
+                        break;
+                    }
+                    case XKB_KEY_4: {
                         uint32_t arg = win->font_size;
-                        nss_create_window(con,(nss_rect_t) {100,100,400,200}, win->font_name, nss_wc_font_size, &arg);
-                    } else {
-                        uint8_t buf[8];
-                        size_t sz = xkb_state_key_get_utf8(con->xkb_state, keycode, NULL, 0);
-                        if (sz > 0 && sz < 8) {
-                            xkb_state_key_get_utf8(con->xkb_state, keycode, (char *)buf, 7);
-                            info("Got key: '%s'", buf);
-                            nss_term_write(win->term, buf, sz, 1);
-                        }
+                        nss_create_window(con, (nss_rect_t) {100, 100, 400, 200}, win->font_name, nss_wc_font_size, &arg);
+                        handled = 1;
+                        break;
+                    }
+                    }
+                    if (handled) break;
+
+                    // 2. Custom translations
+                    // 3. Basic keycode passing
+                    // TODO Change utf8 decoder to stateless
+
+                    uint8_t buf[8];
+                    size_t sz = xkb_state_key_get_utf8(con->xkb_state, keycode, NULL, 0);
+                    if (sz > 0 && sz < 8) {
+                        xkb_state_key_get_utf8(con->xkb_state, keycode, (char *)buf, 7);
+                        info("Got key: '%s'", buf);
+                        nss_term_write(win->term, buf, sz, 1);
                     }
                     break;
                 }
                 case XCB_FOCUS_IN:
                 case XCB_FOCUS_OUT:{
                     xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
-                    nss_window_t *win = nss_window_for_xid(con,ev->event);
+                    nss_window_t *win = nss_window_for_xid(con, ev->event);
                     if (!win) break;
 
-                    handle_focus(con,win,event->response_type == XCB_FOCUS_IN);
+                    handle_focus(con, win, event->response_type == XCB_FOCUS_IN);
                     xcb_flush(con->con);
                     break;
                 }
@@ -1127,12 +1152,12 @@ void nss_context_run(nss_context_t *con) {
                 free(event);
             }
         }
-        for(size_t i = 1; i < con->pfdcap; i++) {
-            if(con->pfds[i].fd > 0) {
+        for (size_t i = 1; i < con->pfdcap; i++) {
+            if (con->pfds[i].fd > 0) {
                 nss_window_t *win = nss_window_for_term_fd(con, con->pfds[i].fd);
-                if(con->pfds[i].revents & POLLIN & win->got_configure) {
+                if (con->pfds[i].revents & POLLIN & win->got_configure) {
                     nss_term_read(win->term);
-                } else if(con->pfds[i].revents & (POLLERR | POLLNVAL | POLLHUP)) {
+                } else if (con->pfds[i].revents & (POLLERR | POLLNVAL | POLLHUP)) {
                     nss_free_window(con, win);
                 }
             }

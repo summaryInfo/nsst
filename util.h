@@ -6,9 +6,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#define MIN(x,y) ((x) < (y) ? (x) : (y))
-#define MAX(x,y) ((x) > (y) ? (x) : (y))
-#define SWAP(T,a,b) {T tmp_ = a; a = b; b = tmp_; }
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define SWAP(T, a, b) {T tmp_ = a; a = b; b = tmp_; }
 
 typedef struct nss_rect {
     int16_t x;
@@ -55,7 +55,7 @@ inline static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst) {
             .height = MIN(src->y + src->height, dst->y + dst->height),
         };
         if (inters.width <= inters.x || inters.height <= inters.y) {
-            *src = (nss_rect_t) {0,0,0,0};
+            *src = (nss_rect_t) {0, 0, 0, 0};
             return 0;
         } else {
             inters.width -= inters.x;

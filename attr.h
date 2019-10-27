@@ -24,8 +24,8 @@ typedef enum nss_attrs {
 
 #define NSS_GLYPH_MASK (0xffffff | (nss_font_attrib_mask << 24))
 #define NSS_CELL_CHAR(s) ((s).ch & 0xffffff)
-#define NSS_CELL_FG(s,b) (nss_color_get((s)->fg + (b)))
-#define NSS_CELL_BG(s,b) (nss_color_get((s)->bg + (b)))
+#define NSS_CELL_FG(s, b) (nss_color_get((s)->fg + (b)))
+#define NSS_CELL_BG(s, b) (nss_color_get((s)->bg + (b)))
 #define NSS_CELL_ATTRS(s) ((s).attrs)
 #define NSS_CELL_GLYPH(s) ((s).ch & NSS_GLYPH_MASK)
 #define NSS_MKCELL(f, b, l, c) ((nss_cell_t) { .bg = (b), .fg = (f), .ch = (c) | ((l) << 24)})
