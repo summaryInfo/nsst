@@ -50,6 +50,7 @@ struct nss_window {
     _Bool focused;
     _Bool active;
     _Bool lcd_mode;
+    _Bool got_configure;
 
     int16_t width;
     int16_t height;
@@ -139,9 +140,8 @@ static nss_window_t *nss_window_for_xid(nss_context_t *con, xcb_window_t xid) {
     return NULL;
 }
 static nss_window_t *nss_window_for_term_fd(nss_context_t *con, int fd) {
-    for (nss_window_t *win = con->first; win; win = win->next) {
+    for (nss_window_t *win = con->first; win; win = win->next)
         if (win->term_fd == fd) return win;
-    }
     warn("Window for fd not found");
     return NULL;
 }
@@ -532,11 +532,12 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     win->fg_cid = 7;
     win->cursor_bg_cid = 0;
     win->cursor_fg_cid = 7;
-    win->cursor_type = nss_cursor_bar;
+    win->cursor_type = nss_cursor_block;
     win->lcd_mode = 0;
     win->font_size = 0;
     win->focused = 0;
     win->active = 0;
+    win->got_configure = 0;
     win->font_name = strdup(font_name);
 
     set_config(win,tag, values);
@@ -694,6 +695,7 @@ static xcb_render_picture_t create_pen(nss_context_t *con, nss_window_t *win, xc
 }
 
 void nss_window_draw_cursor(nss_context_t *con, nss_window_t *win, int16_t x, int16_t y, nss_cell_t *cell) {
+    int16_t cx = x, cy = y;
     x = x * win->char_width;
     y = y * (win->char_height + win->char_depth) + win->char_height;
     xcb_rectangle_t rects[4] = {
@@ -703,6 +705,7 @@ void nss_window_draw_cursor(nss_context_t *con, nss_window_t *win, int16_t x, in
         {x,y+win->char_depth-1,win->char_width, 1}
     };
     size_t off = 0, count = 4;
+    nss_cell_t cel = *cell;
     if (win->focused) {
         if (win->cursor_type == nss_cursor_bar) {
             count = 1;
@@ -712,10 +715,15 @@ void nss_window_draw_cursor(nss_context_t *con, nss_window_t *win, int16_t x, in
             off = 3;
             rects[3].height = win->cursor_width;
             rects[3].y -= win->cursor_width - 1;
-        } else count = 0;
+        } else {
+            count = 0;
+            cel.attrs ^= nss_attrib_inverse;
+        }
     }
+    nss_window_draw(con, win, cx, cy, &cel, 1);
     xcb_render_color_t c = MAKE_COLOR(nss_color_get(win->cursor_fg_cid));
-    xcb_render_fill_rectangles(con->con,XCB_RENDER_PICT_OP_OVER, win->pic, c, count, rects + off);
+    xcb_render_fill_rectangles(con->con, XCB_RENDER_PICT_OP_OVER, win->pic, c, count, rects + off);
+    xcb_flush(con->con);
 }
 
 /* Draw line with attributes */
@@ -971,6 +979,7 @@ static void handle_focus(nss_context_t *con, nss_window_t *win, _Bool focused) {
 
 /* Start window logic, handling all windows in context */
 void nss_context_run(nss_context_t *con) {
+
     for (;;) {
         if(poll(con->pfds, con->pfdcap, -1) < 0 && errno != EINTR)
             warn("Poll error: %s", strerror(errno));
@@ -999,6 +1008,7 @@ void nss_context_run(nss_context_t *con) {
                         handle_resize(con,win, ev->width, ev->height);
                         xcb_flush(con->con);
                     }
+                    win->got_configure |= 1;
                     break;
                 }
                 case XCB_KEY_RELEASE: /* ignore */ break;
@@ -1119,7 +1129,7 @@ void nss_context_run(nss_context_t *con) {
         for(size_t i = 1; i < con->pfdcap; i++) {
             if(con->pfds[i].fd > 0) {
                 nss_window_t *win = nss_window_for_term_fd(con, con->pfds[i].fd);
-                if(con->pfds[i].revents & POLLIN) {
+                if(con->pfds[i].revents & POLLIN & win->got_configure) {
                     nss_term_read(win->term);
                 } else if(con->pfds[i].revents & (POLLERR | POLLNVAL | POLLHUP)) {
                     nss_free_window(con, win);

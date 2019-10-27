@@ -61,10 +61,10 @@ struct nss_term {
     int8_t utf_rest;
 
     enum nss_term_mode {
-        nss_tm_echo = 1 << 0, //This is done by driver
-        nss_tm_crlf = 1 << 1, //This also, and non-printable to printable conversion
+        nss_tm_echo = 1 << 0, //This is done by driver, done
+        nss_tm_crlf = 1 << 1, //This also, and non-printable to printable conversion, done
         nss_tm_lock = 1 << 2,
-        nss_tm_wrap = 1 << 3,
+        nss_tm_wrap = 1 << 3, //Done
         nss_tm_visible = 1 << 4,
         nss_tm_focused = 1 << 5
     } mode;
@@ -283,28 +283,36 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
             bufs[utf8_encode(ch, bufs)] = '\0';
             info("Decoded: 0x%"PRIx32", %s", ch, bufs);
             if(!utf8_check(ch, start - prev)) ch = UTF_INVAL;
-            // Write it here
-            term->cur_line->cell[term->cur_x] = NSS_MKCELL(term->cur_fg, term->cur_bg, term->cur_attrs, ch);
-            nss_window_draw(term->con, term->win, term->cur_x, term->cur_y, &term->cur_line->cell[term->cur_x], 1);
-            nss_window_update(term->con, term->win, 1, &(nss_rect_t) {term->cur_x, term->cur_y, 1, 1});
-            if(term->cur_x >= term->width) {
-                //Create new line
-                term->cur_y++;
-                term->cur_x = 0;
-                if (!term->cur_line->next)
-                    term->cur_line->next = create_line(term->cur_line, NULL, term->width);
-                term->cur_line = term->cur_line->next;
-            } else {
-                //Or resize existing
-                nss_line_t *line = term->cur_line;
-                if((size_t)term->cur_x == term->cur_line->width)
+
+            if(term->mode & nss_tm_wrap) {
+                if(term->cur_x == term->width) {
+                    nss_window_draw(term->con, term->win, term->cur_x - 1, term->cur_y, &term->cur_line->cell[term->cur_x - 1], 1);
+                    nss_window_update(term->con, term->win, 1, &(nss_rect_t) {term->cur_x - 1, term->cur_y, 1, 1});
+                    term->cur_y++;
+                    term->cur_x = 1;
+                    if (!term->cur_line->next)
+                        term->cur_line->next = create_line(term->cur_line, NULL, term->width);
+                    term->cur_line = term->cur_line->next;
+                } else if ((size_t)term->cur_x++ > term->cur_line->width) {
+                    nss_line_t *line = term->cur_line;
                     term->cur_line = resize_line(line, term->width);
-                if(line == term->screen)
-                    term->screen = term->cur_line;
-                term->cur_x++;
+                    if(line == term->screen)
+                        term->screen = term->cur_line;
+                }
+            } else if(term->cur_x < term->width) {
+                if ((size_t)term->cur_x++ > term->cur_line->width) {
+                    nss_line_t *line = term->cur_line;
+                    term->cur_line = resize_line(line, term->width);
+                    if(line == term->screen)
+                        term->screen = term->cur_line;
+                }
             }
-            nss_window_draw_cursor(term->con, term->win, term->cur_x, term->cur_y, &term->cur_line->cell[term->cur_x]);
-            nss_window_update(term->con, term->win, 1, &(nss_rect_t) {term->cur_x, term->cur_y, 1, 1});
+            term->cur_line->cell[term->cur_x - 1] = NSS_MKCELL(term->cur_fg, term->cur_bg, term->cur_attrs, ch);
+
+            nss_window_draw(term->con, term->win, term->cur_x - 1, term->cur_y, &term->cur_line->cell[term->cur_x - 1], 1);
+            nss_window_draw_cursor(term->con, term->win, MIN(term->width - 1, term->cur_x), term->cur_y, &term->cur_line->cell[MIN(term->cur_x, term->width - 1)]);
+            nss_window_update(term->con, term->win, 1, &(nss_rect_t) {term->cur_x - 1, term->cur_y, 1, 1});
+            nss_window_update(term->con, term->win, 1, &(nss_rect_t) {MIN(term->width - 1, term->cur_x), term->cur_y, 1, 1});
             nss_window_draw_commit(term->con, term->win);
 
             prev = start;
@@ -406,7 +414,7 @@ nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width
     term->height = height;
     term->win = win;
     term->con = con;
-    term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_focused;
+    term->mode = nss_tm_wrap | nss_tm_visible;
 
     term->utf_part = 0;
     term->utf_rest = 0;
@@ -467,8 +475,9 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage) {
         if ((size_t)damage.x < line->width) {
             nss_window_draw(term->con, term->win, damage.x, j, line->cell + damage.x, MIN(line->width - damage.x, damage.width));
             info("Draw: x=%d..%d y=%d", damage.x, damage.x + MIN(line->width - damage.x, damage.width), j);
-            if (line == term->cur_line && damage.x <= term->cur_x && term->cur_x < damage.x + damage.width) {
-                nss_window_draw_cursor(term->con, term->win, term->cur_x, term->cur_y, &term->cur_line->cell[term->cur_x]);
+            if (line == term->cur_line && damage.x <= term->cur_x && term->cur_x <= damage.x + damage.width) {
+                int16_t cx = MIN(term->cur_x, term->width - 1);
+                nss_window_draw_cursor(term->con, term->win, cx, term->cur_y, &term->cur_line->cell[cx]);
             }
         }
     }
@@ -491,7 +500,7 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
 }
 
 void nss_term_focus(nss_term_t *term, _Bool focused) {
-    int16_t cx = term->cur_x, cy = term->cur_y;
+    int16_t cx = MIN(term->cur_x, term->width - 1), cy = term->cur_y;
     if(focused) term->mode |= nss_tm_focused;
     else term->mode &= ~nss_tm_focused;
     nss_window_draw_cursor(term->con, term->win, cx, cy, &term->cur_line->cell[cx]);

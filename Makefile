@@ -1,5 +1,5 @@
 
-CFLAGS=-Os -Og -Wall -Wextra -Wno-unused-parameter -std=c99
+CFLAGS= -Os -Wall -Wextra -Wno-unused-parameter -std=c99
 PROG=nss
 
 IN=window.c nss.c util.c font.c term.c attr.c
