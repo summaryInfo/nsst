@@ -1021,6 +1021,7 @@ void nss_context_run(nss_context_t *con) {
 
                     xkb_keycode_t keycode = ev->detail;
                     uint32_t rune = xkb_state_key_get_utf32(con->xkb_state, keycode);
+                    info("Got key: %"PRIx32, rune);
                     if (rune == '1') {
                         uint32_t arg = win->font_size + 2;
                         nss_window_set(con, win, nss_wc_font_size, &arg);
