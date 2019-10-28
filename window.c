@@ -1063,9 +1063,10 @@ void nss_context_run(nss_context_t *con) {
 
                     uint8_t buf[8];
                     size_t sz = xkb_state_key_get_utf8(con->xkb_state, keycode, NULL, 0);
+                    uint32_t rune = xkb_state_key_get_utf32(con->xkb_state, keycode);
                     if (sz > 0 && sz < 8) {
                         xkb_state_key_get_utf8(con->xkb_state, keycode, (char *)buf, 7);
-                        info("Got key: '%s'", buf);
+                        info("Got key: '%s' == %"PRIx32, buf, rune);
                         nss_term_write(win->term, buf, sz, 1);
                     }
                     break;

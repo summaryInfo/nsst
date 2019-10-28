@@ -58,6 +58,7 @@ struct nss_term {
     nss_line_t *cur_line;
     nss_line_t *altscreen;
 
+	//Need remove this
     uint32_t utf_part;
     int8_t utf_rest;
 
@@ -72,8 +73,11 @@ struct nss_term {
         nss_tm_utf8 = 1 << 7,
     } mode;
 
+    //TODO Put parser state here
+
     pid_t child;
     int fd;
+    // Make this just 4 bytes for incomplete utf-8
     uint8_t fd_buf[NSS_FD_BUF_SZ];
     size_t fd_buf_pos;
 };
@@ -110,7 +114,7 @@ static void exec_shell(char *cmd, char **args) {
     }
 
     char *sh = cmd;
-    // TODO
+    // TODO - Use fixed program for testing
     //if (!(sh = getenv("SHELL")))
     //    sh = pw->pw_shell[0] ? pw->pw_shell : cmd;
 
@@ -193,52 +197,38 @@ static size_t utf8_encode(uint32_t u, uint8_t *buf) {
     return i;
 }
 
-static _Bool utf8_decode(nss_term_t *term, uint32_t *res, const uint8_t **buf) {
-    if (**buf >= 0x80 && **buf < 0xc0) {
-        uint8_t ch = *(*buf)++;
-        if (!term->utf_rest) {
-            *res = UTF_INVAL;
-            return 1;
-        }
-        term->utf_part <<= 6;
-        term->utf_part |= ch & ~0xc0;
-        if (!--term->utf_rest) {
-            *res = term->utf_part;
-            return 1;
-        }
-        return 0;
-    }
-    if (term->utf_rest) {
-        term->utf_rest = 0;
+static _Bool utf8_decode(nss_term_t *term, uint32_t *res, const uint8_t **buf, const uint8_t *end) {
+    if (*buf >= end) return 0;
+    uint32_t part = *(*buf)++;
+    uint8_t len = 0, i = 0x80;
+    if (part > 0xf7) {
         *res = UTF_INVAL;
-        return 1;
+    } else {
+        while (part & i) {
+            len++;
+            part &= ~i;
+            i /= 2;
+        }
+        if (len == 1) {
+            part = UTF_INVAL;
+        }  else if (len > 1) {
+            uint8_t i = --len;
+            if (end - *buf < i) return 0;
+            while (i--) {
+                if ((**buf & 0xc0) != 0x80) {
+                    part = UTF_INVAL;
+                    goto end;
+                }
+                part = (part << 6) + (*(*buf)++ & ~0xc0);
+            }
+            if(part >= 0xd800 && part < 0xe000 &&
+                    part >= (uint32_t[]){0x80, 0x800, 0x10000, 0x11000}[len - 1])
+                part = UTF_INVAL;
+        }
     }
-    term->utf_part = *(*buf)++;
-    if (term->utf_part < 0x80) {
-        *res = term->utf_part;
-        return 1;
-    }
-    if (term->utf_part > 0xf7) {
-        *res = UTF_INVAL;
-        return 1;
-    }
-    term->utf_part &= ~0x80;
-    uint32_t i = 0x40;
-    do {
-        term->utf_part &= ~i;
-        term->utf_rest++;
-    } while ((i /= 2) & term->utf_part);
-    info("Rest: %"PRIi8, term->utf_rest);
-
-    return 0;
-}
-
-static _Bool utf8_check(uint32_t u, size_t len) {
-    static const uint32_t utf8_min[] = {0x80, 0x800, 0x10000, 0x11000};
-    if (len > 4 || u > 0x10ffff) return 0;
-    if (u >= 0xd800 && u < 0xe000) return 0;
-    if (len > 1 && u < utf8_min[len - 2]) return 0;
-    return 1;
+end:
+	*res = part;
+	return 1;
 }
 
 static nss_line_t *create_line(nss_line_t *prev, nss_line_t *next, size_t width) {
@@ -312,34 +302,39 @@ static void term_adjscreen(nss_term_t *term, _Bool force) {
         // if cursor on last line -> scroll up
     // else scroll to cursor
 
+	//			 +---Thats a wierd condition, need fix
+	//			 |
+	//			 V
     if (force || term->cur_y > term->height - 1) {
         nss_line_t *new_screen = term->cur_line;
         for (size_t i = term->height - 1; i && new_screen->prev; i--)
             new_screen = new_screen->prev;
-        if (term->mode & nss_tm_altscreen) {
-            nss_line_t *ln = term->screen->prev;
-            while (ln) {
-                nss_line_t *tmp = ln->prev;
-                free(ln);
-                ln = tmp;
-            }
-        }
         if (term->screen != new_screen) {
             term->screen = new_screen;
+            if (term->mode & nss_tm_altscreen) {
+                nss_line_t *ln = term->screen->prev;
+                while (ln) {
+                    nss_line_t *tmp = ln->prev;
+                    free(ln);
+                    ln = tmp;
+                }
+            }
             term->cur_y = MIN(term->cur_y, term->height - 1);
             nss_term_redraw(term, (nss_rect_t) {0, 0, term->width, term->height}, 1);
         }
     } else {
-
         // TODO Fix cursor pos somehow
 
     }
+    term->cur_y = MAX(0, term->cur_y);
+    term->cur_x = MAX(0, MIN(term->cur_x, term->width));
 }
 
 static void term_newline(nss_term_t *term, _Bool cr) {
     if (!term->cur_line->next) {
-        term->cur_line->next = create_line(term->cur_line, NULL, term->width);
-        if (term->mode & nss_tm_altscreen) {
+        create_line(term->cur_line, NULL, term->width);
+        if (term->mode & nss_tm_altscreen && term->cur_y >= term->height) {
+            // This segfaults....
             nss_line_t *top = term->screen;
             while (top->prev) top = top->prev;
             if (top->next) top->next->prev = NULL;
@@ -354,10 +349,12 @@ static void term_newline(nss_term_t *term, _Bool cr) {
 
 static void term_putchar(nss_term_t *term, uint32_t ch) {
     if (term->mode & nss_tm_wrap) {
-        if (term->cur_x == term->width)
+        info("Current line length 2: %zu, %"PRId16, term->width, term->cur_x);
+        if (term->cur_x == term->width) {
             term_newline(term, 1);
-        term->cur_x++;
+        }
     }
+    term->cur_x++;
     term_adjline(term);
 
     term->cur_line->cell[term->cur_x - 1] = NSS_MKCELL(term->cur_fg, term->cur_bg, term->cur_attrs, ch);
@@ -409,11 +406,13 @@ static _Bool term_handle(nss_term_t *term, uint32_t ch) {
     case 0x84:   // IND - TODO
         return 1;
     case 0x85:   // NEL -- Next line
+        //Ignore for now
         return 1;
     case 0x86:   // SSA - TODO 
     case 0x87:   // ESA - TODO 
         return 1;
     case 0x88:   // HTS -- Horizontal tab stop
+        //Ignore for now
         return 1;
     case 0x89:   // HTJ - TODO
     case 0x8a:   // VTS - TODO
@@ -433,6 +432,7 @@ static _Bool term_handle(nss_term_t *term, uint32_t ch) {
     case 0x99:   // SGCI - TODO
         return 1;
     case 0x9a:   // DECID -- Identify Terminal
+        //Ignore for now
         return 1;
     case 0x9b:   // CSI - TODO
     case 0x9c:   // ST - TODO
@@ -441,6 +441,7 @@ static _Bool term_handle(nss_term_t *term, uint32_t ch) {
     case 0x9d:   // OSC -- Operating System Command
     case 0x9e:   // PM -- Privacy Message
     case 0x9f:   // APC -- Application Program Command
+        //Ignore for now
         return 1;
     default:
         return 0;
@@ -448,24 +449,19 @@ static _Bool term_handle(nss_term_t *term, uint32_t ch) {
 }
 
 static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool show_ctl) {
-    const uint8_t *end = buf + len, *start = buf, *prev = buf;
+    const uint8_t *end = buf + len, *start = buf;
     uint32_t ch;
-    while (start < end) {
-        if (utf8_decode(term, &ch, &start)) {
-            uint8_t bufs[5];
-            bufs[utf8_encode(ch, bufs)] = '\0';
-            if (!utf8_check(ch, start - prev)) ch = UTF_INVAL;
-            info("Decoded: 0x%"PRIx32", %s", ch, bufs);
-            nss_term_redraw(term, (nss_rect_t) { MIN(term->cur_x, term->width - 1), term->cur_y, 1, 1}, 0);
-            if (ch > 0xff || !term_handle(term, ch))
-                term_putchar(term, ch);
-            else
-                nss_term_redraw(term, (nss_rect_t) { MIN(term->cur_x, term->width - 1), term->cur_y, 1, 1}, 1);
-            //nss_window_draw_commit(term->con, term->win);
-            info("Current line length: %zu", term->cur_line->width);
-
-            prev = start;
-        }
+    while (utf8_decode(term, &ch, &start, end)) {
+        uint8_t bufs[5];
+        bufs[utf8_encode(ch, bufs)] = '\0';
+        info("Decoded: 0x%"PRIx32", %s", ch, bufs);
+        nss_term_redraw(term, (nss_rect_t) { MIN(term->cur_x, term->width - 1), term->cur_y, 1, 1}, 0);
+        if (ch > 0xff || !term_handle(term, ch))
+            term_putchar(term, ch);
+        else
+            nss_term_redraw(term, (nss_rect_t) { MIN(term->cur_x, term->width - 1), term->cur_y, 1, 1}, 1);
+        nss_window_draw_commit(term->con, term->win);
+        info("Current line length: %zu, %"PRId16, term->width, term->cur_x);
     }
     return start - buf;
 }
@@ -563,7 +559,7 @@ nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width
     term->height = height;
     term->win = win;
     term->con = con;
-    term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_utf8;
+    term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_utf8 | nss_tm_altscreen;
 
     term->utf_part = 0;
     term->utf_rest = 0;
@@ -630,18 +626,21 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage, _Bool cursor) {
             }
         }
         nss_window_update(term->con, term->win, 1, &damage);
-        nss_window_draw_commit(term->con, term->win);
     }
 }
 
 void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
+    _Bool cur_moved = term->cur_x == term->width;
     term->width = width;
     term->height = height;
     info("Resize: w=%"PRId16" h=%"PRId16, width, height);
     info("Cursor: x=%"PRId16" y=%"PRId16, term->cur_x, term->cur_y);
 
     //TODO Resize
+    if (cur_moved)
+        nss_term_redraw(term, (nss_rect_t){term->cur_x - 1, term->cur_y, 1, 1}, 1);
     term_adjscreen(term, 0);
+    nss_window_draw_commit(term->con, term->win);
 
     // Pixel sizes are unused
     // TODO: Set them correctly
