@@ -48,7 +48,6 @@ struct nss_term {
     int16_t height;
 
     nss_window_t *win;
-    nss_context_t *con;
 
     uint8_t *tabs;
     nss_line_t *view;
@@ -285,7 +284,7 @@ void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
     }
     if (term->view != old_view) {
         nss_term_redraw(term, (nss_rect_t) {0, 0, term->width, term->height}, 1);
-        nss_window_draw_commit(term->con, term->win);
+        nss_window_draw_commit(term->win);
     }
 }
 
@@ -468,7 +467,7 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
             term_putchar(term, ch);
         else
             nss_term_redraw(term, (nss_rect_t) { MIN(term->cur_x, term->width - 1), term->cur_y, 1, 1}, 1);
-        nss_window_draw_commit(term->con, term->win);
+        nss_window_draw_commit(term->win);
 
         info("Current line length: %zu, %"PRId16" %"PRId16 , term->width, term->cur_x, term->cur_y);
     }
@@ -561,13 +560,12 @@ int nss_term_fd(nss_term_t *term) {
     return term->fd;
 }
 
-nss_term_t *nss_create_term(nss_context_t *con, nss_window_t *win, int16_t width, int16_t height) {
+nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
     nss_term_t *term = malloc(sizeof(nss_term_t));
 
     term->width = width;
     term->height = height;
     term->win = win;
-    term->con = con;
     term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_utf8 | nss_tm_altscreen;
 
     term->fd_buf_pos = 0;
@@ -631,23 +629,23 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage, _Bool cursor) {
 
     if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
         //Clear undefined areas
-        nss_window_clear(term->con, term->win, 1, &damage);
+        nss_window_clear(term->win, 1, &damage);
 
         nss_line_t *line = term->view;
         size_t j = 0;
         for (; line && j < (size_t)damage.y; j++, line = line->next);
         for (; line && j < (size_t)damage.height + damage.y; j++, line = line->next) {
             if (line->width > (size_t)damage.x)
-                nss_window_draw(term->con, term->win, damage.x, j,
+                nss_window_draw(term->win, damage.x, j,
                         MIN(line->width - damage.x, damage.width), line->cell + damage.x);
         }
 
         if (cursor && damage.x <= term->cur_x && term->cur_x <= damage.x + damage.width &&
                 damage.y <= term->cur_y && term->cur_y <= damage.y + damage.height) {
             int16_t cx = MIN(term->cur_x, term->width - 1);
-            nss_window_draw_cursor(term->con, term->win, cx, term->cur_y, &term->display[term->cur_y]->cell[cx]);
+            nss_window_draw_cursor(term->win, cx, term->cur_y, &term->display[term->cur_y]->cell[cx]);
         }
-        nss_window_update(term->con, term->win, 1, &damage);
+        nss_window_update(term->win, 1, &damage);
     }
 }
 
@@ -698,13 +696,16 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
    // if (term->view == term->display[0] && term->cur_y > height - 1)
     //        term_scroll(term, term->cur_y - height - 1);
-    nss_window_draw_commit(term->con, term->win);
+    nss_window_draw_commit(term->win);
 
     // Pixel sizes are unused
     // TODO: Set them correctly
     struct winsize wsz;
-    wsz.ws_xpixel = wsz.ws_col = width;
-    wsz.ws_ypixel = wsz.ws_row = height;
+    wsz.ws_col = width;
+    wsz.ws_row = height;
+    wsz.ws_xpixel = nss_window_get(term->win, nss_wc_width);
+    wsz.ws_ypixel = nss_window_get(term->win, nss_wc_height);
+
     if (ioctl(term->fd, TIOCSWINSZ, &wsz) < 0)
         warn("Can't change tty size");
 }
@@ -713,7 +714,7 @@ void nss_term_focus(nss_term_t *term, _Bool focused) {
     if (focused) term->mode |= nss_tm_focused;
     else term->mode &= ~nss_tm_focused;
     nss_term_redraw(term, (nss_rect_t) {term->cur_x, term->cur_y, 1, 1}, 1);
-    nss_window_draw_commit(term->con, term->win);
+    nss_window_draw_commit(term->win);
 }
 
 void nss_term_visibility(nss_term_t *term, _Bool visible) {
