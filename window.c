@@ -539,6 +539,8 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
     win->active = 0;
     win->got_configure = 0;
     win->font_name = strdup(font_name);
+    win->width = rect.width;
+    win->height = rect.height;
 
     set_config(win, tag, values);
 
@@ -572,19 +574,6 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
 
     info("Font size: %d %d %d", win->char_height, win->char_depth, win->char_width);
 
-    win->term = nss_create_term(con, win, win->cw, win->ch);
-    if (!win->term) {
-        warn("Can't create term");
-        xcb_render_free_picture(con->con, win->pic);
-        xcb_free_gc(con->con, win->gc);
-        xcb_free_pixmap(con->con, win->pid);
-        xcb_render_free_glyph_set(con->con, win->gsid);
-        xcb_destroy_window(con->con, win->wid);
-        free(win);
-        return NULL;
-    }
-    nss_term_redraw(win->term, (nss_rect_t) {0, 0, win->cw, win->ch}, 1);
-
 
     win->next = con->first;
     win->prev = NULL;
@@ -609,6 +598,13 @@ nss_window_t *nss_create_window(nss_context_t *con, nss_rect_t rect, const char 
             return NULL;
         }
     }
+    win->term = nss_create_term(con, win, win->cw, win->ch);
+    if (!win->term) {
+        warn("Can't create term");
+        nss_free_window(con, win);
+    }
+    nss_term_redraw(win->term, (nss_rect_t) {0, 0, win->cw, win->ch}, 1);
+
     con->pfdn++;
     size_t i = 1;
     while (con->pfds[i].fd >= 0) i++;
@@ -1051,6 +1047,16 @@ void nss_context_run(nss_context_t *con) {
                     case XKB_KEY_4: {
                         uint32_t arg = win->font_size;
                         nss_create_window(con, (nss_rect_t) {100, 100, 400, 200}, win->font_name, nss_wc_font_size, &arg);
+                        handled = 1;
+                        break;
+                    }
+                    case XKB_KEY_5: {
+                        nss_term_scroll_view(win->term, 1);
+                        handled = 1;
+                        break;
+                    }
+                    case XKB_KEY_6: {
+                        nss_term_scroll_view(win->term, -1);
                         handled = 1;
                         break;
                     }
