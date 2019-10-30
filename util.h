@@ -8,7 +8,7 @@
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
-#define SWAP(T, a, b) {T tmp_ = a; a = b; b = tmp_; }
+#define SWAP(T, a, b) {T tmp_ = (a); (a) = (b); (b) = tmp_; }
 
 typedef struct nss_rect {
     int16_t x;

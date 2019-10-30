@@ -20,6 +20,7 @@ typedef enum nss_attrs {
     nss_attrib_strikethrough = 1 << 4, //done
     nss_attrib_overlined = 1 << 5, //ignored
     nss_attrib_inverse = 1 << 6, //done
+    nss_attrib_wide = 1 << 7 //todo
 } nss_attrs_t;
 
 #define NSS_GLYPH_MASK (0xffffff | (nss_font_attrib_mask << 24))
@@ -30,6 +31,7 @@ typedef enum nss_attrs {
 #define NSS_CELL_GLYPH(s) ((s).ch & NSS_GLYPH_MASK)
 #define NSS_MKCELL(f, b, l, c) ((nss_cell_t) { .bg = (b), .fg = (f), .ch = (c) | ((l) << 24)})
 #define NSS_EQCELL(s, z) ((s).fg == (z).fg && (s).bg == (z).bg && (s).attrs == (z).attrs)
+#define NSS_MKCELLWITH(s, c) ((s).ch = c | ((s).attrs << 24), (s))
 
 typedef struct nss_cell {
         union {
