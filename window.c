@@ -713,7 +713,7 @@ void nss_window_draw_cursor(nss_window_t *win, int16_t x, int16_t y, nss_cell_t 
             rects[3].y -= win->cursor_width - 1;
         } else {
             count = 0;
-            cel.attrs ^= nss_attrib_inverse;
+            NSS_CELL_ATTR_INVERT(cel, nss_attrib_inverse);
         }
     }
     nss_window_draw(win, cx, cy, 1, &cel);
@@ -740,15 +740,21 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
         }
     }
     while (len > 0) {
-        uint8_t attr = cells->attrs;
+        uint32_t attr = NSS_CELL_ATTRS(*cells);
         uint8_t fattr = attr & nss_font_attrib_mask;
         nss_cid_t bgc = cells->bg, fgc = cells->fg;
 
-        if (attr & nss_attrib_inverse)
-            SWAP(nss_cid_t, fgc, bgc);
+        if ((attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && fgc < 8) fgc += 8;
 
         xcb_render_color_t fg = MAKE_COLOR(nss_color_get(fgc));
         xcb_render_color_t bg = MAKE_COLOR(nss_color_get(bgc));
+
+        if ((attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint)
+            fg.red /= 2, fg.green /= 2, fg.blue /= 2;
+        if (attr & nss_attrib_inverse) SWAP(xcb_render_color_t, fg, bg);
+        if (attr & nss_attrib_invisible) fg = bg;
+        /* blink here */
+
         xcb_render_picture_t pen = create_pen(win, &fg);
 
         size_t blk_len = 1;
@@ -1052,12 +1058,12 @@ void nss_context_run(void) {
                         handled = 1;
                         break;
                     }
-                    case XKB_KEY_5: {
+                    case XKB_KEY_Up: {
                         nss_term_scroll_view(win->term, 1);
                         handled = 1;
                         break;
                     }
-                    case XKB_KEY_6: {
+                    case XKB_KEY_Down: {
                         nss_term_scroll_view(win->term, -1);
                         handled = 1;
                         break;

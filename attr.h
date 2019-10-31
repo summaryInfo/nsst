@@ -15,32 +15,36 @@ typedef uint32_t nss_color_t;
 typedef enum nss_attrs {
     nss_attrib_italic = 1 << 0, //done
     nss_attrib_bold = 1 << 1, //done
-    nss_attrib_faint = 1 << 2, //ignored
+    nss_attrib_faint = 1 << 2, //done
     nss_attrib_underlined = 1 << 3, //done
     nss_attrib_strikethrough = 1 << 4, //done
-    nss_attrib_overlined = 1 << 5, //ignored
+    nss_attrib_invisible = 1 << 5, //done
     nss_attrib_inverse = 1 << 6, //done
-    nss_attrib_wide = 1 << 7 //todo
+    nss_attrib_blink = 1 << 7, //todo
+    nss_attrib_wide = 1 << 8, //todo
+    nss_attrib_wdummy = 1 << 9, //todo
+    nss_attrib_reserved = 1 << 10
+    // 11 bits total, sice unicode codepoint is 21 bit
 } nss_attrs_t;
 
-#define NSS_GLYPH_MASK (0xffffff | (nss_font_attrib_mask << 24))
-#define NSS_CELL_CHAR(s) ((s).ch & 0xffffff)
+#define NSS_CELL_CHAR_BITS 21
+#define NSS_CELL_CHAR_MASK ((1 << NSS_CELL_CHAR_BITS) - 1)
+#define NSS_GLYPH_MASK (NSS_CELL_CHAR_MASK | (nss_font_attrib_mask << 21))
+#define NSS_CELL_CHAR(s) ((s).ch & NSS_CELL_CHAR_MASK)
 #define NSS_CELL_FG(s, b) (nss_color_get((s)->fg + (b)))
 #define NSS_CELL_BG(s, b) (nss_color_get((s)->bg + (b)))
-#define NSS_CELL_ATTRS(s) ((s).attrs)
+#define NSS_CELL_ATTRS_ZERO(s) ((s).ch &= NSS_CELL_CHAR_MASK)
+#define NSS_CELL_ATTRS(s) ((s).ch >> NSS_CELL_CHAR_BITS)
+#define NSS_CELL_ATTRSET(s, l) ((s).ch |= (l) << NSS_CELL_CHAR_BITS)
+#define NSS_CELL_ATTRCLR(s, l) ((s).ch &= ~((l) << NSS_CELL_CHAR_BITS))
+#define NSS_CELL_ATTR_INVERT(s, l) ((s).ch ^= (l) << NSS_CELL_CHAR_BITS)
 #define NSS_CELL_GLYPH(s) ((s).ch & NSS_GLYPH_MASK)
-#define NSS_MKCELL(f, b, l, c) ((nss_cell_t) { .bg = (b), .fg = (f), .ch = (c) | ((l) << 24)})
-#define NSS_EQCELL(s, z) ((s).fg == (z).fg && (s).bg == (z).bg && (s).attrs == (z).attrs)
-#define NSS_MKCELLWITH(s, c) ((s).ch = c | ((s).attrs << 24), (s))
+#define NSS_MKCELL(f, b, l, c) ((nss_cell_t) { .bg = (b), .fg = (f), .ch = ((c) & NSS_CELL_CHAR_MASK) | ((l) << NSS_CELL_CHAR_BITS)})
+#define NSS_EQCELL(s, z) ((s).fg == (z).fg && (s).bg == (z).bg && NSS_CELL_ATTRS(s) == NSS_CELL_ATTRS(z))
+#define NSS_MKCELLWITH(s, c) NSS_MKCELL((s).fg, (s).bg, NSS_CELL_ATTRS(s), c)
 
 typedef struct nss_cell {
-        union {
-            struct {
-                uint8_t pad[3];
-                uint8_t attrs;
-            };
-            uint32_t ch;
-        };
+        uint32_t ch; /* not really char but char + attributes */
         nss_short_cid_t fg;
         nss_short_cid_t bg;
 } nss_cell_t;

@@ -27,7 +27,15 @@ typedef enum nss_wc_tag {
     nss_wc_font_size = 1 << 9,
     nss_wc_underline_width = 1 << 10,
     nss_wc_width = 1 << 11,
-    nss_wc_height = 1 << 12
+    nss_wc_height = 1 << 12,
+    // TODO
+    nss_wc_appkey = 1 << 13,
+    nss_wc_appcursor = 1 << 14,
+    nss_wc_numlock = 1 << 15,
+    nss_wc_8bit = 1 << 16,
+    nss_wc_inverted = 1 << 17,
+    nss_wc_mouse = 1 << 18, // Report mouse
+    nss_wc_hide_cursor = 1 << 19 // Don't render cursor
 } nss_wc_tag_t;
 
 typedef struct nss_window nss_window_t;
