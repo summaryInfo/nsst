@@ -907,7 +907,6 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
         xcb_free_pixmap(con.con, win->pid);
         xcb_free_gc(con.con, win->gc);
         xcb_render_free_picture(con.con, win->pic);
-        nss_term_resize(win->term, win->cw, win->ch);
     } else {
         win->pid = xcb_generate_id(con.con);
         win->gc = xcb_generate_id(con.con);
@@ -938,7 +937,9 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
 
     xcb_render_color_t color = MAKE_COLOR(nss_color_get(win->bg_cid));
     xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_OVER, win->pic, color, 1, &bound);
-    xcb_flush(con.con);
+
+    if (need_free)
+        nss_term_resize(win->term, win->cw, win->ch);
     return 1;
 }
 
@@ -1443,27 +1444,26 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     //
     // 1. Key bindings
     uint32_t arg;
-    switch (sym) {
-    case XKB_KEY_1:
+    if (sym == XKB_KEY_1 && mods == XCB_MOD_MASK_1) {
         arg = win->font_size + 2;
         nss_window_set(win, nss_wc_font_size, &arg);
         return;
-    case XKB_KEY_2:
+    } else if (sym == XKB_KEY_2 && mods == XCB_MOD_MASK_1) {
         arg = win->font_size - 2;
         nss_window_set(win, nss_wc_font_size, &arg);
         return;
-    case XKB_KEY_3:
+    } else if (sym == XKB_KEY_3 && mods == XCB_MOD_MASK_1) {
         arg = !win->lcd_mode;
         nss_window_set(win, nss_wc_lcd_mode, &arg);
         return;
-    case XKB_KEY_4:
+    } else if (sym == XKB_KEY_4 && mods == XCB_MOD_MASK_1) {
         arg = win->font_size;
-        nss_create_window((nss_rect_t) {100, 100, 400, 200}, win->font_name, nss_wc_font_size, &arg);
+        nss_create_window((nss_rect_t) {100, 100, 800, 600}, win->font_name, nss_wc_font_size, &arg);
         return;
-    case XKB_KEY_Page_Up:
+    } else if (sym == XKB_KEY_Page_Up) {
         nss_term_scroll_view(win->term, 1);
         return;
-    case XKB_KEY_Page_Down:
+    } else if (sym == XKB_KEY_Page_Down) {
         nss_term_scroll_view(win->term, -1);
         return;
     }
