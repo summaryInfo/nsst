@@ -1473,7 +1473,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     nss_ckey_t ck_pat = { .ksym = sym };
     nss_ckey_t *ck = bsearch(&ck_pat, ckeys, sizeof(ckeys)/sizeof(*ckeys), sizeof(*ckeys), key_cmpfn);
     if (ck) {
-        for (nss_ckey_key_t *it = ck->inst; it; it++) {
+        for (nss_ckey_key_t *it = ck->inst; it->string; it++) {
             if ((it->mmask & mods) != it->mstate) continue;
             if (it->flag & (win->appkey ? NSS_M_NOAPPK : NSS_M_APPK)) continue;
             if (it->flag & (win->appcursor ? NSS_M_NOAPPCUR : NSS_M_APPCUR)) continue;
