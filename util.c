@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <stddef.h>
 
 #include "util.h"
 
@@ -57,7 +58,7 @@ size_t utf8_encode(uint32_t u, uint8_t *buf, uint8_t *end) {
     if (u > 0x10ffff) u = UTF_INVAL;
     size_t i = 0, j;
     while (u > utf8_min[i++]);
-    if (i > end - buf) return 0;
+    if ((ptrdiff_t)i > end - buf) return 0;
     for (j = i; j > 1; j--) {
         buf[j - 1] = (u & 0x3f) | 0x80;
         u >>= 6;
