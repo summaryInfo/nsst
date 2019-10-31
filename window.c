@@ -52,6 +52,12 @@ struct nss_window {
     _Bool lcd_mode;
     _Bool got_configure;
 
+    _Bool appkey;
+    _Bool appcursor;
+    _Bool numlock;
+    _Bool keylock;
+    _Bool eight_bit;
+
     int16_t width;
     int16_t height;
     int16_t cw, ch;
@@ -122,6 +128,409 @@ typedef struct nss_glyph_mesg {
     int16_t dx, dy;
     uint8_t data[];
 } nss_glyph_mesg_t;
+
+#define NSS_M_ALL (0xff)
+
+#define NSS_M_SHIFT (1 << 0)
+#define NSS_M_LOCK (1 << 1)
+#define NSS_M_CONTROL (1 << 2)
+#define NSS_M_MOD1 (1 << 3)
+#define NSS_M_MOD2 (1 << 4)
+#define NSS_M_MOD3 (1 << 5)
+#define NSS_M_MOD4 (1 << 6)
+#define NSS_M_MOD5 (1 << 7)
+
+#define NSS_M_NOAPPCUR (1 << 0)
+#define NSS_M_APPCUR (1 << 1)
+#define NSS_M_NOAPPK (1 << 2)
+#define NSS_M_NONUM (1 << 3)
+#define NSS_M_APPK (1 << 4)
+
+//typedef struct nss_shortcut_key {
+//    uint32_t mstate;
+//    uint32_t mmask;
+//    uint8_t *string;
+//} nss_shortcut_key_t;
+//typedef struct nss_shortcut {
+//    uint32_t ksym;
+//    nss_shortcut_key_t *inst;
+//} nss_shortcut_t;
+
+typedef struct nss_ckey_key {
+    uint32_t mmask;
+    uint32_t mstate;
+    const char *string;
+    int8_t flag;
+} nss_ckey_key_t;
+
+typedef struct nss_ckey {
+    uint32_t ksym;
+    nss_ckey_key_t *inst;
+} nss_ckey_t;
+
+nss_ckey_t ckeys[] = {
+    {XKB_KEY_KP_Home,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[2J",NSS_M_NOAPPCUR},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[1;2H",NSS_M_APPCUR},
+        {0,0,"\033[H",NSS_M_NOAPPCUR},
+        {0,0,"\033[1~",NSS_M_APPCUR},
+        {0}}},
+    {XKB_KEY_KP_Up,(nss_ckey_key_t[]){
+        {0,0,"\033Ox",NSS_M_APPK},
+        {0,0,"\033[A",NSS_M_NOAPPCUR},
+        {0,0,"\033OA",NSS_M_APPCUR},
+        {0}}},
+    {XKB_KEY_KP_Down,(nss_ckey_key_t[]){
+        {0,0,"\033Or",NSS_M_APPK},
+        {0,0,"\033[B",NSS_M_NOAPPCUR},
+        {0,0,"\033OB",NSS_M_APPCUR},
+        {0}}},
+    {XKB_KEY_KP_Left,(nss_ckey_key_t[]){
+        {0,0,"\033Ot",NSS_M_APPK},
+        {0,0,"\033[D",NSS_M_NOAPPCUR},
+        {0,0,"\033OD",NSS_M_APPCUR},
+        {0}}},
+    {XKB_KEY_KP_Right,(nss_ckey_key_t[]){
+        {0,0,"\033Ov",NSS_M_APPK},
+        {0,0,"\033[C",NSS_M_NOAPPCUR},
+        {0,0,"\033OC",NSS_M_APPCUR},
+        {0}}},
+    {XKB_KEY_KP_Prior,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[5;2~",0},
+        {0,0,"\033[5~",0},
+        {0}}},
+    {XKB_KEY_KP_Begin,(nss_ckey_key_t[]){
+        {0,0,"\033[E",0},
+        {0}}},
+    {XKB_KEY_KP_End,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[J",NSS_M_NOAPPK},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[1;5F",NSS_M_APPK},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[K",NSS_M_NOAPPK},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[1;2F",NSS_M_APPK},
+        {0,0,"\033[4~",0},
+        {0}}},
+    {XKB_KEY_KP_Next,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[6;2~",0},
+        {0,0,"\033[6~",0},
+        {0}}},
+    {XKB_KEY_KP_Insert,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[2;2~",NSS_M_APPK},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[4l",NSS_M_NOAPPK},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[L",NSS_M_NOAPPK},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[2;5~",NSS_M_APPK},
+        {0,0,"\033[4h",NSS_M_NOAPPK},
+        {0,0,"\033[2~",NSS_M_APPK},
+        {0}}},
+    {XKB_KEY_KP_Delete,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[M",NSS_M_NOAPPK},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[3;5~",NSS_M_APPK},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[2K",NSS_M_NOAPPK},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[3;2~",NSS_M_APPK},
+        {0,0,"\033[P",NSS_M_NOAPPK},
+        {0,0,"\033[3~",NSS_M_APPK},
+        {0}}},
+    {XKB_KEY_KP_Multiply,(nss_ckey_key_t[]){
+        {0,0,"\033Oj",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_Add,(nss_ckey_key_t[]){
+        {0,0,"\033Ok",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_Enter,(nss_ckey_key_t[]){
+        {0,0,"\033OM",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_Enter,(nss_ckey_key_t[]){
+        {0,0,"\r",NSS_M_NOAPPK},
+        {0}}},
+    {XKB_KEY_KP_Subtract,(nss_ckey_key_t[]){
+        {0,0,"\033Om",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_Decimal,(nss_ckey_key_t[]){
+        {0,0,"\033On",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_Divide,(nss_ckey_key_t[]){
+        {0,0,"\033Oo",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_0,(nss_ckey_key_t[]){
+        {0,0,"\033Op",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_1,(nss_ckey_key_t[]){
+        {0,0,"\033Oq",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_2,(nss_ckey_key_t[]){
+        {0,0,"\033Or",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_3,(nss_ckey_key_t[]){
+        {0,0,"\033Os",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_4,(nss_ckey_key_t[]){
+        {0,0,"\033Ot",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_5,(nss_ckey_key_t[]){
+        {0,0,"\033Ou",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_6,(nss_ckey_key_t[]){
+        {0,0,"\033Ov",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_7,(nss_ckey_key_t[]){
+        {0,0,"\033Ow",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_8,(nss_ckey_key_t[]){
+        {0,0,"\033Ox",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_KP_9,(nss_ckey_key_t[]){
+        {0,0,"\033Oy",NSS_M_NONUM},
+        {0}}},
+    {XKB_KEY_Up,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[1;2A",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[1;3A",0},
+        {NSS_M_ALL,NSS_M_SHIFT|NSS_M_MOD1,"\033[1;4A",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[1;5A",0},
+        {NSS_M_ALL,NSS_M_SHIFT|NSS_M_CONTROL,"\033[1;6A",0},
+        {NSS_M_ALL,NSS_M_CONTROL|NSS_M_MOD1,"\033[1;7A",0},
+        {NSS_M_ALL,NSS_M_SHIFT|NSS_M_CONTROL|NSS_M_MOD1,"\033[1;8A",0},
+        {0,0,"\033[A",NSS_M_NOAPPCUR},
+        {0,0,"\033OA",NSS_M_APPCUR},
+        {0}}},
+    {XKB_KEY_Down,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[1;2B",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[1;3B",0},
+        {NSS_M_ALL,NSS_M_SHIFT|NSS_M_MOD1,"\033[1;4B",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[1;5B", 0},
+        {NSS_M_ALL,NSS_M_SHIFT|NSS_M_CONTROL,"\033[1;6B",0},
+        {NSS_M_ALL,NSS_M_CONTROL|NSS_M_MOD1,"\033[1;7B",0},
+        {NSS_M_ALL,NSS_M_SHIFT|NSS_M_CONTROL|NSS_M_MOD1,"\033[1;8B",0},
+        {0,0,"\033[B",NSS_M_NOAPPCUR},
+        {0,0,"\033OB",NSS_M_APPCUR},
+        {0}}},
+    {XKB_KEY_Left,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[1;2D",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[1;3D",0},
+        {NSS_M_ALL,NSS_M_SHIFT|NSS_M_MOD1,"\033[1;4D",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[1;5D", 0},
+        {NSS_M_ALL,NSS_M_SHIFT|NSS_M_CONTROL,"\033[1;6D",0},
+        {NSS_M_ALL,NSS_M_CONTROL|NSS_M_MOD1,"\033[1;7D",0},
+        {NSS_M_ALL,NSS_M_SHIFT|NSS_M_CONTROL|NSS_M_MOD1,"\033[1;8D",0},
+        {0,0,"\033[D",NSS_M_NOAPPCUR},
+        {0,0,"\033OD",NSS_M_APPCUR},
+        {0}}},
+    {XKB_KEY_Right,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[1;2C",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[1;3C",0},
+        {NSS_M_ALL,NSS_M_SHIFT|NSS_M_MOD1,"\033[1;4C",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[1;5C", 0},
+        {NSS_M_ALL,NSS_M_SHIFT|NSS_M_CONTROL,"\033[1;6C",0},
+        {NSS_M_ALL,NSS_M_CONTROL|NSS_M_MOD1,"\033[1;7C",0},
+        {NSS_M_ALL,NSS_M_SHIFT|NSS_M_CONTROL|NSS_M_MOD1,"\033[1;8C",0},
+        {0,0,"\033[C",NSS_M_NOAPPCUR},
+        {0,0,"\033OC",NSS_M_APPCUR},
+        {0}}},
+    {XKB_KEY_ISO_Left_Tab,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[Z",0},
+        {0}}},
+    {XKB_KEY_Return,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_MOD1,"\033\r",0},
+        {0,0,"\r",0},
+        {0}}},
+    {XKB_KEY_Insert,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[4l",NSS_M_NOAPPK},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[2;2~",NSS_M_APPK},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[L",NSS_M_NOAPPK},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[2;5~",NSS_M_APPK},
+        {0,0,"\033[4h",NSS_M_NOAPPK},
+        {0,0,"\0332~",NSS_M_APPK},
+        {0}}},
+    {XKB_KEY_Delete,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[M",NSS_M_NOAPPK},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[3;5~",NSS_M_APPK},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[2K",NSS_M_NOAPPK},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[3;2~",NSS_M_APPK},
+        {0,0,"\033[P",NSS_M_NOAPPK},
+        {0,0,"\033[3~",NSS_M_APPK},
+        {0}}},
+    {XKB_KEY_BackSpace,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\177",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033\177",0},
+        {0}}},
+    {XKB_KEY_Home,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[2J",NSS_M_NOAPPCUR},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[1;2H",NSS_M_APPCUR},
+        {0,0,"\033[H",NSS_M_NOAPPCUR},
+        {0,0,"\033[1~",NSS_M_APPCUR},
+        {0}}},
+    {XKB_KEY_End,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[J",NSS_M_NOAPPK},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[1;5F",NSS_M_APPK},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[K",NSS_M_NOAPPK},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[1;2F",NSS_M_APPK},
+        {0,0,"\033[4~",0},
+        {0}}},
+    {XKB_KEY_Prior,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[5;5~",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[5;2~",0},
+        {0,0,"\033[5~",0},
+        {0}}},
+    {XKB_KEY_Next,(nss_ckey_key_t[]){
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[6;5~",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[6;2~",0},
+        {0,0,"\033[6~",0},
+        {0}}},
+    {XKB_KEY_F1,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033OP",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[1;2P",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[1;5P",0},
+        {NSS_M_ALL,NSS_M_MOD4,"\033[1;6P",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[1;3P",0},
+        {NSS_M_ALL,NSS_M_MOD3,"\033[1;4P",0},
+        {0}}},
+    {XKB_KEY_F2,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033OQ",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[1;2Q",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[1;5Q",0},
+        {NSS_M_ALL,NSS_M_MOD4,"\033[1;6Q",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[1;3Q",0},
+        {NSS_M_ALL,NSS_M_MOD3,"\033[1;4Q",0},
+        {0}}},
+    {XKB_KEY_F3,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033OR",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[1;2R",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[1;5R",0},
+        {NSS_M_ALL,NSS_M_MOD4,"\033[1;6R",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[1;3R",0},
+        {NSS_M_ALL,NSS_M_MOD3,"\033[1;4R",0},
+        {0}}},
+    {XKB_KEY_F4,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033OS",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[1;2S",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[1;5S",0},
+        {NSS_M_ALL,NSS_M_MOD4,"\033[1;6S",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[1;3S",0},
+        {0}}},
+    {XKB_KEY_F5,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[15~",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[15;2~",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[15;5~",0},
+        {NSS_M_ALL,NSS_M_MOD4,"\033[15;6~",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[15;3~",0},
+        {0}}},
+    {XKB_KEY_F6,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[17~",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[17;2~",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[17;5~",0},
+        {NSS_M_ALL,NSS_M_MOD4,"\033[17;6~",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[17;3~",0},
+        {0}}},
+    {XKB_KEY_F7,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[18~",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[18;2~",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[18;5~",0},
+        {NSS_M_ALL,NSS_M_MOD4,"\033[18;6~",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[18;3~",0},
+        {0}}},
+    {XKB_KEY_F8,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[19~",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[19;2~",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[19;5~",0},
+        {NSS_M_ALL,NSS_M_MOD4,"\033[19;6~",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[19;3~",0},
+        {0}}},
+    {XKB_KEY_F9,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[20~",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[20;2~",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[20;5~",0},
+        {NSS_M_ALL,NSS_M_MOD4,"\033[20;6~",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[20;3~",0},
+        {0}}},
+    {XKB_KEY_F10,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[21~",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[21;2~",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[21;5~",0},
+        {NSS_M_ALL,NSS_M_MOD4,"\033[21;6~",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[21;3~",0},
+        {0}}},
+    {XKB_KEY_F11,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[23~",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[23;2~",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[23;5~",0},
+        {NSS_M_ALL,NSS_M_MOD4,"\033[23;6~",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[23;3~",0},
+        {0}}},
+    {XKB_KEY_F12,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[24~",0},
+        {NSS_M_ALL,NSS_M_SHIFT,"\033[24;2~",0},
+        {NSS_M_ALL,NSS_M_CONTROL,"\033[24;5~",0},
+        {NSS_M_ALL,NSS_M_MOD4,"\033[24;6~",0},
+        {NSS_M_ALL,NSS_M_MOD1,"\033[24;3~",0},
+        {0}}},
+    {XKB_KEY_F13,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[1;2P",0},
+        {0}}},
+    {XKB_KEY_F14,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[1;2Q",0},
+        {0}}},
+    {XKB_KEY_F15,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[1;2R",0},
+        {0}}},
+    {XKB_KEY_F16,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[1;2S",0},
+        {0}}},
+    {XKB_KEY_F17,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[15;2~",0},
+        {0}}},
+    {XKB_KEY_F18,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[17;2~",0},
+        {0}}},
+    {XKB_KEY_F19,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[18;2~",0},
+        {0}}},
+    {XKB_KEY_F20,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[19;2~",0},
+        {0}}},
+    {XKB_KEY_F21,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[20;2~",0},
+        {0}}},
+    {XKB_KEY_F22,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[21;2~",0},
+        {0}}},
+    {XKB_KEY_F23,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[23;2~",0},
+        {0}}},
+    {XKB_KEY_F24,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[24;2~",0},
+        {0}}},
+    {XKB_KEY_F25,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[1;5P",0},
+        {0}}},
+    {XKB_KEY_F26,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[1;5Q",0},
+        {0}}},
+    {XKB_KEY_F27,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[1;5R",0},
+        {0}}},
+    {XKB_KEY_F28,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[1;5S",0},
+        {0}}},
+    {XKB_KEY_F29,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[15;5~",0},
+        {0}}},
+    {XKB_KEY_F30,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[17;5~",0},
+        {0}}},
+    {XKB_KEY_F31,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[18;5~",0},
+        {0}}},
+    {XKB_KEY_F32,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[19;5~",0},
+        {0}}},
+    {XKB_KEY_F33,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[20;5~",0},
+        {0}}},
+    {XKB_KEY_F34,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[21;5~",0},
+        {0}}},
+    {XKB_KEY_F35,(nss_ckey_key_t[]){
+        {NSS_M_ALL,0,"\033[23;5~",0},
+        {0}}}
+};
 
 struct nss_context con;
 
@@ -253,6 +662,12 @@ cleanup_context:
     return 1;
 }
 
+int key_cmpfn(const void *a, const void *b) {
+    const nss_ckey_t *ka = a;
+    const nss_ckey_t *kb = b;
+    return (long long) ka->ksym - kb->ksym;
+}
+
 /* Initialize global state object */
 void nss_init_context(void) {
     con.daemon_mode = 0;
@@ -360,6 +775,8 @@ void nss_init_context(void) {
     con.atom_wm_protocols = intern_atom("WM_PROTOCOLS");
     con.atom_utf8_string = intern_atom("UTF8_STRING");
     con.atom_net_wm_name = intern_atom("_NET_WM_NAME");
+
+    qsort(ckeys, sizeof(ckeys)/sizeof(*ckeys), sizeof(*ckeys), key_cmpfn);
 }
 
 void nss_window_set_title(nss_window_t *win, const char *title) {
@@ -402,6 +819,11 @@ static void set_config(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *valu
     if (tag & nss_wc_underline_width) win->underline_width = *values++;
     if (tag & nss_wc_width) warn("Tag is not settable"), values++;
     if (tag & nss_wc_height) warn("Tag is not settable"), values++;
+    if (tag & nss_wc_appcursor) win->appcursor = *values++;
+    if (tag & nss_wc_appkey) win->appkey = *values++;
+    if (tag & nss_wc_numlock) win->numlock = *values++;
+    if (tag & nss_wc_keylock) win->keylock = *values++;
+    if (tag & nss_wc_8bit) win->eight_bit = *values++;
 }
 
 /* Reload font using win->font_size and win->font_name */
@@ -537,6 +959,11 @@ nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_t
     win->font_size = 0;
     win->focused = 0;
     win->active = 0;
+    win->numlock = 1;
+    win->appcursor = 0;
+    win->appkey = 0;
+    win->keylock = 0;
+    win->eight_bit = 0;
     win->got_configure = 0;
     win->font_name = strdup(font_name);
     win->width = rect.width;
@@ -911,6 +1338,12 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
     if (tag & nss_wc_font_size) return win->font_size;
     if (tag & nss_wc_width) return win->width;
     if (tag & nss_wc_height) return win->height;
+    if (tag & nss_wc_numlock) return win->numlock;
+    if (tag & nss_wc_appcursor) return win->appcursor;
+    if (tag & nss_wc_appkey) return win->appkey;
+    if (tag & nss_wc_keylock) return win->keylock;
+    if (tag & nss_wc_8bit) return win->eight_bit;
+
     warn("Invalid option");
     return 0;
 }
@@ -981,6 +1414,90 @@ static void handle_focus(nss_window_t *win, _Bool focused) {
     nss_term_focus(win->term, focused);
 }
 
+static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
+    _Bool handled = 0;
+    uint8_t buf[8] = {0};
+
+    xkb_keysym_t sym = xkb_state_key_get_one_sym(con.xkb_state, keycode);
+    xkb_mod_mask_t mods = xkb_state_serialize_mods(con.xkb_state, XKB_STATE_MODS_EFFECTIVE);
+    size_t sz = xkb_state_key_get_utf8(con.xkb_state, keycode, NULL, 0);
+    if (sz > 0 && sz < 8) xkb_state_key_get_utf8(con.xkb_state, keycode, (char *)buf, 7);
+
+    if (win->keylock) return;
+
+    // TODO
+    //
+    // 1. Key bindings
+    switch (sym) {
+    case XKB_KEY_1: {
+        uint32_t arg = win->font_size + 2;
+        nss_window_set(win, nss_wc_font_size, &arg);
+        handled = 1;
+        break;
+    }
+    case XKB_KEY_2: {
+        uint32_t arg = win->font_size - 2;
+        nss_window_set(win, nss_wc_font_size, &arg);
+        handled = 1;
+        break;
+    }
+    case XKB_KEY_3: {
+        uint32_t arg = !win->lcd_mode;
+        nss_window_set(win, nss_wc_lcd_mode, &arg);
+        handled = 1;
+        break;
+    }
+    case XKB_KEY_4: {
+        uint32_t arg = win->font_size;
+        nss_create_window((nss_rect_t) {100, 100, 400, 200}, win->font_name, nss_wc_font_size, &arg);
+        handled = 1;
+        break;
+    }
+    case XKB_KEY_Page_Up: {
+        nss_term_scroll_view(win->term, 1);
+        handled = 1;
+        break;
+    }
+    case XKB_KEY_Page_Down: {
+        nss_term_scroll_view(win->term, -1);
+        handled = 1;
+        break;
+    }
+    }
+    if (handled) return;
+
+    // 2. Custom translations
+
+    nss_ckey_t ck_pat = { .ksym = sym };
+    nss_ckey_t *ck = bsearch(&ck_pat, ckeys, sizeof(ckeys)/sizeof(*ckeys), sizeof(*ckeys), key_cmpfn);
+    if (ck) {
+        for (nss_ckey_key_t *it = ck->inst; it; it++) {
+            if ((it->mmask & mods) != it->mstate) continue;
+            if (it->flag & (win->appkey ? NSS_M_NOAPPK : NSS_M_APPK)) continue;
+            if (it->flag & (win->appcursor ? NSS_M_NOAPPCUR : NSS_M_APPCUR)) continue;
+            if ((it->flag & NSS_M_NONUM) && win->numlock) continue;
+            nss_term_write(win->term, (uint8_t*)it->string, strlen(it->string), 1);
+            return;
+        }
+    }
+
+    // 3. Basic keycode passing
+    if (!sz) return;
+
+    info("Got key: '%s'", buf);
+
+    if (sz == 1 && mods & NSS_M_MOD1) {
+        if (win->eight_bit)
+            utf8_encode(*buf | 0x80, buf, buf + 8);
+        else {
+            buf[1] = buf[0];
+            buf[0] = '\033';
+            sz++;
+        }
+    }
+    nss_term_write(win->term, buf, sz, 1);
+}
+
 #define POLL_TIMEOUT (1000/60)
 /* Start window logic, handling all windows in context */
 void nss_context_run(void) {
@@ -1024,65 +1541,7 @@ void nss_context_run(void) {
                     xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
                     nss_window_t *win = window_for_xid(ev->event);
                     if (!win) break;
-
-                    xkb_keycode_t keycode = ev->detail;
-                    xkb_keysym_t sym = xkb_state_key_get_one_sym(con.xkb_state, keycode);
-                    xkb_mod_mask_t mods = xkb_state_serialize_mods(con.xkb_state, XKB_STATE_MODS_EFFECTIVE);
-                    _Bool handled = 0;
-
-                    // TODO
-                    //
-                    // 1. Key bindings
-                    switch (sym) {
-                    case XKB_KEY_1: {
-                        uint32_t arg = win->font_size + 2;
-                        nss_window_set(win, nss_wc_font_size, &arg);
-                        handled = 1;
-                        break;
-                    }
-                    case XKB_KEY_2: {
-                        uint32_t arg = win->font_size - 2;
-                        nss_window_set(win, nss_wc_font_size, &arg);
-                        handled = 1;
-                        break;
-                    }
-                    case XKB_KEY_3: {
-                        uint32_t arg = !win->lcd_mode;
-                        nss_window_set(win, nss_wc_lcd_mode, &arg);
-                        handled = 1;
-                        break;
-                    }
-                    case XKB_KEY_4: {
-                        uint32_t arg = win->font_size;
-                        nss_create_window((nss_rect_t) {100, 100, 400, 200}, win->font_name, nss_wc_font_size, &arg);
-                        handled = 1;
-                        break;
-                    }
-                    case XKB_KEY_Up: {
-                        nss_term_scroll_view(win->term, 1);
-                        handled = 1;
-                        break;
-                    }
-                    case XKB_KEY_Down: {
-                        nss_term_scroll_view(win->term, -1);
-                        handled = 1;
-                        break;
-                    }
-                    }
-                    if (handled) break;
-
-                    // 2. Custom translations
-                    // 3. Basic keycode passing
-                    // TODO Change utf8 decoder to stateless
-
-                    uint8_t buf[8];
-                    size_t sz = xkb_state_key_get_utf8(con.xkb_state, keycode, NULL, 0);
-                    uint32_t rune = xkb_state_key_get_utf32(con.xkb_state, keycode);
-                    if (sz > 0 && sz < 8) {
-                        xkb_state_key_get_utf8(con.xkb_state, keycode, (char *)buf, 7);
-                        info("Got key: '%s' == %"PRIx32, buf, rune);
-                        nss_term_write(win->term, buf, sz, 1);
-                    }
+                    handle_keydown(win, ev->detail);
                     break;
                 }
                 case XCB_FOCUS_IN:

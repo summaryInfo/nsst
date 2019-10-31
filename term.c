@@ -34,8 +34,6 @@ typedef struct nss_line {
     nss_cell_t cell[];
 } nss_line_t;
 
-#define UTF8_MAX_LEN 4
-#define UTF_INVAL 0xfffd
 #define TTY_MAX_WRITE 256
 #define NSS_FD_BUF_SZ 256
 #define INIT_TAB_SIZE 8
@@ -117,12 +115,6 @@ struct nss_term {
     size_t fd_buf_pos;
 };
 
-// Need term_mouse
-// erase_line erase_cell erase_screen
-// delete_line delete_cell
-// insert_line insert_cell
-// copy_line copy_cell copy_screen
-
 static void sigchld_fn(int arg) {
     int status;
     pid_t pid = waitpid(-1, &status, WNOHANG);
@@ -133,9 +125,9 @@ static void sigchld_fn(int arg) {
     }
 
     if (WIFEXITED(status) && WEXITSTATUS(status))
-        warn("Child exited with status: %d", WEXITSTATUS(status));
+        info("Child exited with status: %d", WEXITSTATUS(status));
     else if (WIFSIGNALED(status))
-        warn("Child terminated due to the signal: %d", WTERMSIG(status));
+        info("Child terminated due to the signal: %d", WTERMSIG(status));
 }
 
 static void exec_shell(char *cmd, char **args) {
@@ -215,54 +207,6 @@ int tty_open(nss_term_t *term, char *cmd, char **args) {
     term->fd = master;
 
     return master;
-}
-
-static size_t utf8_encode(uint32_t u, uint8_t *buf) {
-    static const uint32_t utf8_min[] = {0x80, 0x800, 0x10000, 0x11000};
-    static const uint8_t utf8_mask[] = {0x00, 0xc0, 0xe0, 0xf0};
-    if (u > 0x10ffff) u = UTF_INVAL;
-    size_t i = 0, j;
-    while (u > utf8_min[i++]);
-    for (j = i; j > 1; j--) {
-        buf[j - 1] = (u & 0x3f) | 0x80;
-        u >>= 6;
-    }
-    buf[0] = u | utf8_mask[i - 1];
-    return i;
-}
-
-static _Bool utf8_decode(nss_term_t *term, uint32_t *res, const uint8_t **buf, const uint8_t *end) {
-    if (*buf >= end) return 0;
-    uint32_t part = *(*buf)++;
-    uint8_t len = 0, i = 0x80;
-    if (part > 0xf7) {
-        *res = UTF_INVAL;
-    } else {
-        while (part & i) {
-            len++;
-            part &= ~i;
-            i /= 2;
-        }
-        if (len == 1) {
-            part = UTF_INVAL;
-        }  else if (len > 1) {
-            uint8_t i = --len;
-            if (end - *buf < i) return 0;
-            while (i--) {
-                if ((**buf & 0xc0) != 0x80) {
-                    part = UTF_INVAL;
-                    goto end;
-                }
-                part = (part << 6) + (*(*buf)++ & ~0xc0);
-            }
-            if(part >= 0xd800 && part < 0xe000 &&
-                    part >= (uint32_t[]){0x80, 0x800, 0x10000, 0x11000}[len - 1])
-                part = UTF_INVAL;
-        }
-    }
-end:
-    *res = part;
-    return 1;
 }
 
 static nss_line_t *create_line(size_t width) {
@@ -549,7 +493,7 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
         uint32_t ch;
         // consider sixel here
         if (!(term->mode & nss_tm_utf8))  ch = *buf++;
-        else if (!utf8_decode(term, &ch, &start, end))  break;
+        else if (!utf8_decode(&ch, &start, end))  break;
 
         // Parse here
         // TODO Redo drawing to damage based

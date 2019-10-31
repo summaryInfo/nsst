@@ -65,4 +65,10 @@ inline static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst) {
         }
 }
 
+#define UTF8_MAX_LEN 4
+#define UTF_INVAL 0xfffd
+
+size_t utf8_encode(uint32_t u, uint8_t *buf, uint8_t *end);
+_Bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end);
+
 #endif 

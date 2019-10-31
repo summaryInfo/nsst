@@ -32,10 +32,12 @@ typedef enum nss_wc_tag {
     nss_wc_appkey = 1 << 13,
     nss_wc_appcursor = 1 << 14,
     nss_wc_numlock = 1 << 15,
-    nss_wc_8bit = 1 << 16,
-    nss_wc_inverted = 1 << 17,
-    nss_wc_mouse = 1 << 18, // Report mouse
-    nss_wc_hide_cursor = 1 << 19 // Don't render cursor
+    nss_wc_keylock = 1 << 16,
+    nss_wc_8bit = 1 << 17,
+
+    nss_wc_inverted = 1 << 18,
+    nss_wc_mouse = 1 << 19, // Report mouse
+    nss_wc_hide_cursor = 1 << 20 // Don't render cursor
 } nss_wc_tag_t;
 
 typedef struct nss_window nss_window_t;
