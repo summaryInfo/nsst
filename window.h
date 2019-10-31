@@ -8,6 +8,8 @@
 #include "util.h"
 #include "attr.h"
 
+#define NSS_WIN_FPS 120
+
 typedef enum nss_cursor_type {
     nss_cursor_block = 2,
     nss_cursor_bar = 4,
@@ -28,16 +30,17 @@ typedef enum nss_wc_tag {
     nss_wc_underline_width = 1 << 10,
     nss_wc_width = 1 << 11,
     nss_wc_height = 1 << 12,
-    // TODO
     nss_wc_appkey = 1 << 13,
     nss_wc_appcursor = 1 << 14,
     nss_wc_numlock = 1 << 15,
     nss_wc_keylock = 1 << 16,
     nss_wc_8bit = 1 << 17,
+    nss_wc_blink_time = 1 << 18,
+    // TODO
+    nss_wc_inverted = 1 << 19,
+    nss_wc_mouse = 1 << 20, // Report mouse
+    nss_wc_hide_cursor = 1 << 21 // Don't render cursor (may be in terminal?)
 
-    nss_wc_inverted = 1 << 18,
-    nss_wc_mouse = 1 << 19, // Report mouse
-    nss_wc_hide_cursor = 1 << 20 // Don't render cursor
 } nss_wc_tag_t;
 
 typedef struct nss_window nss_window_t;

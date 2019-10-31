@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <time.h>
 
 //For openpty() funcion
 #if   defined(__linux)
@@ -68,15 +69,18 @@ struct nss_term {
     nss_line_t *view;
     nss_line_t *scrollback;
 
+    struct timespec draw_time;
+
     enum nss_term_mode {
-        nss_tm_echo = 1 << 0, //This is done by driver, done
-        nss_tm_crlf = 1 << 1, //This also, and non-printable to printable conversion, done
+        nss_tm_echo = 1 << 0,
+        nss_tm_crlf = 1 << 1,
         nss_tm_lock = 1 << 2,
-        nss_tm_wrap = 1 << 3, //Done
+        nss_tm_wrap = 1 << 3,
         nss_tm_visible = 1 << 4,
         nss_tm_focused = 1 << 5,
         nss_tm_altscreen = 1 << 6,
         nss_tm_utf8 = 1 << 7,
+        nss_tm_force_redraw = 1 << 8
     } mode;
 
 
@@ -326,9 +330,8 @@ static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t a
         term_clear_region(term, 0, top, term->width, top + amount);
     }
 
-    //@REDRAW
     term->view = NULL;
-    nss_term_redraw(term, (nss_rect_t) {0, 0, term->width, term->height}, 1);
+    term->mode |= nss_tm_force_redraw;
 }
 
 static void term_insert_cells(nss_term_t *term, int16_t n) {
@@ -372,7 +375,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
         term_newline(term, 1);
     }
     term->screen[term->cur_y]->cell[term->cur_x++] = NSS_MKCELLWITH(term->cur, ch);
-    nss_term_redraw(term, (nss_rect_t) {term->cur_x - 1, term->cur_y, 2, 1}, 1);
+    term->screen[term->cur_y]->mode |= nss_lm_dirty;
 }
 
 static void term_reset_tabs(nss_term_t *term) {
@@ -487,13 +490,15 @@ static _Bool term_handle(nss_term_t *term, uint32_t ch) {
 static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool show_ctl) {
     const uint8_t *end = buf + len, *start = buf;
 
-    nss_term_redraw(term, (nss_rect_t) { MIN(term->cur_x, term->width - 1), term->cur_y, 1, 1}, 0);
+    nss_term_redraw(term, (nss_rect_t) { MIN(term->cur_x, term->width - 1), term->cur_y, 2, 1}, 0);
 
     while (start < end) {
         uint32_t ch;
         // consider sixel here
         if (!(term->mode & nss_tm_utf8))  ch = *buf++;
         else if (!utf8_decode(&ch, &start, end))  break;
+
+        info("UTF %"PRIx32, ch);
 
         // Parse here
         // TODO Redo drawing to damage based
@@ -502,8 +507,15 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
             term_putchar(term, ch);
     }
 
-    nss_term_redraw(term, (nss_rect_t) { MIN(term->cur_x, term->width - 1), term->cur_y, 1, 1}, 1);
-    nss_window_draw_commit(term->win);
+    struct timespec cur;
+    clock_gettime(CLOCK_MONOTONIC, &cur);
+    long long ms_diff = ((cur.tv_sec - term->draw_time.tv_sec) * 1000000000 +
+            (cur.tv_nsec - term->draw_time.tv_nsec)) / 1000;
+    if (ms_diff > (1000000/NSS_TERM_FPS)) {
+        term->draw_time = cur;
+        nss_term_redraw_dirty(term, 1);
+        nss_window_draw_commit(term->win);
+    }
 
     return start - buf;
 }
@@ -559,11 +571,9 @@ static void tty_write_raw(nss_term_t *term, const uint8_t *buf, size_t len) {
 
 void nss_term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool do_echo) {
     if (term->fd == -1) return;
-    term->view = NULL;
 
-    // @REDRAW
-    nss_term_redraw(term, (nss_rect_t) {0, 0, term->width, term->height}, 1);
-    nss_window_draw_commit(term->win);
+    if (term->view) term->mode |= nss_tm_force_redraw;
+    term->view = NULL;
 
     const uint8_t *next;
 
@@ -598,7 +608,7 @@ int nss_term_fd(nss_term_t *term) {
     return term->fd;
 }
 
-static _Bool term_resize(nss_term_t *term, int16_t width, int16_t height) {
+static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
     int16_t ow = term->width, oh = term->height;
     int16_t ox = term->cur_x, oy = term->cur_y;
 
@@ -609,6 +619,8 @@ static _Bool term_resize(nss_term_t *term, int16_t width, int16_t height) {
             SWAP(nss_line_t **, term->screen, term->back_screen);
 
         int16_t delta = MAX(0, term->cur_y - height + 1);
+
+        if (delta) term->mode |= nss_tm_force_redraw;
 
         for (int16_t i = height; i < term->height; i++) {
             if (i < height + delta)
@@ -693,12 +705,12 @@ static _Bool term_resize(nss_term_t *term, int16_t width, int16_t height) {
     // Clear new regions
 
     for (size_t i = 0; i < 2; i++) {
-        //if (width > ow) term_clear_region(term, ow, 0, width, height);
         if (height > oh) term_clear_region(term, 0, oh, width, height);
         SWAP(nss_line_t **, term->screen, term->back_screen);
     }
 
-    return ow == ox || ox != term->cur_x || oy != term->cur_y;
+    if(ow == ox || ox != term->cur_x || oy != term->cur_y)
+        term->mode |= nss_tm_force_redraw;
 }
 
 nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
@@ -708,6 +720,7 @@ nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
     term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_utf8;
     term->fd = -1;
     term->cur = term->back_saved = term->saved = NSS_MKCELL(7, 0, 0, ' ');
+    clock_gettime(CLOCK_MONOTONIC, &term->draw_time);
 
                 //    +-- This is temoporal
                 //    |
@@ -727,7 +740,7 @@ nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
         nss_attrs_t test[] = {
             nss_attrib_italic | nss_attrib_bold,
             nss_attrib_italic | nss_attrib_underlined,
-            nss_attrib_strikethrough,
+            nss_attrib_strikethrough | nss_attrib_blink,
             nss_attrib_underlined | nss_attrib_inverse,
             0
         };
@@ -735,6 +748,8 @@ nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
             for (size_t i = 0; i <= (size_t)('~' - '!'); i++)
                 term->screen[k]->cell[i] = NSS_MKCELL(7, 0, test[k], i + '!');
         }
+        term->screen[2]->mode |= nss_lm_blink;
+        term->screen[1]->mode |= nss_lm_blink;
         term->screen[0]->cell[13] = NSS_MKCELL(3, 5, test[3], 'A');
         term->screen[1]->cell[16] = NSS_MKCELL(4, 6, test[2], 'A');
     }
@@ -765,22 +780,46 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage, _Bool cursor) {
         if (cursor && !term->view && damage.x <= term->cur_x && term->cur_x <= damage.x + damage.width &&
                 damage.y <= term->cur_y && term->cur_y <= damage.y + damage.height) {
             int16_t cx = MIN(term->cur_x, term->width - 1);
-            nss_window_draw_cursor(term->win, cx, term->cur_y, &term->screen[term->cur_y]->cell[cx]);
+            nss_window_draw_cursor(term->win, term->cur_x, term->cur_y, &term->screen[term->cur_y]->cell[cx]);
         }
 
         nss_window_update(term->win, 1, &damage);
     }
 }
 
+void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
+    if (!(term->mode & nss_tm_visible)) return;
+
+    int16_t y0 = 0;
+    nss_line_t *view = term->view;
+    for (; view && y0 < term->height; y0++, view = view->next) {
+        if (view->mode & (nss_lm_dirty | nss_lm_blink) || term->mode & nss_tm_force_redraw)
+            nss_window_draw(term->win, 0, y0, term->width, view->cell);
+        view->mode &= ~nss_lm_dirty;
+    }
+
+    for (int16_t y = 0; y + y0 < term->height; y++) {
+        if (term->screen[y]->mode & (nss_lm_dirty | nss_lm_blink) || term->mode & nss_tm_force_redraw)
+            nss_window_draw(term->win, 0, y0 + y, term->width, term->screen[y]->cell);
+        term->screen[y]->mode &= ~nss_lm_dirty;
+    }
+
+    term->mode &= ~nss_tm_force_redraw;
+
+    if (cursor && !term->view) {
+        int16_t cx = MIN(term->cur_x, term->width - 1);
+        nss_window_draw_cursor(term->win, term->cur_x, term->cur_y, &term->screen[term->cur_y]->cell[cx]);
+    }
+
+    nss_window_update(term->win, 1, &(nss_rect_t){0, 0, term->width, term->height});
+}
+
 void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
     info("Resize: w=%"PRId16" h=%"PRId16, width, height);
 
-    _Bool draw_cur = term_resize(term, width, height);;
-    _Bool draw = width > term->width || height != term->height;
+    term_resize(term, width, height);
 
-    if (draw || 1) nss_term_redraw(term, (nss_rect_t){0, 0, term->width ,term->height}, 1);
-    else if (draw_cur) nss_term_redraw(term, (nss_rect_t){term->cur_x - 1, term->cur_y, 2, 1}, 1);
-
+    nss_term_redraw_dirty(term, 1);
     nss_window_draw_commit(term->win);
 
     struct winsize wsz = {
