@@ -1444,15 +1444,19 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     //
     // 1. Key bindings
     uint32_t arg;
-    if (sym == XKB_KEY_1 && mods == XCB_MOD_MASK_1) {
-        arg = win->font_size + 2;
-        nss_window_set(win, nss_wc_font_size, &arg);
-        return;
-    } else if (sym == XKB_KEY_2 && mods == XCB_MOD_MASK_1) {
+    if (sym == XKB_KEY_Page_Down && mods == (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)) {
         arg = win->font_size - 2;
         nss_window_set(win, nss_wc_font_size, &arg);
         return;
-    } else if (sym == XKB_KEY_3 && mods == XCB_MOD_MASK_1) {
+    } else if (sym == XKB_KEY_Page_Up && mods == (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)) {
+        arg = win->font_size + 2;
+        nss_window_set(win, nss_wc_font_size, &arg);
+        return;
+    } else if (sym == XKB_KEY_Home && mods == (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)) {
+        arg = 0;
+        nss_window_set(win, nss_wc_font_size, &arg);
+        return;
+    } else if (sym == XKB_KEY_End && mods == (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)) {
         arg = !win->lcd_mode;
         nss_window_set(win, nss_wc_lcd_mode, &arg);
         return;

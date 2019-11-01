@@ -68,6 +68,9 @@ struct nss_term {
     uint8_t *tabs;
     nss_line_t *view;
     nss_line_t *scrollback;
+    nss_line_t *scrollback_top;
+    int32_t scrollback_limit;
+    int32_t scrollback_size;
 
     struct timespec draw_time;
 
@@ -226,9 +229,25 @@ static nss_line_t *create_line(size_t width) {
 static void term_append_history(nss_term_t *term, nss_line_t *line) {
     if (term->scrollback)
         term->scrollback->next = line;
+    else
+        term->scrollback_top = line;
     line->prev = term->scrollback;
     line->next = NULL;
     term->scrollback = line;
+
+    if (term->scrollback_limit >= 0 && ++term->scrollback_size > term->scrollback_limit) {
+        if (term->scrollback_top == term->view) {
+            term->view = term->scrollback_top->next;
+            term->mode |= nss_tm_force_redraw;
+        }
+        if (term->scrollback_top == term->scrollback)
+            term->scrollback = NULL;
+        nss_line_t *next = term->scrollback_top->next;
+        free(term->scrollback_top);
+        if (next) next->prev = NULL;
+        term->scrollback_top = next;
+        term->scrollback_size = term->scrollback_limit;
+    }
 }
 
 static void term_clear_region(nss_term_t *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
@@ -719,6 +738,7 @@ nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
     term->win = win;
     term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_utf8;
     term->fd = -1;
+    term->scrollback_limit = -1;
     term->cur = term->back_saved = term->saved = NSS_MKCELL(7, 0, 0, ' ');
     clock_gettime(CLOCK_MONOTONIC, &term->draw_time);
 
