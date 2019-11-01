@@ -37,7 +37,7 @@ typedef enum nss_wc_tag {
     nss_wc_8bit = 1 << 17,
     nss_wc_blink_time = 1 << 18,
     // TODO
-    nss_wc_inverted = 1 << 19,
+    nss_wc_reverse = 1 << 19,
     nss_wc_mouse = 1 << 20, // Report mouse
     nss_wc_hide_cursor = 1 << 21 // Don't render cursor (may be in terminal?)
 

@@ -58,6 +58,7 @@ struct nss_window {
     _Bool numlock;
     _Bool keylock;
     _Bool eight_bit;
+    _Bool reverse_video;
 
     int16_t width;
     int16_t height;
@@ -822,6 +823,7 @@ static void set_config(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *valu
     if (tag & nss_wc_keylock) win->keylock = *values++;
     if (tag & nss_wc_8bit) win->eight_bit = *values++;
     if (tag & nss_wc_blink_time) win->blink_time = *values++;
+    if (tag & nss_wc_reverse) win->reverse_video = *values++;
 }
 
 /* Reload font using win->font_size and win->font_name */
@@ -920,7 +922,8 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
     }
 
     uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
-    uint32_t values2[3] = { nss_color_get(win->bg_cid), nss_color_get(win->bg_cid), 0 };
+    uint32_t values2[3] = { nss_color_get(win->reverse_video ? win->fg_cid : win->bg_cid),
+                           nss_color_get(win->reverse_video ? win->fg_cid : win->bg_cid), 0 };
     c = xcb_create_gc_checked(con.con, win->gc, win->pid, mask2, values2);
     if (check_void_cookie(c)) {
         warn("Can't create GC");
@@ -935,7 +938,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
         return 0;
     }
 
-    xcb_render_color_t color = MAKE_COLOR(nss_color_get(win->bg_cid));
+    xcb_render_color_t color = MAKE_COLOR(nss_color_get(win->reverse_video ? win->fg_cid : win->bg_cid));
     xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_OVER, win->pic, color, 1, &bound);
 
     if (need_free)
@@ -953,7 +956,7 @@ static void set_wm_props(nss_window_t *win) {
 
 /* Create new window */
 nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_tag_t tag, const uint32_t *values) {
-    nss_window_t *win = malloc(sizeof(nss_window_t));
+    nss_window_t *win = calloc(1, sizeof(nss_window_t));
     win->cursor_width = 2;
     win->underline_width = 1;
     win->left_border = 8;
@@ -963,18 +966,9 @@ nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_t
     win->cursor_bg_cid = 0;
     win->cursor_fg_cid = 7;
     win->cursor_type = nss_cursor_bar;
-    win->lcd_mode = 0;
-    win->font_size = 0;
-    win->blink_state = 0;
-    win->focused = 0;
     win->active = 1;
     win->numlock = 1;
-    win->appcursor = 0;
     win->blink_time = 800000;
-    win->appkey = 0;
-    win->keylock = 0;
-    win->eight_bit = 0;
-    win->got_configure = 0;
     win->font_name = strdup(font_name);
     win->width = rect.width;
     win->height = rect.height;
@@ -987,7 +981,8 @@ nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_t
     uint32_t mask1 =  XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
         XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
     uint32_t values1[5] = {
-        nss_color_get(win->bg_cid),  nss_color_get(win->bg_cid),
+        nss_color_get(win->reverse_video ? win->fg_cid : win->bg_cid),
+        nss_color_get(win->reverse_video ? win->fg_cid : win->bg_cid),
         XCB_GRAVITY_NORTH_WEST, XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_VISIBILITY_CHANGE |
         XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_FOCUS_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY, con.mid
     };
@@ -1143,7 +1138,7 @@ void nss_window_draw_cursor(nss_window_t *win, int16_t x, int16_t y, nss_cell_t 
     if (win->focused) {
         if (win->cursor_type == nss_cursor_bar) {
             if(win->cw == cx) {
-				off = 2;
+                off = 2;
                 rects[2].width = win->cursor_width;
                 rects[2].x -= win->cursor_width - 1;
             } else
@@ -1160,7 +1155,7 @@ void nss_window_draw_cursor(nss_window_t *win, int16_t x, int16_t y, nss_cell_t 
         }
     }
     nss_window_draw(win, MIN(cx, win->cw - 1), cy, 1, &cel);
-    xcb_render_color_t c = MAKE_COLOR(nss_color_get(win->cursor_fg_cid));
+    xcb_render_color_t c = MAKE_COLOR(nss_color_get(win->reverse_video ? win->cursor_bg_cid : win->cursor_fg_cid));
     xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_OVER, win->pic, c, count, rects + off);
     xcb_flush(con.con);
 }
@@ -1186,6 +1181,13 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
         uint32_t attr = NSS_CELL_ATTRS(*cells);
         uint8_t fattr = attr & nss_font_attrib_mask;
         nss_cid_t bgc = cells->bg, fgc = cells->fg;
+
+        if (win->reverse_video) {
+            if (bgc == win->bg_cid)
+                bgc = win->fg_cid;
+            if (fgc == win->fg_cid)
+                fgc = win->bg_cid;
+        }
 
         if ((attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && fgc < 8) fgc += 8;
 
@@ -1266,7 +1268,7 @@ static void redraw_damage(nss_window_t *win, nss_rect_t damage) {
         nss_rect_t damaged[NUM_BORDERS], borders[NUM_BORDERS] = {
             {0, 0, win->left_border, height},
             {win->left_border, 0, width, win->top_border},
-            {width, win->top_border, win->width - width, win->height},
+            {width, 0, win->width - width, win->height},
             {0, height, width, win->height - height},
         };
         for (size_t i = 0; i < NUM_BORDERS; i++)
@@ -1299,7 +1301,7 @@ void nss_window_clear(nss_window_t *win, size_t len, const nss_rect_t *damage) {
     for (size_t i = 0; i < len; i++)
         rects[i] = rect_scale_up(damage[i], win->char_width, win->char_height + win->char_depth);
 
-    xcb_render_color_t color = MAKE_COLOR(nss_color_get(win->bg_cid));
+    xcb_render_color_t color = MAKE_COLOR(nss_color_get(win->reverse_video ? win->fg_cid : win->bg_cid));
     xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_OVER, win->pic, color, len, (xcb_rectangle_t*)rects);
     free(rects);
 }
@@ -1308,10 +1310,14 @@ void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values)
     set_config(win, tag, values);
     if (tag & (nss_wc_font_size | nss_wc_lcd_mode))
         reload_font(win, 1);
-    if (tag & (nss_wc_cursor_background | nss_wc_cursor_foreground | nss_wc_background | nss_wc_foreground)) {
+    if (tag & (nss_wc_cursor_background | nss_wc_cursor_foreground | nss_wc_background | nss_wc_foreground | nss_wc_reverse)) {
+        uint32_t values2[2];
+        if (tag & nss_wc_reverse && win->reverse_video)
+            values2[0] = values2[1] = nss_color_get(win->fg_cid);
+        else
+            values2[0] = values2[1] = nss_color_get(win->bg_cid);
         //@@TODO Test this
         // Do this also for nss_color_set
-        uint32_t values2[2] = { nss_color_get(win->bg_cid), nss_color_get(win->bg_cid) };
         xcb_change_window_attributes(con.con, win->wid, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL, values2);
         xcb_change_gc(con.con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
     }
@@ -1459,6 +1465,10 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     } else if (sym == XKB_KEY_End && mods == (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)) {
         arg = !win->lcd_mode;
         nss_window_set(win, nss_wc_lcd_mode, &arg);
+        return;
+    } else if (sym == XKB_KEY_1 && mods == XCB_MOD_MASK_1) {
+        arg = !win->reverse_video;
+        nss_window_set(win, nss_wc_reverse, &arg);
         return;
     } else if (sym == XKB_KEY_4 && mods == XCB_MOD_MASK_1) {
         arg = win->font_size;
