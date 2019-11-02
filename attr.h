@@ -13,17 +13,17 @@ typedef uint32_t nss_color_t;
 
 // Just 8 bits
 typedef enum nss_attrs {
-    nss_attrib_italic = 1 << 0, //done
-    nss_attrib_bold = 1 << 1, //done
-    nss_attrib_faint = 1 << 2, //done
-    nss_attrib_underlined = 1 << 3, //done
-    nss_attrib_strikethrough = 1 << 4, //done
-    nss_attrib_invisible = 1 << 5, //done
-    nss_attrib_inverse = 1 << 6, //done
-    nss_attrib_blink = 1 << 7, //todo
-    nss_attrib_wide = 1 << 8, //todo
-    nss_attrib_wdummy = 1 << 9, //todo
-    nss_attrib_reserved = 1 << 10
+    nss_attrib_italic = 1 << 0,
+    nss_attrib_bold = 1 << 1,
+    nss_attrib_faint = 1 << 2,
+    nss_attrib_underlined = 1 << 3,
+    nss_attrib_strikethrough = 1 << 4,
+    nss_attrib_invisible = 1 << 5,
+    nss_attrib_inverse = 1 << 6,
+    nss_attrib_blink = 1 << 7,
+    nss_attrib_wide = 1 << 8,
+    nss_attrib_wdummy = 1 << 9,
+    nss_attrib_protected = 1 << 10 //todo
     // 11 bits total, sice unicode codepoint is 21 bit
 } nss_attrs_t;
 
