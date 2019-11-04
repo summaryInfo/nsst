@@ -36,11 +36,9 @@ typedef enum nss_wc_tag {
     nss_wc_keylock = 1 << 16,
     nss_wc_8bit = 1 << 17,
     nss_wc_blink_time = 1 << 18,
-    // TODO
     nss_wc_reverse = 1 << 19,
+    // TODO
     nss_wc_mouse = 1 << 20, // Report mouse
-    nss_wc_hide_cursor = 1 << 21 // Don't render cursor (may be in terminal?)
-
 } nss_wc_tag_t;
 
 typedef struct nss_window nss_window_t;
@@ -57,6 +55,7 @@ void nss_window_draw_commit(nss_window_t *win);
 void nss_window_draw_cursor(nss_window_t *win, int16_t x, int16_t y, nss_cell_t *cell);
 void nss_window_update(nss_window_t *win, size_t len, const nss_rect_t *damage);
 void nss_window_clear(nss_window_t *win, size_t len, const nss_rect_t *damage);
+void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height);
 void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values);
 void nss_window_set_font(nss_window_t *win, const char *name);
 void nss_window_set_title(nss_window_t *win, const char *name);

@@ -10,8 +10,11 @@ typedef uint32_t nss_color_t;
 #define NSS_CID_NONE UINT32_MAX
 #define NSS_CID_DEFAULT 0
 #define NSS_N_BASE_COLORS (256)
+#define NSS_DEFAULT_FG 7
+#define NSS_DEFAULT_BG 0
+#define NSS_DEFAULT_CURSOR_FG 7
+#define NSS_DEFAULT_CURSOR_BG 0
 
-// Just 8 bits
 typedef enum nss_attrs {
     nss_attrib_italic = 1 << 0,
     nss_attrib_bold = 1 << 1,
@@ -23,7 +26,7 @@ typedef enum nss_attrs {
     nss_attrib_blink = 1 << 7,
     nss_attrib_wide = 1 << 8,
     nss_attrib_wdummy = 1 << 9,
-    nss_attrib_protected = 1 << 10 //todo
+    nss_attrib_protected = 1 << 10
     // 11 bits total, sice unicode codepoint is 21 bit
 } nss_attrs_t;
 

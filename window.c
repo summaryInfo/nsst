@@ -70,6 +70,7 @@ struct nss_window {
     int16_t font_size;
     uint32_t blink_time;
     struct timespec prev_blink;
+    struct timespec prev_draw;
 
     nss_cid_t bg_cid;
     nss_cid_t fg_cid;
@@ -961,10 +962,10 @@ nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_t
     win->underline_width = 1;
     win->left_border = 8;
     win->top_border = 8;
-    win->bg_cid = 0;
-    win->fg_cid = 7;
-    win->cursor_bg_cid = 0;
-    win->cursor_fg_cid = 7;
+    win->bg_cid = NSS_DEFAULT_BG;
+    win->fg_cid = NSS_DEFAULT_FG;
+    win->cursor_bg_cid = NSS_DEFAULT_CURSOR_BG;
+    win->cursor_fg_cid = NSS_DEFAULT_CURSOR_FG;
     win->cursor_type = nss_cursor_bar;
     win->active = 1;
     win->numlock = 1;
@@ -1036,7 +1037,6 @@ nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_t
         warn("Can't create term");
         nss_free_window(win);
     }
-    nss_term_redraw(win->term, (nss_rect_t) {0, 0, win->cw, win->ch}, 1);
 
     con.pfdn++;
     size_t i = 1;
@@ -1045,6 +1045,9 @@ nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_t
     win->term_fd = nss_term_fd(win->term);
     con.pfds[i].events = POLLIN | POLLHUP;
     con.pfds[i].fd = win->term_fd;
+
+    nss_term_redraw(win->term, (nss_rect_t) {0, 0, win->cw, win->ch}, 1);
+    nss_window_update(win, 1, &(nss_rect_t){0, 0, win->ch, win->cw});
 
     return win;
 }
@@ -1168,13 +1171,15 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
     if (!cells || !len) return;
 
     for (size_t i = 0; i < len; i++) {
-        if (NSS_CELL_CHAR(cells[i]) > ASCII_MAX) {
-            uint8_t fattr = NSS_CELL_ATTRS(cells[i]) & nss_font_attrib_mask;
-            nss_glyph_t *glyph = nss_font_render_glyph(win->font, NSS_CELL_CHAR(cells[i]), fattr, win->lcd_mode);
-            //In case of non-monospace fonts
-            glyph->x_off = win->char_width;
-            register_glyph(win, NSS_CELL_GLYPH(cells[i]), glyph);
-            free(glyph);
+        uint32_t ch = NSS_CELL_CHAR(cells[i]);
+        if (!nss_font_glyph_is_loaded(win->font, ch)) {
+            for (size_t i = 0; i < nss_font_attrib_max; i++) {
+                nss_glyph_t *glyph = nss_font_render_glyph(win->font, ch, i, win->lcd_mode);
+                //In case of non-monospace fonts
+                glyph->x_off = win->char_width;
+                register_glyph(win, ch | (i << NSS_CELL_CHAR_BITS) , glyph);
+                free(glyph);
+            }
         }
     }
     while (len > 0) {
@@ -1296,6 +1301,21 @@ void nss_window_update(nss_window_t *win, size_t len, const nss_rect_t *damage) 
     }
 }
 
+void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height) {
+    ys = MAX(0, MIN(ys, win->ch));
+    yd = MAX(0, MIN(yd, win->ch));
+    height = MIN(height, MIN(win->ch - ys, win->ch - yd));
+
+    if (!height) return;
+
+    ys *= win->char_height + win->char_depth;
+    yd *= win->char_height + win->char_depth;
+    int16_t width = win->cw * win->char_width;
+    height *= win->char_depth + win->char_height;
+
+    xcb_copy_area(con.con, win->pid, win->pid, win->gc, 0, ys, 0, yd, width, height);
+}
+
 void nss_window_clear(nss_window_t *win, size_t len, const nss_rect_t *damage) {
     nss_rect_t *rects = malloc(len*sizeof(nss_rect_t));
     for (size_t i = 0; i < len; i++)
@@ -1316,14 +1336,15 @@ void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values)
             values2[0] = values2[1] = nss_color_get(win->fg_cid);
         else
             values2[0] = values2[1] = nss_color_get(win->bg_cid);
-        //@@TODO Test this
-        // Do this also for nss_color_set
+        // TODO Do this also for nss_color_set
         xcb_change_window_attributes(con.con, win->wid, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL, values2);
         xcb_change_gc(con.con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
     }
-    nss_term_redraw(win->term, (nss_rect_t) {0, 0, win->cw, win->ch}, 1);
-    redraw_damage(win, (nss_rect_t) {0, 0, win->width, win->height});
-    xcb_flush(con.con);
+   if (tag & ~ (nss_wc_appcursor | nss_wc_appkey | nss_wc_numlock | nss_wc_keylock | nss_wc_8bit)) {
+        nss_term_redraw(win->term, (nss_rect_t) {0, 0, win->cw, win->ch}, 1);
+        redraw_damage(win, (nss_rect_t) {0, 0, win->width, win->height});
+        xcb_flush(con.con);
+   }
 }
 
 void nss_window_set_font(nss_window_t *win, const char * name) {
@@ -1492,7 +1513,6 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
             if (it->flag & (win->appkey ? NSS_M_NOAPPK : NSS_M_APPK)) continue;
             if (it->flag & (win->appcursor ? NSS_M_NOAPPCUR : NSS_M_APPCUR)) continue;
             if ((it->flag & NSS_M_NONUM) && win->numlock) continue;
-            info("Custom %"PRIx32, sym);
             nss_term_write(win->term, (uint8_t*)it->string, strlen(it->string), 1);
             return;
         }
@@ -1500,8 +1520,6 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
 
     // 3. Basic keycode passing
     if (!sz) return;
-
-    info("Got key: '%s'", buf);
 
     if (sz == 1 && mods & XCB_MOD_MASK_1) {
         if (win->eight_bit)
@@ -1546,8 +1564,10 @@ void nss_context_run(void) {
                         handle_resize(win, ev->width, ev->height);
                         xcb_flush(con.con);
                     }
-                    if (!win->got_configure)
+                    if (!win->got_configure) {
                         nss_term_redraw(win->term, (nss_rect_t){0, 0, win->cw, win->ch}, 1);
+                        nss_window_update(win, 1, &(nss_rect_t){0, 0, win->cw, win->ch});
+                    }
                     win->got_configure |= 1;
                     break;
                 }
@@ -1654,14 +1674,21 @@ void nss_context_run(void) {
         struct timespec cur;
         clock_gettime(CLOCK_MONOTONIC, &cur);
         for (nss_window_t *win = con.first; win; win = win->next) {
-            long long ms_diff = ((cur.tv_sec - win->prev_blink.tv_sec) * 1000000000 + 
+            long long ms_diff1 = ((cur.tv_sec - win->prev_blink.tv_sec) * 1000000000 +
                     (cur.tv_nsec - win->prev_blink.tv_nsec)) / 1000;
-            if (ms_diff > win->blink_time && win->active) {
+            long long ms_diff2 = ((cur.tv_sec - win->prev_draw.tv_sec) * 1000000000 +
+                    (cur.tv_nsec - win->prev_draw.tv_nsec)) / 1000;
+            if (ms_diff1 > win->blink_time && win->active) {
                 win->blink_state = !win->blink_state;
                 win->prev_blink = cur;
+            }
+            if (ms_diff2 > 1000000/NSS_TERM_FPS) {
+                win->prev_draw = cur;
                 nss_term_redraw_dirty(win->term, 1);
             }
         }
+        xcb_flush(con.con);
+
         if (!con.daemon_mode && !con.first) break;
     }
 }

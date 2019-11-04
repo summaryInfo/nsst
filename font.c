@@ -23,11 +23,15 @@ typedef struct nss_face_list {
         FT_Face *faces;
 } nss_face_list_t;
 
+/* Cache first two unicode planes */
+#define LOADED_MAP_SIZE (2 * 65536 / 32)
+
 struct nss_font {
     size_t refs;
     uint16_t dpi;
     double pixel_size;
     double size;
+    uint32_t *loaded_map;
     nss_face_list_t face_types[nss_font_attrib_max];
 };
 
@@ -48,6 +52,7 @@ void nss_free_font(nss_font_t *font) {
             FcFini();
             FT_Done_FreeType(global.library);
         }
+        free(font->loaded_map);
         free(font);
     }
 }
@@ -97,7 +102,6 @@ static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_pate
             ftmat.yx = (FT_Fixed)(matrix.u.m->yx * 0x10000L);
             ftmat.yy = (FT_Fixed)(matrix.u.m->yy * 0x10000L);
             FT_Set_Transform(faces->faces[faces->length], &ftmat, NULL);
-            FcValueDestroy(matrix);
         }
 
         FcResult res = FcPatternGet(pats.pats[i], FC_PIXEL_SIZE, 0, &pixsize);
@@ -125,10 +129,10 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
     nss_paterns_holder_t pats = {
         .length = 0,
         .caps = CAPS_STEP,
-        .pats = malloc(sizeof(*pats.pats)*pats.caps)
+        .pats = calloc(pats.caps, sizeof(*pats.pats))
     };
 
-    for (char *tok = strtok(tmp, ", "); tok; tok = strtok(NULL, ", ")) {
+    for (char *tok = strtok(tmp, ","); tok; tok = strtok(NULL, ",")) {
         FcPattern *final_pat = NULL;
         FcPattern *pat = FcNameParse((FcChar8*) tok);
         FcPatternAddDouble(pat, FC_DPI, font->dpi);
@@ -171,8 +175,8 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
 
         FcDefaultSubstitute(pat);
         if (FcConfigSubstitute(NULL, pat, FcMatchPattern) == FcFalse) {
-            FcPatternDestroy(pat);
             warn("Can't substitute font config for font: %s", tok);
+            FcPatternDestroy(pat);
             continue;
         }
 
@@ -209,13 +213,13 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
 
         pats.pats[pats.length++] = final_pat;
     }
-    free(tmp);
 
     load_append_fonts(font, faces, pats);
 
     for (size_t i = 0; i < pats.length; i++)
         FcPatternDestroy(pats.pats[i]);
     free(pats.pats);
+    free(tmp);
 }
 
 nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi) {
@@ -230,6 +234,12 @@ nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi) {
     nss_font_t *font = calloc(1, sizeof(*font));
     if (!font) {
         warn("Can't allocate font");
+        return NULL;
+    }
+    font->loaded_map = calloc(LOADED_MAP_SIZE, sizeof(font->loaded_map[0]));
+    if (!font->loaded_map) {
+        warn("Can't allocate font glyph map");
+        free(font);
         return NULL;
     }
 
@@ -258,7 +268,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     nss_face_list_t *faces = &font->face_types[attr];
     int glyph_index = 0;
     FT_Face face = faces->faces[0];
-    for (size_t i = 0; !glyph_index && i < faces->length; i++)
+    for (size_t i = 0; glyph_index == 0 && i < faces->length; i++)
         if ((glyph_index = FT_Get_Char_Index(faces->faces[i], ch)))
             face = faces->faces[i];
     //size_t sz = faces->faces[0]->size->metrics.x_ppem/font->dpi*72.0*64;
@@ -321,8 +331,15 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
         putc('\n', stderr);
     }
     */
+	if (ch < LOADED_MAP_SIZE * 32)
+        font->loaded_map[ch / 32] |= 1 << (ch % 32);
 
     return glyph;
+}
+
+_Bool nss_font_glyph_is_loaded(nss_font_t *font, uint32_t ch) {
+    if (ch >= 32 * LOADED_MAP_SIZE) return 0;
+    else return font->loaded_map[ch / 32] & (1 << (ch % 32));
 }
 
 int16_t nss_font_get_size(nss_font_t *font) {
