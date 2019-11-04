@@ -44,7 +44,7 @@ typedef struct nss_line {
 
 #define IS_C1(c) ((c) < 0xa0 && (c) >= 0x80)
 #define IS_C0(c) (((c) < 0x20) || (c) == 0x7f)
-#define IS_STREND(c) (IS_C1(c) || (c) == 0x1b || (c) == 0x1a || (c) == 0x18)
+#define IS_STREND(c) (IS_C1(c) || (c) == 0x1b || (c) == 0x1a || (c) == 0x18 || (c) == 0x07)
 
 typedef struct nss_cursor {
     int16_t x;
@@ -641,43 +641,43 @@ static void term_escape_da(nss_term_t *term, uint8_t mode) {
         break;
     case '>':
         /*
-         * 0 - vt100
-         * 1 - vt220
-         * 2 - vt240
-         * 18 - vt330
-         * 19 - vt340
-         * 24 - vt320
-         * 41 - vt420
-         * 61 - vt510
-         * 64 - vt520
-         * 65 - vt525
+         * 0 - VT100
+         * 1 - VT220
+         * 2 - VT240
+         * 18 - VT330
+         * 19 - VT340
+         * 24 - VT320
+         * 41 - VT420
+         * 61 - VT510
+         * 64 - VT520
+         * 65 - VT525
          */
         term_answerback(term, "\x9B>1;10;0c");
         break;
     default:
         /*
-         * ?1;2 - vt100
-         * ?1;0 - vt101
-         * ?6 - vt102
-         * ?62;... - vt220
-         * ?63;... - vt320
-         * ?64;... - vt420
-         *
-         * 1 - 132-columns
-         * 2 - Printer
-         * 3 - ReGIS graphics
-         * 4 - Sixel graphics
-         * 6 - Selective erase
-         * 8 - User-defined keys
-         * 9 - National Replacement Character sets
-         * 15 - Technical characters
-         * 16 - Locator port
-         * 17 - Terminal state interrogation
-         * 18 - User windows
-         * 21 - Horizontal scrolling
-         * 22 - ANSI color
-         * 28 - Rectangular editing
-         * 29 - ANSI text locator (i.e., DEC Locator mode).
+         * ?1;2 - VT100
+         * ?1;0 - VT101
+         * ?6 - VT102
+         * ?62;... - VT220
+         * ?63;... - VT320
+         * ?64;... - VT420
+         * 	where ... is
+         *		 1 - 132-columns
+         *		 2 - Printer
+         *		 3 - ReGIS graphics
+         *		 4 - Sixel graphics
+         *		 6 - Selective erase
+         *		 8 - User-defined keys
+         *		 9 - National Replacement Character sets
+         *		 15 - Technical characters
+         *		 16 - Locator port
+         *		 17 - Terminal state interrogation
+         *		 18 - User windows
+         *		 21 - Horizontal scrolling
+         *		 22 - ANSI color
+         *		 28 - Rectangular editing
+         *		 29 - ANSI text locator (i.e., DEC Locator mode).
          */
          term_answerback(term, "\x9B?62;1;2;6;9;22c");
     }
@@ -885,8 +885,10 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 break;
             case 3: /* DECCOLM */
                 //Just clear screen
-                if (!(term->mode & nss_tm_132_preserve_display))
+                if (!(term->mode & nss_tm_132_preserve_display)) {
                     term_erase(term, 0, 0, term->width, term->height);
+                    term_move_to(term, 0, 0);
+                }
                 break;
             case 4: /* DECSCLM */
                 // IGNORE
@@ -1579,6 +1581,7 @@ static void term_escape_reset(nss_term_t *term) {
 }
 
 static void term_escape_control(nss_term_t *term, uint32_t ch) {
+    // DUMP
     if (IS_C0(ch)) {
         if (ch != 0x1B) warn("^%c", ch ^ 0x40);
     } else warn("^[%c", ch ^ 0xc0);
@@ -1591,7 +1594,9 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
         break;
     case 0x07: /* BEL */
         if (term->esc.state & nss_es_string) {
-            if (term->esc.state & nss_es_dcs)
+            if (term->esc.state & nss_es_ignore)
+                /* do nothing */;
+            else if (term->esc.state & nss_es_dcs)
                 term_escape_dcs(term);
             else if (term->esc.state & nss_es_osc)
                 term_escape_osc(term);
@@ -1638,10 +1643,10 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
         return;
     case 0x7f:   /* DEL (IGNORE) */
         return;
-    case 0x80:   /* PAD - TODO */
-    case 0x81:   /* HOP - TODO */
-    case 0x82:   /* BPH - TODO */
-    case 0x83:   /* NBH - TODO */
+    case 0x80:   /* PAD */
+    case 0x81:   /* HOP */
+    case 0x82:   /* BPH */
+    case 0x83:   /* NBH */
         warn("Unknown control character %"PRIx32, ch);
         break;
     case 0x84:   /* IND - Index */
@@ -1650,17 +1655,17 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
     case 0x85:   /* NEL -- Next line */
         term_index(term, 1);
         break;
-    case 0x86:   /* SSA - TODO */
-    case 0x87:   /* ESA - TODO */
+    case 0x86:   /* SSA */
+    case 0x87:   /* ESA */
         warn("Unknown control character %"PRIx32, ch);
         break;
     case 0x88:   /* HTS -- Horizontal tab stop */
         term->tabs[MIN(term->c.x, term->width - 1)] = 1;
         break;
-    case 0x89:   /* HTJ - TODO */
-    case 0x8a:   /* VTS - TODO */
-    case 0x8b:   /* PLD - TODO */
-    case 0x8c:   /* PLU - TODO */
+    case 0x89:   /* HTJ */
+    case 0x8a:   /* VTS */
+    case 0x8b:   /* PLD */
+    case 0x8c:   /* PLU */
         warn("Unknown control character %"PRIx32, ch);
         break;
     case 0x8d:   /* RI - Reverse Index */
@@ -1672,11 +1677,11 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
     case 0x8f:   /* SS3 - Single Shift 3 */
         term->c.gl_ss = 3;
         break;
-    case 0x91:   /* PU1 - TODO */
-    case 0x92:   /* PU2 - TODO */
-    case 0x93:   /* STS - TODO */
-    case 0x94:   /* CCH - TODO */
-    case 0x95:   /* MW - TODO */
+    case 0x91:   /* PU1 */
+    case 0x92:   /* PU2 */
+    case 0x93:   /* STS */
+    case 0x94:   /* CCH */
+    case 0x95:   /* MW */
         warn("Unknown control character %"PRIx32, ch);
         break;
     case 0x96:   /* SPA - Start of Protected Area */
@@ -1691,7 +1696,7 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
         term_escape_reset(term);
         term->esc.state = nss_es_ignore | nss_es_string;
         return;
-    case 0x99:   /* SGCI - TODO */
+    case 0x99:   /* SGCI */
         warn("Unknown control character %"PRIx32, ch);
         break;
     case 0x9a:   /* DECID -- Identify Terminal */
@@ -1703,7 +1708,9 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
         break;
     case 0x9c:   /* ST - String terminator */
         if (term->esc.state & nss_es_string) {
-            if (term->esc.state & nss_es_dcs)
+            if (term->esc.state & nss_es_ignore)
+                /* do nothing */;
+            else if (term->esc.state & nss_es_dcs)
                 term_escape_dcs(term);
             else if (term->esc.state & nss_es_osc)
                 term_escape_osc(term);
@@ -1827,7 +1834,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
         return;
     }
 
-    //Char
+    //DUMP
     info("%c (%u)", ch, ch);
 
     if (term->mode & nss_tm_wrap && term->c.x + width - 1 > term->width - 1) {
