@@ -30,7 +30,7 @@ nss_font_t *nss_font_reference(nss_font_t *font);
 nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t face, _Bool lcd);
 int16_t nss_font_get_size(nss_font_t *font);
 _Bool nss_font_glyph_is_loaded(nss_font_t *font, uint32_t ch);
-_Bool nss_font_glyph_mark_loaded(nss_font_t *font, uint32_t ch);
+void nss_font_glyph_mark_loaded(nss_font_t *font, uint32_t ch);
 
 #endif
 

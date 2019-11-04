@@ -394,7 +394,7 @@ static void term_cursor_mode(nss_term_t *term, _Bool mode) {
     } else { //restore
        term->c = term->cs;
        term->c.x = MIN(term->c.x, term->width);
-       term->c.y = MIN(term->c.x, term->height - 1);
+       term->c.y = MIN(term->c.y, term->height - 1);
     }
 }
 
@@ -402,6 +402,7 @@ static void term_swap_screen(nss_term_t *term) {
     term->mode ^= nss_tm_altscreen;
     SWAP(nss_cursor_t, term->back_cs, term->cs);
     SWAP(nss_line_t **, term->back_screen, term->screen);
+    term->view = NULL;
 }
 
 static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t amount, _Bool save) {
@@ -531,7 +532,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
         .gn = {nss_cs_dec_ascii, nss_cs_dec_sup, nss_cs_dec_sup, nss_cs_dec_sup}
     };
     // TODO Altscreen is wrong disable it for now
-    term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_utf8 | nss_tm_disable_altscreen;
+    term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_utf8;
     term->top = 0;
     term->bottom = term->height - 1;
     memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
@@ -934,6 +935,11 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
             case 45: /* Reverse wrap */
                 term_escape_dump(term);
                 break;
+            case 47: /* Enable altscreen */
+                if (term->mode & nss_tm_disable_altscreen) break;
+                if (set ^ !!(term->mode & nss_tm_altscreen))
+                    term_swap_screen(term);
+                break;
             case 66: /* DECNKM */
                 nss_window_set(term->win, nss_wc_appkey, &arg);
                 break;
@@ -990,19 +996,25 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 if (!set) term->mode |= nss_tm_disable_altscreen;
                 else  term->mode &= ~nss_tm_disable_altscreen;
                 break;
+            case 1047: /* Enable altscreen and clear screen */
+                if (term->mode & nss_tm_disable_altscreen) break;
+                if (set) term_erase(term, 0, 0, term->width, term->height);
+                if (!!(term->mode & nss_tm_altscreen) ^ set)
+                    term_swap_screen(term);
+                break;
+            case 1048: /* Save cursor  */
+                term_cursor_mode(term, set);
+                break;
             case 1049: /* Save cursor and switch to altscreen */
                 if (term->mode & nss_tm_disable_altscreen) break;
-                term_cursor_mode(term, set);
-            case 47:
-            case 1047: /* Enable altscreen */
-                if (term->mode & nss_tm_disable_altscreen) break;
-                if (set ^ !!(term->mode & nss_tm_altscreen))
+                if (set) term_erase(term, 0, 0, term->width, term->height);
+                if (!(term->mode & nss_tm_altscreen) && set) {
+                    term_cursor_mode(term, 1);
                     term_swap_screen(term);
-                if (term->mode & nss_tm_altscreen)
-                    term_erase(term, 0, 0, term->width, term->height);
-                if (term->esc.param[i] != 1049) break;
-            case 1048: /* Save cursor, fallthrough */
-                term_cursor_mode(term, set);
+                } else if (term->mode & nss_tm_altscreen && !set) {
+                    term_swap_screen(term);
+                    term_cursor_mode(term, 0);
+                }
                 break;
             case 2004: /* Bracketed paste */
                 term_escape_dump(term);
@@ -1208,14 +1220,14 @@ static void term_escape_csi(nss_term_t *term) {
             break;
         case 's': /* DECSLRM/(SCOSC) */ /* ? Save DEC privite mode */
             if (!term->esc.private) {
-                term_cursor_mode(term, 0);
+                term_cursor_mode(term, 1);
             } else term_escape_dump(term);
             break;
         case 't': /* Window operations, xterm */ /* > Title mode, xterm */
             term_escape_dump(term);
             break;
         case 'u': /* (SCORC) */
-            term_cursor_mode(term, 1);
+            term_cursor_mode(term, 0);
             break;
         case 'x': /* DECREQTPARAM */
             term_escape_dump(term);
@@ -1458,7 +1470,7 @@ static void term_escape_esc(nss_term_t *term) {
             term_cursor_mode(term, 1);
             break;
         case '8': /* DECRC */
-            term_cursor_mode(term, 1);
+            term_cursor_mode(term, 0);
             break;
         case '9': /* DECFI */
             term_escape_dump(term);
