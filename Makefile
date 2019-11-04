@@ -1,5 +1,5 @@
 
-CFLAGS= -Os -Wall -Wextra -Wno-unused-parameter -std=c99
+CFLAGS= -Os -Wall -Wextra -Wno-unused-parameter -Wno-implicit-fallthrough -Wno-empty-body -Wno-missing-field-initializers -std=c11
 PROG=nss
 
 IN=window.c nss.c util.c font.c term.c attr.c
