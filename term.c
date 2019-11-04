@@ -95,7 +95,7 @@ struct nss_term {
     int16_t bottom;
     uint8_t *tabs;
 
-    struct timespec draw_time;
+    struct timespec lastscroll;
 
     enum nss_term_mode {
         nss_tm_echo = 1 << 0,
@@ -412,7 +412,7 @@ static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t a
         amount = MIN(amount, (bottom - top + 1));
         size_t rest = (bottom - top + 1) - amount;
 
-        if (save && !(term->mode & nss_tm_altscreen)) {
+        if (save && !(term->mode & nss_tm_altscreen) && term->top == top) {
             for (size_t i = 0; i < (size_t)amount; i++) {
                 term_append_history(term, term->screen[top + i]);
                 term->screen[top + i] = create_line(term->width);
@@ -441,8 +441,13 @@ static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t a
             nss_window_shift(term->win, top, top - amount, bottom + 1 - top + amount);
             for (size_t i = 0; i < (size_t)-amount; i++) term->screen[top + i]->mode |= nss_lm_dirty;
         }
+        clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
     } else  term->mode |= nss_tm_force_redraw;
     term->view = NULL;
+}
+
+struct timespec *nss_term_last_scroll_time(nss_term_t *term) {
+    return &term->lastscroll;
 }
 
 static void term_set_tb_margins(nss_term_t *term, int16_t top, int16_t bottom) {
@@ -524,11 +529,12 @@ static void term_tabs(nss_term_t *term, int16_t n) {
 static void term_reset(nss_term_t *term, _Bool hard) {
 
     term->c = (nss_cursor_t) {
-        .cel = NSS_MKCELL(NSS_DEFAULT_FG, NSS_DEFAULT_FG, 0, ' '),
+        .cel = NSS_MKCELL(NSS_DEFAULT_BG, NSS_DEFAULT_FG, 0, ' '),
         .gl = 0, .gl_ss = 0, .gr = 2,
         .gn = {nss_cs_dec_ascii, nss_cs_dec_sup, nss_cs_dec_sup, nss_cs_dec_sup}
     };
-    term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_utf8;
+    // TODO Altscreen is wrong disable it for now
+    term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_utf8 | nss_tm_disable_altscreen;
     term->top = 0;
     term->bottom = term->height - 1;
     memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
@@ -1053,10 +1059,10 @@ static void term_escape_csi(nss_term_t *term) {
             term_move_to(term, term->c.x, term->c.y + PARAM(0, 1));
             break;
         case 'C': /* CUF */
-            term_move_to(term, term->c.x + PARAM(0, 1), term->c.y);
+            term_move_to(term, MIN(term->c.x, term->width - 1) + PARAM(0, 1), term->c.y);
             break;
         case 'D': /* CUB */
-            term_move_to(term, term->c.x - PARAM(0, 1), term->c.y);
+            term_move_to(term, MIN(term->c.x, term->width - 1) - PARAM(0, 1), term->c.y);
             break;
         case 'E': /* CNL */
             term_move_to(term, 0, term->c.y + PARAM(0, 1));
@@ -1155,7 +1161,7 @@ static void term_escape_csi(nss_term_t *term) {
             term_tabs(term, -PARAM(0, 1));
             break;
         case 'a': /* HPR */
-            term_move_to(term, term->c.x + PARAM(0, 1), term->c.y + PARAM(1, 0));
+            term_move_to(term, MIN(term->c.x, term->width - 1) + PARAM(0, 1), term->c.y + PARAM(1, 0));
             break;
         case 'b': /* REP */
             term_escape_dump(term);
@@ -1604,7 +1610,7 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
         else /* term_bell() -- TODO */;
         break;
     case 0x08: /* BS */
-        term_move_to(term, term->c.x - 1, term->c.y);
+        term_move_to(term, MIN(term->c.x, term->width - 1) - 1, term->c.y);
         return;
     case 0x09: /* HT */
         term_tabs(term, 1);
@@ -1893,7 +1899,7 @@ ssize_t nss_term_read(nss_term_t *term) {
     if (term->fd == -1) return -1;
 
     if (term->mode & nss_tm_scoll_on_output && term->view) {
-        if (term->view) term->mode |= nss_tm_force_redraw;
+        term->mode |= nss_tm_force_redraw;
         term->view = NULL;
     }
 
@@ -1949,8 +1955,8 @@ static void tty_write_raw(nss_term_t *term, const uint8_t *buf, size_t len) {
 void nss_term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool do_echo) {
     if (term->fd == -1) return;
 
-    if (!(term->mode | nss_tm_dont_scroll_on_input)) {
-        if (term->view) term->mode |= nss_tm_force_redraw;
+    if (!(term->mode | nss_tm_dont_scroll_on_input) && term->view && do_echo) {
+        term->mode |= nss_tm_force_redraw;
         term->view = NULL;
     }
 
@@ -2093,10 +2099,9 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
 nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
     nss_term_t *term = calloc(1, sizeof(nss_term_t));
-
     term->win = win;
     term->scrollback_limit = -1;
-    clock_gettime(CLOCK_MONOTONIC, &term->draw_time);
+    clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
 
     term_resize(term, width, height);
     term_reset(term, 0);
@@ -2170,7 +2175,7 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
 }
 
 void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
-    //info("Resize: w=%"PRId16" h=%"PRId16, width, height);
+    info("Resize: w=%"PRId16" h=%"PRId16, width, height);
 
     term_resize(term, width, height);
 

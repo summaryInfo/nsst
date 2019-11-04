@@ -1467,7 +1467,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     size_t sz = xkb_state_key_get_utf8(con.xkb_state, keycode, NULL, 0);
     if (sz && sz < sizeof(buf)) xkb_state_key_get_utf8(con.xkb_state, keycode, (char *)buf, sizeof(buf));
 
-    // TODO
+    // TODO Make table for this too
     //
     // 1. Key bindings
     uint32_t arg;
@@ -1539,6 +1539,16 @@ void nss_context_run(void) {
     for (;;) {
         if (poll(con.pfds, con.pfdcap, POLL_TIMEOUT) < 0 && errno != EINTR)
             warn("Poll error: %s", strerror(errno));
+        for (size_t i = 1; i < con.pfdcap; i++) {
+            if (con.pfds[i].fd > 0) {
+                nss_window_t *win = window_for_term_fd(con.pfds[i].fd);
+                if (con.pfds[i].revents & POLLIN & win->got_configure) {
+                    nss_term_read(win->term);
+                } else if (con.pfds[i].revents & (POLLERR | POLLNVAL | POLLHUP)) {
+                    nss_free_window(win);
+                }
+            }
+        }
         if (con.pfds[0].revents & POLLIN) {
             xcb_generic_event_t *event;
             while ((event = xcb_poll_for_event(con.con))) {
@@ -1661,16 +1671,6 @@ void nss_context_run(void) {
                 free(event);
             }
         }
-        for (size_t i = 1; i < con.pfdcap; i++) {
-            if (con.pfds[i].fd > 0) {
-                nss_window_t *win = window_for_term_fd(con.pfds[i].fd);
-                if (con.pfds[i].revents & POLLIN & win->got_configure) {
-                    nss_term_read(win->term);
-                } else if (con.pfds[i].revents & (POLLERR | POLLNVAL | POLLHUP)) {
-                    nss_free_window(win);
-                }
-            }
-        }
         struct timespec cur;
         clock_gettime(CLOCK_MONOTONIC, &cur);
         for (nss_window_t *win = con.first; win; win = win->next) {
@@ -1678,15 +1678,19 @@ void nss_context_run(void) {
                     (cur.tv_nsec - win->prev_blink.tv_nsec)) / 1000;
             long long ms_diff2 = ((cur.tv_sec - win->prev_draw.tv_sec) * 1000000000 +
                     (cur.tv_nsec - win->prev_draw.tv_nsec)) / 1000;
+            struct timespec *lastscroll = nss_term_last_scroll_time(win->term);
+            long long ms_diff3 = ((cur.tv_sec - lastscroll->tv_sec) * 1000000000 +
+                    (cur.tv_nsec - lastscroll->tv_nsec)) / 1000;
             if (ms_diff1 > win->blink_time && win->active) {
                 win->blink_state = !win->blink_state;
                 win->prev_blink = cur;
             }
-            if (ms_diff2 > 1000000/NSS_TERM_FPS) {
+            if (ms_diff2 > 1000000/NSS_TERM_FPS && ms_diff3 > NSS_TERM_SCROLL_DELAY) {
                 win->prev_draw = cur;
                 nss_term_redraw_dirty(win->term, 1);
             }
         }
+        // TODO Adjust timeouts like in st
         xcb_flush(con.con);
 
         if (!con.daemon_mode && !con.first) break;
