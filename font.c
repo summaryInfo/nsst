@@ -331,10 +331,14 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
         putc('\n', stderr);
     }
     */
-	if (ch < LOADED_MAP_SIZE * 32)
-        font->loaded_map[ch / 32] |= 1 << (ch % 32);
+    nss_font_glyph_mark_loaded(font, ch);
 
     return glyph;
+}
+
+_Bool nss_font_glyph_mark_loaded(nss_font_t *font, uint32_t ch) {
+	if (ch < LOADED_MAP_SIZE * 32)
+        font->loaded_map[ch / 32] |= 1 << (ch % 32);
 }
 
 _Bool nss_font_glyph_is_loaded(nss_font_t *font, uint32_t ch) {

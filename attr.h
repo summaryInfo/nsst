@@ -41,10 +41,9 @@ typedef enum nss_attrs {
 #define NSS_CELL_ATTRSET(s, l) ((s).ch |= (l) << NSS_CELL_CHAR_BITS)
 #define NSS_CELL_ATTRCLR(s, l) ((s).ch &= ~((l) << NSS_CELL_CHAR_BITS))
 #define NSS_CELL_ATTR_INVERT(s, l) ((s).ch ^= (l) << NSS_CELL_CHAR_BITS)
-#define NSS_CELL_GLYPH(s) ((s).ch & NSS_GLYPH_MASK)
+#define NSS_MKCELLWITH(s, c) NSS_MKCELL((s).fg, (s).bg, NSS_CELL_ATTRS(s), c)
 #define NSS_MKCELL(f, b, l, c) ((nss_cell_t) { .bg = (b), .fg = (f), .ch = ((c) & NSS_CELL_CHAR_MASK) | ((l) << NSS_CELL_CHAR_BITS)})
 #define NSS_EQCELL(s, z) ((s).fg == (z).fg && (s).bg == (z).bg && NSS_CELL_ATTRS(s) == NSS_CELL_ATTRS(z))
-#define NSS_MKCELLWITH(s, c) NSS_MKCELL((s).fg, (s).bg, NSS_CELL_ATTRS(s), c)
 
 typedef struct nss_cell {
         uint32_t ch; /* not really char but char + attributes */

@@ -39,7 +39,7 @@ typedef struct nss_line {
 } nss_line_t;
 
 #define TTY_MAX_WRITE 256
-#define NSS_FD_BUF_SZ 1024
+#define NSS_FD_BUF_SZ 256
 #define INIT_TAB_SIZE 8
 
 #define IS_C1(c) ((c) < 0xa0 && (c) >= 0x80)
@@ -117,10 +117,6 @@ struct nss_term {
         nss_tm_scoll_on_output = 1 << 18,
         nss_tm_dont_scroll_on_input = 1 << 19,
         nss_tm_use_protected_area_semantics = 1 << 12
-        //          -- DECSCA -- only selective erases and ECH affected
-        //          -- SPA/EPA -- all erases affected
-
-        // TODO IND can work outside scrolling region
     } mode;
 
 #define ESC_MAX_PARAM 16
@@ -257,6 +253,7 @@ static nss_line_t *create_line(size_t width) {
         line->width = width;
         line->mode = nss_lm_dirty;
         line->next = line->prev = NULL;
+        line->wrap_at = 0;
     } else warn("Can't allocate line");
     return line;
 }
@@ -529,7 +526,7 @@ static void term_tabs(nss_term_t *term, int16_t n) {
 static void term_reset(nss_term_t *term, _Bool hard) {
 
     term->c = (nss_cursor_t) {
-        .cel = NSS_MKCELL(NSS_DEFAULT_BG, NSS_DEFAULT_FG, 0, ' '),
+        .cel = NSS_MKCELL(NSS_DEFAULT_FG, NSS_DEFAULT_BG, 0, ' '),
         .gl = 0, .gl_ss = 0, .gr = 2,
         .gn = {nss_cs_dec_ascii, nss_cs_dec_sup, nss_cs_dec_sup, nss_cs_dec_sup}
     };
@@ -668,22 +665,22 @@ static void term_escape_da(nss_term_t *term, uint8_t mode) {
          * ?62;... - VT220
          * ?63;... - VT320
          * ?64;... - VT420
-         * 	where ... is
-         *		 1 - 132-columns
-         *		 2 - Printer
-         *		 3 - ReGIS graphics
-         *		 4 - Sixel graphics
-         *		 6 - Selective erase
-         *		 8 - User-defined keys
-         *		 9 - National Replacement Character sets
-         *		 15 - Technical characters
-         *		 16 - Locator port
-         *		 17 - Terminal state interrogation
-         *		 18 - User windows
-         *		 21 - Horizontal scrolling
-         *		 22 - ANSI color
-         *		 28 - Rectangular editing
-         *		 29 - ANSI text locator (i.e., DEC Locator mode).
+         *  where ... is
+         *       1 - 132-columns
+         *       2 - Printer
+         *       3 - ReGIS graphics
+         *       4 - Sixel graphics
+         *       6 - Selective erase
+         *       8 - User-defined keys
+         *       9 - National Replacement Character sets
+         *       15 - Technical characters
+         *       16 - Locator port
+         *       17 - Terminal state interrogation
+         *       18 - User windows
+         *       21 - Horizontal scrolling
+         *       22 - ANSI color
+         *       28 - Rectangular editing
+         *       29 - ANSI text locator (i.e., DEC Locator mode).
          */
          term_answerback(term, "\x9B?62;1;2;6;9;22c");
     }
@@ -1210,7 +1207,9 @@ static void term_escape_csi(nss_term_t *term) {
             } else term_escape_dump(term);
             break;
         case 's': /* DECSLRM/(SCOSC) */ /* ? Save DEC privite mode */
-            term_escape_dump(term);
+            if (!term->esc.private) {
+                term_cursor_mode(term, 0);
+            } else term_escape_dump(term);
             break;
         case 't': /* Window operations, xterm */ /* > Title mode, xterm */
             term_escape_dump(term);
@@ -1426,6 +1425,9 @@ static void term_escape_esc(nss_term_t *term) {
         case 'E': /* NEL */
             term_index(term, 1);
             break;
+        case 'F': /* HP Home Down */
+            term_move_to(term, 0, term->height - 1);
+            break;
         case 'H': /* HTS */
             term->tabs[MIN(term->c.x, term->width - 1)] = 1;
             break;
@@ -1472,6 +1474,12 @@ static void term_escape_esc(nss_term_t *term) {
         case 'c': /* RIS */
             term_reset(term, 1);
             break;
+        case 'l': /* HP Memory lock */
+            term_set_tb_margins(term, term->c.y, term->height - 1);
+            break;
+        case 'm': /* HP Memory unlock */
+            term_set_tb_margins(term, 0, term->height - 1);
+            break;
         case 'n': /* LS2 */
             term->c.gl = term->c.gl_ss = 2;
             break;
@@ -1505,7 +1513,15 @@ static void term_escape_esc(nss_term_t *term) {
                 nss_window_set(term->win, nss_wc_8bit, &arg);
                 term->mode |= nss_tm_8bit;
                 break;
-            case 'L': case 'M': case 'N':
+            case 'L': /* ANSI_LEVEL_1 */
+            case 'M': /* ANSI_LEVEL_2 */
+                term->c.gn[1] = nss_cs_dec_sup;
+                term->c.gr = 1;
+                /* fallthrough */
+            case 'N': /* ANSI_LEVEL_3 */
+                term->c.gn[0] = nss_cs_dec_ascii;
+                term->c.gl = term->c.gl_ss = 0;
+                break;
             default:
                 term_escape_dump(term);
             }
@@ -1752,9 +1768,10 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
     //info("UTF %"PRIx32" '%s'", ch, buf);
 
     if (term->esc.state & nss_es_string && !IS_STREND(ch)) {
+        if (term->esc.state & nss_es_ignore) return;
         if (term->esc.state & nss_es_dcs && ch == 0x7f) return;
         if (term->esc.state & nss_es_osc && IS_C0(ch) && ch != 0x7f) return;
-        if (term->esc.state & nss_es_ignore) return;
+        // TODO Handle some DCSs right here
         /* It might be useful to stop string mode here V */
         if (term->esc.str_idx + char_len > ESC_MAX_STR) return;
         memcpy(term->esc.str, buf, char_len + 1);
