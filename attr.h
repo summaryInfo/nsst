@@ -3,13 +3,14 @@
 
 #include <stdint.h>
 
-typedef uint32_t nss_cid_t;
-typedef uint16_t nss_short_cid_t;
+typedef uint16_t nss_cid_t;
 typedef uint32_t nss_color_t;
+typedef nss_color_t* nss_palette_t;
 
-#define NSS_CID_NONE UINT32_MAX
+#define NSS_CID_NONE UINT16_MAX
 #define NSS_CID_DEFAULT 0
-#define NSS_N_BASE_COLORS (256)
+#define NSS_DEFAULT_PALETTE NULL
+#define NSS_PALETTE_SIZE (256)
 #define NSS_DEFAULT_FG 7
 #define NSS_DEFAULT_BG 0
 #define NSS_DEFAULT_CURSOR_FG 7
@@ -47,17 +48,19 @@ typedef enum nss_attrs {
 
 typedef struct nss_cell {
         uint32_t ch; /* not really char but char + attributes */
-        nss_short_cid_t fg;
-        nss_short_cid_t bg;
+        nss_cid_t fg;
+        nss_cid_t bg;
 } nss_cell_t;
 
 void nss_init_color(void);
-nss_cid_t nss_color_alloc(nss_color_t col);
-nss_cid_t nss_color_find(nss_color_t col);
-void nss_color_ref(nss_cid_t idx);
-nss_color_t nss_color_get(nss_cid_t col);
-void nss_color_set(nss_cid_t idx, nss_color_t col);
-void nss_color_free(nss_cid_t i);
+nss_palette_t nss_create_palette(void);
+nss_cid_t nss_color_alloc(nss_palette_t pal, nss_color_t col);
+nss_cid_t nss_color_find(nss_palette_t pal, nss_color_t col);
+void nss_color_ref(nss_palette_t pal, nss_cid_t idx);
+nss_color_t nss_color_get(nss_palette_t pal, nss_cid_t col);
+void nss_color_set(nss_palette_t pal, nss_cid_t idx, nss_color_t col);
+void nss_color_free(nss_palette_t pal, nss_cid_t i);
+void nss_free_palette(nss_palette_t pal);
 void nss_free_color(void);
 
 #endif
