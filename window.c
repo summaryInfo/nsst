@@ -777,6 +777,7 @@ void nss_init_context(void) {
 }
 
 void nss_window_set_title(nss_window_t *win, const char *title) {
+    if (!title) title = "Not So Simple Terminal";
     xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_NAME, con.atom_utf8_string, 8, strlen(title), title);
     xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, con.atom_net_wm_name, con.atom_utf8_string, 8, strlen(title), title);
 }
@@ -980,14 +981,14 @@ nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_t
         nss_free_window(win);
         return NULL;
     }
-    win->bg_cid = NSS_DEFAULT_BG;
-    win->fg_cid = NSS_DEFAULT_FG;
-    win->cursor_bg_cid = NSS_DEFAULT_CURSOR_BG;
-    win->cursor_fg_cid = NSS_DEFAULT_CURSOR_FG;
-    nss_color_ref(win->pal, NSS_DEFAULT_FG);
-    nss_color_ref(win->pal, NSS_DEFAULT_BG);
-    nss_color_ref(win->pal, NSS_DEFAULT_CURSOR_FG);
-    nss_color_ref(win->pal, NSS_DEFAULT_CURSOR_BG);
+    win->bg_cid = NSS_SPECIAL_BG;
+    win->fg_cid = NSS_SPECIAL_FG;
+    win->cursor_bg_cid = NSS_SPECIAL_CURSOR_BG;
+    win->cursor_fg_cid = NSS_SPECIAL_CURSOR_FG;
+    nss_color_ref(win->pal, NSS_SPECIAL_FG);
+    nss_color_ref(win->pal, NSS_SPECIAL_BG);
+    nss_color_ref(win->pal, NSS_SPECIAL_CURSOR_FG);
+    nss_color_ref(win->pal, NSS_SPECIAL_CURSOR_BG);
     win->cursor_type = nss_cursor_bar;
     win->active = 1;
     win->numlock = 1;
@@ -1207,11 +1208,11 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
     for (size_t i = 0; i < len; i++) {
         uint32_t ch = NSS_CELL_CHAR(cells[i]);
         if (!nss_font_glyph_is_loaded(win->font, ch)) {
-            for (size_t i = 0; i < nss_font_attrib_max; i++) {
-                nss_glyph_t *glyph = nss_font_render_glyph(win->font, ch, i, win->lcd_mode);
+            for (size_t j = 0; j < nss_font_attrib_max; j++) {
+                nss_glyph_t *glyph = nss_font_render_glyph(win->font, ch, j, win->lcd_mode);
                 //In case of non-monospace fonts
                 glyph->x_off = win->char_width;
-                register_glyph(win, ch | (i << NSS_CELL_CHAR_BITS) , glyph);
+                register_glyph(win, ch | (j << 24) , glyph);
                 free(glyph);
             }
         }

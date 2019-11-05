@@ -53,6 +53,10 @@ void nss_init_color(void) {
         uint8_t val = MIN(0x08 + 0x0a * i, 0xff);
         stor.def_palette[CN_BASE + CN_EXT + i] = 0xff000000 + val * 0x10101;
     }
+    stor.def_palette[NSS_SPECIAL_BG] = base[0];
+    stor.def_palette[NSS_SPECIAL_FG] = base[7];
+    stor.def_palette[NSS_SPECIAL_CURSOR_BG] = base[0];
+    stor.def_palette[NSS_SPECIAL_CURSOR_FG] = base[7];
 }
 
 nss_palette_t nss_create_palette(void) {

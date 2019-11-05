@@ -243,7 +243,7 @@ nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi) {
         return NULL;
     }
 
-	font->refs = 1;
+    font->refs = 1;
     font->pixel_size = 0;
     font->dpi = dpi;
     font->size = size;
@@ -260,8 +260,8 @@ nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi) {
 }
 
 nss_font_t *nss_font_reference(nss_font_t *font) {
-	font->refs++;
-	return font;
+    font->refs++;
+    return font;
 }
 
 nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t attr, _Bool lcd) {
@@ -337,7 +337,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
 }
 
 void nss_font_glyph_mark_loaded(nss_font_t *font, uint32_t ch) {
-	if (ch < LOADED_MAP_SIZE * 32)
+    if (ch < LOADED_MAP_SIZE * 32)
         font->loaded_map[ch / 32] |= 1 << (ch % 32);
 }
 

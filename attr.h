@@ -10,11 +10,12 @@ typedef nss_color_t* nss_palette_t;
 #define NSS_CID_NONE UINT16_MAX
 #define NSS_CID_DEFAULT 0
 #define NSS_DEFAULT_PALETTE NULL
-#define NSS_PALETTE_SIZE (256)
-#define NSS_DEFAULT_FG 7
-#define NSS_DEFAULT_BG 0
-#define NSS_DEFAULT_CURSOR_FG 7
-#define NSS_DEFAULT_CURSOR_BG 0
+#define NSS_SPECIAL_COLORS 4
+#define NSS_PALETTE_SIZE (256 + NSS_SPECIAL_COLORS)
+#define NSS_SPECIAL_BG 256
+#define NSS_SPECIAL_FG 257
+#define NSS_SPECIAL_CURSOR_BG 258
+#define NSS_SPECIAL_CURSOR_FG 259
 
 typedef enum nss_attrs {
     nss_attrib_italic = 1 << 0,

@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -269,7 +270,7 @@ static void term_free_line(nss_term_t *term, nss_line_t *line) {
         nss_color_free(term->pal, line->cell[i].fg);
         nss_color_free(term->pal, line->cell[i].bg);
     }
-	free(line);
+    free(line);
 }
 
 void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
@@ -435,7 +436,7 @@ static void term_move_to_abs(nss_term_t *term, int16_t x, int16_t y) {
 }
 
 static void term_cursor_mode(nss_term_t *term, _Bool mode) {
-    if (mode) /* save */ { 
+    if (mode) /* save */ {
         nss_color_free(term->pal, term->cs.cel.fg);
         nss_color_free(term->pal, term->cs.cel.bg);
         term->cs = term->c;
@@ -585,13 +586,12 @@ static void term_tabs(nss_term_t *term, int16_t n) {
 }
 
 static void term_reset(nss_term_t *term, _Bool hard) {
-
-	nss_color_ref(term->pal, NSS_DEFAULT_FG);
-	nss_color_ref(term->pal, NSS_DEFAULT_BG);
-	nss_color_free(term->pal, term->c.cel.fg);
-	nss_color_free(term->pal, term->c.cel.bg);
+    nss_color_ref(term->pal, NSS_SPECIAL_FG);
+    nss_color_ref(term->pal, NSS_SPECIAL_BG);
+    nss_color_free(term->pal, term->c.cel.fg);
+    nss_color_free(term->pal, term->c.cel.bg);
     term->c = (nss_cursor_t) {
-        .cel = NSS_MKCELL(NSS_DEFAULT_FG, NSS_DEFAULT_BG, 0, ' '),
+        .cel = NSS_MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, ' '),
         .gl = 0, .gl_ss = 0, .gr = 2,
         .gn = {nss_cs_dec_ascii, nss_cs_dec_sup, nss_cs_dec_sup, nss_cs_dec_sup}
     };
@@ -612,6 +612,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     uint32_t args[] = { 0, 0, 1, 0, 0 };
     nss_window_set(term->win, nss_wc_appkey | nss_wc_appcursor |
                    nss_wc_numlock | nss_wc_keylock | nss_wc_8bit, args);
+    nss_window_set_title(term->win, NULL);
 }
 
 #define GRAPH0_BASE 0x41
@@ -760,31 +761,35 @@ static void term_escape_dump(nss_term_t *term) {
     char buf[ESC_DUMP_MAX] = "^[";
     size_t pos = 2;
     int w = 0;
-    if (term->esc.state & (nss_es_csi | nss_es_dcs)) {
+    if (term->esc.state & (nss_es_csi | nss_es_dcs | nss_es_osc)) {
         if (term->esc.state & nss_es_csi) buf[pos++] = '[';
         else if (term->esc.state & nss_es_dcs) buf[pos++] = 'P';
+        else if (term->esc.state & nss_es_osc) buf[pos++] = ']';
         if (term->esc.private)
             buf[pos++] = term->esc.private;
-        for (size_t i = 0; i <= term->esc.param_idx; i++) {
+        for (size_t i = 0; i <= term->esc.param_idx - (!!(term->esc.state & nss_es_osc)); i++) {
             snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRIu32"%n", term->esc.param[i], &w);
             pos += w;
             if (i < term->esc.param_idx) buf[pos++] = ';';
         }
-    } else if (term->esc.state & nss_es_osc)
-        buf[pos++] = ']';
+    }
     for (size_t i = 0; i < term->esc.interm_idx; i++)
         buf[pos++] = term->esc.interm[i];
-    buf[pos++] = term->esc.final;
-    if (term->esc.state & nss_es_string) {
-        strncpy(buf + pos, (const char *)term->esc.str, term->esc.str_idx);
+    if (!(term->esc.state & nss_es_osc))
+        buf[pos++] = term->esc.final;
+    if (term->esc.state & (nss_es_string | nss_es_defer)) {
+        memcpy(buf + pos, term->esc.str, term->esc.str_idx);
         pos += term->esc.str_idx;
+        buf[pos++] = '^';
+        buf[pos++] = '[';
+        buf[pos++] = '\\';
     }
-    buf[pos] = '\0';
+    buf[pos] = 0;
     warn("%s", buf);
 }
 
 static nss_cid_t term_define_color(nss_term_t *term, uint32_t *args, size_t *len) {
-    nss_cid_t cid = NSS_DEFAULT_BG;
+    nss_cid_t cid = NSS_SPECIAL_BG;
     if (*len) switch(args[0]) {
     case 2: {
         if (*len > 3) {
@@ -839,8 +844,131 @@ static void term_escape_dsr(nss_term_t *term) {
 static void term_escape_dcs(nss_term_t *term) {
     warn("DCS"); /* yet nothing here */
 }
+
+static nss_color_t term_color_parse(nss_term_t *term) {
+    size_t n = term->esc.str_idx;
+    uint64_t val = 0;
+    if (term->esc.str[0] != '#') return 0;
+    for (size_t i = 1; i < n; i++) {
+        if (term->esc.str[i] - '0' < 10)
+            val = (val << 4) + term->esc.str[i] - '0';
+        else if (term->esc.str[i] - 'A' < 6)
+            val = (val << 4) + 10 + term->esc.str[i] - 'A';
+        else if (term->esc.str[i] - 'a' < 6)
+            val = (val << 4) + 10 + term->esc.str[i] - 'a';
+        else return 0;
+    }
+    nss_color_t col = 0xFF;
+    switch (n) {
+    case 4:
+        for (size_t i = 0; i < 3; i++) {
+            col = (col << 8) | ((val & 0xF) << 4);
+            val >>= 4;
+        }
+        break;
+    case 7:
+        col = val | 0xFF000000;
+        break;
+    case 10:
+        for (size_t i = 0; i < 3; i++) {
+            col = (col << 8) | (val & 0xFF);
+            val >>= 12;
+        }
+    case 13:
+        for (size_t i = 0; i < 3; i++) {
+            col = (col << 8) | (val & 0xFF);
+            val >>= 16;
+        }
+    }
+    return col;
+}
+
 static void term_escape_osc(nss_term_t *term) {
-    warn("OSC"); /* yet nothing here */
+    nss_color_t col = term_color_parse(term);
+    switch(term->esc.param[0]) {
+        uint32_t args[2];
+    case 0: /* Change window icon name and title */
+    case 1: /* Change window icon name */
+    case 2: /* Change window title */
+        nss_window_set_title(term->win, (char *)term->esc.str);
+        break;
+    case 4: /* Set color */
+        if(col && term->esc.param_idx > 1 && term->esc.param[1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
+            nss_color_set(term->pal, term->esc.param[1], col);
+        } else term_escape_dump(term);
+        break;
+    case 5: /* Set special color */
+    case 6: /* Enable/disable special color */
+        term_escape_dump(term);
+        break;
+    case 10: /* Set VT100 foreground color */
+        if (col) {
+            args[0] = NSS_SPECIAL_FG;
+            nss_color_set(term->pal, NSS_SPECIAL_FG, col);
+            nss_window_set(term->win, nss_wc_foreground, args);
+        } else term_escape_dump(term);
+        break;
+    case 11: /* Set VT100 background color */
+        if (col) {
+            args[0] = NSS_SPECIAL_BG;
+            args[1] = NSS_SPECIAL_CURSOR_BG;
+            nss_color_t def = nss_color_get(term->pal, NSS_SPECIAL_BG);
+            col = (col & 0x00FFFFFF) | (0xFF000000 & def); // Keep alpha
+            nss_color_set(term->pal, NSS_SPECIAL_BG, col);
+            nss_color_set(term->pal, NSS_SPECIAL_CURSOR_BG, col);
+            nss_window_set(term->win, nss_wc_background | nss_wc_cursor_background, args);
+        } else term_escape_dump(term);
+        break;
+    case 12: /* Set Cursor color */
+        if (col) {
+            args[0] = term_color_parse(term);
+            nss_color_set(term->pal, NSS_SPECIAL_CURSOR_FG, args[0]);
+            nss_window_set(term->win, nss_wc_background, args);
+        } else term_escape_dump(term);
+        break;
+    case 13: /* Set Mouse foreground color */
+    case 14: /* Set Mouse background color */
+    case 17: /* Set Highlight background color */
+    case 19: /* Set Highlight foreground color */
+    case 50: /* Set Font */
+    case 52: /* Manipulate selecion data */
+        term_escape_dump(term);
+        break;
+    case 104: /* Reset color */
+        if(term->esc.param_idx > 1 && term->esc.param[1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS)
+            nss_color_set(term->pal, term->esc.param[1], nss_color_get(NSS_DEFAULT_PALETTE, term->esc.param[1]));
+        else term_escape_dump(term);
+        break;
+    case 105: /* Reset special color */
+    case 106: /* Enable/disable special color */
+        term_escape_dump(term);
+        break;
+    case 110: /*Reset  VT100 foreground color */
+        args[0] = NSS_SPECIAL_FG;
+        nss_color_set(term->pal, NSS_SPECIAL_FG, nss_color_get(NSS_DEFAULT_PALETTE, NSS_SPECIAL_FG));
+        nss_window_set(term->win, nss_wc_background, args);
+        break;
+    case 111: /*Reset  VT100 background color */
+        args[0] = NSS_SPECIAL_BG;
+        args[1] = NSS_SPECIAL_CURSOR_BG;
+        nss_color_set(term->pal, NSS_SPECIAL_BG, nss_color_get(NSS_DEFAULT_PALETTE, NSS_SPECIAL_BG));
+        nss_color_set(term->pal, NSS_SPECIAL_CURSOR_BG, nss_color_get(NSS_DEFAULT_PALETTE, NSS_SPECIAL_CURSOR_BG));
+        nss_window_set(term->win, nss_wc_background | nss_wc_cursor_background, args);
+        break;
+    case 112: /*Reset  Cursor color */
+        args[0] = NSS_SPECIAL_CURSOR_BG;
+        nss_color_set(term->pal, NSS_SPECIAL_CURSOR_FG, nss_color_get(NSS_DEFAULT_PALETTE, NSS_SPECIAL_CURSOR_FG));
+        nss_window_set(term->win, nss_wc_cursor_foreground, args);
+        break;
+    case 113: /*Reset  Mouse foreground color */
+    case 114: /*Reset  Mouse background color */
+    case 117: /*Reset  Highlight background color */
+    case 119: /*Reset  Highlight foreground color */
+        term_escape_dump(term);
+        break;
+    default:
+        term_escape_dump(term);
+    }
 }
 
 static void term_escape_sgr(nss_term_t *term) {
@@ -856,8 +984,12 @@ static void term_escape_sgr(nss_term_t *term) {
             CLR(nss_attrib_blink | nss_attrib_bold | nss_attrib_faint |
                     nss_attrib_inverse | nss_attrib_invisible | nss_attrib_italic |
                     nss_attrib_underlined | nss_attrib_strikethrough);
-            term->c.cel.bg = NSS_DEFAULT_BG;
-            term->c.cel.fg = NSS_DEFAULT_FG;
+            nss_color_ref(term->pal, NSS_SPECIAL_BG);
+            nss_color_ref(term->pal, NSS_SPECIAL_FG);
+            nss_color_free(term->pal, term->c.cel.bg);
+            nss_color_free(term->pal, term->c.cel.fg);
+            term->c.cel.bg = NSS_SPECIAL_BG;
+            term->c.cel.fg = NSS_SPECIAL_FG;
             break;
         case 1:
             SET(nss_attrib_bold);
@@ -917,9 +1049,9 @@ static void term_escape_sgr(nss_term_t *term) {
             i += len - term->esc.param_idx + i;
             break;
         case 39:
-            nss_color_ref(term->pal, term->c.cel.fg);
-            nss_color_ref(term->pal, NSS_DEFAULT_BG);
-            term->c.cel.fg = NSS_DEFAULT_FG;
+            nss_color_ref(term->pal, NSS_SPECIAL_BG);
+            nss_color_free(term->pal, term->c.cel.fg);
+            term->c.cel.fg = NSS_SPECIAL_FG;
             break;
         case 48:
             len = term->esc.param_idx - i;
@@ -928,9 +1060,9 @@ static void term_escape_sgr(nss_term_t *term) {
             i += len - term->esc.param_idx + i;
             break;
         case 49:
+            nss_color_ref(term->pal, NSS_SPECIAL_BG);
             nss_color_free(term->pal, term->c.cel.bg);
-            nss_color_ref(term->pal, NSS_DEFAULT_BG);
-            term->c.cel.bg = NSS_DEFAULT_BG;
+            term->c.cel.bg = NSS_SPECIAL_BG;
             break;
         default:
             if (30 <= p && p <= 37) {
@@ -1546,6 +1678,9 @@ static void term_escape_esc(nss_term_t *term) {
         case 'Z': /* DECID */
             term_escape_da(term, 0);
             break;
+        case '\\': /* ST */
+            /* do nothing */
+            break;
         case '6': /* DECBI */
             term_escape_dump(term);
             break;
@@ -1701,7 +1836,7 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
     // DUMP
     //if (IS_C0(ch)) {
     //    if (ch != 0x1B) warn("^%c", ch ^ 0x40);
-    //} else warn("^[%c", ch ^ 0xc0);
+    //} else warn("^[%c", ch ^ 0xC0);
 
     switch (ch) {
     case 0x00: /* NUL (IGNORE) */
@@ -1864,12 +1999,32 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
 
     if (term->esc.state & nss_es_string && !IS_STREND(ch)) {
         if (term->esc.state & nss_es_ignore) return;
-        if (term->esc.state & nss_es_dcs && ch == 0x7f) return;
-        if (term->esc.state & nss_es_osc && IS_C0(ch) && ch != 0x7f) return;
-        // TODO Handle some DCSs right here
-        /* It might be useful to stop string mode here V */
+        if (term->esc.state & nss_es_dcs) {
+            if (ch == 0x7f) return;
+        } else if (term->esc.state & nss_es_osc) {
+            if (IS_C0(ch) && ch != 0x7f) return;
+            if (!(term->esc.state & nss_es_gotfirst)) {
+                if ('0' <= ch && ch <= '9') {
+                    term->esc.param[term->esc.param_idx] *= 10;
+                    term->esc.param[term->esc.param_idx] += ch - '0';
+                    return;
+                } else if (ch == ';') {
+                    term->esc.param[++term->esc.param_idx] = 0;
+                    return;
+                } else {
+                    term->esc.state |= nss_es_gotfirst;
+                    if (ch == 'I') {
+                        term->esc.param[term->esc.param_idx++] = 1;
+                        return;
+                    } else if (ch == 'l' || ch == 'L') {
+                        term->esc.param[term->esc.param_idx++] = 2;
+                        return;
+                    }
+                }
+            }
+        }
         if (term->esc.str_idx + char_len > ESC_MAX_STR) return;
-        memcpy(term->esc.str, buf, char_len + 1);
+        memcpy(term->esc.str + term->esc.str_idx, buf, char_len + 1);
         term->esc.str_idx += char_len;
         return;
     } else if (IS_C0(ch) || IS_C1(ch)) {
@@ -1937,9 +2092,9 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
                 else if (ch == 0x5d) /* OSC */
                     term->esc.state |= nss_es_osc | nss_es_string;
                 else if (ch == 'k') { /* old set title */
-                    term->esc.str[term->esc.str_idx++] = '0';
-                    term->esc.str[term->esc.str_idx++] = ';';
-                    term->esc.state |= nss_es_osc | nss_es_string;
+                    term->esc.param[0] = 2;
+                    term->esc.param_idx = 1;
+                    term->esc.state |= nss_es_osc | nss_es_string | nss_es_gotfirst;
                 } else if (0x30 <= ch && ch <= 0x7e) {
                     term->esc.final = ch;
                     if (!(term->esc.state & nss_es_ignore))
@@ -2185,7 +2340,7 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
     // Clear new regions
 
-	nss_line_t *view = term->view;
+    nss_line_t *view = term->view;
     for (size_t i = 0; i < 2; i++) {
         for (size_t i = 0; i < minh; i++)
             if (term->screen[i]->width < (size_t)width)
