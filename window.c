@@ -894,25 +894,29 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
             warn("Can't create glyph set");
 
         //Preload ASCII
+        nss_glyph_t *glyphs['~' - ' ' + 1][nss_font_attrib_max] = { NULL };
         int16_t total = 0, maxd = 0, maxh = 0;
         for (uint32_t i = ' '; i <= '~'; i++) {
-            nss_glyph_t *glyphs[nss_font_attrib_max];
-            for (size_t j = 0; j < nss_font_attrib_max; j++) {
-                glyphs[j] = nss_font_render_glyph(win->font, i, j, win->lcd_mode);
-                register_glyph(win, i | (j << 24), glyphs[j]);
-            }
-
-            total += glyphs[0]->x_off;
-            maxd = MAX(maxd, glyphs[0]->height - glyphs[0]->y);
-            maxh = MAX(maxh, glyphs[0]->y);
-
             for (size_t j = 0; j < nss_font_attrib_max; j++)
-                free(glyphs[j]);
+                glyphs[i - ' '][j] = nss_font_render_glyph(win->font, i, j, win->lcd_mode);
+
+            total += glyphs[i - ' '][0]->x_off;
+            maxd = MAX(maxd, glyphs[i - ' '][0]->height - glyphs[i - ' '][0]->y);
+            maxh = MAX(maxh, glyphs[i - ' '][0]->y);
         }
 
-        win->char_width = (total + '~' - ' ') / ('~' - ' ' + 1);
+        win->char_width = (total  - 1) / ('~' - ' ' + 1);
         win->char_height = maxh;
         win->char_depth = maxd;
+
+        for (uint32_t i = ' '; i <= '~'; i++) {
+            for (size_t j = 0; j < nss_font_attrib_max; j++) {
+                glyphs[i - ' '][j]->x_off = win->char_width;
+                register_glyph(win, i | (j << 24), glyphs[i - ' '][j]);
+                free(glyphs[i - ' '][j]);
+            }
+        }
+
     }
 
     win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
@@ -1205,6 +1209,9 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
     y = y * (win->char_height + win->char_depth) + win->char_height;
     if (!cells || !len) return;
 
+    xcb_rectangle_t clip = {0, y - win->char_height, win->char_width * win->cw, win->char_depth + win->char_height};
+    xcb_render_set_picture_clip_rectangles(con.con, win->pic, 0, 0, 1, &clip);
+
     for (size_t i = 0; i < len; i++) {
         uint32_t ch = NSS_CELL_CHAR(cells[i]);
         if (!nss_font_glyph_is_loaded(win->font, ch)) {
@@ -1274,7 +1281,7 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
             msg.dx = msg.dy = 0;
         }
 
-        xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_OVER, win->pic, bg, 1, &rect);
+        xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, bg, 1, &rect);
 
         if (attr & (nss_attrib_underlined|nss_attrib_strikethrough)) {
             size_t count = !!(attr & nss_attrib_underlined) + !!(attr & nss_attrib_strikethrough);
@@ -1292,6 +1299,9 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
         len -= blk_len;
         x += blk_len * win->char_width;
     }
+
+    clip = (xcb_rectangle_t) {0, 0, win->cw * win->char_width, win->ch * (win->char_height + win->char_depth)};
+    xcb_render_set_picture_clip_rectangles(con.con, win->pic, 0, 0, 1, &clip);
 
 }
 
@@ -1357,7 +1367,7 @@ void nss_window_clear(nss_window_t *win, size_t len, const nss_rect_t *damage) {
         rects[i] = rect_scale_up(damage[i], win->char_width, win->char_height + win->char_depth);
 
     xcb_render_color_t color = MAKE_COLOR(nss_color_get(win->pal, win->reverse_video ? win->fg_cid : win->bg_cid));
-    xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_OVER, win->pic, color, len, (xcb_rectangle_t*)rects);
+    xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, color, len, (xcb_rectangle_t*)rects);
     free(rects);
 }
 
@@ -1455,7 +1465,7 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
         uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
         xcb_render_create_picture(con.con, pic, pid, con.pfargb, mask3, values3);
 
-        xcb_render_composite(con.con, XCB_RENDER_PICT_OP_OVER, win->pic, 0, pic, 0, 0, 0, 0, 0, 0, common_w, common_h);
+        xcb_render_composite(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, 0, pic, 0, 0, 0, 0, 0, 0, common_w, common_h);
 
         SWAP(xcb_pixmap_t, win->pid, pid);
         SWAP(xcb_render_picture_t, win->pic, pic);
@@ -1574,16 +1584,6 @@ void nss_context_run(void) {
     for (;;) {
         if (poll(con.pfds, con.pfdcap, POLL_TIMEOUT) < 0 && errno != EINTR)
             warn("Poll error: %s", strerror(errno));
-        for (size_t i = 1; i < con.pfdcap; i++) {
-            if (con.pfds[i].fd > 0) {
-                nss_window_t *win = window_for_term_fd(con.pfds[i].fd);
-                if (con.pfds[i].revents & POLLIN & win->got_configure) {
-                    nss_term_read(win->term);
-                } else if (con.pfds[i].revents & (POLLERR | POLLNVAL | POLLHUP)) {
-                    nss_free_window(win);
-                }
-            }
-        }
         if (con.pfds[0].revents & POLLIN) {
             xcb_generic_event_t *event;
             while ((event = xcb_poll_for_event(con.con))) {
@@ -1704,6 +1704,16 @@ void nss_context_run(void) {
                     break;
                 }
                 free(event);
+            }
+        }
+        for (size_t i = 1; i < con.pfdcap; i++) {
+            if (con.pfds[i].fd > 0) {
+                nss_window_t *win = window_for_term_fd(con.pfds[i].fd);
+                if (con.pfds[i].revents & POLLIN & win->got_configure) {
+                    nss_term_read(win->term);
+                } else if (con.pfds[i].revents & (POLLERR | POLLNVAL | POLLHUP)) {
+                    nss_free_window(win);
+                }
             }
         }
         struct timespec cur;
