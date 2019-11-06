@@ -46,6 +46,7 @@ struct nss_window {
     xcb_pixmap_t pid;
     xcb_gcontext_t gc;
     xcb_render_picture_t pic;
+    xcb_event_mask_t ev_mask;
 
     _Bool focused;
     _Bool active;
@@ -57,8 +58,9 @@ struct nss_window {
     _Bool appcursor;
     _Bool numlock;
     _Bool keylock;
-    _Bool eight_bit;
+    _Bool has_meta;
     _Bool reverse_video;
+    _Bool mouse_events;
 
     int16_t width;
     int16_t height;
@@ -836,9 +838,10 @@ static void set_config(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *valu
     if (tag & nss_wc_appkey) win->appkey = *values++;
     if (tag & nss_wc_numlock) win->numlock = *values++;
     if (tag & nss_wc_keylock) win->keylock = *values++;
-    if (tag & nss_wc_8bit) win->eight_bit = *values++;
+    if (tag & nss_wc_has_meta) win->has_meta = *values++;
     if (tag & nss_wc_blink_time) win->blink_time = *values++;
     if (tag & nss_wc_reverse) win->reverse_video = *values++;
+    if (tag & nss_wc_mouse) win->mouse_events = *values++;
 }
 
 /* Reload font using win->font_size and win->font_name */
@@ -905,6 +908,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
             maxh = MAX(maxh, glyphs[i - ' '][0]->y);
         }
 
+		// TODO Make character width adjustment configurable
         win->char_width = (total  - 1) / ('~' - ' ' + 1);
         win->char_height = maxh;
         win->char_depth = maxd;
@@ -1013,11 +1017,14 @@ nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_t
 
     uint32_t mask1 =  XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
         XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
+    win->ev_mask = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_VISIBILITY_CHANGE |
+        XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_FOCUS_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY |
+        XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE;
+    if (win->mouse_events) win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
     uint32_t values1[5] = {
         nss_color_get(win->pal, win->reverse_video ? win->fg_cid : win->bg_cid),
         nss_color_get(win->pal, win->reverse_video ? win->fg_cid : win->bg_cid),
-        XCB_GRAVITY_NORTH_WEST, XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_VISIBILITY_CHANGE |
-        XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_FOCUS_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY, con.mid
+        XCB_GRAVITY_NORTH_WEST, win->ev_mask, con.mid
     };
     win->wid = xcb_generate_id(con.con);
     c = xcb_create_window_checked(con.con, TRUE_COLOR_ALPHA_DEPTH, win->wid, con.screen->root,
@@ -1385,10 +1392,17 @@ void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values)
         xcb_change_window_attributes(con.con, win->wid, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL, values2);
         xcb_change_gc(con.con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
     }
-   if (tag & ~ (nss_wc_appcursor | nss_wc_appkey | nss_wc_numlock | nss_wc_keylock | nss_wc_8bit)) {
+   if (tag & ~ (nss_wc_appcursor | nss_wc_appkey | nss_wc_numlock | nss_wc_keylock | nss_wc_has_meta)) {
         nss_term_redraw(win->term, (nss_rect_t) {0, 0, win->cw, win->ch}, 1);
         redraw_damage(win, (nss_rect_t) {0, 0, win->width, win->height});
         xcb_flush(con.con);
+   }
+   if (tag & nss_wc_mouse) {
+       if (win->mouse_events)
+            win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
+       else
+           win->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
+       xcb_change_window_attributes(con.con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
    }
 }
 
@@ -1430,7 +1444,8 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
     if (tag & nss_wc_appcursor) return win->appcursor;
     if (tag & nss_wc_appkey) return win->appkey;
     if (tag & nss_wc_keylock) return win->keylock;
-    if (tag & nss_wc_8bit) return win->eight_bit;
+    if (tag & nss_wc_has_meta) return win->has_meta;
+    if (tag & nss_wc_mouse) return win->mouse_events;
 
     warn("Invalid option");
     return 0;
@@ -1510,7 +1525,11 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     xkb_mod_mask_t mods = xkb_state_serialize_mods(con.xkb_state, XKB_STATE_MODS_EFFECTIVE);
     uint8_t buf[8] = {0};
     size_t sz = xkb_state_key_get_utf8(con.xkb_state, keycode, NULL, 0);
-    if (sz && sz < sizeof(buf)) xkb_state_key_get_utf8(con.xkb_state, keycode, (char *)buf, sizeof(buf));
+    if (sz && sz < sizeof(buf) - 1) {
+        xkb_state_key_get_utf8(con.xkb_state, keycode, (char *)buf, sizeof(buf));
+        buf[sz] = '\0';
+    }
+    
 
     // TODO Make table for this too
     //
@@ -1558,7 +1577,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
             if (it->flag & (win->appkey ? NSS_M_NOAPPK : NSS_M_APPK)) continue;
             if (it->flag & (win->appcursor ? NSS_M_NOAPPCUR : NSS_M_APPCUR)) continue;
             if ((it->flag & NSS_M_NONUM) && win->numlock) continue;
-            nss_term_write(win->term, (uint8_t*)it->string, strlen(it->string), 1);
+            nss_term_sendkey(win->term, it->string);
             return;
         }
     }
@@ -1566,16 +1585,29 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     // 3. Basic keycode passing
     if (!sz) return;
 
-    if (sz == 1 && mods & XCB_MOD_MASK_1) {
-        if (win->eight_bit)
-            utf8_encode(*buf | 0x80, buf, buf + 8);
-        else {
-            buf[1] = buf[0];
-            buf[0] = '\033';
-            sz++;
+	if (nss_term_is_utf8(win->term)) {
+        if (sz == 1 && mods & XCB_MOD_MASK_1) {
+            if (win->has_meta) {
+                buf[utf8_encode(*buf | 0x80, buf, buf + 8)] = '\0';
+            } else {
+                buf[2] = '\0';
+                buf[1] = buf[0];
+                buf[0] = '\033';
+            }
         }
-    }
-    nss_term_write(win->term, buf, sz, 1);
+	} else {
+    	buf[1] = '\0';
+        if (mods & XCB_MOD_MASK_1) {
+            if (win->has_meta) {
+                *buf |= 0x80;
+            } else {
+                buf[1] = buf[0];
+                buf[2] = '\0';
+                buf[0] = '\033';
+            }
+        }
+	}
+    nss_term_sendkey(win->term, (char *)buf);
 }
 
 #define POLL_TIMEOUT (1000/NSS_WIN_FPS)
@@ -1632,6 +1664,41 @@ void nss_context_run(void) {
 
                     handle_focus(win, event->response_type == XCB_FOCUS_IN);
                     xcb_flush(con.con);
+                    break;
+                }
+                case XCB_BUTTON_RELEASE: /* All these events have same structure */
+                case XCB_BUTTON_PRESS:
+                case XCB_MOTION_NOTIFY: {
+                    xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t*)event;
+                    nss_window_t *win = window_for_xid(ev->event);
+                    if (!win) break;
+
+
+                    int16_t x = (ev->event_x - win->left_border) / win->char_width;
+                    int16_t y = (ev->event_y - win->top_border) / (win->char_height + win->char_depth);
+                    x = MAX(0, MIN(x, win->cw));
+                    y = MAX(0, MIN(y, win->ch));
+                    nss_mouse_state_t mask = ev->state;
+                    nss_mouse_event_t evtype = -1;
+                    switch (ev->response_type & 0xF7) {
+                    case XCB_BUTTON_PRESS:
+                        evtype = nss_me_press;
+                        break;
+                    case XCB_BUTTON_RELEASE:
+                        evtype = nss_me_release;
+                        break;
+                    case XCB_MOTION_NOTIFY:
+                        evtype = nss_me_motion;
+                        break;
+                    }
+					nss_term_mouse(win->term, x, y, mask, evtype, ev->detail - XCB_BUTTON_INDEX_1);
+                    //if (ev->detail == XCB_BUTTON_INDEX_4 && !mask) {
+                    //    nss_term_answerback(win->term, "\031");
+                    //    return;
+                    //} else if (ev->detail == XCB_BUTTON_INDEX_5 && !mask) {
+                    //    nss_term_answerback(win->term, "\005");
+                    //    return;
+                    //}
                     break;
                 }
                 case XCB_CLIENT_MESSAGE: {

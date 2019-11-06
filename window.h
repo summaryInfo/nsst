@@ -34,12 +34,34 @@ typedef enum nss_wc_tag {
     nss_wc_appcursor = 1 << 14,
     nss_wc_numlock = 1 << 15,
     nss_wc_keylock = 1 << 16,
-    nss_wc_8bit = 1 << 17,
+    nss_wc_has_meta = 1 << 17,
     nss_wc_blink_time = 1 << 18,
     nss_wc_reverse = 1 << 19,
     // TODO
     nss_wc_mouse = 1 << 20, // Report mouse
 } nss_wc_tag_t;
+
+typedef enum nss_mouse_event {
+	nss_me_motion,
+	nss_me_press,
+	nss_me_release
+} nss_mouse_event_t;
+
+typedef enum nss_mouse_state {
+    nss_ms_shift = 1 << 0,
+    nss_ms_lock = 1 << 1,
+    nss_ms_control = 1 << 2,
+    nss_ms_mod_1 = 1 << 3,
+    nss_ms_mod_2 = 1 << 4,
+    nss_ms_mod_3 = 1 << 5,
+    nss_ms_mod_4 = 1 << 6,
+    nss_ms_mod_5 = 1 << 7,
+    nss_ms_button_1 = 1 << 8,
+    nss_ms_button_2 = 1 << 9,
+    nss_ms_button_3 = 1 << 10,
+    nss_ms_button_4 = 1 << 11,
+    nss_ms_button_5 = 1 << 12
+} nss_mouse_state_t;
 
 typedef struct nss_window nss_window_t;
 

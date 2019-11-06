@@ -90,6 +90,10 @@ struct nss_term {
     nss_cursor_t back_cs;
     uint32_t prev_ch;
 
+    int16_t prev_mouse_x;
+    int16_t prev_mouse_y;
+    uint8_t prev_mouse_button;
+
     int16_t width;
     int16_t height;
     int16_t top;
@@ -110,6 +114,7 @@ struct nss_term {
         nss_tm_insert = 1 << 9,
         nss_tm_sixel = 1 << 10,
         nss_tm_8bit = 1 << 11,
+        nss_tm_use_protected_area_semantics = 1 << 12,
         nss_tm_disable_altscreen = 1 << 13,
         nss_tm_track_focus = 1 << 14,
         nss_tm_hide_cursor = 1<< 15,
@@ -117,7 +122,15 @@ struct nss_term {
         nss_tm_132_preserve_display = 1 << 17,
         nss_tm_scoll_on_output = 1 << 18,
         nss_tm_dont_scroll_on_input = 1 << 19,
-        nss_tm_use_protected_area_semantics = 1 << 12
+        nss_tm_mouse_x10 = 1 << 20,
+        nss_tm_mouse_button = 1 << 21,
+        nss_tm_mouse_motion = 1 << 22,
+        nss_tm_mouse_many = 1 << 23,
+        nss_tm_mouse_format_sgr = 1 << 24,
+        nss_tm_mouse_mask =
+            nss_tm_mouse_x10 | nss_tm_mouse_button |
+            nss_tm_mouse_motion | nss_tm_mouse_many |
+            nss_tm_mouse_format_sgr
     } mode;
 
 #define ESC_MAX_PARAM 16
@@ -611,7 +624,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
 
     uint32_t args[] = { 0, 0, 1, 0, 0 };
     nss_window_set(term->win, nss_wc_appkey | nss_wc_appcursor |
-                   nss_wc_numlock | nss_wc_keylock | nss_wc_8bit, args);
+                   nss_wc_numlock | nss_wc_keylock | nss_wc_has_meta, args);
     nss_window_set_title(term->win, NULL);
 }
 
@@ -684,32 +697,10 @@ static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, nss_cell_t cel
     term->prev_ch = ch; // For REP CSI Ps b
 }
 
-#define MAX_REPORT 256
-static void term_answerback(nss_term_t *term, const char *str, ...) {
-    va_list vl;
-    va_start(vl, str);
-    static uint8_t fmt[MAX_REPORT], csi[MAX_REPORT];
-    uint8_t *fmtp = fmt;
-    for (uint8_t *it = (uint8_t *)str; *it && fmtp - fmt < MAX_REPORT; it++) {
-        if (IS_C1(*it) && !(term->mode & nss_tm_8bit)) {
-            *fmtp++ = 0x1B;
-            *fmtp++ = *it ^ 0xC0;
-        } else {
-            if (IS_C1(*it) && term->mode & nss_tm_utf8)
-                *fmtp++ = 0xC2;
-            *fmtp++ = *it;
-        }
-    }
-    *fmtp = 0x00;
-    vsnprintf((char *)csi, sizeof(csi), (char *)fmt, vl);
-    va_end(vl);
-    nss_term_write(term, csi, (uint8_t *)memchr(csi, 0, MAX_REPORT) - csi, 0);
-}
-
 static void term_escape_da(nss_term_t *term, uint8_t mode) {
     switch (mode) {
     case '=':
-        term_answerback(term, "\x90!|00000000\x9C");
+        nss_term_answerback(term, "\x90!|00000000\x9C");
         break;
     case '>':
         /*
@@ -724,7 +715,7 @@ static void term_escape_da(nss_term_t *term, uint8_t mode) {
          * 64 - VT520
          * 65 - VT525
          */
-        term_answerback(term, "\x9B>1;10;0c");
+        nss_term_answerback(term, "\x9B>1;10;0c");
         break;
     default:
         /*
@@ -751,7 +742,7 @@ static void term_escape_da(nss_term_t *term, uint8_t mode) {
          *       28 - Rectangular editing
          *       29 - ANSI text locator (i.e., DEC Locator mode).
          */
-         term_answerback(term, "\x9B?62;1;2;6;9;22c");
+         nss_term_answerback(term, "\x9B?62;1;2;6;9;22c");
     }
 }
 
@@ -820,21 +811,21 @@ static void term_escape_dsr(nss_term_t *term) {
     if (term->esc.private == '?') {
         switch(term->esc.param[0]) {
         case 15: /* Printer status -- Has no printer */
-            term_answerback(term, "\x9B?13n"); //TODO Has printer -- 10n
+            nss_term_answerback(term, "\x9B?13n"); //TODO Has printer -- 10n
             break;
         case 25: /* User defined keys lock -- Locked */
-            term_answerback(term, "\x9B?21n"); //TODO Unlocked - ?20n
+            nss_term_answerback(term, "\x9B?21n"); //TODO Unlocked - ?20n
             break;
         case 26: /* Keyboard Language -- Unknown */
-            term_answerback(term, "\x9B?27;0n"); //TODO Print proper keylayout
+            nss_term_answerback(term, "\x9B?27;0n"); //TODO Print proper keylayout
         }
     } else {
         switch(term->esc.param[0]) {
         case 5: /* Health report -- OK */
-            term_answerback(term, "\x9B%dn", 0);
+            nss_term_answerback(term, "\x9B%dn", 0);
             break;
         case 6: /* Cursor position -- Y;X */
-            term_answerback(term, "\x9B%"PRIu16";%"PRIu16"R",
+            nss_term_answerback(term, "\x9B%"PRIu16";%"PRIu16"R",
                     (term->c.origin ? -term->top : 0) + term->c.y + 1, MIN(term->c.x, term->width - 1) + 1);
             break;
         }
@@ -935,9 +926,14 @@ static void term_escape_osc(nss_term_t *term) {
         term_escape_dump(term);
         break;
     case 104: /* Reset color */
-        if(term->esc.param_idx > 1 && term->esc.param[1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS)
-            nss_color_set(term->pal, term->esc.param[1], nss_color_get(NSS_DEFAULT_PALETTE, term->esc.param[1]));
-        else term_escape_dump(term);
+        if(term->esc.param_idx > 1) {
+            if (term->esc.param[1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS)
+                nss_color_set(term->pal, term->esc.param[1], nss_color_get(NSS_DEFAULT_PALETTE, term->esc.param[1]));
+            else term_escape_dump(term);
+        } else {
+            for(size_t i = 0; i < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; i++)
+                nss_color_set(term->pal, i, nss_color_get(NSS_DEFAULT_PALETTE, i));
+        }
         break;
     case 105: /* Reset special color */
     case 106: /* Enable/disable special color */
@@ -969,6 +965,13 @@ static void term_escape_osc(nss_term_t *term) {
     default:
         term_escape_dump(term);
     }
+}
+
+_Bool nss_term_is_altscreen(nss_term_t *term) {
+    return term->mode & nss_tm_altscreen;
+}
+_Bool nss_term_is_utf8(nss_term_t *term) {
+    return term->mode & nss_tm_utf8;
 }
 
 static void term_escape_sgr(nss_term_t *term) {
@@ -1089,6 +1092,7 @@ static void term_escape_sgr(nss_term_t *term) {
 #undef CLR
 }
 static void term_escape_setmode(nss_term_t *term, _Bool set) {
+    term_escape_dump(term);
     if (term->esc.private == '?') {
         for(uint32_t i = 0; i < term->esc.param_idx + 1; i++) {
             uint32_t arg = set;
@@ -1104,6 +1108,7 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 //Just clear screen
                 if (!(term->mode & nss_tm_132_preserve_display)) {
                     term_erase(term, 0, 0, term->width, term->height);
+                    term_set_tb_margins(term, 0, 0);
                     term_move_to(term, 0, 0);
                 }
                 break;
@@ -1125,6 +1130,11 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 // IGNORE
                 break;
             case 9: /* X10 Mouse tracking */
+                arg = 0;
+                nss_window_set(term->win, nss_wc_mouse, &arg);
+                term->mode &= ~nss_tm_mouse_mask;
+                if (set) term->mode |= nss_tm_mouse_x10;
+                else term->mode |= nss_tm_mouse_x10;
                 term_escape_dump(term);
                 break;
             case 12: /* Start blinking cursor */
@@ -1170,16 +1180,26 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 else term->mode &= ~nss_tm_132_preserve_display;
                 break;
             case 1000: /* X11 Mouse tracking */
-                term_escape_dump(term);
+                arg = 0;
+                nss_window_set(term->win, nss_wc_mouse, &arg);
+                term->mode &= ~nss_tm_mouse_mask;
+                term->mode |= nss_tm_mouse_button;
                 break;
             case 1001: /* Highlight mouse tracking */
                 // IGNORE
                 break;
-            case 1002: /* Cell motion mouse tracking */
-                term_escape_dump(term);
+            case 1002: /* Cell motion mouse tracking on keydown */
+                arg = 0;
+                nss_window_set(term->win, nss_wc_mouse, &arg);
+                term->mode &= ~nss_tm_mouse_mask;
+                if (set) term->mode |= nss_tm_mouse_motion;
+                else term->mode &= ~nss_tm_mouse_motion;
                 break;
             case 1003: /* All motion mouse tracking */
-                term_escape_dump(term);
+                nss_window_set(term->win, nss_wc_mouse, &arg);
+                term->mode &= ~nss_tm_mouse_mask;
+                if (set) term->mode |= nss_tm_mouse_many;
+                else term->mode &= ~nss_tm_mouse_many;
                 break;
             case 1004: /* Focus in/out events */
                 if (set) term->mode |= nss_tm_track_focus;
@@ -1189,7 +1209,8 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 // IGNORE
                 break;
             case 1006: /* SGR mouse tracking */
-                term_escape_dump(term);
+                if (set) term->mode |= nss_tm_mouse_format_sgr;
+                else term->mode &= ~nss_tm_mouse_format_sgr;
                 break;
             case 1010: /* Scroll to bottom on output */
                 if (set) term->mode |= nss_tm_scoll_on_output;
@@ -1203,7 +1224,7 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 // IGNORE
                 break;
             case 1034: /* Interpret meta */
-                nss_window_set(term->win, nss_wc_8bit, &arg);
+                nss_window_set(term->win, nss_wc_has_meta, &arg);
                 break;
             case 1046: /* Allow altscreen */
                 if (!set) term->mode |= nss_tm_disable_altscreen;
@@ -1513,15 +1534,10 @@ static void term_escape_csi(nss_term_t *term) {
                     term_escape_dump(term);
                 }
                 switch(PARAM(1, 2)) {
-                    uint32_t arg;
                 case 2:
-                    arg = 1;
-                    nss_window_set(term->win, nss_wc_8bit, &arg);
                     term->mode |= nss_tm_8bit;
                     break;
                 case 1:
-                    arg = 0;
-                    nss_window_set(term->win, nss_wc_8bit, &arg);
                     term->mode &= ~nss_tm_8bit;
                     break;
                 default:
@@ -1644,7 +1660,7 @@ static void term_escape_esc(nss_term_t *term) {
     //DUMP
     //term_escape_dump(term);
     if (term->esc.interm_idx == 0) {
-            uint32_t arg;
+        uint32_t arg;
         switch(term->esc.final) {
         case 'D': /* IND */
             term_index(term, 0);
@@ -1732,15 +1748,10 @@ static void term_escape_esc(nss_term_t *term) {
         switch (term->esc.interm[0]) {
         case ' ':
             switch (term->esc.final) {
-                uint32_t arg;
             case 'F': /* S7C1T */
-                arg = 0;
-                nss_window_set(term->win, nss_wc_8bit, &arg);
                 term->mode &= ~nss_tm_8bit;
                 break;
             case 'G': /* S8C1T */
-                arg = 1;
-                nss_window_set(term->win, nss_wc_8bit, &arg);
                 term->mode |= nss_tm_8bit;
                 break;
             case 'L': /* ANSI_LEVEL_1 */
@@ -2230,18 +2241,10 @@ static void tty_write_raw(nss_term_t *term, const uint8_t *buf, size_t len) {
 
 }
 
-void nss_term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool do_echo) {
+void term_tty_write(nss_term_t *term, const uint8_t *buf, size_t len) {
     if (term->fd == -1) return;
 
-    if (!(term->mode | nss_tm_dont_scroll_on_input) && term->view && do_echo) {
-        term->mode |= nss_tm_force_redraw;
-        term->view = NULL;
-    }
-
     const uint8_t *next;
-
-    if (do_echo && term->mode & nss_tm_echo)
-        term_write(term, buf, len, 1);
 
     if (!(term->mode & nss_tm_crlf))
         tty_write_raw(term, buf, len);
@@ -2258,6 +2261,43 @@ void nss_term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool do_e
         buf = next;
     }
 }
+
+#define MAX_REPORT 256
+void nss_term_answerback(nss_term_t *term, const char *str, ...) {
+    va_list vl;
+    va_start(vl, str);
+    uint8_t fmt[MAX_REPORT], csi[MAX_REPORT];
+    uint8_t *fmtp = fmt;
+    for (uint8_t *it = (uint8_t *)str; *it && fmtp - fmt < MAX_REPORT; it++) {
+        if (IS_C1(*it) && !(term->mode & nss_tm_8bit)) {
+            *fmtp++ = 0x1B;
+            *fmtp++ = *it ^ 0xC0;
+        } else {
+            if (IS_C1(*it) && term->mode & nss_tm_utf8)
+                *fmtp++ = 0xC2;
+            *fmtp++ = *it;
+        }
+    }
+    *fmtp = 0x00;
+    vsnprintf((char *)csi, sizeof(csi), (char *)fmt, vl);
+    va_end(vl);
+
+    term_tty_write(term, csi, (uint8_t *)memchr(csi, 0, MAX_REPORT) - csi);
+
+}
+
+void nss_term_sendkey(nss_term_t *term, const char *str) {
+    if (term->mode & nss_tm_echo)
+        term_write(term, (uint8_t *)str, strlen(str), 1);
+
+    if (!(term->mode & nss_tm_dont_scroll_on_input) && term->view) {
+        term->mode |= nss_tm_force_redraw;
+        term->view = NULL;
+    }
+
+    nss_term_answerback(term, str);
+}
+
 
 void nss_term_hang(nss_term_t *term) {
     if(term->fd >= 0) {
@@ -2456,7 +2496,7 @@ void nss_term_focus(nss_term_t *term, _Bool focused) {
     if (focused) term->mode |= nss_tm_focused;
     else term->mode &= ~nss_tm_focused;
     if (term->mode & nss_tm_track_focus)
-        term_answerback(term, focused ? "\x9BI" : "\x9BO");
+        nss_term_answerback(term, focused ? "\x9BI" : "\x9BO");
     nss_rect_t damage = {MIN(term->c.x, term->width - 1), term->c.y, 1, 1};
     nss_term_redraw(term, damage, 1);
     nss_window_update(term->win, 1, &damage);
@@ -2471,6 +2511,47 @@ void nss_term_visibility(nss_term_t *term, _Bool visible) {
         nss_term_redraw(term, damage, 1);
         nss_window_update(term->win, 1, &damage);
     } else term->mode &= ~nss_tm_visible;
+}
+
+_Bool nss_term_mouse(nss_term_t *term, int16_t x, int16_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
+    if (term->mode & nss_tm_mouse_x10 && button > 2) return 0;
+    if (!(term->mode & nss_tm_mouse_mask)) return 0;
+
+    if (event == nss_me_motion) {
+        if (!(term->mode & (nss_tm_mouse_many | nss_tm_mouse_motion))) return 0;
+        if (term->mode & nss_tm_mouse_button && term->prev_mouse_button == 3) return 0;
+        if (x == term->prev_mouse_x && y == term->prev_mouse_y) return 0;
+        button = term->prev_mouse_button + 32;
+    } else {
+        if (button > 6) button += 128 - 7;
+        else if (button > 2) button += 64 - 3;
+        if (event == nss_me_release) {
+            if (term->mode & nss_tm_mouse_x10) return 0;
+            /* Don't report wheel relese events */
+            if (button == 64 || button == 65) return 0;
+            if (!(term->mode & nss_tm_mouse_format_sgr)) button = 3;
+        }
+        term->prev_mouse_button = button;
+    }
+
+    if (!(term->mode & nss_tm_mouse_x10)) {
+        if (mask & nss_ms_shift) button |= 4;
+        if (mask & nss_ms_mod_1) button |= 8;
+        if (mask & nss_ms_control) button |= 16;
+    }
+
+
+    if (term->mode & nss_tm_mouse_format_sgr) {
+        nss_term_answerback(term, "\x9B%<"PRIu8";%"PRIu16";%"PRIu16"%c",
+                button, x + 1, y + 1, event == nss_me_release ? 'm' : 'M');
+    } else {
+        if (x >= 223 || y >= 223) return 0;
+        nss_term_answerback(term, "\x9BM%c%c%c", button + ' ', x + 1 + ' ', y + 1 + ' ');
+    }
+
+    term->prev_mouse_x = x;
+    term->prev_mouse_y = y;
+    return 1;
 }
 
 void nss_free_term(nss_term_t *term) {
