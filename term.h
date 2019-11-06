@@ -5,7 +5,7 @@
 #include "window.h"
 #include "util.h"
 
-#define NSS_TERM_NAME "st"
+#define NSS_TERM_NAME "xterm-256color"
 #define NSS_TERM_FPS 60
 #define NSS_TERM_SCROLL_DELAY (1000000/240)
 #define NSS_TERM_REDRAW_RATE (1000000/NSS_TERM_FPS)

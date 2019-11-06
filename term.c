@@ -46,6 +46,7 @@ typedef struct nss_line {
 #define IS_C1(c) ((c) < 0xa0 && (c) >= 0x80)
 #define IS_C0(c) (((c) < 0x20) || (c) == 0x7f)
 #define IS_STREND(c) (IS_C1(c) || (c) == 0x1b || (c) == 0x1a || (c) == 0x18 || (c) == 0x07)
+#define ENABLE_IF(c, m, f) { if (c) { (m) |= (f); } else { (m) &= ~(f); }}
 
 typedef struct nss_cursor {
     int16_t x;
@@ -59,7 +60,7 @@ typedef struct nss_cursor {
         nss_cs_dec_ascii,
         nss_cs_dec_sup,
         nss_cs_dec_graph,
-        nss_cs_british,
+        nss_cs_british, // Also latin-1
         nss_cs_french_canadian,
         nss_cs_finnish,
         nss_cs_german,
@@ -129,8 +130,7 @@ struct nss_term {
         nss_tm_mouse_format_sgr = 1 << 24,
         nss_tm_mouse_mask =
             nss_tm_mouse_x10 | nss_tm_mouse_button |
-            nss_tm_mouse_motion | nss_tm_mouse_many |
-            nss_tm_mouse_format_sgr
+            nss_tm_mouse_motion | nss_tm_mouse_many
     } mode;
 
 #define ESC_MAX_PARAM 16
@@ -633,7 +633,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
 
 static uint32_t nrcs_translate(uint8_t set, uint32_t ch, _Bool nrcs) {
     static const unsigned *trans[nss_cs_max] = {
-        /* [0x23] [0x40] [0x5b 0x5c 0x5d 0x5e 0x5f 0x60] [0x7b 0x7c 0x7d 0x7e] */
+        /* [0x23] [0x40] [0x5B 0x5C 0x5D 0x5E 0x5F 0x60] [0x7B 0x7C 0x7D 0x7E] */
         [nss_cs_british] =           U"£@[\\]^_`{|}~",
         [nss_cs_dutch] =             U"£¾\u0133½|^_`¨f¼´",
         [nss_cs_finnish] =           U"#@ÄÖÅÜ_éäöåü",
@@ -649,17 +649,24 @@ static uint32_t nrcs_translate(uint8_t set, uint32_t ch, _Bool nrcs) {
     static const unsigned *graph = U" ◆▒␉␌␍␊°±␤␋┘┐┌└┼⎺⎻─⎼⎽├┤┴┬│≤≥π≠£·";
     if (set == nss_cs_dec_ascii) /* do nothing */;
     else if (set == nss_cs_dec_graph) {
-        if (0x5f <= ch && ch <= 0x7e)
-            return graph[ch - 0x5f];
-    } else if (set == nss_cs_dec_sup || (!nrcs && set == nss_cs_british)) {
+        if (0x5F <= ch && ch <= 0x7E)
+            return graph[ch - 0x5F];
+    } else if (!nrcs && set == nss_cs_british) { /* latin-1 */
         return ch + 0x80;
+    } else if (set == nss_cs_dec_sup) {
+        ch += 0x80;
+        if (ch == 0xA8) ch = U'¤';
+        else if (ch == 0xD7) ch = U'Œ'; 
+        else if (ch == 0xDD) ch = U'Ÿ';
+        else if (ch == 0xF7) ch = U'œ';
+        else if (ch == 0xFD) ch = U'ÿ';
     } else if (trans[set]){
         if (ch == 0x23) return trans[set][0];
         if (ch == 0x40) return trans[set][1];
-        if (0x5b <= ch && ch <= 0x60)
-            return trans[set][2 + ch - 0x5b];
-        if (0x7b <= ch && ch <= 0x7e)
-            return trans[set][8 + ch - 0x7b];
+        if (0x5B <= ch && ch <= 0x60)
+            return trans[set][2 + ch - 0x5B];
+        if (0x7B <= ch && ch <= 0x7E)
+            return trans[set][8 + ch - 0x7B];
     }
     return ch;
 
@@ -671,13 +678,15 @@ static uint32_t nrcs_translate(uint8_t set, uint32_t ch, _Bool nrcs) {
 
 static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, nss_cell_t cel, uint32_t ch) {
 
-    if (ch < 0x80) {
-        if (term->c.gn[term->c.gl_ss] != nss_cs_dec_ascii) {
-            ch = nrcs_translate(term->c.gn[term->c.gl_ss], ch, term->mode & nss_tm_enable_nrcs);
+    if (!(term->mode & nss_tm_utf8)) {
+        if (ch < 0x80) {
+            if (term->c.gn[term->c.gl_ss] != nss_cs_dec_ascii) {
+                ch = nrcs_translate(term->c.gn[term->c.gl_ss], ch, term->mode & nss_tm_enable_nrcs);
+            }
+        } else if (ch < 0x100) {
+            if (term->c.gn[term->c.gr] != nss_cs_british || term->mode & nss_tm_enable_nrcs)
+                ch = nrcs_translate(term->c.gn[term->c.gr], ch - 0x80, term->mode & nss_tm_enable_nrcs);
         }
-    } else if (ch < 0x100) {
-        if (term->c.gn[term->c.gr] != nss_cs_dec_sup)
-            ch = nrcs_translate(term->c.gn[term->c.gr], ch - 0x80, term->mode & nss_tm_enable_nrcs);
     }
 
     nss_cell_t *cell = &term->screen[y]->cell[x];
@@ -1123,8 +1132,7 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 term_move_to_abs(term, 0, 0);
                 break;
             case 7: /* DECAWM */
-                if (set) term->mode |= nss_tm_wrap;
-                else term->mode &= ~nss_tm_wrap;
+                ENABLE_IF(set, term->mode, nss_tm_wrap);
                 break;
             case 8: /* DECARM */
                 // IGNORE
@@ -1133,9 +1141,7 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 arg = 0;
                 nss_window_set(term->win, nss_wc_mouse, &arg);
                 term->mode &= ~nss_tm_mouse_mask;
-                if (set) term->mode |= nss_tm_mouse_x10;
-                else term->mode |= nss_tm_mouse_x10;
-                term_escape_dump(term);
+                ENABLE_IF(set, term->mode, nss_tm_mouse_x10);
                 break;
             case 12: /* Start blinking cursor */
             case 13:
@@ -1148,12 +1154,10 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 term_escape_dump(term);
                 break;
             case 25: /* DECTCEM */
-                if (!set) term->mode |= nss_tm_hide_cursor;
-                else term->mode &= ~nss_tm_hide_cursor;
+                ENABLE_IF(!set, term->mode, nss_tm_hide_cursor);
                 break;
             case 42: /* DECNRCM */
-                if (set) term->mode |= nss_tm_enable_nrcs;
-                else term->mode &= ~nss_tm_enable_nrcs;
+                ENABLE_IF(set, term->mode, nss_tm_enable_nrcs);
                 break;
             case 45: /* Reverse wrap */
                 term_escape_dump(term);
@@ -1176,14 +1180,13 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 term_escape_dump(term);
                 break;
             case 95: /* DECNCSM */
-                if (set) term->mode |= nss_tm_132_preserve_display;
-                else term->mode &= ~nss_tm_132_preserve_display;
+                ENABLE_IF(set, term->mode, nss_tm_132_preserve_display);
                 break;
             case 1000: /* X11 Mouse tracking */
                 arg = 0;
                 nss_window_set(term->win, nss_wc_mouse, &arg);
                 term->mode &= ~nss_tm_mouse_mask;
-                term->mode |= nss_tm_mouse_button;
+                ENABLE_IF(set, term->mode, nss_tm_mouse_button);
                 break;
             case 1001: /* Highlight mouse tracking */
                 // IGNORE
@@ -1192,33 +1195,27 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 arg = 0;
                 nss_window_set(term->win, nss_wc_mouse, &arg);
                 term->mode &= ~nss_tm_mouse_mask;
-                if (set) term->mode |= nss_tm_mouse_motion;
-                else term->mode &= ~nss_tm_mouse_motion;
+                ENABLE_IF(set, term->mode, nss_tm_mouse_motion);
                 break;
             case 1003: /* All motion mouse tracking */
                 nss_window_set(term->win, nss_wc_mouse, &arg);
                 term->mode &= ~nss_tm_mouse_mask;
-                if (set) term->mode |= nss_tm_mouse_many;
-                else term->mode &= ~nss_tm_mouse_many;
+                ENABLE_IF(set, term->mode, nss_tm_mouse_many);
                 break;
             case 1004: /* Focus in/out events */
-                if (set) term->mode |= nss_tm_track_focus;
-                else  term->mode &= ~nss_tm_track_focus;
+                ENABLE_IF(set, term->mode, nss_tm_track_focus);
                 break;
             case 1005: /* UTF-8 mouse tracking */
                 // IGNORE
                 break;
             case 1006: /* SGR mouse tracking */
-                if (set) term->mode |= nss_tm_mouse_format_sgr;
-                else term->mode &= ~nss_tm_mouse_format_sgr;
+                ENABLE_IF(set, term->mode, nss_tm_mouse_format_sgr);
                 break;
             case 1010: /* Scroll to bottom on output */
-                if (set) term->mode |= nss_tm_scoll_on_output;
-                else  term->mode &= ~nss_tm_scoll_on_output;
+                ENABLE_IF(set, term->mode, nss_tm_scoll_on_output);
                 break;
             case 1011: /* Scroll to bottom on keypress */
-                if (!set) term->mode |= nss_tm_dont_scroll_on_input;
-                else  term->mode &= ~nss_tm_dont_scroll_on_input;
+                ENABLE_IF(!set, term->mode, nss_tm_dont_scroll_on_input);
                 break;
             case 1015: /* Urxvt mouse tracking */
                 // IGNORE
@@ -1227,8 +1224,7 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 nss_window_set(term->win, nss_wc_has_meta, &arg);
                 break;
             case 1046: /* Allow altscreen */
-                if (!set) term->mode |= nss_tm_disable_altscreen;
-                else  term->mode &= ~nss_tm_disable_altscreen;
+                ENABLE_IF(!set, term->mode, nss_tm_disable_altscreen);
                 break;
             case 1047: /* Enable altscreen and clear screen */
                 if (term->mode & nss_tm_disable_altscreen) break;
@@ -1267,16 +1263,13 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 nss_window_set(term->win, nss_wc_keylock, &arg);
                 break;
             case 4: /* IRM */
-                if (set) term->mode |= nss_tm_insert;
-                else  term->mode &= ~nss_tm_insert;
+                ENABLE_IF(set, term->mode, nss_tm_insert);
                 break;
             case 12: /* SRM */
-                if (set) term->mode |= nss_tm_echo;
-                else  term->mode &= ~nss_tm_echo;
+                ENABLE_IF(set, term->mode, nss_tm_echo);
                 break;
             case 20: /* LNM */
-                if (set) term->mode |= nss_tm_crlf;
-                else  term->mode &= ~nss_tm_crlf;
+                ENABLE_IF(set, term->mode, nss_tm_crlf);
                 break;
             default:
                 term_escape_dump(term);
@@ -2542,7 +2535,8 @@ _Bool nss_term_mouse(nss_term_t *term, int16_t x, int16_t y, nss_mouse_state_t m
 
 
     if (term->mode & nss_tm_mouse_format_sgr) {
-        nss_term_answerback(term, "\x9B%<"PRIu8";%"PRIu16";%"PRIu16"%c",
+        warn("Reported");
+        nss_term_answerback(term, "\x9B<%"PRIu8";%"PRIu16";%"PRIu16"%c",
                 button, x + 1, y + 1, event == nss_me_release ? 'm' : 'M');
     } else {
         if (x >= 223 || y >= 223) return 0;
