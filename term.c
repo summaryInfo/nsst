@@ -2027,7 +2027,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
                     if (ch == 'I') {
                         term->esc.param[term->esc.param_idx++] = 1;
                         return;
-                    } else if (ch == 'l' || ch == 'L') {
+                    } else if (ch == 'L') {
                         term->esc.param[term->esc.param_idx++] = 2;
                         return;
                     }
