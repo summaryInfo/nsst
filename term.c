@@ -288,26 +288,39 @@ static void term_free_line(nss_term_t *term, nss_line_t *line) {
 
 void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
     if (term->mode & nss_tm_altscreen) return;
-    int16_t scrolled = 0, y0, yd, yr;
+    int16_t scrolled = 0;
     if (amount > 0) {
         if (!term->view && term->scrollback) {
             term->view = term->scrollback;
+            term->scrollback->mode |= nss_lm_dirty;
             scrolled++;
         }
-        if (term->view)
-            while (scrolled < amount && term->view->prev)
-                term->view = term->view->prev, scrolled++;
-        y0 = 0, yd = scrolled, yr = 0;
+        if (term->view) {
+            while (scrolled < amount && term->view->prev) {
+                term->view = term->view->prev;
+                scrolled++;
+                if (term->view)
+                    term->view->mode |= nss_lm_dirty;
+            }
+        }
+
+        nss_window_shift(term->win, 0, scrolled, term->height - scrolled);
     } else if (amount < 0) {
         while (scrolled < -amount && term->view)
             term->view = term->view->next, scrolled++;
-        y0 = scrolled, yd = 0, yr = term->height - scrolled;
-    }
-    if (scrolled) {
-        nss_window_shift(term->win, y0, yd, term->height - scrolled);
-        nss_term_redraw(term, (nss_rect_t) {0, yr, term->width, scrolled}, 1);
-        nss_window_update(term->win, 1, &(nss_rect_t){0, 0, term->width, term->height});
-        nss_window_draw_commit(term->win);
+
+        nss_line_t *line = term->view;
+        size_t y0 = 0;
+        for (; line && y0 < (size_t)scrolled; y0++)
+            line = line->next;
+        for (; line && y0 < (size_t)term->height; y0++) {
+            line->mode |= nss_lm_dirty;
+            line = line->next;
+        }
+        for(size_t y = 0; y < term->height - y0; y++)
+            term->screen[y]->mode |= nss_lm_dirty;
+
+        nss_window_shift(term->win, scrolled, 0, term->height - scrolled);
     }
 }
 
@@ -495,13 +508,10 @@ static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t a
     }
 
     if (!term->view) {
-        if (amount > 0) {
+        if (amount > 0)
             nss_window_shift(term->win, top + amount, top, bottom + 1 - top - amount);
-            for (size_t i = 0; i < (size_t)amount; i++) term->screen[bottom - i]->mode |= nss_lm_dirty;
-        } else if (amount < 0) {
+        else if (amount < 0)
             nss_window_shift(term->win, top, top - amount, bottom + 1 - top + amount);
-            for (size_t i = 0; i < (size_t)-amount; i++) term->screen[top + i]->mode |= nss_lm_dirty;
-        }
         clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
     } else  term->mode |= nss_tm_force_redraw;
     term->view = NULL;
@@ -599,33 +609,67 @@ static void term_tabs(nss_term_t *term, int16_t n) {
 }
 
 static void term_reset(nss_term_t *term, _Bool hard) {
+    for(size_t i = 0; i < NSS_PALETTE_SIZE; i++)
+        nss_color_set(term->pal, i, nss_color_get(NSS_DEFAULT_PALETTE, i));
+    uint32_t args[] = {
+        NSS_SPECIAL_BG, NSS_SPECIAL_FG,
+        NSS_SPECIAL_CURSOR_BG, NSS_SPECIAL_CURSOR_FG,
+        nss_cursor_bar, 0, 0, 1, 0, 0, 0, 0};
+    nss_window_set(term->win,
+            nss_wc_background | nss_wc_foreground |
+            nss_wc_cursor_background | nss_wc_cursor_foreground |
+            nss_wc_cursor_type | nss_wc_appkey |
+            nss_wc_appcursor | nss_wc_numlock |
+            nss_wc_keylock | nss_wc_has_meta |
+            nss_wc_reverse | nss_wc_mouse, args);
+
     nss_color_ref(term->pal, NSS_SPECIAL_FG);
     nss_color_ref(term->pal, NSS_SPECIAL_BG);
     nss_color_free(term->pal, term->c.cel.fg);
     nss_color_free(term->pal, term->c.cel.bg);
-    term->c = (nss_cursor_t) {
+
+    int16_t cx = term->c.x, cy =term->c.y;
+
+    term->c = term->back_cs = term->cs = (nss_cursor_t) {
         .cel = NSS_MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, ' '),
         .gl = 0, .gl_ss = 0, .gr = 2,
-        .gn = {nss_cs_dec_ascii, nss_cs_dec_sup, nss_cs_dec_sup, nss_cs_dec_sup}
+        .gn = {nss_cs_dec_ascii, nss_cs_british, nss_cs_british, nss_cs_british}
     };
-    term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_utf8;
+
+    term->mode &= nss_tm_disable_altscreen | nss_tm_dont_scroll_on_input | nss_tm_focused | nss_tm_scoll_on_output;
+    term->mode |= nss_tm_wrap | nss_tm_visible | nss_tm_utf8;
     term->top = 0;
     term->bottom = term->height - 1;
-    memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
 
-    for(size_t i = INIT_TAB_SIZE; i < (size_t)term->width; i += INIT_TAB_SIZE)
-        term->tabs[i] = 1;
+    if (hard) {
+        memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
+        for(size_t i = INIT_TAB_SIZE; i < (size_t)term->width; i += INIT_TAB_SIZE)
+            term->tabs[i] = 1;
 
-    for(size_t i = 0; i < 2; i++) {
-        term_cursor_mode(term, 1);
-        term_erase(term, 0, 0, term->width, term->height);
-        term_swap_screen(term);
+        for(size_t i = 0; i < 2; i++) {
+            term_cursor_mode(term, 1);
+            term_erase(term, 0, 0, term->width, term->height);
+            term_swap_screen(term);
+        }
+        for (nss_line_t *tmp, *line = term->scrollback; line; line = tmp) {
+            tmp = line->next;
+            term_free_line(term, line);
+        }
+
+        term->view = NULL;
+        term->scrollback_top = NULL;
+        term->scrollback = NULL;
+        term->scrollback_limit = -1;
+        term->scrollback_size = 0;
+        nss_window_set_title(term->win, NULL);
+
+        // Hmm?..
+        // term->mode |= nss_tm_echo;
+    } else {
+        term->c.x = cx;
+        term->c.y = cy;
     }
 
-    uint32_t args[] = { 0, 0, 1, 0, 0 };
-    nss_window_set(term->win, nss_wc_appkey | nss_wc_appcursor |
-                   nss_wc_numlock | nss_wc_keylock | nss_wc_has_meta, args);
-    nss_window_set_title(term->win, NULL);
 }
 
 #define GRAPH0_BASE 0x41
@@ -656,7 +700,7 @@ static uint32_t nrcs_translate(uint8_t set, uint32_t ch, _Bool nrcs) {
     } else if (set == nss_cs_dec_sup) {
         ch += 0x80;
         if (ch == 0xA8) ch = U'¤';
-        else if (ch == 0xD7) ch = U'Œ'; 
+        else if (ch == 0xD7) ch = U'Œ';
         else if (ch == 0xDD) ch = U'Ÿ';
         else if (ch == 0xF7) ch = U'œ';
         else if (ch == 0xFD) ch = U'ÿ';
@@ -796,9 +840,9 @@ static nss_cid_t term_define_color(nss_term_t *term, uint32_t *args, size_t *len
             if (args[1] > 255 || args[2] > 255 || args[3] > 255)
                 term_escape_dump(term);
             uint32_t c = 0xff;
-            c = (c << 8) + MIN(args[3], 255);
-            c = (c << 8) + MIN(args[2], 255);
             c = (c << 8) + MIN(args[1], 255);
+            c = (c << 8) + MIN(args[2], 255);
+            c = (c << 8) + MIN(args[3], 255);
             cid = nss_color_find(term->pal, c);
             *len += 4;
         } else term_escape_dump(term);
@@ -951,7 +995,7 @@ static void term_escape_osc(nss_term_t *term) {
     case 110: /*Reset  VT100 foreground color */
         args[0] = NSS_SPECIAL_FG;
         nss_color_set(term->pal, NSS_SPECIAL_FG, nss_color_get(NSS_DEFAULT_PALETTE, NSS_SPECIAL_FG));
-        nss_window_set(term->win, nss_wc_background, args);
+        nss_window_set(term->win, nss_wc_foreground, args);
         break;
     case 111: /*Reset  VT100 background color */
         args[0] = NSS_SPECIAL_BG;
@@ -1101,7 +1145,6 @@ static void term_escape_sgr(nss_term_t *term) {
 #undef CLR
 }
 static void term_escape_setmode(nss_term_t *term, _Bool set) {
-    term_escape_dump(term);
     if (term->esc.private == '?') {
         for(uint32_t i = 0; i < term->esc.param_idx + 1; i++) {
             uint32_t arg = set;
@@ -1512,6 +1555,7 @@ static void term_escape_csi(nss_term_t *term) {
         case '"':
             switch(term->esc.final) {
             case 'p': /* DECSCL */
+                term_reset(term, 1);
                 switch(PARAM(0, 62)) { /* TODO Compatablility restrictions */
                 case 61: /* VT100 */
                     break;
@@ -1536,7 +1580,6 @@ static void term_escape_csi(nss_term_t *term) {
                 default:
                     term_escape_dump(term);
                 }
-                term_reset(term, 1);
                 break;
             case 'q': /* DECSCA */
                 switch(PARAM(0, 2)) {
@@ -2396,12 +2439,29 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_palette_t pal, int16_t width,
     term->win = win;
     term->pal = pal;
     term->scrollback_limit = -1;
+
+
+    term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_utf8;
+    term->c = term->back_cs = term->cs = (nss_cursor_t) {
+        .cel = NSS_MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, ' '),
+        .gl = 0, .gl_ss = 0, .gr = 2,
+        .gn = {nss_cs_dec_ascii, nss_cs_british, nss_cs_british, nss_cs_british}
+    };
+
+    memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
+    for(size_t i = INIT_TAB_SIZE; i < (size_t)term->width; i += INIT_TAB_SIZE)
+        term->tabs[i] = 1;
+
+    for(size_t i = 0; i < 2; i++) {
+        term_cursor_mode(term, 1);
+        term_erase(term, 0, 0, term->width, term->height);
+        term_swap_screen(term);
+    }
+
     clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
 
     term_resize(term, width, height);
-    term_reset(term, 0);
 
-    // TODO Config
     if (tty_open(term, "./testcmd", NULL) < 0) {
         warn("Can't create tty");
         nss_free_term(term);
@@ -2412,6 +2472,8 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_palette_t pal, int16_t width,
 }
 
 void nss_term_redraw(nss_term_t *term, nss_rect_t damage, _Bool cursor) {
+    if (!(term->mode & nss_tm_visible)) return;
+
     if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
         //Clear undefined areas
         nss_window_clear(term->win, 1, &damage);
@@ -2444,6 +2506,7 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage, _Bool cursor) {
 }
 
 void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
+    if (!(term->mode & nss_tm_visible)) return;
 
     int16_t y0 = 0;
     nss_line_t *view = term->view;
@@ -2486,24 +2549,14 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
 }
 
 void nss_term_focus(nss_term_t *term, _Bool focused) {
-    if (focused) term->mode |= nss_tm_focused;
-    else term->mode &= ~nss_tm_focused;
+    ENABLE_IF(focused, term->mode, nss_tm_focused);
     if (term->mode & nss_tm_track_focus)
         nss_term_answerback(term, focused ? "\x9BI" : "\x9BO");
-    nss_rect_t damage = {MIN(term->c.x, term->width - 1), term->c.y, 1, 1};
-    nss_term_redraw(term, damage, 1);
-    nss_window_update(term->win, 1, &damage);
-    nss_window_draw_commit(term->win);
+    term->screen[term->c.y]->mode |= nss_lm_dirty;
 }
 
 void nss_term_visibility(nss_term_t *term, _Bool visible) {
-    info("Visibliltiy: %d", visible);
-    if (visible) {
-        term->mode |= nss_tm_visible;
-        nss_rect_t damage = {0, 0, term->width, term->height};
-        nss_term_redraw(term, damage, 1);
-        nss_window_update(term->win, 1, &damage);
-    } else term->mode &= ~nss_tm_visible;
+    ENABLE_IF(visible, term->mode, nss_tm_force_redraw | nss_tm_visible);
 }
 
 _Bool nss_term_mouse(nss_term_t *term, int16_t x, int16_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
@@ -2535,7 +2588,6 @@ _Bool nss_term_mouse(nss_term_t *term, int16_t x, int16_t y, nss_mouse_state_t m
 
 
     if (term->mode & nss_tm_mouse_format_sgr) {
-        warn("Reported");
         nss_term_answerback(term, "\x9B<%"PRIu8";%"PRIu16";%"PRIu16"%c",
                 button, x + 1, y + 1, event == nss_me_release ? 'm' : 'M');
     } else {

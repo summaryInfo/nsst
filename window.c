@@ -34,10 +34,10 @@
 #define HEADER_WORDS ((sizeof(nss_glyph_mesg_t)+sizeof(uint32_t))/sizeof(uint32_t))
 #define CHARS_PER_MESG (WORDS_IN_MESSAGE - HEADER_WORDS)
 
-#define CR(c) (((c) & 0xff) * 0x101)
-#define CG(c) ((((c) >> 8) & 0xff) * 0x101)
-#define CB(c) ((((c) >> 16) & 0xff) * 0x101)
-#define CA(c) ((((c) >> 24) & 0xff) * 0x101)
+#define CB(c) (((c) & 0xff) * 0x100)
+#define CG(c) ((((c) >> 8) & 0xff) * 0x100)
+#define CR(c) ((((c) >> 16) & 0xff) * 0x100)
+#define CA(c) ((((c) >> 24) & 0xff) * 0x100)
 #define MAKE_COLOR(c) {.red=CR(c), .green=CG(c), .blue=CB(c), .alpha=CA(c)}
 
 
@@ -908,8 +908,8 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
             maxh = MAX(maxh, glyphs[i - ' '][0]->y);
         }
 
-		// TODO Make character width adjustment configurable
-        win->char_width = (total  - 1) / ('~' - ' ' + 1);
+        // TODO Make character width adjustment configurable
+        win->char_width = (total - 1) / ('~' - ' ' + 1);
         win->char_height = maxh;
         win->char_depth = maxd;
 
@@ -962,7 +962,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
     }
 
     xcb_render_color_t color = MAKE_COLOR(nss_color_get(win->pal, win->reverse_video ? win->fg_cid : win->bg_cid));
-    xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_OVER, win->pic, color, 1, &bound);
+    xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, color, 1, &bound);
 
     if (need_free)
         nss_term_resize(win->term, win->cw, win->ch);
@@ -1529,7 +1529,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         xkb_state_key_get_utf8(con.xkb_state, keycode, (char *)buf, sizeof(buf));
         buf[sz] = '\0';
     }
-    
+
 
     // TODO Make table for this too
     //
@@ -1585,7 +1585,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     // 3. Basic keycode passing
     if (!sz) return;
 
-	if (nss_term_is_utf8(win->term)) {
+    if (nss_term_is_utf8(win->term)) {
         if (sz == 1 && mods & XCB_MOD_MASK_1) {
             if (win->has_meta) {
                 buf[utf8_encode(*buf | 0x80, buf, buf + 8)] = '\0';
@@ -1595,8 +1595,8 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
                 buf[0] = '\033';
             }
         }
-	} else {
-    	buf[1] = '\0';
+    } else {
+        buf[1] = '\0';
         if (mods & XCB_MOD_MASK_1) {
             if (win->has_meta) {
                 *buf |= 0x80;
@@ -1606,7 +1606,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
                 buf[0] = '\033';
             }
         }
-	}
+    }
     nss_term_sendkey(win->term, (char *)buf);
 }
 
@@ -1673,11 +1673,11 @@ void nss_context_run(void) {
                     nss_window_t *win = window_for_xid(ev->event);
                     if (!win) break;
 
-
-                    int16_t x = (ev->event_x - win->left_border) / win->char_width;
-                    int16_t y = (ev->event_y - win->top_border) / (win->char_height + win->char_depth);
-                    x = MAX(0, MIN(x, win->cw));
-                    y = MAX(0, MIN(y, win->ch));
+                    uint8_t button = ev->detail - XCB_BUTTON_INDEX_1;
+                    int16_t x = MAX(0, MIN(win->cw, (ev->event_x - win->left_border)/
+                            win->char_width));
+                    int16_t y = MAX(0, MIN(win->ch, (ev->event_y - win->top_border) /
+                            (win->char_height + win->char_depth)));
                     nss_mouse_state_t mask = ev->state;
                     nss_mouse_event_t evtype = -1;
                     switch (ev->response_type & 0xF7) {
@@ -1691,7 +1691,15 @@ void nss_context_run(void) {
                         evtype = nss_me_motion;
                         break;
                     }
-					nss_term_mouse(win->term, x, y, mask, evtype, ev->detail - XCB_BUTTON_INDEX_1);
+
+                    if (evtype == nss_me_press &&
+                            !nss_term_is_altscreen(win->term) &&
+                            (button == 3 || button == 4) &&
+                            !mask) {
+                        nss_term_scroll_view(win->term, button == 3 ? 2 : -2);
+                    } else nss_term_mouse(win->term, x, y, mask, evtype, button);
+
+                    // What is that?
                     //if (ev->detail == XCB_BUTTON_INDEX_4 && !mask) {
                     //    nss_term_answerback(win->term, "\031");
                     //    return;

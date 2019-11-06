@@ -37,24 +37,28 @@ void nss_init_color(void) {
     // Generate basic palette
     // TODO: Make it  congigurable
     nss_color_t base[CN_BASE] = {
-        0xff000000, 0xff0000cd, 0xff00cd00, 0xff00cdcd,
-        0xffee0000, 0xffcd00cd, 0xffcdcd00, 0xffe5e5e5,
-        0xff7f7f7f, 0xff0000ff, 0xff00ff00, 0xff00ffff,
-        0xffff5c5c, 0xffff00ff, 0xffffff00, 0xffffffff
+        0xFF222222, 0xFFFF4433, 0xFFBBBB22, 0xFFFFBB22,
+        0xFF88AA99, 0xFFDD8899, 0xFF88CC77, 0xFFDDCCAA,
+        0xFF665555, 0xFFFF4433, 0xFFBBBB22, 0xFFFFBB22,
+        0xFF88AA99, 0xFFDD8899, 0xFF88CC77, 0xFFFFFFCC,
+//        0xff000000, 0xff0000cd, 0xff00cd00, 0xff00cdcd,
+//        0xffee0000, 0xffcd00cd, 0xffcdcd00, 0xffe5e5e5,
+//        0xff7f7f7f, 0xff0000ff, 0xff00ff00, 0xff00ffff,
+//        0xffff5c5c, 0xffff00ff, 0xffffff00, 0xffffffff,
     };
     for (size_t i = 0; i < CN_BASE; i++) {
         stor.def_palette[i] = base[i];
     }
     for (size_t i = 0; i < CN_EXT; i++) {
-        stor.def_palette[CN_BASE + i] = 0xff000000 +  SD28B((i / 36) % 6) +
+        stor.def_palette[CN_BASE + i] = 0xFF000000 +  SD28B((i / 36) % 6) +
                 (SD28B((i / 36) % 6) << 8) + (SD28B((i / 36) % 6) << 16);
     }
     for (size_t i = 0; i < CN_GRAY; i++) {
-        uint8_t val = MIN(0x08 + 0x0a * i, 0xff);
-        stor.def_palette[CN_BASE + CN_EXT + i] = 0xff000000 + val * 0x10101;
+        uint8_t val = MIN(0x08 + 0x0A * i, 0xFF);
+        stor.def_palette[CN_BASE + CN_EXT + i] = 0xFF000000 + val * 0x10101;
     }
-    stor.def_palette[NSS_SPECIAL_BG] = 0x77000000;
-    stor.def_palette[NSS_SPECIAL_FG] = base[7];
+    stor.def_palette[NSS_SPECIAL_BG] = base[0];
+    stor.def_palette[NSS_SPECIAL_FG] = base[15];
     stor.def_palette[NSS_SPECIAL_CURSOR_BG] = base[0];
     stor.def_palette[NSS_SPECIAL_CURSOR_FG] = base[7];
 }
