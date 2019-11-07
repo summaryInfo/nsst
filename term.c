@@ -696,7 +696,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
         term->view = NULL;
         term->scrollback_top = NULL;
         term->scrollback = NULL;
-        term->scrollback_limit = -1;
+        term->scrollback_limit = 1024;
         term->scrollback_size = 0;
         nss_window_set_title(term->win, NULL);
 
@@ -849,10 +849,10 @@ static void term_escape_dump(nss_term_t *term) {
         else if (term->esc.state & nss_es_osc) buf[pos++] = ']';
         if (term->esc.private)
             buf[pos++] = term->esc.private;
-        for (size_t i = 0; i <= term->esc.param_idx - (!!(term->esc.state & nss_es_osc)); i++) {
+        for (ssize_t i = 0; i <= (ssize_t)term->esc.param_idx - (!!(term->esc.state & nss_es_osc)); i++) {
             snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRIu32"%n", term->esc.param[i], &w);
             pos += w;
-            if (i < term->esc.param_idx) buf[pos++] = ';';
+            if (i < (ssize_t)term->esc.param_idx) buf[pos++] = ';';
         }
     }
     for (size_t i = 0; i < term->esc.interm_idx; i++)
@@ -1332,6 +1332,7 @@ static void term_escape_csi(nss_term_t *term) {
         switch (term->esc.final) {
         case '@': /* ICH */
             term_insert_cells(term, PARAM(0, 1));
+            term_move_to(term, term->c.x, term->c.y);
             break;
         case 'A': /* CUU */
             term_move_to(term, term->c.x, term->c.y - PARAM(0, 1));
@@ -1421,8 +1422,8 @@ static void term_escape_csi(nss_term_t *term) {
             term_delete_lines(term, PARAM(0, 1));
             break;
         case 'P': /* DCH */
-            term_move_to(term, term->c.x, term->c.y);
             term_delete_cells(term, PARAM(0, 1));
+            term_move_to(term, term->c.x, term->c.y);
             break;
         case 'S': /* SU */ /* ? Set graphics attributes, xterm */
             if (!term->esc.private)
@@ -1438,8 +1439,8 @@ static void term_escape_csi(nss_term_t *term) {
             term_scroll(term, term->top, term->bottom, -PARAM(0, 1), 0);
             break;
         case 'X': /* ECH */
-            term_move_to(term, term->c.x, term->c.y);
             term_protective_erase(term, term->c.x, term->c.y, term->c.x + PARAM(0, 1), term->c.y + 1);
+            term_move_to(term, term->c.x, term->c.y);
             break;
         case 'Z': /* CBT */
             term_tabs(term, -PARAM(0, 1));
