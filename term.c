@@ -272,7 +272,8 @@ int tty_open(nss_term_t *term, char *cmd, char **args) {
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
 
 static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
-    static nss_cid_t *buf = NULL, buf_len = 0, *new;
+    static nss_cid_t *buf = NULL, buf_len = 0, *new; // <=== Here's a leak. I
+                                                     // t doesn't free memory until exited
     if (line->extra_size + 1 >= line->extra_caps) {
         if (line->extra) {
             _Bool blink = 0;
@@ -376,14 +377,20 @@ void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
 
         nss_line_t *line = term->view;
         size_t y0 = 0;
-        for (; line && y0 < (size_t)scrolled; y0++)
+        for (; line && y0 < (size_t)(term->height - scrolled); y0++)
             line = line->next;
-        for (; line && y0 < (size_t)term->height; y0++) {
-            line->mode |= nss_lm_dirty;
-            line = line->next;
+        if (y0 < (size_t)(term->height - scrolled)) {
+            y0 = term->height - scrolled - y0;
+            for(size_t y = y0; y < y0 + scrolled; y++)
+                term->screen[y]->mode |= nss_lm_dirty;
+        } else {
+            for (; line && y0 < (size_t)term->height; y0++) {
+                line->mode |= nss_lm_dirty;
+                line = line->next;
+            }
+            for(size_t y = 0; y < (size_t)term->height - y0; y++)
+                term->screen[y]->mode |= nss_lm_dirty;
         }
-        for(size_t y = 0; y < term->height - y0; y++)
-            term->screen[y]->mode |= nss_lm_dirty;
 
         nss_window_shift(term->win, scrolled, 0, term->height - scrolled);
     }
