@@ -12,7 +12,7 @@
 
 typedef struct nss_term nss_term_t;
 
-nss_term_t *nss_create_term(nss_window_t *win, nss_palette_t pal, int16_t width, int16_t height);
+nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height);
 void nss_free_term(nss_term_t *term);
 void nss_term_redraw(nss_term_t *term, nss_rect_t rect, _Bool cursor);
 void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor);
