@@ -27,7 +27,7 @@ nss_color_t nss_config_color(uint32_t opt) {
         return base[0];
     case NSS_CONFIG_FG:
     case NSS_CONFIG_CURSOR_FG:
-        return base[7];
+        return base[15];
     }
 
     if (opt < CN_BASE) return base[opt];

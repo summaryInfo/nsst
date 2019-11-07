@@ -752,21 +752,25 @@ static uint32_t nrcs_translate(uint8_t set, uint32_t ch, _Bool nrcs) {
 
 static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
 
-    if (!(term->mode & nss_tm_utf8)) {
-        if (ch < 0x80) {
-            if (term->c.gn[term->c.gl_ss] != nss_cs_dec_ascii) {
-                ch = nrcs_translate(term->c.gn[term->c.gl_ss], ch, term->mode & nss_tm_enable_nrcs);
-            }
-        } else if (ch < 0x100) {
-            if (term->c.gn[term->c.gr] != nss_cs_british || term->mode & nss_tm_enable_nrcs)
-                ch = nrcs_translate(term->c.gn[term->c.gr], ch - 0x80, term->mode & nss_tm_enable_nrcs);
+    // In theory this should be disabled while in UTF-8 mode, but
+    // in practive applications use these symbols, so keep translating
+
+    // Need to make this configuration option
+
+    //if (!(term->mode & nss_tm_utf8)) {
+    if (ch < 0x80) {
+        if (term->c.gn[term->c.gl_ss] != nss_cs_dec_ascii) {
+            ch = nrcs_translate(term->c.gn[term->c.gl_ss], ch, term->mode & nss_tm_enable_nrcs);
         }
+    } else if (ch < 0x100) {
+        if (term->c.gn[term->c.gr] != nss_cs_british || term->mode & nss_tm_enable_nrcs)
+            ch = nrcs_translate(term->c.gn[term->c.gr], ch - 0x80, term->mode & nss_tm_enable_nrcs);
     }
+    //}
 
     nss_line_t *line = term->screen[y];
     nss_cell_t cel = fixup_color(line, &term->c);
     CELL_CHAR_SET(cel, ch);
-
 
     line->mode |= nss_lm_dirty;
     line->cell[x] = cel;
@@ -1410,6 +1414,7 @@ static void term_escape_csi(nss_term_t *term) {
             term_delete_lines(term, PARAM(0, 1));
             break;
         case 'P': /* DCH */
+            term_move_to(term, term->c.x, term->c.y);
             term_delete_cells(term, PARAM(0, 1));
             break;
         case 'S': /* SU */ /* ? Set graphics attributes, xterm */
@@ -1426,6 +1431,7 @@ static void term_escape_csi(nss_term_t *term) {
             term_scroll(term, term->top, term->bottom, -PARAM(0, 1), 0);
             break;
         case 'X': /* ECH */
+            term_move_to(term, term->c.x, term->c.y);
             term_protective_erase(term, term->c.x, term->c.y, term->c.x + PARAM(0, 1), term->c.y + 1);
             break;
         case 'Z': /* CBT */
@@ -1919,7 +1925,8 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
     case 0x18: /* CAN */
         break;
     case 0x1a: /* SUB */
-        term_set_cell(term, MIN(term->c.x, term->width - 1), term->c.y, '?');
+        term_move_to(term, term->c.x, term->c.y);
+        term_set_cell(term, term->c.x, term->c.y, '?');
         break;
     case 0x1b: /* ESC */
         if (term->esc.state & nss_es_string) {
@@ -2278,12 +2285,9 @@ void term_tty_write(nss_term_t *term, const uint8_t *buf, size_t len) {
 }
 
 #define MAX_REPORT 256
-void nss_term_answerback(nss_term_t *term, const char *str, ...) {
-    va_list vl;
-    va_start(vl, str);
-    uint8_t fmt[MAX_REPORT], csi[MAX_REPORT];
-    uint8_t *fmtp = fmt;
-    for (uint8_t *it = (uint8_t *)str; *it && fmtp - fmt < MAX_REPORT; it++) {
+static size_t term_encode_c1(nss_term_t *term, const uint8_t *in, uint8_t *out) {
+    uint8_t *fmtp = out;
+    for (uint8_t *it = (uint8_t *)in; *it && fmtp - out < MAX_REPORT - 1; it++) {
         if (IS_C1(*it) && !(term->mode & nss_tm_8bit)) {
             *fmtp++ = 0x1B;
             *fmtp++ = *it ^ 0xC0;
@@ -2294,11 +2298,18 @@ void nss_term_answerback(nss_term_t *term, const char *str, ...) {
         }
     }
     *fmtp = 0x00;
+    return fmtp - out;
+}
+
+void nss_term_answerback(nss_term_t *term, const char *str, ...) {
+    uint8_t fmt[MAX_REPORT], csi[MAX_REPORT];
+    term_encode_c1(term, (const uint8_t *)str, fmt);
+    va_list vl;
+    va_start(vl, str);
     vsnprintf((char *)csi, sizeof(csi), (char *)fmt, vl);
     va_end(vl);
 
     term_tty_write(term, csi, (uint8_t *)memchr(csi, 0, MAX_REPORT) - csi);
-
 }
 
 void nss_term_sendkey(nss_term_t *term, const char *str) {
@@ -2309,8 +2320,10 @@ void nss_term_sendkey(nss_term_t *term, const char *str) {
         term->mode |= nss_tm_force_redraw;
         term->view = NULL;
     }
+    uint8_t rep[MAX_REPORT];
+    size_t len = term_encode_c1(term, (const uint8_t *)str, rep);
 
-    nss_term_answerback(term, str);
+    term_tty_write(term, rep, len);
 }
 
 

@@ -978,7 +978,6 @@ nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_t
     win->fg = nss_config_color(NSS_CONFIG_FG);
     win->cursor_bg = nss_config_color(NSS_CONFIG_CURSOR_BG);
     win->cursor_fg = nss_config_color(NSS_CONFIG_CURSOR_FG);
-    warn("B %x F %x", win->bg, win->fg);
     win->cursor_type = nss_cursor_bar;
     win->active = 1;
     win->numlock = 1;
@@ -1517,7 +1516,6 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         buf[sz] = '\0';
     }
 
-
     // TODO Make table for this too
     //
     // 1. Key bindings
@@ -1547,10 +1545,10 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         nss_create_window((nss_rect_t) {100, 100, 800, 600}, win->font_name, nss_wc_font_size, &arg);
         return;
     } else if (sym == XKB_KEY_Page_Up) {
-        nss_term_scroll_view(win->term, 1);
+        nss_term_scroll_view(win->term, 2);
         return;
     } else if (sym == XKB_KEY_Page_Down) {
-        nss_term_scroll_view(win->term, -1);
+        nss_term_scroll_view(win->term, -2);
         return;
     }
 
@@ -1588,8 +1586,8 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
             if (win->has_meta) {
                 *buf |= 0x80;
             } else {
-                buf[1] = buf[0];
                 buf[2] = '\0';
+                buf[1] = buf[0];
                 buf[0] = '\033';
             }
         }
