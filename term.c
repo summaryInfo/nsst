@@ -47,7 +47,7 @@ typedef struct nss_line {
 #define INIT_TAB_SIZE 8
 #define ESC_MAX_PARAM 16
 #define ESC_MAX_INTERM 2
-#define ESC_MAX_STR 256
+#define ESC_MAX_STR 512
 
 
 #define IS_C1(c) ((c) < 0xa0 && (c) >= 0x80)
@@ -877,7 +877,7 @@ static void term_escape_dump(nss_term_t *term) {
         buf[pos++] = '\\';
     }
     buf[pos] = 0;
-    //warn("%s", buf);
+    warn("%s", buf);
 }
 
 static void term_escape_dsr(nss_term_t *term) {
@@ -909,46 +909,49 @@ static void term_escape_dcs(nss_term_t *term) {
     warn("DCS"); /* yet nothing here */
 }
 
-static nss_color_t term_color_parse(nss_term_t *term) {
-    size_t n = term->esc.str_idx;
+static nss_color_t color_parse(char *str, char *end) {
     uint64_t val = 0;
-    if (term->esc.str[0] != '#') return 0;
-    for (size_t i = 1; i < n; i++) {
-        if (term->esc.str[i] - '0' < 10)
-            val = (val << 4) + term->esc.str[i] - '0';
-        else if (term->esc.str[i] - 'A' < 6)
-            val = (val << 4) + 10 + term->esc.str[i] - 'A';
-        else if (term->esc.str[i] - 'a' < 6)
-            val = (val << 4) + 10 + term->esc.str[i] - 'a';
+    ptrdiff_t sz = end - str;
+    if (*str != '#') return 0;
+    while (++str < end) {
+        if (*str - '0' < 10)
+            val = (val << 4) + *str - '0';
+        else if (*str - 'A' < 6)
+            val = (val << 4) + 10 + *str - 'A';
+        else if (*str - 'a' < 6)
+            val = (val << 4) + 10 + *str - 'a';
         else return 0;
     }
-    nss_color_t col = 0xFF;
-    switch (n) {
+    nss_color_t col = 0xFF000000;
+    switch (sz) {
     case 4:
         for (size_t i = 0; i < 3; i++) {
-            col = (col << 8) | ((val & 0xF) << 4);
+            col |= (val & 0xF) << (8*i + 4);
             val >>= 4;
         }
         break;
     case 7:
-        col = val | 0xFF000000;
+        col |= val;
         break;
     case 10:
         for (size_t i = 0; i < 3; i++) {
-            col = (col << 8) | (val & 0xFF);
+            col |= ((val >> 4) & 0xFF) << 8*i;
             val >>= 12;
         }
+        break;
     case 13:
         for (size_t i = 0; i < 3; i++) {
-            col = (col << 8) | (val & 0xFF);
+            col |= ((val >> 8) & 0xFF) << 8*i;
             val >>= 16;
         }
+        break;
+    default:
+        return 0;
     }
     return col;
 }
 
 static void term_escape_osc(nss_term_t *term) {
-    nss_color_t col = term_color_parse(term);
     switch(term->esc.param[0]) {
         uint32_t args[2];
     case 0: /* Change window icon name and title */
@@ -956,22 +959,49 @@ static void term_escape_osc(nss_term_t *term) {
     case 2: /* Change window title */
         nss_window_set_title(term->win, (char *)term->esc.str);
         break;
-    case 4: /* Set color */
-        if(col && term->esc.param_idx > 1 && term->esc.param[1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
-            term->palette[term->esc.param[1]] = col;
-        } else term_escape_dump(term);
+    case 4: /* Set color */ {
+        char *pstr = (char *)term->esc.str, *pnext, *s_end;
+        char *pend = pstr + term->esc.str_idx;
+        while(pstr < pend && (pnext = strchr(pstr, ';'))) {
+            *pnext = '\0';
+            errno = 0;
+            unsigned long idx = strtoul(pstr, &s_end, 10);
+
+            char *parg  = pnext + 1;
+            if ((pnext = strchr(parg, ';'))) *pnext = '\0';
+            else pnext = pend - 1;
+
+            if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
+
+                nss_color_t col = color_parse(parg, pnext);
+                if (col) term->palette[idx] = col;
+                else if (parg[0] == '?' && parg[1] == '\0')
+                    nss_term_answerback(term, "\2354;#%06X\234", term->palette[idx] & 0x00FFFFFF);
+                else term_escape_dump(term);
+            }
+            pstr = pnext + 1;
+        }
+        if (pstr < pend && !pnext) {
+            for (size_t i = 0; i < term->esc.str_idx; i++)
+                if (!term->esc.str[i]) term->esc.str[i] = ';';
+            term_escape_dump(term);
+        }
         break;
+    }
     case 5: /* Set special color */
     case 6: /* Enable/disable special color */
         term_escape_dump(term);
         break;
-    case 10: /* Set VT100 foreground color */
+    case 10: /* Set VT100 foreground color */ {
+        nss_color_t col = color_parse((char *)term->esc.str, (char *)term->esc.str + term->esc.str_idx);
         if (col) {
             term->palette[NSS_SPECIAL_FG] = col;
             nss_window_set(term->win, nss_wc_foreground, &col);
         } else term_escape_dump(term);
         break;
-    case 11: /* Set VT100 background color */
+    }
+    case 11: /* Set VT100 background color */ {
+        nss_color_t col = color_parse((char *)term->esc.str, (char *)term->esc.str + term->esc.str_idx);
         if (col) {
             args[0] = args[1] = col;
             nss_color_t def = term->palette[NSS_SPECIAL_BG];
@@ -980,12 +1010,15 @@ static void term_escape_osc(nss_term_t *term) {
             nss_window_set(term->win, nss_wc_background | nss_wc_cursor_background, args);
         } else term_escape_dump(term);
         break;
-    case 12: /* Set Cursor color */
+    }
+    case 12: /* Set Cursor color */ {
+        nss_color_t col = color_parse((char *)term->esc.str, (char *)term->esc.str + term->esc.str_idx);
         if (col) {
             term->palette[NSS_SPECIAL_CURSOR_FG] = col;
             nss_window_set(term->win, nss_wc_background, &col);
         } else term_escape_dump(term);
         break;
+    }
     case 13: /* Set Mouse foreground color */
     case 14: /* Set Mouse background color */
     case 17: /* Set Highlight background color */
@@ -994,16 +1027,24 @@ static void term_escape_osc(nss_term_t *term) {
     case 52: /* Manipulate selecion data */
         term_escape_dump(term);
         break;
-    case 104: /* Reset color */
-        if(term->esc.param_idx > 1) {
-            if (term->esc.param[1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS)
-                term->palette[term->esc.param[1]] = nss_config_color(NSS_CONFIG_COLOR_0 + term->esc.param[1]);
-            else term_escape_dump(term);
+    case 104: /* Reset color */ {
+        if (term->esc.str_idx) {
+            char *pstr = (char *)term->esc.str, *pnext, *s_end;
+            while((pnext = strchr(pstr, ';'))) {
+                *pnext = '\0';
+                errno = 0;
+                unsigned long idx = strtoul(pstr, &s_end, 10);
+                if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
+                    term->palette[idx] = nss_config_color(NSS_CONFIG_COLOR_0 + idx);
+                } else term_escape_dump(term);
+                pstr = pnext + 1;
+            }
         } else {
             for(size_t i = 0; i < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; i++)
                 term->palette[i] = nss_config_color(NSS_CONFIG_COLOR_0 + i);
         }
         break;
+    }
     case 105: /* Reset special color */
     case 106: /* Enable/disable special color */
         term_escape_dump(term);
@@ -2065,20 +2106,22 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
                 if ('0' <= ch && ch <= '9') {
                     term->esc.param[term->esc.param_idx] *= 10;
                     term->esc.param[term->esc.param_idx] += ch - '0';
-                    return;
                 } else if (ch == ';') {
-                    term->esc.param[++term->esc.param_idx] = 0;
-                    return;
+                    if (term->esc.state & nss_es_intermediate) {
+                        term->esc.param_idx++;
+                        term->esc.state |= nss_es_gotfirst;
+                    } else term->esc.state |= nss_es_ignore;
                 } else {
-                    term->esc.state |= nss_es_gotfirst;
-                    if (ch == 'I') {
+                    if (term->esc.state & nss_es_intermediate) {
+                        term->esc.state |= nss_es_ignore;
+                    } else if (ch == 'I') {
                         term->esc.param[term->esc.param_idx++] = 1;
-                        return;
                     } else if (ch == 'L') {
                         term->esc.param[term->esc.param_idx++] = 2;
-                        return;
                     }
                 }
+                term->esc.state |= nss_es_intermediate;
+                return;
             }
         }
 
@@ -2564,7 +2607,7 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
     if (ioctl(term->fd, TIOCSWINSZ, &wsz) < 0)
         warn("Can't change tty size");
 
-	// Add delay to remove flickering
+    // Add delay to remove flickering
     clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
 }
 
