@@ -45,11 +45,19 @@ typedef struct nss_line {
 #define TTY_MAX_WRITE 256
 #define NSS_FD_BUF_SZ 256
 #define INIT_TAB_SIZE 8
+#define ESC_MAX_PARAM 16
+#define ESC_MAX_INTERM 2
+#define ESC_MAX_STR 256
+
 
 #define IS_C1(c) ((c) < 0xa0 && (c) >= 0x80)
 #define IS_C0(c) (((c) < 0x20) || (c) == 0x7f)
 #define IS_STREND(c) (IS_C1(c) || (c) == 0x1b || (c) == 0x1a || (c) == 0x18 || (c) == 0x07)
 #define ENABLE_IF(c, m, f) { if (c) { (m) |= (f); } else { (m) &= ~(f); }}
+
+#define MAX_EXTRA_PALETTE (0x10000 - NSS_PALETTE_SIZE)
+#define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
+
 
 typedef struct nss_cursor {
     int16_t x;
@@ -138,10 +146,6 @@ struct nss_term {
             nss_tm_mouse_x10 | nss_tm_mouse_button |
             nss_tm_mouse_motion | nss_tm_mouse_many
     } mode;
-
-#define ESC_MAX_PARAM 16
-#define ESC_MAX_INTERM 2
-#define ESC_MAX_STR 256
 
     struct nss_escape {
         enum nss_escape_state {
@@ -268,12 +272,8 @@ int tty_open(nss_term_t *term, char *cmd, char **args) {
     return master;
 }
 
-#define MAX_EXTRA_PALETTE (0x10000 - NSS_PALETTE_SIZE)
-#define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
-
 static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
-    static nss_cid_t *buf = NULL, buf_len = 0, *new; // <=== Here's a leak. I
-                                                     // t doesn't free memory until exited
+    static nss_cid_t *buf = NULL, buf_len = 0, *new;
     if (line->extra_size + 1 >= line->extra_caps) {
         if (line->extra) {
             _Bool blink = 0;
@@ -567,11 +567,15 @@ static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t a
     }
 
     if (!term->view) {
-        if (amount > 0)
-            nss_window_shift(term->win, top + amount, top, bottom + 1 - top - amount);
-        else if (amount < 0)
-            nss_window_shift(term->win, top, top - amount, bottom + 1 - top + amount);
-        clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
+        struct timespec cur;
+        clock_gettime(CLOCK_MONOTONIC, &cur);
+        if (TIMEDIFF(term->lastscroll, cur) > NSS_TERM_SCROLL_DELAY) {
+            if (amount > 0)
+                nss_window_shift(term->win, top + amount, top, bottom + 1 - top - amount);
+            else if (amount < 0)
+                nss_window_shift(term->win, top, top - amount, bottom + 1 - top + amount);
+        } else  term->mode |= nss_tm_force_redraw;
+        term->lastscroll = cur;
     } else  term->mode |= nss_tm_force_redraw;
     term->view = NULL;
 }
@@ -685,7 +689,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term->top = 0;
     term->bottom = term->height - 1;
 
-    if (hard && 0) {
+    if (hard) {
         memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
         for(size_t i = INIT_TAB_SIZE; i < (size_t)term->width; i += INIT_TAB_SIZE)
             term->tabs[i] = 1;
@@ -2045,13 +2049,9 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
 
 static void term_putchar(nss_term_t *term, uint32_t ch) {
     int16_t width = wcwidth(ch);
-    uint8_t buf[UTF8_MAX_LEN + 1];
 
     if (width < 0 && !(IS_C0(ch) || IS_C1(ch)))
         ch = UTF_INVAL, width =1;
-
-    size_t char_len = utf8_encode(ch, buf, buf + UTF8_MAX_LEN);
-    buf[char_len] = '\0';
 
     //info("UTF %"PRIx32" '%s'", ch, buf);
 
@@ -2081,6 +2081,11 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
                 }
             }
         }
+
+        uint8_t buf[UTF8_MAX_LEN + 1];
+        size_t char_len = utf8_encode(ch, buf, buf + UTF8_MAX_LEN);
+        buf[char_len] = '\0';
+
         if (term->esc.str_idx + char_len > ESC_MAX_STR) return;
         memcpy(term->esc.str + term->esc.str_idx, buf, char_len + 1);
         term->esc.str_idx += char_len;
@@ -2438,6 +2443,7 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
     term_move_to(term, term->c.x, term->c.y);
     if (cur_moved)
         term->screen[term->c.y]->mode |= nss_lm_dirty;
+
 }
 
 nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
@@ -2557,6 +2563,9 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
     if (ioctl(term->fd, TIOCSWINSZ, &wsz) < 0)
         warn("Can't change tty size");
+
+	// Add delay to remove flickering
+    clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
 }
 
 void nss_term_focus(nss_term_t *term, _Bool focused) {

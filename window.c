@@ -36,7 +36,6 @@
 #define CA(c) ((((c) >> 24) & 0xff) * 0x100)
 #define MAKE_COLOR(c) {.red=CR(c), .green=CG(c), .blue=CB(c), .alpha=CA(c)}
 
-
 struct nss_window {
     xcb_window_t wid;
     xcb_pixmap_t pid;
@@ -1602,16 +1601,6 @@ void nss_context_run(void) {
     for (;;) {
         if (poll(con.pfds, con.pfdcap, POLL_TIMEOUT) < 0 && errno != EINTR)
             warn("Poll error: %s", strerror(errno));
-        for (size_t i = 1; i < con.pfdcap; i++) {
-            if (con.pfds[i].fd > 0) {
-                nss_window_t *win = window_for_term_fd(con.pfds[i].fd);
-                if (con.pfds[i].revents & POLLIN & win->got_configure) {
-                    nss_term_read(win->term);
-                } else if (con.pfds[i].revents & (POLLERR | POLLNVAL | POLLHUP)) {
-                    nss_free_window(win);
-                }
-            }
-        }
         if (con.pfds[0].revents & POLLIN) {
             xcb_generic_event_t *event;
             while ((event = xcb_poll_for_event(con.con))) {
@@ -1777,6 +1766,16 @@ void nss_context_run(void) {
                 free(event);
             }
         }
+        for (size_t i = 1; i < con.pfdcap; i++) {
+            if (con.pfds[i].fd > 0) {
+                nss_window_t *win = window_for_term_fd(con.pfds[i].fd);
+                if (con.pfds[i].revents & POLLIN & win->got_configure) {
+                    nss_term_read(win->term);
+                } else if (con.pfds[i].revents & (POLLERR | POLLNVAL | POLLHUP)) {
+                    nss_free_window(win);
+                }
+            }
+        }
         struct timespec cur;
         clock_gettime(CLOCK_MONOTONIC, &cur);
         for (nss_window_t *win = con.first; win; win = win->next) {
@@ -1788,7 +1787,7 @@ void nss_context_run(void) {
                 win->blink_state = !win->blink_state;
                 win->prev_blink = cur;
             }
-            if (ms_diff2 > 1000000/NSS_TERM_FPS && ms_diff3 > NSS_TERM_SCROLL_DELAY) {
+            if ((ms_diff2 > NSS_TERM_REDRAW_RATE && ms_diff3 > NSS_TERM_SCROLL_DELAY) || ms_diff2 > NSS_TERM_MAX_DELAY_SKIP) {
                 win->prev_draw = cur;
                 nss_term_redraw_dirty(win->term, 1);
             }
