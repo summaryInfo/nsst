@@ -125,6 +125,8 @@ struct nss_context {
 
     uint8_t *render_buffer;
     size_t render_buffer_size;
+    uint8_t *mark_buffer;
+    size_t mark_buffer_size;
 };
 
 typedef struct nss_glyph_mesg {
@@ -791,6 +793,7 @@ void nss_free_context(void) {
     xkb_context_unref(con.xkb_ctx);
 
     free(con.render_buffer);
+    free(con.mark_buffer);
     free(con.pfds);
 
     xcb_disconnect(con.con);
@@ -1192,6 +1195,56 @@ void nss_window_draw_cursor(nss_window_t *win, int16_t x, int16_t y, nss_cell_t 
     xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_OVER, win->pic, c, count, rects + off);
 }
 
+
+static inline void eval_color(nss_window_t *win, nss_cell_t cell, nss_color_t *pal, nss_color_t *extra, xcb_render_color_t *fgr, xcb_render_color_t *bgr) {
+        uint32_t attr = CELL_ATTR(cell);
+        nss_cid_t bgi = cell.bg, fgi = cell.fg;
+
+        if ((attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && fgi < 8) fgi += 8;
+
+        nss_color_t bcolor = bgi < NSS_PALETTE_SIZE ? pal[bgi] : extra[bgi - NSS_PALETTE_SIZE];
+        nss_color_t fcolor = fgi < NSS_PALETTE_SIZE ? pal[fgi] : extra[fgi - NSS_PALETTE_SIZE];
+
+        if (win->reverse_video) {
+            if (bcolor == win->bg)
+                bcolor = win->fg;
+            if (fcolor == win->fg)
+                fcolor = win->bg;
+        }
+
+        xcb_render_color_t fg = MAKE_COLOR(fcolor);
+        xcb_render_color_t bg = MAKE_COLOR(bcolor);
+
+        if ((attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint)
+            fg.red /= 2, fg.green /= 2, fg.blue /= 2;
+        if (attr & nss_attrib_inverse) SWAP(xcb_render_color_t, fg, bg);
+        if (attr & nss_attrib_invisible || (attr & nss_attrib_blink && win->blink_state)) fg = bg;
+
+        if (fgr) *fgr = fg;
+        if (bgr) *bgr = bg;
+}
+
+_Bool cell_equal_bg(nss_cell_t a, nss_cell_t b) {
+    uint32_t a_attr = CELL_ATTR(a), b_attr = CELL_ATTR(b);
+    if (!(a_attr & nss_attrib_inverse) && !(b_attr & nss_attrib_inverse))
+        return a.bg == b.bg;
+
+    nss_cid_t a_bg = a.bg;
+    if (a_attr & nss_attrib_inverse)
+        a_bg = a.fg + 8 * ((a_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && a.fg < 8);
+    nss_cid_t b_bg = b.bg;
+    if (b_attr & nss_attrib_inverse)
+        b_bg = b.fg + 8 * ((b_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && b.fg < 8);
+
+    if (a_bg != b_bg) return 0;
+
+    if ((((a_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint) && (a_attr & nss_attrib_inverse)) ||
+            (((b_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint) && (b_attr & nss_attrib_inverse))) {
+        return ((a_attr & (nss_attrib_bold | nss_attrib_faint | nss_attrib_inverse))
+                == (b_attr & (nss_attrib_bold | nss_attrib_faint | nss_attrib_inverse)));
+    } else return 1;
+}
+
 /* Draw line with attributes */
 /* TODO: Implement query caching */
 void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_cell_t *cells, nss_color_t *pal, nss_color_t *extra) {
@@ -1214,44 +1267,72 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
             }
         }
     }
+
+    if (con.mark_buffer_size < len) {
+        uint8_t *new = realloc(con.mark_buffer, len);
+        if (!new) return;
+        con.mark_buffer = new;
+        con.mark_buffer_size = len;
+    }
+
+    memset(con.mark_buffer, 0, con.mark_buffer_size);
+
+    for (size_t i = 0; i < len; ) {
+        xcb_render_color_t bg;
+        eval_color(win, cells[i], pal, extra, NULL, &bg);
+
+        xcb_rectangle_t *rects = (xcb_rectangle_t *)con.render_buffer;
+        xcb_rectangle_t *rend = rects + con.render_buffer_size / sizeof(xcb_rectangle_t), *rpos = rects;
+        for (size_t j = i; j < len; ) {
+            size_t blk_len = 0;
+            while (j + blk_len < len && cell_equal_bg(cells[i], cells[j + blk_len]))
+                con.mark_buffer[j + blk_len++] = 1;
+
+            if (rpos + 1 >= rend) {
+                size_t new_size = MAX(3 * con.render_buffer_size / 2, 16 * sizeof(xcb_rectangle_t));
+                uint8_t *new = realloc(con.render_buffer, new_size);
+                if (!new) return;
+                con.render_buffer = new;
+                con.render_buffer_size = new_size;
+                rpos = (xcb_rectangle_t *)con.render_buffer + (rpos - rects);
+                rects = (xcb_rectangle_t *)con.render_buffer;
+                rend = rects + new_size / sizeof(xcb_rectangle_t);
+            }
+
+            *rpos++ = (xcb_rectangle_t) {
+                .x = x + j * win->char_width, .y = y - win->char_height,
+                .width = blk_len * win->char_width,
+                .height = win->char_depth + win->char_height
+            };
+
+            j += blk_len;
+            while (j < len && !cell_equal_bg(cells[i], cells[j])) j++;
+        }
+
+        xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, bg, rpos - rects, rects);
+
+        while(con.mark_buffer[i]) i++;
+    }
+
+
     while (len > 0) {
         uint32_t attr = CELL_ATTR(*cells);
         uint8_t fattr = attr & nss_font_attrib_mask;
-        nss_cid_t bgi = cells->bg, fgi = cells->fg;
-
-        if ((attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && fgi < 8) fgi += 8;
-
-        nss_color_t bcolor = bgi < NSS_PALETTE_SIZE ? pal[bgi] : extra[bgi - NSS_PALETTE_SIZE];
-        nss_color_t fcolor = fgi < NSS_PALETTE_SIZE ? pal[fgi] : extra[fgi - NSS_PALETTE_SIZE];
-
-        if (win->reverse_video) {
-            if (bcolor == win->bg)
-                bcolor = win->fg;
-            if (fcolor == win->fg)
-                fcolor = win->bg;
-        }
-
-        xcb_render_color_t fg = MAKE_COLOR(fcolor);
-        xcb_render_color_t bg = MAKE_COLOR(bcolor);
-
-        if ((attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint)
-            fg.red /= 2, fg.green /= 2, fg.blue /= 2;
-        if (attr & nss_attrib_inverse) SWAP(xcb_render_color_t, fg, bg);
-        if (attr & nss_attrib_invisible || (attr & nss_attrib_blink && win->blink_state)) fg = bg;
+        xcb_render_color_t fg, bg;
+        eval_color(win, *cells, pal, extra, &fg, &bg);
 
         xcb_rectangle_t rect2 = { .x = 0, .y = 0, .width = 1, .height = 1 };
         xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pen, fg, 1, &rect2);
-
 
         size_t blk_len = 1;
         while (blk_len < len && CELL_EQ(cells[blk_len], cells[blk_len - 1]))
             blk_len++;
 
-        xcb_rectangle_t rect = {
-            .x = x, .y = y-win->char_height,
-            .width = win->char_width*blk_len,
-            .height = win->char_height+win->char_depth
-        };
+        //xcb_rectangle_t rect = {
+        //    .x = x, .y = y-win->char_height,
+        //    .width = win->char_width*blk_len,
+        //    .height = win->char_height+win->char_depth
+        //};
 
         xcb_rectangle_t lines[2] = {
             { .x = x, .y= y + 1, .width = win->char_width*blk_len, .height = win->underline_width },
@@ -1280,7 +1361,7 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
             msg.dx = msg.dy = 0;
         }
 
-        xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, bg, 1, &rect);
+        //xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, bg, 1, &rect);
 
         if (attr & (nss_attrib_underlined|nss_attrib_strikethrough)) {
             size_t count = !!(attr & nss_attrib_underlined) + !!(attr & nss_attrib_strikethrough);
