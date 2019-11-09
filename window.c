@@ -45,19 +45,18 @@ struct nss_window {
     xcb_event_mask_t ev_mask;
     xcb_render_picture_t pen;
 
-    _Bool focused;
-    _Bool active;
-    _Bool lcd_mode;
-    _Bool got_configure;
-    _Bool blink_state;
-
-    _Bool appkey;
-    _Bool appcursor;
-    _Bool numlock;
-    _Bool keylock;
-    _Bool has_meta;
-    _Bool reverse_video;
-    _Bool mouse_events;
+    unsigned focused : 1;
+    unsigned active : 1;
+    unsigned lcd_mode : 1;
+    unsigned got_configure : 1;
+    unsigned blink_state : 1;
+    unsigned appkey : 1;
+    unsigned appcursor : 1;
+    unsigned numlock : 1;
+    unsigned keylock : 1;
+    unsigned has_meta : 1;
+    unsigned reverse_video : 1;
+    unsigned mouse_events : 1;
 
     int16_t width;
     int16_t height;
@@ -793,6 +792,7 @@ void nss_free_context(void) {
     xkb_context_unref(con.xkb_ctx);
 
     free(con.render_buffer);
+    free(con.pfds);
 
     xcb_disconnect(con.con);
     memset(&con, 0, sizeof(con));
@@ -1379,7 +1379,8 @@ void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values)
         xcb_change_gc(con.con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
     }
    if (tag & ~(nss_wc_appcursor | nss_wc_appkey | nss_wc_numlock | nss_wc_keylock | nss_wc_has_meta)) {
-        nss_term_redraw(win->term, (nss_rect_t) {0, 0, win->cw, win->ch}, 1);
+        // TODO Redraw?
+        nss_term_invalidate_screen(win->term);
         redraw_damage(win, (nss_rect_t) {0, 0, win->width, win->height});
         xcb_flush(con.con);
    }
@@ -1780,9 +1781,9 @@ void nss_context_run(void) {
         clock_gettime(CLOCK_MONOTONIC, &cur);
         for (nss_window_t *win = con.first; win; win = win->next) {
             struct timespec *lastscroll = nss_term_last_scroll_time(win->term);
-            long long ms_diff1 = ((cur.tv_sec - win->prev_blink.tv_sec) * 1000000000 + (cur.tv_nsec - win->prev_blink.tv_nsec)) / 1000;
-            long long ms_diff2 = ((cur.tv_sec - win->prev_draw.tv_sec) * 1000000000 + (cur.tv_nsec - win->prev_draw.tv_nsec)) / 1000;
-            long long ms_diff3 = ((cur.tv_sec - lastscroll->tv_sec) * 1000000000 + (cur.tv_nsec - lastscroll->tv_nsec)) / 1000;
+            long long ms_diff1 = TIMEDIFF(win->prev_blink, cur);
+            long long ms_diff2 = TIMEDIFF(win->prev_draw, cur);
+            long long ms_diff3 = TIMEDIFF(*lastscroll, cur);
             if (ms_diff1 > win->blink_time && win->active) {
                 win->blink_state = !win->blink_state;
                 win->prev_blink = cur;

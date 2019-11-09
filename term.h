@@ -29,5 +29,6 @@ void nss_term_hang(nss_term_t *term);
 struct timespec *nss_term_last_scroll_time(nss_term_t *term);
 _Bool nss_term_is_altscreen(nss_term_t *term);
 _Bool nss_term_is_utf8(nss_term_t *term);
+void nss_term_invalidate_screen(nss_term_t *term);
 
 #endif

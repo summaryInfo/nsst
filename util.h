@@ -9,6 +9,7 @@
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 #define SWAP(T, a, b) {T tmp_ = (a); (a) = (b); (b) = tmp_; }
+#define TIMEDIFF(t, d)  ((((d).tv_sec - (t).tv_sec) * 1000000000 + ((d).tv_nsec - (t).tv_nsec)) / 1000)
 
 typedef struct nss_rect {
     int16_t x;

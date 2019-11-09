@@ -352,6 +352,10 @@ static void term_free_line(nss_term_t *term, nss_line_t *line) {
     free(line);
 }
 
+void nss_term_invalidate_screen(nss_term_t *term) {
+    term->mode |= nss_tm_force_redraw;
+}
+
 void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
     if (term->mode & nss_tm_altscreen) return;
     int16_t scrolled = 0;
@@ -397,26 +401,29 @@ void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
 }
 
 static void term_append_history(nss_term_t *term, nss_line_t *line) {
-    if (term->scrollback)
-        term->scrollback->next = line;
-    else
-        term->scrollback_top = line;
-    line->prev = term->scrollback;
-    line->next = NULL;
-    term->scrollback = line;
+    if (term->scrollback_limit == 0) {
+        term_free_line(term,line);
+    } else {
+        if (term->scrollback) term->scrollback->next = line;
+        else term->scrollback_top = line;
+        line->prev = term->scrollback;
+        line->next = NULL;
+        term->scrollback = line;
 
-    if (term->scrollback_limit >= 0 && ++term->scrollback_size > term->scrollback_limit) {
-        if (term->scrollback_top == term->view) {
-            term->view = term->scrollback_top->next;
-            term->mode |= nss_tm_force_redraw;
+        if (term->scrollback_limit >= 0 && ++term->scrollback_size > term->scrollback_limit) {
+            if (term->scrollback_top == term->view) {
+                // TODO Dont invalidate whole screen
+                term->view = term->scrollback_top->next;
+                term->mode |= nss_tm_force_redraw;
+            }
+            nss_line_t *next = term->scrollback_top->next;
+            term_free_line(term, term->scrollback_top);
+
+            if (next) next->prev = NULL;
+            else term->scrollback = NULL;
+            term->scrollback_top = next;
+            term->scrollback_size = term->scrollback_limit;
         }
-        if (term->scrollback_top == term->scrollback)
-            term->scrollback = NULL;
-        nss_line_t *next = term->scrollback_top->next;
-        term_free_line(term, term->scrollback_top);
-        if (next) next->prev = NULL;
-        term->scrollback_top = next;
-        term->scrollback_size = term->scrollback_limit;
     }
 }
 
@@ -678,7 +685,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term->top = 0;
     term->bottom = term->height - 1;
 
-    if (hard) {
+    if (hard && 0) {
         memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
         for(size_t i = INIT_TAB_SIZE; i < (size_t)term->width; i += INIT_TAB_SIZE)
             term->tabs[i] = 1;
@@ -689,14 +696,13 @@ static void term_reset(nss_term_t *term, _Bool hard) {
             term_swap_screen(term);
         }
         for (nss_line_t *tmp, *line = term->scrollback; line; line = tmp) {
-            tmp = line->next;
+            tmp = line->prev;
             term_free_line(term, line);
         }
 
         term->view = NULL;
         term->scrollback_top = NULL;
         term->scrollback = NULL;
-        term->scrollback_limit = 1024;
         term->scrollback_size = 0;
         nss_window_set_title(term->win, NULL);
 
@@ -867,7 +873,7 @@ static void term_escape_dump(nss_term_t *term) {
         buf[pos++] = '\\';
     }
     buf[pos] = 0;
-    warn("%s", buf);
+    //warn("%s", buf);
 }
 
 static void term_escape_dsr(nss_term_t *term) {
