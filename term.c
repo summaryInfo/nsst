@@ -44,7 +44,6 @@ typedef struct nss_line {
 
 #define TTY_MAX_WRITE 256
 #define NSS_FD_BUF_SZ 256
-#define INIT_TAB_SIZE 8
 #define ESC_MAX_PARAM 16
 #define ESC_MAX_INTERM 2
 #define ESC_MAX_STR 512
@@ -194,7 +193,7 @@ static void sigchld_fn(int arg) {
         info("Child terminated due to the signal: %d", WTERMSIG(status));
 }
 
-static void exec_shell(char *cmd, char **args) {
+static void exec_shell(const char *cmd, const char **args) {
 
     const struct passwd *pw;
     errno = 0;
@@ -203,14 +202,14 @@ static void exec_shell(char *cmd, char **args) {
         else die("I don't know you");
     }
 
-    char *sh = cmd;
+    const char *sh = cmd;
     if (!(sh = getenv("SHELL")))
         sh = pw->pw_shell[0] ? pw->pw_shell : cmd;
 
     if (args) cmd = args[0];
     else cmd = sh;
 
-    char *def[] = {cmd, NULL};
+    const char *def[] = {cmd, NULL};
     if (!args) args = def;
 
     unsetenv("COLUMNS");
@@ -229,11 +228,11 @@ static void exec_shell(char *cmd, char **args) {
     signal(SIGTERM, SIG_DFL);
     signal(SIGALRM, SIG_DFL);
 
-    execvp(cmd, args);
+    execvp(cmd, (char *const *)args);
     _exit(1);
 }
 
-int tty_open(nss_term_t *term, char *cmd, char **args) {
+int tty_open(nss_term_t *term, const char *cmd, const char **args) {
     int slave, master;
     if (openpty(&master, &slave, NULL, NULL, NULL) < 0) {
         warn("Can't create pseudo terminal");
@@ -661,11 +660,13 @@ static void term_tabs(nss_term_t *term, int16_t n) {
 
 static void term_reset(nss_term_t *term, _Bool hard) {
     for(size_t i = 0; i < NSS_PALETTE_SIZE; i++)
-        term->palette[i] = nss_config_color(NSS_CONFIG_COLOR_0 + i);
+        term->palette[i] = nss_config_color(nss_config_color_0 + i);
     uint32_t args[] = {
         term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG],
         term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG],
-        nss_cursor_bar, 0, 0, 1, 0, 0, 0, 0};
+        nss_config_integer(nss_config_cursor_shape, 0, 6), 0, 0, 1, 0,
+        nss_config_integer(nss_config_has_meta, 0, 1), 
+        nss_config_integer(nss_config_reverse_video, 0, 1), 0};
     nss_window_set(term->win,
             nss_wc_background | nss_wc_foreground |
             nss_wc_cursor_background | nss_wc_cursor_foreground |
@@ -678,20 +679,26 @@ static void term_reset(nss_term_t *term, _Bool hard) {
 
     term->c = term->back_cs = term->cs = (nss_cursor_t) {
         .cel = MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, ' '),
-        .fg = nss_config_color(NSS_CONFIG_FG),
-        .bg = nss_config_color(NSS_CONFIG_BG),
+        .fg = nss_config_color(nss_config_fg),
+        .bg = nss_config_color(nss_config_bg),
         .gl = 0, .gl_ss = 0, .gr = 2,
         .gn = {nss_cs_dec_ascii, nss_cs_british, nss_cs_british, nss_cs_british}
     };
 
-    term->mode &= nss_tm_disable_altscreen | nss_tm_dont_scroll_on_input | nss_tm_focused | nss_tm_scoll_on_output;
-    term->mode |= nss_tm_wrap | nss_tm_visible | nss_tm_utf8;
+    term->mode &= nss_tm_focused | nss_tm_visible;
+    if (nss_config_integer(nss_config_utf8, 0, 1)) term->mode |= nss_tm_utf8;
+    if (!nss_config_integer(nss_config_allow_altscreen, 0, 1)) term->mode |= nss_tm_disable_altscreen; 
+    if (nss_config_integer(nss_config_init_wrap, 0, 1)) term->mode |= nss_tm_wrap;
+    if (!nss_config_integer(nss_config_scroll_on_input, 0, 1)) term->mode |= nss_tm_dont_scroll_on_input;
+    if (nss_config_integer(nss_config_scroll_on_output, 0, 1)) term->mode |= nss_tm_scoll_on_output;
+    
     term->top = 0;
     term->bottom = term->height - 1;
 
     if (hard) {
         memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
-        for(size_t i = INIT_TAB_SIZE; i < (size_t)term->width; i += INIT_TAB_SIZE)
+        size_t tabw = nss_config_integer(nss_config_tab_width, 1, 10000);
+        for(size_t i = tabw; i < (size_t)term->width; i += tabw)
             term->tabs[i] = 1;
 
         for(size_t i = 0; i < 2; i++) {
@@ -771,19 +778,18 @@ static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
 
     // In theory this should be disabled while in UTF-8 mode, but
     // in practive applications use these symbols, so keep translating
-
     // Need to make this configuration option
 
-    //if (!(term->mode & nss_tm_utf8)) {
-    if (ch < 0x80) {
-        if (term->c.gn[term->c.gl_ss] != nss_cs_dec_ascii) {
-            ch = nrcs_translate(term->c.gn[term->c.gl_ss], ch, term->mode & nss_tm_enable_nrcs);
+    if (!(term->mode & nss_tm_utf8) || nss_config_integer(nss_config_allow_nrcs, 0, 1)) {
+        if (ch < 0x80) {
+            if (term->c.gn[term->c.gl_ss] != nss_cs_dec_ascii) {
+                ch = nrcs_translate(term->c.gn[term->c.gl_ss], ch, term->mode & nss_tm_enable_nrcs);
+            }
+        } else if (ch < 0x100) {
+            if (term->c.gn[term->c.gr] != nss_cs_british || term->mode & nss_tm_enable_nrcs)
+                ch = nrcs_translate(term->c.gn[term->c.gr], ch - 0x80, term->mode & nss_tm_enable_nrcs);
         }
-    } else if (ch < 0x100) {
-        if (term->c.gn[term->c.gr] != nss_cs_british || term->mode & nss_tm_enable_nrcs)
-            ch = nrcs_translate(term->c.gn[term->c.gr], ch - 0x80, term->mode & nss_tm_enable_nrcs);
     }
-    //}
 
     nss_line_t *line = term->screen[y];
     nss_cell_t cel = fixup_color(line, &term->c);
@@ -1035,13 +1041,13 @@ static void term_escape_osc(nss_term_t *term) {
                 errno = 0;
                 unsigned long idx = strtoul(pstr, &s_end, 10);
                 if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
-                    term->palette[idx] = nss_config_color(NSS_CONFIG_COLOR_0 + idx);
+                    term->palette[idx] = nss_config_color(nss_config_color_0 + idx);
                 } else term_escape_dump(term);
                 pstr = pnext + 1;
             }
         } else {
             for(size_t i = 0; i < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; i++)
-                term->palette[i] = nss_config_color(NSS_CONFIG_COLOR_0 + i);
+                term->palette[i] = nss_config_color(nss_config_color_0 + i);
         }
         break;
     }
@@ -1050,16 +1056,16 @@ static void term_escape_osc(nss_term_t *term) {
         term_escape_dump(term);
         break;
     case 110: /*Reset  VT100 foreground color */
-        args[0] = term->palette[NSS_SPECIAL_FG] = nss_config_color(NSS_CONFIG_FG);
+        args[0] = term->palette[NSS_SPECIAL_FG] = nss_config_color(nss_config_fg);
         nss_window_set(term->win, nss_wc_foreground, args);
         break;
     case 111: /*Reset  VT100 background color */
-        args[0] = term->palette[NSS_SPECIAL_BG] = nss_config_color(NSS_CONFIG_BG);
-        args[1] = term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(NSS_CONFIG_CURSOR_BG);
+        args[0] = term->palette[NSS_SPECIAL_BG] = nss_config_color(nss_config_bg);
+        args[1] = term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(nss_config_cursor_bg);
         nss_window_set(term->win, nss_wc_background | nss_wc_cursor_background, args);
         break;
     case 112: /*Reset  Cursor color */
-        args[0] = term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(NSS_CONFIG_CURSOR_FG);
+        args[0] = term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(nss_config_cursor_fg);
         nss_window_set(term->win, nss_wc_cursor_foreground, args);
         break;
     case 113: /*Reset  Mouse foreground color */
@@ -2456,9 +2462,9 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
     if(width > term->width) {
         memset(new_tabs + term->width, 0, (width - term->width) * sizeof(new_tabs[0]));
-        int16_t tab = term->width;
+        int16_t tab = term->width, tabw = nss_config_integer(nss_config_tab_width, 1, 10000);
         while (tab > 0 && !new_tabs[tab]) tab--;
-        while ((tab += INIT_TAB_SIZE) < width) new_tabs[tab] = 1;
+        while ((tab += tabw) < width) new_tabs[tab] = 1;
     }
 
     // Set parameters
@@ -2493,9 +2499,15 @@ nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
     nss_term_t *term = calloc(1, sizeof(nss_term_t));
     term->palette = nss_create_palette();
     term->win = win;
-    term->scrollback_limit = 1024;
+    term->scrollback_limit = nss_config_integer(nss_config_history_lines, -1, 1000000);
 
-    term->mode = nss_tm_wrap | nss_tm_visible | nss_tm_utf8;
+    term->mode = nss_tm_visible;
+    if (nss_config_integer(nss_config_utf8, 0, 1)) term->mode |= nss_tm_utf8;
+    if (!nss_config_integer(nss_config_allow_altscreen, 0, 1)) term->mode |= nss_tm_disable_altscreen; 
+    if (nss_config_integer(nss_config_init_wrap, 0, 1)) term->mode |= nss_tm_wrap;
+    if (!nss_config_integer(nss_config_scroll_on_input, 0, 1)) term->mode |= nss_tm_dont_scroll_on_input;
+    if (nss_config_integer(nss_config_scroll_on_output, 0, 1)) term->mode |= nss_tm_scoll_on_output;
+
     term->c = term->back_cs = term->cs = (nss_cursor_t) {
         .cel = MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, ' '),
         .gl = 0, .gl_ss = 0, .gr = 2,
@@ -2503,7 +2515,8 @@ nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
     };
 
     memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
-    for(size_t i = INIT_TAB_SIZE; i < (size_t)term->width; i += INIT_TAB_SIZE)
+    size_t tabw = nss_config_integer(nss_config_tab_width, 1, 10000);
+    for(size_t i = tabw; i < (size_t)term->width; i += tabw)
         term->tabs[i] = 1;
 
     for(size_t i = 0; i < 2; i++) {
@@ -2516,7 +2529,7 @@ nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
 
     term_resize(term, width, height);
 
-    if (tty_open(term, "./testcmd", NULL) < 0) {
+    if (tty_open(term, nss_config_string(nss_config_shell, "/bin/sh"), NULL) < 0) {
         warn("Can't create tty");
         nss_free_term(term);
         return NULL;
@@ -2593,8 +2606,6 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
 }
 
 void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
-    info("Resize: w=%"PRId16" h=%"PRId16, width, height);
-
     term_resize(term, width, height);
 
     struct winsize wsz = {

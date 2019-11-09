@@ -12,8 +12,7 @@
 
 int main(int argc, char **argv) {
     nss_init_context();
-    char *fname= argc >= 2 ? argv[1] : "Iosevka-13,MaterialDesignIcons-13";
-    nss_create_window((nss_rect_t) {100, 100, 800, 600}, fname, 0, NULL);
+    nss_create_window(NULL, 0, NULL);
     nss_context_run();
     info("Top level");
     nss_free_context();

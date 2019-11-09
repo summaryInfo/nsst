@@ -25,7 +25,7 @@ typedef enum nss_wc_tag {
     nss_wc_cursor_background = 1 << 5,
     nss_wc_cursor_foreground = 1 << 6,
     nss_wc_cursor_type = 1 << 7,
-    nss_wc_lcd_mode = 1 << 8,
+    nss_wc_subpixel_fonts = 1 << 8,
     nss_wc_font_size = 1 << 9,
     nss_wc_underline_width = 1 << 10,
     nss_wc_width = 1 << 11,
@@ -69,7 +69,7 @@ void nss_free_context(void);
 uint16_t nss_context_get_dpi(void);
 void nss_context_run(void);
 
-nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_tag_t tag, const uint32_t *values);
+nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const uint32_t *values);
 void nss_free_window(nss_window_t *win);
 void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_cell_t *cells, nss_color_t *pal, nss_color_t *extra);
 void nss_window_draw_commit(nss_window_t *win);

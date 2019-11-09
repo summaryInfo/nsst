@@ -13,11 +13,38 @@ typedef uint32_t nss_color_t;
 #define NSS_SPECIAL_CURSOR_BG 258
 #define NSS_SPECIAL_CURSOR_FG 259
 
-#define NSS_CONFIG_BG 256
-#define NSS_CONFIG_FG 257
-#define NSS_CONFIG_CURSOR_BG 258
-#define NSS_CONFIG_CURSOR_FG 159
-#define NSS_CONFIG_COLOR_0 0
+enum nss_config_opt {
+    nss_config_window_x,
+    nss_config_window_y,
+    nss_config_window_width,
+    nss_config_window_height,
+    nss_config_history_lines,
+    nss_config_utf8,
+    nss_config_allow_nrcs,
+    nss_config_tab_width,
+    nss_config_init_wrap,
+    nss_config_scroll_on_input,
+    nss_config_scroll_on_output,
+    nss_config_has_meta,
+    nss_config_cursor_shape,
+    nss_config_underline_width,
+    nss_config_cursor_width,
+    nss_config_subpixel_fonts,
+    nss_config_reverse_video,
+    nss_config_allow_altscreen,
+    nss_config_left_border,
+    nss_config_top_border,
+    nss_config_blink_time,
+    nss_config_font_size,
+    nss_config_font_name, // string
+    nss_config_answerback_string, // string
+    nss_config_shell, // string
+    nss_config_color_0,
+    nss_config_bg = nss_config_color_0 + NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS,
+    nss_config_fg,
+    nss_config_cursor_bg,
+    nss_config_cursor_fg,
+};
 
 typedef enum nss_attrs {
     nss_attrib_italic = 1 << 0,
@@ -57,6 +84,8 @@ typedef struct nss_cell {
 
 nss_color_t *nss_create_palette(void);
 nss_color_t nss_config_color(uint32_t opt);
+int32_t nss_config_integer(uint32_t opt, int32_t min, int32_t max);
+const char *nss_config_string(uint32_t opt, const char *alt);
 
 #endif
 

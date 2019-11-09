@@ -46,7 +46,7 @@ struct nss_window {
 
     unsigned focused : 1;
     unsigned active : 1;
-    unsigned lcd_mode : 1;
+    unsigned subpixel_fonts : 1;
     unsigned got_configure : 1;
     unsigned blink_state : 1;
     unsigned appkey : 1;
@@ -592,7 +592,7 @@ static _Bool configure_xkb(void) {
     int res = xkb_x11_setup_xkb_extension(con.con, XKB_X11_MIN_MAJOR_XKB_VERSION,
                                           XKB_X11_MIN_MINOR_XKB_VERSION, XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
                                           &xkb_maj, &xkb_min, &con.xkb_base_event, &con.xkb_base_err);
-    info("XKB base event: %02"PRIu8, con.xkb_base_event);
+
     if (!res || xkb_maj < XKB_X11_MIN_MAJOR_XKB_VERSION) {
         warn("Can't get suitable XKB verion");
         return 0;
@@ -818,7 +818,7 @@ static void set_config(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *valu
     if (tag & nss_wc_cursor_background) win->cursor_bg = *values++;
     if (tag & nss_wc_cursor_foreground) win->cursor_fg = *values++;
     if (tag & nss_wc_cursor_type) win->cursor_type = *values++;
-    if (tag & nss_wc_lcd_mode) win->lcd_mode = *values++;
+    if (tag & nss_wc_subpixel_fonts) win->subpixel_fonts = *values++;
     if (tag & nss_wc_font_size) win->font_size = *values++;
     if (tag & nss_wc_underline_width) win->underline_width = *values++;
     if (tag & nss_wc_width) warn("Tag is not settable"), values++;
@@ -843,7 +843,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
            !strcmp(win->font_name, src->font_name) && src != win) {
             found_font = 1;
             found = src;
-            if (src->lcd_mode == win->lcd_mode) {
+            if (src->subpixel_fonts == win->subpixel_fonts) {
                 found_gset = 1;
                 break;
             }
@@ -861,7 +861,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
 
     win->font = new;
     win->font_size = nss_font_get_size(new);
-    win->pfglyph = win->lcd_mode ? con.pfargb : con.pfalpha;
+    win->pfglyph = win->subpixel_fonts ? con.pfargb : con.pfalpha;
 
     xcb_void_cookie_t c;
 
@@ -890,7 +890,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
         int16_t total = 0, maxd = 0, maxh = 0;
         for (uint32_t i = ' '; i <= '~'; i++) {
             for (size_t j = 0; j < nss_font_attrib_max; j++)
-                glyphs[i - ' '][j] = nss_font_render_glyph(win->font, i, j, win->lcd_mode);
+                glyphs[i - ' '][j] = nss_font_render_glyph(win->font, i, j, win->subpixel_fonts);
 
             total += glyphs[i - ' '][0]->x_off;
             maxd = MAX(maxd, glyphs[i - ' '][0]->height - glyphs[i - ' '][0]->y);
@@ -967,28 +967,33 @@ static void set_wm_props(nss_window_t *win) {
 }
 
 /* Create new window */
-nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_tag_t tag, const uint32_t *values) {
+nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const uint32_t *values) {
     nss_window_t *win = calloc(1, sizeof(nss_window_t));
-    win->cursor_width = 2;
-    win->underline_width = 1;
-    win->left_border = 8;
-    win->top_border = 8;
-    win->bg = nss_config_color(NSS_CONFIG_BG);
-    win->fg = nss_config_color(NSS_CONFIG_FG);
-    win->cursor_bg = nss_config_color(NSS_CONFIG_CURSOR_BG);
-    win->cursor_fg = nss_config_color(NSS_CONFIG_CURSOR_FG);
-    win->cursor_type = nss_cursor_bar;
+    win->cursor_width = nss_config_integer(nss_config_cursor_width, 1, 32);
+    win->underline_width = nss_config_integer(nss_config_underline_width, 0, 32);
+    win->left_border = nss_config_integer(nss_config_left_border, 0, 256);
+    win->top_border = nss_config_integer(nss_config_top_border, 0, 256);
+    win->bg = nss_config_color(nss_config_bg);
+    win->fg = nss_config_color(nss_config_fg);
+    win->cursor_bg = nss_config_color(nss_config_cursor_bg);
+    win->cursor_fg = nss_config_color(nss_config_cursor_fg);
+    win->cursor_type = nss_config_integer(nss_config_cursor_shape, 0, 6);
+    win->subpixel_fonts = nss_config_integer(nss_config_subpixel_fonts, 0, 1);
+    win->reverse_video = nss_config_integer(nss_config_reverse_video, 0, 1);
+    win->has_meta = nss_config_integer(nss_config_has_meta, 0, 1);
+    win->font_size = nss_config_integer(nss_config_font_size, 0, 1000);
     win->active = 1;
     win->numlock = 1;
     win->term_fd = -1;
-    win->blink_time = 800000;
+    win->blink_time = nss_config_integer(nss_config_blink_time, 10000, 10000000);
+    if (!font_name) font_name = nss_config_string(nss_config_font_name, "fixed");
     win->font_name = strdup(font_name);
     if (!win->font_name) {
         nss_free_window(win);
         return NULL;
     }
-    win->width = rect.width;
-    win->height = rect.height;
+    win->width = nss_config_integer(nss_config_window_width, 0, 32767);
+    win->height = nss_config_integer(nss_config_window_height, 0, 32767);
     clock_gettime(CLOCK_MONOTONIC, &win->prev_blink);
 
     set_config(win, tag, values);
@@ -1006,9 +1011,11 @@ nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_t
         win->reverse_video ? win->fg : win->bg,
         XCB_GRAVITY_NORTH_WEST, win->ev_mask, con.mid
     };
+    int16_t x = nss_config_integer(nss_config_window_x, -32768, 32767);
+    int16_t y = nss_config_integer(nss_config_window_y, -32768, 32767);
     win->wid = xcb_generate_id(con.con);
     c = xcb_create_window_checked(con.con, TRUE_COLOR_ALPHA_DEPTH, win->wid, con.screen->root,
-                                  rect.x, rect.y, rect.width, rect.height, 0,
+                                  x, y, win->width, win->height, 0,
                                   XCB_WINDOW_CLASS_INPUT_OUTPUT,
                                   con.vis->visual_id, mask1, values1);
     if (check_void_cookie(c)) {
@@ -1085,10 +1092,7 @@ nss_window_t *nss_create_window(nss_rect_t rect, const char *font_name, nss_wc_t
     con.pfds[i].events = POLLIN | POLLHUP;
     con.pfds[i].fd = win->term_fd;
 
-    //nss_term_redraw(win->term, (nss_rect_t) {0, 0, win->cw, win->ch}, 1);
-    //nss_window_update(win, 1, &(nss_rect_t){0, 0, win->ch, win->cw});
     xcb_flush(con.con);
-
     return win;
 }
 
@@ -1202,7 +1206,7 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
         uint32_t ch = CELL_CHAR(cells[i]);
         if (!nss_font_glyph_is_loaded(win->font, ch)) {
             for (size_t j = 0; j < nss_font_attrib_max; j++) {
-                nss_glyph_t *glyph = nss_font_render_glyph(win->font, ch, j, win->lcd_mode);
+                nss_glyph_t *glyph = nss_font_render_glyph(win->font, ch, j, win->subpixel_fonts);
                 //In case of non-monospace fonts
                 glyph->x_off = win->char_width;
                 register_glyph(win, ch | (j << 24) , glyph);
@@ -1366,7 +1370,7 @@ void nss_window_clear(nss_window_t *win, size_t len, const nss_rect_t *damage) {
 void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values) {
     set_config(win, tag, values);
 
-    if (tag & (nss_wc_font_size | nss_wc_lcd_mode))
+    if (tag & (nss_wc_font_size | nss_wc_subpixel_fonts))
         reload_font(win, 1);
     if (tag & (nss_wc_cursor_background | nss_wc_cursor_foreground | nss_wc_background | nss_wc_foreground | nss_wc_reverse)) {
         uint32_t values2[2];
@@ -1422,7 +1426,7 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
     if (tag & nss_wc_cursor_background) return win->cursor_bg;
     if (tag & nss_wc_cursor_foreground) return win->cursor_fg;
     if (tag & nss_wc_cursor_type) return win->cursor_type;
-    if (tag & nss_wc_lcd_mode) return win->lcd_mode;
+    if (tag & nss_wc_subpixel_fonts) return win->subpixel_fonts;
     if (tag & nss_wc_font_size) return win->font_size;
     if (tag & nss_wc_width) return win->width;
     if (tag & nss_wc_height) return win->height;
@@ -1533,8 +1537,8 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         nss_window_set(win, nss_wc_font_size, &arg);
         return;
     } else if (sym == XKB_KEY_End && mods == (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)) {
-        arg = !win->lcd_mode;
-        nss_window_set(win, nss_wc_lcd_mode, &arg);
+        arg = !win->subpixel_fonts;
+        nss_window_set(win, nss_wc_subpixel_fonts, &arg);
         return;
     } else if (sym == XKB_KEY_1 && mods == XCB_MOD_MASK_1) {
         arg = !win->reverse_video;
@@ -1542,7 +1546,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         return;
     } else if (sym == XKB_KEY_4 && mods == XCB_MOD_MASK_1) {
         arg = win->font_size;
-        nss_create_window((nss_rect_t) {100, 100, 800, 600}, win->font_name, nss_wc_font_size, &arg);
+        nss_create_window(win->font_name, nss_wc_font_size, &arg);
         return;
     } else if (sym == XKB_KEY_Page_Up) {
         nss_term_scroll_view(win->term, 2);

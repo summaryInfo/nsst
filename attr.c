@@ -2,12 +2,58 @@
 #include <string.h>
 #include "attr.h"
 #include "util.h"
+#include "window.h"
 
 #define CN_BASE 16
 #define CN_EXT (6*6*6)
 #define CN_GRAY (NSS_PALETTE_SIZE - CN_BASE - CN_EXT)
 #define SD28B(x) ((x) ? 0 : 0x37 + 0x28 * (x))
 
+int32_t nss_config_integer(uint32_t opt, int32_t min, int32_t max) {
+    int32_t val;
+    switch (opt) {
+    case nss_config_window_x: val = 200; break;
+    case nss_config_window_y: val = 200; break;
+    case nss_config_window_width: val = 800; break;
+    case nss_config_window_height: val = 600; break;
+    case nss_config_history_lines: val = 1024; break;
+    case nss_config_utf8: val = 1; break;
+    case nss_config_allow_nrcs: val = 1; break;
+    case nss_config_tab_width: val = 8; break;
+    case nss_config_init_wrap: val = 1; break;
+    case nss_config_scroll_on_input: val = 1; break;
+    case nss_config_scroll_on_output: val = 0; break;
+    case nss_config_has_meta: val = 0; break;
+    case nss_config_cursor_shape: val = nss_cursor_bar; break;
+    case nss_config_underline_width: val = 1; break;
+    case nss_config_cursor_width: val = 2; break;
+    case nss_config_subpixel_fonts: val = 0; break;
+    case nss_config_reverse_video: val = 0; break;
+    case nss_config_allow_altscreen: val = 1; break;
+    case nss_config_left_border: val = 8; break;
+    case nss_config_top_border: val = 8; break;
+    case nss_config_blink_time: val = 800000; break;
+    case nss_config_font_size: val = 13; break;
+    default:
+        warn("Unknown config option");
+        val = min;
+        break;
+    }
+    return MIN(max, MAX(val, min));
+}
+
+const char *nss_config_string(uint32_t opt, const char *alt) {
+    switch(opt) {
+        case nss_config_font_name:
+            return "Iosevka-13,MaterialDesignIcons-13";
+        case nss_config_answerback_string:
+            return "";
+        case nss_config_shell:
+            return "/bin/sh";
+    }
+    return alt;
+
+}
 
 nss_color_t nss_config_color(uint32_t opt) {
     static nss_color_t base[CN_BASE] = {
@@ -22,13 +68,15 @@ nss_color_t nss_config_color(uint32_t opt) {
     };
 
     switch(opt) {
-    case NSS_CONFIG_BG:
-    case NSS_CONFIG_CURSOR_BG:
+    case nss_config_bg:
+    case nss_config_cursor_bg:
         return base[0];
-    case NSS_CONFIG_FG:
-    case NSS_CONFIG_CURSOR_FG:
+    case nss_config_fg:
+    case nss_config_cursor_fg:
         return base[15];
     }
+
+    opt -= nss_config_color_0;
 
     if (opt < CN_BASE) return base[opt];
     else if (opt < CN_EXT + CN_BASE) {
@@ -45,7 +93,7 @@ nss_color_t nss_config_color(uint32_t opt) {
 nss_color_t *nss_create_palette(void) {
     nss_color_t *palette = malloc(NSS_PALETTE_SIZE * sizeof(nss_color_t));
     for (size_t i = 0; i < NSS_PALETTE_SIZE; i++)
-        palette[i] = nss_config_color(i);
+        palette[i] = nss_config_color(i + nss_config_color_0);
     return palette;
 }
 
