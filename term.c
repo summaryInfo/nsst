@@ -665,7 +665,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
         term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG],
         term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG],
         nss_config_integer(nss_config_cursor_shape, 0, 6), 0, 0, 1, 0,
-        nss_config_integer(nss_config_has_meta, 0, 1), 
+        nss_config_integer(nss_config_has_meta, 0, 1),
         nss_config_integer(nss_config_reverse_video, 0, 1), 0};
     nss_window_set(term->win,
             nss_wc_background | nss_wc_foreground |
@@ -687,11 +687,11 @@ static void term_reset(nss_term_t *term, _Bool hard) {
 
     term->mode &= nss_tm_focused | nss_tm_visible;
     if (nss_config_integer(nss_config_utf8, 0, 1)) term->mode |= nss_tm_utf8;
-    if (!nss_config_integer(nss_config_allow_altscreen, 0, 1)) term->mode |= nss_tm_disable_altscreen; 
+    if (!nss_config_integer(nss_config_allow_altscreen, 0, 1)) term->mode |= nss_tm_disable_altscreen;
     if (nss_config_integer(nss_config_init_wrap, 0, 1)) term->mode |= nss_tm_wrap;
     if (!nss_config_integer(nss_config_scroll_on_input, 0, 1)) term->mode |= nss_tm_dont_scroll_on_input;
     if (nss_config_integer(nss_config_scroll_on_output, 0, 1)) term->mode |= nss_tm_scoll_on_output;
-    
+
     term->top = 0;
     term->bottom = term->height - 1;
 
@@ -1951,7 +1951,7 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
     case 0x00: /* NUL (IGNORE) */
         return;
     case 0x05: /* ENQ */
-        term_escape_da(term, 0);
+        nss_term_answerback(term, "%s", nss_config_string(nss_config_answerback_string, ""));
         break;
     case 0x07: /* BEL */
         if (term->esc.state & nss_es_string) {
@@ -2503,7 +2503,7 @@ nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
 
     term->mode = nss_tm_visible;
     if (nss_config_integer(nss_config_utf8, 0, 1)) term->mode |= nss_tm_utf8;
-    if (!nss_config_integer(nss_config_allow_altscreen, 0, 1)) term->mode |= nss_tm_disable_altscreen; 
+    if (!nss_config_integer(nss_config_allow_altscreen, 0, 1)) term->mode |= nss_tm_disable_altscreen;
     if (nss_config_integer(nss_config_init_wrap, 0, 1)) term->mode |= nss_tm_wrap;
     if (!nss_config_integer(nss_config_scroll_on_input, 0, 1)) term->mode |= nss_tm_dont_scroll_on_input;
     if (nss_config_integer(nss_config_scroll_on_output, 0, 1)) term->mode |= nss_tm_scoll_on_output;
