@@ -889,8 +889,14 @@ static inline _Bool cell_equal_fg(nss_cell_t a, nss_cell_t b, _Bool blink) {
     } else return 1;
 }
 
+static inline _Bool cell_vis(nss_cell_t cell, _Bool blink) {
+    return cell.fg != cell.bg && !(CELL_ATTR(cell) & nss_attrib_invisible) &&
+            !(CELL_ATTR(cell) & nss_attrib_blink && blink) && (CELL_CHAR(cell) != ' ');
+            // Assume that space is invisible
+}
+
 /* Draw line with attributes */
-/* TODO Draw multiple lines at a time -- or I should not do that since it's then quadratic */
+/* TODO Draw multiple lines at a time -- or I should not do that since it is quadratic */
 void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_cell_t *cells, nss_color_t *pal, nss_color_t *extra) {
     x = x * win->char_width;
     y = y * (win->char_height + win->char_depth) + win->char_height;
@@ -961,6 +967,9 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
     memset(con.mark_buffer, 0, con.mark_buffer_size);
 
     for (size_t i = 0; i < len; ) {
+        while(i < len && (con.mark_buffer[i] || !cell_vis(cells[i], win->blink_state))) i++;
+        if (i >= len) break;
+
         xcb_render_color_t fg;
         eval_color(win, cells[i], pal, extra, &fg, NULL);
 
@@ -975,7 +984,7 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
         *msg_head = (nss_glyph_mesg_t) { .dx = x + i * win->char_width, .dy = y };
 
         for (size_t j = i; j < len; j++) {
-            if (!con.mark_buffer[j] && cell_equal_fg(cells[i], cells[j], win->blink_state)) {
+            if (!con.mark_buffer[j] && cell_equal_fg(cells[i], cells[j], win->blink_state) && cell_vis(cells[j], win->blink_state)) {
                 con.mark_buffer[j] = 1;
                 size_t inc = sizeof(uint32_t);
                 if ((size_t)msg_head->len + 1 > CHARS_PER_MESG || jump) inc += sizeof(nss_glyph_mesg_t);
@@ -1005,13 +1014,12 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
         xcb_render_composite_glyphs_32(con.con, XCB_RENDER_PICT_OP_OVER,
                                        win->pen, win->pic, win->pfglyph, win->gsid,
                                        0, 0, bpos - con.render_buffer, con.render_buffer);
-        while(i < len && con.mark_buffer[i]) i++;
     }
 
     memset(con.mark_buffer, 0, con.mark_buffer_size);
     for (size_t i = 0; i < len; i++) {
-        while(i < len && (con.mark_buffer[i] || (CELL_ATTR(cells[i]) & nss_attrib_invisible) ||
-                (CELL_ATTR(cells[i]) & nss_attrib_blink && win->blink_state) || !(CELL_ATTR(cells[i]) & (nss_attrib_strikethrough | nss_attrib_underlined)))) i++;
+        while(i < len && (con.mark_buffer[i] || !cell_vis(cells[i], win->blink_state)
+                || !(CELL_ATTR(cells[i]) & (nss_attrib_strikethrough | nss_attrib_underlined)))) i++;
         if (i >= len) break;
 
         xcb_render_color_t fg;
@@ -1306,7 +1314,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     for (size_t i = 0; i < sizeof(cshorts)/sizeof(*cshorts); i++) {
         if (cshorts[i].ksym == sym && (mods & cshorts[i].mmask) == cshorts[i].mstate) {
             action = cshorts[i].action;
-        	break;
+            break;
         }
     }
     switch (action) {
@@ -1349,7 +1357,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         nss_create_window(NULL, 0, NULL);
         return;
     case nss_sa_none:
-      	break;
+        break;
     }
 
     // 2. Custom translations

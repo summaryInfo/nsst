@@ -1,5 +1,4 @@
 #define _XOPEN_SOURCE
-#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <poll.h>
@@ -576,7 +575,7 @@ static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t a
                 nss_window_shift(term->win, top + amount, top, bottom + 1 - top - amount);
             else if (amount < 0)
                 nss_window_shift(term->win, top, top - amount, bottom + 1 - top + amount);
-        } else  term->mode |= nss_tm_force_redraw;
+        } else term->mode |= nss_tm_force_redraw;
         term->lastscroll = cur;
     } else term->mode |= nss_tm_force_redraw;
 }
@@ -2164,7 +2163,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
                 } else {
                     if (term->esc.state & nss_es_intermediate) {
                         term->esc.state |= nss_es_ignore;
-                    } else if (ch == 'I') {
+                    } else if (ch == 'l') {
                         term->esc.param[term->esc.param_idx++] = 1;
                     } else if (ch == 'L') {
                         term->esc.param[term->esc.param_idx++] = 2;
@@ -2297,7 +2296,8 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
 static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool show_ctl) {
     const uint8_t *end = buf + len, *start = buf;
 
-    term->screen[term->c.y]->mode |= nss_lm_dirty;
+    int16_t oy = term->c.y;
+    _Bool cinvis = term->mode & nss_tm_hide_cursor;
 
     while (start < end) {
         uint32_t ch;
@@ -2317,7 +2317,12 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
         term_putchar(term, ch);
     }
 
-    term->screen[term->c.y]->mode |= nss_lm_dirty;
+	if (term->c.y != oy) {
+    	if (!cinvis)
+        	term->screen[term->c.y]->mode |= nss_lm_dirty;
+        if (!(term->mode & nss_tm_hide_cursor))
+            term->screen[oy]->mode |= nss_lm_dirty;
+	}
 
     return start - buf;
 }
@@ -2637,6 +2642,8 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
         }
         view->mode &= ~nss_lm_dirty;
     }
+
+    cursor &= term->screen[term->c.y]->mode & (nss_lm_dirty | nss_lm_blink);
 
     for (int16_t y = 0; y + y0 < term->height; y++) {
         nss_line_t *line = term->screen[y];
