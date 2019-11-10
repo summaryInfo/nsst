@@ -2297,7 +2297,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
 static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool show_ctl) {
     const uint8_t *end = buf + len, *start = buf;
 
-	term->screen[term->c.y]->mode |= nss_lm_dirty;
+    int16_t ox = MIN(term->c.x, term->width), oy = term->c.y;
 
     while (start < end) {
         uint32_t ch;
@@ -2317,7 +2317,10 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
         term_putchar(term, ch);
     }
 
-	term->screen[term->c.y]->mode |= nss_lm_dirty;
+    if (MIN(term->c.x, term->width) != ox || term->c.y != oy) {
+        term->screen[oy]->mode |= nss_lm_dirty;
+        term->screen[term->c.y]->mode |= nss_lm_dirty;
+    }
 
     return start - buf;
 }
@@ -2647,8 +2650,9 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
 
     for (int16_t y = 0; y + y0 < term->height; y++) {
         nss_line_t *line = term->screen[y];
-        if (line->mode & (nss_lm_dirty | nss_lm_blink) || (term->mode & nss_tm_force_redraw))
+        if (line->mode & (nss_lm_dirty | nss_lm_blink) || (term->mode & nss_tm_force_redraw)) {
             nss_window_draw(term->win, 0, y0 + y, term->width, line->cell, term->palette, line->extra), drawn++;
+        }
         line->mode &= ~nss_lm_dirty;
     }
 
@@ -2661,8 +2665,8 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
         drawn++;
     }
 
-	nss_window_clear(term->win, rbuf_clear, term->render_buffer);
-	if (drawn) nss_window_update(term->win, 1, &(nss_rect_t){0, 0, term->width, term->height});
+    if (rbuf_clear) nss_window_clear(term->win, rbuf_clear, term->render_buffer);
+    if (drawn) nss_window_update(term->win, 1, &(nss_rect_t){0, 0, term->width, term->height});
 }
 
 void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
