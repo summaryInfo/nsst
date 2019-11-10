@@ -42,7 +42,7 @@ typedef struct nss_line {
 } nss_line_t;
 
 #define TTY_MAX_WRITE 256
-#define NSS_FD_BUF_SZ 256
+#define NSS_FD_BUF_SZ 512
 #define ESC_MAX_PARAM 16
 #define ESC_MAX_INTERM 2
 #define ESC_MAX_STR 512
@@ -93,6 +93,7 @@ typedef struct nss_cursor {
 struct nss_term {
     nss_line_t **screen;
     nss_line_t **back_screen;
+    nss_rect_t *render_buffer;
     nss_line_t *view;
     nss_line_t *scrollback;
     nss_line_t *scrollback_top;
@@ -221,7 +222,7 @@ static void exec_shell(const char *cmd, const char **args) {
     setenv("USER", pw->pw_name, 1);
     setenv("SHELL", sh, 1);
     setenv("HOME", pw->pw_dir, 1);
-    setenv("TERM", NSS_TERM_NAME, 1);
+    setenv("TERM", nss_config_string(nss_config_term_name, "xterm"), 1);
 
     signal(SIGCHLD, SIG_DFL);
     signal(SIGHUP, SIG_DFL);
@@ -2296,8 +2297,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
 static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool show_ctl) {
     const uint8_t *end = buf + len, *start = buf;
 
-    int16_t oy = term->c.y;
-    _Bool cinvis = term->mode & nss_tm_hide_cursor;
+	term->screen[term->c.y]->mode |= nss_lm_dirty;
 
     while (start < end) {
         uint32_t ch;
@@ -2317,12 +2317,7 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
         term_putchar(term, ch);
     }
 
-	if (term->c.y != oy) {
-    	if (!cinvis)
-        	term->screen[term->c.y]->mode |= nss_lm_dirty;
-        if (!(term->mode & nss_tm_hide_cursor))
-            term->screen[oy]->mode |= nss_lm_dirty;
-	}
+	term->screen[term->c.y]->mode |= nss_lm_dirty;
 
     return start - buf;
 }
@@ -2494,12 +2489,15 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
     nss_line_t **new = realloc(term->screen, height * sizeof(term->screen[0]));
     nss_line_t **new_back = realloc(term->back_screen, height * sizeof(term->back_screen[0]));
+    nss_rect_t *new_rend = realloc(term->render_buffer, height * sizeof(term->render_buffer[0]));
 
     if (!new) die("Can't create lines");
     if (!new_back) die("Can't create lines");
+    if (!new_rend) die("Can't create lines");
 
     term->screen = new;
     term->back_screen = new_back;
+    term->render_buffer = new_rend;
 
     // Create new lines
 
@@ -2632,13 +2630,14 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage, _Bool cursor) {
 void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
     if (!(term->mode & nss_tm_visible)) return;
 
+    size_t rbuf_clear = 0;
+
     int16_t y0 = 0;
     nss_line_t *view = term->view;
     for (; view && y0 < term->height; y0++, view = view->next) {
         if (view->mode & (nss_lm_dirty | nss_lm_blink)) {
             nss_window_draw(term->win, 0, y0, MIN(view->width, term->width), view->cell, term->palette, view->extra);
-            if (term->width > view->width)
-                nss_window_clear(term->win, 1, &(nss_rect_t){ view->width, y0, term->width - view->width, 1});
+            term->render_buffer[rbuf_clear++] = (nss_rect_t){ view->width, y0, MAX(0, term->width - view->width), 1};
         }
         view->mode &= ~nss_lm_dirty;
     }
@@ -2660,6 +2659,7 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
                 &term->screen[term->c.y]->cell[cx], term->palette, term->screen[term->c.y]->extra);
     }
 
+	nss_window_clear(term->win, rbuf_clear, term->render_buffer);
     nss_window_update(term->win, 1, &(nss_rect_t){0, 0, term->width, term->height});
 }
 
@@ -2740,6 +2740,7 @@ void nss_free_term(nss_term_t *term) {
     }
     free(term->screen);
     free(term->back_screen);
+    free(term->render_buffer);
 
     nss_line_t *next, *line = term->scrollback;
     while (line) {

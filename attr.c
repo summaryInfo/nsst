@@ -56,6 +56,8 @@ const char *nss_config_string(uint32_t opt, const char *alt) {
             return "";
         case nss_config_shell:
             return "/bin/sh";
+        case nss_config_term_name:
+            return "xterm-new";
     }
     return alt;
 

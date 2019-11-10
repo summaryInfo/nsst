@@ -1125,10 +1125,9 @@ void nss_window_update(nss_window_t *win, size_t len, const nss_rect_t *damage) 
     for (size_t i = 0; i < len; i++) {
         nss_rect_t rect = damage[i];
         rect = rect_scale_up(rect, win->char_width, win->char_height + win->char_depth);
-        rect = rect_shift(rect, win->left_border, win->top_border);
         xcb_copy_area(con.con, win->pid, win->wid, win->gc,
-                      rect.x - win->left_border, rect.y - win->top_border,
-                      rect.x, rect.y, rect.width, rect.height);
+                      rect.x, rect.y, rect.x + win->left_border,
+                      rect.y + win->top_border, rect.width, rect.height);
     }
 }
 
@@ -1145,16 +1144,24 @@ void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height)
     height *= win->char_depth + win->char_height;
 
     xcb_copy_area(con.con, win->pid, win->pid, win->gc, 0, ys, 0, yd, width, height);
+    //xcb_render_composite(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, 0, win->pic, 0, ys, 0, 0, 0, yd, width, height);
 }
 
 void nss_window_clear(nss_window_t *win, size_t len, const nss_rect_t *damage) {
-    nss_rect_t *rects = malloc(len*sizeof(nss_rect_t));
+    if (con.render_buffer_size < len * sizeof(nss_rect_t)) {
+        uint8_t *new = realloc(con.render_buffer, len * sizeof(nss_rect_t));
+        if (!new) return;
+        con.render_buffer = new;
+        con.render_buffer_size = len * sizeof(nss_rect_t);
+    }
+    nss_rect_t *rects = (nss_rect_t *)con.render_buffer;
+    size_t count = 0;
     for (size_t i = 0; i < len; i++)
-        rects[i] = rect_scale_up(damage[i], win->char_width, win->char_height + win->char_depth);
+        if (damage[i].width > 0 && damage[i].height > 0)
+            rects[count++] = rect_scale_up(damage[i], win->char_width, win->char_height + win->char_depth);
 
     xcb_render_color_t color = MAKE_COLOR(win->reverse_video ? win->fg : win->bg);
-    xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, color, len, (xcb_rectangle_t*)rects);
-    free(rects);
+    xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, color, count, (xcb_rectangle_t*)rects);
 }
 
 void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values) {

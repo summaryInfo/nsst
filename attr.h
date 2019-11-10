@@ -45,6 +45,7 @@ enum nss_config_opt {
     nss_config_font_name, // string
     nss_config_answerback_string, // string
     nss_config_shell, // string
+    nss_config_term_name, //string
     nss_config_color_0,
     nss_config_bg = nss_config_color_0 + NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS,
     nss_config_fg,
