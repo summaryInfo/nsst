@@ -50,7 +50,8 @@ typedef struct nss_line {
 #define MAX_REPORT 256
 
 #define IS_C1(c) ((c) < 0xa0 && (c) >= 0x80)
-#define IS_C0(c) (((c) < 0x20) || (c) == 0x7f)
+#define IS_C0(c) ((c) < 0x20)
+#define IS_DEL(c) ((c) == 0x7f)
 #define IS_STREND(c) (IS_C1(c) || (c) == 0x1b || (c) == 0x1a || (c) == 0x18 || (c) == 0x07)
 #define ENABLE_IF(c, m, f) { if (c) { (m) |= (f); } else { (m) &= ~(f); }}
 
@@ -143,7 +144,7 @@ struct nss_term {
         nss_tm_mouse_format_sgr = 1 << 24,
         nss_tm_mouse_mask =
             nss_tm_mouse_x10 | nss_tm_mouse_button |
-            nss_tm_mouse_motion | nss_tm_mouse_many
+            nss_tm_mouse_motion | nss_tm_mouse_many,
     } mode;
 
     struct nss_escape {
@@ -1934,9 +1935,15 @@ static void term_escape_esc(nss_term_t *term) {
         }
         case '-': /* G1D6 */
         case '.': /* G2D6 */
-        case '/': /* G3D6 */
-            term_escape_dump(term);
+        case '/': /* G3D6 */ {
+            enum nss_char_set *set = &term->c.gn[term->esc.interm[0] - '-'];
+            switch(term->esc.final) {
+            case 'A': *set = nss_cs_british; term->mode &= ~nss_tm_enable_nrcs; break;
+            default:
+                term_escape_dump(term);
+            };
             break;
+        }
         default:
             term_escape_dump(term);
         }
@@ -1961,16 +1968,22 @@ static void term_escape_reset(nss_term_t *term) {
 
 static void term_escape_control(nss_term_t *term, uint32_t ch) {
     // DUMP
-    //if (IS_C0(ch)) {
+    //if (IS_C0(ch) || IS_DEL(ch)) {
     //    if (ch != 0x1B) warn("^%c", ch ^ 0x40);
     //} else warn("^[%c", ch ^ 0xC0);
 
     switch (ch) {
     case 0x00: /* NUL (IGNORE) */
+    case 0x01: /* SOH (IGNORE) */
+    case 0x02: /* STX (IGNORE) */
+    case 0x03: /* ETX (IGNORE) */
+    case 0x04: /* EOT (IGNORE) */
         return;
     case 0x05: /* ENQ */
         term_answerback(term, "%s", nss_config_string(nss_config_answerback_string, ""));
         break;
+    case 0x06: /* ACK (IGNORE) */
+        return;
     case 0x07: /* BEL */
         if (term->esc.state & nss_es_string) {
             if (term->esc.state & nss_es_ignore)
@@ -2002,11 +2015,20 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
     case 0x0f: /* SI/LS0 */
         term->c.gl = term->c.gl_ss = 0;
         return;
+    case 0x10: /* DLE (IGNORE) */
+        return;
     case 0x11: /* XON (IGNORE) */
+    case 0x12: /* DC2 (IGNORE) */
     case 0x13: /* XOFF (IGNORE) */
+    case 0x14: /* DC4 (IGNORE) */
+    case 0x15: /* NAK (IGNORE) */
+    case 0x16: /* SYN (IGNORE) */
+    case 0x17: /* ETB (IGNORE) */
         return;
     case 0x18: /* CAN */
         break;
+    case 0x19: /* EM (IGNORE) */
+        return;
     case 0x1a: /* SUB */
         term_move_to(term, term->c.x, term->c.y);
         term_set_cell(term, term->c.x, term->c.y, '?');
@@ -2020,72 +2042,80 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
         term_escape_reset(term);
         term->esc.state = nss_es_escape;
         return;
-    case 0x7f:   /* DEL (IGNORE) */
+    case 0x1c: /* FS (IGNORE) */
+    case 0x1d: /* GS (IGNORE) */
+    case 0x1e: /* RS (IGNORE) */
+    case 0x1f: /* US (IGNORE) */
+    case 0x7f: /* DEL (IGNORE) */
         return;
-    case 0x80:   /* PAD */
-    case 0x81:   /* HOP */
-    case 0x82:   /* BPH */
-    case 0x83:   /* NBH */
-        warn("Unknown control character ^%"PRIx32, ch ^ 0xC0);
+    case 0x80: /* PAD */
+    case 0x81: /* HOP */
+    case 0x82: /* BPH */
+    case 0x83: /* NBH */
+        warn("^%"PRIx32, ch ^ 0xC0);
         break;
-    case 0x84:   /* IND - Index */
+    case 0x84: /* IND - Index */
         term_index(term, 0);
         break;
-    case 0x85:   /* NEL -- Next line */
+    case 0x85: /* NEL -- Next line */
         term_index(term, 1);
         break;
-    case 0x86:   /* SSA */
-    case 0x87:   /* ESA */
-        warn("Unknown control character ^%"PRIx32, ch ^ 0xC0);
+    case 0x86: /* SSA */
+    case 0x87: /* ESA */
+        warn("^%"PRIx32, ch ^ 0xC0);
         break;
-    case 0x88:   /* HTS -- Horizontal tab stop */
+    case 0x88: /* HTS -- Horizontal tab stop */
         term->tabs[MIN(term->c.x, term->width - 1)] = 1;
         break;
-    case 0x89:   /* HTJ */
-    case 0x8a:   /* VTS */
-    case 0x8b:   /* PLD */
-    case 0x8c:   /* PLU */
-        warn("Unknown control character ^%"PRIx32, ch ^ 0xC0);
+    case 0x89: /* HTJ */
+    case 0x8a: /* VTS */
+    case 0x8b: /* PLD */
+    case 0x8c: /* PLU */
+        warn("^%"PRIx32, ch ^ 0xC0);
         break;
-    case 0x8d:   /* RI - Reverse Index */
+    case 0x8d: /* RI - Reverse Index */
         term_rindex(term, 0);
         break;
-    case 0x8e:   /* SS2 - Single Shift 2 */
+    case 0x8e: /* SS2 - Single Shift 2 */
         term->c.gl_ss = 2;
         break;
-    case 0x8f:   /* SS3 - Single Shift 3 */
+    case 0x8f: /* SS3 - Single Shift 3 */
         term->c.gl_ss = 3;
         break;
-    case 0x91:   /* PU1 */
-    case 0x92:   /* PU2 */
-    case 0x93:   /* STS */
-    case 0x94:   /* CCH */
-    case 0x95:   /* MW */
-        warn("Unknown control character ^%"PRIx32, ch ^ 0xC0);
+    case 0x90: /* DCS -- Device Control String */
+        term_escape_reset(term);
+        term->esc.state = nss_es_dcs | nss_es_escape;
+        return;
+    case 0x91: /* PU1 */
+    case 0x92: /* PU2 */
+    case 0x93: /* STS */
+    case 0x94: /* CCH */
+    case 0x95: /* MW */
+        warn("^%"PRIx32, ch ^ 0xC0);
         break;
-    case 0x96:   /* SPA - Start of Protected Area */
+    case 0x96: /* SPA - Start of Protected Area */
         CELL_ATTR_SET(term->c.cel, nss_attrib_protected);
         term->mode |= nss_tm_use_protected_area_semantics;
         break;
-    case 0x97:   /* EPA - End of Protected Area */
+    case 0x97: /* EPA - End of Protected Area */
         CELL_ATTR_CLR(term->c.cel, nss_attrib_protected);
         term->mode |= nss_tm_use_protected_area_semantics;
         break;
-    case 0x98:   /* SOS - Start Of String */
+    case 0x98: /* SOS - Start Of String */
         term_escape_reset(term);
         term->esc.state = nss_es_ignore | nss_es_string;
         return;
-    case 0x99:   /* SGCI */
-        warn("Unknown control character ^%"PRIx32, ch ^ 0xC0);
+    case 0x99: /* SGCI */
+        warn("^%"PRIx32, ch ^ 0xC0);
         break;
-    case 0x9a:   /* DECID -- Identify Terminal */
+    case 0x9a: /* DECID -- Identify Terminal */
         term_escape_da(term, 0);
         break;
-    case 0x9b:   /* CSI - Control Sequence Introducer */
+    case 0x9b: /* CSI - Control Sequence Introducer */
         term_escape_reset(term);
         term->esc.state = nss_es_csi | nss_es_escape;
         break;
-    case 0x9c:   /* ST - String terminator */
+    case 0x9c: /* ST - String terminator */
         if (term->esc.state & nss_es_string) {
             if (term->esc.state & nss_es_ignore)
                 /* do nothing */;
@@ -2095,16 +2125,12 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
                 term_escape_osc(term);
         }
         break;
-    case 0x90:   /* DCS -- Device Control String */
-        term_escape_reset(term);
-        term->esc.state = nss_es_dcs | nss_es_escape;
-        return;
-    case 0x9d:   /* OSC -- Operating System Command */
+    case 0x9d: /* OSC -- Operating System Command */
         term_escape_reset(term);
         term->esc.state = nss_es_osc | nss_es_string;
         return;
-    case 0x9e:   /* PM -- Privacy Message */
-    case 0x9f:   /* APC -- Application Program Command */
+    case 0x9e: /* PM -- Privacy Message */
+    case 0x9f: /* APC -- Application Program Command */
         term_escape_reset(term);
         term->esc.state = nss_es_string | nss_es_ignore;
         return;
@@ -2115,7 +2141,7 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
 static void term_putchar(nss_term_t *term, uint32_t ch) {
     int16_t width = wcwidth(ch);
 
-    if (width < 0 && !(IS_C0(ch) || IS_C1(ch)))
+    if (width < 0 && !(IS_C0(ch) || IS_DEL(ch) || IS_C1(ch)))
         ch = UTF_INVAL, width =1;
 
     //info("UTF %"PRIx32" '%s'", ch, buf);
@@ -2123,9 +2149,9 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
     if (term->esc.state & nss_es_string && !IS_STREND(ch)) {
         if (term->esc.state & nss_es_ignore) return;
         if (term->esc.state & nss_es_dcs) {
-            if (ch == 0x7f) return;
+            if (IS_DEL(ch)) return;
         } else if (term->esc.state & nss_es_osc) {
-            if (IS_C0(ch) && ch != 0x7f) return;
+            if (IS_C0(ch)) return;
             if (!(term->esc.state & nss_es_gotfirst)) {
                 if ('0' <= ch && ch <= '9') {
                     term->esc.param[term->esc.param_idx] *= 10;
@@ -2157,10 +2183,14 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
         memcpy(term->esc.str + term->esc.str_idx, buf, char_len + 1);
         term->esc.str_idx += char_len;
         return;
-    } else if (IS_C0(ch) || IS_C1(ch)) {
-        if (!IS_STREND(ch) && (term->esc.state & nss_es_dcs)) return;
-        term_escape_control(term, ch);
-        return;
+    } else if (IS_C0(ch) || IS_C1(ch) || (IS_DEL(ch) && !term->esc.state && term->c.gn[term->c.gl_ss])) {
+        // We should print DEL if 96 character set is assigned to GL and we are at ground state
+        if (!IS_DEL(ch) || term->esc.state || term->c.gn[term->c.gl_ss] !=
+                nss_cs_british || (term->mode & nss_tm_enable_nrcs)) {
+            if (!IS_STREND(ch) && (term->esc.state & nss_es_dcs)) return;
+            term_escape_control(term, ch);
+            return;
+        }
     } else if (term->esc.state & nss_es_escape) {
         if (term->esc.state & nss_es_defer) {
             if (ch == 0x5c) { /* ST */
@@ -2279,7 +2309,7 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
                 term_putchar(term, '^');
                 term_putchar(term, '[');
                 ch ^= 0xc0;
-            } else if (IS_C0(ch) && ch != '\n' && ch != '\t' && ch != '\r') {
+            } else if ((IS_C0(ch) || IS_DEL(ch)) && ch != '\n' && ch != '\t' && ch != '\r') {
                 term_putchar(term, '^');
                 ch ^= 0x40;
             }
