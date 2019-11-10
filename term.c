@@ -47,7 +47,7 @@ typedef struct nss_line {
 #define ESC_MAX_PARAM 16
 #define ESC_MAX_INTERM 2
 #define ESC_MAX_STR 512
-
+#define MAX_REPORT 256
 
 #define IS_C1(c) ((c) < 0xa0 && (c) >= 0x80)
 #define IS_C0(c) (((c) < 0x20) || (c) == 0x7f)
@@ -177,6 +177,8 @@ struct nss_term {
     size_t fd_buf_pos;
     uint8_t fd_buf[NSS_FD_BUF_SZ];
 };
+
+static void term_answerback(nss_term_t *term, const char *str, ...);
 
 static void sigchld_fn(int arg) {
     int status;
@@ -575,8 +577,7 @@ static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t a
                 nss_window_shift(term->win, top, top - amount, bottom + 1 - top + amount);
         } else  term->mode |= nss_tm_force_redraw;
         term->lastscroll = cur;
-    } else  term->mode |= nss_tm_force_redraw;
-    term->view = NULL;
+    } else term->mode |= nss_tm_force_redraw;
 }
 
 struct timespec *nss_term_last_scroll_time(nss_term_t *term) {
@@ -664,8 +665,14 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     uint32_t args[] = {
         term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG],
         term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG],
-        nss_config_integer(nss_config_cursor_shape, 0, 6), 0, 0, 1, 0,
+        nss_config_integer(nss_config_cursor_shape, 0, 6),
+        nss_config_integer(nss_config_appkey, 0, 1),
+        nss_config_integer(nss_config_appcursor, 0, 1),
+        nss_config_integer(nss_config_numlock, 0, 1), 0,
         nss_config_integer(nss_config_has_meta, 0, 1),
+        nss_config_integer(nss_config_meta_escape, 0, 1),
+        nss_config_integer(nss_config_backspace_is_delete, 0, 1),
+        nss_config_integer(nss_config_delete_is_delete, 0, 1),
         nss_config_integer(nss_config_reverse_video, 0, 1), 0};
     nss_window_set(term->win,
             nss_wc_background | nss_wc_foreground |
@@ -673,7 +680,8 @@ static void term_reset(nss_term_t *term, _Bool hard) {
             nss_wc_cursor_type | nss_wc_appkey |
             nss_wc_appcursor | nss_wc_numlock |
             nss_wc_keylock | nss_wc_has_meta |
-            nss_wc_reverse | nss_wc_mouse, args);
+            nss_wc_meta_escape | nss_wc_bs_del |
+            nss_wc_del_del | nss_wc_reverse | nss_wc_mouse, args);
 
     int16_t cx = term->c.x, cy =term->c.y;
 
@@ -807,7 +815,7 @@ static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
 static void term_escape_da(nss_term_t *term, uint8_t mode) {
     switch (mode) {
     case '=':
-        nss_term_answerback(term, "\x90!|00000000\x9C");
+        term_answerback(term, "\x90!|00000000\x9C");
         break;
     case '>':
         /*
@@ -822,7 +830,7 @@ static void term_escape_da(nss_term_t *term, uint8_t mode) {
          * 64 - VT520
          * 65 - VT525
          */
-        nss_term_answerback(term, "\x9B>1;10;0c");
+        term_answerback(term, "\x9B>1;10;0c");
         break;
     default:
         /*
@@ -849,7 +857,7 @@ static void term_escape_da(nss_term_t *term, uint8_t mode) {
          *       28 - Rectangular editing
          *       29 - ANSI text locator (i.e., DEC Locator mode).
          */
-         nss_term_answerback(term, "\x9B?62;1;2;6;9;22c");
+         term_answerback(term, "\x9B?62;1;2;6;9;22c");
     }
 }
 
@@ -890,21 +898,21 @@ static void term_escape_dsr(nss_term_t *term) {
     if (term->esc.private == '?') {
         switch(term->esc.param[0]) {
         case 15: /* Printer status -- Has no printer */
-            nss_term_answerback(term, "\x9B?13n"); //TODO Has printer -- 10n
+            term_answerback(term, "\x9B?13n"); //TODO Has printer -- 10n
             break;
         case 25: /* User defined keys lock -- Locked */
-            nss_term_answerback(term, "\x9B?21n"); //TODO Unlocked - ?20n
+            term_answerback(term, "\x9B?21n"); //TODO Unlocked - ?20n
             break;
         case 26: /* Keyboard Language -- Unknown */
-            nss_term_answerback(term, "\x9B?27;0n"); //TODO Print proper keylayout
+            term_answerback(term, "\x9B?27;0n"); //TODO Print proper keylayout
         }
     } else {
         switch(term->esc.param[0]) {
         case 5: /* Health report -- OK */
-            nss_term_answerback(term, "\x9B%dn", 0);
+            term_answerback(term, "\x9B%dn", 0);
             break;
         case 6: /* Cursor position -- Y;X */
-            nss_term_answerback(term, "\x9B%"PRIu16";%"PRIu16"R",
+            term_answerback(term, "\x9B%"PRIu16";%"PRIu16"R",
                     (term->c.origin ? -term->top : 0) + term->c.y + 1, MIN(term->c.x, term->width - 1) + 1);
             break;
         }
@@ -982,7 +990,7 @@ static void term_escape_osc(nss_term_t *term) {
                 nss_color_t col = color_parse(parg, pnext);
                 if (col) term->palette[idx] = col;
                 else if (parg[0] == '?' && parg[1] == '\0')
-                    nss_term_answerback(term, "\2354;#%06X\234", term->palette[idx] & 0x00FFFFFF);
+                    term_answerback(term, "\2354;#%06X\234", term->palette[idx] & 0x00FFFFFF);
                 else term_escape_dump(term);
             }
             pstr = pnext + 1;
@@ -1217,11 +1225,10 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 break;
             case 3: /* DECCOLM */
                 //Just clear screen
-                if (!(term->mode & nss_tm_132_preserve_display)) {
+                if (!(term->mode & nss_tm_132_preserve_display))
                     term_erase(term, 0, 0, term->width, term->height);
-                    term_set_tb_margins(term, 0, 0);
-                    term_move_to(term, 0, 0);
-                }
+                term_set_tb_margins(term, 0, 0);
+                term_move_to(term, 0, 0);
                 break;
             case 4: /* DECSCLM */
                 // IGNORE
@@ -1272,8 +1279,9 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
             case 66: /* DECNKM */
                 nss_window_set(term->win, nss_wc_appkey, &arg);
                 break;
-            case 67: /* DECBKM */ // TODO DECUDK
-                term_escape_dump(term);
+            case 67: /* DECBKM */
+                arg = !set;
+                nss_window_set(term->win, nss_wc_bs_del, &arg);
                 break;
             case 69: /* DECLRMM */ //TODO DECBI/DECFI
                 term_escape_dump(term);
@@ -1324,6 +1332,15 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 break;
             case 1034: /* Interpret meta */
                 nss_window_set(term->win, nss_wc_has_meta, &arg);
+                break;
+            case 1035: /* Numlock */
+                nss_window_set(term->win, nss_wc_numlock, &arg);
+                break;
+            case 1036: /* Meta sends escape */
+                nss_window_set(term->win, nss_wc_meta_escape, &arg);
+                break;
+            case 1037: /* Backspace is delete */
+                nss_window_set(term->win, nss_wc_del_del, &arg);
                 break;
             case 1046: /* Allow altscreen */
                 ENABLE_IF(!set, term->mode, nss_tm_disable_altscreen);
@@ -1941,6 +1958,7 @@ static void term_escape_reset(nss_term_t *term) {
     memset(&term->esc, 0, sizeof(term->esc));
 }
 
+
 static void term_escape_control(nss_term_t *term, uint32_t ch) {
     // DUMP
     //if (IS_C0(ch)) {
@@ -1951,7 +1969,7 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
     case 0x00: /* NUL (IGNORE) */
         return;
     case 0x05: /* ENQ */
-        nss_term_answerback(term, "%s", nss_config_string(nss_config_answerback_string, ""));
+        term_answerback(term, "%s", nss_config_string(nss_config_answerback_string, ""));
         break;
     case 0x07: /* BEL */
         if (term->esc.state & nss_es_string) {
@@ -2352,15 +2370,14 @@ void term_tty_write(nss_term_t *term, const uint8_t *buf, size_t len) {
     }
 }
 
-#define MAX_REPORT 256
 static size_t term_encode_c1(nss_term_t *term, const uint8_t *in, uint8_t *out) {
     uint8_t *fmtp = out;
     for (uint8_t *it = (uint8_t *)in; *it && fmtp - out < MAX_REPORT - 1; it++) {
-        if (IS_C1(*it) && !(term->mode & nss_tm_8bit)) {
+        if ((*it > 0x7F) && !(term->mode & nss_tm_8bit)) {
             *fmtp++ = 0x1B;
             *fmtp++ = *it ^ 0xC0;
         } else {
-            if (IS_C1(*it) && term->mode & nss_tm_utf8)
+            if ((*it > 0x7F) && term->mode & nss_tm_utf8)
                 *fmtp++ = 0xC2;
             *fmtp++ = *it;
         }
@@ -2369,7 +2386,7 @@ static size_t term_encode_c1(nss_term_t *term, const uint8_t *in, uint8_t *out) 
     return fmtp - out;
 }
 
-void nss_term_answerback(nss_term_t *term, const char *str, ...) {
+static void term_answerback(nss_term_t *term, const char *str, ...) {
     uint8_t fmt[MAX_REPORT], csi[MAX_REPORT];
     term_encode_c1(term, (const uint8_t *)str, fmt);
     va_list vl;
@@ -2394,6 +2411,10 @@ void nss_term_sendkey(nss_term_t *term, const char *str) {
     term_tty_write(term, rep, len);
 }
 
+void nss_term_sendbreak(nss_term_t *term) {
+    if (tcsendbreak(term->fd, 0))
+        warn("Can't send break");
+}
 
 void nss_term_hang(nss_term_t *term) {
     if(term->fd >= 0) {
@@ -2625,7 +2646,7 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
 void nss_term_focus(nss_term_t *term, _Bool focused) {
     ENABLE_IF(focused, term->mode, nss_tm_focused);
     if (term->mode & nss_tm_track_focus)
-        nss_term_answerback(term, focused ? "\x9BI" : "\x9BO");
+        term_answerback(term, focused ? "\x9BI" : "\x9BO");
     term->screen[term->c.y]->mode |= nss_lm_dirty;
 }
 
@@ -2662,11 +2683,11 @@ _Bool nss_term_mouse(nss_term_t *term, int16_t x, int16_t y, nss_mouse_state_t m
 
 
     if (term->mode & nss_tm_mouse_format_sgr) {
-        nss_term_answerback(term, "\x9B<%"PRIu8";%"PRIu16";%"PRIu16"%c",
+        term_answerback(term, "\x9B<%"PRIu8";%"PRIu16";%"PRIu16"%c",
                 button, x + 1, y + 1, event == nss_me_release ? 'm' : 'M');
     } else {
         if (x >= 223 || y >= 223) return 0;
-        nss_term_answerback(term, "\x9BM%c%c%c", button + ' ', x + 1 + ' ', y + 1 + ' ');
+        term_answerback(term, "\x9BM%c%c%c", button + ' ', x + 1 + ' ', y + 1 + ' ');
     }
 
     term->prev_mouse_x = x;

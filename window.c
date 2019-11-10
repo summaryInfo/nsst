@@ -21,6 +21,7 @@
 #include "util.h"
 #include "font.h"
 #include "term.h"
+#include "input.h"
 
 #define TRUE_COLOR_ALPHA_DEPTH 32
 #define NUM_BORDERS 4
@@ -54,6 +55,9 @@ struct nss_window {
     unsigned numlock : 1;
     unsigned keylock : 1;
     unsigned has_meta : 1;
+    unsigned meta_escape : 1;
+    unsigned bs_del : 1;
+    unsigned del_del : 1;
     unsigned reverse_video : 1;
     unsigned mouse_events : 1;
 
@@ -135,400 +139,6 @@ typedef struct nss_glyph_mesg {
     int16_t dx, dy;
     uint8_t data[];
 } nss_glyph_mesg_t;
-
-#define NSS_M_ALL (0xff)
-
-#define NSS_M_NOAPPCUR (1 << 0)
-#define NSS_M_APPCUR (1 << 1)
-#define NSS_M_NOAPPK (1 << 2)
-#define NSS_M_NONUM (1 << 3)
-#define NSS_M_APPK (1 << 4)
-
-//typedef struct nss_shortcut_key {
-//    uint32_t mstate;
-//    uint32_t mmask;
-//    uint8_t *string;
-//} nss_shortcut_key_t;
-//typedef struct nss_shortcut {
-//    uint32_t ksym;
-//    nss_shortcut_key_t *inst;
-//} nss_shortcut_t;
-
-typedef struct nss_ckey_key {
-    uint32_t mmask;
-    uint32_t mstate;
-    const char *string;
-    int8_t flag;
-} nss_ckey_key_t;
-
-typedef struct nss_ckey {
-    uint32_t ksym;
-    nss_ckey_key_t *inst;
-} nss_ckey_t;
-
-nss_ckey_t ckeys[] = {
-    {XKB_KEY_KP_Home,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2332J",NSS_M_NOAPPCUR},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2331;2H",NSS_M_APPCUR},
-        {0,0,"\233H",NSS_M_NOAPPCUR},
-        {0,0,"\2331~",NSS_M_APPCUR},
-        {0}}},
-    {XKB_KEY_KP_Up,(nss_ckey_key_t[]){
-        {0,0,"\217x",NSS_M_APPK},
-        {0,0,"\233A",NSS_M_NOAPPCUR},
-        {0,0,"\217A",NSS_M_APPCUR},
-        {0}}},
-    {XKB_KEY_KP_Down,(nss_ckey_key_t[]){
-        {0,0,"\217r",NSS_M_APPK},
-        {0,0,"\233B",NSS_M_NOAPPCUR},
-        {0,0,"\217B",NSS_M_APPCUR},
-        {0}}},
-    {XKB_KEY_KP_Left,(nss_ckey_key_t[]){
-        {0,0,"\217t",NSS_M_APPK},
-        {0,0,"\233D",NSS_M_NOAPPCUR},
-        {0,0,"\217D",NSS_M_APPCUR},
-        {0}}},
-    {XKB_KEY_KP_Right,(nss_ckey_key_t[]){
-        {0,0,"\217v",NSS_M_APPK},
-        {0,0,"\233C",NSS_M_NOAPPCUR},
-        {0,0,"\217C",NSS_M_APPCUR},
-        {0}}},
-    {XKB_KEY_KP_Prior,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2335;2~",0},
-        {0,0,"\2335~",0},
-        {0}}},
-    {XKB_KEY_KP_Begin,(nss_ckey_key_t[]){
-        {0,0,"\233E",0},
-        {0}}},
-    {XKB_KEY_KP_End,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\233J",NSS_M_NOAPPK},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2331;5F",NSS_M_APPK},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\233K",NSS_M_NOAPPK},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2331;2F",NSS_M_APPK},
-        {0,0,"\2334~",0},
-        {0}}},
-    {XKB_KEY_KP_Next,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2336;2~",0},
-        {0,0,"\2336~",0},
-        {0}}},
-    {XKB_KEY_KP_Insert,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2332;2~",NSS_M_APPK},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2334l",NSS_M_NOAPPK},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\233L",NSS_M_NOAPPK},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2332;5~",NSS_M_APPK},
-        {0,0,"\2334h",NSS_M_NOAPPK},
-        {0,0,"\2332~",NSS_M_APPK},
-        {0}}},
-    {XKB_KEY_KP_Delete,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\233M",NSS_M_NOAPPK},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2333;5~",NSS_M_APPK},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2332K",NSS_M_NOAPPK},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2333;2~",NSS_M_APPK},
-        {0,0,"\233P",NSS_M_NOAPPK},
-        {0,0,"\2333~",NSS_M_APPK},
-        {0}}},
-    {XKB_KEY_KP_Multiply,(nss_ckey_key_t[]){
-        {0,0,"\217j",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_Add,(nss_ckey_key_t[]){
-        {0,0,"\217k",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_Enter,(nss_ckey_key_t[]){
-        {0,0,"\217M",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_Enter,(nss_ckey_key_t[]){
-        {0,0,"\r",NSS_M_NOAPPK},
-        {0}}},
-    {XKB_KEY_KP_Subtract,(nss_ckey_key_t[]){
-        {0,0,"\217m",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_Decimal,(nss_ckey_key_t[]){
-        {0,0,"\217n",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_Divide,(nss_ckey_key_t[]){
-        {0,0,"\217o",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_0,(nss_ckey_key_t[]){
-        {0,0,"\217p",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_1,(nss_ckey_key_t[]){
-        {0,0,"\217q",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_2,(nss_ckey_key_t[]){
-        {0,0,"\217r",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_3,(nss_ckey_key_t[]){
-        {0,0,"\217s",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_4,(nss_ckey_key_t[]){
-        {0,0,"\217t",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_5,(nss_ckey_key_t[]){
-        {0,0,"\217u",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_6,(nss_ckey_key_t[]){
-        {0,0,"\217v",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_7,(nss_ckey_key_t[]){
-        {0,0,"\217w",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_8,(nss_ckey_key_t[]){
-        {0,0,"\217x",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_KP_9,(nss_ckey_key_t[]){
-        {0,0,"\217y",NSS_M_NONUM},
-        {0}}},
-    {XKB_KEY_Up,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2331;2A",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\2331;3A",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_1,"\2331;4A",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2331;5A",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_CONTROL,"\2331;6A",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL|XCB_MOD_MASK_1,"\2331;7A",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_CONTROL|XCB_MOD_MASK_1,"\2331;8A",0},
-        {0,0,"\233A",NSS_M_NOAPPCUR},
-        {0,0,"\217A",NSS_M_APPCUR},
-        {0}}},
-    {XKB_KEY_Down,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2331;2B",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\2331;3B",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_1,"\2331;4B",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2331;5B", 0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_CONTROL,"\2331;6B",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL|XCB_MOD_MASK_1,"\2331;7B",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_CONTROL|XCB_MOD_MASK_1,"\2331;8B",0},
-        {0,0,"\233B",NSS_M_NOAPPCUR},
-        {0,0,"\217B",NSS_M_APPCUR},
-        {0}}},
-    {XKB_KEY_Left,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2331;2D",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\2331;3D",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_1,"\2331;4D",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2331;5D", 0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_CONTROL,"\2331;6D",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL|XCB_MOD_MASK_1,"\2331;7D",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_CONTROL|XCB_MOD_MASK_1,"\2331;8D",0},
-        {0,0,"\233D",NSS_M_NOAPPCUR},
-        {0,0,"\217D",NSS_M_APPCUR},
-        {0}}},
-    {XKB_KEY_Right,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2331;2C",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\2331;3C",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_1,"\2331;4C",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2331;5C", 0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_CONTROL,"\2331;6C",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL|XCB_MOD_MASK_1,"\2331;7C",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_CONTROL|XCB_MOD_MASK_1,"\2331;8C",0},
-        {0,0,"\233C",NSS_M_NOAPPCUR},
-        {0,0,"\217C",NSS_M_APPCUR},
-        {0}}},
-    {XKB_KEY_ISO_Left_Tab,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\233Z",0},
-        {0}}},
-    {XKB_KEY_Return,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\033\r",0},
-        {0,0,"\r",0},
-        {0}}},
-    {XKB_KEY_Insert,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2334l",NSS_M_NOAPPK},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2332;2~",NSS_M_APPK},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\233L",NSS_M_NOAPPK},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2332;5~",NSS_M_APPK},
-        {0,0,"\2334h",NSS_M_NOAPPK},
-        {0,0,"\0332~",NSS_M_APPK},
-        {0}}},
-    {XKB_KEY_Delete,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\233M",NSS_M_NOAPPK},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2333;5~",NSS_M_APPK},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2332K",NSS_M_NOAPPK},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2333;2~",NSS_M_APPK},
-        {0,0,"\233P",NSS_M_NOAPPK},
-        {0,0,"\2333~",NSS_M_APPK},
-        {0}}},
-    {XKB_KEY_BackSpace,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\177",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\033\177",0},
-        {0}}},
-    {XKB_KEY_Home,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2332J",NSS_M_NOAPPCUR},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2331;2H",NSS_M_APPCUR},
-        {0,0,"\233H",NSS_M_NOAPPCUR},
-        {0,0,"\2331~",NSS_M_APPCUR},
-        {0}}},
-    {XKB_KEY_End,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\233J",NSS_M_NOAPPK},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2331;5F",NSS_M_APPK},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\233K",NSS_M_NOAPPK},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2331;2F",NSS_M_APPK},
-        {0,0,"\2334~",0},
-        {0}}},
-    {XKB_KEY_Prior,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2335;5~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2335;2~",0},
-        {0,0,"\2335~",0},
-        {0}}},
-    {XKB_KEY_Next,(nss_ckey_key_t[]){
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2336;5~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2336;2~",0},
-        {0,0,"\2336~",0},
-        {0}}},
-    {XKB_KEY_F1,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\217P",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2331;2P",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2331;5P",0},
-        {NSS_M_ALL,XCB_MOD_MASK_4,"\2331;6P",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\2331;3P",0},
-        {NSS_M_ALL,XCB_MOD_MASK_3,"\2331;4P",0},
-        {0}}},
-    {XKB_KEY_F2,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\217Q",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2331;2Q",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2331;5Q",0},
-        {NSS_M_ALL,XCB_MOD_MASK_4,"\2331;6Q",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\2331;3Q",0},
-        {NSS_M_ALL,XCB_MOD_MASK_3,"\2331;4Q",0},
-        {0}}},
-    {XKB_KEY_F3,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\217R",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2331;2R",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2331;5R",0},
-        {NSS_M_ALL,XCB_MOD_MASK_4,"\2331;6R",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\2331;3R",0},
-        {NSS_M_ALL,XCB_MOD_MASK_3,"\2331;4R",0},
-        {0}}},
-    {XKB_KEY_F4,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\217S",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\2331;2S",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\2331;5S",0},
-        {NSS_M_ALL,XCB_MOD_MASK_4,"\2331;6S",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\2331;3S",0},
-        {0}}},
-    {XKB_KEY_F5,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23315~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\23315;2~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\23315;5~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_4,"\23315;6~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\23315;3~",0},
-        {0}}},
-    {XKB_KEY_F6,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23317~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\23317;2~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\23317;5~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_4,"\23317;6~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\23317;3~",0},
-        {0}}},
-    {XKB_KEY_F7,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23318~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\23318;2~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\23318;5~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_4,"\23318;6~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\23318;3~",0},
-        {0}}},
-    {XKB_KEY_F8,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23319~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\23319;2~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\23319;5~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_4,"\23319;6~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\23319;3~",0},
-        {0}}},
-    {XKB_KEY_F9,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23320~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\23320;2~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\23320;5~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_4,"\23320;6~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\23320;3~",0},
-        {0}}},
-    {XKB_KEY_F10,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23321~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\23321;2~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\23321;5~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_4,"\23321;6~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\23321;3~",0},
-        {0}}},
-    {XKB_KEY_F11,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23323~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\23323;2~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\23323;5~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_4,"\23323;6~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\23323;3~",0},
-        {0}}},
-    {XKB_KEY_F12,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23324~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_SHIFT,"\23324;2~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_CONTROL,"\23324;5~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_4,"\23324;6~",0},
-        {NSS_M_ALL,XCB_MOD_MASK_1,"\23324;3~",0},
-        {0}}},
-    {XKB_KEY_F13,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\2331;2P",0},
-        {0}}},
-    {XKB_KEY_F14,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\2331;2Q",0},
-        {0}}},
-    {XKB_KEY_F15,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\2331;2R",0},
-        {0}}},
-    {XKB_KEY_F16,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\2331;2S",0},
-        {0}}},
-    {XKB_KEY_F17,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23315;2~",0},
-        {0}}},
-    {XKB_KEY_F18,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23317;2~",0},
-        {0}}},
-    {XKB_KEY_F19,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23318;2~",0},
-        {0}}},
-    {XKB_KEY_F20,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23319;2~",0},
-        {0}}},
-    {XKB_KEY_F21,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23320;2~",0},
-        {0}}},
-    {XKB_KEY_F22,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23321;2~",0},
-        {0}}},
-    {XKB_KEY_F23,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23323;2~",0},
-        {0}}},
-    {XKB_KEY_F24,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23324;2~",0},
-        {0}}},
-    {XKB_KEY_F25,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\2331;5P",0},
-        {0}}},
-    {XKB_KEY_F26,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\2331;5Q",0},
-        {0}}},
-    {XKB_KEY_F27,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\2331;5R",0},
-        {0}}},
-    {XKB_KEY_F28,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\2331;5S",0},
-        {0}}},
-    {XKB_KEY_F29,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23315;5~",0},
-        {0}}},
-    {XKB_KEY_F30,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23317;5~",0},
-        {0}}},
-    {XKB_KEY_F31,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23318;5~",0},
-        {0}}},
-    {XKB_KEY_F32,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23319;5~",0},
-        {0}}},
-    {XKB_KEY_F33,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23320;5~",0},
-        {0}}},
-    {XKB_KEY_F34,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23321;5~",0},
-        {0}}},
-    {XKB_KEY_F35,(nss_ckey_key_t[]){
-        {NSS_M_ALL,0,"\23323;5~",0},
-        {0}}}
-};
 
 struct nss_context con;
 
@@ -835,6 +445,9 @@ static void set_config(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *valu
     if (tag & nss_wc_numlock) win->numlock = *values++;
     if (tag & nss_wc_keylock) win->keylock = *values++;
     if (tag & nss_wc_has_meta) win->has_meta = *values++;
+    if (tag & nss_wc_meta_escape) win->meta_escape = *values++;
+    if (tag & nss_wc_bs_del) win->bs_del = *values++;
+    if (tag & nss_wc_del_del) win->del_del = *values++;
     if (tag & nss_wc_blink_time) win->blink_time = *values++;
     if (tag & nss_wc_reverse) win->reverse_video = *values++;
     if (tag & nss_wc_mouse) win->mouse_events = *values++;
@@ -969,7 +582,7 @@ static void set_wm_props(nss_window_t *win) {
     uint32_t pid = getpid();
     xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, con.atom_net_wm_pid, XCB_ATOM_CARDINAL, 32, 1, &pid);
     xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, con.atom_wm_protocols, XCB_ATOM_ATOM, 32, 1, &con.atom_wm_delete_window);
-    const char class[] = "nss\0Nss";
+    const char class[] = "nsst\0Nsst";
     xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(class), class);
 }
 
@@ -987,7 +600,13 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
     win->cursor_type = nss_config_integer(nss_config_cursor_shape, 0, 6);
     win->subpixel_fonts = nss_config_integer(nss_config_subpixel_fonts, 0, 1);
     win->reverse_video = nss_config_integer(nss_config_reverse_video, 0, 1);
+    win->appkey = nss_config_integer(nss_config_appkey, 0, 1);
+    win->appcursor = nss_config_integer(nss_config_appcursor, 0, 1);
+    win->numlock = nss_config_integer(nss_config_numlock, 0, 1);
     win->has_meta = nss_config_integer(nss_config_has_meta, 0, 1);
+    win->meta_escape = nss_config_integer(nss_config_meta_escape, 0, 1);
+    win->bs_del = nss_config_integer(nss_config_backspace_is_delete, 0, 1);
+    win->del_del = nss_config_integer(nss_config_delete_is_delete, 0, 1);
     win->font_size = nss_config_integer(nss_config_font_size, 0, 1000);
     win->active = 1;
     win->numlock = 1;
@@ -1271,7 +890,7 @@ static inline _Bool cell_equal_fg(nss_cell_t a, nss_cell_t b, _Bool blink) {
 }
 
 /* Draw line with attributes */
-/* TODO: Implement query caching */
+/* TODO Draw multiple lines at a time -- or I should not do that since it's then quadratic */
 void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_cell_t *cells, nss_color_t *pal, nss_color_t *extra) {
     x = x * win->char_width;
     y = y * (win->char_height + win->char_depth) + win->char_height;
@@ -1532,9 +1151,10 @@ void nss_window_clear(nss_window_t *win, size_t len, const nss_rect_t *damage) {
 
 void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values) {
     set_config(win, tag, values);
+    _Bool inval_screen = 0;
 
     if (tag & (nss_wc_font_size | nss_wc_subpixel_fonts))
-        reload_font(win, 1);
+        reload_font(win, 1), inval_screen = 1;
     if (tag & (nss_wc_cursor_background | nss_wc_cursor_foreground | nss_wc_background | nss_wc_foreground | nss_wc_reverse)) {
         uint32_t values2[2];
         if (tag & nss_wc_reverse && win->reverse_video)
@@ -1543,12 +1163,11 @@ void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values)
             values2[0] = values2[1] = win->bg;
         xcb_change_window_attributes(con.con, win->wid, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL, values2);
         xcb_change_gc(con.con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
+        inval_screen = 1;
     }
-   if (tag & ~(nss_wc_appcursor | nss_wc_appkey | nss_wc_numlock | nss_wc_keylock | nss_wc_has_meta)) {
-        // TODO Redraw?
+   if (inval_screen) {
         nss_term_invalidate_screen(win->term);
         redraw_damage(win, (nss_rect_t) {0, 0, win->width, win->height});
-        xcb_flush(con.con);
    }
    if (tag & nss_wc_mouse) {
        if (win->mouse_events)
@@ -1598,6 +1217,11 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
     if (tag & nss_wc_appkey) return win->appkey;
     if (tag & nss_wc_keylock) return win->keylock;
     if (tag & nss_wc_has_meta) return win->has_meta;
+    if (tag & nss_wc_meta_escape) return win->meta_escape;
+    if (tag & nss_wc_bs_del) return win->bs_del;
+    if (tag & nss_wc_del_del) return win->del_del;
+    if (tag & nss_wc_blink_time) return win->blink_time;
+    if (tag & nss_wc_reverse) return win->reverse_video;
     if (tag & nss_wc_mouse) return win->mouse_events;
 
     warn("Invalid option");
@@ -1676,47 +1300,56 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
 
     xkb_keysym_t sym = xkb_state_key_get_one_sym(con.xkb_state, keycode);
     xkb_mod_mask_t mods = xkb_state_serialize_mods(con.xkb_state, XKB_STATE_MODS_EFFECTIVE);
-    uint8_t buf[8] = {0};
-    size_t sz = xkb_state_key_get_utf8(con.xkb_state, keycode, NULL, 0);
-    if (sz && sz < sizeof(buf) - 1) {
-        xkb_state_key_get_utf8(con.xkb_state, keycode, (char *)buf, sizeof(buf));
-        buf[sz] = '\0';
-    }
 
-    // TODO Make table for this too
-    //
     // 1. Key bindings
-    uint32_t arg;
-    if (sym == XKB_KEY_Page_Down && mods == (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)) {
-        arg = win->font_size - 2;
-        nss_window_set(win, nss_wc_font_size, &arg);
+    enum nss_shortcut_action action = nss_sa_none;
+    for (size_t i = 0; i < sizeof(cshorts)/sizeof(*cshorts); i++) {
+        if (cshorts[i].ksym == sym && (mods & cshorts[i].mmask) == cshorts[i].mstate) {
+            action = cshorts[i].action;
+        	break;
+        }
+    }
+    switch (action) {
+        uint32_t arg;
+    case nss_sa_break:
+        nss_term_sendbreak(win->term);
         return;
-    } else if (sym == XKB_KEY_Page_Up && mods == (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)) {
-        arg = win->font_size + 2;
-        nss_window_set(win, nss_wc_font_size, &arg);
-        return;
-    } else if (sym == XKB_KEY_Home && mods == (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)) {
-        arg = 0;
-        nss_window_set(win, nss_wc_font_size, &arg);
-        return;
-    } else if (sym == XKB_KEY_End && mods == (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)) {
-        arg = !win->subpixel_fonts;
-        nss_window_set(win, nss_wc_subpixel_fonts, &arg);
-        return;
-    } else if (sym == XKB_KEY_1 && mods == XCB_MOD_MASK_1) {
+    case nss_sa_reverse:
         arg = !win->reverse_video;
         nss_window_set(win, nss_wc_reverse, &arg);
         return;
-    } else if (sym == XKB_KEY_4 && mods == XCB_MOD_MASK_1) {
-        arg = win->font_size;
-        nss_create_window(win->font_name, nss_wc_font_size, &arg);
+    case nss_sa_numlock:
+        arg = !win->numlock;
+        nss_window_set(win, nss_wc_numlock, &arg);
         return;
-    } else if (sym == XKB_KEY_Page_Up) {
+    case nss_sa_scroll_up:
+        nss_term_scroll_view(win->term, -2); //TODO Amount configurable
+        return;
+    case nss_sa_scroll_down:
         nss_term_scroll_view(win->term, 2);
         return;
-    } else if (sym == XKB_KEY_Page_Down) {
-        nss_term_scroll_view(win->term, -2);
+    case nss_sa_font_up:
+        arg = win->font_size + 1; // TODO Amount configurable
+        nss_window_set(win, nss_wc_font_size, &arg);
         return;
+    case nss_sa_font_down:
+        arg = win->font_size - 1;
+        nss_window_set(win, nss_wc_font_size, &arg);
+        return;
+    case nss_sa_font_default:
+        arg = 0; // TODO Use config
+        nss_window_set(win, nss_wc_font_size, &arg);
+        return;
+    case nss_sa_font_subpixel:
+        arg = !win->subpixel_fonts;
+        nss_window_set(win, nss_wc_subpixel_fonts, &arg);
+        return;
+    case nss_sa_new_window:
+        arg = 0;
+        nss_create_window(win->font_name, nss_wc_font_size, &arg);
+        return;
+    case nss_sa_none:
+      	break;
     }
 
     // 2. Custom translations
@@ -1728,18 +1361,27 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
             if ((it->mmask & mods) != it->mstate) continue;
             if (it->flag & (win->appkey ? NSS_M_NOAPPK : NSS_M_APPK)) continue;
             if (it->flag & (win->appcursor ? NSS_M_NOAPPCUR : NSS_M_APPCUR)) continue;
-            if ((it->flag & NSS_M_NONUM) && win->numlock) continue;
+            if (it->flag & (win->bs_del ? NSS_M_NOBSDEL : NSS_M_BSDEL)) continue;
+            if (it->flag & (win->del_del ? NSS_M_NODELDEL : NSS_M_DELDEL)) continue;
+            if ((it->flag & NSS_M_NUM) && (!win->numlock || !win->appkey)) continue;
             nss_term_sendkey(win->term, it->string);
             return;
         }
     }
 
     // 3. Basic keycode passing
+    uint8_t buf[8] = {0};
+    size_t sz = xkb_state_key_get_utf8(con.xkb_state, keycode, NULL, 0);
+    if (sz && sz < sizeof(buf) - 1) {
+        xkb_state_key_get_utf8(con.xkb_state, keycode, (char *)buf, sizeof(buf));
+        buf[sz] = '\0';
+    }
+
     if (!sz) return;
 
     if (nss_term_is_utf8(win->term)) {
-        if (sz == 1 && mods & XCB_MOD_MASK_1) {
-            if (win->has_meta) {
+        if (sz == 1 && mods & XCB_MOD_MASK_1 && win->has_meta) {
+            if (!win->meta_escape) {
                 buf[utf8_encode(*buf | 0x80, buf, buf + 8)] = '\0';
             } else {
                 buf[2] = '\0';
@@ -1749,8 +1391,8 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         }
     } else {
         buf[1] = '\0';
-        if (mods & XCB_MOD_MASK_1) {
-            if (win->has_meta) {
+        if (mods & XCB_MOD_MASK_1 && win->has_meta) {
+            if (!win->meta_escape) {
                 *buf |= 0x80;
             } else {
                 buf[2] = '\0';

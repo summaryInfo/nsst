@@ -35,9 +35,12 @@ typedef enum nss_wc_tag {
     nss_wc_numlock = 1 << 15,
     nss_wc_keylock = 1 << 16,
     nss_wc_has_meta = 1 << 17,
-    nss_wc_blink_time = 1 << 18,
-    nss_wc_reverse = 1 << 19,
-    nss_wc_mouse = 1 << 20,
+    nss_wc_meta_escape = 1 << 18,
+    nss_wc_bs_del = 1 << 19,
+    nss_wc_del_del = 1 << 20,
+    nss_wc_blink_time = 1 << 21,
+    nss_wc_reverse = 1 << 22,
+    nss_wc_mouse = 1 << 23,
 } nss_wc_tag_t;
 
 typedef enum nss_mouse_event {

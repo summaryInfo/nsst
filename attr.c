@@ -23,7 +23,13 @@ int32_t nss_config_integer(uint32_t opt, int32_t min, int32_t max) {
     case nss_config_init_wrap: val = 1; break;
     case nss_config_scroll_on_input: val = 1; break;
     case nss_config_scroll_on_output: val = 0; break;
-    case nss_config_has_meta: val = 0; break;
+    case nss_config_appkey: val = 0; break;
+    case nss_config_appcursor: val = 0; break;
+    case nss_config_numlock: val = 1; break;
+    case nss_config_has_meta: val = 1; break;
+    case nss_config_meta_escape: val = 1; break;
+    case nss_config_backspace_is_delete: val = 1; break;
+    case nss_config_delete_is_delete: val = 0; break;
     case nss_config_cursor_shape: val = nss_cursor_bar; break;
     case nss_config_underline_width: val = 1; break;
     case nss_config_cursor_width: val = 2; break;
