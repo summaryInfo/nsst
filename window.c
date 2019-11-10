@@ -670,6 +670,10 @@ int key_cmpfn(const void *a, const void *b) {
 void nss_init_context(void) {
     con.daemon_mode = 0;
 
+    con.render_buffer = malloc(WORDS_IN_MESSAGE * sizeof(uint32_t));
+    if (!con.render_buffer) die("Can't allocate render_buffer");
+    con.render_buffer_size = WORDS_IN_MESSAGE * sizeof(uint32_t);
+
     con.pfds = calloc(INIT_PFD_NUM, sizeof(struct pollfd));
     if (!con.pfds) die("Can't allocate pfds");
     con.pfdn = 1;
@@ -1245,6 +1249,27 @@ _Bool cell_equal_bg(nss_cell_t a, nss_cell_t b) {
     } else return 1;
 }
 
+_Bool cell_equal_fg(nss_cell_t a, nss_cell_t b, _Bool blink) {
+    uint32_t a_attr = CELL_ATTR(a), b_attr = CELL_ATTR(b);
+    _Bool a_inv = a_attr & (nss_attrib_inverse | nss_attrib_invisible) || (blink && a_attr & nss_attrib_blink);
+    _Bool b_inv = b_attr & (nss_attrib_inverse | nss_attrib_invisible) || (blink && b_attr & nss_attrib_blink);
+    if (a_inv && b_inv) return a.bg == b.bg;
+
+    nss_cid_t a_bg = a.bg;
+    if (!a_inv)
+        a_bg = a.fg + 8 * ((a_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && a.fg < 8);
+    nss_cid_t b_bg = b.bg;
+    if (!b_inv)
+        b_bg = b.fg + 8 * ((b_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && b.fg < 8);
+
+    if (a_bg != b_bg) return 0;
+
+    if ((((a_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint) && !a_inv) ||
+            (((b_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint) && !b_inv)) {
+        return ((a_attr & (nss_attrib_bold | nss_attrib_faint)) == (b_attr & (nss_attrib_bold | nss_attrib_faint))) && (a_inv == b_inv);
+    } else return 1;
+}
+
 /* Draw line with attributes */
 /* TODO: Implement query caching */
 void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_cell_t *cells, nss_color_t *pal, nss_color_t *extra) {
@@ -1311,70 +1336,131 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
 
         xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, bg, rpos - rects, rects);
 
-        while(con.mark_buffer[i]) i++;
+        while(i < len && con.mark_buffer[i]) i++;
     }
 
+    memset(con.mark_buffer, 0, con.mark_buffer_size);
 
-    while (len > 0) {
-        uint32_t attr = CELL_ATTR(*cells);
-        uint8_t fattr = attr & nss_font_attrib_mask;
-        xcb_render_color_t fg, bg;
-        eval_color(win, *cells, pal, extra, &fg, &bg);
+    for (size_t i = 0; i < len; ) {
+        xcb_render_color_t fg;
+        eval_color(win, cells[i], pal, extra, &fg, NULL);
 
         xcb_rectangle_t rect2 = { .x = 0, .y = 0, .width = 1, .height = 1 };
         xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pen, fg, 1, &rect2);
 
-        size_t blk_len = 1;
-        while (blk_len < len && CELL_EQ(cells[blk_len], cells[blk_len - 1]))
-            blk_len++;
+        nss_glyph_mesg_t *msg_head = (nss_glyph_mesg_t *)con.render_buffer;
+        uint8_t *bpos = con.render_buffer + sizeof(nss_glyph_mesg_t);
+        uint8_t *bend = con.render_buffer + con.render_buffer_size;
+        size_t msg_count = 0, jump = 0;
 
-        //xcb_rectangle_t rect = {
-        //    .x = x, .y = y-win->char_height,
-        //    .width = win->char_width*blk_len,
-        //    .height = win->char_height+win->char_depth
-        //};
+        *msg_head = (nss_glyph_mesg_t) { .dx = x + i * win->char_width, .dy = y };
 
-        xcb_rectangle_t lines[2] = {
-            { .x = x, .y= y + 1, .width = win->char_width*blk_len, .height = win->underline_width },
-            { .x = x, .y= y - win->char_height/3, .width = win->char_width*blk_len, .height = win->underline_width }
-        };
-
-        size_t messages = (blk_len + CHARS_PER_MESG - 1)/CHARS_PER_MESG;
-        size_t data_len = messages*sizeof(nss_glyph_mesg_t) + blk_len*sizeof(uint32_t);
-        if (con.render_buffer_size < data_len) {
-            uint8_t *new = realloc(con.render_buffer, data_len);
-            if (!new) return;
-            con.render_buffer = new;
-            con.render_buffer_size = data_len;
+        for (size_t j = i; j < len; j++) {
+            if (!con.mark_buffer[j] && cell_equal_fg(cells[i], cells[j], win->blink_state)) {
+                con.mark_buffer[j] = 1;
+                size_t inc = sizeof(uint32_t);
+                if ((size_t)msg_head->len + 1 > CHARS_PER_MESG || jump) inc += sizeof(nss_glyph_mesg_t);
+                if (bend - bpos <= (ssize_t)inc) {
+                    size_t new_size = MAX(3 * con.render_buffer_size / 2, 128 * sizeof(uint32_t));
+                    uint8_t *new = realloc(con.render_buffer, new_size);
+                    if (!new) return;
+                    msg_head = (nss_glyph_mesg_t *)(new + ((uint8_t *)msg_head - con.render_buffer));
+                    bpos = new + (bpos - con.render_buffer);
+                    bend = new + new_size;
+                    con.render_buffer = new;
+                    con.render_buffer_size = new_size;
+                }
+                if ((size_t)msg_head->len + 1 > CHARS_PER_MESG || jump) {
+                    msg_count++;
+                    msg_head = (nss_glyph_mesg_t *)bpos;
+                    *msg_head = (nss_glyph_mesg_t) { .dx = jump * win->char_width };
+                    bpos += sizeof(msg_head);
+                    jump = 0;
+                }
+                uint32_t ch = CELL_CHAR(cells[j]) | ((CELL_ATTR(cells[j]) & nss_font_attrib_mask) << 24);
+                memcpy(bpos, &ch, sizeof(ch));
+                bpos += sizeof(ch);
+                msg_head->len++;
+            } else jump++;
         }
-        uint32_t *off = (uint32_t *)con.render_buffer;
-        nss_glyph_mesg_t msg = {.dx=x, .dy=y};
-
-        for (size_t msgi = 0, chari = 0; msgi < messages; msgi++, chari += CHARS_PER_MESG) {
-                msg.len = (blk_len - chari < CHARS_PER_MESG ? blk_len - chari : CHARS_PER_MESG);
-            memcpy(off, &msg, sizeof(msg));
-            off += sizeof(msg) / sizeof(uint32_t);
-            for (size_t j = 0; j < msg.len; j++)
-                off[j] = CELL_CHAR(cells[chari + j]) | (fattr << 24);
-            off += msg.len;
-            //Reset for all, except first
-            msg.dx = msg.dy = 0;
-        }
-
-        //xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, bg, 1, &rect);
-
-        if (attr & (nss_attrib_underlined|nss_attrib_strikethrough)) {
-            size_t count = !!(attr & nss_attrib_underlined) + !!(attr & nss_attrib_strikethrough);
-            size_t offset = !(attr & nss_attrib_underlined) && !!(attr & nss_attrib_strikethrough);
-            xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_OVER, win->pic, fg, count, lines+offset);
-        }
-
         xcb_render_composite_glyphs_32(con.con, XCB_RENDER_PICT_OP_OVER,
                                        win->pen, win->pic, win->pfglyph, win->gsid,
-                                       0, 0, data_len, con.render_buffer);
-        cells += blk_len;
-        len -= blk_len;
-        x += blk_len * win->char_width;
+                                       0, 0, bpos - con.render_buffer, con.render_buffer);
+        while(i < len && con.mark_buffer[i]) i++;
+    }
+
+    memset(con.mark_buffer, 0, con.mark_buffer_size);
+    for (size_t i = 0; i < len; i++) {
+        while(i < len && (con.mark_buffer[i] || (CELL_ATTR(cells[i]) & nss_attrib_invisible) ||
+                (CELL_ATTR(cells[i]) & nss_attrib_blink && win->blink_state) || !(CELL_ATTR(cells[i]) & (nss_attrib_strikethrough | nss_attrib_underlined)))) i++;
+        if (i >= len) break;
+
+        xcb_render_color_t fg;
+        eval_color(win, cells[i], pal, extra, &fg, NULL);
+
+        xcb_rectangle_t *rects = (xcb_rectangle_t *)con.render_buffer;
+        xcb_rectangle_t *rend = rects + con.render_buffer_size / sizeof(xcb_rectangle_t), *rpos = rects;
+        for (size_t j = i; j < len; ) {
+            while (j < len && (!cell_equal_fg(cells[i], cells[j], win->blink_state) ||
+                    !(CELL_ATTR(cells[j]) & nss_attrib_underlined))) j++;
+            if (j >= len) break;
+
+            size_t blk_len = 0;
+            while (j + blk_len < len && cell_equal_fg(cells[i], cells[j + blk_len], win->blink_state) &&
+                (CELL_ATTR(cells[j + blk_len]) & nss_attrib_underlined))
+                con.mark_buffer[j + blk_len++] = 1;
+
+            if (rpos + 1 >= rend) {
+                size_t new_size = MAX(3 * con.render_buffer_size / 2, 16 * sizeof(xcb_rectangle_t));
+                uint8_t *new = realloc(con.render_buffer, new_size);
+                if (!new) return;
+                con.render_buffer = new;
+                con.render_buffer_size = new_size;
+                rpos = (xcb_rectangle_t *)con.render_buffer + (rpos - rects);
+                rects = (xcb_rectangle_t *)con.render_buffer;
+                rend = rects + new_size / sizeof(xcb_rectangle_t);
+            }
+
+            *rpos++ = (xcb_rectangle_t) {
+                .x = x + j * win->char_width, .y = y + 1,
+                .width = blk_len * win->char_width,
+                .height = win->underline_width
+            };
+
+            j += blk_len;
+        }
+        for (size_t j = i; j < len; ) {
+            while (j < len && (!cell_equal_fg(cells[i], cells[j], win->blink_state) ||
+                    !(CELL_ATTR(cells[j]) & nss_attrib_strikethrough))) j++;
+            if (j >= len) break;
+
+            size_t blk_len = 0;
+            while (j + blk_len < len && cell_equal_fg(cells[i], cells[j + blk_len], win->blink_state) &&
+                (CELL_ATTR(cells[j + blk_len]) & nss_attrib_strikethrough))
+                con.mark_buffer[j + blk_len++] = 1;
+
+            if (rpos + 1 >= rend) {
+                size_t new_size = MAX(3 * con.render_buffer_size / 2, 16 * sizeof(xcb_rectangle_t));
+                uint8_t *new = realloc(con.render_buffer, new_size);
+                if (!new) return;
+                con.render_buffer = new;
+                con.render_buffer_size = new_size;
+                rpos = (xcb_rectangle_t *)con.render_buffer + (rpos - rects);
+                rects = (xcb_rectangle_t *)con.render_buffer;
+                rend = rects + new_size / sizeof(xcb_rectangle_t);
+            }
+
+            *rpos++ = (xcb_rectangle_t) {
+                .x = x + j * win->char_width, .y = y - win->char_height/3,
+                .width = blk_len * win->char_width,
+                .height = win->underline_width
+            };
+
+            j += blk_len;
+        }
+
+        xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, fg, rpos - rects, rects);
+
     }
 
     clip = (xcb_rectangle_t) {0, 0, win->cw * win->char_width, win->ch * (win->char_height + win->char_depth)};
