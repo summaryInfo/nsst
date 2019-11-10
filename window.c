@@ -1346,7 +1346,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         return;
     case nss_sa_new_window:
         arg = 0;
-        nss_create_window(win->font_name, nss_wc_font_size, &arg);
+        nss_create_window(NULL, 0, NULL);
         return;
     case nss_sa_none:
       	break;
