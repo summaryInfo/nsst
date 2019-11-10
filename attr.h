@@ -80,7 +80,6 @@ typedef enum nss_attrs {
 #define CELL_ATTR_INVERT(s, l) ((s).ch ^= (l) << CELL_CHAR_BITS)
 #define MKCELLWITH(s, c) MKCELL((s).fg, (s).bg, CELL_ATTR(s), (c))
 #define MKCELL(f, b, l, c) ((nss_cell_t) { .bg = (b), .fg = (f), .ch = ((c) & CELL_CHAR_MASK) | ((l) << CELL_CHAR_BITS)})
-#define CELL_EQ(s, z) ((s).fg == (z).fg && (s).bg == (z).bg && CELL_ATTR(s) == CELL_ATTR(z))
 
 typedef struct nss_cell {
         uint32_t ch; /* not really char but char + attributes */
