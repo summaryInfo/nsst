@@ -1228,7 +1228,7 @@ static inline void eval_color(nss_window_t *win, nss_cell_t cell, nss_color_t *p
         if (bgr) *bgr = bg;
 }
 
-_Bool cell_equal_bg(nss_cell_t a, nss_cell_t b) {
+static inline _Bool cell_equal_bg(nss_cell_t a, nss_cell_t b) {
     uint32_t a_attr = CELL_ATTR(a), b_attr = CELL_ATTR(b);
     if (!(a_attr & nss_attrib_inverse) && !(b_attr & nss_attrib_inverse))
         return a.bg == b.bg;
@@ -1249,7 +1249,7 @@ _Bool cell_equal_bg(nss_cell_t a, nss_cell_t b) {
     } else return 1;
 }
 
-_Bool cell_equal_fg(nss_cell_t a, nss_cell_t b, _Bool blink) {
+static inline _Bool cell_equal_fg(nss_cell_t a, nss_cell_t b, _Bool blink) {
     uint32_t a_attr = CELL_ATTR(a), b_attr = CELL_ATTR(b);
     _Bool a_inv = a_attr & (nss_attrib_inverse | nss_attrib_invisible) || (blink && a_attr & nss_attrib_blink);
     _Bool b_inv = b_attr & (nss_attrib_inverse | nss_attrib_invisible) || (blink && b_attr & nss_attrib_blink);
@@ -1466,10 +1466,6 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
     clip = (xcb_rectangle_t) {0, 0, win->cw * win->char_width, win->ch * (win->char_height + win->char_depth)};
     xcb_render_set_picture_clip_rectangles(con.con, win->pic, 0, 0, 1, &clip);
 
-}
-
-void nss_window_draw_commit(nss_window_t *win) {
-    xcb_flush(con.con);
 }
 
 static void redraw_damage(nss_window_t *win, nss_rect_t damage) {
