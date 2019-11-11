@@ -60,6 +60,8 @@ struct nss_window {
     unsigned del_del : 1;
     unsigned reverse_video : 1;
     unsigned mouse_events : 1;
+    unsigned force_redraw : 1; //TODO
+    unsigned blink_commited : 1;
 
     int16_t width;
     int16_t height;
@@ -891,19 +893,19 @@ static inline _Bool cell_equal_fg(nss_cell_t a, nss_cell_t b, _Bool blink) {
 
 static inline _Bool cell_vis(nss_cell_t cell, _Bool blink) {
     return cell.fg != cell.bg && !(CELL_ATTR(cell) & nss_attrib_invisible) &&
-            !(CELL_ATTR(cell) & nss_attrib_blink && blink) && (CELL_CHAR(cell) != ' ');
-            // Assume that space is invisible
+            !(CELL_ATTR(cell) & nss_attrib_blink && blink);
+}
+
+static inline _Bool cell_drawn(nss_cell_t cell, _Bool blink_commited) {
+    return CELL_ATTR(cell) & nss_attrib_drawn && !(!blink_commited && (CELL_ATTR(cell) & nss_attrib_blink));
 }
 
 /* Draw line with attributes */
 /* TODO Draw multiple lines at a time -- or I should not do that since it is quadratic */
-void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_cell_t *cells, nss_color_t *pal, nss_color_t *extra) {
+size_t nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_cell_t *cells, nss_color_t *pal, nss_color_t *extra) {
     x = x * win->char_width;
     y = y * (win->char_height + win->char_depth) + win->char_height;
-    if (!cells || !len) return;
-
-    xcb_rectangle_t clip = {0, y - win->char_height, win->char_width * win->cw, win->char_depth + win->char_height};
-    xcb_render_set_picture_clip_rectangles(con.con, win->pic, 0, 0, 1, &clip);
+    if (!cells || !len) return 0;
 
     for (size_t i = 0; i < len; i++) {
         uint32_t ch = CELL_CHAR(cells[i]);
@@ -920,13 +922,14 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
 
     if (con.mark_buffer_size < len) {
         uint8_t *new = realloc(con.mark_buffer, len);
-        if (!new) return;
+        if (!new) return 0;
         con.mark_buffer = new;
         con.mark_buffer_size = len;
     }
 
     memset(con.mark_buffer, 0, con.mark_buffer_size);
 
+    size_t drawn = 0;
     for (size_t i = 0; i < len; ) {
         xcb_render_color_t bg;
         eval_color(win, cells[i], pal, extra, NULL, &bg);
@@ -935,13 +938,15 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
         xcb_rectangle_t *rend = rects + con.render_buffer_size / sizeof(xcb_rectangle_t), *rpos = rects;
         for (size_t j = i; j < len; ) {
             size_t blk_len = 0;
-            while (j + blk_len < len && cell_equal_bg(cells[i], cells[j + blk_len]))
+            while (j < len && cell_drawn(cells[j], win->blink_commited)) j++;
+            if (j >= len) break;
+            while (j + blk_len < len && cell_equal_bg(cells[i], cells[j + blk_len]) && !cell_drawn(cells[j + blk_len], win->blink_commited))
                 con.mark_buffer[j + blk_len++] = 1;
 
             if (rpos + 1 >= rend) {
                 size_t new_size = MAX(3 * con.render_buffer_size / 2, 16 * sizeof(xcb_rectangle_t));
                 uint8_t *new = realloc(con.render_buffer, new_size);
-                if (!new) return;
+                if (!new) return 0;
                 con.render_buffer = new;
                 con.render_buffer_size = new_size;
                 rpos = (xcb_rectangle_t *)con.render_buffer + (rpos - rects);
@@ -955,19 +960,51 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
                 .height = win->char_depth + win->char_height
             };
 
+            drawn += blk_len;
             j += blk_len;
             while (j < len && !cell_equal_bg(cells[i], cells[j])) j++;
         }
+        if (rpos != rects)
+            xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, bg, rpos - rects, rects);
 
-        xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, bg, rpos - rects, rects);
-
-        while(i < len && con.mark_buffer[i]) i++;
+        while(i < len && (con.mark_buffer[i] || cell_drawn(cells[i], win->blink_commited))) i++;
     }
+    if (!drawn) return 0;
+
+    xcb_rectangle_t *rects = (xcb_rectangle_t *)con.render_buffer;
+    xcb_rectangle_t *rend = rects + con.render_buffer_size / sizeof(xcb_rectangle_t), *rpos = rects;
+    for (size_t i = 0; i < len;) {
+        while (i < len && (cell_drawn(cells[i], win->blink_commited) || !cell_vis(cells[i], win->blink_state) || CELL_CHAR(cells[i]) == ' ')) i++;
+        if (i >= len) break;
+        size_t blk_len = 0;
+        while (i + blk_len < len && !cell_drawn(cells[i + blk_len], win->blink_commited) && cell_vis(cells[i + blk_len], win->blink_state) && CELL_CHAR(cells[i + blk_len]) != ' ') blk_len++;
+        if (blk_len) {
+            if (rpos + 1 >= rend) {
+                size_t new_size = MAX(3 * con.render_buffer_size / 2, 16 * sizeof(xcb_rectangle_t));
+                uint8_t *new = realloc(con.render_buffer, new_size);
+                if (!new) return 0;
+                con.render_buffer = new;
+                con.render_buffer_size = new_size;
+                rpos = (xcb_rectangle_t *)con.render_buffer + (rpos - rects);
+                rects = (xcb_rectangle_t *)con.render_buffer;
+                rend = rects + new_size / sizeof(xcb_rectangle_t);
+            }
+            *rpos++ = (xcb_rectangle_t) {
+                .x = x + i * win->char_width, .y = y - win->char_height,
+                .width = blk_len * win->char_width,
+                .height = win->char_depth + win->char_height
+            };
+        }
+        i += blk_len;
+    }
+    //xcb_rectangle_t clip = {0, y - win->char_height, win->char_width * win->cw, win->char_depth + win->char_height};
+    if (rpos != rects)
+        xcb_render_set_picture_clip_rectangles(con.con, win->pic, 0, 0, rpos - rects, rects);
 
     memset(con.mark_buffer, 0, con.mark_buffer_size);
 
     for (size_t i = 0; i < len; ) {
-        while(i < len && (con.mark_buffer[i] || !cell_vis(cells[i], win->blink_state))) i++;
+        while(i < len && (con.mark_buffer[i] || cell_drawn(cells[i], win->blink_commited) || !cell_vis(cells[i], win->blink_state) || CELL_CHAR(cells[i]) == ' ')) i++;
         if (i >= len) break;
 
         xcb_render_color_t fg;
@@ -984,14 +1021,15 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
         *msg_head = (nss_glyph_mesg_t) { .dx = x + i * win->char_width, .dy = y };
 
         for (size_t j = i; j < len; j++) {
-            if (!con.mark_buffer[j] && cell_equal_fg(cells[i], cells[j], win->blink_state) && cell_vis(cells[j], win->blink_state)) {
+            if (!con.mark_buffer[j] && !cell_drawn(cells[j], win->blink_commited) &&
+                    cell_equal_fg(cells[i], cells[j], win->blink_state) && cell_vis(cells[j], win->blink_state) && !(CELL_CHAR(cells[i]) == ' ')) {
                 con.mark_buffer[j] = 1;
                 size_t inc = sizeof(uint32_t);
                 if ((size_t)msg_head->len + 1 > CHARS_PER_MESG || jump) inc += sizeof(nss_glyph_mesg_t);
                 if (bend - bpos <= (ssize_t)inc) {
                     size_t new_size = MAX(3 * con.render_buffer_size / 2, 128 * sizeof(uint32_t));
                     uint8_t *new = realloc(con.render_buffer, new_size);
-                    if (!new) return;
+                    if (!new) return 0;
                     msg_head = (nss_glyph_mesg_t *)(new + ((uint8_t *)msg_head - con.render_buffer));
                     bpos = new + (bpos - con.render_buffer);
                     bend = new + new_size;
@@ -1018,7 +1056,7 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
 
     memset(con.mark_buffer, 0, con.mark_buffer_size);
     for (size_t i = 0; i < len; i++) {
-        while(i < len && (con.mark_buffer[i] || !cell_vis(cells[i], win->blink_state)
+        while(i < len && (con.mark_buffer[i] || !cell_vis(cells[i], win->blink_state) || cell_drawn(cells[i], win->blink_commited)
                 || !(CELL_ATTR(cells[i]) & (nss_attrib_strikethrough | nss_attrib_underlined)))) i++;
         if (i >= len) break;
 
@@ -1028,19 +1066,19 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
         xcb_rectangle_t *rects = (xcb_rectangle_t *)con.render_buffer;
         xcb_rectangle_t *rend = rects + con.render_buffer_size / sizeof(xcb_rectangle_t), *rpos = rects;
         for (size_t j = i; j < len; ) {
-            while (j < len && (!cell_equal_fg(cells[i], cells[j], win->blink_state) ||
+            while (j < len && (cell_drawn(cells[j], win->blink_commited) || !cell_equal_fg(cells[i], cells[j], win->blink_state) ||
                     !(CELL_ATTR(cells[j]) & nss_attrib_underlined))) j++;
             if (j >= len) break;
 
             size_t blk_len = 0;
-            while (j + blk_len < len && cell_equal_fg(cells[i], cells[j + blk_len], win->blink_state) &&
-                (CELL_ATTR(cells[j + blk_len]) & nss_attrib_underlined))
+            while (j + blk_len < len && cell_equal_fg(cells[i], cells[j + blk_len], win->blink_state) && !cell_drawn(cells[j + blk_len], win->blink_commited) &&
+                !cell_drawn(cells[j + blk_len], win->blink_commited) && (CELL_ATTR(cells[j + blk_len]) & nss_attrib_underlined))
                 con.mark_buffer[j + blk_len++] = 1;
 
             if (rpos + 1 >= rend) {
                 size_t new_size = MAX(3 * con.render_buffer_size / 2, 16 * sizeof(xcb_rectangle_t));
                 uint8_t *new = realloc(con.render_buffer, new_size);
-                if (!new) return;
+                if (!new) return 0;
                 con.render_buffer = new;
                 con.render_buffer_size = new_size;
                 rpos = (xcb_rectangle_t *)con.render_buffer + (rpos - rects);
@@ -1057,19 +1095,20 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
             j += blk_len;
         }
         for (size_t j = i; j < len; ) {
-            while (j < len && (!cell_equal_fg(cells[i], cells[j], win->blink_state) ||
+            while (j < len && (cell_drawn(cells[j], win->blink_commited) || !cell_equal_fg(cells[i], cells[j], win->blink_state) ||
                     !(CELL_ATTR(cells[j]) & nss_attrib_strikethrough))) j++;
             if (j >= len) break;
 
             size_t blk_len = 0;
-            while (j + blk_len < len && cell_equal_fg(cells[i], cells[j + blk_len], win->blink_state) &&
-                (CELL_ATTR(cells[j + blk_len]) & nss_attrib_strikethrough))
+            while (j + blk_len < len && !cell_drawn(cells[j + blk_len], win->blink_commited) &&
+                    cell_equal_fg(cells[i], cells[j + blk_len], win->blink_state) &&
+                    (CELL_ATTR(cells[j + blk_len]) & nss_attrib_strikethrough))
                 con.mark_buffer[j + blk_len++] = 1;
 
             if (rpos + 1 >= rend) {
                 size_t new_size = MAX(3 * con.render_buffer_size / 2, 16 * sizeof(xcb_rectangle_t));
                 uint8_t *new = realloc(con.render_buffer, new_size);
-                if (!new) return;
+                if (!new) return 0;
                 con.render_buffer = new;
                 con.render_buffer_size = new_size;
                 rpos = (xcb_rectangle_t *)con.render_buffer + (rpos - rects);
@@ -1090,9 +1129,13 @@ void nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_ce
 
     }
 
-    clip = (xcb_rectangle_t) {0, 0, win->cw * win->char_width, win->ch * (win->char_height + win->char_depth)};
-    xcb_render_set_picture_clip_rectangles(con.con, win->pic, 0, 0, 1, &clip);
+    for (size_t i = 0; i < len; i++)
+        CELL_ATTR_SET(cells[i], nss_attrib_drawn);
 
+    xcb_render_set_picture_clip_rectangles(con.con, win->pic, 0, 0, 1, &(xcb_rectangle_t) {0, 0,
+            win->cw * win->char_width, win->ch * (win->char_height + win->char_depth)});
+
+    return drawn;
 }
 
 static void redraw_damage(nss_window_t *win, nss_rect_t damage) {
@@ -1609,11 +1652,14 @@ void nss_context_run(void) {
             long long ms_diff3 = TIMEDIFF(*lastscroll, cur);
             if (ms_diff1 > win->blink_time && win->active) {
                 win->blink_state = !win->blink_state;
+                win->blink_commited = 0;
                 win->prev_blink = cur;
             }
-            if ((ms_diff2 > NSS_TERM_REDRAW_RATE && ms_diff3 > NSS_TERM_SCROLL_DELAY) || ms_diff2 > NSS_TERM_MAX_DELAY_SKIP) {
+            if (win->force_redraw || (ms_diff2 > NSS_TERM_REDRAW_RATE && ms_diff3 > NSS_TERM_SCROLL_DELAY) || ms_diff2 > NSS_TERM_MAX_DELAY_SKIP) {
                 win->prev_draw = cur;
                 nss_term_redraw_dirty(win->term, 1);
+                win->force_redraw = 0;
+                win->blink_commited = 1;
             }
         }
         // TODO Adjust timeouts like in st

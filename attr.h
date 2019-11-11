@@ -63,8 +63,8 @@ typedef enum nss_attrs {
     nss_attrib_inverse = 1 << 6,
     nss_attrib_blink = 1 << 7,
     nss_attrib_wide = 1 << 8,
-    nss_attrib_wdummy = 1 << 9,
-    nss_attrib_protected = 1 << 10
+    nss_attrib_protected = 1 << 9,
+    nss_attrib_drawn = 1 << 10
     // 11 bits total, sice unicode codepoint is 21 bit
 } nss_attrs_t;
 
@@ -80,7 +80,7 @@ typedef enum nss_attrs {
 #define CELL_ATTR_CLR(s, l) ((s).ch &= ~((l) << CELL_CHAR_BITS))
 #define CELL_ATTR_INVERT(s, l) ((s).ch ^= (l) << CELL_CHAR_BITS)
 #define MKCELLWITH(s, c) MKCELL((s).fg, (s).bg, CELL_ATTR(s), (c))
-#define MKCELL(f, b, l, c) ((nss_cell_t) { .bg = (b), .fg = (f), .ch = ((c) & CELL_CHAR_MASK) | ((l) << CELL_CHAR_BITS)})
+#define MKCELL(f, b, l, c) ((nss_cell_t) { .bg = (b), .fg = (f), .ch = ((c) & CELL_CHAR_MASK) | (((l) & ~nss_attrib_drawn) << CELL_CHAR_BITS)})
 
 typedef struct nss_cell {
         uint32_t ch; /* not really char but char + attributes */

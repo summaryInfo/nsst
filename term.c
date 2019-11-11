@@ -34,10 +34,6 @@ typedef struct nss_line {
     uint16_t extra_size;
     uint16_t extra_caps;
     nss_color_t *extra;
-    enum nss_line_mode {
-        nss_lm_dirty = 1 << 0,
-        nss_lm_blink = 1 << 1,
-    } mode;
     nss_cell_t cell[];
 } nss_line_t;
 
@@ -108,6 +104,8 @@ struct nss_term {
     int16_t prev_mouse_x;
     int16_t prev_mouse_y;
     uint8_t prev_mouse_button;
+    int16_t prev_c_x;
+    int16_t prev_c_y;
 
     int16_t width;
     int16_t height;
@@ -125,7 +123,7 @@ struct nss_term {
         nss_tm_focused = 1 << 5,
         nss_tm_altscreen = 1 << 6,
         nss_tm_utf8 = 1 << 7,
-        nss_tm_force_redraw = 1 << 8,
+        //nss_tm_force_redraw = 1 << 8,
         nss_tm_insert = 1 << 9,
         nss_tm_sixel = 1 << 10,
         nss_tm_8bit = 1 << 11,
@@ -278,7 +276,6 @@ static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
     static nss_cid_t *buf = NULL, buf_len = 0, *new;
     if (line->extra_size + 1 >= line->extra_caps) {
         if (line->extra) {
-            _Bool blink = 0;
             if (buf_len < line->extra_size) {
                 new = realloc(buf, line->extra_size * sizeof(nss_cid_t));
                 if (!new) return NSS_SPECIAL_BG;
@@ -290,9 +287,7 @@ static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
                     buf[line->cell[i].fg - NSS_PALETTE_SIZE] = 0xFFFF;
                 if (line->cell[i].bg >= NSS_PALETTE_SIZE)
                     buf[line->cell[i].bg - NSS_PALETTE_SIZE] = 0xFFFF;
-                blink |= CELL_ATTR(line->cell[i]) & nss_attrib_blink;
             }
-            ENABLE_IF(blink, line->mode, nss_lm_blink);
             int16_t k = 0;
             for (nss_cid_t i = 0; i < line->extra_size; i++) {
                 if (buf[i] == 0xFFFF) {
@@ -339,7 +334,6 @@ static nss_line_t *term_create_line(nss_term_t *term, size_t width) {
         line->wrap_at = 0;
         line->extra_caps = 0;
         line->extra_size = 0;
-        line->mode = nss_lm_dirty;
         line->next = line->prev = NULL;
         line->extra = NULL;
         nss_cell_t cel = fixup_color(line, &term->c);
@@ -354,9 +348,22 @@ static void term_free_line(nss_term_t *term, nss_line_t *line) {
     free(line);
 }
 
-void nss_term_invalidate_screen(nss_term_t *term) {
-    term->mode |= nss_tm_force_redraw;
+static void term_line_dirt(nss_line_t *line) {
+    for (int16_t i = 0; i < line->width; i++)
+        CELL_ATTR_CLR(line->cell[i], nss_attrib_drawn);
 }
+
+void nss_term_invalidate_screen(nss_term_t *term) {
+    int16_t i = 0;
+    nss_line_t *view = term->view;
+    for (; view && i < term->height; i++) {
+        term_line_dirt(view);
+        view = view->next;
+    }
+    for (int16_t j = 0; j < term->height; j++)
+        term_line_dirt(term->screen[j - i]);
+}
+
 
 void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
     if (term->mode & nss_tm_altscreen) return;
@@ -364,7 +371,7 @@ void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
     if (amount > 0) {
         if (!term->view && term->scrollback) {
             term->view = term->scrollback;
-            term->scrollback->mode |= nss_lm_dirty;
+            term_line_dirt(term->scrollback);
             scrolled++;
         }
         if (term->view) {
@@ -372,7 +379,7 @@ void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
                 term->view = term->view->prev;
                 scrolled++;
                 if (term->view)
-                    term->view->mode |= nss_lm_dirty;
+                    term_line_dirt(term->view);
             }
         }
 
@@ -388,14 +395,14 @@ void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
         if (y0 < (size_t)(term->height - scrolled)) {
             y0 = term->height - scrolled - y0;
             for(size_t y = y0; y < y0 + scrolled; y++)
-                term->screen[y]->mode |= nss_lm_dirty;
+                term_line_dirt(term->screen[y]);
         } else {
             for (; line && y0 < (size_t)term->height; y0++) {
-                line->mode |= nss_lm_dirty;
+                term_line_dirt(line);
                 line = line->next;
             }
             for(size_t y = 0; y < (size_t)term->height - y0; y++)
-                term->screen[y]->mode |= nss_lm_dirty;
+                term_line_dirt(term->screen[y]);
         }
 
         nss_window_shift(term->win, scrolled, 0, term->height - scrolled);
@@ -416,7 +423,7 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
             if (term->scrollback_top == term->view) {
                 // TODO Dont invalidate whole screen
                 term->view = term->scrollback_top->next;
-                term->mode |= nss_tm_force_redraw;
+                nss_term_invalidate_screen(term);
             }
             nss_line_t *next = term->scrollback_top->next;
             term_free_line(term, term->scrollback_top);
@@ -440,7 +447,6 @@ static void term_erase(nss_term_t *term, int16_t xs, int16_t ys, int16_t xe, int
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
-        line->mode |= nss_lm_dirty;
         nss_cell_t cell = fixup_color(line, &term->c);
         CELL_ATTR_ZERO(cell);
         for(int16_t i = xs; i < xe; i++)
@@ -454,7 +460,6 @@ static nss_line_t *term_realloc_line(nss_term_t *term, nss_line_t *line, size_t 
 
     nss_cell_t cell = fixup_color(line, &term->c);
     CELL_ATTR_ZERO(cell);
-    new->mode |= nss_lm_dirty;
 
     for(size_t i = new->width; i < width; i++)
         new->cell[i] = cell;
@@ -474,7 +479,6 @@ static void term_protective_erase(nss_term_t *term, int16_t xs, int16_t ys, int1
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
-        line->mode |= nss_lm_dirty;
         nss_cell_t cell = fixup_color(line, &term->c);
         CELL_ATTR_ZERO(cell);
         for(int16_t i = xs; i < xe; i++)
@@ -494,7 +498,6 @@ static void term_selective_erase(nss_term_t *term, int16_t xs, int16_t ys, int16
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
-        line->mode |= nss_lm_dirty;
         for(int16_t i = xs; i < xe; i++)
             if (!(CELL_ATTR(line->cell[i]) & nss_attrib_protected))
                 line->cell[i] = MKCELLWITH(line->cell[i], ' ');
@@ -504,13 +507,12 @@ static void term_selective_erase(nss_term_t *term, int16_t xs, int16_t ys, int16
 static void term_adjust_wide_before(nss_term_t *term, int16_t x, int16_t y, _Bool left, _Bool right) {
     if (x < 0 || x > term->screen[y]->width - 1) return;
     nss_cell_t *cell = &term->screen[y]->cell[x];
-    if (left && CELL_ATTR(*cell) & nss_attrib_wdummy && x > 0) {
+    if (left && x > 0 && CELL_ATTR(cell[-1]) & nss_attrib_wide) {
         cell[-1] = MKCELLWITH(cell[-1], ' ');
         CELL_ATTR_CLR(cell[-1], nss_attrib_wide);
     }
-    if (right && CELL_ATTR(*cell) & nss_attrib_wide && x < term->screen[y]->width) {
+    if (right && x < term->screen[y]->width && CELL_ATTR(cell[0]) & nss_attrib_wide) {
         cell[1] = MKCELLWITH(cell[1], ' ');
-        CELL_ATTR_CLR(cell[1], nss_attrib_wdummy);
     }
 }
 
@@ -544,6 +546,12 @@ static void term_swap_screen(nss_term_t *term) {
 }
 
 static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t amount, _Bool save) {
+    if (term->prev_c_y >= 0 && top <= term->prev_c_y && term->prev_c_y <= bottom) {
+        CELL_ATTR_CLR(term->screen[term->prev_c_y]->cell[term->prev_c_x], nss_attrib_drawn);
+        if (amount >= 0) term->prev_c_y = MAX(0, term->prev_c_y - MIN(amount, (bottom - top + 1)));
+        else term->prev_c_y = MIN(term->height - 1, term->prev_c_y + MIN(-amount, (bottom - top + 1)));
+    }
+
     if (amount > 0) { /* up */
         amount = MIN(amount, (bottom - top + 1));
         size_t rest = (bottom - top + 1) - amount;
@@ -569,16 +577,18 @@ static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t a
     }
 
     if (!term->view) {
-        struct timespec cur;
+            struct timespec cur;
         clock_gettime(CLOCK_MONOTONIC, &cur);
-        if (TIMEDIFF(term->lastscroll, cur) > NSS_TERM_SCROLL_DELAY) {
+        if (TIMEDIFF(term->lastscroll, cur) > NSS_TERM_SCROLL_DELAY/2) {
             if (amount > 0)
                 nss_window_shift(term->win, top + amount, top, bottom + 1 - top - amount);
             else if (amount < 0)
                 nss_window_shift(term->win, top, top - amount, bottom + 1 - top + amount);
-        } else term->mode |= nss_tm_force_redraw;
-        term->lastscroll = cur;
-    } else term->mode |= nss_tm_force_redraw;
+            term->lastscroll = cur;
+        } else {
+            nss_term_invalidate_screen(term);
+        }
+    } else nss_term_invalidate_screen(term);
 }
 
 struct timespec *nss_term_last_scroll_time(nss_term_t *term) {
@@ -601,6 +611,8 @@ static void term_insert_cells(nss_term_t *term, int16_t n) {
     nss_line_t *line = term->screen[term->c.y];
     term_adjust_wide_before(term, cx, term->c.y, 1, 1);
     memmove(line->cell + cx + n, line->cell + cx, (line->width - cx - n) * sizeof(nss_cell_t));
+    for (int16_t i = cx + n; i < term->width; i++)
+        CELL_ATTR_CLR(line->cell[i], nss_attrib_drawn);
     term_erase(term, cx, term->c.y, cx + n, term->c.y + 1);
     term_move_to(term, term->c.x, term->c.y);
 }
@@ -612,6 +624,8 @@ static void term_delete_cells(nss_term_t *term, int16_t n) {
     term_adjust_wide_before(term, cx, term->c.y, 1, 0);
     term_adjust_wide_before(term, cx + n - 1, term->c.y, 0, 1);
     memmove(line->cell + cx, line->cell + cx + n, (term->width - cx - n) * sizeof(nss_cell_t));
+    for (int16_t i = cx; i < term->width - n; i++)
+        CELL_ATTR_CLR(line->cell[i], nss_attrib_drawn);
     term_erase(term, term->width - n, term->c.y, term->width, term->c.y + 1);
     term_move_to(term, term->c.x, term->c.y);
 }
@@ -804,10 +818,7 @@ static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
     nss_cell_t cel = fixup_color(line, &term->c);
     CELL_CHAR_SET(cel, ch);
 
-    line->mode |= nss_lm_dirty;
     line->cell[x] = cel;
-    if(CELL_ATTR(cel) & nss_attrib_blink)
-        line->mode |= nss_lm_blink;
 
     term->c.gl_ss = term->c.gl; // Reset single shift
     term->prev_ch = ch; // For REP CSI Ps b
@@ -2277,8 +2288,11 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
 
     nss_cell_t *cell = &term->screen[term->c.y]->cell[term->c.x];
 
-    if (term->mode & nss_tm_insert && term->c.x + width < term->width)
+    if (term->mode & nss_tm_insert && term->c.x + width < term->width) {
+        for (nss_cell_t *c = cell + width; c - term->screen[term->c.y]->cell < term->width; c++)
+            CELL_ATTR_CLR(*c, nss_attrib_drawn);
         memmove(cell + width, cell, term->screen[term->c.y]->width - term->c.x - width);
+    }
 
     term_adjust_wide_before(term, MIN(term->c.x, term->width - 1), term->c.y, 1, 0);
     term_adjust_wide_before(term, MIN(term->c.x, term->width - 1) + width - 1, term->c.y, 0, 1);
@@ -2286,9 +2300,8 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
     term_set_cell(term, MIN(term->c.x, term->width - 1), term->c.y, ch);
 
     if (width > 1) {
-        cell[1] =fixup_color(term->screen[term->c.y], &term->c);
+        cell[1] = fixup_color(term->screen[term->c.y], &term->c);
         CELL_ATTR_SET(cell[0], nss_attrib_wide);
-        CELL_ATTR_SET(cell[1], nss_attrib_wdummy);
     }
 
     term->c.x += width;
@@ -2297,7 +2310,8 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
 static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool show_ctl) {
     const uint8_t *end = buf + len, *start = buf;
 
-    int16_t ox = MIN(term->c.x, term->width), oy = term->c.y;
+    term->prev_c_x = MIN(term->c.x, term->width - 1);
+    term->prev_c_y = term->c.y;
 
     while (start < end) {
         uint32_t ch;
@@ -2317,9 +2331,9 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
         term_putchar(term, ch);
     }
 
-    if (MIN(term->c.x, term->width) != ox || term->c.y != oy) {
-        term->screen[oy]->mode |= nss_lm_dirty;
-        term->screen[term->c.y]->mode |= nss_lm_dirty;
+    if (MIN(term->c.x, term->width - 1) != term->prev_c_x || term->c.y != term->prev_c_y) {
+        CELL_ATTR_CLR(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)], nss_attrib_drawn);
+        CELL_ATTR_CLR(term->screen[term->prev_c_y]->cell[term->prev_c_x], nss_attrib_drawn);
     }
 
     return start - buf;
@@ -2329,8 +2343,8 @@ ssize_t nss_term_read(nss_term_t *term) {
     if (term->fd == -1) return -1;
 
     if (term->mode & nss_tm_scoll_on_output && term->view) {
-        term->mode |= nss_tm_force_redraw;
         term->view = NULL;
+        nss_term_invalidate_screen(term);
     }
 
     ssize_t res;
@@ -2435,8 +2449,8 @@ void nss_term_sendkey(nss_term_t *term, const char *str) {
         term_write(term, (uint8_t *)str, strlen(str), 1);
 
     if (!(term->mode & nss_tm_dont_scroll_on_input) && term->view) {
-        term->mode |= nss_tm_force_redraw;
         term->view = NULL;
+        nss_term_invalidate_screen(term);
     }
     uint8_t rep[MAX_REPORT];
     size_t len = term_encode_c1(term, (const uint8_t *)str, rep);
@@ -2472,7 +2486,7 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
         int16_t delta = MAX(0, term->c.y - height + 1);
 
-        if (delta) term->mode |= nss_tm_force_redraw;
+        if (delta) nss_term_invalidate_screen(term);
 
         for (int16_t i = height; i < term->height; i++) {
             if (i < height + delta)
@@ -2547,8 +2561,10 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
     term->top = 0;
     term->bottom = height - 1;
     term_move_to(term, term->c.x, term->c.y);
-    if (cur_moved)
-        term->screen[term->c.y]->mode |= nss_lm_dirty;
+    if (cur_moved) {
+        CELL_ATTR_CLR(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)], nss_attrib_drawn);
+        CELL_ATTR_CLR(term->screen[term->c.y]->cell[MAX(term->c.x - 1, 0)], nss_attrib_drawn);
+    }
 
 }
 
@@ -2608,7 +2624,7 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage, _Bool cursor) {
         for (; view && y0 < damage.height + damage.y; y0++, view = view->next) {
             if (view->width > damage.x) {
                 int16_t xs = damage.x, w = MIN(view->width - damage.x, damage.width);
-                if (CELL_ATTR(view->cell[xs]) & nss_attrib_wdummy) w++, xs--;
+                if (xs > 0 && CELL_ATTR(view->cell[xs - 1]) & nss_attrib_wide) w++, xs--;
                 if (CELL_ATTR(view->cell[xs]) & nss_attrib_wide) w++;
                 nss_window_draw(term->win, xs, y0, w, view->cell + xs, term->palette, view->extra);
             }
@@ -2617,7 +2633,7 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage, _Bool cursor) {
             nss_line_t *line = term->screen[y];
             if (line->width > damage.x) {
                 int16_t xs = damage.x, w = MIN(line->width - damage.x, damage.width);
-                if (CELL_ATTR(line->cell[xs]) & nss_attrib_wdummy) w++, xs--;
+                if (xs > 0 && CELL_ATTR(line->cell[xs - 1]) & nss_attrib_wide) w++, xs--;
                 if (CELL_ATTR(line->cell[xs]) & nss_attrib_wide) w++;
                 nss_window_draw(term->win, xs, y0 + y, w, line->cell + xs, term->palette, line->extra);
             }
@@ -2638,25 +2654,19 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
     int16_t y0 = 0;
     nss_line_t *view = term->view;
     for (; view && y0 < term->height; y0++, view = view->next) {
-        if (view->mode & (nss_lm_dirty | nss_lm_blink)) {
-            nss_window_draw(term->win, 0, y0, MIN(view->width, term->width), view->cell, term->palette, view->extra);
-            term->render_buffer[rbuf_clear++] = (nss_rect_t){ view->width, y0, MAX(0, term->width - view->width), 1};
-            drawn++;
+        drawn += nss_window_draw(term->win, 0, y0, MIN(view->width, term->width), view->cell, term->palette, view->extra);
+        if (term->width > view->width) {
+            term->render_buffer[rbuf_clear++] = (nss_rect_t){ view->width, y0, term->width - view->width, 1};
+            drawn += term->width - view->width;
         }
-        view->mode &= ~nss_lm_dirty;
     }
 
-    cursor &= term->screen[term->c.y]->mode & (nss_lm_dirty | nss_lm_blink);
+    cursor &= !(CELL_ATTR(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)]) & nss_attrib_drawn);
 
     for (int16_t y = 0; y + y0 < term->height; y++) {
         nss_line_t *line = term->screen[y];
-        if (line->mode & (nss_lm_dirty | nss_lm_blink) || (term->mode & nss_tm_force_redraw)) {
-            nss_window_draw(term->win, 0, y0 + y, term->width, line->cell, term->palette, line->extra), drawn++;
-        }
-        line->mode &= ~nss_lm_dirty;
+        drawn += nss_window_draw(term->win, 0, y0 + y, term->width, line->cell, term->palette, line->extra);
     }
-
-    term->mode &= ~nss_tm_force_redraw;
 
     if (cursor && !term->view && !(term->mode & nss_tm_hide_cursor)) {
         int16_t cx = MIN(term->c.x, term->width - 1);
@@ -2690,11 +2700,12 @@ void nss_term_focus(nss_term_t *term, _Bool focused) {
     ENABLE_IF(focused, term->mode, nss_tm_focused);
     if (term->mode & nss_tm_track_focus)
         term_answerback(term, focused ? "\x9BI" : "\x9BO");
-    term->screen[term->c.y]->mode |= nss_lm_dirty;
+    CELL_ATTR_CLR(term->screen[term->c.y]->cell[term->c.x], nss_attrib_drawn);
 }
 
 void nss_term_visibility(nss_term_t *term, _Bool visible) {
-    ENABLE_IF(visible, term->mode, nss_tm_force_redraw | nss_tm_visible);
+    ENABLE_IF(visible, term->mode, nss_tm_visible);
+    if (visible) nss_term_invalidate_screen(term);
 }
 
 _Bool nss_term_mouse(nss_term_t *term, int16_t x, int16_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
