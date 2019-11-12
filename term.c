@@ -68,7 +68,7 @@ typedef struct nss_cursor {
         nss_cs_dec_ascii,
         nss_cs_dec_sup,
         nss_cs_dec_graph,
-        nss_cs_british, // Also latin-1
+        nss_cs_british_latin1, // Also latin-1
         nss_cs_french_canadian,
         nss_cs_finnish,
         nss_cs_german,
@@ -705,7 +705,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
         .fg = nss_config_color(nss_config_fg),
         .bg = nss_config_color(nss_config_bg),
         .gl = 0, .gl_ss = 0, .gr = 2,
-        .gn = {nss_cs_dec_ascii, nss_cs_british, nss_cs_british, nss_cs_british}
+        .gn = {nss_cs_dec_ascii, nss_cs_british_latin1, nss_cs_british_latin1, nss_cs_british_latin1}
     };
 
     term->mode &= nss_tm_focused | nss_tm_visible;
@@ -749,31 +749,15 @@ static void term_reset(nss_term_t *term, _Bool hard) {
 
 }
 
-#define GRAPH0_BASE 0x41
-#define GRAPH0_SIZE 62
-
 static uint32_t nrcs_translate(uint8_t set, uint32_t ch, _Bool nrcs) {
-    static const unsigned *trans[nss_cs_max] = {
-        /* [0x23] [0x40] [0x5B 0x5C 0x5D 0x5E 0x5F 0x60] [0x7B 0x7C 0x7D 0x7E] */
-        [nss_cs_british] =           U"£@[\\]^_`{|}~",
-        [nss_cs_dutch] =             U"£¾\u0133½|^_`¨f¼´",
-        [nss_cs_finnish] =           U"#@ÄÖÅÜ_éäöåü",
-        [nss_cs_french] =            U"£à°ç§^_`éùè¨",
-        [nss_cs_swiss] =             U"ùàéçêîèôäöüû",
-        [nss_cs_french_canadian] =   U"#àâçêî_ôéùèû",
-        [nss_cs_german] =            U"#§ÄÖÜ^_`äöüß",
-        [nss_cs_itallian] =          U"£§°çé^_ùàòèì",
-        [nss_cs_norwegian_dannish] = U"#ÄÆØÅÜ_äæøåü",
-        [nss_cs_spannish] =          U"£§¡Ñ¿^_`°ñç~",
-        [nss_cs_swedish] =           U"#ÉÆØÅÜ_éæøåü",
-    };
-    static const unsigned *graph = U" ◆▒␉␌␍␊°±␤␋┘┐┌└┼⎺⎻─⎼⎽├┤┴┬│≤≥π≠£·";
-    if (set == nss_cs_dec_ascii) /* do nothing */;
-    else if (set == nss_cs_dec_graph) {
+    if (set == nss_cs_dec_ascii) {
+        /* do nothing */;
+    } else if (set == nss_cs_dec_graph) {
+        static const unsigned *graph = U" ◆▒␉␌␍␊°±␤␋┘┐┌└┼⎺⎻─⎼⎽├┤┴┬│≤≥π≠£·";
         if (0x5F <= ch && ch <= 0x7E)
-            return graph[ch - 0x5F];
-    } else if (!nrcs && set == nss_cs_british) { /* latin-1 */
-        return ch + 0x80;
+            ch = graph[ch - 0x5F];
+    } else if (set == nss_cs_british_latin1 && !nrcs) { /* latin-1 */
+        ch += 0x80;
     } else if (set == nss_cs_dec_sup) {
         ch += 0x80;
         if (ch == 0xA8) ch = U'¤';
@@ -781,20 +765,31 @@ static uint32_t nrcs_translate(uint8_t set, uint32_t ch, _Bool nrcs) {
         else if (ch == 0xDD) ch = U'Ÿ';
         else if (ch == 0xF7) ch = U'œ';
         else if (ch == 0xFD) ch = U'ÿ';
-    } else if (trans[set]){
-        if (ch == 0x23) return trans[set][0];
-        if (ch == 0x40) return trans[set][1];
-        if (0x5B <= ch && ch <= 0x60)
-            return trans[set][2 + ch - 0x5B];
-        if (0x7B <= ch && ch <= 0x7E)
-            return trans[set][8 + ch - 0x7B];
+    } else if (nrcs){
+        static const unsigned *trans[nss_cs_max] = {
+            /* [0x23] [0x40] [0x5B 0x5C 0x5D 0x5E 0x5F 0x60] [0x7B 0x7C 0x7D 0x7E] */
+            [nss_cs_british_latin1] =    U"£@[\\]^_`{|}~",
+            [nss_cs_dutch] =             U"£¾\u0133½|^_`¨f¼´",
+            [nss_cs_finnish] =           U"#@ÄÖÅÜ_éäöåü",
+            [nss_cs_french] =            U"£à°ç§^_`éùè¨",
+            [nss_cs_swiss] =             U"ùàéçêîèôäöüû",
+            [nss_cs_french_canadian] =   U"#àâçêî_ôéùèû",
+            [nss_cs_german] =            U"#§ÄÖÜ^_`äöüß",
+            [nss_cs_itallian] =          U"£§°çé^_ùàòèì",
+            [nss_cs_norwegian_dannish] = U"#ÄÆØÅÜ_äæøåü",
+            [nss_cs_spannish] =          U"£§¡Ñ¿^_`°ñç~",
+            [nss_cs_swedish] =           U"#ÉÆØÅÜ_éæøåü",
+        };
+        if (trans[set]) {
+            if (ch == 0x23) return trans[set][0];
+            if (ch == 0x40) return trans[set][1];
+            if (0x5B <= ch && ch <= 0x60)
+                return trans[set][2 + ch - 0x5B];
+            if (0x7B <= ch && ch <= 0x7E)
+                return trans[set][8 + ch - 0x7B];
+        }
     }
     return ch;
-
-    /*
-     * Where these symbols did come from?
-        "↑", "↓", "→", "←", "█", "▚", "☃",      // A - G
-    */
 }
 
 static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
@@ -804,21 +799,20 @@ static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
     // Need to make this configuration option
 
     if (!(term->mode & nss_tm_utf8) || nss_config_integer(nss_config_allow_nrcs, 0, 1)) {
-        if (ch < 0x80) {
+        if (ch < 0x80) { /* if it's not ASCII, map GL */
             if (term->c.gn[term->c.gl_ss] != nss_cs_dec_ascii) {
                 ch = nrcs_translate(term->c.gn[term->c.gl_ss], ch, term->mode & nss_tm_enable_nrcs);
             }
-        } else if (ch < 0x100) {
-            if (term->c.gn[term->c.gr] != nss_cs_british || term->mode & nss_tm_enable_nrcs)
+        } else if (ch < 0x100) { /* if its not Latin-1, map GR */
+            if (term->c.gn[term->c.gr] != nss_cs_british_latin1 || term->mode & nss_tm_enable_nrcs)
                 ch = nrcs_translate(term->c.gn[term->c.gr], ch - 0x80, term->mode & nss_tm_enable_nrcs);
         }
     }
 
-    nss_line_t *line = term->screen[y];
-    nss_cell_t cel = fixup_color(line, &term->c);
+    nss_cell_t cel = fixup_color(term->screen[y], &term->c);
     CELL_CHAR_SET(cel, ch);
 
-    line->cell[x] = cel;
+    term->screen[y]->cell[x] = cel;
 
     term->c.gl_ss = term->c.gl; // Reset single shift
     term->prev_ch = ch; // For REP CSI Ps b
@@ -909,14 +903,17 @@ static void term_escape_dump(nss_term_t *term) {
 static void term_escape_dsr(nss_term_t *term) {
     if (term->esc.private == '?') {
         switch(term->esc.param[0]) {
+        case 6: /* Cursor position -- Y;X */
+            term_answerback(term, "\x9B%"PRIu16";%"PRIu16"R",
+                    (term->c.origin ? -term->top : 0) + term->c.y + 1, MIN(term->c.x, term->width - 1) + 1);
         case 15: /* Printer status -- Has no printer */
             term_answerback(term, "\x9B?13n"); //TODO Has printer -- 10n
             break;
         case 25: /* User defined keys lock -- Locked */
             term_answerback(term, "\x9B?21n"); //TODO Unlocked - ?20n
             break;
-        case 26: /* Keyboard Language -- Unknown */
-            term_answerback(term, "\x9B?27;0n"); //TODO Print proper keylayout
+        case 26: /* Keyboard Language -- North American */
+            term_answerback(term, "\x9B?27;1n");
         }
     } else {
         switch(term->esc.param[0]) {
