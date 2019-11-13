@@ -1922,7 +1922,7 @@ static void term_escape_esc(nss_term_t *term) {
         case '+': /* G3D4 */ {
             enum nss_char_set *set = &term->c.gn[term->esc.interm[0] - '('];
             switch (term->esc.final) {
-            case 'A': *set = nss_cs_british; break;
+            case 'A': *set = nss_cs_british_latin1; break;
             case 'B': *set = nss_cs_dec_ascii; break;
             case 'C': case '5': *set = nss_cs_finnish; break;
             case 'H': case '7': *set = nss_cs_swedish; break;
@@ -1943,15 +1943,8 @@ static void term_escape_esc(nss_term_t *term) {
         }
         case '-': /* G1D6 */
         case '.': /* G2D6 */
-        case '/': /* G3D6 */ {
-            enum nss_char_set *set = &term->c.gn[term->esc.interm[0] - '-'];
-            switch(term->esc.final) {
-            case 'A': *set = nss_cs_british; term->mode &= ~nss_tm_enable_nrcs; break;
-            default:
-                term_escape_dump(term);
-            };
-            break;
-        }
+        case '/': /* G3D6 */
+            term_escape_dump(term);
         default:
             term_escape_dump(term);
         }
@@ -2194,7 +2187,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
     } else if (IS_C0(ch) || IS_C1(ch) || (IS_DEL(ch) && !term->esc.state && term->c.gn[term->c.gl_ss])) {
         // We should print DEL if 96 character set is assigned to GL and we are at ground state
         if (!IS_DEL(ch) || term->esc.state || term->c.gn[term->c.gl_ss] !=
-                nss_cs_british || (term->mode & nss_tm_enable_nrcs)) {
+                nss_cs_british_latin1 || (term->mode & nss_tm_enable_nrcs)) {
             if (!IS_STREND(ch) && (term->esc.state & nss_es_dcs)) return;
             term_escape_control(term, ch);
             return;
@@ -2581,7 +2574,7 @@ nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
     term->c = term->back_cs = term->cs = (nss_cursor_t) {
         .cel = MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, ' '),
         .gl = 0, .gl_ss = 0, .gr = 2,
-        .gn = {nss_cs_dec_ascii, nss_cs_british, nss_cs_british, nss_cs_british}
+        .gn = {nss_cs_dec_ascii, nss_cs_british_latin1, nss_cs_british_latin1, nss_cs_british_latin1}
     };
 
     memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
