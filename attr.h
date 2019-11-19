@@ -2,6 +2,7 @@
 #define NSS_ATTR_H_ 1
 
 #include <stdint.h>
+#include "input.h"
 
 typedef uint16_t nss_cid_t;
 typedef uint32_t nss_color_t;
@@ -25,13 +26,6 @@ enum nss_config_opt {
     nss_config_init_wrap,
     nss_config_scroll_on_input,
     nss_config_scroll_on_output,
-    nss_config_appkey,
-    nss_config_appcursor,
-    nss_config_numlock,
-    nss_config_has_meta,
-    nss_config_meta_escape,
-    nss_config_backspace_is_delete,
-    nss_config_delete_is_delete,
     nss_config_cursor_shape,
     nss_config_underline_width,
     nss_config_cursor_width,
@@ -92,6 +86,7 @@ nss_color_t *nss_create_palette(void);
 nss_color_t nss_config_color(uint32_t opt);
 int32_t nss_config_integer(uint32_t opt, int32_t min, int32_t max);
 const char *nss_config_string(uint32_t opt, const char *alt);
+nss_input_mode_t nss_config_input_mode(void);
 
 #endif
 

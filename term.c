@@ -25,6 +25,7 @@
 #endif
 
 #include "term.h"
+#include "input.h"
 #include "window.h"
 
 typedef struct nss_line {
@@ -53,6 +54,7 @@ typedef struct nss_line {
 #define MAX_EXTRA_PALETTE (0x10000 - NSS_PALETTE_SIZE)
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
 
+void term_answerback(nss_term_t *term, const char *str, ...);
 
 typedef struct nss_cursor {
     int16_t x;
@@ -169,6 +171,7 @@ struct nss_term {
     } esc;
 
     nss_window_t *win;
+    nss_input_mode_t *in_mode;
     nss_color_t *palette;
     pid_t child;
     int fd;
@@ -176,8 +179,6 @@ struct nss_term {
     size_t fd_buf_pos;
     uint8_t fd_buf[NSS_FD_BUF_SZ];
 };
-
-static void term_answerback(nss_term_t *term, const char *str, ...);
 
 static void sigchld_fn(int arg) {
     int status;
@@ -681,22 +682,12 @@ static void term_reset(nss_term_t *term, _Bool hard) {
         term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG],
         term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG],
         nss_config_integer(nss_config_cursor_shape, 0, 6),
-        nss_config_integer(nss_config_appkey, 0, 1),
-        nss_config_integer(nss_config_appcursor, 0, 1),
-        nss_config_integer(nss_config_numlock, 0, 1), 0,
-        nss_config_integer(nss_config_has_meta, 0, 1),
-        nss_config_integer(nss_config_meta_escape, 0, 1),
-        nss_config_integer(nss_config_backspace_is_delete, 0, 1),
-        nss_config_integer(nss_config_delete_is_delete, 0, 1),
         nss_config_integer(nss_config_reverse_video, 0, 1), 0};
     nss_window_set(term->win,
             nss_wc_background | nss_wc_foreground |
             nss_wc_cursor_background | nss_wc_cursor_foreground |
-            nss_wc_cursor_type | nss_wc_appkey |
-            nss_wc_appcursor | nss_wc_numlock |
-            nss_wc_keylock | nss_wc_has_meta |
-            nss_wc_meta_escape | nss_wc_bs_del |
-            nss_wc_del_del | nss_wc_reverse | nss_wc_mouse, args);
+            nss_wc_cursor_type | nss_wc_reverse | nss_wc_mouse, args);
+    *term->in_mode = nss_config_input_mode();
 
     int16_t cx = term->c.x, cy =term->c.y;
 
@@ -1226,7 +1217,7 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
             uint32_t arg = set;
             switch(term->esc.param[i]) {
             case 1: /* DECCKM */
-                nss_window_set(term->win, nss_wc_appcursor, &arg);
+                term->in_mode->appcursor = set;
                 break;
             case 2: /* DECANM */
                 // TODO
@@ -1286,11 +1277,10 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                     term_swap_screen(term);
                 break;
             case 66: /* DECNKM */
-                nss_window_set(term->win, nss_wc_appkey, &arg);
+                term->in_mode->appkey = set;
                 break;
             case 67: /* DECBKM */
-                arg = !set;
-                nss_window_set(term->win, nss_wc_bs_del, &arg);
+                term->in_mode->backspace_is_del = !set;
                 break;
             case 69: /* DECLRMM */ //TODO DECBI/DECFI
                 term_escape_dump(term);
@@ -1340,16 +1330,16 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 // IGNORE
                 break;
             case 1034: /* Interpret meta */
-                nss_window_set(term->win, nss_wc_has_meta, &arg);
+                term->in_mode->has_meta = set;
                 break;
             case 1035: /* Numlock */
-                nss_window_set(term->win, nss_wc_numlock, &arg);
+                term->in_mode->numlock = set;;
                 break;
             case 1036: /* Meta sends escape */
-                nss_window_set(term->win, nss_wc_meta_escape, &arg);
+                term->in_mode->meta_escape = set;
                 break;
             case 1037: /* Backspace is delete */
-                nss_window_set(term->win, nss_wc_del_del, &arg);
+                term->in_mode->backspace_is_del = set;
                 break;
             case 1046: /* Allow altscreen */
                 ENABLE_IF(!set, term->mode, nss_tm_disable_altscreen);
@@ -1383,12 +1373,11 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
         }
     } else {
         for(uint32_t i = 0; i < term->esc.param_idx + 1; i++) {
-            uint32_t arg = set;
             switch(term->esc.param[i]) {
             case 0: /* Default - nothing */
                 break;
             case 2: /* KAM */
-                nss_window_set(term->win, nss_wc_keylock, &arg);
+                term->in_mode->keylock = set;
                 break;
             case 4: /* IRM */
                 ENABLE_IF(set, term->mode, nss_tm_insert);
@@ -1559,11 +1548,19 @@ static void term_escape_csi(nss_term_t *term) {
         case 'l': /* RM */ /* ? DECRST */
             term_escape_setmode(term, 0);
             break;
-        case 'm': /* SGR */
-            term_escape_sgr(term);
+        case 'm': /* SGR */ /* > Modify keys, xterm */
+            if (term->esc.private == '>') {
+                term_escape_dump(term); // TODO
+            } else if (!term->esc.private) {
+                term_escape_sgr(term);
+            } else term_escape_dump(term);
             break;
         case 'n': /* DSR */ /* ? DSR */ /* > Disable key modifires, xterm */
-            term_escape_dsr(term);
+            if (term->esc.private == '>') {
+                term_escape_dump(term); //TODO
+            } else if (term->esc.private == '?' || !term->esc.private) {
+                term_escape_dsr(term);
+            } else term_escape_dump(term);
             break;
         case 'p': /* > Set pointer mode, xterm */
             term_escape_dump(term);
@@ -1784,7 +1781,6 @@ static void term_escape_esc(nss_term_t *term) {
     //DUMP
     //term_escape_dump(term);
     if (term->esc.interm_idx == 0) {
-        uint32_t arg;
         switch(term->esc.final) {
         case 'D': /* IND */
             term_index(term, 0);
@@ -1834,12 +1830,10 @@ static void term_escape_esc(nss_term_t *term) {
             term_escape_dump(term);
             break;
         case '=': /* DECKPAM */
-            arg = 1;
-            nss_window_set(term->win, nss_wc_appkey, &arg);
+            term->in_mode->appkey = 1;
             break;
         case '>': /* DECKPNM */
-            arg = 0;
-            nss_window_set(term->win, nss_wc_appkey, &arg);
+            term->in_mode->appkey = 0;
             break;
         case 'c': /* RIS */
             term_reset(term, 1);
@@ -2143,7 +2137,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
     int16_t width = wcwidth(ch);
 
     if (width < 0 && !(IS_C0(ch) || IS_DEL(ch) || IS_C1(ch)))
-        ch = UTF_INVAL, width =1;
+        ch = UTF_INVAL, width = 1;
 
     //info("UTF %"PRIx32" '%s'", ch, buf);
 
@@ -2410,12 +2404,13 @@ void term_tty_write(nss_term_t *term, const uint8_t *buf, size_t len) {
 static size_t term_encode_c1(nss_term_t *term, const uint8_t *in, uint8_t *out) {
     uint8_t *fmtp = out;
     for (uint8_t *it = (uint8_t *)in; *it && fmtp - out < MAX_REPORT - 1; it++) {
-        if ((*it > 0x7F) && !(term->mode & nss_tm_8bit)) {
+        if (IS_C1(*it) && !(term->mode & nss_tm_8bit)) {
             *fmtp++ = 0x1B;
             *fmtp++ = *it ^ 0xC0;
+        } else if ((*it > 0x7F) && term->mode & nss_tm_utf8) {
+            *fmtp++ = 0xC0 | (*it >> 6);
+            *fmtp++ = 0x80 | (*it & 0x3F);
         } else {
-            if ((*it > 0x7F) && term->mode & nss_tm_utf8)
-                *fmtp++ = 0xC2;
             *fmtp++ = *it;
         }
     }
@@ -2423,7 +2418,7 @@ static size_t term_encode_c1(nss_term_t *term, const uint8_t *in, uint8_t *out) 
     return fmtp - out;
 }
 
-static void term_answerback(nss_term_t *term, const char *str, ...) {
+void term_answerback(nss_term_t *term, const char *str, ...) {
     uint8_t fmt[MAX_REPORT], csi[MAX_REPORT];
     term_encode_c1(term, (const uint8_t *)str, fmt);
     va_list vl;
@@ -2434,7 +2429,7 @@ static void term_answerback(nss_term_t *term, const char *str, ...) {
     term_tty_write(term, csi, (uint8_t *)memchr(csi, 0, MAX_REPORT) - csi);
 }
 
-void nss_term_sendkey(nss_term_t *term, const char *str) {
+void nss_term_sendkey(nss_term_t *term, const char *str, _Bool encode) {
     if (term->mode & nss_tm_echo)
         term_write(term, (uint8_t *)str, strlen(str), 1);
 
@@ -2443,9 +2438,12 @@ void nss_term_sendkey(nss_term_t *term, const char *str) {
         nss_term_invalidate_screen(term);
     }
     uint8_t rep[MAX_REPORT];
-    size_t len = term_encode_c1(term, (const uint8_t *)str, rep);
+    size_t len;
 
-    term_tty_write(term, rep, len);
+    if (encode) len = term_encode_c1(term, (const uint8_t *)str, rep);
+    else len = strlen(str);
+
+    term_tty_write(term, encode ? rep : (uint8_t *)str, len);
 }
 
 void nss_term_sendbreak(nss_term_t *term) {
@@ -2558,10 +2556,11 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
 }
 
-nss_term_t *nss_create_term(nss_window_t *win, int16_t width, int16_t height) {
+nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t width, int16_t height) {
     nss_term_t *term = calloc(1, sizeof(nss_term_t));
     term->palette = nss_create_palette();
     term->win = win;
+    term->in_mode = mode;
     term->scrollback_limit = nss_config_integer(nss_config_history_lines, -1, 1000000);
 
     term->mode = nss_tm_visible;

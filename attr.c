@@ -3,6 +3,7 @@
 #include "attr.h"
 #include "util.h"
 #include "window.h"
+#include "input.h"
 
 #define CN_BASE 16
 #define CN_EXT (6*6*6)
@@ -23,13 +24,6 @@ int32_t nss_config_integer(uint32_t opt, int32_t min, int32_t max) {
     case nss_config_init_wrap: val = 1; break;
     case nss_config_scroll_on_input: val = 1; break;
     case nss_config_scroll_on_output: val = 0; break;
-    case nss_config_appkey: val = 0; break;
-    case nss_config_appcursor: val = 0; break;
-    case nss_config_numlock: val = 1; break;
-    case nss_config_has_meta: val = 1; break;
-    case nss_config_meta_escape: val = 1; break;
-    case nss_config_backspace_is_delete: val = 1; break;
-    case nss_config_delete_is_delete: val = 0; break;
     case nss_config_cursor_shape: val = nss_cursor_bar; break;
     case nss_config_underline_width: val = 1; break;
     case nss_config_cursor_width: val = 2; break;
@@ -105,3 +99,28 @@ nss_color_t *nss_create_palette(void) {
     return palette;
 }
 
+
+nss_input_mode_t nss_config_input_mode(void) {
+    return (nss_input_mode_t) {
+        .modkey_fn = 3,
+        .modkey_cursor = 3,
+        .modkey_keypad = 3,
+        .modkey_other = 1,
+        .modkey_other_fmt = 0,
+        .modkey_legacy_allow_keypad = 0,
+        .modkey_legacy_allow_edit_keypad = 0,
+        .modkey_legacy_allow_function = 0,
+        .modkey_legacy_allow_misc = 0,
+        .appkey = 0,
+        .appcursor = 0,
+        .numlock = 1,
+        .keylock = 0,
+        .has_meta = 1,
+        .meta_escape = 1,
+        .backspace_is_del = 1,
+        .delete_is_del = 0,
+        .fkey_inc_step = 10,
+        .keyboad_vt52 = 0,
+        .keyboard_mapping = nss_km_default
+    };
+}

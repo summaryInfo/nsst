@@ -37,6 +37,36 @@
 #define CA(c) ((((c) >> 24) & 0xff) * 0x100)
 #define MAKE_COLOR(c) {.red=CR(c), .green=CG(c), .blue=CB(c), .alpha=CA(c)}
 
+struct nss_shortcut {
+    uint32_t ksym;
+    uint32_t mmask;
+    uint32_t mstate;
+    enum nss_shortcut_action {
+        nss_sa_none,
+        nss_sa_break,
+        nss_sa_reverse,
+        nss_sa_numlock,
+        nss_sa_scroll_up,
+        nss_sa_scroll_down,
+        nss_sa_font_up,
+        nss_sa_font_down,
+        nss_sa_font_default,
+        nss_sa_font_subpixel,
+        nss_sa_new_window,
+    } action;
+} cshorts[] = {
+    {XKB_KEY_Up, NSS_M_ALL, NSS_M_TERM, nss_sa_scroll_down},
+    {XKB_KEY_Down, NSS_M_ALL, NSS_M_TERM, nss_sa_scroll_up},
+    {XKB_KEY_Page_Up, NSS_M_ALL, NSS_M_TERM, nss_sa_font_up},
+    {XKB_KEY_Page_Down, NSS_M_ALL, NSS_M_TERM, nss_sa_font_down},
+    {XKB_KEY_Home, NSS_M_ALL, NSS_M_TERM, nss_sa_font_default},
+    {XKB_KEY_End, NSS_M_ALL, NSS_M_TERM, nss_sa_font_subpixel},
+    {XKB_KEY_N, NSS_M_ALL, NSS_M_TERM, nss_sa_new_window},
+    {XKB_KEY_R, NSS_M_ALL, NSS_M_TERM, nss_sa_reverse},
+    {XKB_KEY_Num_Lock, NSS_M_ALL, NSS_M_TERM, nss_sa_numlock},
+    {XKB_KEY_Break, 0, 0, nss_sa_break},
+};
+
 struct nss_window {
     xcb_window_t wid;
     xcb_pixmap_t pid;
@@ -50,14 +80,6 @@ struct nss_window {
     unsigned subpixel_fonts : 1;
     unsigned got_configure : 1;
     unsigned blink_state : 1;
-    unsigned appkey : 1;
-    unsigned appcursor : 1;
-    unsigned numlock : 1;
-    unsigned keylock : 1;
-    unsigned has_meta : 1;
-    unsigned meta_escape : 1;
-    unsigned bs_del : 1;
-    unsigned del_del : 1;
     unsigned reverse_video : 1;
     unsigned mouse_events : 1;
     unsigned force_redraw : 1; //TODO
@@ -97,6 +119,7 @@ struct nss_window {
     char *font_name;
     nss_term_t *term;
     int term_fd;
+    nss_input_mode_t inmode;
     struct nss_window *prev, *next;
 };
 
@@ -272,12 +295,6 @@ cleanup_context:
     return 0;
 }
 
-int key_cmpfn(const void *a, const void *b) {
-    const nss_ckey_t *ka = a;
-    const nss_ckey_t *kb = b;
-    return (long long) ka->ksym - kb->ksym;
-}
-
 /* Initialize global state object */
 void nss_init_context(void) {
     con.daemon_mode = 0;
@@ -390,8 +407,6 @@ void nss_init_context(void) {
     con.atom_wm_protocols = intern_atom("WM_PROTOCOLS");
     con.atom_utf8_string = intern_atom("UTF8_STRING");
     con.atom_net_wm_name = intern_atom("_NET_WM_NAME");
-
-    qsort(ckeys, sizeof(ckeys)/sizeof(*ckeys), sizeof(*ckeys), key_cmpfn);
 }
 
 void nss_window_set_title(nss_window_t *win, const char *title) {
@@ -442,14 +457,6 @@ static void set_config(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *valu
     if (tag & nss_wc_underline_width) win->underline_width = *values++;
     if (tag & nss_wc_width) warn("Tag is not settable"), values++;
     if (tag & nss_wc_height) warn("Tag is not settable"), values++;
-    if (tag & nss_wc_appcursor) win->appcursor = *values++;
-    if (tag & nss_wc_appkey) win->appkey = *values++;
-    if (tag & nss_wc_numlock) win->numlock = *values++;
-    if (tag & nss_wc_keylock) win->keylock = *values++;
-    if (tag & nss_wc_has_meta) win->has_meta = *values++;
-    if (tag & nss_wc_meta_escape) win->meta_escape = *values++;
-    if (tag & nss_wc_bs_del) win->bs_del = *values++;
-    if (tag & nss_wc_del_del) win->del_del = *values++;
     if (tag & nss_wc_blink_time) win->blink_time = *values++;
     if (tag & nss_wc_reverse) win->reverse_video = *values++;
     if (tag & nss_wc_mouse) win->mouse_events = *values++;
@@ -602,16 +609,11 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
     win->cursor_type = nss_config_integer(nss_config_cursor_shape, 0, 6);
     win->subpixel_fonts = nss_config_integer(nss_config_subpixel_fonts, 0, 1);
     win->reverse_video = nss_config_integer(nss_config_reverse_video, 0, 1);
-    win->appkey = nss_config_integer(nss_config_appkey, 0, 1);
-    win->appcursor = nss_config_integer(nss_config_appcursor, 0, 1);
-    win->numlock = nss_config_integer(nss_config_numlock, 0, 1);
-    win->has_meta = nss_config_integer(nss_config_has_meta, 0, 1);
-    win->meta_escape = nss_config_integer(nss_config_meta_escape, 0, 1);
-    win->bs_del = nss_config_integer(nss_config_backspace_is_delete, 0, 1);
-    win->del_del = nss_config_integer(nss_config_delete_is_delete, 0, 1);
     win->font_size = nss_config_integer(nss_config_font_size, 0, 1000);
     win->active = 1;
-    win->numlock = 1;
+
+    win->inmode = nss_config_input_mode();
+
     win->term_fd = -1;
     win->blink_time = nss_config_integer(nss_config_blink_time, 10000, 10000000);
     if (!font_name) font_name = nss_config_string(nss_config_font_name, "fixed");
@@ -705,7 +707,7 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
             return NULL;
         }
     }
-    win->term = nss_create_term(win, win->cw, win->ch);
+    win->term = nss_create_term(win, &win->inmode, win->cw, win->ch);
     if (!win->term) {
         warn("Can't create term");
         nss_free_window(win);
@@ -1270,14 +1272,7 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
     if (tag & nss_wc_font_size) return win->font_size;
     if (tag & nss_wc_width) return win->width;
     if (tag & nss_wc_height) return win->height;
-    if (tag & nss_wc_numlock) return win->numlock;
-    if (tag & nss_wc_appcursor) return win->appcursor;
-    if (tag & nss_wc_appkey) return win->appkey;
-    if (tag & nss_wc_keylock) return win->keylock;
-    if (tag & nss_wc_has_meta) return win->has_meta;
-    if (tag & nss_wc_meta_escape) return win->meta_escape;
-    if (tag & nss_wc_bs_del) return win->bs_del;
-    if (tag & nss_wc_del_del) return win->del_del;
+
     if (tag & nss_wc_blink_time) return win->blink_time;
     if (tag & nss_wc_reverse) return win->reverse_video;
     if (tag & nss_wc_mouse) return win->mouse_events;
@@ -1353,16 +1348,17 @@ static void handle_focus(nss_window_t *win, _Bool focused) {
 }
 
 static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
+    nss_key_t key = { 0 };
+    if ((key.sym = xkb_state_key_get_one_sym(con.xkb_state, keycode)) == XKB_KEY_NoSymbol) return;
+    key.mask = xkb_state_serialize_mods(con.xkb_state, XKB_STATE_MODS_EFFECTIVE);
+    if ((key.utf32 = xkb_keysym_to_utf32(key.sym))) {
+        key.utf8len = utf8_encode(key.utf32, key.utf8data, key.utf8data + sizeof(key.utf8data));
+        key.utf8data[key.utf8len] = '\0';
+    }
 
-    if (win->keylock) return;
-
-    xkb_keysym_t sym = xkb_state_key_get_one_sym(con.xkb_state, keycode);
-    xkb_mod_mask_t mods = xkb_state_serialize_mods(con.xkb_state, XKB_STATE_MODS_EFFECTIVE);
-
-    // 1. Key bindings
     enum nss_shortcut_action action = nss_sa_none;
     for (size_t i = 0; i < sizeof(cshorts)/sizeof(*cshorts); i++) {
-        if (cshorts[i].ksym == sym && (mods & cshorts[i].mmask) == cshorts[i].mstate) {
+        if (cshorts[i].ksym == key.sym && (key.mask & cshorts[i].mmask) == cshorts[i].mstate) {
             action = cshorts[i].action;
             break;
         }
@@ -1377,8 +1373,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         nss_window_set(win, nss_wc_reverse, &arg);
         return;
     case nss_sa_numlock:
-        arg = !win->numlock;
-        nss_window_set(win, nss_wc_numlock, &arg);
+        win->inmode.numlock = !win->inmode.numlock;
         return;
     case nss_sa_scroll_up:
         nss_term_scroll_view(win->term, -2); //TODO Amount configurable
@@ -1406,60 +1401,10 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         arg = 0;
         nss_create_window(NULL, 0, NULL);
         return;
-    case nss_sa_none:
-        break;
+    case nss_sa_none: break;
     }
 
-    // 2. Custom translations
-
-    nss_ckey_t ck_pat = { .ksym = sym };
-    nss_ckey_t *ck = bsearch(&ck_pat, ckeys, sizeof(ckeys)/sizeof(*ckeys), sizeof(*ckeys), key_cmpfn);
-    if (ck) {
-        for (nss_ckey_key_t *it = ck->inst; it->string; it++) {
-            if ((it->mmask & mods) != it->mstate) continue;
-            if (it->flag & (win->appkey ? NSS_M_NOAPPK : NSS_M_APPK)) continue;
-            if (it->flag & (win->appcursor ? NSS_M_NOAPPCUR : NSS_M_APPCUR)) continue;
-            if (it->flag & (win->bs_del ? NSS_M_NOBSDEL : NSS_M_BSDEL)) continue;
-            if (it->flag & (win->del_del ? NSS_M_NODELDEL : NSS_M_DELDEL)) continue;
-            if ((it->flag & NSS_M_NUM) && (!win->numlock || !win->appkey)) continue;
-            nss_term_sendkey(win->term, it->string);
-            return;
-        }
-    }
-
-    // 3. Basic keycode passing
-    uint8_t buf[8] = {0};
-    size_t sz = xkb_state_key_get_utf8(con.xkb_state, keycode, NULL, 0);
-    if (sz && sz < sizeof(buf) - 1) {
-        xkb_state_key_get_utf8(con.xkb_state, keycode, (char *)buf, sizeof(buf));
-        buf[sz] = '\0';
-    }
-
-    if (!sz) return;
-
-    if (nss_term_is_utf8(win->term)) {
-        if (sz == 1 && mods & XCB_MOD_MASK_1 && win->has_meta) {
-            if (!win->meta_escape) {
-                buf[utf8_encode(*buf | 0x80, buf, buf + 8)] = '\0';
-            } else {
-                buf[2] = '\0';
-                buf[1] = buf[0];
-                buf[0] = '\033';
-            }
-        }
-    } else {
-        buf[1] = '\0';
-        if (mods & XCB_MOD_MASK_1 && win->has_meta) {
-            if (!win->meta_escape) {
-                *buf |= 0x80;
-            } else {
-                buf[2] = '\0';
-                buf[1] = buf[0];
-                buf[0] = '\033';
-            }
-        }
-    }
-    nss_term_sendkey(win->term, (char *)buf);
+    nss_handle_input(key, win->inmode, win->term);
 }
 
 #define POLL_TIMEOUT (1000/NSS_WIN_FPS)
