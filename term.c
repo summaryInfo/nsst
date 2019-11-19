@@ -1550,14 +1550,62 @@ static void term_escape_csi(nss_term_t *term) {
             break;
         case 'm': /* SGR */ /* > Modify keys, xterm */
             if (term->esc.private == '>') {
-                term_escape_dump(term); // TODO
+                nss_input_mode_t mode = nss_config_input_mode();
+                // That actually doesn't work -- \e[>0m causes full reset
+                // TODO Fix
+                uint32_t p = PARAM(0, 0), inone = !term->esc.param_idx && !p;
+                if (term->esc.param_idx > 0) {
+                    switch(p) {
+                    case 0:
+                        term->in_mode->modkey_legacy_allow_keypad = PARAM(1, 0) & 1;
+                        term->in_mode->modkey_legacy_allow_edit_keypad = PARAM(1, 0) & 2;
+                        term->in_mode->modkey_legacy_allow_function = PARAM(1, 0) & 4;
+                        term->in_mode->modkey_legacy_allow_misc = PARAM(1, 0) & 8;
+                        break;
+                    case 1:
+                        term->in_mode->modkey_cursor = PARAM(1, 0) + 1;
+                        break;
+                    case 2:
+                        term->in_mode->modkey_fn = PARAM(1, 0) + 1;
+                        break;
+                    case 3:
+                        term->in_mode->modkey_keypad = PARAM(1, 0) + 1;
+                        break;
+                    case 4:
+                        term->in_mode->modkey_other = PARAM(1, 0);
+                        break;
+                    }
+                } else {
+                    if (inone || p == 0) {
+                        term->in_mode->modkey_legacy_allow_keypad = mode.modkey_legacy_allow_keypad;
+                        term->in_mode->modkey_legacy_allow_edit_keypad = mode.modkey_legacy_allow_edit_keypad;
+                        term->in_mode->modkey_legacy_allow_function = mode.modkey_legacy_allow_function;
+                        term->in_mode->modkey_legacy_allow_misc = mode.modkey_legacy_allow_misc;
+                    }
+                    if (inone || p == 1) term->in_mode->modkey_cursor = mode.modkey_cursor;
+                    if (inone || p == 2) term->in_mode->modkey_fn = mode.modkey_fn;
+                    if (inone || p == 3) term->in_mode->modkey_keypad = mode.modkey_keypad;
+                    if (inone || p == 4) term->in_mode->modkey_other = mode.modkey_other;
+                }
             } else if (!term->esc.private) {
                 term_escape_sgr(term);
             } else term_escape_dump(term);
             break;
         case 'n': /* DSR */ /* ? DSR */ /* > Disable key modifires, xterm */
             if (term->esc.private == '>') {
-                term_escape_dump(term); //TODO
+                // That actually doesn't work -- \e[>m is treated as \e[>0m
+                // TODO Fix
+                uint32_t p = PARAM(0, 0);
+                if (p == 0) {
+                    term->in_mode->modkey_legacy_allow_keypad = 0;
+                    term->in_mode->modkey_legacy_allow_edit_keypad = 0;
+                    term->in_mode->modkey_legacy_allow_function = 0;
+                    term->in_mode->modkey_legacy_allow_misc = 0;
+                }
+                if (p == 1) term->in_mode->modkey_cursor = 0;
+                if (p == 2) term->in_mode->modkey_fn = 0;
+                if (p == 3) term->in_mode->modkey_keypad = 0;
+                if (p == 4) term->in_mode->modkey_other = 0;
             } else if (term->esc.private == '?' || !term->esc.private) {
                 term_escape_dsr(term);
             } else term_escape_dump(term);
@@ -2299,7 +2347,8 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
 
     while (start < end) {
         uint32_t ch;
-        if (!(term->mode & nss_tm_utf8) || (term->mode & nss_tm_sixel))  ch = *start++;
+        // Try to handle unencoded C1 bytes even if UTF-8 is enabled
+        if (!(term->mode & nss_tm_utf8) || IS_C1(*start)) ch = *start++;
         else if (!utf8_decode(&ch, &start, end)) break;
 
         if (show_ctl) {
