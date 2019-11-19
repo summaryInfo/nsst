@@ -69,7 +69,7 @@ _Bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end) {
     uint32_t part = *(*buf)++;
     uint8_t len = 0, i = 0x80;
     if (part > 0xF7) {
-        *res = UTF_INVAL;
+        part = UTF_INVAL;
     } else {
         while (part & i) {
             len++;

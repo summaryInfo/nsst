@@ -1400,47 +1400,60 @@ static void term_escape_csi(nss_term_t *term) {
     //term_escape_dump(term);
 
 #define PARAM(i, d) (term->esc.param[i] ? term->esc.param[i] : (d))
+#define NOPRIV(p) { if (term->esc.private && term->esc.private != (p)) {\
+                    term_escape_dump(term); break; } }
     if (!term->esc.interm_idx) {
         switch (term->esc.final) {
         case '@': /* ICH */
+            NOPRIV(0);
             term_insert_cells(term, PARAM(0, 1));
             term_move_to(term, term->c.x, term->c.y);
             break;
         case 'A': /* CUU */
+            NOPRIV(0);
             term_move_to(term, term->c.x, term->c.y - PARAM(0, 1));
             break;
         case 'B': /* CUD */
         case 'e': /* VPR */
+            NOPRIV(0);
             term_move_to(term, term->c.x, term->c.y + PARAM(0, 1));
             break;
         case 'C': /* CUF */
+            NOPRIV(0);
             term_move_to(term, MIN(term->c.x, term->width - 1) + PARAM(0, 1), term->c.y);
             break;
         case 'D': /* CUB */
+            NOPRIV(0);
             term_move_to(term, MIN(term->c.x, term->width - 1) - PARAM(0, 1), term->c.y);
             break;
         case 'E': /* CNL */
+            NOPRIV(0);
             term_move_to(term, 0, term->c.y + PARAM(0, 1));
             break;
         case 'F': /* CPL */
+            NOPRIV(0);
             term_move_to(term, 0, term->c.y - PARAM(0, 1));
             break;
         case '`': /* HPA */
         case 'G': /* CHA */
+            NOPRIV(0);
             term_move_to(term, PARAM(0, 1) - 1, term->c.y);
             break;
         case 'H': /* CUP */
         case 'f': /* HVP */
+            NOPRIV(0);
             term_move_to_abs(term, PARAM(1, 1) - 1, PARAM(0, 1) - 1);
             break;
         case 'I': /* CHT */
+            NOPRIV(0);
             term_tabs(term, PARAM(0, 1));
             break;
         case 'J': /* ED */ /* ? DECSED */ {
+            NOPRIV('?');
             void (*erase)(nss_term_t *, int16_t, int16_t, int16_t, int16_t) = term_erase;
-            if(term->esc.private == '?')
+            if (term->esc.private == '?')
                 erase = term_selective_erase;
-            else if(term->mode & nss_tm_use_protected_area_semantics)
+            else if (term->mode & nss_tm_use_protected_area_semantics)
                 erase = term_protective_erase;
             switch(PARAM(0, 0)) {
             case 0: /* Below */
@@ -1464,6 +1477,7 @@ static void term_escape_csi(nss_term_t *term) {
             break;
         }
         case 'K': /* EL */ /* ? DECSEL */ {
+            NOPRIV('?');
             void (*erase)(nss_term_t *, int16_t, int16_t, int16_t, int16_t) = term_erase;
             if(term->esc.private == '?')
                 erase = term_selective_erase;
@@ -1488,48 +1502,54 @@ static void term_escape_csi(nss_term_t *term) {
             break;
         }
         case 'L': /* IL */
+            NOPRIV(0);
             term_insert_lines(term, PARAM(0, 1));
             break;
         case 'M': /* DL */
+            NOPRIV(0);
             term_delete_lines(term, PARAM(0, 1));
             break;
         case 'P': /* DCH */
+            NOPRIV(0);
             term_delete_cells(term, PARAM(0, 1));
             term_move_to(term, term->c.x, term->c.y);
             break;
         case 'S': /* SU */ /* ? Set graphics attributes, xterm */
-            if (!term->esc.private)
-                term_scroll(term, term->top, term->bottom, PARAM(0, 1), 0);
-            else term_escape_dump(term);
+            NOPRIV(0);
+            term_scroll(term, term->top, term->bottom, PARAM(0, 1), 0);
             break;
         case 'T': /* SD */ /* > Reset title, xterm */
-            if (term->esc.private) {
-                term_escape_dump(term);
-                break;
-            } /* fallthrough */
         case '^': /* SD */
+            NOPRIV(0);
             term_scroll(term, term->top, term->bottom, -PARAM(0, 1), 0);
             break;
         case 'X': /* ECH */
+            NOPRIV(0);
             term_protective_erase(term, term->c.x, term->c.y, term->c.x + PARAM(0, 1), term->c.y + 1);
             term_move_to(term, term->c.x, term->c.y);
             break;
         case 'Z': /* CBT */
+            NOPRIV(0);
             term_tabs(term, -PARAM(0, 1));
             break;
         case 'a': /* HPR */
+            NOPRIV(0);
             term_move_to(term, MIN(term->c.x, term->width - 1) + PARAM(0, 1), term->c.y + PARAM(1, 0));
             break;
         case 'b': /* REP */
             term_escape_dump(term);
             break;
         case 'c': /* Primary DA */ /* > Secondary DA */ /* = Tertinary DA */
-            term_escape_da(term, term->esc.private);
+            if (term->esc.private == '>' || term->esc.private == '=' || !term->esc.private)
+                term_escape_da(term, term->esc.private);
+            else term_escape_dump(term);
             break;
         case 'd': /* VPA */
+            NOPRIV(0);
             term_move_to_abs(term, term->c.x, PARAM(0, 1) - 1);
             break;
         case 'g': /* TBC */
+            NOPRIV(0);
             switch (PARAM(0, 0)) {
             case 0:
                 term->tabs[MIN(term->c.x, term->width - 1)] = 0;
@@ -1540,12 +1560,14 @@ static void term_escape_csi(nss_term_t *term) {
             }
             break;
         case 'h': /* SM */ /* ? DECSET */
+            NOPRIV('?');
             term_escape_setmode(term, 1);
             break;
         case 'i': /* MC */ /* ? MC */
             term_escape_dump(term);
             break;
         case 'l': /* RM */ /* ? DECRST */
+            NOPRIV('?');
             term_escape_setmode(term, 0);
             break;
         case 'm': /* SGR */ /* > Modify keys, xterm */
@@ -1617,20 +1639,18 @@ static void term_escape_csi(nss_term_t *term) {
             term_escape_dump(term);
             break;
         case 'r': /* DECSTBM */ /* ? Restore DEC privite mode */
-            if (!term->esc.private) {
-                term_set_tb_margins(term, PARAM(0, 1) - 1, PARAM(1, (size_t)term->height) - 1);
-                //term_move_to_abs(term, 0, 0);
-            } else term_escape_dump(term);
+            NOPRIV(0);
+            term_set_tb_margins(term, PARAM(0, 1) - 1, PARAM(1, (size_t)term->height) - 1);
             break;
         case 's': /* DECSLRM/(SCOSC) */ /* ? Save DEC privite mode */
-            if (!term->esc.private) {
-                term_cursor_mode(term, 1);
-            } else term_escape_dump(term);
+            NOPRIV(0);
+            term_cursor_mode(term, 1);
             break;
         case 't': /* Window operations, xterm */ /* > Title mode, xterm */
             term_escape_dump(term);
             break;
         case 'u': /* (SCORC) */
+            NOPRIV(0);
             term_cursor_mode(term, 0);
             break;
         case 'x': /* DECREQTPARAM */
@@ -1642,6 +1662,7 @@ static void term_escape_csi(nss_term_t *term) {
     } else if (term->esc.interm_idx == 1) {
         switch(term->esc.interm[0]) {
         case ' ':
+            NOPRIV(0);
             switch(term->esc.final) {
             case '@': /* SL */
                 term_escape_dump(term);
@@ -1677,6 +1698,7 @@ static void term_escape_csi(nss_term_t *term) {
             }
             break;
         case '!':
+            NOPRIV(0);
             switch(term->esc.final) {
             case 'p': /* DECSTR */
                 term_reset(term, 0);
@@ -1686,6 +1708,7 @@ static void term_escape_csi(nss_term_t *term) {
             }
             break;
         case '"':
+            NOPRIV(0);
             switch(term->esc.final) {
             case 'p': /* DECSCL */
                 term_reset(term, 1);
@@ -1730,6 +1753,7 @@ static void term_escape_csi(nss_term_t *term) {
             }
             break;
         case '#':
+            NOPRIV(0);
             switch(term->esc.final) {
             case 'y': /* XTCHECKSUM */
                 term_escape_dump(term);
@@ -1752,27 +1776,35 @@ static void term_escape_csi(nss_term_t *term) {
         case '$':
             switch(term->esc.final) {
             case 'p': /* DECRQM */ /* ? DECRQM */
+                NOPRIV('?');
                 term_escape_dump(term);
                 break;
             case 'r': /* DECCARA */
+                NOPRIV(0);
                 term_escape_dump(term);
                 break;
             case 't': /* DECRARA */
+                NOPRIV(0);
                 term_escape_dump(term);
                 break;
             case 'v': /* DECCRA */
+                NOPRIV(0);
                 term_escape_dump(term);
                 break;
             case 'w': /* DECRQPSR */
+                NOPRIV(0);
                 term_escape_dump(term);
                 break;
             case 'x': /* DECFRA */
+                NOPRIV(0);
                 term_escape_dump(term);
                 break;
             case 'z': /* DECERA */
+                NOPRIV(0);
                 term_escape_dump(term);
                 break;
             case '{': /* DECSERA */
+                NOPRIV(0);
                 term_escape_dump(term);
                 break;
             default:
@@ -1780,6 +1812,7 @@ static void term_escape_csi(nss_term_t *term) {
             }
             break;
         case '\'':
+            NOPRIV(0);
             switch(term->esc.final) {
             case 'w': /* DECEFR */
                 term_escape_dump(term);
@@ -1804,6 +1837,7 @@ static void term_escape_csi(nss_term_t *term) {
             }
             break;
         case '*':
+            NOPRIV(0);
             switch(term->esc.final) {
             case 'x': /* DECSACE */
                 term_escape_dump(term);
@@ -1822,6 +1856,7 @@ static void term_escape_csi(nss_term_t *term) {
     } else term_escape_dump(term);
 
 #undef PARAM
+#undef NOPRIV
 
 }
 
