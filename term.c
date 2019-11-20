@@ -562,7 +562,7 @@ static void term_adjust_wide_before(nss_term_t *term, int16_t x, int16_t y, _Boo
 }
 
 static void term_move_to(nss_term_t *term, int16_t x, int16_t y) {
-    term->c.x = MIN(MAX(x, 0), term->width - 1);
+    term->c.x = MAX(0, MIN(x, term->width - 1));
     if (term->c.origin)
         term->c.y = MIN(MAX(y, term->top), term->bottom);
     else
@@ -2104,10 +2104,6 @@ static void term_dispatch_c0(nss_term_t *term, uint32_t ch) {
 }
 
 static void term_putchar(nss_term_t *term, uint32_t ch) {
-    int16_t width = wcwidth(ch);
-    if (width < 0 && !(IS_C0(ch) || IS_DEL(ch) || IS_C1(ch)))
-        ch = UTF_INVAL, width = 1;
-
     //info("UTF %"PRIx32" '%s'", ch, buf);
 
     if (IS_C1(ch)) {
@@ -2220,7 +2216,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
             size_t char_len = utf8_encode(ch, buf, buf + UTF8_MAX_LEN);
             buf[char_len] = '\0';
 
-            if (term->esc.si + char_len > ESC_MAX_STR) return;
+            if (term->esc.si + char_len + 1 > ESC_MAX_STR) return;
             memcpy(term->esc.str + term->esc.si, buf, char_len + 1);
             term->esc.si += char_len;
         }
@@ -2232,13 +2228,19 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
                 nss_cs_british_latin1 && !(term->mode & nss_tm_enable_nrcs))
             /* ignore */;
         else {
+            int16_t width = wcwidth(ch);
+            if (width < 0 && !(IS_C0(ch) || IS_DEL(ch) || IS_C1(ch)))
+                ch = UTF_INVAL, width = 1;
+
             //DUMP
             //info("%c (%u)", ch, ch);
 
-            if (term->mode & nss_tm_wrap && term->c.x + width - 1 > term->width - 1) {
-                term->screen[term->c.y]->wrap_at = term->c.x;
-                term_index(term, 1);
-            }
+            if (term->mode & nss_tm_wrap) {
+                if (term->c.x + width > term->width - 1) {
+                    term->screen[term->c.y]->wrap_at = term->c.x;
+                    term_index(term, 1);
+                }
+            } else term->c.x = MIN(term->c.x, term->width - width);
 
             nss_cell_t *cell = &term->screen[term->c.y]->cell[term->c.x];
 
@@ -2248,10 +2250,11 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
                 memmove(cell + width, cell, term->screen[term->c.y]->width - term->c.x - width);
             }
 
-            term_adjust_wide_before(term, MIN(term->c.x, term->width - 1), term->c.y, 1, 0);
-            term_adjust_wide_before(term, MIN(term->c.x, term->width - 1) + width - 1, term->c.y, 0, 1);
+            term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
+            term_adjust_wide_before(term, term->c.x + width - 1, term->c.y, 0, 1);
 
-            term_set_cell(term, MIN(term->c.x, term->width - 1), term->c.y, ch);
+			if (term->c.x < 0) fatal("Grnd"); //?!!
+            term_set_cell(term, term->c.x, term->c.y, ch);
 
             if (width > 1) {
                 cell[1] = fixup_color(term->screen[term->c.y], &term->c);
@@ -2275,6 +2278,8 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
         // Try to handle unencoded C1 bytes even if UTF-8 is enabled
         if (!(term->mode & nss_tm_utf8) || IS_C1(*start)) ch = *start++;
         else if (!utf8_decode(&ch, &start, end)) break;
+
+        if (term->c.x < 0) fatal("X");
 
         if (show_ctl) {
             if (IS_C1(ch)) {
@@ -2399,7 +2404,6 @@ void term_answerback(nss_term_t *term, const char *str, ...) {
     va_start(vl, str);
     vsnprintf((char *)csi, sizeof(csi), (char *)fmt, vl);
     va_end(vl);
-
     term_tty_write(term, csi, (uint8_t *)memchr(csi, 0, MAX_REPORT) - csi);
 }
 
@@ -2489,13 +2493,13 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
     // Resize tabs
 
-    uint8_t *new_tabs = realloc(term->tabs, width * sizeof(*new_tabs));
+    uint8_t *new_tabs = realloc(term->tabs, width * sizeof(*term->tabs));
     if (!new_tabs) die("Can't alloc tabs");
     term->tabs = new_tabs;
 
     if(width > term->width) {
         memset(new_tabs + term->width, 0, (width - term->width) * sizeof(new_tabs[0]));
-        int16_t tab = term->width, tabw = nss_config_integer(nss_config_tab_width, 1, 10000);
+        int16_t tab = term->width ? term->width - 1: 0, tabw = nss_config_integer(nss_config_tab_width, 1, 10000);
         while (tab > 0 && !new_tabs[tab]) tab--;
         while ((tab += tabw) < width) new_tabs[tab] = 1;
     }
@@ -2550,20 +2554,15 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
         .gn = {nss_cs_dec_ascii, nss_cs_british_latin1, nss_cs_british_latin1, nss_cs_british_latin1}
     };
 
-    memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
-    size_t tabw = nss_config_integer(nss_config_tab_width, 1, 10000);
-    for(size_t i = tabw; i < (size_t)term->width; i += tabw)
-        term->tabs[i] = 1;
+    clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
+
+    term_resize(term, width, height);
 
     for(size_t i = 0; i < 2; i++) {
         term_cursor_mode(term, 1);
         term_erase(term, 0, 0, term->width, term->height);
         term_swap_screen(term);
     }
-
-    clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
-
-    term_resize(term, width, height);
 
     if (tty_open(term, nss_config_string(nss_config_shell, "/bin/sh"), NULL) < 0) {
         warn("Can't create tty");
