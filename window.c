@@ -814,7 +814,7 @@ void nss_window_draw_cursor(nss_window_t *win, int16_t x, int16_t y, nss_cell_t 
             rects[3].x -= win->cursor_width - 1;
         } else {
             count = 0;
-            CELL_ATTR_INVERT(cel, nss_attrib_inverse);
+            cel.attr ^= nss_attrib_inverse;
         }
     }
     nss_window_draw(win, MIN(cx, win->cw - 1), cy, 1, &cel, pal, extra);
@@ -824,7 +824,7 @@ void nss_window_draw_cursor(nss_window_t *win, int16_t x, int16_t y, nss_cell_t 
 
 
 static inline void eval_color(nss_window_t *win, nss_cell_t cell, nss_color_t *pal, nss_color_t *extra, xcb_render_color_t *fgr, xcb_render_color_t *bgr) {
-        uint32_t attr = CELL_ATTR(cell);
+        uint32_t attr = cell.attr;
         nss_cid_t bgi = cell.bg, fgi = cell.fg;
 
         if ((attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && fgi < 8) fgi += 8;
@@ -852,54 +852,52 @@ static inline void eval_color(nss_window_t *win, nss_cell_t cell, nss_color_t *p
 }
 
 static inline _Bool cell_equal_bg(nss_cell_t a, nss_cell_t b) {
-    uint32_t a_attr = CELL_ATTR(a), b_attr = CELL_ATTR(b);
-    if (!(a_attr & nss_attrib_inverse) && !(b_attr & nss_attrib_inverse))
+    if (!(a.attr & nss_attrib_inverse) && !(b.attr & nss_attrib_inverse))
         return a.bg == b.bg;
 
     nss_cid_t a_bg = a.bg;
-    if (a_attr & nss_attrib_inverse)
-        a_bg = a.fg + 8 * ((a_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && a.fg < 8);
+    if (a.attr & nss_attrib_inverse)
+        a_bg = a.fg + 8 * ((a.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && a.fg < 8);
     nss_cid_t b_bg = b.bg;
-    if (b_attr & nss_attrib_inverse)
-        b_bg = b.fg + 8 * ((b_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && b.fg < 8);
+    if (b.attr & nss_attrib_inverse)
+        b_bg = b.fg + 8 * ((b.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && b.fg < 8);
 
     if (a_bg != b_bg) return 0;
 
-    if ((((a_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint) && (a_attr & nss_attrib_inverse)) ||
-            (((b_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint) && (b_attr & nss_attrib_inverse))) {
-        return ((a_attr & (nss_attrib_bold | nss_attrib_faint | nss_attrib_inverse))
-                == (b_attr & (nss_attrib_bold | nss_attrib_faint | nss_attrib_inverse)));
+    if ((((a.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint) && (a.attr & nss_attrib_inverse)) ||
+            (((b.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint) && (b.attr & nss_attrib_inverse))) {
+        return ((a.attr & (nss_attrib_bold | nss_attrib_faint | nss_attrib_inverse))
+                == (b.attr & (nss_attrib_bold | nss_attrib_faint | nss_attrib_inverse)));
     } else return 1;
 }
 
 static inline _Bool cell_equal_fg(nss_cell_t a, nss_cell_t b, _Bool blink) {
-    uint32_t a_attr = CELL_ATTR(a), b_attr = CELL_ATTR(b);
-    _Bool a_inv = a_attr & (nss_attrib_inverse | nss_attrib_invisible) || (blink && a_attr & nss_attrib_blink);
-    _Bool b_inv = b_attr & (nss_attrib_inverse | nss_attrib_invisible) || (blink && b_attr & nss_attrib_blink);
+    _Bool a_inv = a.attr & (nss_attrib_inverse | nss_attrib_invisible) || (blink && a.attr & nss_attrib_blink);
+    _Bool b_inv = b.attr & (nss_attrib_inverse | nss_attrib_invisible) || (blink && b.attr & nss_attrib_blink);
     if (a_inv && b_inv) return a.bg == b.bg;
 
     nss_cid_t a_bg = a.bg;
     if (!a_inv)
-        a_bg = a.fg + 8 * ((a_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && a.fg < 8);
+        a_bg = a.fg + 8 * ((a.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && a.fg < 8);
     nss_cid_t b_bg = b.bg;
     if (!b_inv)
-        b_bg = b.fg + 8 * ((b_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && b.fg < 8);
+        b_bg = b.fg + 8 * ((b.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && b.fg < 8);
 
     if (a_bg != b_bg) return 0;
 
-    if ((((a_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint) && !a_inv) ||
-            (((b_attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint) && !b_inv)) {
-        return ((a_attr & (nss_attrib_bold | nss_attrib_faint)) == (b_attr & (nss_attrib_bold | nss_attrib_faint))) && (a_inv == b_inv);
+    if ((((a.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint) && !a_inv) ||
+            (((b.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint) && !b_inv)) {
+        return ((a.attr & (nss_attrib_bold | nss_attrib_faint)) == (b.attr & (nss_attrib_bold | nss_attrib_faint))) && (a_inv == b_inv);
     } else return 1;
 }
 
 static inline _Bool cell_vis(nss_cell_t cell, _Bool blink) {
-    return cell.fg != cell.bg && !(CELL_ATTR(cell) & nss_attrib_invisible) &&
-            !(CELL_ATTR(cell) & nss_attrib_blink && blink);
+    return cell.fg != cell.bg && !(cell.attr & nss_attrib_invisible) &&
+            !(cell.attr & nss_attrib_blink && blink);
 }
 
 static inline _Bool cell_drawn(nss_cell_t cell, _Bool blink_commited) {
-    return CELL_ATTR(cell) & nss_attrib_drawn && !(!blink_commited && (CELL_ATTR(cell) & nss_attrib_blink));
+    return cell.attr & nss_attrib_drawn && !(!blink_commited && (cell.attr & nss_attrib_blink));
 }
 
 /* Draw line with attributes */
@@ -910,7 +908,7 @@ size_t nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_
     if (!cells || !len) return 0;
 
     for (size_t i = 0; i < len; i++) {
-        uint32_t ch = CELL_CHAR(cells[i]);
+        uint32_t ch = cells[i].ch;
         if (!nss_font_glyph_is_loaded(win->font, ch)) {
             for (size_t j = 0; j < nss_font_attrib_max; j++) {
                 nss_glyph_t *glyph = nss_font_render_glyph(win->font, ch, j, win->subpixel_fonts);
@@ -976,10 +974,10 @@ size_t nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_
     xcb_rectangle_t *rects = (xcb_rectangle_t *)con.render_buffer;
     xcb_rectangle_t *rend = rects + con.render_buffer_size / sizeof(xcb_rectangle_t), *rpos = rects;
     for (size_t i = 0; i < len;) {
-        while (i < len && (cell_drawn(cells[i], win->blink_commited) || !cell_vis(cells[i], win->blink_state) || CELL_CHAR(cells[i]) == ' ')) i++;
+        while (i < len && (cell_drawn(cells[i], win->blink_commited) || !cell_vis(cells[i], win->blink_state) || cells[i].ch == ' ')) i++;
         if (i >= len) break;
         size_t blk_len = 0;
-        while (i + blk_len < len && !cell_drawn(cells[i + blk_len], win->blink_commited) && cell_vis(cells[i + blk_len], win->blink_state) && CELL_CHAR(cells[i + blk_len]) != ' ') blk_len++;
+        while (i + blk_len < len && !cell_drawn(cells[i + blk_len], win->blink_commited) && cell_vis(cells[i + blk_len], win->blink_state) && cells[i + blk_len].ch != ' ') blk_len++;
         if (blk_len) {
             if (rpos + 1 >= rend) {
                 size_t new_size = MAX(3 * con.render_buffer_size / 2, 16 * sizeof(xcb_rectangle_t));
@@ -1006,7 +1004,7 @@ size_t nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_
     memset(con.mark_buffer, 0, con.mark_buffer_size);
 
     for (size_t i = 0; i < len; ) {
-        while(i < len && (con.mark_buffer[i] || cell_drawn(cells[i], win->blink_commited) || !cell_vis(cells[i], win->blink_state) || CELL_CHAR(cells[i]) == ' ')) i++;
+        while(i < len && (con.mark_buffer[i] || cell_drawn(cells[i], win->blink_commited) || !cell_vis(cells[i], win->blink_state) || cells[i].ch == ' ')) i++;
         if (i >= len) break;
 
         xcb_render_color_t fg;
@@ -1024,7 +1022,7 @@ size_t nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_
 
         for (size_t j = i; j < len; j++) {
             if (!con.mark_buffer[j] && !cell_drawn(cells[j], win->blink_commited) &&
-                    cell_equal_fg(cells[i], cells[j], win->blink_state) && cell_vis(cells[j], win->blink_state) && !(CELL_CHAR(cells[i]) == ' ')) {
+                    cell_equal_fg(cells[i], cells[j], win->blink_state) && cell_vis(cells[j], win->blink_state) && !(cells[i].ch == ' ')) {
                 con.mark_buffer[j] = 1;
                 size_t inc = sizeof(uint32_t);
                 if ((size_t)msg_head->len + 1 > CHARS_PER_MESG || jump) inc += sizeof(nss_glyph_mesg_t);
@@ -1045,7 +1043,7 @@ size_t nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_
                     bpos += sizeof(msg_head);
                     jump = 0;
                 }
-                uint32_t ch = CELL_CHAR(cells[j]) | ((CELL_ATTR(cells[j]) & nss_font_attrib_mask) << 24);
+                uint32_t ch = cells[j].ch | ((cells[j].attr & nss_font_attrib_mask) << 24);
                 memcpy(bpos, &ch, sizeof(ch));
                 bpos += sizeof(ch);
                 msg_head->len++;
@@ -1059,7 +1057,7 @@ size_t nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_
     memset(con.mark_buffer, 0, con.mark_buffer_size);
     for (size_t i = 0; i < len; i++) {
         while(i < len && (con.mark_buffer[i] || !cell_vis(cells[i], win->blink_state) || cell_drawn(cells[i], win->blink_commited)
-                || !(CELL_ATTR(cells[i]) & (nss_attrib_strikethrough | nss_attrib_underlined)))) i++;
+                || !(cells[i].attr & (nss_attrib_strikethrough | nss_attrib_underlined)))) i++;
         if (i >= len) break;
 
         xcb_render_color_t fg;
@@ -1069,12 +1067,12 @@ size_t nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_
         xcb_rectangle_t *rend = rects + con.render_buffer_size / sizeof(xcb_rectangle_t), *rpos = rects;
         for (size_t j = i; j < len; ) {
             while (j < len && (cell_drawn(cells[j], win->blink_commited) || !cell_equal_fg(cells[i], cells[j], win->blink_state) ||
-                    !(CELL_ATTR(cells[j]) & nss_attrib_underlined))) j++;
+                    !(cells[j].attr & nss_attrib_underlined))) j++;
             if (j >= len) break;
 
             size_t blk_len = 0;
             while (j + blk_len < len && cell_equal_fg(cells[i], cells[j + blk_len], win->blink_state) && !cell_drawn(cells[j + blk_len], win->blink_commited) &&
-                !cell_drawn(cells[j + blk_len], win->blink_commited) && (CELL_ATTR(cells[j + blk_len]) & nss_attrib_underlined))
+                !cell_drawn(cells[j + blk_len], win->blink_commited) && (cells[j + blk_len].attr & nss_attrib_underlined))
                 con.mark_buffer[j + blk_len++] = 1;
 
             if (rpos + 1 >= rend) {
@@ -1098,13 +1096,13 @@ size_t nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_
         }
         for (size_t j = i; j < len; ) {
             while (j < len && (cell_drawn(cells[j], win->blink_commited) || !cell_equal_fg(cells[i], cells[j], win->blink_state) ||
-                    !(CELL_ATTR(cells[j]) & nss_attrib_strikethrough))) j++;
+                    !(cells[j].attr & nss_attrib_strikethrough))) j++;
             if (j >= len) break;
 
             size_t blk_len = 0;
             while (j + blk_len < len && !cell_drawn(cells[j + blk_len], win->blink_commited) &&
                     cell_equal_fg(cells[i], cells[j + blk_len], win->blink_state) &&
-                    (CELL_ATTR(cells[j + blk_len]) & nss_attrib_strikethrough))
+                    (cells[j + blk_len].attr & nss_attrib_strikethrough))
                 con.mark_buffer[j + blk_len++] = 1;
 
             if (rpos + 1 >= rend) {
@@ -1132,7 +1130,7 @@ size_t nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_
     }
 
     for (size_t i = 0; i < len; i++)
-        CELL_ATTR_SET(cells[i], nss_attrib_drawn);
+        cells[i].attr |= nss_attrib_drawn;
 
     xcb_render_set_picture_clip_rectangles(con.con, win->pic, 0, 0, 1, &(xcb_rectangle_t) {0, 0,
             win->cw * win->char_width, win->ch * (win->char_height + win->char_depth)});
@@ -1351,7 +1349,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     nss_key_t key = { 0 };
     if ((key.sym = xkb_state_key_get_one_sym(con.xkb_state, keycode)) == XKB_KEY_NoSymbol) return;
     key.mask = xkb_state_serialize_mods(con.xkb_state, XKB_STATE_MODS_EFFECTIVE);
-    if ((key.utf32 = xkb_keysym_to_utf32(key.sym))) {
+    if ((key.utf32 = xkb_state_key_get_utf32(con.xkb_state, keycode))) {
         key.utf8len = utf8_encode(key.utf32, key.utf8data, key.utf8data + sizeof(key.utf8data));
         key.utf8data[key.utf8len] = '\0';
     }

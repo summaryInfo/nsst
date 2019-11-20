@@ -62,22 +62,12 @@ typedef enum nss_attrs {
     // 11 bits total, sice unicode codepoint is 21 bit
 } nss_attrs_t;
 
-#define CELL_CHAR_BITS 21
-#define CELL_CHAR_MASK ((1 << CELL_CHAR_BITS) - 1)
-#define CELL_CHAR(s) ((s).ch & CELL_CHAR_MASK)
-#define CELL_CHAR_SET(s, c) ((s).ch = ((s).ch & ~CELL_CHAR_MASK) | ((c) & CELL_CHAR_MASK))
-#define CELL_FG(s, b) (nss_color_get((s).fg + (b)))
-#define CELL_BG(s, b) (nss_color_get((s).bg + (b)))
-#define CELL_ATTR_ZERO(s) ((s).ch &= CELL_CHAR_MASK)
-#define CELL_ATTR(s) ((s).ch >> CELL_CHAR_BITS)
-#define CELL_ATTR_SET(s, l) ((s).ch |= (l) << CELL_CHAR_BITS)
-#define CELL_ATTR_CLR(s, l) ((s).ch &= ~((l) << CELL_CHAR_BITS))
-#define CELL_ATTR_INVERT(s, l) ((s).ch ^= (l) << CELL_CHAR_BITS)
-#define MKCELLWITH(s, c) MKCELL((s).fg, (s).bg, CELL_ATTR(s), (c))
-#define MKCELL(f, b, l, c) ((nss_cell_t) { .bg = (b), .fg = (f), .ch = ((c) & CELL_CHAR_MASK) | (((l) & ~nss_attrib_drawn) << CELL_CHAR_BITS)})
+#define MKCELLWITH(s, c) MKCELL((s).fg, (s).bg, (s).attr, (c))
+#define MKCELL(f, b, l, c) ((nss_cell_t) { .bg = (b), .fg = (f), .ch = (c), .attr = (l) & ~nss_attrib_drawn})
 
 typedef struct nss_cell {
-        uint32_t ch; /* not really char but char + attributes */
+        uint32_t ch : 21;
+        uint32_t attr : 11;
         nss_cid_t fg;
         nss_cid_t bg;
 } nss_cell_t;

@@ -162,7 +162,7 @@ struct nss_term {
         } state;
         uint8_t private;
         size_t param_idx;
-        uint32_t param[ESC_MAX_PARAM];
+        int32_t param[ESC_MAX_PARAM];
         size_t interm_idx;
         uint8_t interm[ESC_MAX_INTERM];
         uint8_t final;
@@ -351,7 +351,7 @@ static void term_free_line(nss_term_t *term, nss_line_t *line) {
 
 static void term_line_dirt(nss_line_t *line) {
     for (int16_t i = 0; i < line->width; i++)
-        CELL_ATTR_CLR(line->cell[i], nss_attrib_drawn);
+        line->cell[i].attr &= ~nss_attrib_drawn;
 }
 
 void nss_term_invalidate_screen(nss_term_t *term) {
@@ -449,7 +449,7 @@ static void term_erase(nss_term_t *term, int16_t xs, int16_t ys, int16_t xe, int
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
         nss_cell_t cell = fixup_color(line, &term->c);
-        CELL_ATTR_ZERO(cell);
+        cell.attr = 0;
         for(int16_t i = xs; i < xe; i++)
             line->cell[i] = cell;
     }
@@ -460,7 +460,7 @@ static nss_line_t *term_realloc_line(nss_term_t *term, nss_line_t *line, size_t 
     if (!new) die("Can't create lines");
 
     nss_cell_t cell = fixup_color(line, &term->c);
-    CELL_ATTR_ZERO(cell);
+    cell.attr = 0;
 
     for(size_t i = new->width; i < width; i++)
         new->cell[i] = cell;
@@ -481,9 +481,9 @@ static void term_protective_erase(nss_term_t *term, int16_t xs, int16_t ys, int1
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
         nss_cell_t cell = fixup_color(line, &term->c);
-        CELL_ATTR_ZERO(cell);
+        cell.attr = 0;
         for(int16_t i = xs; i < xe; i++)
-            if (!(CELL_ATTR(line->cell[i]) & nss_attrib_protected))
+            if (!(line->cell[i].attr & nss_attrib_protected))
                 line->cell[i] = cell;
     }
 }
@@ -500,7 +500,7 @@ static void term_selective_erase(nss_term_t *term, int16_t xs, int16_t ys, int16
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
         for(int16_t i = xs; i < xe; i++)
-            if (!(CELL_ATTR(line->cell[i]) & nss_attrib_protected))
+            if (!(line->cell[i].attr & nss_attrib_protected))
                 line->cell[i] = MKCELLWITH(line->cell[i], ' ');
     }
 }
@@ -508,11 +508,11 @@ static void term_selective_erase(nss_term_t *term, int16_t xs, int16_t ys, int16
 static void term_adjust_wide_before(nss_term_t *term, int16_t x, int16_t y, _Bool left, _Bool right) {
     if (x < 0 || x > term->screen[y]->width - 1) return;
     nss_cell_t *cell = &term->screen[y]->cell[x];
-    if (left && x > 0 && CELL_ATTR(cell[-1]) & nss_attrib_wide) {
+    if (left && x > 0 && cell[-1].attr & nss_attrib_wide) {
         cell[-1] = MKCELLWITH(cell[-1], ' ');
-        CELL_ATTR_CLR(cell[-1], nss_attrib_wide);
+        cell[-1].attr &= ~nss_attrib_wide;
     }
-    if (right && x < term->screen[y]->width && CELL_ATTR(cell[0]) & nss_attrib_wide) {
+    if (right && x < term->screen[y]->width && cell[0].attr & nss_attrib_wide) {
         cell[1] = MKCELLWITH(cell[1], ' ');
     }
 }
@@ -548,7 +548,7 @@ static void term_swap_screen(nss_term_t *term) {
 
 static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t amount, _Bool save) {
     if (term->prev_c_y >= 0 && top <= term->prev_c_y && term->prev_c_y <= bottom) {
-        CELL_ATTR_CLR(term->screen[term->prev_c_y]->cell[term->prev_c_x], nss_attrib_drawn);
+        term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
         if (amount >= 0) term->prev_c_y = MAX(0, term->prev_c_y - MIN(amount, (bottom - top + 1)));
         else term->prev_c_y = MIN(term->height - 1, term->prev_c_y + MIN(-amount, (bottom - top + 1)));
     }
@@ -613,7 +613,7 @@ static void term_insert_cells(nss_term_t *term, int16_t n) {
     term_adjust_wide_before(term, cx, term->c.y, 1, 1);
     memmove(line->cell + cx + n, line->cell + cx, (line->width - cx - n) * sizeof(nss_cell_t));
     for (int16_t i = cx + n; i < term->width; i++)
-        CELL_ATTR_CLR(line->cell[i], nss_attrib_drawn);
+        line->cell[i].attr &= ~nss_attrib_drawn;
     term_erase(term, cx, term->c.y, cx + n, term->c.y + 1);
     term_move_to(term, term->c.x, term->c.y);
 }
@@ -626,7 +626,7 @@ static void term_delete_cells(nss_term_t *term, int16_t n) {
     term_adjust_wide_before(term, cx + n - 1, term->c.y, 0, 1);
     memmove(line->cell + cx, line->cell + cx + n, (term->width - cx - n) * sizeof(nss_cell_t));
     for (int16_t i = cx; i < term->width - n; i++)
-        CELL_ATTR_CLR(line->cell[i], nss_attrib_drawn);
+        line->cell[i].attr &= ~nss_attrib_drawn;
     term_erase(term, term->width - n, term->c.y, term->width, term->c.y + 1);
     term_move_to(term, term->c.x, term->c.y);
 }
@@ -801,7 +801,7 @@ static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
     }
 
     nss_cell_t cel = fixup_color(term->screen[y], &term->c);
-    CELL_CHAR_SET(cel, ch);
+    cel.ch = ch;
 
     term->screen[y]->cell[x] = cel;
 
@@ -863,7 +863,6 @@ static void term_escape_da(nss_term_t *term, uint8_t mode) {
 static void term_escape_dump(nss_term_t *term) {
     char buf[ESC_DUMP_MAX] = "^[";
     size_t pos = 2;
-    int w = 0;
     if (term->esc.state & (nss_es_csi | nss_es_dcs | nss_es_osc)) {
         if (term->esc.state & nss_es_csi) buf[pos++] = '[';
         else if (term->esc.state & nss_es_dcs) buf[pos++] = 'P';
@@ -871,7 +870,9 @@ static void term_escape_dump(nss_term_t *term) {
         if (term->esc.private)
             buf[pos++] = term->esc.private;
         for (ssize_t i = 0; i <= (ssize_t)term->esc.param_idx - (!!(term->esc.state & nss_es_osc)); i++) {
-            snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRIu32"%n", term->esc.param[i], &w);
+            size_t w = 0;
+            if (term->esc.param[i] >= 0)
+                snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRIu32"%zn", term->esc.param[i], &w);
             pos += w;
             if (i < (ssize_t)term->esc.param_idx) buf[pos++] = ';';
         }
@@ -923,7 +924,7 @@ static void term_escape_dcs(nss_term_t *term) {
     warn("DCS"); /* yet nothing here */
 }
 
-static nss_color_t color_parse(char *str, char *end) {
+static nss_color_t parse_color(char *str, char *end) {
     uint64_t val = 0;
     ptrdiff_t sz = end - str;
     if (*str != '#') return 0;
@@ -987,7 +988,7 @@ static void term_escape_osc(nss_term_t *term) {
 
             if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
 
-                nss_color_t col = color_parse(parg, pnext);
+                nss_color_t col = parse_color(parg, pnext);
                 if (col) term->palette[idx] = col;
                 else if (parg[0] == '?' && parg[1] == '\0')
                     term_answerback(term, "\2354;#%06X\234", term->palette[idx] & 0x00FFFFFF);
@@ -1007,7 +1008,7 @@ static void term_escape_osc(nss_term_t *term) {
         term_escape_dump(term);
         break;
     case 10: /* Set VT100 foreground color */ {
-        nss_color_t col = color_parse((char *)term->esc.str, (char *)term->esc.str + term->esc.str_idx);
+        nss_color_t col = parse_color((char *)term->esc.str, (char *)term->esc.str + term->esc.str_idx);
         if (col) {
             term->palette[NSS_SPECIAL_FG] = col;
             nss_window_set(term->win, nss_wc_foreground, &col);
@@ -1015,7 +1016,7 @@ static void term_escape_osc(nss_term_t *term) {
         break;
     }
     case 11: /* Set VT100 background color */ {
-        nss_color_t col = color_parse((char *)term->esc.str, (char *)term->esc.str + term->esc.str_idx);
+        nss_color_t col = parse_color((char *)term->esc.str, (char *)term->esc.str + term->esc.str_idx);
         if (col) {
             args[0] = args[1] = col;
             nss_color_t def = term->palette[NSS_SPECIAL_BG];
@@ -1026,7 +1027,7 @@ static void term_escape_osc(nss_term_t *term) {
         break;
     }
     case 12: /* Set Cursor color */ {
-        nss_color_t col = color_parse((char *)term->esc.str, (char *)term->esc.str + term->esc.str_idx);
+        nss_color_t col = parse_color((char *)term->esc.str, (char *)term->esc.str + term->esc.str_idx);
         if (col) {
             term->palette[NSS_SPECIAL_CURSOR_FG] = col;
             nss_window_set(term->win, nss_wc_background, &col);
@@ -1097,11 +1098,12 @@ _Bool nss_term_is_utf8(nss_term_t *term) {
 static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) {
     if (term->esc.param_idx - arg > 1) {
         if (term->esc.param[arg] == 2 && term->esc.param_idx - arg > 2) {
-            if (term->esc.param[arg + 1] > 255 || term->esc.param[arg + 2] > 255 || term->esc.param[arg + 3] > 255)
+            if (term->esc.param[arg + 1] > 255 || term->esc.param[arg + 2] > 255 || term->esc.param[arg + 3] > 255 ||
+            		term->esc.param[arg + 1] < 0 || term->esc.param[arg + 2] < 0 || term->esc.param[arg + 3] < 0)
                 term_escape_dump(term);
             nss_color_t col = 0xFF;
             for (size_t i = 1; i < 4; i++)
-                col = (col << 8) + MIN(term->esc.param[arg + i], 255);
+                col = (col << 8) + MIN(MAX(0, term->esc.param[arg + i]), 255);
             if (foreground) {
                 term->c.cel.fg = 0xFFFF;
                 term->c.fg = col;
@@ -1112,7 +1114,7 @@ static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) 
         }
         return 4;
     } else if (term->esc.param[arg] == 5 && term->esc.param_idx - arg > 0) {
-        if (term->esc.param[arg + 1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
+        if (term->esc.param[arg + 1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS && term->esc.param[arg + 1] >= 0) {
             if (foreground)
                 term->c.cel.fg = term->esc.param[arg + 1];
             else
@@ -1125,66 +1127,66 @@ static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) 
 }
 
 static void term_escape_sgr(nss_term_t *term) {
-    for(uint32_t i = 0; i < term->esc.param_idx + 1; i++) {
-        uint32_t p = term->esc.param[i];
+    for(uint32_t i = 0; i <= term->esc.param_idx; i++) {
+        uint32_t p = MAX(0, term->esc.param[i]);
         switch(p) {
         case 0:
-            CELL_ATTR_CLR(term->c.cel, nss_attrib_blink | nss_attrib_bold |
+            term->c.cel.attr &= ~(nss_attrib_blink | nss_attrib_bold |
                     nss_attrib_faint | nss_attrib_inverse | nss_attrib_invisible |
                     nss_attrib_italic | nss_attrib_underlined | nss_attrib_strikethrough);
             term->c.cel.bg = NSS_SPECIAL_BG;
             term->c.cel.fg = NSS_SPECIAL_FG;
             break;
         case 1:
-            CELL_ATTR_SET(term->c.cel, nss_attrib_bold);
+            term->c.cel.attr |= nss_attrib_bold;
             break;
         case 2:
-            CELL_ATTR_SET(term->c.cel, nss_attrib_faint);
+            term->c.cel.attr |= nss_attrib_faint;
             break;
         case 3:
-            CELL_ATTR_SET(term->c.cel, nss_attrib_italic);
+            term->c.cel.attr |= nss_attrib_italic;
             break;
         case 4:
-            CELL_ATTR_SET(term->c.cel, nss_attrib_underlined);
+            term->c.cel.attr |= nss_attrib_underlined;
             break;
         case 5:
         case 6:
-            CELL_ATTR_SET(term->c.cel, nss_attrib_blink);
+            term->c.cel.attr |= nss_attrib_blink;
             break;
         case 7:
-            CELL_ATTR_SET(term->c.cel, nss_attrib_inverse);
+            term->c.cel.attr |= nss_attrib_inverse;
             break;
         case 8:
-            CELL_ATTR_SET(term->c.cel, nss_attrib_invisible);
+            term->c.cel.attr |= nss_attrib_invisible;
             break;
         case 9:
-            CELL_ATTR_SET(term->c.cel, nss_attrib_strikethrough);
+            term->c.cel.attr |= nss_attrib_strikethrough;
             break;
         case 21:
             /* actually double underlind */
-            CELL_ATTR_SET(term->c.cel, nss_attrib_underlined);
+            term->c.cel.attr |= nss_attrib_underlined;
             break;
         case 22:
-            CELL_ATTR_CLR(term->c.cel, nss_attrib_bold | nss_attrib_faint);
+            term->c.cel.attr &= ~ (nss_attrib_bold | nss_attrib_faint);
             break;
         case 23:
-            CELL_ATTR_CLR(term->c.cel, nss_attrib_italic);
+            term->c.cel.attr &= ~nss_attrib_italic;
             break;
         case 24:
-            CELL_ATTR_CLR(term->c.cel, nss_attrib_underlined);
+            term->c.cel.attr &= ~nss_attrib_underlined;
             break;
         case 25:
         case 26:
-            CELL_ATTR_CLR(term->c.cel, nss_attrib_blink);
+            term->c.cel.attr &= ~nss_attrib_blink;
             break;
         case 27:
-            CELL_ATTR_CLR(term->c.cel, nss_attrib_inverse);
+            term->c.cel.attr &= ~nss_attrib_inverse;
             break;
         case 28:
-            CELL_ATTR_CLR(term->c.cel, nss_attrib_invisible);
+            term->c.cel.attr &= ~nss_attrib_invisible;
             break;
         case 29:
-            CELL_ATTR_CLR(term->c.cel, nss_attrib_strikethrough);
+            term->c.cel.attr &= ~nss_attrib_strikethrough;
             break;
         case 38:
             i += term_define_color(term, i + 1, 1);
@@ -1216,6 +1218,9 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
         for(uint32_t i = 0; i < term->esc.param_idx + 1; i++) {
             uint32_t arg = set;
             switch(term->esc.param[i]) {
+            case -1:
+            case 0: /* Default - nothing */
+                break;
             case 1: /* DECCKM */
                 term->in_mode->appcursor = set;
                 break;
@@ -1374,6 +1379,7 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
     } else {
         for(uint32_t i = 0; i < term->esc.param_idx + 1; i++) {
             switch(term->esc.param[i]) {
+            case -1:
             case 0: /* Default - nothing */
                 break;
             case 2: /* KAM */
@@ -1399,7 +1405,7 @@ static void term_escape_csi(nss_term_t *term) {
     //DUMP
     //term_escape_dump(term);
 
-#define PARAM(i, d) (term->esc.param[i] ? term->esc.param[i] : (d))
+#define PARAM(i, d) (term->esc.param[i] >= 0 ? (uint32_t)term->esc.param[i] : (d))
 #define NOPRIV(p) { if (term->esc.private && term->esc.private != (p)) {\
                     term_escape_dump(term); break; } }
     if (!term->esc.interm_idx) {
@@ -1740,10 +1746,11 @@ static void term_escape_csi(nss_term_t *term) {
             case 'q': /* DECSCA */
                 switch(PARAM(0, 2)) {
                 case 1:
-                    CELL_ATTR_SET(term->c.cel, nss_attrib_protected);
+                    term->c.cel.attr |= nss_attrib_protected;
                     break;
+                case 0:
                 case 2:
-                    CELL_ATTR_CLR(term->c.cel, nss_attrib_protected);
+                    term->c.cel.attr &= ~nss_attrib_protected;
                     break;
                 }
                 term->mode &= ~nss_tm_use_protected_area_semantics;
@@ -1887,11 +1894,11 @@ static void term_escape_esc(nss_term_t *term) {
             term->c.gl_ss = 3;
             break;
         case 'V': /* SPA */
-            CELL_ATTR_SET(term->c.cel, nss_attrib_protected);
+            term->c.cel.attr |= nss_attrib_protected;
             term->mode |= nss_tm_use_protected_area_semantics;
             break;
         case 'W': /* EPA */
-            CELL_ATTR_CLR(term->c.cel, nss_attrib_protected);
+            term->c.cel.attr &= ~nss_attrib_protected;
             term->mode |= nss_tm_use_protected_area_semantics;
             break;
         case 'Z': /* DECID */
@@ -2040,7 +2047,15 @@ static void term_escape_esc(nss_term_t *term) {
 }
 
 static void term_escape_reset(nss_term_t *term) {
-    memset(&term->esc, 0, sizeof(term->esc));
+    term->esc.state = 0;
+    term->esc.param_idx = 0;
+    term->esc.param[0] = -1;
+    term->esc.private = 0;
+    term->esc.param_idx = 0;
+    term->esc.interm_idx = 0;
+    term->esc.final= 0;
+    term->esc.str_idx = 0;
+    term->esc.interm[0] = term->esc.interm[1] = 0;
 }
 
 
@@ -2172,11 +2187,11 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
         warn("^%"PRIx32, ch ^ 0xC0);
         break;
     case 0x96: /* SPA - Start of Protected Area */
-        CELL_ATTR_SET(term->c.cel, nss_attrib_protected);
+        term->c.cel.attr |= nss_attrib_protected;
         term->mode |= nss_tm_use_protected_area_semantics;
         break;
     case 0x97: /* EPA - End of Protected Area */
-        CELL_ATTR_CLR(term->c.cel, nss_attrib_protected);
+        term->c.cel.attr &= ~nss_attrib_protected;
         term->mode |= nss_tm_use_protected_area_semantics;
         break;
     case 0x98: /* SOS - Start Of String */
@@ -2232,6 +2247,8 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
             if (IS_C0(ch)) return;
             if (!(term->esc.state & nss_es_gotfirst)) {
                 if ('0' <= ch && ch <= '9') {
+                    if (term->esc.param[term->esc.param_idx] < 0)
+                        term->esc.param[term->esc.param_idx] = 0;
                     term->esc.param[term->esc.param_idx] *= 10;
                     term->esc.param[term->esc.param_idx] += ch - '0';
                 } else if (ch == ';') {
@@ -2293,7 +2310,10 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
                 if (0x30 <= ch && ch <= 0x39) { /* 0-9 */
                     if (term->esc.state & nss_es_intermediate)
                         term->esc.state |= nss_es_ignore;
-                    if (term->esc.param_idx < ESC_MAX_PARAM) {
+                    if (term->esc.param_idx < ESC_MAX_PARAM &&
+                            term->esc.param[term->esc.param_idx] < INT32_MAX/10 - 10) {
+                        if (term->esc.param[term->esc.param_idx] < 0)
+                            term->esc.param[term->esc.param_idx] = 0;
                         term->esc.param[term->esc.param_idx] *= 10;
                         term->esc.param[term->esc.param_idx] += ch - 0x30;
                     }
@@ -2303,7 +2323,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
                     if (term->esc.state & nss_es_intermediate)
                         term->esc.state |= nss_es_ignore;
                     else if (term->esc.param_idx < ESC_MAX_PARAM)
-                        term->esc.param[++term->esc.param_idx] = 0;
+                        term->esc.param[++term->esc.param_idx] = -1;
                 } else if (0x3c <= ch && ch <= 0x3f) {
                     if (term->esc.state & (nss_es_gotfirst | nss_es_intermediate))
                         term->esc.state |= nss_es_ignore;
@@ -2357,7 +2377,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
 
     if (term->mode & nss_tm_insert && term->c.x + width < term->width) {
         for (nss_cell_t *c = cell + width; c - term->screen[term->c.y]->cell < term->width; c++)
-            CELL_ATTR_CLR(*c, nss_attrib_drawn);
+            c->attr &= ~nss_attrib_drawn;
         memmove(cell + width, cell, term->screen[term->c.y]->width - term->c.x - width);
     }
 
@@ -2368,7 +2388,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
 
     if (width > 1) {
         cell[1] = fixup_color(term->screen[term->c.y], &term->c);
-        CELL_ATTR_SET(cell[0], nss_attrib_wide);
+        cell[0].attr |= nss_attrib_wide;
     }
 
     term->c.x += width;
@@ -2400,8 +2420,8 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
     }
 
     if (MIN(term->c.x, term->width - 1) != term->prev_c_x || term->c.y != term->prev_c_y) {
-        CELL_ATTR_CLR(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)], nss_attrib_drawn);
-        CELL_ATTR_CLR(term->screen[term->prev_c_y]->cell[term->prev_c_x], nss_attrib_drawn);
+        term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
+        term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
     }
 
     return start - buf;
@@ -2634,8 +2654,8 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
     term->bottom = height - 1;
     term_move_to(term, term->c.x, term->c.y);
     if (cur_moved) {
-        CELL_ATTR_CLR(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)], nss_attrib_drawn);
-        CELL_ATTR_CLR(term->screen[term->c.y]->cell[MAX(term->c.x - 1, 0)], nss_attrib_drawn);
+        term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
+        term->screen[term->c.y]->cell[MAX(term->c.x - 1, 0)].attr &= ~nss_attrib_drawn;
     }
 
 }
@@ -2697,8 +2717,8 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage, _Bool cursor) {
         for (; view && y0 < damage.height + damage.y; y0++, view = view->next) {
             if (view->width > damage.x) {
                 int16_t xs = damage.x, w = MIN(view->width - damage.x, damage.width);
-                if (xs > 0 && CELL_ATTR(view->cell[xs - 1]) & nss_attrib_wide) w++, xs--;
-                if (CELL_ATTR(view->cell[xs]) & nss_attrib_wide) w++;
+                if (xs > 0 && view->cell[xs - 1].attr & nss_attrib_wide) w++, xs--;
+                if (view->cell[xs].attr & nss_attrib_wide) w++;
                 nss_window_draw(term->win, xs, y0, w, view->cell + xs, term->palette, view->extra);
             }
         }
@@ -2706,8 +2726,8 @@ void nss_term_redraw(nss_term_t *term, nss_rect_t damage, _Bool cursor) {
             nss_line_t *line = term->screen[y];
             if (line->width > damage.x) {
                 int16_t xs = damage.x, w = MIN(line->width - damage.x, damage.width);
-                if (xs > 0 && CELL_ATTR(line->cell[xs - 1]) & nss_attrib_wide) w++, xs--;
-                if (CELL_ATTR(line->cell[xs]) & nss_attrib_wide) w++;
+                if (xs > 0 && line->cell[xs - 1].attr & nss_attrib_wide) w++, xs--;
+                if (line->cell[xs].attr & nss_attrib_wide) w++;
                 nss_window_draw(term->win, xs, y0 + y, w, line->cell + xs, term->palette, line->extra);
             }
         }
@@ -2734,7 +2754,7 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
         }
     }
 
-    cursor &= !(CELL_ATTR(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)]) & nss_attrib_drawn);
+    cursor &= !(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr & nss_attrib_drawn);
 
     for (int16_t y = 0; y + y0 < term->height; y++) {
         nss_line_t *line = term->screen[y];
@@ -2773,7 +2793,7 @@ void nss_term_focus(nss_term_t *term, _Bool focused) {
     ENABLE_IF(focused, term->mode, nss_tm_focused);
     if (term->mode & nss_tm_track_focus)
         term_answerback(term, focused ? "\x9BI" : "\x9BO");
-    CELL_ATTR_CLR(term->screen[term->c.y]->cell[term->c.x], nss_attrib_drawn);
+    term->screen[term->c.y]->cell[term->c.x].attr &= ~nss_attrib_drawn;
 }
 
 void nss_term_visibility(nss_term_t *term, _Bool visible) {
