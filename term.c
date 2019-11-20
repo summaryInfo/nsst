@@ -147,6 +147,7 @@ struct nss_term {
             nss_tm_mouse_motion | nss_tm_mouse_many,
     } mode;
 
+    /*
     struct nss_escape {
         enum nss_escape_state {
             nss_es_ground = 0,
@@ -167,6 +168,49 @@ struct nss_term {
         uint8_t interm[ESC_MAX_INTERM];
         uint8_t final;
         size_t str_idx;
+        uint8_t str[ESC_MAX_STR + 1];
+    } esc;
+    */
+
+#define C(c) ((c) & 0x3F)
+#define P(p) ((p) ? 0x40 | (((p) & 3) << 7) : 0)
+#define E(c) ((c) & 0x7F)
+#define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
+#define I1(i) (I0(i) << 5)
+#define C_MASK (0x3F)
+#define E_MASK (0x7F)
+#define I0_MASK (0x1F << 9)
+#define I1_MASK (0x1F << 14)
+
+
+
+    struct nss_escape {
+        enum nss_escape_state {
+            nss_ps_ground,
+            nss_ps_esc_0,
+            nss_ps_esc_1,
+            nss_ps_esc_2,
+            nss_ps_esc_I,
+            nss_ps_csi_P,
+            nss_ps_csi_0,
+            nss_ps_csi_1,
+            nss_ps_csi_2,
+            nss_ps_csi_I,
+            nss_ps_dcs_P,
+            nss_ps_dcs_0,
+            nss_ps_dcs_1,
+            nss_ps_dcs_2,
+            nss_ps_osc_0,
+            nss_ps_osc_1,
+            nss_ps_osc_2,
+            nss_ps_osc_S,
+            nss_ps_dcs_S,
+            nss_ps_ign_S,
+        } state;
+        uint32_t selector;
+        size_t i;
+        int32_t param[ESC_MAX_PARAM];
+        size_t si;
         uint8_t str[ESC_MAX_STR + 1];
     } esc;
 
@@ -809,12 +853,12 @@ static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
     term->prev_ch = ch; // For REP CSI Ps b
 }
 
-static void term_escape_da(nss_term_t *term, uint8_t mode) {
+static void term_dispatch_da(nss_term_t *term, uint32_t mode) {
     switch (mode) {
-    case '=':
+    case P('='):
         term_answerback(term, "\x90!|00000000\x9C");
         break;
-    case '>':
+    case P('>'):
         /*
          * 0 - VT100
          * 1 - VT220
@@ -863,37 +907,53 @@ static void term_escape_da(nss_term_t *term, uint8_t mode) {
 static void term_escape_dump(nss_term_t *term) {
     char buf[ESC_DUMP_MAX] = "^[";
     size_t pos = 2;
-    if (term->esc.state & (nss_es_csi | nss_es_dcs | nss_es_osc)) {
-        if (term->esc.state & nss_es_csi) buf[pos++] = '[';
-        else if (term->esc.state & nss_es_dcs) buf[pos++] = 'P';
-        else if (term->esc.state & nss_es_osc) buf[pos++] = ']';
-        if (term->esc.private)
-            buf[pos++] = term->esc.private;
-        for (ssize_t i = 0; i <= (ssize_t)term->esc.param_idx - (!!(term->esc.state & nss_es_osc)); i++) {
-            size_t w = 0;
-            if (term->esc.param[i] >= 0)
-                snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRIu32"%zn", term->esc.param[i], &w);
-            pos += w;
-            if (i < (ssize_t)term->esc.param_idx) buf[pos++] = ';';
-        }
-    }
-    for (size_t i = 0; i < term->esc.interm_idx; i++)
-        buf[pos++] = term->esc.interm[i];
-    if (!(term->esc.state & nss_es_osc))
-        buf[pos++] = term->esc.final;
-    if (term->esc.state & (nss_es_string | nss_es_defer)) {
-        memcpy(buf + pos, term->esc.str, term->esc.str_idx);
-        pos += term->esc.str_idx;
-        buf[pos++] = '^';
-        buf[pos++] = '[';
-        buf[pos++] = '\\';
+    switch(term->esc.state) {
+        case nss_ps_esc_0:
+        case nss_ps_esc_1:
+            buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
+        case nss_ps_esc_2:
+            buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
+            buf[pos++] = E_MASK & term->esc.selector;
+            break;
+        case nss_ps_csi_P:
+        case nss_ps_csi_0:
+        case nss_ps_csi_1:
+        case nss_ps_csi_2:
+        case nss_ps_dcs_S:
+            buf[pos++] = term->esc.state == nss_ps_dcs_S ? 'P' :'[';
+            if (term->esc.selector & (1 << 6))
+                buf[pos++] = '<' + ((term->esc.selector >> 7) & 3);
+            for (size_t i = 0; i <= term->esc.i; i++) {
+                size_t w = 0;
+                if (term->esc.param[i] >= 0)
+                    snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRIu32"%zn", term->esc.param[i], &w);
+                pos += w;
+                if (i < term->esc.i) buf[pos++] = ';';
+            }
+            if (term->esc.selector & I0_MASK)
+                buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
+            if (term->esc.selector & I1_MASK)
+                buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
+            buf[pos++] = (C_MASK & term->esc.selector) + 0x40;
+            if (term->esc.state == nss_ps_dcs_S) {
+                strncat(buf + pos, (char *)term->esc.str, ESC_DUMP_MAX - pos);
+                pos += term->esc.si - 1;
+                buf[pos++] = '^';
+                buf[pos++] = '[';
+                buf[pos++] = '\\';
+            }
+            break;
+        case nss_ps_osc_S:
+            warn("^[]%u;%s^[\\", term->esc.selector, term->esc.str);
+        default:
+            return;
     }
     buf[pos] = 0;
     warn("%s", buf);
 }
 
-static void term_escape_dsr(nss_term_t *term) {
-    if (term->esc.private == '?') {
+static void term_dispatch_dsr(nss_term_t *term) {
+    if (term->esc.selector & (1 << 6)) {
         switch(term->esc.param[0]) {
         case 6: /* Cursor position -- Y;X */
             term_answerback(term, "\x9B%"PRIu16";%"PRIu16"R",
@@ -920,8 +980,21 @@ static void term_escape_dsr(nss_term_t *term) {
     }
 }
 
-static void term_escape_dcs(nss_term_t *term) {
-    warn("DCS"); /* yet nothing here */
+static void term_escape_reset(nss_term_t *term) {
+    term->esc.state = nss_ps_ground;
+    term->esc.selector = 0;
+    term->esc.i = 0;
+    for (size_t i = 0; i < ESC_MAX_PARAM; i++)
+        term->esc.param[i] = -1;
+    term->esc.si = 0;
+    term->esc.str[0] = 0;
+}
+
+
+static void term_dispatch_dcs(nss_term_t *term) {
+    /* yet nothing here */
+    term_escape_dump(term);
+    term_escape_reset(term);
 }
 
 static nss_color_t parse_color(char *str, char *end) {
@@ -966,8 +1039,8 @@ static nss_color_t parse_color(char *str, char *end) {
     return col;
 }
 
-static void term_escape_osc(nss_term_t *term) {
-    switch(term->esc.param[0]) {
+static void term_dispatch_osc(nss_term_t *term) {
+    switch(term->esc.selector) {
         uint32_t args[2];
     case 0: /* Change window icon name and title */
     case 1: /* Change window icon name */
@@ -976,7 +1049,7 @@ static void term_escape_osc(nss_term_t *term) {
         break;
     case 4: /* Set color */ {
         char *pstr = (char *)term->esc.str, *pnext, *s_end;
-        char *pend = pstr + term->esc.str_idx;
+        char *pend = pstr + term->esc.si;
         while(pstr < pend && (pnext = strchr(pstr, ';'))) {
             *pnext = '\0';
             errno = 0;
@@ -997,7 +1070,7 @@ static void term_escape_osc(nss_term_t *term) {
             pstr = pnext + 1;
         }
         if (pstr < pend && !pnext) {
-            for (size_t i = 0; i < term->esc.str_idx; i++)
+            for (size_t i = 0; i < term->esc.si; i++)
                 if (!term->esc.str[i]) term->esc.str[i] = ';';
             term_escape_dump(term);
         }
@@ -1008,7 +1081,7 @@ static void term_escape_osc(nss_term_t *term) {
         term_escape_dump(term);
         break;
     case 10: /* Set VT100 foreground color */ {
-        nss_color_t col = parse_color((char *)term->esc.str, (char *)term->esc.str + term->esc.str_idx);
+        nss_color_t col = parse_color((char *)term->esc.str, (char *)term->esc.str + term->esc.si);
         if (col) {
             term->palette[NSS_SPECIAL_FG] = col;
             nss_window_set(term->win, nss_wc_foreground, &col);
@@ -1016,7 +1089,7 @@ static void term_escape_osc(nss_term_t *term) {
         break;
     }
     case 11: /* Set VT100 background color */ {
-        nss_color_t col = parse_color((char *)term->esc.str, (char *)term->esc.str + term->esc.str_idx);
+        nss_color_t col = parse_color((char *)term->esc.str, (char *)term->esc.str + term->esc.si);
         if (col) {
             args[0] = args[1] = col;
             nss_color_t def = term->palette[NSS_SPECIAL_BG];
@@ -1027,7 +1100,7 @@ static void term_escape_osc(nss_term_t *term) {
         break;
     }
     case 12: /* Set Cursor color */ {
-        nss_color_t col = parse_color((char *)term->esc.str, (char *)term->esc.str + term->esc.str_idx);
+        nss_color_t col = parse_color((char *)term->esc.str, (char *)term->esc.str + term->esc.si);
         if (col) {
             term->palette[NSS_SPECIAL_CURSOR_FG] = col;
             nss_window_set(term->win, nss_wc_background, &col);
@@ -1043,7 +1116,7 @@ static void term_escape_osc(nss_term_t *term) {
         term_escape_dump(term);
         break;
     case 104: /* Reset color */ {
-        if (term->esc.str_idx) {
+        if (term->esc.si) {
             char *pstr = (char *)term->esc.str, *pnext, *s_end;
             while((pnext = strchr(pstr, ';'))) {
                 *pnext = '\0';
@@ -1086,6 +1159,8 @@ static void term_escape_osc(nss_term_t *term) {
     default:
         term_escape_dump(term);
     }
+
+    term_escape_reset(term);
 }
 
 _Bool nss_term_is_altscreen(nss_term_t *term) {
@@ -1096,8 +1171,8 @@ _Bool nss_term_is_utf8(nss_term_t *term) {
 }
 
 static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) {
-    if (term->esc.param_idx - arg > 1) {
-        if (term->esc.param[arg] == 2 && term->esc.param_idx - arg > 2) {
+    if (term->esc.i - arg > 1) {
+        if (term->esc.param[arg] == 2 && term->esc.i - arg > 2) {
             if (term->esc.param[arg + 1] > 0xFF || term->esc.param[arg + 2] > 0xFF || term->esc.param[arg + 3] > 0xFF ||
                     term->esc.param[arg + 1] < 0 || term->esc.param[arg + 2] < 0 || term->esc.param[arg + 3] < 0)
                 term_escape_dump(term);
@@ -1113,7 +1188,7 @@ static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) 
             }
         }
         return 4;
-    } else if (term->esc.param[arg] == 5 && term->esc.param_idx - arg > 0) {
+    } else if (term->esc.param[arg] == 5 && term->esc.i - arg > 0) {
         if (term->esc.param[arg + 1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS && term->esc.param[arg + 1] >= 0) {
             if (foreground)
                 term->c.cel.fg = term->esc.param[arg + 1];
@@ -1126,8 +1201,8 @@ static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) 
     return 0;
 }
 
-static void term_escape_sgr(nss_term_t *term) {
-    for(uint32_t i = 0; i <= term->esc.param_idx; i++) {
+static void term_dispatch_sgr(nss_term_t *term) {
+    for(uint32_t i = 0; i <= term->esc.i; i++) {
         uint32_t p = MAX(0, term->esc.param[i]);
         switch(p) {
         case 0:
@@ -1219,21 +1294,22 @@ static void term_escape_sgr(nss_term_t *term) {
         }
     }
 }
-static void term_escape_setmode(nss_term_t *term, _Bool set) {
-    if (term->esc.private == '?') {
-        for(uint32_t i = 0; i < term->esc.param_idx + 1; i++) {
+
+#define PARAM(i, d) (term->esc.param[i] >= 0 ? (uint32_t)term->esc.param[i] : (d))
+
+static void term_dispatch_srm(nss_term_t *term, _Bool set) {
+
+    if (term->esc.selector & (1 << 6)) {
+        for(uint32_t i = 0; i <= term->esc.i; i++) {
             uint32_t arg = set;
-            switch(term->esc.param[i]) {
-            case -1:
+            switch(PARAM(i, 0)) {
             case 0: /* Default - nothing */
                 break;
             case 1: /* DECCKM */
                 term->in_mode->appcursor = set;
                 break;
-            case 2: /* DECANM */
-                // TODO
-                term_escape_dump(term);
-                break;
+            //case 2: /* DECANM */
+            //    break;
             case 3: /* DECCOLM */
                 //Just clear screen
                 if (!(term->mode & nss_tm_132_preserve_display))
@@ -1267,21 +1343,18 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
             case 13:
                 // IGNORE
                 break;
-            case 18: /* DECPFF */ // TODO MC
-                term_escape_dump(term);
-                break;
-            case 19: /* DECREX */ // TODO MC
-                term_escape_dump(term);
-                break;
+            //case 18: /* DECPFF */ // TODO MC
+            //    break;
+            //case 19: /* DECREX */ // TODO MC
+            //    break;
             case 25: /* DECTCEM */
                 ENABLE_IF(!set, term->mode, nss_tm_hide_cursor);
                 break;
             case 42: /* DECNRCM */
                 ENABLE_IF(set, term->mode, nss_tm_enable_nrcs);
                 break;
-            case 45: /* Reverse wrap */
-                term_escape_dump(term);
-                break;
+            //case 45: /* Reverse wrap */
+            //    break;
             case 47: /* Enable altscreen */
                 if (term->mode & nss_tm_disable_altscreen) break;
                 if (set ^ !!(term->mode & nss_tm_altscreen))
@@ -1296,9 +1369,8 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
             case 69: /* DECLRMM */ //TODO DECBI/DECFI
                 term_escape_dump(term);
                 break;
-            case 80: /* DECSDM */ //TODO SIXEL
-                term_escape_dump(term);
-                break;
+            //case 80: /* DECSDM */ //TODO SIXEL
+            //    break;
             case 95: /* DECNCSM */
                 ENABLE_IF(set, term->mode, nss_tm_132_preserve_display);
                 break;
@@ -1344,7 +1416,8 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                 term->in_mode->has_meta = set;
                 break;
             case 1035: /* Numlock */
-                term->in_mode->numlock = set;;
+                // TODO That is not correct
+                term->in_mode->numlock = set;
                 break;
             case 1036: /* Meta sends escape */
                 term->in_mode->meta_escape = set;
@@ -1375,16 +1448,15 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
                     term_cursor_mode(term, 0);
                 }
                 break;
-            case 2004: /* Bracketed paste */
-                term_escape_dump(term);
-                break;
+            //case 2004: /* Bracketed paste */
+            //    break;
             default:
                 term_escape_dump(term);
             }
         }
     } else {
-        for(uint32_t i = 0; i < term->esc.param_idx + 1; i++) {
-            switch(term->esc.param[i]) {
+        for(uint32_t i = 0; i <= term->esc.i; i++) {
+            switch(PARAM(i, 0)) {
             case -1:
             case 0: /* Default - nothing */
                 break;
@@ -1407,21 +1479,11 @@ static void term_escape_setmode(nss_term_t *term, _Bool set) {
     }
 }
 
-static void term_escape_csi(nss_term_t *term) {
+static void term_dispatch_csi(nss_term_t *term) {
     //DUMP
-    //term_escape_dump(term);
+    // term_escape_dump(term);
 
-
-#define C(c) ((c) & 0x3F)
-#define P(p) ((p) ? 0x40 | (((p) & 3) << 7) : 0)
-#define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
-#define I1(i) (I0(i) << 5)
-
-#define PARAM(i, d) (term->esc.param[i] >= 0 ? (uint32_t)term->esc.param[i] : (d))
-
-    uint32_t selector = C(term->esc.final) | P(term->esc.private) | I0(term->esc.interm[0]) | I1(term->esc.interm[1]);
-
-    switch (selector) {
+    switch (term->esc.selector) {
     case C('@'): /* ICH */
         term_insert_cells(term, PARAM(0, 1));
         term_move_to(term, term->c.x, term->c.y);
@@ -1459,7 +1521,7 @@ static void term_escape_csi(nss_term_t *term) {
     case C('J') | P('?'): /* DECSED */
     case C('J'): /* ED */ {
         void (*erase)(nss_term_t *, int16_t, int16_t, int16_t, int16_t) = term_erase;
-        if (term->esc.private == '?')
+        if (term->esc.selector & (1 << 6))
             erase = term_selective_erase;
         else if (term->mode & nss_tm_use_protected_area_semantics)
             erase = term_protective_erase;
@@ -1487,7 +1549,7 @@ static void term_escape_csi(nss_term_t *term) {
     case C('K') | P('?'): /* DECSEL */
     case C('K'): /* EL */ {
         void (*erase)(nss_term_t *, int16_t, int16_t, int16_t, int16_t) = term_erase;
-        if(term->esc.private == '?')
+        if (term->esc.selector & (1 << 6))
             erase = term_selective_erase;
         else if(term->mode & nss_tm_use_protected_area_semantics)
             erase = term_protective_erase;
@@ -1545,7 +1607,7 @@ static void term_escape_csi(nss_term_t *term) {
     case C('c'): /* Primary DA */
     case C('c') | P('>'): /* Secondary DA */
     case C('c') | P('='): /* Tertinary DA */
-        term_escape_da(term, term->esc.private);
+        term_dispatch_da(term, term->esc.selector & (7 << 6));
         break;
     case C('d'): /* VPA */
         term_move_to_abs(term, term->c.x, PARAM(0, 1) - 1);
@@ -1562,19 +1624,19 @@ static void term_escape_csi(nss_term_t *term) {
         break;
     case C('h'): /* SM */
     case C('h') | P('?'): /* DECSET */
-        term_escape_setmode(term, 1);
+        term_dispatch_srm(term, 1);
         break;
-    case C('i'): /* MC */ /* ? MC */
-        term_escape_dump(term);
-        break;
+    //case C('i'): /* MC */
+    //case C('i') | P('?'): /* MC */
+    //    break;
     case C('l'): /* RM */
     case C('l') | P('?'):/* DECRST */
-        term_escape_setmode(term, 0);
+        term_dispatch_srm(term, 0);
         break;
     case C('m') | P('>'): /* Modify keys, xterm */ {
         nss_input_mode_t mode = nss_config_input_mode();
-        uint32_t p = PARAM(0, 0), inone = !term->esc.param_idx && term->esc.param[0] < 0;
-        if (term->esc.param_idx > 0) {
+        uint32_t p = PARAM(0, 0), inone = !term->esc.i && term->esc.param[0] < 0;
+        if (term->esc.i > 0 && term->esc.param[1] >= 0) {
             switch(p) {
             case 0:
                 term->in_mode->modkey_legacy_allow_keypad = PARAM(1, 0) & 1;
@@ -1610,7 +1672,7 @@ static void term_escape_csi(nss_term_t *term) {
         break;
     }
     case C('m'): /* SGR */
-        term_escape_sgr(term);
+        term_dispatch_sgr(term);
         break;
     case C('n') | P('>'): /* Disable key modifires, xterm */ {
             uint32_t p = PARAM(0, 0xFFFF);
@@ -1628,7 +1690,7 @@ static void term_escape_csi(nss_term_t *term) {
     }
     case C('n') | P('?'): /* DECDSR */
     case C('n'):
-        term_escape_dsr(term);
+        term_dispatch_dsr(term);
         break;
     //case C('p') | P('>'): /* Set pointer mode, xterm */
     //    break;
@@ -1714,8 +1776,7 @@ static void term_escape_csi(nss_term_t *term) {
         case 1:
             term->c.cel.attr |= nss_attrib_protected;
             break;
-        case 0:
-        case 2:
+        case 0: case 2:
             term->c.cel.attr &= ~nss_attrib_protected;
             break;
         }
@@ -1771,160 +1832,177 @@ static void term_escape_csi(nss_term_t *term) {
         term_escape_dump(term);
     }
 
-#undef P
-#undef I
-#undef C
-#undef PARAM
-
+    term_escape_reset(term);
 }
 
-static void term_escape_esc(nss_term_t *term) {
-
-#define C(c) ((c) & 0x7F)
-#define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
-#define I1(i) (I0(i) << 5)
-#define C_MASK (0x7F)
-#define I0_MASK (0x1F << 9)
-#define I1_MASK (0x1F << 14)
-
-    uint32_t selector = C(term->esc.final) | I0(term->esc.interm[0]) | I1(term->esc.interm[1]);
+static void term_dispatch_esc(nss_term_t *term) {
 
     //DUMP
-    //term_escape_dump(term);
+    //if (term->esc.selector != E('['))
+    //    term_escape_dump(term);
 
-    switch(selector) {
-    case C('D'): /* IND */
+    switch(term->esc.selector) {
+    case E('D'): /* IND */
         term_index(term, 0);
         break;
-    case C('E'): /* NEL */
+    case E('E'): /* NEL */
         term_index(term, 1);
         break;
-    case C('F'): /* HP Home Down */
+    case E('F'): /* HP Home Down */
         term_move_to(term, 0, term->height - 1);
         break;
-    case C('H'): /* HTS */
+    case E('H'): /* HTS */
         term->tabs[MIN(term->c.x, term->width - 1)] = 1;
         break;
-    case C('M'): /* RI */
+    case E('M'): /* RI */
         term_rindex(term, 0);
         break;
-    case C('N'): /* SS2 */
+    case E('N'): /* SS2 */
         term->c.gl_ss = 2;
         break;
-    case C('O'): /* SS3 */
+    case E('O'): /* SS3 */
         term->c.gl_ss = 3;
         break;
-    case C('V'): /* SPA */
+    case E('P'): /* DCS */
+        term_escape_reset(term);
+        term->esc.state = nss_ps_dcs_P;
+        return;
+    case E('V'): /* SPA */
         term->c.cel.attr |= nss_attrib_protected;
         term->mode |= nss_tm_use_protected_area_semantics;
         break;
-    case C('W'): /* EPA */
+    case E('W'): /* EPA */
         term->c.cel.attr &= ~nss_attrib_protected;
         term->mode |= nss_tm_use_protected_area_semantics;
         break;
-    case C('Z'): /* DECID */
-        term_escape_da(term, 0);
+    case E('Z'): /* DECID */
+        term_dispatch_da(term, 0);
         break;
-    case C('\\'): /* ST */
-        /* do nothing */
+    case E('['): /* CSI */
+        term_escape_reset(term);
+        term->esc.state = nss_ps_csi_P;
+        return;
+    case E('\\'): /* ST */
+        if (term->esc.state == nss_ps_dcs_S)
+            term_dispatch_dcs(term);
+        else if(term->esc.state == nss_ps_osc_S)
+            term_dispatch_osc(term);
         break;
-    case C('6'): /* DECBI */
-        term_escape_dump(term);
-        break;
-    case C('7'): /* DECSC */
+    case E(']'): /* OSC */
+        term_escape_reset(term);
+        term->esc.state = nss_ps_osc_0;
+        return;
+    case E('X'): /* SOS */
+    case E('^'): /* PM */
+    case E('_'): /* APC */
+        term_escape_reset(term);
+        term->esc.state = nss_ps_ign_S;
+        return;
+    //case E('6'): /* DECBI */
+    //    break;
+    case E('7'): /* DECSC */
         term_cursor_mode(term, 1);
         break;
-    case C('8'): /* DECRC */
+    case E('8'): /* DECRC */
         term_cursor_mode(term, 0);
         break;
-    case C('9'): /* DECFI */
-        term_escape_dump(term);
-        break;
-    case C('='): /* DECKPAM */
+    //case E('9'): /* DECFI */
+    //    break;
+    case E('='): /* DECKPAM */
         term->in_mode->appkey = 1;
         break;
-    case C('>'): /* DECKPNM */
+    case E('>'): /* DECKPNM */
         term->in_mode->appkey = 0;
         break;
-    case C('c'): /* RIS */
+    case E('c'): /* RIS */
         term_reset(term, 1);
         break;
-    case C('l'): /* HP Memory lock */
+    case E('k'): /* Old style title */
+        term_escape_reset(term);
+        term->esc.state = nss_ps_osc_S;
+        term->esc.selector = 2;
+        return;
+    case E('l'): /* HP Memory lock */
         term_set_tb_margins(term, term->c.y, term->height - 1);
         break;
-    case C('m'): /* HP Memory unlock */
+    case E('m'): /* HP Memory unlock */
         term_set_tb_margins(term, 0, term->height - 1);
         break;
-    case C('n'): /* LS2 */
+    case E('n'): /* LS2 */
         term->c.gl = term->c.gl_ss = 2;
         break;
-    case C('o'): /* LS3 */
+    case E('o'): /* LS3 */
         term->c.gl = term->c.gl_ss = 3;
         break;
-    case C('|'): /* LS3R */
+    case E('|'): /* LS3R */
         term->c.gr = 3;
         break;
-    case C('}'): /* LS2R */
+    case E('}'): /* LS2R */
         term->c.gr = 2;
         break;
-    case C('~'): /* LS1R */
+    case E('~'): /* LS1R */
         term->c.gr = 1;
         break;
-    case C('F') | I0(' '): /* S7C1T */
+    case E('F') | I0(' '): /* S7C1T */
         term->mode &= ~nss_tm_8bit;
         break;
-    case C('G') | I0(' '): /* S8C1T */
+    case E('G') | I0(' '): /* S8C1T */
         term->mode |= nss_tm_8bit;
         break;
-    case C('L') | I0(' '): /* ANSI_LEVEL_1 */
-    case C('M') | I0(' '): /* ANSI_LEVEL_2 */
+    case E('L') | I0(' '): /* ANSI_LEVEL_1 */
+    case E('M') | I0(' '): /* ANSI_LEVEL_2 */
         term->c.gn[1] = nss_cs_dec_sup;
         term->c.gr = 1;
         /* fallthrough */
-    case C('N') | I0(' '): /* ANSI_LEVEL_3 */
+    case E('N') | I0(' '): /* ANSI_LEVEL_3 */
         term->c.gn[0] = nss_cs_dec_ascii;
         term->c.gl = term->c.gl_ss = 0;
         break;
-    case C('3') | I0('#'): /* DECDHL */
-    case C('4') | I0('#'): /* DECDHL */
-    case C('5') | I0('#'): /* DECSWL */
-    case C('6') | I0('#'): /* DECDWL */
-        term_escape_dump(term);
-        break;
-    case C('8') | I0('#'): /* DECALN*/
+    //case E('3') | I0('#'): /* DECDHL */
+    //case E('4') | I0('#'): /* DECDHL */
+    //case E('5') | I0('#'): /* DECSWL */
+    //case E('6') | I0('#'): /* DECDWL */
+    //    break;
+    case E('8') | I0('#'): /* DECALN*/
         for (int16_t i = 0; i < term->height; i++)
             for(int16_t j = 0; j < term->width; j++)
                 term_set_cell(term, j, i, 'E');
         break;
-    case C('@') | I0('%'): /* Disable UTF-8 */
+    case E('@') | I0('%'): /* Disable UTF-8 */
         term->mode &= ~nss_tm_utf8;
         break;
-    case C('G') | I0('%'): /* Eable UTF-8 */
+    case E('G') | I0('%'): /* Eable UTF-8 */
         term->mode |= nss_tm_utf8;
         break;
     default:
         /* Decode select charset */
-        switch(selector & I0_MASK) {
+        switch(term->esc.selector & I0_MASK) {
         case I0('('): /* GZD4 */
         case I0(')'): /* G1D4 */
         case I0('*'): /* G2D4 */
         case I0('+'): /* G3D4 */ {
-            enum nss_char_set *set = &term->c.gn[((selector & I0_MASK) - I0('(')) >> 9];
-            switch (selector & (I1_MASK | C_MASK)) {
-            case C('A'): *set = nss_cs_british_latin1; break;
-            case C('B'): *set = nss_cs_dec_ascii; break;
-            case C('C'): case C('5'): *set = nss_cs_finnish; break;
-            case C('H'): case C('7'): *set = nss_cs_swedish; break;
-            case C('K'): *set = nss_cs_german; break;
-            case C('Q'): case C('9'): *set = nss_cs_french_canadian; break;
-            case C('R'): case C('f'): *set = nss_cs_french; break;
-            case C('Y'): *set = nss_cs_itallian; break;
-            case C('Z'): *set = nss_cs_spannish; break;
-            case C('4'): *set = nss_cs_dutch; break;
-            case C('='): *set = nss_cs_swiss; break;
-            case C('`'): case C('E'): case C('6'): *set = nss_cs_norwegian_dannish; break;
-            case C('0'): *set = nss_cs_dec_graph; break;
-            case C('<'): *set = nss_cs_dec_sup; break;
+            enum nss_char_set *set = &term->c.gn[((term->esc.selector & I0_MASK) - I0('(')) >> 9];
+            switch (term->esc.selector & (I1_MASK | E_MASK)) {
+            case E('A'): *set = nss_cs_british_latin1; break;
+            case E('B'): *set = nss_cs_dec_ascii; break;
+            case E('C'):
+            case E('5'): *set = nss_cs_finnish; break;
+            case E('H'):
+            case E('7'): *set = nss_cs_swedish; break;
+            case E('K'): *set = nss_cs_german; break;
+            case E('Q'):
+            case E('9'): *set = nss_cs_french_canadian; break;
+            case E('R'):
+            case E('f'): *set = nss_cs_french; break;
+            case E('Y'): *set = nss_cs_itallian; break;
+            case E('Z'): *set = nss_cs_spannish; break;
+            case E('4'): *set = nss_cs_dutch; break;
+            case E('='): *set = nss_cs_swiss; break;
+            case E('`'):
+            case E('E'):
+            case E('6'): *set = nss_cs_norwegian_dannish; break;
+            case E('0'): *set = nss_cs_dec_graph; break;
+            case E('<'): *set = nss_cs_dec_sup; break;
             default:
                 term_escape_dump(term);
             }
@@ -1934,38 +2012,19 @@ static void term_escape_esc(nss_term_t *term) {
         case I0('.'): /* G2D6 */
         case I0('/'): /* G3D6 */
         default:
+            if (term->esc.state == nss_ps_ground)
+                term->esc.state = nss_ps_esc_0;
             term_escape_dump(term);
         }
     }
 
-#undef C
-#undef I0
-#undef I1
-#undef C_MASK
-#undef I0_MASK
-#undef I1_MASK
+    term_escape_reset(term);
 
 }
 
-static void term_escape_reset(nss_term_t *term) {
-    term->esc.state = 0;
-    term->esc.private = 0;
-    term->esc.param_idx = 0;
-    for (size_t i = 0; i < ESC_MAX_PARAM; i++)
-        term->esc.param[i] = -1;
-    term->esc.interm_idx = 0;
-    term->esc.interm[0] = term->esc.interm[1] = 0;
-    term->esc.final = 0;
-    term->esc.str_idx = 0;
-    term->esc.str[0] = 0;
-}
-
-
-static void term_escape_control(nss_term_t *term, uint32_t ch) {
+static void term_dispatch_c0(nss_term_t *term, uint32_t ch) {
     // DUMP
-    //if (IS_C0(ch) || IS_DEL(ch)) {
-    //    if (ch != 0x1B) warn("^%c", ch ^ 0x40);
-    //} else warn("^[%c", ch ^ 0xC0);
+    // if (ch != 0x1B) warn("^%c", ch ^ 0x40);
 
     switch (ch) {
     case 0x00: /* NUL (IGNORE) */
@@ -1973,45 +2032,42 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
     case 0x02: /* STX (IGNORE) */
     case 0x03: /* ETX (IGNORE) */
     case 0x04: /* EOT (IGNORE) */
-        return;
+        break;
     case 0x05: /* ENQ */
         term_answerback(term, "%s", nss_config_string(nss_config_answerback_string, ""));
         break;
     case 0x06: /* ACK (IGNORE) */
-        return;
+        break;
     case 0x07: /* BEL */
-        if (term->esc.state & nss_es_string) {
-            if (term->esc.state & nss_es_ignore)
-                /* do nothing */;
-            else if (term->esc.state & nss_es_dcs)
-                term_escape_dcs(term);
-            else if (term->esc.state & nss_es_osc)
-                term_escape_osc(term);
-        }
+        if (term->esc.state == nss_ps_dcs_S)
+            term_dispatch_dcs(term);
+        else if (term->esc.state == nss_ps_osc_S)
+            term_dispatch_osc(term);
+        else if (term->esc.state == nss_ps_ign_S)
+            term_escape_reset(term);
         else /* term_bell() -- TODO */;
         break;
     case 0x08: /* BS */
         term_move_to(term, MIN(term->c.x, term->width - 1) - 1, term->c.y);
-        return;
+        break;
     case 0x09: /* HT */
         term_tabs(term, 1);
-        return;
+        break;
     case 0x0a: /* LF */
     case 0x0b: /* VT */
     case 0x0c: /* FF */
         term_index(term, term->mode & nss_tm_crlf);
-        return;
+        break;
     case 0x0d: /* CR */
         term_move_to(term, 0, term->c.y);
-        return;
+        break;
     case 0x0e: /* SO/LS1 */
         term->c.gl = term->c.gl_ss = 1;
-        return;
+        break;
     case 0x0f: /* SI/LS0 */
         term->c.gl = term->c.gl_ss = 0;
-        return;
+        break;
     case 0x10: /* DLE (IGNORE) */
-        return;
     case 0x11: /* XON (IGNORE) */
     case 0x12: /* DC2 (IGNORE) */
     case 0x13: /* XOFF (IGNORE) */
@@ -2019,282 +2075,193 @@ static void term_escape_control(nss_term_t *term, uint32_t ch) {
     case 0x15: /* NAK (IGNORE) */
     case 0x16: /* SYN (IGNORE) */
     case 0x17: /* ETB (IGNORE) */
-        return;
+        break;
     case 0x18: /* CAN */
+        term_escape_reset(term);
         break;
     case 0x19: /* EM (IGNORE) */
-        return;
+        break;
     case 0x1a: /* SUB */
         term_move_to(term, term->c.x, term->c.y);
         term_set_cell(term, term->c.x, term->c.y, '?');
+        term_escape_reset(term);
         break;
     case 0x1b: /* ESC */
-        if (term->esc.state & nss_es_string) {
-            term->esc.state &= (nss_es_osc | nss_es_dcs | nss_es_ignore);
-            term->esc.state |= nss_es_escape | nss_es_defer;
-            return;
-        }
-        term_escape_reset(term);
-        term->esc.state = nss_es_escape;
-        return;
+        if (term->esc.state == nss_ps_dcs_S)
+            term_dispatch_dcs(term);
+        else if (term->esc.state == nss_ps_osc_S)
+            term_dispatch_osc(term);
+        else
+            term_escape_reset(term);
+        term->esc.state = nss_ps_esc_0;
+        break;
     case 0x1c: /* FS (IGNORE) */
     case 0x1d: /* GS (IGNORE) */
     case 0x1e: /* RS (IGNORE) */
     case 0x1f: /* US (IGNORE) */
-    case 0x7f: /* DEL (IGNORE) */
-        return;
-
-
-    case 0x80: /* PAD */
-    case 0x81: /* HOP */
-    case 0x82: /* BPH */
-    case 0x83: /* NBH */
-        warn("^%"PRIx32, ch ^ 0xC0);
         break;
-    case 0x84: /* IND - Index */
-        term_index(term, 0);
-        break;
-    case 0x85: /* NEL -- Next line */
-        term_index(term, 1);
-        break;
-    case 0x86: /* SSA */
-    case 0x87: /* ESA */
-        warn("^%"PRIx32, ch ^ 0xC0);
-        break;
-    case 0x88: /* HTS -- Horizontal tab stop */
-        term->tabs[MIN(term->c.x, term->width - 1)] = 1;
-        break;
-    case 0x89: /* HTJ */
-    case 0x8a: /* VTS */
-    case 0x8b: /* PLD */
-    case 0x8c: /* PLU */
-        warn("^%"PRIx32, ch ^ 0xC0);
-        break;
-    case 0x8d: /* RI - Reverse Index */
-        term_rindex(term, 0);
-        break;
-    case 0x8e: /* SS2 - Single Shift 2 */
-        term->c.gl_ss = 2;
-        break;
-    case 0x8f: /* SS3 - Single Shift 3 */
-        term->c.gl_ss = 3;
-        break;
-    case 0x90: /* DCS -- Device Control String */
-        term_escape_reset(term);
-        term->esc.state = nss_es_dcs | nss_es_escape;
-        return;
-    case 0x91: /* PU1 */
-    case 0x92: /* PU2 */
-    case 0x93: /* STS */
-    case 0x94: /* CCH */
-    case 0x95: /* MW */
-        warn("^%"PRIx32, ch ^ 0xC0);
-        break;
-    case 0x96: /* SPA - Start of Protected Area */
-        term->c.cel.attr |= nss_attrib_protected;
-        term->mode |= nss_tm_use_protected_area_semantics;
-        break;
-    case 0x97: /* EPA - End of Protected Area */
-        term->c.cel.attr &= ~nss_attrib_protected;
-        term->mode |= nss_tm_use_protected_area_semantics;
-        break;
-    case 0x98: /* SOS - Start Of String */
-        term_escape_reset(term);
-        term->esc.state = nss_es_ignore | nss_es_string;
-        return;
-    case 0x99: /* SGCI */
-        warn("^%"PRIx32, ch ^ 0xC0);
-        break;
-    case 0x9a: /* DECID -- Identify Terminal */
-        term_escape_da(term, 0);
-        break;
-    case 0x9b: /* CSI - Control Sequence Introducer */
-        term_escape_reset(term);
-        term->esc.state = nss_es_csi | nss_es_escape;
-        break;
-    case 0x9c: /* ST - String terminator */
-        if (term->esc.state & nss_es_string) {
-            if (term->esc.state & nss_es_ignore)
-                /* do nothing */;
-            else if (term->esc.state & nss_es_dcs)
-                term_escape_dcs(term);
-            else if (term->esc.state & nss_es_osc)
-                term_escape_osc(term);
-        }
-        break;
-    case 0x9d: /* OSC -- Operating System Command */
-        term_escape_reset(term);
-        term->esc.state = nss_es_osc | nss_es_string;
-        return;
-    case 0x9e: /* PM -- Privacy Message */
-    case 0x9f: /* APC -- Application Program Command */
-        term_escape_reset(term);
-        term->esc.state = nss_es_string | nss_es_ignore;
-        return;
     }
-    term_escape_reset(term);
 }
 
 static void term_putchar(nss_term_t *term, uint32_t ch) {
     int16_t width = wcwidth(ch);
-
     if (width < 0 && !(IS_C0(ch) || IS_DEL(ch) || IS_C1(ch)))
         ch = UTF_INVAL, width = 1;
 
     //info("UTF %"PRIx32" '%s'", ch, buf);
 
-    if (term->esc.state & nss_es_string && !IS_STREND(ch)) {
-        if (term->esc.state & nss_es_ignore) return;
-        if (term->esc.state & nss_es_dcs) {
-            if (IS_DEL(ch)) return;
-        } else if (term->esc.state & nss_es_osc) {
-            if (IS_C0(ch)) return;
-            if (!(term->esc.state & nss_es_gotfirst)) {
-                if ('0' <= ch && ch <= '9') {
-                    if (term->esc.param[term->esc.param_idx] < 0)
-                        term->esc.param[term->esc.param_idx] = 0;
-                    term->esc.param[term->esc.param_idx] *= 10;
-                    term->esc.param[term->esc.param_idx] += ch - '0';
-                } else if (ch == ';') {
-                    if (term->esc.state & nss_es_intermediate) {
-                        term->esc.param_idx++;
-                        term->esc.state |= nss_es_gotfirst;
-                    } else term->esc.state |= nss_es_ignore;
-                } else {
-                    if (term->esc.state & nss_es_intermediate) {
-                        term->esc.state |= nss_es_ignore;
-                    } else if (ch == 'l') {
-                        term->esc.param[term->esc.param_idx++] = 1;
-                    } else if (ch == 'L') {
-                        term->esc.param[term->esc.param_idx++] = 2;
-                    }
-                }
-                term->esc.state |= nss_es_intermediate;
-                return;
-            }
-        }
-
-        uint8_t buf[UTF8_MAX_LEN + 1];
-        size_t char_len = utf8_encode(ch, buf, buf + UTF8_MAX_LEN);
-        buf[char_len] = '\0';
-
-        if (term->esc.str_idx + char_len > ESC_MAX_STR) return;
-        memcpy(term->esc.str + term->esc.str_idx, buf, char_len + 1);
-        term->esc.str_idx += char_len;
+    if (IS_C1(ch)) {
+        term->esc.selector = E(ch ^ 0xC0);
+        term_dispatch_esc(term);
         return;
-    } else if (IS_C0(ch) || IS_C1(ch) || (IS_DEL(ch) && !term->esc.state && term->c.gn[term->c.gl_ss])) {
-        // We should print DEL if 96 character set is assigned to GL and we are at ground state
-        if (!IS_DEL(ch) || term->esc.state || term->c.gn[term->c.gl_ss] !=
-                nss_cs_british_latin1 || (term->mode & nss_tm_enable_nrcs)) {
-            if (!IS_STREND(ch) && (term->esc.state & nss_es_dcs)) return;
-            term_escape_control(term, ch);
-            return;
-        }
-    } else if (term->esc.state & nss_es_escape) {
-        if (term->esc.state & nss_es_defer) {
-            if (ch == 0x5c) { /* ST */
-                if (term->esc.state & nss_es_ignore)
-                    /* do nothing */;
-                else if (term->esc.state & nss_es_dcs)
-                    term_escape_dcs(term);
-                else if (term->esc.state & nss_es_osc)
-                    term_escape_osc(term);
-            }
+    }
+    if (term->esc.state != nss_ps_ground && term->esc.state !=
+            nss_ps_dcs_S && term->esc.state != nss_ps_osc_S)
+        ch &= 0x7F;
+
+    switch (term->esc.state) {
+    case nss_ps_esc_0:
+    case nss_ps_esc_1:
+        if (0x20 <= ch && ch <= 0x2F) {
+            term->esc.selector |= term->esc.state ==
+                    nss_ps_esc_0 ? I0(ch) : I1(ch);
+            term->esc.state++;
+        } else
+    case nss_ps_esc_2:
+        if (0x30 <= ch && ch <= 0x7E) {
+            term->esc.selector |= E(ch);
+            term_dispatch_esc(term);
+        } else
+    case nss_ps_esc_I:
+        if (ch <= 0x1F)
+            term_dispatch_c0(term, ch);
+        else if (ch == 0x7F)
+            /* ignore */;
+        else if (0x30 <= ch && ch <= 0x7E)
             term_escape_reset(term);
-            term->esc.state = nss_es_escape;
-        }
+        else
+            term->esc.state = nss_ps_esc_I;
+        break;
+    case nss_ps_csi_P:
+    case nss_ps_dcs_P:
+        term->esc.state++;
+        if (0x3C <= ch && ch <= 0x3F)
+            term->esc.selector |= P(ch);
+        else
+    case nss_ps_csi_0:
+    case nss_ps_dcs_0:
+        if (0x30 <= ch && ch <= 0x39)
+            term->esc.param[term->esc.i] = (ch - 0x30) +
+                MAX(term->esc.param[term->esc.i], 0) * 10;
+        else if (ch == 0x3B) {
+            if (term->esc.i < ESC_MAX_PARAM - 1)
+                term->esc.param[++term->esc.i] = -1;
+        } else
+    case nss_ps_csi_1:
+    case nss_ps_dcs_1:
+        if (0x20 <= ch && ch <= 0x2F) {
+            term->esc.state++;
+            term->esc.selector |= (term->esc.state == nss_ps_csi_0 ||
+                    term->esc.state == nss_ps_dcs_0) ? I0(ch) : I1(ch);
+        } else
+    case nss_ps_csi_2:
+    case nss_ps_dcs_2:
+        if (0x40 <= ch && ch <= 0x7E) {
+            term->esc.selector |= C(ch);
+            if (nss_ps_dcs_P <= term->esc.state && term->esc.state <= nss_ps_dcs_2)
+                term->esc.state = nss_ps_dcs_S;
+            else
+                term_dispatch_csi(term);
+        } else
+    case nss_ps_csi_I:
+        if (ch <= 0x1F) {
+            if (nss_ps_dcs_P > term->esc.state || term->esc.state > nss_ps_dcs_2)
+                term_dispatch_c0(term, ch);
+        } else if (ch == 0x7F)
+            /* ignore */;
+        else if (nss_ps_dcs_P <= term->esc.state && term->esc.state <= nss_ps_dcs_2)
+            term->esc.state = nss_ps_ign_S;
+        else if (0x40 <= ch && ch <= 0x7E)
+            term_escape_reset(term);
+        else
+            term->esc.state = nss_ps_csi_I;
+        break;
+    case nss_ps_osc_0:
+        term->esc.state++;
+        if (ch == 'l' || ch == 'L') {
+            term->esc.selector = 1 + (ch == 'L');
+            term->esc.state = nss_ps_osc_2;
+        } else
+    case nss_ps_osc_1:
+        if (0x30 <= ch && ch <= 0x39)
+            term->esc.selector = (ch - 0x30) + term->esc.selector * 10;
+        else
+    case nss_ps_osc_2:
+        if(ch == 0x3B)
+            term->esc.state = nss_ps_osc_S;
+        else
+    case nss_ps_ign_S:
+        if (ch == 0x1b || ch == 0x1a || ch == 0x18 || ch == 0x07)
+            term_dispatch_c0(term, ch);
+        else
+            term->esc.state = nss_ps_ign_S;
+        break;
+    case nss_ps_osc_S:
+        if (ch <= 0x1F && ch != 0x1B && ch != 0x1A && ch != 0x18 && ch != 0x07)
+            /* ignore */;
+        else
+    case nss_ps_dcs_S:
+        if (ch == 0x7F && term->esc.state != nss_ps_osc_S)
+            /* ignore */;
+        else if (ch == 0x1b || ch == 0x1a || ch == 0x18 || ch == 0x07)
+            term_dispatch_c0(term, ch);
+        else {
+            uint8_t buf[UTF8_MAX_LEN + 1];
+            size_t char_len = utf8_encode(ch, buf, buf + UTF8_MAX_LEN);
+            buf[char_len] = '\0';
 
-        if (0x20 <= ch && ch <= 0x2f) {
-            term->esc.state |= nss_es_intermediate;
-            if (term->esc.interm_idx < ESC_MAX_INTERM)
-                term->esc.interm[term->esc.interm_idx++] = ch;
-            else term->esc.state |= nss_es_ignore;
-        } else {
-            if (term->esc.state & (nss_es_csi | nss_es_dcs)) {
-                if (0x30 <= ch && ch <= 0x39) { /* 0-9 */
-                    if (term->esc.state & nss_es_intermediate)
-                        term->esc.state |= nss_es_ignore;
-                    if (term->esc.param_idx < ESC_MAX_PARAM) {
-                        if (term->esc.param[term->esc.param_idx] < 0)
-                            term->esc.param[term->esc.param_idx] = 0;
-                        else term->esc.param[term->esc.param_idx] *= 10;
-                        term->esc.param[term->esc.param_idx] += ch - 0x30;
-                    }
-                } else if (ch == 0x3a) { /* : */
-                    term->esc.state |= nss_es_ignore;
-                } else if (ch == 0x3b) { /* ; */
-                    if (term->esc.state & nss_es_intermediate)
-                        term->esc.state |= nss_es_ignore;
-                    else if (term->esc.param_idx < ESC_MAX_PARAM)
-                        term->esc.param[++term->esc.param_idx] = -1;
-                } else if (0x3c <= ch && ch <= 0x3f) {
-                    if (term->esc.state & (nss_es_gotfirst | nss_es_intermediate))
-                        term->esc.state |= nss_es_ignore;
-                    else term->esc.private = ch;
-                } else if (0x40 <= ch && ch <= 0x7e) {
-                    term->esc.final = ch;
-                    if (term->esc.state & nss_es_csi) {
-                        if (!(term->esc.state & nss_es_ignore))
-                            term_escape_csi(term);
-                        else term_escape_dump(term);
-                        term_escape_reset(term);
-                    } else
-                        term->esc.state |= nss_es_string | nss_es_gotfirst;
-                    return;
-                }
-                term->esc.state |= nss_es_gotfirst;
-            } else {
-                if (ch == 0x50) /* DCS */
-                    term->esc.state |= nss_es_dcs;
-                else if (ch == 0x5b) /* CSI */
-                    term->esc.state |= nss_es_csi;
-                else if (ch == 0x58 || ch == 0x5e || ch == 0x5f) /* SOS, APC, PM */
-                    term->esc.state |= nss_es_string | nss_es_ignore;
-                else if (ch == 0x5d) /* OSC */
-                    term->esc.state |= nss_es_osc | nss_es_string;
-                else if (ch == 'k') { /* old set title */
-                    term->esc.param[0] = 2;
-                    term->esc.param_idx = 1;
-                    term->esc.state |= nss_es_osc | nss_es_string | nss_es_gotfirst;
-                } else if (0x30 <= ch && ch <= 0x7e) {
-                    term->esc.final = ch;
-                    if (!(term->esc.state & nss_es_ignore))
-                        term_escape_esc(term);
-                    else term_escape_dump(term);
-                    term_escape_reset(term);
-                }
+            if (term->esc.si + char_len > ESC_MAX_STR) return;
+            memcpy(term->esc.str + term->esc.si, buf, char_len + 1);
+            term->esc.si += char_len;
+        }
+        break;
+    case nss_ps_ground:
+        if (ch <= 0x1F)
+            term_dispatch_c0(term, ch);
+        else if (ch == 0x7F && term->c.gn[term->c.gl_ss] ==
+                nss_cs_british_latin1 && !(term->mode & nss_tm_enable_nrcs))
+            /* ignore */;
+        else {
+            //DUMP
+            //info("%c (%u)", ch, ch);
+
+            if (term->mode & nss_tm_wrap && term->c.x + width - 1 > term->width - 1) {
+                term->screen[term->c.y]->wrap_at = term->c.x;
+                term_index(term, 1);
             }
+
+            nss_cell_t *cell = &term->screen[term->c.y]->cell[term->c.x];
+
+            if (term->mode & nss_tm_insert && term->c.x + width < term->width) {
+                for (nss_cell_t *c = cell + width; c - term->screen[term->c.y]->cell < term->width; c++)
+                    c->attr &= ~nss_attrib_drawn;
+                memmove(cell + width, cell, term->screen[term->c.y]->width - term->c.x - width);
+            }
+
+            term_adjust_wide_before(term, MIN(term->c.x, term->width - 1), term->c.y, 1, 0);
+            term_adjust_wide_before(term, MIN(term->c.x, term->width - 1) + width - 1, term->c.y, 0, 1);
+
+            term_set_cell(term, MIN(term->c.x, term->width - 1), term->c.y, ch);
+
+            if (width > 1) {
+                cell[1] = fixup_color(term->screen[term->c.y], &term->c);
+                cell[0].attr |= nss_attrib_wide;
+            }
+
+            term->c.x += width;
         }
-        return;
+        break;
     }
-
-    //DUMP
-    //info("%c (%u)", ch, ch);
-
-    if (term->mode & nss_tm_wrap && term->c.x + width - 1 > term->width - 1) {
-        term->screen[term->c.y]->wrap_at = term->c.x;
-        term_index(term, 1);
-    }
-
-    nss_cell_t *cell = &term->screen[term->c.y]->cell[term->c.x];
-
-    if (term->mode & nss_tm_insert && term->c.x + width < term->width) {
-        for (nss_cell_t *c = cell + width; c - term->screen[term->c.y]->cell < term->width; c++)
-            c->attr &= ~nss_attrib_drawn;
-        memmove(cell + width, cell, term->screen[term->c.y]->width - term->c.x - width);
-    }
-
-    term_adjust_wide_before(term, MIN(term->c.x, term->width - 1), term->c.y, 1, 0);
-    term_adjust_wide_before(term, MIN(term->c.x, term->width - 1) + width - 1, term->c.y, 0, 1);
-
-    term_set_cell(term, MIN(term->c.x, term->width - 1), term->c.y, ch);
-
-    if (width > 1) {
-        cell[1] = fixup_color(term->screen[term->c.y], &term->c);
-        cell[0].attr |= nss_attrib_wide;
-    }
-
-    term->c.x += width;
 }
 
 static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool show_ctl) {
