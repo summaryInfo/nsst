@@ -1022,7 +1022,7 @@ size_t nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_
 
         for (size_t j = i; j < len; j++) {
             if (!con.mark_buffer[j] && !cell_drawn(cells[j], win->blink_commited) &&
-                    cell_equal_fg(cells[i], cells[j], win->blink_state) && cell_vis(cells[j], win->blink_state) && !(cells[i].ch == ' ')) {
+                    cell_equal_fg(cells[i], cells[j], win->blink_state) && cell_vis(cells[j], win->blink_state) && cells[i].ch != ' ') {
                 con.mark_buffer[j] = 1;
                 size_t inc = sizeof(uint32_t);
                 if ((size_t)msg_head->len + 1 > CHARS_PER_MESG || jump) inc += sizeof(nss_glyph_mesg_t);
