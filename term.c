@@ -2229,8 +2229,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
             /* ignore */;
         else {
             int16_t width = wcwidth(ch);
-            if (width < 0 && !(IS_C0(ch) || IS_DEL(ch) || IS_C1(ch)))
-                ch = UTF_INVAL, width = 1;
+            if (width < 0) ch = UTF_INVAL, width = 1;
 
             //DUMP
             //info("%c (%u)", ch, ch);
@@ -2253,7 +2252,6 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
             term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
             term_adjust_wide_before(term, term->c.x + width - 1, term->c.y, 0, 1);
 
-			if (term->c.x < 0) fatal("Grnd"); //?!!
             term_set_cell(term, term->c.x, term->c.y, ch);
 
             if (width > 1) {
@@ -2278,8 +2276,6 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
         // Try to handle unencoded C1 bytes even if UTF-8 is enabled
         if (!(term->mode & nss_tm_utf8) || IS_C1(*start)) ch = *start++;
         else if (!utf8_decode(&ch, &start, end)) break;
-
-        if (term->c.x < 0) fatal("X");
 
         if (show_ctl) {
             if (IS_C1(ch)) {
