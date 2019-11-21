@@ -230,7 +230,7 @@ static void exec_shell(const char *cmd, const char **args) {
     setenv("USER", pw->pw_name, 1);
     setenv("SHELL", sh, 1);
     setenv("HOME", pw->pw_dir, 1);
-    setenv("TERM", nss_config_string(nss_config_term_name, "xterm"), 1);
+    setenv("TERM", nss_config_string(NSS_SCONFIG_TERM_NAME), 1);
 
     signal(SIGCHLD, SIG_DFL);
     signal(SIGHUP, SIG_DFL);
@@ -713,15 +713,15 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term->mode &= nss_tm_focused | nss_tm_visible;
 
     for(size_t i = 0; i < NSS_PALETTE_SIZE; i++)
-        term->palette[i] = nss_config_color(nss_config_color_0 + i);
-    if (nss_config_integer(nss_config_reverse_video, 0, 1)) {
+        term->palette[i] = nss_config_color(NSS_CCONFIG_COLOR_0 + i);
+    if (nss_config_integer(NSS_ICONFIG_REVERSE_VIDEO)) {
         SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
         SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
         term->mode |= nss_tm_reverse_video;
     }
     uint32_t args[] = {
         term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG],
-        nss_config_integer(nss_config_cursor_shape, 0, 6), 0
+        nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE), 0
     };
 
     nss_window_set(term->win, nss_wc_background | nss_wc_cursor_foreground | nss_wc_cursor_type | nss_wc_mouse, args);
@@ -731,24 +731,24 @@ static void term_reset(nss_term_t *term, _Bool hard) {
 
     term->c = term->back_cs = term->cs = (nss_cursor_t) {
         .cel = MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, ' '),
-        .fg = nss_config_color(nss_config_fg),
-        .bg = nss_config_color(nss_config_bg),
+        .fg = nss_config_color(NSS_CCONFIG_FG),
+        .bg = nss_config_color(NSS_CCONFIG_BG),
         .gl = 0, .gl_ss = 0, .gr = 2,
         .gn = {nss_cs_dec_ascii, nss_cs_british_latin1, nss_cs_british_latin1, nss_cs_british_latin1}
     };
 
-    if (nss_config_integer(nss_config_utf8, 0, 1)) term->mode |= nss_tm_utf8;
-    if (!nss_config_integer(nss_config_allow_altscreen, 0, 1)) term->mode |= nss_tm_disable_altscreen;
-    if (nss_config_integer(nss_config_init_wrap, 0, 1)) term->mode |= nss_tm_wrap;
-    if (!nss_config_integer(nss_config_scroll_on_input, 0, 1)) term->mode |= nss_tm_dont_scroll_on_input;
-    if (nss_config_integer(nss_config_scroll_on_output, 0, 1)) term->mode |= nss_tm_scoll_on_output;
+    if (nss_config_integer(NSS_ICONFIG_UTF8)) term->mode |= nss_tm_utf8;
+    if (!nss_config_integer(NSS_ICONFIG_ALLOW_ALTSCREEN)) term->mode |= nss_tm_disable_altscreen;
+    if (nss_config_integer(NSS_ICONFIG_INIT_WRAP)) term->mode |= nss_tm_wrap;
+    if (!nss_config_integer(NSS_ICONFIG_SCROLL_ON_INPUT)) term->mode |= nss_tm_dont_scroll_on_input;
+    if (nss_config_integer(NSS_ICONFIG_SCROLL_ON_OUTPUT)) term->mode |= nss_tm_scoll_on_output;
 
     term->top = 0;
     term->bottom = term->height - 1;
 
     if (hard) {
         memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
-        size_t tabw = nss_config_integer(nss_config_tab_width, 1, 10000);
+        size_t tabw = nss_config_integer(NSS_ICONFIG_TAB_WIDTH);
         for(size_t i = tabw; i < (size_t)term->width; i += tabw)
             term->tabs[i] = 1;
 
@@ -827,7 +827,7 @@ static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
     // in practive applications use these symbols, so keep translating
     // Need to make this configuration option
 
-    if (!(term->mode & nss_tm_utf8) || nss_config_integer(nss_config_allow_nrcs, 0, 1)) {
+    if (!(term->mode & nss_tm_utf8) || nss_config_integer(NSS_ICONFIG_ALLOW_NRCS)) {
         if (ch < 0x80) { /* if it's not ASCII, map GL */
             if (term->c.gn[term->c.gl_ss] != nss_cs_dec_ascii) {
                 ch = nrcs_translate(term->c.gn[term->c.gl_ss], ch, term->mode & nss_tm_enable_nrcs);
@@ -1116,13 +1116,13 @@ static void term_dispatch_osc(nss_term_t *term) {
                 errno = 0;
                 unsigned long idx = strtoul(pstr, &s_end, 10);
                 if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
-                    term->palette[idx] = nss_config_color(nss_config_color_0 + idx);
+                    term->palette[idx] = nss_config_color(NSS_CCONFIG_COLOR_0 + idx);
                 } else term_esc_dump(term);
                 pstr = pnext + 1;
             }
         } else {
             for(size_t i = 0; i < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; i++)
-                term->palette[i] = nss_config_color(nss_config_color_0 + i);
+                term->palette[i] = nss_config_color(NSS_CCONFIG_COLOR_0 + i);
         }
         break;
     }
@@ -1132,26 +1132,26 @@ static void term_dispatch_osc(nss_term_t *term) {
         break;
     case 110: /*Reset  VT100 foreground color */
         if (!(term->mode & nss_tm_reverse_video)) {
-            args[0] = term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(nss_config_fg);
+            args[0] = term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(NSS_CCONFIG_FG);
             nss_window_set(term->win, nss_wc_cursor_foreground, args);
-        } else term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(nss_config_fg);
+        } else term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(NSS_CCONFIG_FG);
         break;
     case 111: /*Reset  VT100 background color */
         if (!(term->mode & nss_tm_reverse_video)) {
-            args[0] = term->palette[NSS_SPECIAL_BG] = nss_config_color(nss_config_bg);
-            term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(nss_config_cursor_bg);
+            args[0] = term->palette[NSS_SPECIAL_BG] = nss_config_color(NSS_CCONFIG_BG);
+            term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(NSS_CCONFIG_CURSOR_BG);
             nss_window_set(term->win, nss_wc_background, args);
         } else {
-            term->palette[NSS_SPECIAL_FG] = nss_config_color(nss_config_fg);
-            args[0] = term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(nss_config_cursor_fg);
+            term->palette[NSS_SPECIAL_FG] = nss_config_color(NSS_CCONFIG_FG);
+            args[0] = term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(NSS_CCONFIG_CURSOR_FG);
             nss_window_set(term->win, nss_wc_cursor_foreground, args);
         }
         break;
     case 112: /*Reset  Cursor color */
         if (!(term->mode & nss_tm_reverse_video)) {
-            args[0] = term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(nss_config_cursor_fg);
+            args[0] = term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(NSS_CCONFIG_CURSOR_FG);
             nss_window_set(term->win, nss_wc_cursor_foreground, args);
-        } else term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(nss_config_cursor_fg);
+        } else term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(NSS_CCONFIG_CURSOR_FG);
         break;
     case 113: /*Reset  Mouse foreground color */
     case 114: /*Reset  Mouse background color */
@@ -1440,7 +1440,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             case 1047: /* Enable altscreen and clear screen */
                 if (term->mode & nss_tm_disable_altscreen) break;
                 if (set) term_erase(term, 0, 0, term->width, term->height);
-                if (!!(term->mode & nss_tm_altscreen) ^ set)
+                if (set ^ !!(term->mode & nss_tm_altscreen))
                     term_swap_screen(term);
                 break;
             case 1048: /* Save cursor  */
@@ -1546,9 +1546,9 @@ static void term_dispatch_csi(nss_term_t *term) {
             erase(term, 0, 0, term->width, term->c.y);
             break;
         case 2: /* All */
+        case 3: /* Saved Lines?, xterm */
             erase(term, 0, 0, term->width, term->height);
             break;
-        case 3: /* Saved Lines?, xterm */
         default:
             term_esc_dump(term);
         }
@@ -1968,6 +1968,11 @@ static void term_dispatch_esc(nss_term_t *term) {
     //case E('6') | I0('#'): /* DECDWL */
     //    break;
     case E('8') | I0('#'): /* DECALN*/
+        term_set_tb_margins(term, 0, 0);
+        term->c.x = term->c.y = 0;
+        term->c.cel.attr = 0;
+        term->c.cel.fg = NSS_SPECIAL_FG;
+        term->c.cel.bg = NSS_SPECIAL_BG;
         for (int16_t i = 0; i < term->height; i++)
             for(int16_t j = 0; j < term->width; j++)
                 term_set_cell(term, j, i, 'E');
@@ -2039,7 +2044,7 @@ static void term_dispatch_c0(nss_term_t *term, uint32_t ch) {
     case 0x04: /* EOT (IGNORE) */
         break;
     case 0x05: /* ENQ */
-        term_answerback(term, "%s", nss_config_string(nss_config_answerback_string, ""));
+        term_answerback(term, "%s", nss_config_string(NSS_SCONFIG_ANSWERBACK_STRING));
         break;
     case 0x06: /* ACK (IGNORE) */
         break;
@@ -2108,8 +2113,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
         return;
     }
     if (term->esc.state != esc_ground && term->esc.state !=
-            esc_dcs_string && term->esc.state != esc_osc_string)
-        ch &= 0x7F;
+            esc_dcs_string && term->esc.state != esc_osc_string) ch &= 0x7F;
 
     switch (term->esc.state) {
     case esc_esc_entry:
@@ -2501,7 +2505,7 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
     if(width > term->width) {
         memset(new_tabs + term->width, 0, (width - term->width) * sizeof(new_tabs[0]));
-        int16_t tab = term->width ? term->width - 1: 0, tabw = nss_config_integer(nss_config_tab_width, 1, 10000);
+        int16_t tab = term->width ? term->width - 1: 0, tabw = nss_config_integer(NSS_ICONFIG_TAB_WIDTH);
         while (tab > 0 && !new_tabs[tab]) tab--;
         while ((tab += tabw) < width) new_tabs[tab] = 1;
     }
@@ -2540,27 +2544,27 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
     nss_term_t *term = calloc(1, sizeof(nss_term_t));
     term->palette = nss_create_palette();
     term->mode = nss_tm_visible;
-    if (nss_config_integer(nss_config_reverse_video, 0, 1)) {
+    if (nss_config_integer(NSS_ICONFIG_REVERSE_VIDEO)) {
         SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
         SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
         term->mode |= nss_tm_reverse_video;
     }
     term->win = win;
     term->in_mode = mode;
-    term->scrollback_limit = nss_config_integer(nss_config_history_lines, -1, 1000000);
+    term->scrollback_limit = nss_config_integer(NSS_ICONFIG_HISTORY_LINES);
 
-    if (nss_config_integer(nss_config_utf8, 0, 1)) term->mode |= nss_tm_utf8;
-    if (!nss_config_integer(nss_config_allow_altscreen, 0, 1)) term->mode |= nss_tm_disable_altscreen;
-    if (nss_config_integer(nss_config_init_wrap, 0, 1)) term->mode |= nss_tm_wrap;
-    if (!nss_config_integer(nss_config_scroll_on_input, 0, 1)) term->mode |= nss_tm_dont_scroll_on_input;
-    if (nss_config_integer(nss_config_scroll_on_output, 0, 1)) term->mode |= nss_tm_scoll_on_output;
+    if (nss_config_integer(NSS_ICONFIG_UTF8)) term->mode |= nss_tm_utf8;
+    if (!nss_config_integer(NSS_ICONFIG_ALLOW_ALTSCREEN)) term->mode |= nss_tm_disable_altscreen;
+    if (nss_config_integer(NSS_ICONFIG_INIT_WRAP)) term->mode |= nss_tm_wrap;
+    if (!nss_config_integer(NSS_ICONFIG_SCROLL_ON_INPUT)) term->mode |= nss_tm_dont_scroll_on_input;
+    if (nss_config_integer(NSS_ICONFIG_SCROLL_ON_OUTPUT)) term->mode |= nss_tm_scoll_on_output;
 
     term->c = term->back_cs = term->cs = (nss_cursor_t) {
         .cel = MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, ' '),
         .gl = 0, .gl_ss = 0, .gr = 2,
         .gn = {nss_cs_dec_ascii, nss_cs_british_latin1, nss_cs_british_latin1, nss_cs_british_latin1}
     };
-    term->vt_verion = nss_config_integer(nss_config_vt_verion, 0, 999);
+    term->vt_verion = nss_config_integer(NSS_ICONFIG_VT_VERION);
     term->vt_level = term->vt_verion / 100;
 
     clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
@@ -2573,7 +2577,7 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
         term_swap_screen(term);
     }
 
-    if (tty_open(term, nss_config_string(nss_config_shell, "/bin/sh"), NULL) < 0) {
+    if (tty_open(term, nss_config_string(NSS_SCONFIG_SHELL), NULL) < 0) {
         warn("Can't create tty");
         nss_free_term(term);
         return NULL;
@@ -2632,10 +2636,11 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
         }
     }
 
+	nss_cell_t *cur_cell = &term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)];
     cursor &= !term->view && !(term->mode & nss_tm_hide_cursor);
-    cursor &= !(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr & nss_attrib_drawn);
+    cursor &= !(cur_cell->attr & nss_attrib_drawn);
     // if cursor should be drawn on cell, don't update it
-    if (cursor) term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr |= nss_attrib_drawn;
+    if (cursor) cur_cell->attr |= nss_attrib_drawn;
 
     for (int16_t y = 0; y + y0 < term->height; y++) {
         nss_line_t *line = term->screen[y];
@@ -2643,9 +2648,7 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
     }
 
     if (cursor) {
-        int16_t cx = MIN(term->c.x, term->width - 1);
-        nss_window_draw_cursor(term->win, term->c.x, term->c.y,
-                &term->screen[term->c.y]->cell[cx], term->palette, term->screen[term->c.y]->extra);
+        nss_window_draw_cursor(term->win, term->c.x, term->c.y, cur_cell, term->palette, term->screen[term->c.y]->extra);
         drawn++;
     }
 
@@ -2674,7 +2677,7 @@ void nss_term_focus(nss_term_t *term, _Bool focused) {
     ENABLE_IF(focused, term->mode, nss_tm_focused);
     if (term->mode & nss_tm_track_focus)
         term_answerback(term, focused ? "\x9BI" : "\x9BO");
-    term->screen[term->c.y]->cell[term->c.x].attr &= ~nss_attrib_drawn;
+    term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
 }
 
 void nss_term_visibility(nss_term_t *term, _Bool visible) {

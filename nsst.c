@@ -3,13 +3,6 @@
 #include "window.h"
 #include "util.h"
 
-/* TODO:
-    event handling
-    add window config changing support
-    terminal logic
-    add frontend selection
-*/
-
 int main(int argc, char **argv) {
     nss_init_context();
     nss_create_window(NULL, 0, NULL);

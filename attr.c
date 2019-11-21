@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
 #include <string.h>
 #include "attr.h"
@@ -10,55 +11,89 @@
 #define CN_GRAY (NSS_PALETTE_SIZE - CN_BASE - CN_EXT)
 #define SD28B(x) ((x) ? 0 : 0x37 + 0x28 * (x))
 
-int32_t nss_config_integer(uint32_t opt, int32_t min, int32_t max) {
+
+static struct {
     int32_t val;
-    switch (opt) {
-    case nss_config_window_x: val = 200; break;
-    case nss_config_window_y: val = 200; break;
-    case nss_config_window_width: val = 800; break;
-    case nss_config_window_height: val = 600; break;
-    case nss_config_history_lines: val = 1024; break;
-    case nss_config_utf8: val = 1; break;
-    case nss_config_vt_verion: val = 420; break;
-    case nss_config_allow_nrcs: val = 1; break;
-    case nss_config_tab_width: val = 8; break;
-    case nss_config_init_wrap: val = 1; break;
-    case nss_config_scroll_on_input: val = 1; break;
-    case nss_config_scroll_on_output: val = 0; break;
-    case nss_config_cursor_shape: val = nss_cursor_bar; break;
-    case nss_config_underline_width: val = 1; break;
-    case nss_config_cursor_width: val = 2; break;
-    case nss_config_subpixel_fonts: val = 0; break;
-    case nss_config_reverse_video: val = 0; break;
-    case nss_config_allow_altscreen: val = 1; break;
-    case nss_config_left_border: val = 8; break;
-    case nss_config_top_border: val = 8; break;
-    case nss_config_blink_time: val = 800000; break;
-    case nss_config_font_size: val = 13; break;
-    default:
+    int32_t dflt;
+    int32_t min;
+    int32_t max;
+} ioptions[] = {
+    [NSS_ICONFIG_WINDOW_X] = {200, 200, -32768, 32767 },
+    [NSS_ICONFIG_WINDOW_Y] = {200, 200, -32768, 32767 },
+    [NSS_ICONFIG_WINDOW_WIDTH] = {800, 800, 1, 32767},
+    [NSS_ICONFIG_WINDOW_HEIGHT] = {600, 600, 1, 32767},
+    [NSS_ICONFIG_HISTORY_LINES] = {1024, 1024, -1, 100000},
+    [NSS_ICONFIG_UTF8] = {1, 1, 0, 1},
+    [NSS_ICONFIG_VT_VERION] = {420, 420, 0, 999},
+    [NSS_ICONFIG_ALLOW_NRCS] = {1, 1, 0, 1},
+    [NSS_ICONFIG_TAB_WIDTH] = {8, 8, 1, 100},
+    [NSS_ICONFIG_INIT_WRAP] = {1, 1, 0, 1},
+    [NSS_ICONFIG_SCROLL_ON_INPUT] = {1, 1, 0, 1},
+    [NSS_ICONFIG_SCROLL_ON_OUTPUT] = {0, 0, 0, 1},
+    [NSS_ICONFIG_CURSOR_SHAPE] = {nss_cursor_bar, nss_cursor_bar, 0, 6},
+    [NSS_ICONFIG_UNDERLINE_WIDTH] = {1, 1, 0, 16},
+    [NSS_ICONFIG_CURSOR_WIDTH] = {2, 2, 0, 16},
+    [NSS_ICONFIG_SUBPIXEL_FONTS] = {0, 0, 0, 1},
+    [NSS_ICONFIG_REVERSE_VIDEO] = {0, 0, 0, 1},
+    [NSS_ICONFIG_ALLOW_ALTSCREEN] = {1, 1, 0, 1},
+    [NSS_ICONFIG_LEFT_BORDER] = {8, 8, 0, 100},
+    [NSS_ICONFIG_TOP_BORDER] = {8, 8, 0 , 100},
+    [NSS_ICONFIG_BLINK_TIME] = {800000, 800000, 0, 10000000},
+    [NSS_ICONFIG_FONT_SIZE] = {13, 13, 1, 200}
+};
+
+static struct {
+    const char *dflt;
+    char *val;
+} soptions[] = {
+        [NSS_SCONFIG_FONT_NAME - NSS_ICONFIG_MAX] = { "Iosevka-13,MaterialDesignIcons-13" },
+        [NSS_SCONFIG_ANSWERBACK_STRING - NSS_ICONFIG_MAX] = { "" },
+        [NSS_SCONFIG_SHELL - NSS_ICONFIG_MAX] = { "/bin/sh" },
+        [NSS_SCONFIG_TERM_NAME - NSS_ICONFIG_MAX] = { "xterm" },
+};
+
+static nss_color_t coptions[NSS_PALETTE_SIZE];
+static _Bool color_init;
+
+int32_t nss_config_integer(uint32_t opt) {
+    if (opt >= NSS_ICONFIG_MAX) {
         warn("Unknown config option");
-        val = min;
-        break;
+        return 0;
     }
-    return MIN(max, MAX(val, min));
+    return ioptions[opt].val;
 }
 
-const char *nss_config_string(uint32_t opt, const char *alt) {
-    switch(opt) {
-        case nss_config_font_name:
-            return "Iosevka-13,MaterialDesignIcons-13";
-        case nss_config_answerback_string:
-            return "";
-        case nss_config_shell:
-            return "/bin/sh";
-        case nss_config_term_name:
-            return "xterm-new";
+void nss_config_set_integer(uint32_t opt, int32_t val) {
+    if (opt >= NSS_ICONFIG_MAX) {
+        warn("Unknown config option");
+        return;
     }
-    return alt;
-
+    if (val > ioptions[opt].max) val = ioptions[opt].max;
+    else if (val < ioptions[opt].min) val = ioptions[opt].min;
+    ioptions[opt].val = val;
 }
 
-nss_color_t nss_config_color(uint32_t opt) {
+const char *nss_config_string(uint32_t opt) {
+    if (opt <= NSS_ICONFIG_MAX || opt >= NSS_SCONFIG_MAX) {
+        warn("Unknown config option");
+        return NULL;
+    }
+    opt -= NSS_ICONFIG_MAX;
+    return soptions[opt].val ? soptions[opt].val : soptions[opt].dflt;
+}
+
+void nss_config_set_string(uint32_t opt, const char *val) {
+    if (opt <= NSS_ICONFIG_MAX || opt >= NSS_SCONFIG_MAX) {
+        warn("Unknown config option");
+        return;
+    }
+    opt -= NSS_ICONFIG_MAX;
+    if(soptions[opt].val)
+        free(soptions[opt].val);
+    soptions[opt].val = strdup(val);
+}
+
+static nss_color_t color(uint32_t opt) {
     static nss_color_t base[CN_BASE] = {
             0xFF222222, 0xFFFF4433, 0xFFBBBB22, 0xFFFFBB22,
             0xFF88AA99, 0xFFDD8899, 0xFF88CC77, 0xFFDDCCAA,
@@ -71,15 +106,15 @@ nss_color_t nss_config_color(uint32_t opt) {
     };
 
     switch(opt) {
-    case nss_config_bg:
-    case nss_config_cursor_bg:
+    case NSS_CCONFIG_BG:
+    case NSS_CCONFIG_CURSOR_BG:
         return base[0];
-    case nss_config_fg:
-    case nss_config_cursor_fg:
+    case NSS_CCONFIG_FG:
+    case NSS_CCONFIG_CURSOR_FG:
         return base[15];
     }
 
-    opt -= nss_config_color_0;
+    opt -= NSS_CCONFIG_COLOR_0;
 
     if (opt < CN_BASE) return base[opt];
     else if (opt < CN_EXT + CN_BASE) {
@@ -93,35 +128,70 @@ nss_color_t nss_config_color(uint32_t opt) {
     return base[0];
 }
 
+void nss_config_set_color(uint32_t opt, nss_color_t val) {
+    if (!color_init) {
+        for (size_t i = 0; i < NSS_PALETTE_SIZE; i++)
+            coptions[i] = color(i + NSS_CCONFIG_COLOR_0);
+        color_init = 1;
+    }
+    if (opt < NSS_CCONFIG_COLOR_0 || opt >= NSS_CCONFIG_MAX) {
+        warn("Unknown option");
+        return;
+    }
+    coptions[opt - NSS_CCONFIG_COLOR_0] = val ? val : color(opt);
+}
+
+nss_color_t nss_config_color(uint32_t opt) {
+    if (!color_init) {
+        for (size_t i = 0; i < NSS_PALETTE_SIZE; i++)
+            coptions[i] = color(i + NSS_CCONFIG_COLOR_0);
+        color_init = 1;
+    }
+    if (opt < NSS_CCONFIG_COLOR_0 || opt >= NSS_CCONFIG_MAX) {
+        warn("Unknown option");
+        return 0;
+    }
+    nss_color_t val = coptions[opt - NSS_CCONFIG_COLOR_0];
+    return val ? val : color(opt);
+}
+
 nss_color_t *nss_create_palette(void) {
+    if (!color_init) {
+        for (size_t i = 0; i < NSS_PALETTE_SIZE; i++)
+            coptions[i] = color(i + NSS_CCONFIG_COLOR_0);
+        color_init = 1;
+    }
     nss_color_t *palette = malloc(NSS_PALETTE_SIZE * sizeof(nss_color_t));
-    for (size_t i = 0; i < NSS_PALETTE_SIZE; i++)
-        palette[i] = nss_config_color(i + nss_config_color_0);
+    memcpy(palette, coptions, sizeof(coptions));
     return palette;
 }
 
+static nss_input_mode_t input_mode = {
+    .modkey_fn = 3,
+    .modkey_cursor = 3,
+    .modkey_keypad = 3,
+    .modkey_other = 1,
+    .modkey_other_fmt = 0,
+    .modkey_legacy_allow_keypad = 0,
+    .modkey_legacy_allow_edit_keypad = 0,
+    .modkey_legacy_allow_function = 0,
+    .modkey_legacy_allow_misc = 0,
+    .appkey = 0,
+    .appcursor = 0,
+    .numlock = 1,
+    .keylock = 0,
+    .has_meta = 1,
+    .meta_escape = 1,
+    .backspace_is_del = 1,
+    .delete_is_del = 0,
+    .fkey_inc_step = 10,
+    .keyboad_vt52 = 0,
+    .keyboard_mapping = nss_km_default
+};
 
 nss_input_mode_t nss_config_input_mode(void) {
-    return (nss_input_mode_t) {
-        .modkey_fn = 3,
-        .modkey_cursor = 3,
-        .modkey_keypad = 3,
-        .modkey_other = 1,
-        .modkey_other_fmt = 0,
-        .modkey_legacy_allow_keypad = 0,
-        .modkey_legacy_allow_edit_keypad = 0,
-        .modkey_legacy_allow_function = 0,
-        .modkey_legacy_allow_misc = 0,
-        .appkey = 0,
-        .appcursor = 0,
-        .numlock = 1,
-        .keylock = 0,
-        .has_meta = 1,
-        .meta_escape = 1,
-        .backspace_is_del = 1,
-        .delete_is_del = 0,
-        .fkey_inc_step = 10,
-        .keyboad_vt52 = 0,
-        .keyboard_mapping = nss_km_default
-    };
+    return input_mode;
+}
+void nss_config_set_input_mode(nss_input_mode_t mode) {
+    input_mode = mode;
 }

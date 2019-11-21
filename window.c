@@ -589,29 +589,29 @@ static void set_wm_props(nss_window_t *win) {
 /* Create new window */
 nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const uint32_t *values) {
     nss_window_t *win = calloc(1, sizeof(nss_window_t));
-    win->cursor_width = nss_config_integer(nss_config_cursor_width, 1, 32);
-    win->underline_width = nss_config_integer(nss_config_underline_width, 0, 32);
-    win->left_border = nss_config_integer(nss_config_left_border, 0, 256);
-    win->top_border = nss_config_integer(nss_config_top_border, 0, 256);
-    win->bg = nss_config_color(nss_config_bg);
-    win->cursor_fg = nss_config_color(nss_config_cursor_fg);
-    win->cursor_type = nss_config_integer(nss_config_cursor_shape, 0, 6);
-    win->subpixel_fonts = nss_config_integer(nss_config_subpixel_fonts, 0, 1);
-    win->font_size = nss_config_integer(nss_config_font_size, 0, 1000);
+    win->cursor_width = nss_config_integer(NSS_ICONFIG_CURSOR_WIDTH);
+    win->underline_width = nss_config_integer(NSS_ICONFIG_UNDERLINE_WIDTH);
+    win->left_border = nss_config_integer(NSS_ICONFIG_LEFT_BORDER);
+    win->top_border = nss_config_integer(NSS_ICONFIG_TOP_BORDER);
+    win->bg = nss_config_color(NSS_CCONFIG_BG);
+    win->cursor_fg = nss_config_color(NSS_CCONFIG_CURSOR_FG);
+    win->cursor_type = nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE);
+    win->subpixel_fonts = nss_config_integer(NSS_ICONFIG_SUBPIXEL_FONTS);
+    win->font_size = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
     win->active = 1;
 
     win->inmode = nss_config_input_mode();
 
     win->term_fd = -1;
-    win->blink_time = nss_config_integer(nss_config_blink_time, 10000, 10000000);
-    if (!font_name) font_name = nss_config_string(nss_config_font_name, "fixed");
+    win->blink_time = nss_config_integer(NSS_ICONFIG_BLINK_TIME);
+    if (!font_name) font_name = nss_config_string(NSS_SCONFIG_FONT_NAME);
     win->font_name = strdup(font_name);
     if (!win->font_name) {
         nss_free_window(win);
         return NULL;
     }
-    win->width = nss_config_integer(nss_config_window_width, 0, 32767);
-    win->height = nss_config_integer(nss_config_window_height, 0, 32767);
+    win->width = nss_config_integer(NSS_ICONFIG_WINDOW_WIDTH);
+    win->height = nss_config_integer(NSS_ICONFIG_WINDOW_HEIGHT);
     clock_gettime(CLOCK_MONOTONIC, &win->prev_blink);
 
     set_config(win, tag, values);
@@ -625,8 +625,8 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
         XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE;
     if (win->mouse_events) win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
     uint32_t values1[5] = { win->bg, win->bg, XCB_GRAVITY_NORTH_WEST, win->ev_mask, con.mid };
-    int16_t x = nss_config_integer(nss_config_window_x, -32768, 32767);
-    int16_t y = nss_config_integer(nss_config_window_y, -32768, 32767);
+    int16_t x = nss_config_integer(NSS_ICONFIG_WINDOW_X);
+    int16_t y = nss_config_integer(NSS_ICONFIG_WINDOW_Y);
     win->wid = xcb_generate_id(con.con);
     c = xcb_create_window_checked(con.con, TRUE_COLOR_ALPHA_DEPTH, win->wid, con.screen->root,
                                   x, y, win->width, win->height, 0,
@@ -782,6 +782,7 @@ void nss_window_draw_cursor(nss_window_t *win, int16_t x, int16_t y, nss_cell_t 
     };
     size_t off = 0, count = 4;
     nss_cell_t cel = *cell;
+    cel.attr &= ~nss_attrib_drawn;
     if (win->focused) {
         if (win->cursor_type == nss_cursor_bar) {
             if(win->cw == cx) {

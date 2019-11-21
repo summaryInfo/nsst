@@ -15,37 +15,42 @@ typedef uint32_t nss_color_t;
 #define NSS_SPECIAL_CURSOR_FG 259
 
 enum nss_config_opt {
-    nss_config_window_x,
-    nss_config_window_y,
-    nss_config_window_width,
-    nss_config_window_height,
-    nss_config_history_lines,
-    nss_config_utf8,
-    nss_config_vt_verion,
-    nss_config_allow_nrcs,
-    nss_config_tab_width,
-    nss_config_init_wrap,
-    nss_config_scroll_on_input,
-    nss_config_scroll_on_output,
-    nss_config_cursor_shape,
-    nss_config_underline_width,
-    nss_config_cursor_width,
-    nss_config_subpixel_fonts,
-    nss_config_reverse_video,
-    nss_config_allow_altscreen,
-    nss_config_left_border,
-    nss_config_top_border,
-    nss_config_blink_time,
-    nss_config_font_size,
-    nss_config_font_name, // string
-    nss_config_answerback_string, // string
-    nss_config_shell, // string
-    nss_config_term_name, //string
-    nss_config_color_0,
-    nss_config_bg = nss_config_color_0 + NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS,
-    nss_config_fg,
-    nss_config_cursor_bg,
-    nss_config_cursor_fg,
+    NSS_ICONFIG_WINDOW_X,
+    NSS_ICONFIG_WINDOW_Y,
+    NSS_ICONFIG_WINDOW_WIDTH,
+    NSS_ICONFIG_WINDOW_HEIGHT,
+    NSS_ICONFIG_HISTORY_LINES,
+    NSS_ICONFIG_UTF8,
+    NSS_ICONFIG_VT_VERION,
+    NSS_ICONFIG_ALLOW_NRCS,
+    NSS_ICONFIG_TAB_WIDTH,
+    NSS_ICONFIG_INIT_WRAP,
+    NSS_ICONFIG_SCROLL_ON_INPUT,
+    NSS_ICONFIG_SCROLL_ON_OUTPUT,
+    NSS_ICONFIG_CURSOR_SHAPE,
+    NSS_ICONFIG_UNDERLINE_WIDTH,
+    NSS_ICONFIG_CURSOR_WIDTH,
+    NSS_ICONFIG_SUBPIXEL_FONTS,
+    NSS_ICONFIG_REVERSE_VIDEO,
+    NSS_ICONFIG_ALLOW_ALTSCREEN,
+    NSS_ICONFIG_LEFT_BORDER,
+    NSS_ICONFIG_TOP_BORDER,
+    NSS_ICONFIG_BLINK_TIME,
+    NSS_ICONFIG_FONT_SIZE,
+    NSS_ICONFIG_MAX,
+
+    NSS_SCONFIG_FONT_NAME,
+    NSS_SCONFIG_ANSWERBACK_STRING,
+    NSS_SCONFIG_SHELL,
+    NSS_SCONFIG_TERM_NAME,
+    NSS_SCONFIG_MAX,
+
+    NSS_CCONFIG_COLOR_0,
+    NSS_CCONFIG_BG = NSS_CCONFIG_COLOR_0 + NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS,
+    NSS_CCONFIG_FG,
+    NSS_CCONFIG_CURSOR_BG,
+    NSS_CCONFIG_CURSOR_FG,
+    NSS_CCONFIG_MAX,
 };
 
 typedef enum nss_attrs {
@@ -75,9 +80,13 @@ typedef struct nss_cell {
 
 nss_color_t *nss_create_palette(void);
 nss_color_t nss_config_color(uint32_t opt);
-int32_t nss_config_integer(uint32_t opt, int32_t min, int32_t max);
-const char *nss_config_string(uint32_t opt, const char *alt);
+int32_t nss_config_integer(uint32_t opt);
+const char *nss_config_string(uint32_t opt);
+void nss_config_set__color(uint32_t opt, nss_color_t val);
+void nss_config_set_integer(uint32_t opt, int32_t val);
+void nss_config_set_string(uint32_t opt, const char *val);
 nss_input_mode_t nss_config_input_mode(void);
+void nss_config_set_input_mode(nss_input_mode_t val);
 
 #endif
 
