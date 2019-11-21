@@ -40,7 +40,7 @@ typedef struct nss_line {
 
 #define TTY_MAX_WRITE 256
 #define NSS_FD_BUF_SZ 512
-#define ESC_MAX_PARAM 16
+#define ESC_MAX_PARAM 36
 #define ESC_MAX_INTERM 2
 #define ESC_MAX_STR 512
 #define MAX_REPORT 256
@@ -53,6 +53,18 @@ typedef struct nss_line {
 
 #define MAX_EXTRA_PALETTE (0x10000 - NSS_PALETTE_SIZE)
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
+#define PARAM(i, d) (term->esc.param[i] > 0 ? (uint32_t)term->esc.param[i] : (d))
+
+#define C(c) ((c) & 0x3F)
+#define P(p) ((p) ? 0x40 | (((p) & 3) << 7) : 0)
+#define E(c) ((c) & 0x7F)
+#define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
+#define I1(i) (I0(i) << 5)
+#define C_MASK (0x3F)
+#define P_MASK (7 << 6)
+#define E_MASK (0x7F)
+#define I0_MASK (0x1F << 9)
+#define I1_MASK (0x1F << 14)
 
 void term_answerback(nss_term_t *term, const char *str, ...);
 
@@ -146,17 +158,6 @@ struct nss_term {
             nss_tm_mouse_x10 | nss_tm_mouse_button |
             nss_tm_mouse_motion | nss_tm_mouse_many,
     } mode;
-
-#define C(c) ((c) & 0x3F)
-#define P(p) ((p) ? 0x40 | (((p) & 3) << 7) : 0)
-#define E(c) ((c) & 0x7F)
-#define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
-#define I1(i) (I0(i) << 5)
-#define C_MASK (0x3F)
-#define P_MASK (7 << 6)
-#define E_MASK (0x7F)
-#define I0_MASK (0x1F << 9)
-#define I1_MASK (0x1F << 14)
 
     struct nss_escape {
         enum nss_escape_state {
@@ -1298,8 +1299,6 @@ static void term_dispatch_sgr(nss_term_t *term) {
     }
 }
 
-#define PARAM(i, d) (term->esc.param[i] >= 0 ? (uint32_t)term->esc.param[i] : (d))
-
 static void term_dispatch_srm(nss_term_t *term, _Bool set) {
 
     if (term->esc.selector & (1 << 6)) {
@@ -1684,7 +1683,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_dispatch_sgr(term);
         break;
     case C('n') | P('>'): /* Disable key modifires, xterm */ {
-            uint32_t p = PARAM(0, 0xFFFF);
+            uint32_t p = term->esc.param[0];
             if (p == 0) {
                 term->in_mode->modkey_legacy_allow_keypad = 0;
                 term->in_mode->modkey_legacy_allow_edit_keypad = 0;
