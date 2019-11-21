@@ -2021,6 +2021,7 @@ static void term_dispatch_esc(nss_term_t *term) {
         case I0('.'): /* G2D6 */
         case I0('/'): /* G3D6 */
         default:
+            // We got unknown C1
             if (term->esc.state == esc_ground)
                 term->esc.state = esc_esc_entry;
             term_esc_dump(term);
@@ -2036,8 +2037,6 @@ static void term_dispatch_c0(nss_term_t *term, uint32_t ch) {
 
     switch (ch) {
     case 0x00: /* NUL (IGNORE) */
-
-
     case 0x01: /* SOH (IGNORE) */
     case 0x02: /* STX (IGNORE) */
     case 0x03: /* ETX (IGNORE) */
@@ -2245,7 +2244,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
             //info("%c (%u)", ch, ch);
 
             if (term->mode & nss_tm_wrap) {
-                if (term->c.x + width > term->width - 1) {
+                if (term->c.x + width > term->width) {
                     term->screen[term->c.y]->wrap_at = term->c.x;
                     term_index(term, 1);
                 }
