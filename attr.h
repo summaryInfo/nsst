@@ -21,6 +21,7 @@ enum nss_config_opt {
     nss_config_window_height,
     nss_config_history_lines,
     nss_config_utf8,
+    nss_config_vt_verion,
     nss_config_allow_nrcs,
     nss_config_tab_width,
     nss_config_init_wrap,

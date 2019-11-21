@@ -19,6 +19,7 @@ int32_t nss_config_integer(uint32_t opt, int32_t min, int32_t max) {
     case nss_config_window_height: val = 600; break;
     case nss_config_history_lines: val = 1024; break;
     case nss_config_utf8: val = 1; break;
+    case nss_config_vt_verion: val = 420; break;
     case nss_config_allow_nrcs: val = 1; break;
     case nss_config_tab_width: val = 8; break;
     case nss_config_init_wrap: val = 1; break;

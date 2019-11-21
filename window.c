@@ -44,7 +44,6 @@ struct nss_shortcut {
     enum nss_shortcut_action {
         nss_sa_none,
         nss_sa_break,
-        nss_sa_reverse,
         nss_sa_numlock,
         nss_sa_scroll_up,
         nss_sa_scroll_down,
@@ -62,7 +61,6 @@ struct nss_shortcut {
     {XKB_KEY_Home, NSS_M_ALL, NSS_M_TERM, nss_sa_font_default},
     {XKB_KEY_End, NSS_M_ALL, NSS_M_TERM, nss_sa_font_subpixel},
     {XKB_KEY_N, NSS_M_ALL, NSS_M_TERM, nss_sa_new_window},
-    {XKB_KEY_R, NSS_M_ALL, NSS_M_TERM, nss_sa_reverse},
     {XKB_KEY_Num_Lock, NSS_M_ALL, NSS_M_TERM, nss_sa_numlock},
     {XKB_KEY_Break, 0, 0, nss_sa_break},
 };
@@ -80,7 +78,6 @@ struct nss_window {
     unsigned subpixel_fonts : 1;
     unsigned got_configure : 1;
     unsigned blink_state : 1;
-    unsigned reverse_video : 1;
     unsigned mouse_events : 1;
     unsigned force_redraw : 1; //TODO
     unsigned blink_commited : 1;
@@ -98,9 +95,7 @@ struct nss_window {
     struct timespec prev_draw;
 
     nss_color_t bg;
-    nss_color_t fg;
     nss_color_t cursor_fg;
-    nss_color_t cursor_bg;
     nss_cursor_type_t cursor_type;
 
 
@@ -448,8 +443,6 @@ static void set_config(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *valu
     if (tag & nss_wc_left_border) win->left_border = *values++;
     if (tag & nss_wc_top_border) win->top_border = *values++;
     if (tag & nss_wc_background) win->bg = *values++;
-    if (tag & nss_wc_foreground) win->fg = *values++;
-    if (tag & nss_wc_cursor_background) win->cursor_bg = *values++;
     if (tag & nss_wc_cursor_foreground) win->cursor_fg = *values++;
     if (tag & nss_wc_cursor_type) win->cursor_type = *values++;
     if (tag & nss_wc_subpixel_fonts) win->subpixel_fonts = *values++;
@@ -458,7 +451,6 @@ static void set_config(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *valu
     if (tag & nss_wc_width) warn("Tag is not settable"), values++;
     if (tag & nss_wc_height) warn("Tag is not settable"), values++;
     if (tag & nss_wc_blink_time) win->blink_time = *values++;
-    if (tag & nss_wc_reverse) win->reverse_video = *values++;
     if (tag & nss_wc_mouse) win->mouse_events = *values++;
 }
 
@@ -563,8 +555,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
     }
 
     uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
-    uint32_t values2[3] = { win->reverse_video ? win->fg : win->bg,
-                            win->reverse_video ? win->fg : win->bg, 0 };
+    uint32_t values2[3] = { win->bg, win->bg, 0 };
     c = xcb_create_gc_checked(con.con, win->gc, win->pid, mask2, values2);
     if (check_void_cookie(c)) {
         warn("Can't create GC");
@@ -579,7 +570,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
         return 0;
     }
 
-    xcb_render_color_t color = MAKE_COLOR(win->reverse_video ? win->fg : win->bg);
+    xcb_render_color_t color = MAKE_COLOR(win->bg);
     xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, color, 1, &bound);
 
     if (need_free)
@@ -603,12 +594,9 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
     win->left_border = nss_config_integer(nss_config_left_border, 0, 256);
     win->top_border = nss_config_integer(nss_config_top_border, 0, 256);
     win->bg = nss_config_color(nss_config_bg);
-    win->fg = nss_config_color(nss_config_fg);
-    win->cursor_bg = nss_config_color(nss_config_cursor_bg);
     win->cursor_fg = nss_config_color(nss_config_cursor_fg);
     win->cursor_type = nss_config_integer(nss_config_cursor_shape, 0, 6);
     win->subpixel_fonts = nss_config_integer(nss_config_subpixel_fonts, 0, 1);
-    win->reverse_video = nss_config_integer(nss_config_reverse_video, 0, 1);
     win->font_size = nss_config_integer(nss_config_font_size, 0, 1000);
     win->active = 1;
 
@@ -636,11 +624,7 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
         XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_FOCUS_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY |
         XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE;
     if (win->mouse_events) win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
-    uint32_t values1[5] = {
-        win->reverse_video ? win->fg : win->bg,
-        win->reverse_video ? win->fg : win->bg,
-        XCB_GRAVITY_NORTH_WEST, win->ev_mask, con.mid
-    };
+    uint32_t values1[5] = { win->bg, win->bg, XCB_GRAVITY_NORTH_WEST, win->ev_mask, con.mid };
     int16_t x = nss_config_integer(nss_config_window_x, -32768, 32767);
     int16_t y = nss_config_integer(nss_config_window_y, -32768, 32767);
     win->wid = xcb_generate_id(con.con);
@@ -818,7 +802,7 @@ void nss_window_draw_cursor(nss_window_t *win, int16_t x, int16_t y, nss_cell_t 
         }
     }
     nss_window_draw(win, MIN(cx, win->cw - 1), cy, 1, &cel, pal, extra);
-    xcb_render_color_t c = MAKE_COLOR(win->reverse_video ? win->cursor_bg : win->cursor_fg);
+    xcb_render_color_t c = MAKE_COLOR(win->cursor_fg);
     xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_OVER, win->pic, c, count, rects + off);
 }
 
@@ -831,13 +815,6 @@ static inline void eval_color(nss_window_t *win, nss_cell_t cell, nss_color_t *p
 
         nss_color_t bcolor = bgi < NSS_PALETTE_SIZE ? pal[bgi] : extra[bgi - NSS_PALETTE_SIZE];
         nss_color_t fcolor = fgi < NSS_PALETTE_SIZE ? pal[fgi] : extra[fgi - NSS_PALETTE_SIZE];
-
-        if (win->reverse_video) {
-            if (bcolor == win->bg)
-                bcolor = win->fg;
-            if (fcolor == win->fg)
-                fcolor = win->bg;
-        }
 
         xcb_render_color_t fg = MAKE_COLOR(fcolor);
         xcb_render_color_t bg = MAKE_COLOR(bcolor);
@@ -1203,7 +1180,7 @@ void nss_window_clear(nss_window_t *win, size_t len, const nss_rect_t *damage) {
         if (damage[i].width > 0 && damage[i].height > 0)
             rects[count++] = rect_scale_up(damage[i], win->char_width, win->char_height + win->char_depth);
 
-    xcb_render_color_t color = MAKE_COLOR(win->reverse_video ? win->fg : win->bg);
+    xcb_render_color_t color = MAKE_COLOR(win->bg);
     xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, color, count, (xcb_rectangle_t*)rects);
 }
 
@@ -1213,12 +1190,9 @@ void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values)
 
     if (tag & (nss_wc_font_size | nss_wc_subpixel_fonts))
         reload_font(win, 1), inval_screen = 1;
-    if (tag & (nss_wc_cursor_background | nss_wc_cursor_foreground | nss_wc_background | nss_wc_foreground | nss_wc_reverse)) {
+    if (tag & nss_wc_background) {
         uint32_t values2[2];
-        if (tag & nss_wc_reverse && win->reverse_video)
-            values2[0] = values2[1] = win->fg;
-        else
-            values2[0] = values2[1] = win->bg;
+        values2[0] = values2[1] = win->bg;
         xcb_change_window_attributes(con.con, win->wid, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL, values2);
         xcb_change_gc(con.con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
         inval_screen = 1;
@@ -1262,8 +1236,6 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
     if (tag & nss_wc_left_border) return win->left_border;
     if (tag & nss_wc_top_border) return win->top_border;
     if (tag & nss_wc_background) return win->bg;
-    if (tag & nss_wc_foreground) return win->fg;
-    if (tag & nss_wc_cursor_background) return win->cursor_bg;
     if (tag & nss_wc_cursor_foreground) return win->cursor_fg;
     if (tag & nss_wc_cursor_type) return win->cursor_type;
     if (tag & nss_wc_subpixel_fonts) return win->subpixel_fonts;
@@ -1272,7 +1244,6 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
     if (tag & nss_wc_height) return win->height;
 
     if (tag & nss_wc_blink_time) return win->blink_time;
-    if (tag & nss_wc_reverse) return win->reverse_video;
     if (tag & nss_wc_mouse) return win->mouse_events;
 
     warn("Invalid option");
@@ -1365,10 +1336,6 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         uint32_t arg;
     case nss_sa_break:
         nss_term_sendbreak(win->term);
-        return;
-    case nss_sa_reverse:
-        arg = !win->reverse_video;
-        nss_window_set(win, nss_wc_reverse, &arg);
         return;
     case nss_sa_numlock:
         win->inmode.numlock = !win->inmode.numlock;

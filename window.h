@@ -21,8 +21,6 @@ typedef enum nss_wc_tag {
     nss_wc_left_border = 1 << 1,
     nss_wc_top_border = 1 << 2,
     nss_wc_background = 1 << 3,
-    nss_wc_foreground = 1 << 4,
-    nss_wc_cursor_background = 1 << 5,
     nss_wc_cursor_foreground = 1 << 6,
     nss_wc_cursor_type = 1 << 7,
     nss_wc_subpixel_fonts = 1 << 8,
@@ -31,7 +29,6 @@ typedef enum nss_wc_tag {
     nss_wc_width = 1 << 11,
     nss_wc_height = 1 << 12,
     nss_wc_blink_time = 1 << 21,
-    nss_wc_reverse = 1 << 22,
     nss_wc_mouse = 1 << 23,
 } nss_wc_tag_t;
 
