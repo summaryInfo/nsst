@@ -28,16 +28,6 @@
 #include "input.h"
 #include "window.h"
 
-typedef struct nss_line {
-    struct nss_line *next, *prev;
-    int16_t width;
-    int16_t wrap_at;
-    uint16_t extra_size;
-    uint16_t extra_caps;
-    nss_color_t *extra;
-    nss_cell_t cell[];
-} nss_line_t;
-
 #define TTY_MAX_WRITE 256
 #define NSS_FD_BUF_SZ 512
 #define ESC_MAX_PARAM 36
@@ -373,6 +363,29 @@ void nss_term_invalidate_screen(nss_term_t *term) {
     }
     for (int16_t j = 0; j < term->height; j++)
         term_line_dirt(term->screen[j - i]);
+}
+
+void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
+    if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
+        int16_t i = 0;
+        nss_line_t *view = term->view;
+        for (; view && i < damage.y; i++);
+        for (; view && i < term->height; view = view->next, i++)
+            for (int16_t j = damage.x; j < MIN(damage.width, view->width); j++)
+                view->cell[i].attr &= ~nss_attrib_drawn;
+        for (int16_t j = 0; j < term->height; j++)
+            for (int16_t k = damage.x; k < MIN(damage.width, term->screen[j - i]->width); k++)
+                term->screen[j - i]->cell[k].attr &= ~nss_attrib_drawn;
+    }
+}
+
+void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
+    if (!(term->mode & nss_tm_visible)) return;
+
+    cursor &= !term->view && !(term->mode & nss_tm_hide_cursor);
+    cursor &= !(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr & nss_attrib_drawn);
+
+    nss_window_submit_screen(term->win, term->view, term->screen, term->palette, term->c.x, term->c.y, cursor);
 }
 
 
@@ -2157,9 +2170,9 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
     case esc_csi_1:
     case esc_dcs_1:
         if (0x20 <= ch && ch <= 0x2F) {
-            term->esc.state++;
             term->esc.selector |= (term->esc.state == esc_csi_0 ||
                     term->esc.state == esc_dcs_0) ? I0(ch) : I1(ch);
+            term->esc.state++;
         } else
     case esc_csi_2:
     case esc_dcs_2:
@@ -2582,76 +2595,6 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
     }
 
     return term;
-}
-
-void nss_term_redraw(nss_term_t *term, nss_rect_t damage, _Bool cursor) {
-    if (!(term->mode & nss_tm_visible)) return;
-
-    if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
-        //Clear undefined areas
-        nss_window_clear(term->win, 1, &damage);
-
-        int16_t y0 = 0;
-        nss_line_t *view = term->view;
-        for (; view && y0 < damage.y; y0++, view = view->next);
-        for (; view && y0 < damage.height + damage.y; y0++, view = view->next) {
-            if (view->width > damage.x) {
-                int16_t xs = damage.x, w = MIN(view->width - damage.x, damage.width);
-                if (xs > 0 && view->cell[xs - 1].attr & nss_attrib_wide) w++, xs--;
-                if (view->cell[xs].attr & nss_attrib_wide) w++;
-                nss_window_draw(term->win, xs, y0, w, view->cell + xs, term->palette, view->extra);
-            }
-        }
-        for (int16_t y = 0; y < term->height && y + y0 < damage.height + damage.y; y++) {
-            nss_line_t *line = term->screen[y];
-            if (line->width > damage.x) {
-                int16_t xs = damage.x, w = MIN(line->width - damage.x, damage.width);
-                if (xs > 0 && line->cell[xs - 1].attr & nss_attrib_wide) w++, xs--;
-                if (line->cell[xs].attr & nss_attrib_wide) w++;
-                nss_window_draw(term->win, xs, y0 + y, w, line->cell + xs, term->palette, line->extra);
-            }
-        }
-        if (cursor && !(term->mode & nss_tm_hide_cursor) && !term->view && damage.x <= term->c.x && term->c.x <= damage.x + damage.width &&
-                damage.y <= term->c.y && term->c.y <= damage.y + damage.height) {
-            int16_t cx = MIN(term->c.x, term->width - 1);
-            nss_window_draw_cursor(term->win, term->c.x, term->c.y, &term->screen[term->c.y]->cell[cx], term->palette, term->screen[term->c.y]->extra);
-        }
-    }
-}
-
-void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
-    if (!(term->mode & nss_tm_visible)) return;
-
-    size_t rbuf_clear = 0, drawn = 0;
-
-    int16_t y0 = 0;
-    nss_line_t *view = term->view;
-    for (; view && y0 < term->height; y0++, view = view->next) {
-        drawn += nss_window_draw(term->win, 0, y0, MIN(view->width, term->width), view->cell, term->palette, view->extra);
-        if (term->width > view->width) {
-            term->render_buffer[rbuf_clear++] = (nss_rect_t){ view->width, y0, term->width - view->width, 1};
-            drawn += term->width - view->width;
-        }
-    }
-
-	nss_cell_t *cur_cell = &term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)];
-    cursor &= !term->view && !(term->mode & nss_tm_hide_cursor);
-    cursor &= !(cur_cell->attr & nss_attrib_drawn);
-    // if cursor should be drawn on cell, don't update it
-    if (cursor) cur_cell->attr |= nss_attrib_drawn;
-
-    for (int16_t y = 0; y + y0 < term->height; y++) {
-        nss_line_t *line = term->screen[y];
-        drawn += nss_window_draw(term->win, 0, y0 + y, term->width, line->cell, term->palette, line->extra);
-    }
-
-    if (cursor) {
-        nss_window_draw_cursor(term->win, term->c.x, term->c.y, cur_cell, term->palette, term->screen[term->c.y]->extra);
-        drawn++;
-    }
-
-    if (rbuf_clear) nss_window_clear(term->win, rbuf_clear, term->render_buffer);
-    if (drawn) nss_window_update(term->win, 1, &(nss_rect_t){0, 0, term->width, term->height});
 }
 
 void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {

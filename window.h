@@ -55,6 +55,7 @@ typedef enum nss_mouse_state {
 } nss_mouse_state_t;
 
 typedef struct nss_window nss_window_t;
+typedef struct nss_line nss_line_t;
 
 void nss_init_context(void);
 void nss_free_context(void);
@@ -63,8 +64,7 @@ void nss_context_run(void);
 
 nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const uint32_t *values);
 void nss_free_window(nss_window_t *win);
-size_t nss_window_draw(nss_window_t *win, int16_t x, int16_t y, size_t len, nss_cell_t *cells, nss_color_t *pal, nss_color_t *extra);
-void nss_window_draw_cursor(nss_window_t *win, int16_t x, int16_t y, nss_cell_t *cell, nss_color_t *pal, nss_color_t *extra);
+void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, int16_t cur_x, int16_t cur_y, _Bool cursor);
 void nss_window_update(nss_window_t *win, size_t len, const nss_rect_t *damage);
 void nss_window_clear(nss_window_t *win, size_t len, const nss_rect_t *damage);
 void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height);

@@ -11,12 +11,21 @@
 #define NSS_TERM_SCROLL_DELAY (1000000/4/NSS_TERM_FPS)
 #define NSS_TERM_REDRAW_RATE (1000000/NSS_TERM_FPS)
 
+typedef struct nss_line {
+    struct nss_line *next, *prev;
+    int16_t width;
+    int16_t wrap_at;
+    uint16_t extra_size;
+    uint16_t extra_caps;
+    nss_color_t *extra;
+    nss_cell_t cell[];
+} nss_line_t;
+
 typedef struct nss_input_mode nss_input_mode_t;
 typedef struct nss_term nss_term_t;
 
 nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t width, int16_t height);
 void nss_free_term(nss_term_t *term);
-void nss_term_redraw(nss_term_t *term, nss_rect_t rect, _Bool cursor);
 void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor);
 void nss_term_resize(nss_term_t *term, int16_t width, int16_t height);
 void nss_term_visibility(nss_term_t *term, _Bool visible);
@@ -32,5 +41,6 @@ struct timespec *nss_term_last_scroll_time(nss_term_t *term);
 _Bool nss_term_is_altscreen(nss_term_t *term);
 _Bool nss_term_is_utf8(nss_term_t *term);
 void nss_term_invalidate_screen(nss_term_t *term);
+void nss_term_damage(nss_term_t *term, nss_rect_t damage);
 
 #endif
