@@ -2632,7 +2632,7 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
         }
     }
 
-    cursor &= !term->view;
+    cursor &= !term->view && !(term->mode & nss_tm_hide_cursor);
     cursor &= !(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr & nss_attrib_drawn);
     // if cursor should be drawn on cell, don't update it
     if (cursor) term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr |= nss_attrib_drawn;
@@ -2642,7 +2642,7 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
         drawn += nss_window_draw(term->win, 0, y0 + y, term->width, line->cell, term->palette, line->extra);
     }
 
-    if (cursor && !term->view && !(term->mode & nss_tm_hide_cursor)) {
+    if (cursor) {
         int16_t cx = MIN(term->c.x, term->width - 1);
         nss_window_draw_cursor(term->win, term->c.x, term->c.y,
                 &term->screen[term->c.y]->cell[cx], term->palette, term->screen[term->c.y]->extra);
