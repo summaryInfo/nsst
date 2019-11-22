@@ -839,6 +839,9 @@ static void push_rect(nss_window_t *win, xcb_rectangle_t *rect) {
     con.bufpos += sizeof(xcb_rectangle_t);
 }
 
+
+// Use custom shell sort implementation, sice it works faster
+
 static inline _Bool cmp_bg(const struct cell_desc *ad, const struct cell_desc *bd) {
     if (ad->bg < bd->bg) return 1;
     if (ad->bg > bd->bg) return 0;
@@ -893,7 +896,9 @@ static inline void shell_sort_fg(struct cell_desc *array, size_t size) {
 
 /* new method of rendering: whole screen in a time */
 void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, int16_t cur_x, int16_t cur_y, _Bool cursor) {
+    // TODO Fill short lines
     con.cbufpos = 0;
+    con.bufpos = 0;
 
     _Bool marg = win->cw == cur_x;
     cur_x -= marg;
@@ -906,16 +911,40 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
     }
 
     size_t h = 0;
-    for (; h < (size_t)win->ch && list; list = list->next, h++)
+    for (; h < (size_t)win->ch && list; list = list->next, h++) {
+        if (win->cw > list->width) {
+            push_rect(win, &(xcb_rectangle_t){
+                .x = list->width * win->char_width,
+                .y = h * (win->char_height + win->char_depth),
+                .width = (win->cw - list->width) * win->char_width,
+                .height = win->char_height + win->char_depth
+            });
+        }
         for (int16_t i = 0; i < MIN(win->cw, list->width); i++)
             if (!(list->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (list->cell[i].attr & nss_attrib_blink)))
                 push_cell(win, i, h, palette, list->extra, &list->cell[i]);
-    for (size_t j = 0; j < win->ch - h; j++)
+    }
+    for (size_t j = 0; j < win->ch - h; j++) {
+        if (win->cw > array[j]->width) {
+            push_rect(win, &(xcb_rectangle_t){
+                .x = array[j]->width * win->char_width,
+                .y = (j + h) * (win->char_height + win->char_depth),
+                .width = (win->cw - array[j]->width) * win->char_width,
+                .height = win->char_height + win->char_depth
+            });
+        }
         for (int16_t i = 0; i < MIN(win->cw, array[j]->width); i++)
             if (!(array[j]->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (array[j]->cell[i].attr & nss_attrib_blink)))
                 push_cell(win, i, j + h, palette, array[j]->extra, &array[j]->cell[i]);
+    }
+
+    if (con.bufpos) {
+        xcb_render_color_t col = MAKE_COLOR(win->bg);
+        xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, col,
+            con.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)con.buffer);
+    }
 
     //qsort(con.cbuffer, con.cbufpos, sizeof(con.cbuffer[0]), cmp_by_bg);
     shell_sort_bg(con.cbuffer, con.cbufpos);
@@ -1032,7 +1061,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
                     con.cbuffer[k].fg == con.cbuffer[i].fg && con.cbuffer[i].underlined);
             push_rect(win, &(xcb_rectangle_t) {
                 .x = con.cbuffer[k].x,
-                .y = con.cbuffer[k].y + win->char_height + win->char_depth - win->underline_width,
+                .y = con.cbuffer[k].y + win->char_height + 1,
                 .width = con.cbuffer[i - 1].x + win->char_width - con.cbuffer[k].x,
                 .height = win->underline_width
             });
@@ -1282,6 +1311,7 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
 
         for (size_t i = 0; i < rectc; i++)
             nss_term_damage(win->term, rectv[i]);
+        nss_window_clear(win, rectc, rectv);
     }
 
     if (redraw_borders) { //Update borders
