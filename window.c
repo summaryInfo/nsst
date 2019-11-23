@@ -819,7 +819,7 @@ static void push_cell(nss_window_t *win, int16_t x, int16_t y, nss_color_t *pale
         .x = x * win->char_width,
         .y = y * (win->char_height + win->char_depth),
         .fg = fg, .bg = bg,
-        .glyph = cell.ch | ((cell.attr & nss_font_attrib_mask) << 24),
+        .glyph = (cell.ch ? cell.ch : ' ') | ((cell.attr & nss_font_attrib_mask) << 24),
         .underlined = !!(cell.attr & nss_attrib_underlined),
         .strikethrough = !!(cell.attr & nss_attrib_strikethrough),
     };

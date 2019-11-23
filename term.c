@@ -13,6 +13,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <wchar.h>
 
 //For openpty() funcion
@@ -48,7 +49,7 @@
 #define CHK_VT(v) { if (term->vt_level < (v)) break; }
 
 #define C(c) ((c) & 0x3F)
-#define P(p) ((p) ? 0x40 | (((p) & 3) << 7) : 0)
+#define P(p) ((p) ? ((((p) & 3) + 1) << 6) : 0)
 #define E(c) ((c) & 0x7F)
 #define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
 #define I1(i) (I0(i) << 5)
@@ -173,6 +174,10 @@ struct nss_term {
         nss_tm_mouse_mask =
             nss_tm_mouse_x10 | nss_tm_mouse_button |
             nss_tm_mouse_motion | nss_tm_mouse_many,
+        nss_tm_print_extend = 1 << 25,
+        nss_tm_print_form_feed = 1 << 26,
+        nss_tm_print_enabled = 1 << 27,
+        nss_tm_print_auto = 1 << 28,
     } mode, vt52mode;
 
     struct nss_escape {
@@ -203,6 +208,7 @@ struct nss_term {
     nss_color_t *palette;
     pid_t child;
     int fd;
+    int printerfd;
     // Make this just 4 bytes for incomplete utf-8
     size_t fd_buf_pos;
     uint8_t fd_buf[NSS_FD_BUF_SZ];
@@ -293,6 +299,9 @@ int tty_open(nss_term_t *term, const char *cmd, const char **args) {
         break;
     default:
         close(slave);
+        int fl = fcntl(master, F_GETFD);
+        if (fl >= 0)
+            fcntl(master, F_SETFD, fl | FD_CLOEXEC);
         signal(SIGCHLD, sigchld_fn);
     }
     term->child = pid;
@@ -565,7 +574,7 @@ static void term_selective_erase(nss_term_t *term, int16_t xs, int16_t ys, int16
         nss_line_t *line = term->screen[ys];
         for(int16_t i = xs; i < xe; i++)
             if (!(line->cell[i].attr & nss_attrib_protected))
-                line->cell[i] = MKCELLWITH(line->cell[i], ' ');
+                line->cell[i] = MKCELLWITH(line->cell[i], 0);
     }
 }
 
@@ -573,11 +582,11 @@ static void term_adjust_wide_before(nss_term_t *term, int16_t x, int16_t y, _Boo
     if (x < 0 || x > term->screen[y]->width - 1) return;
     nss_cell_t *cell = &term->screen[y]->cell[x];
     if (left && x > 0 && cell[-1].attr & nss_attrib_wide) {
-        cell[-1] = MKCELLWITH(cell[-1], ' ');
+        cell[-1] = MKCELLWITH(cell[-1], 0);
         cell[-1].attr &= ~nss_attrib_wide;
     }
     if (right && x < term->screen[y]->width && cell[0].attr & nss_attrib_wide) {
-        cell[1] = MKCELLWITH(cell[1], ' ');
+        cell[1] = MKCELLWITH(cell[1], 0);
     }
 }
 
@@ -781,7 +790,7 @@ static void term_esc_dump(nss_term_t *term) {
         case esc_csi_2:
         case esc_dcs_string:
             buf[pos++] = term->esc.state == esc_dcs_string ? 'P' :'[';
-            if (term->esc.selector & (1 << 6))
+            if (term->esc.selector & P_MASK)
                 buf[pos++] = '<' + ((term->esc.selector >> 7) & 3);
             for (size_t i = 0; i <= term->esc.i; i++) {
                 size_t w = 0;
@@ -1047,7 +1056,7 @@ static void term_dispatch_da(nss_term_t *term, uint32_t mode) {
 }
 
 static void term_dispatch_dsr(nss_term_t *term) {
-    if (term->esc.selector & (1 << 6)) {
+    if (term->esc.selector & P_MASK) {
         switch(term->esc.param[0]) {
         case 6: /* Cursor position -- Y;X */
             term_answerback(term, "\x9B%"PRIu16";%"PRIu16"%sR",
@@ -1421,7 +1430,7 @@ static void term_dispatch_sgr(nss_term_t *term) {
 
 static void term_dispatch_srm(nss_term_t *term, _Bool set) {
 
-    if (term->esc.selector & (1 << 6)) {
+    if (term->esc.selector & P_MASK) {
         for(uint32_t i = 0; i <= term->esc.i; i++) {
             uint32_t arg = set;
             switch(PARAM(i, 0)) {
@@ -1484,11 +1493,15 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             case 13:
                 // IGNORE
                 break;
-            //case 18: /* DECPFF */ // TODO MC
-            //    break;
-            //case 19: /* DECREX */ // TODO MC
-            //    break;
+            case 18: /* DECPFF */
+                ENABLE_IF(set, term->mode, nss_tm_print_form_feed);
+                break;
+            case 19: /* DECREX */
+                ENABLE_IF(set, term->mode, nss_tm_print_extend);
+                break;
             case 25: /* DECTCEM */
+                if (set ^ !!(term->mode & nss_tm_hide_cursor))
+                    term->screen[term->c.y]->cell[MIN(term->c.x, term->width -1 )].attr &= ~nss_attrib_drawn;
                 ENABLE_IF(!set, term->mode, nss_tm_hide_cursor);
                 break;
             case 40: /* 132COLS */
@@ -1640,6 +1653,75 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
     }
 }
 
+static void term_print_char(nss_term_t *term, uint32_t ch) {
+    uint8_t buf[5];
+    if (write(term->printerfd, buf, utf8_encode(ch, buf, buf + 5)) < 0) {
+        warn("Printer error");
+        close(term->printerfd);
+        term->printerfd = -1;
+    }
+}
+
+static void term_print_line(nss_term_t *term, nss_line_t *line) {
+    if (term->printerfd < 0) return;
+
+    for (ssize_t i = 0; i < MIN(line->width, term->width); i++)
+        term_print_char(term, line->cell[i].ch);
+    term_print_char(term, '\n');
+}
+
+static void term_print_screen(nss_term_t *term, _Bool ext) {
+    if (term->printerfd < 0) return;
+
+    int16_t top = ext ? 0 : term->top;
+    int16_t bottom = ext ? term->height - 1 : term->bottom;
+
+    while(top < bottom) term_print_line(term, term->screen[top++]);
+    if (term->mode & nss_tm_print_form_feed)
+        term_print_char(term, '\f');
+}
+
+static void term_dispatch_mc(nss_term_t *term) {
+    if (term->esc.selector & P_MASK) {
+        switch(PARAM(0, 0)) {
+        case 1: /* Print current line */
+            if (term->printerfd < 0) break;
+            term_print_line(term, term->screen[term->c.y]);
+            break;
+        case 4: /* Disable autoprint */
+            term->mode &= ~nss_tm_print_auto;
+            break;
+        case 5: /* Enable autoprint */
+            term->mode |= nss_tm_print_auto;
+            break;
+        case 11: /* Print scrollback and screen */
+            if (term->printerfd < 0) break;
+            for (nss_line_t *line = term->scrollback_top; line; line = line->next)
+                term_print_line(term, line);
+        case 10: /* Print screen */
+            term_print_screen(term, 1);
+            break;
+        default:
+            term_esc_dump(term);
+        }
+    } else {
+        switch(PARAM(0, 0)) {
+        case 0: /* Print screen */
+            term_print_screen(term, term->mode & nss_tm_print_extend);
+            break;
+        case 4: /* Disable printer */
+            term->mode &= ~nss_tm_print_enabled;
+            break;
+        case 5: /* Enable printer */
+            term->mode |= nss_tm_print_enabled;
+            break;
+        default:
+            term_esc_dump(term);
+        }
+
+    }
+}
+
 static void term_dispatch_csi(nss_term_t *term) {
     //DUMP
     //term_esc_dump(term);
@@ -1685,7 +1767,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('J') | P('?'): /* DECSED */
     case C('J'): /* ED */ {
         void (*erase)(nss_term_t *, int16_t, int16_t, int16_t, int16_t) = term_erase;
-        if (term->esc.selector & (1 << 6))
+        if (term->esc.selector & P_MASK)
             erase = term_selective_erase;
         else if (term->mode & nss_tm_protected)
             erase = term_protective_erase;
@@ -1701,9 +1783,9 @@ static void term_dispatch_csi(nss_term_t *term) {
             erase(term, 0, 0, term->width, term->c.y);
             break;
         case 2: /* All */
-        case 3: /* Saved Lines?, xterm */
             erase(term, 0, 0, term->width, term->height);
             break;
+        case 3: /* Saved Lines?, xterm */
         default:
             term_esc_dump(term);
         }
@@ -1713,7 +1795,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('K') | P('?'): /* DECSEL */
     case C('K'): /* EL */ {
         void (*erase)(nss_term_t *, int16_t, int16_t, int16_t, int16_t) = term_erase;
-        if (term->esc.selector & (1 << 6))
+        if (term->esc.selector & P_MASK)
             erase = term_selective_erase;
         else if(term->mode & nss_tm_protected)
             erase = term_protective_erase;
@@ -1790,9 +1872,10 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('h') | P('?'): /* DECSET */
         term_dispatch_srm(term, 1);
         break;
-    //case C('i'): /* MC */
-    //case C('i') | P('?'): /* MC */
-    //    break;
+    case C('i'): /* MC */
+    case C('i') | P('?'): /* MC */
+        term_dispatch_mc(term);
+        break;
     case C('l'): /* RM */
     case C('l') | P('?'):/* DECRST */
         term_dispatch_srm(term, 0);
@@ -2278,6 +2361,8 @@ static void term_dispatch_c0(nss_term_t *term, uint32_t ch) {
     case 0x0a: /* LF */
     case 0x0b: /* VT */
     case 0x0c: /* FF */
+        if ((term->mode & (nss_tm_print_enabled | nss_tm_print_auto)) == nss_tm_print_auto)
+            term_print_line(term, term->screen[term->c.y]);
         term_index(term, term->mode & nss_tm_crlf);
         break;
     case 0x0d: /* CR */
@@ -2374,24 +2459,31 @@ static void term_dispatch_vt52(nss_term_t *term, uint8_t ch) {
         term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
         term_erase(term, term->c.x, term->c.y, term->width, term->c.y + 1);
         break;
-    //case 'V': /* Print cursor line */
-    //    break;
-    //case 'W': /* Enable printer */
-    //    break;
-    //case 'X': /* Disable printer */
-    //    break;
+    case 'V': /* Print cursor line */
+        if (term->printerfd < 0) break;
+        term_print_line(term, term->screen[term->c.y]);
+        break;
+    case 'W': /* Enable printer */
+        term->mode |= nss_tm_print_enabled;
+        break;
+    case 'X': /* Disable printer */
+        term->mode &= ~nss_tm_print_enabled;
+        break;
     case 'Y':
         term->esc.state = esc_vt52_cup_0;
         return;
     case 'Z':
         term_answerback(term, "\033/Z");
         break;
-    //case ']': /* Print screen */
-    //    break;
-    //case '^': /* Autoprint */
-    //    break;
-    //case '_': /* Autoprint on */
-    //    break;
+    case ']': /* Print screen */
+        term_print_screen(term, term->mode & nss_tm_print_extend);
+        break;
+    case '^': /* Autoprint on */
+        term->mode |= nss_tm_print_auto;
+        break;
+    case '_': /* Autoprint off */
+        term->mode &= ~nss_tm_print_auto;
+        break;
     default:
         warn("^[%c", ch);
     }
@@ -2406,6 +2498,10 @@ static void term_dispatch_vt52_cup(nss_term_t *term) {
 
 static void term_putchar(nss_term_t *term, uint32_t ch) {
     //info("UTF %"PRIx32" '%s'", ch, buf);
+
+    // TODO More sophisticated filtering
+    if (term->mode & nss_tm_print_enabled)
+        term_print_char(term, ch);
 
     if (IS_C1(ch) && (term->vt_level > 1)) {
         term_esc_start(term);
@@ -2497,7 +2593,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
         term->esc.state++;
         if (ch == 'l' || ch == 'L') {
             term->esc.selector = 1 + (ch == 'L');
-            term->esc.state = esc_osc_string;
+            term->esc.state = esc_osc_2;
         } else
     case esc_osc_1:
         if (0x30 <= ch && ch <= 0x39)
@@ -2572,6 +2668,8 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
             if (term->mode & nss_tm_wrap) {
                 if (term->c.x + width > term->width) {
                     term->screen[term->c.y]->wrap_at = term->c.x;
+                    if ((term->mode & (nss_tm_print_enabled | nss_tm_print_auto)) == nss_tm_print_auto)
+                        term_print_line(term, term->screen[term->c.y]);
                     term_index(term, 1);
                 }
             } else term->c.x = MIN(term->c.x, term->width - width);
@@ -2873,6 +2971,7 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
     }
     term->win = win;
     term->in_mode = mode;
+    term->printerfd = -1;
     term->scrollback_limit = nss_config_integer(NSS_ICONFIG_HISTORY_LINES);
 
     if (nss_config_integer(NSS_ICONFIG_UTF8)) term->mode |= nss_tm_utf8;
