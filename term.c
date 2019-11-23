@@ -1316,9 +1316,11 @@ static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) 
 }
 
 static void term_dispatch_sgr(nss_term_t *term) {
-    for(uint32_t i = 0; i <= term->esc.i; i++) {
+    size_t argc = term->esc.i + (term->esc.param[term->esc.i] > 0);
+    if (!argc) argc++;
+    for(uint32_t i = 0; i < argc; i++) {
         uint32_t p = MAX(0, term->esc.param[i]);
-        if ((term->esc.subpar_mask >> i) & 1 && p != 38 && p != 48) return;
+        if ((term->esc.subpar_mask >> i) & 1) return;
         switch(p) {
         case 0:
             term->c.cel.attr &= ~(nss_attrib_blink | nss_attrib_bold |
@@ -1337,7 +1339,12 @@ static void term_dispatch_sgr(nss_term_t *term) {
             term->c.cel.attr |= nss_attrib_italic;
             break;
         case 4:
-            term->c.cel.attr |= nss_attrib_underlined;
+            if (i < term->esc.i && (term->esc.subpar_mask >> (i + 1)) & 1) {
+                if (term->esc.param[i + 1] <= 0)
+                    term->c.cel.attr &= ~nss_attrib_underlined;
+                else term->c.cel.attr |= nss_attrib_underlined;
+                i++;
+            } else term->c.cel.attr |= nss_attrib_underlined;
             break;
         case 5: case 6:
             term->c.cel.attr |= nss_attrib_blink;
