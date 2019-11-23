@@ -1431,13 +1431,15 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 term->in_mode->appcursor = set;
                 break;
             case 2: /* DECANM */
-                if (set) {
+                if (!set) {
                     term->vt52c = term->c;
                     term->vt52mode = term->mode;
-                    term->c = (nss_cursor_t){ .gr = 2, .gn = {
-                        nss_94cs_ascii, nss_94cs_dec_graph,
-                        nss_94cs_ascii, nss_94cs_ascii
-                    }};
+                    term->in_mode->keyboad_vt52 = 1;
+                    term->vt_level = 0;
+                    term->c.gl_ss = term->c.gl = 0;
+                    term->c.gr = 2, 
+                    term->c.gn[0] = term->c.gn[2] = term->c.gn[3] = nss_94cs_ascii;
+                    term->c.gn[1] = nss_94cs_dec_graph;
                     term->mode &= nss_tm_visible | nss_tm_focused | nss_tm_reverse_video;
                     term_esc_start_seq(term);
                 }
@@ -2177,9 +2179,11 @@ static void term_dispatch_esc(nss_term_t *term) {
         term->c.gr = 1;
         break;
     case E('F') | I0(' '): /* S7C1T */
+        CHK_VT(2);
         term->mode &= ~nss_tm_8bit;
         break;
     case E('G') | I0(' '): /* S8C1T */
+        CHK_VT(2);
         term->mode |= nss_tm_8bit;
         break;
     case E('L') | I0(' '): /* ANSI_LEVEL_1 */
@@ -2210,6 +2214,7 @@ static void term_dispatch_esc(nss_term_t *term) {
         term->mode &= ~nss_tm_utf8;
         break;
     case E('G') | I0('%'): /* Eable UTF-8 */
+    case E('8') | I0('%'):
         term->mode |= nss_tm_utf8;
         break;
     default: {
@@ -2243,7 +2248,7 @@ static void term_dispatch_esc(nss_term_t *term) {
 
 static void term_dispatch_c0(nss_term_t *term, uint32_t ch) {
     // DUMP
-    //if (ch != 0x1B) warn("^%c", ch ^ 0x40);
+    // if (ch != 0x1B) warn("^%c", ch ^ 0x40);
 
     switch (ch) {
     case 0x00: /* NUL (IGNORE) */
@@ -2280,13 +2285,11 @@ static void term_dispatch_c0(nss_term_t *term, uint32_t ch) {
         break;
     case 0x0e: /* SO/LS1 */
         term->c.gl = term->c.gl_ss = 1;
-        if (!term->vt_level)
-            term->esc.state = esc_ground;
+        if (!term->vt_level) term->esc.state = esc_ground;
         break;
     case 0x0f: /* SI/LS0 */
         term->c.gl = term->c.gl_ss = 0;
-        if (!term->vt_level)
-            term->esc.state = esc_ground;
+        if (!term->vt_level) term->esc.state = esc_ground;
         break;
     case 0x10: /* DLE (IGNORE) */
     case 0x11: /* XON (IGNORE) */
@@ -2320,9 +2323,16 @@ static void term_dispatch_vt52(nss_term_t *term, uint8_t ch) {
     switch (ch) {
     case '<':
         if (term->vt_version >= 100) {
+            term->in_mode->keyboad_vt52 = 0;
             term->vt_level = 1;
             term->mode = term->vt52mode;
-            term->c = term->vt52c;
+            term->c.gl = term->vt52c.gl;
+            term->c.gr = term->vt52c.gr;
+            term->c.gl_ss = term->vt52c.gl_ss;
+            term->c.gn[0] = term->vt52c.gn[0];
+            term->c.gn[1] = term->vt52c.gn[1];
+            term->c.gn[2] = term->vt52c.gn[2];
+            term->c.gn[3] = term->vt52c.gn[3];
         }
         break;
     case '=':
@@ -2341,7 +2351,7 @@ static void term_dispatch_vt52(nss_term_t *term, uint8_t ch) {
         term_move_to(term, term->c.x + 1, term->c.y);
         break;
     case 'D':
-        term_move_to(term, term->c.x - 1, term->c.y);
+        term_move_to(term, MIN(term->c.x, term->width - 1) - 1, term->c.y);
         break;
     case 'F':
         term->c.gl = term->c.gl_ss = 1;
@@ -2350,7 +2360,7 @@ static void term_dispatch_vt52(nss_term_t *term, uint8_t ch) {
         term->c.gl = term->c.gl_ss = 0;
         break;
     case 'H':
-        term_move_to(term, 0, 0);
+        term_move_to_abs(term, 0, 0);
         break;
     case 'I':
         term_rindex(term, 0);
@@ -2364,31 +2374,33 @@ static void term_dispatch_vt52(nss_term_t *term, uint8_t ch) {
         term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
         term_erase(term, term->c.x, term->c.y, term->width, term->c.y + 1);
         break;
-    case 'V': /* Print cursor line */
-        break;
-    case 'W': /* Enable printer */
-        break;
-    case 'X': /* Disable printer */
-        break;
+    //case 'V': /* Print cursor line */
+    //    break;
+    //case 'W': /* Enable printer */
+    //    break;
+    //case 'X': /* Disable printer */
+    //    break;
     case 'Y':
         term->esc.state = esc_vt52_cup_0;
-        break;
+        return;
     case 'Z':
         term_answerback(term, "\033/Z");
         break;
-    case ']': /* Print screen */
-        break;
-    case '^': /* Autoprint */
-        break;
-    case '_': /* Autoprint on */
-        break;
+    //case ']': /* Print screen */
+    //    break;
+    //case '^': /* Autoprint */
+    //    break;
+    //case '_': /* Autoprint on */
+    //    break;
+    default:
+        warn("^[%c", ch);
     }
 
     term->esc.state = esc_ground;
 }
 
 static void term_dispatch_vt52_cup(nss_term_t *term) {
-    term_move_to_abs(term, term->esc.param[0], term->esc.param[1]);
+    term_move_to_abs(term, term->esc.param[1], term->esc.param[0]);
     term->esc.state = esc_ground;
 }
 
