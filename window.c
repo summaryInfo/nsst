@@ -614,6 +614,7 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
     win->subpixel_fonts = nss_config_integer(NSS_ICONFIG_SUBPIXEL_FONTS);
     win->font_size = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
     win->active = 1;
+    win->focused = 1;
 
     win->inmode = nss_config_input_mode();
 
@@ -896,7 +897,6 @@ static inline void shell_sort_fg(struct cell_desc *array, size_t size) {
 
 /* new method of rendering: whole screen in a time */
 void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, int16_t cur_x, int16_t cur_y, _Bool cursor) {
-    // TODO Fill short lines
     con.cbufpos = 0;
     con.bufpos = 0;
 
@@ -1153,17 +1153,6 @@ static void redraw_damage(nss_window_t *win, nss_rect_t damage) {
         }
 }
 
-/* Redraw a region of window specified by <damage[len]> in terminal coordinates */
-void nss_window_update(nss_window_t *win, size_t len, const nss_rect_t *damage) {
-    for (size_t i = 0; i < len; i++) {
-        nss_rect_t rect = damage[i];
-        rect = rect_scale_up(rect, win->char_width, win->char_height + win->char_depth);
-        xcb_copy_area(con.con, win->pid, win->wid, win->gc,
-                      rect.x, rect.y, rect.x + win->left_border,
-                      rect.y + win->top_border, rect.width, rect.height);
-    }
-}
-
 void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height) {
     ys = MAX(0, MIN(ys, win->ch));
     yd = MAX(0, MIN(yd, win->ch));
@@ -1180,23 +1169,6 @@ void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height)
     //xcb_render_composite(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, 0, win->pic, 0, ys, 0, 0, 0, yd, width, height);
 }
 
-void nss_window_clear(nss_window_t *win, size_t len, const nss_rect_t *damage) {
-    if (con.bufsize < len * sizeof(nss_rect_t)) {
-        uint8_t *new = realloc(con.buffer, len * sizeof(nss_rect_t));
-        if (!new) return;
-        con.buffer = new;
-        con.bufsize = len * sizeof(nss_rect_t);
-    }
-    nss_rect_t *rects = (nss_rect_t *)con.buffer;
-    size_t count = 0;
-    for (size_t i = 0; i < len; i++)
-        if (damage[i].width > 0 && damage[i].height > 0)
-            rects[count++] = rect_scale_up(damage[i], win->char_width, win->char_height + win->char_depth);
-
-    xcb_render_color_t color = MAKE_COLOR(win->bg);
-    xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, color, count, (xcb_rectangle_t*)rects);
-}
-
 void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values) {
     set_config(win, tag, values);
     _Bool inval_screen = 0;
@@ -1206,7 +1178,7 @@ void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values)
     if (tag & nss_wc_background) {
         uint32_t values2[2];
         values2[0] = values2[1] = win->bg;
-        xcb_change_window_attributes(con.con, win->wid, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL, values2);
+        xcb_change_window_attributes(con.con, win->wid, XCB_CW_BACK_PIXEL, values2);
         xcb_change_gc(con.con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
         inval_screen = 1;
     }
@@ -1311,7 +1283,11 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
 
         for (size_t i = 0; i < rectc; i++)
             nss_term_damage(win->term, rectv[i]);
-        nss_window_clear(win, rectc, rectv);
+
+        for (size_t i = 0; i < rectc; i++)
+            rectv[i] = rect_scale_up(rectv[i], win->char_width, win->char_height + win->char_depth);
+        xcb_render_color_t color = MAKE_COLOR(win->bg);
+        xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, color, rectc, (xcb_rectangle_t*)rectv);
     }
 
     if (redraw_borders) { //Update borders
@@ -1418,7 +1394,7 @@ void nss_context_run(void) {
                     }
                     if (!win->got_configure) {
                         nss_term_invalidate_screen(win->term);
-                        nss_window_update(win, 1, &(nss_rect_t){0, 0, win->cw, win->ch});
+                        win->force_redraw = 1;
                     }
                     win->got_configure |= 1;
                     break;

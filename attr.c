@@ -25,7 +25,7 @@ static struct {
     [NSS_ICONFIG_HISTORY_LINES] = {1024, 1024, -1, 100000},
     [NSS_ICONFIG_UTF8] = {1, 1, 0, 1},
     [NSS_ICONFIG_VT_VERION] = {420, 420, 0, 999},
-    [NSS_ICONFIG_ALLOW_NRCS] = {1, 1, 0, 1},
+    [NSS_ICONFIG_ALLOW_CHARSETS] = {1, 1, 0, 1},
     [NSS_ICONFIG_TAB_WIDTH] = {8, 8, 1, 100},
     [NSS_ICONFIG_INIT_WRAP] = {1, 1, 0, 1},
     [NSS_ICONFIG_SCROLL_ON_INPUT] = {1, 1, 0, 1},

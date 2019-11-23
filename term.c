@@ -30,10 +30,11 @@
 
 #define TTY_MAX_WRITE 256
 #define NSS_FD_BUF_SZ 512
-#define ESC_MAX_PARAM 36
+#define ESC_MAX_PARAM 32
 #define ESC_MAX_INTERM 2
 #define ESC_MAX_STR 512
 #define MAX_REPORT 256
+#define ESC_DUMP_MAX 1024
 
 #define IS_C1(c) ((c) < 0xa0 && (c) >= 0x80)
 #define IS_C0(c) ((c) < 0x20)
@@ -44,6 +45,7 @@
 #define MAX_EXTRA_PALETTE (0x10000 - NSS_PALETTE_SIZE)
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
 #define PARAM(i, d) (term->esc.param[i] > 0 ? (uint32_t)term->esc.param[i] : (d))
+#define CHK_VT(v) { if (term->vt_level < (v)) break; }
 
 #define C(c) ((c) & 0x3F)
 #define P(p) ((p) ? 0x40 | (((p) & 3) << 7) : 0)
@@ -69,21 +71,45 @@ typedef struct nss_cursor {
     uint8_t gr;
     uint8_t gl_ss;
     enum nss_char_set {
-        nss_cs_dec_ascii,
-        nss_cs_dec_sup,
-        nss_cs_dec_graph,
-        nss_cs_british_latin1, // Also latin-1
-        nss_cs_french_canadian,
-        nss_cs_finnish,
-        nss_cs_german,
-        nss_cs_dutch,
-        nss_cs_itallian,
-        nss_cs_swiss,
-        nss_cs_swedish,
-        nss_cs_norwegian_dannish,
-        nss_cs_french,
-        nss_cs_spannish,
-        nss_cs_max,
+        nss_nrcs_french_canadian,
+        nss_nrcs_finnish,
+        nss_nrcs_german,
+        nss_nrcs_dutch,
+        nss_nrcs_itallian,
+        nss_nrcs_swiss,
+        nss_nrcs_swedish,
+        nss_nrcs_norwegian_dannish,
+        nss_nrcs_french,
+        nss_nrcs_spannish,
+        nss_nrcs_portuguese,
+        nss_nrcs_turkish,
+        nss_nrcs_hebrew, // Not implemented
+        nss_nrcs_greek, // Not implemented
+        nss_nrcs_cyrillic, // Not implemented
+        nss_nrcs_french_canadian2,
+        nss_nrcs_finnish2,
+        nss_nrcs_swedish2,
+        nss_nrcs_norwegian_dannish2,
+        nss_nrcs_norwegian_dannish3,
+        nss_nrcs_french2,
+
+        nss_94cs_ascii,
+        nss_94cs_dec_altchars,
+        nss_94cs_dec_altgraph,
+        nss_94cs_british, // same as latin-1
+        nss_94cs_dec_sup,
+        nss_94cs_dec_sup_graph,
+        nss_94cs_dec_graph,
+        nss_94cs_dec_tech,
+        nss_94cs_dec_hebrew, // Not implemented
+        nss_94cs_dec_greek, // Not implemented
+        nss_94cs_dec_turkish, // Not implemented
+
+        nss_96cs_latin_1,
+        nss_96cs_greek, // Not implemented
+        nss_96cs_hebrew, // Not implemented
+        nss_96cs_latin_cyrillic, // Not implemented
+        nss_96cs_latin_5, // Not implemented
     } gn[4];
 
     _Bool origin;
@@ -93,7 +119,6 @@ typedef struct nss_cursor {
 struct nss_term {
     nss_line_t **screen;
     nss_line_t **back_screen;
-    nss_rect_t *render_buffer;
     nss_line_t *view;
     nss_line_t *scrollback;
     nss_line_t *scrollback_top;
@@ -163,12 +188,13 @@ struct nss_term {
         uint32_t old_selector;
         size_t i;
         int32_t param[ESC_MAX_PARAM];
+        uint32_t subpar_mask;
         size_t si;
         uint8_t str[ESC_MAX_STR + 1];
     } esc;
 
-    uint8_t vt_level;
-    uint8_t vt_verion;
+    uint16_t vt_version;
+    uint16_t vt_level;
 
     nss_window_t *win;
     nss_input_mode_t *in_mode;
@@ -275,6 +301,12 @@ int tty_open(nss_term_t *term, const char *cmd, const char **args) {
 
 static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
     static nss_cid_t *buf = NULL, buf_len = 0, *new;
+
+    if (line->extra_size > 0 && line->extra[line->extra_size - 1] == col)
+        return NSS_PALETTE_SIZE + line->extra_size - 1;
+    if (line->extra_size > 1 && line->extra[line->extra_size - 2] == col)
+        return NSS_PALETTE_SIZE + line->extra_size - 2;
+
     if (line->extra_size + 1 >= line->extra_caps) {
         if (line->extra) {
             if (buf_len < line->extra_size) {
@@ -352,6 +384,13 @@ static void term_free_line(nss_term_t *term, nss_line_t *line) {
 static void term_line_dirt(nss_line_t *line) {
     for (int16_t i = 0; i < line->width; i++)
         line->cell[i].attr &= ~nss_attrib_drawn;
+}
+
+_Bool nss_term_is_altscreen(nss_term_t *term) {
+    return term->mode & nss_tm_altscreen;
+}
+_Bool nss_term_is_utf8(nss_term_t *term) {
+    return term->mode & nss_tm_utf8;
 }
 
 void nss_term_invalidate_screen(nss_term_t *term) {
@@ -708,6 +747,7 @@ static inline void term_esc_start_seq(nss_term_t *term) {
     for (size_t i = 0; i <= term->esc.i; i++)
         term->esc.param[i] = -1;
     term->esc.i = 0;
+    term->esc.subpar_mask = 0;
     term->esc.selector = 0;
     term->esc.old_selector = 0;
     term->esc.old_state = 0;
@@ -722,6 +762,53 @@ static inline void term_esc_start_string(nss_term_t *term) {
     term->esc.old_state = 0;
 }
 
+static void term_esc_dump(nss_term_t *term) {
+    char buf[ESC_DUMP_MAX] = "^[";
+    size_t pos = 2;
+    switch(term->esc.state) {
+        case esc_esc_entry:
+        case esc_esc_1:
+            buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
+        case esc_esc_2:
+            buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
+            buf[pos++] = E_MASK & term->esc.selector;
+            break;
+        case esc_csi_entry:
+        case esc_csi_0:
+        case esc_csi_1:
+        case esc_csi_2:
+        case esc_dcs_string:
+            buf[pos++] = term->esc.state == esc_dcs_string ? 'P' :'[';
+            if (term->esc.selector & (1 << 6))
+                buf[pos++] = '<' + ((term->esc.selector >> 7) & 3);
+            for (size_t i = 0; i <= term->esc.i; i++) {
+                size_t w = 0;
+                if (term->esc.param[i] >= 0)
+                    snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRId32"%zn", term->esc.param[i], &w);
+                pos += w;
+                if (i < term->esc.i) buf[pos++] = term->esc.subpar_mask & (1 << (i + 1)) ? ':' : ';' ;
+            }
+            if (term->esc.selector & I0_MASK)
+                buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
+            if (term->esc.selector & I1_MASK)
+                buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
+            buf[pos++] = (C_MASK & term->esc.selector) + 0x40;
+            if (term->esc.state == esc_dcs_string) {
+                strncat(buf + pos, (char *)term->esc.str, ESC_DUMP_MAX - pos);
+                pos += term->esc.si - 1;
+                buf[pos++] = '^';
+                buf[pos++] = '[';
+                buf[pos++] = '\\';
+            }
+            break;
+        case esc_osc_string:
+            warn("^[]%u;%s^[\\", term->esc.selector, term->esc.str);
+        default:
+            return;
+    }
+    buf[pos] = 0;
+    warn("%s", buf);
+}
 
 static void term_reset(nss_term_t *term, _Bool hard) {
     term->mode &= nss_tm_focused | nss_tm_visible;
@@ -741,14 +828,14 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     nss_window_set(term->win, nss_wc_background | nss_wc_cursor_foreground | nss_wc_cursor_type | nss_wc_mouse, args);
     *term->in_mode = nss_config_input_mode();
 
-    int16_t cx = term->c.x, cy =term->c.y;
+    int16_t cx = term->c.x, cy = term->c.y;
 
     term->c = term->back_cs = term->cs = (nss_cursor_t) {
         .cel = MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, ' '),
         .fg = nss_config_color(NSS_CCONFIG_FG),
         .bg = nss_config_color(NSS_CCONFIG_BG),
         .gl = 0, .gl_ss = 0, .gr = 2,
-        .gn = {nss_cs_dec_ascii, nss_cs_british_latin1, nss_cs_british_latin1, nss_cs_british_latin1}
+        .gn = {nss_94cs_ascii, nss_94cs_ascii, nss_94cs_ascii, nss_94cs_ascii}
     };
 
     if (nss_config_integer(NSS_ICONFIG_UTF8)) term->mode |= nss_tm_utf8;
@@ -776,6 +863,8 @@ static void term_reset(nss_term_t *term, _Bool hard) {
             term_free_line(term, line);
         }
 
+        term->vt_level = term->vt_version / 100;
+
         term->view = NULL;
         term->scrollback_top = NULL;
         term->scrollback = NULL;
@@ -792,64 +881,100 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term->esc.state = esc_ground;
 }
 
-static uint32_t nrcs_translate(uint8_t set, uint32_t ch, _Bool nrcs) {
-    if (set == nss_cs_dec_ascii) {
-        /* do nothing */;
-    } else if (set == nss_cs_dec_graph) {
-        static const unsigned *graph = U" ◆▒␉␌␍␊°±␤␋┘┐┌└┼⎺⎻─⎼⎽├┤┴┬│≤≥π≠£·";
-        if (0x5F <= ch && ch <= 0x7E)
-            ch = graph[ch - 0x5F];
-    } else if (set == nss_cs_british_latin1 && !nrcs) { /* latin-1 */
-        ch += 0x80;
-    } else if (set == nss_cs_dec_sup) {
-        ch += 0x80;
-        if (ch == 0xA8) ch = U'¤';
-        else if (ch == 0xD7) ch = U'Œ';
-        else if (ch == 0xDD) ch = U'Ÿ';
-        else if (ch == 0xF7) ch = U'œ';
-        else if (ch == 0xFD) ch = U'ÿ';
-    } else if (nrcs){
-        static const unsigned *trans[nss_cs_max] = {
-            /* [0x23] [0x40] [0x5B 0x5C 0x5D 0x5E 0x5F 0x60] [0x7B 0x7C 0x7D 0x7E] */
-            [nss_cs_british_latin1] =    U"£@[\\]^_`{|}~",
-            [nss_cs_dutch] =             U"£¾\u0133½|^_`¨f¼´",
-            [nss_cs_finnish] =           U"#@ÄÖÅÜ_éäöåü",
-            [nss_cs_french] =            U"£à°ç§^_`éùè¨",
-            [nss_cs_swiss] =             U"ùàéçêîèôäöüû",
-            [nss_cs_french_canadian] =   U"#àâçêî_ôéùèû",
-            [nss_cs_german] =            U"#§ÄÖÜ^_`äöüß",
-            [nss_cs_itallian] =          U"£§°çé^_ùàòèì",
-            [nss_cs_norwegian_dannish] = U"#ÄÆØÅÜ_äæøåü",
-            [nss_cs_spannish] =          U"£§¡Ñ¿^_`°ñç~",
-            [nss_cs_swedish] =           U"#ÉÆØÅÜ_éæøåü",
-        };
-        if (trans[set]) {
-            if (ch == 0x23) return trans[set][0];
-            if (ch == 0x40) return trans[set][1];
-            if (0x5B <= ch && ch <= 0x60)
-                return trans[set][2 + ch - 0x5B];
-            if (0x7B <= ch && ch <= 0x7E)
-                return trans[set][8 + ch - 0x7B];
+static uint32_t nrcs_translate(uint32_t gl, uint32_t gr, uint32_t ch, _Bool nrcs) {
+    if (ch > 0xFF) return ch;
+    if (ch == 0x7F) return U' ';
+
+    uint32_t set = ch > 0x7F ? gr : gl;
+
+    switch (set) {
+    case nss_94cs_ascii:
+    case nss_94cs_dec_altchars:
+    case nss_94cs_dec_altgraph:
+        return ch;
+    case nss_94cs_dec_sup:
+    case nss_94cs_dec_sup_graph:
+        switch(ch |= 0x80) {
+        case 0xA8: return U'¤';
+        case 0xD7: return U'Œ';
+        case 0xDD: return U'Ÿ';
+        case 0xF7: return U'œ';
+        case 0xFD: return U'ÿ';
         }
+        return ch;
+    case nss_94cs_dec_graph:
+        ch &= 0x7F;
+        if (0x5F <= ch && ch <= 0x7E)
+            ch = U" ◆▒␉␌␍␊°±␤␋┘┐┌└┼⎺⎻─⎼⎽├┤┴┬│≤≥π≠£·"[ch - 0x5F];
+        return ch;
+    case nss_96cs_latin_1:
+    case nss_94cs_british:
+        if (nrcs) {
+            ch &= 0x7F;
+            if (ch == '#') ch = U'£';
+            return ch;
+        }
+        return ch | 0x80;
+    case nss_94cs_dec_tech:
+        ch &= 0x7F;
+        if (0x20 < ch && ch < 0x7F)
+            return (uint16_t []) {
+                        0x23B7, 0x250C, 0x2500, 0x2320, 0x2321, 0x2502, 0x23A1,
+                0x23A3, 0x23A4, 0x23A6, 0x239B, 0x239D, 0x239E, 0x23A0, 0x23A8,
+                0x23AC, 0xFFFE, 0xFFFE, 0xFFFE, 0xFFFE, 0xFFFE, 0xFFFE, 0xFFFE,
+                0xFFFE, 0xFFFE, 0xFFFE, 0xFFFE, 0x2264, 0x2260, 0x2265, 0x222B,
+                0x2234, 0x221D, 0x221E, 0x00F7, 0x0394, 0x2207, 0x03A6, 0x0393,
+                0x223C, 0x2243, 0x0398, 0x00D7, 0x039B, 0x21D4, 0x21D2, 0x2261,
+                0x03A0, 0x03A8, 0xFFFE, 0x03A3, 0xFFFE, 0xFFFE, 0x221A, 0x03A9,
+                0x039E, 0x03A5, 0x2282, 0x2283, 0x2229, 0x222A, 0x2227, 0x2228,
+                0x00AC, 0x03B1, 0x03B2, 0x03C7, 0x03B4, 0x03B5, 0x03C6, 0x03B3,
+                0x03B7, 0x03B9, 0x03B8, 0x03BA, 0x03BB, 0xFFFE, 0x03BD, 0x2202,
+                0x03C0, 0x03C8, 0x03C1, 0x03C3, 0x03C4, 0xFFFE, 0x0192, 0x03C9,
+                0x03BE, 0x03C5, 0x03B6, 0x2190, 0x2191, 0x2192, 0x2193,
+            }[ch - 0x21];
+        return ch;
+    case nss_nrcs_french_canadian2: set = nss_nrcs_french_canadian; break;
+    case nss_nrcs_finnish2: set = nss_nrcs_finnish; break;
+    case nss_nrcs_swedish2: set = nss_nrcs_swedish; break;
+    case nss_nrcs_norwegian_dannish2: set = nss_nrcs_norwegian_dannish; break;
+    case nss_nrcs_norwegian_dannish3: set = nss_nrcs_norwegian_dannish; break;
+    case nss_nrcs_french2: set = nss_nrcs_french; break;
+    case nss_nrcs_turkish:
+        if ((ch & 0x7F) == 0x26) return U'ğ';
+    }
+    if (/* nrcs && */set <= nss_nrcs_portuguese) {
+        ch &= 0x7F;
+        static const unsigned short *trans[] = {
+            /* [0x23] [0x40] [0x5B 0x5C 0x5D 0x5E 0x5F 0x60] [0x7B 0x7C 0x7D 0x7E] */
+            [nss_nrcs_french_canadian] =   u"#àâçêî_ôéùèû",
+            [nss_nrcs_finnish] =           u"#@ÄÖÅÜ_éäöåü",
+            [nss_nrcs_german] =            u"#§ÄÖÜ^_`äöüß",
+            [nss_nrcs_dutch] =             u"£¾\u0133½|^_`¨f¼´",
+            [nss_nrcs_itallian] =          u"£§°çé^_ùàòèì",
+            [nss_nrcs_swiss] =             u"ùàéçêîèôäöüû",
+            [nss_nrcs_swedish] =           u"#ÉÆØÅÜ_éæøåü",
+            [nss_nrcs_norwegian_dannish] = u"#ÄÆØÅÜ_äæøåü",
+            [nss_nrcs_french] =            u"£à°ç§^_`éùè¨",
+            [nss_nrcs_spannish] =          u"£§¡Ñ¿^_`°ñç~",
+            [nss_nrcs_portuguese] =        u"#@ÃÇÕ^_`ãçõ~",
+            [nss_nrcs_turkish] =           u"#İŞÖÇÜ_Ğşöçü",
+        };
+        if (ch == 0x23) return trans[set][0];
+        if (ch == 0x40) return trans[set][1];
+        if (0x5B <= ch && ch <= 0x60)
+            return trans[set][2 + ch - 0x5B];
+        if (0x7B <= ch && ch <= 0x7E)
+            return trans[set][8 + ch - 0x7B];
     }
     return ch;
 }
 
 static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
-
     // In theory this should be disabled while in UTF-8 mode, but
     // in practive applications use these symbols, so keep translating
-    // Need to make this configuration option
 
-    if (!(term->mode & nss_tm_utf8) || nss_config_integer(NSS_ICONFIG_ALLOW_NRCS)) {
-        if (ch < 0x80) { /* if it's not ASCII, map GL */
-            if (term->c.gn[term->c.gl_ss] != nss_cs_dec_ascii) {
-                ch = nrcs_translate(term->c.gn[term->c.gl_ss], ch, term->mode & nss_tm_enable_nrcs);
-            }
-        } else if (ch < 0x100) { /* if its not Latin-1, map GR */
-            if (term->c.gn[term->c.gr] != nss_cs_british_latin1 || term->mode & nss_tm_enable_nrcs)
-                ch = nrcs_translate(term->c.gn[term->c.gr], ch - 0x80, term->mode & nss_tm_enable_nrcs);
-        }
+    if (!(term->mode & nss_tm_utf8) || nss_config_integer(NSS_ICONFIG_ALLOW_CHARSETS)) {
+        ch = nrcs_translate(term->c.gn[term->c.gl_ss], term->c.gn[term->c.gr], ch, term->mode & nss_tm_enable_nrcs);
     }
 
     nss_cell_t cel = fixup_color(term->screen[y], &term->c);
@@ -862,127 +987,94 @@ static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
 }
 
 static void term_dispatch_da(nss_term_t *term, uint32_t mode) {
+    if (PARAM(0, 0)) return;
     switch (mode) {
     case P('='):
+        CHK_VT(4);
         term_answerback(term, "\x90!|00000000\x9C");
         break;
-    case P('>'):
-        /*
-         * 0 - VT100
-         * 1 - VT220
-         * 2 - VT240
-         * 18 - VT330
-         * 19 - VT340
-         * 24 - VT320
-         * 41 - VT420
-         * 61 - VT510
-         * 64 - VT520
-         * 65 - VT525
-         */
-        term_answerback(term, "\x9B>1;10;0c");
-        break;
-    default:
-        /*
-         * ?1;2 - VT100
-         * ?1;0 - VT101
-         * ?6 - VT102
-         * ?62;... - VT220
-         * ?63;... - VT320
-         * ?64;... - VT420
-         *  where ... is
-         *       1 - 132-columns
-         *       2 - Printer
-         *       3 - ReGIS graphics
-         *       4 - Sixel graphics
-         *       6 - Selective erase
-         *       8 - User-defined keys
-         *       9 - National Replacement Character sets
-         *       15 - Technical characters
-         *       16 - Locator port
-         *       17 - Terminal state interrogation
-         *       18 - User windows
-         *       21 - Horizontal scrolling
-         *       22 - ANSI color
-         *       28 - Rectangular editing
-         *       29 - ANSI text locator (i.e., DEC Locator mode).
-         */
-         term_answerback(term, "\x9B?62;1;2;6;9;22c");
-    }
-}
-
-#define ESC_DUMP_MAX 1024
-
-static void term_esc_dump(nss_term_t *term) {
-    char buf[ESC_DUMP_MAX] = "^[";
-    size_t pos = 2;
-    switch(term->esc.state) {
-        case esc_esc_entry:
-        case esc_esc_1:
-            buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
-        case esc_esc_2:
-            buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
-            buf[pos++] = E_MASK & term->esc.selector;
-            break;
-        case esc_csi_entry:
-        case esc_csi_0:
-        case esc_csi_1:
-        case esc_csi_2:
-        case esc_dcs_string:
-            buf[pos++] = term->esc.state == esc_dcs_string ? 'P' :'[';
-            if (term->esc.selector & (1 << 6))
-                buf[pos++] = '<' + ((term->esc.selector >> 7) & 3);
-            for (size_t i = 0; i <= term->esc.i; i++) {
-                size_t w = 0;
-                if (term->esc.param[i] >= 0)
-                    snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRId32"%zn", term->esc.param[i], &w);
-                pos += w;
-                if (i < term->esc.i) buf[pos++] = ';';
-            }
-            if (term->esc.selector & I0_MASK)
-                buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
-            if (term->esc.selector & I1_MASK)
-                buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
-            buf[pos++] = (C_MASK & term->esc.selector) + 0x40;
-            if (term->esc.state == esc_dcs_string) {
-                strncat(buf + pos, (char *)term->esc.str, ESC_DUMP_MAX - pos);
-                pos += term->esc.si - 1;
-                buf[pos++] = '^';
-                buf[pos++] = '[';
-                buf[pos++] = '\\';
-            }
-            break;
-        case esc_osc_string:
-            warn("^[]%u;%s^[\\", term->esc.selector, term->esc.str);
+    case P('>'): {
+        uint32_t ver = 0;
+        switch(term->vt_version) {
+        case 100: ver = 0; break;
+        case 220: ver = 1; break;
+        case 240: ver = 2; break;
+        case 330: ver = 18; break;
+        case 340: ver = 19; break;
+        case 320: ver = 24; break;
+        case 420: ver = 41; break;
+        case 510: ver = 61; break;
+        case 520: ver = 64; break;
+        case 525: ver = 65; break;
         default:
-            return;
+            ver = term->vt_level * 100 + 20;
+        }
+        term_answerback(term, "\x9B>%"PRIu32";10;0c", ver);
+        break;
     }
-    buf[pos] = 0;
-    warn("%s", buf);
+    default:
+        if (term->vt_version < 200) {
+            switch(term->vt_level) {
+            case 125: term_answerback(term, "\x9B?12;2;0;10c"); break;
+            case 102: term_answerback(term, "\x9B?6c"); break;
+            case 101: term_answerback(term, "\x9B?1;0c"); break;
+            default: term_answerback(term, "\x9B?1;2c");
+            }
+        } else {
+            /*1 - 132-columns
+             *2 - Printer
+             *3 - ReGIS graphics
+             *4 - Sixel graphics
+             *6 - Selective erase
+             *8 - User-defined keys
+             *9 - National Replacement Character sets
+             *15 - Technical characters
+             *16 - Locator port
+             *17 - Terminal state interrogation
+             *18 - User windows
+             *21 - Horizontal scrolling
+             *22 - ANSI color
+             *28 - Rectangular editing
+             *29 - ANSI text locator (i.e., DEC Locator mode).
+             */
+            term_answerback(term, "\x9B?%u;1;2;6%s;9;22c",
+                    60 + term->vt_version/100,
+                    term->in_mode->keyboard_mapping == nss_km_vt220 ? ";8" : "");
+        }
+    }
 }
 
 static void term_dispatch_dsr(nss_term_t *term) {
     if (term->esc.selector & (1 << 6)) {
         switch(term->esc.param[0]) {
         case 6: /* Cursor position -- Y;X */
-            term_answerback(term, "\x9B%"PRIu16";%"PRIu16"R",
-                    (term->c.origin ? -term->top : 0) + term->c.y + 1, MIN(term->c.x, term->width - 1) + 1);
+            term_answerback(term, "\x9B%"PRIu16";%"PRIu16"%sR",
+                    (term->c.origin ? -term->top : 0) + term->c.y + 1,
+                    MIN(term->c.x, term->width - 1) + 1,
+                    term->vt_level >= 4 ? ";1" : "");
         case 15: /* Printer status -- Has no printer */
-            term_answerback(term, "\x9B?13n"); //TODO Has printer -- 10n
+            CHK_VT(2);
+            term_answerback(term, "\x9B?13n"); //TODO Has printer -- 10
             break;
         case 25: /* User defined keys lock -- Locked */
-            term_answerback(term, "\x9B?21n"); //TODO Unlocked - ?20n
+            CHK_VT(2);
+            term_answerback(term, "\x9B?21n"); //TODO Unlocked - 20
             break;
         case 26: /* Keyboard Language -- North American */
-            term_answerback(term, "\x9B?27;1n");
+            CHK_VT(2);
+            term_answerback(term, "\x9B?27;1%sn",
+                    term->vt_level >= 4 ? ";0;0" :
+                    term->vt_level >= 3 ? ";0" : "");
         }
     } else {
         switch(term->esc.param[0]) {
         case 5: /* Health report -- OK */
-            term_answerback(term, "\x9B%dn", 0);
+            term_answerback(term, "\2330n");
             break;
         case 6: /* Cursor position -- Y;X */
             term_answerback(term, "\x9B%"PRIu16";%"PRIu16"R",
-                    (term->c.origin ? -term->top : 0) + term->c.y + 1, MIN(term->c.x, term->width - 1) + 1);
+                    (term->c.origin ? -term->top : 0) + term->c.y + 1,
+                    MIN(term->c.x, term->width - 1) + 1);
             break;
         }
     }
@@ -1180,22 +1272,25 @@ static void term_dispatch_osc(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-_Bool nss_term_is_altscreen(nss_term_t *term) {
-    return term->mode & nss_tm_altscreen;
-}
-_Bool nss_term_is_utf8(nss_term_t *term) {
-    return term->mode & nss_tm_utf8;
-}
-
 static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) {
-    if (term->esc.i - arg > 1) {
-        if (term->esc.param[arg] == 2 && term->esc.i - arg > 2) {
-            if (term->esc.param[arg + 1] > 0xFF || term->esc.param[arg + 2] > 0xFF || term->esc.param[arg + 3] > 0xFF ||
-                    term->esc.param[arg + 1] < 0 || term->esc.param[arg + 2] < 0 || term->esc.param[arg + 3] < 0)
-                term_esc_dump(term);
+    size_t argc = arg + 1 < ESC_MAX_PARAM;
+    _Bool subpars = arg && (term->esc.subpar_mask >> (arg + 1)) & 1;
+    if (subpars)
+        for (size_t i = arg + 1; i < ESC_MAX_PARAM &&
+                (term->esc.subpar_mask >> i) & 1; i++) argc++;
+    else
+        for (size_t i = arg + 1; i < ESC_MAX_PARAM &&
+                !((term->esc.subpar_mask >> i) & 1); i++) argc++;
+    if (argc > 0) {
+        if (term->esc.param[arg] == 2 && argc > 3) {
             nss_color_t col = 0xFF;
-            for (size_t i = 1; i < 4; i++)
+            _Bool space = subpars && argc > 4;
+            _Bool wrong = 0;
+            for (size_t i = 1 + space; i < 4U + space; i++) {
+                wrong |= term->esc.param[arg + i] > 255;
                 col = (col << 8) + MIN(MAX(0, term->esc.param[arg + i]), 0xFF);
+            }
+            if (wrong) term_esc_dump(term);
             if (foreground) {
                 term->c.cel.fg = 0xFFFF;
                 term->c.fg = col;
@@ -1203,24 +1298,27 @@ static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) 
                 term->c.cel.bg = 0xFFFF;
                 term->c.bg = col;
             }
-        }
-        return 4;
-    } else if (term->esc.param[arg] == 5 && term->esc.i - arg > 0) {
-        if (term->esc.param[arg + 1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS && term->esc.param[arg + 1] >= 0) {
-            if (foreground)
-                term->c.cel.fg = term->esc.param[arg + 1];
-            else
-                term->c.cel.bg = term->esc.param[arg + 1];
-        } else term_esc_dump(term);
-        return 2;
-    }
-    term_esc_dump(term);
-    return 0;
+            if (!subpars) argc = MIN(argc, 4);
+        } else if (term->esc.param[arg] == 5 && argc > 1) {
+            if (term->esc.param[arg + 1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS && term->esc.param[arg + 1] >= 0) {
+                if (foreground)
+                    term->c.cel.fg = term->esc.param[arg + 1];
+                else
+                    term->c.cel.bg = term->esc.param[arg + 1];
+            } else term_esc_dump(term);
+            if (!subpars) argc = MIN(argc, 2);
+        } else {
+            if (!subpars) argc = MIN(argc, 1);
+             term_esc_dump(term);
+         }
+    } else term_esc_dump(term);
+    return argc;
 }
 
 static void term_dispatch_sgr(nss_term_t *term) {
     for(uint32_t i = 0; i <= term->esc.i; i++) {
         uint32_t p = MAX(0, term->esc.param[i]);
+        if ((term->esc.subpar_mask >> i) & 1 && p != 38 && p != 48) return;
         switch(p) {
         case 0:
             term->c.cel.attr &= ~(nss_attrib_blink | nss_attrib_bold |
@@ -1323,7 +1421,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             case 1: /* DECCKM */
                 term->in_mode->appcursor = set;
                 break;
-            //case 2: /* DECANM */
+            //case 2: /* DECANM */ //TODO VT52
             //    break;
             case 3: /* DECCOLM */
                 //Just clear screen
@@ -1387,7 +1485,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             case 67: /* DECBKM */
                 term->in_mode->backspace_is_del = !set;
                 break;
-            case 69: /* DECLRMM */ //TODO DECBI/DECFI
+            case 69: /* DECLRMM */ //TODO
                 term_esc_dump(term);
                 break;
             //case 80: /* DECSDM */ //TODO SIXEL
@@ -1469,7 +1567,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                     term_cursor_mode(term, 0);
                 }
                 break;
-            //case 2004: /* Bracketed paste */
+            //case 2004: /* Bracketed paste */ //TODO Selections
             //    break;
             default:
                 term_esc_dump(term);
@@ -1478,7 +1576,6 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
     } else {
         for(uint32_t i = 0; i <= term->esc.i; i++) {
             switch(PARAM(i, 0)) {
-            case -1:
             case 0: /* Default - nothing */
                 break;
             case 2: /* KAM */
@@ -1502,7 +1599,10 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
 
 static void term_dispatch_csi(nss_term_t *term) {
     //DUMP
-    // term_esc_dump(term);
+    //term_esc_dump(term);
+
+	// Only SGR is allowed to have subparams
+    if (term->esc.subpar_mask && term->esc.selector != C('m')) return;
 
     switch (term->esc.selector) {
     case C('@'): /* ICH */
@@ -1602,7 +1702,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_delete_cells(term, PARAM(0, 1));
         term_move_to(term, term->c.x, term->c.y);
         break;
-    //case C('S') | P('>'): /* Set graphics attributes, xterm */
+    //case C('S') | P('>'): /* Set graphics attributes, xterm */ //TODO SIXEL
     //    break;
     case C('S'): /* SU */
         term_scroll(term, term->top, term->bottom, PARAM(0, 1), 0);
@@ -1734,8 +1834,13 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('u'): /* (SCORC) */
         term_cursor_mode(term, 0);
         break;
-    //case C('x'): /* DECREQTPARAM */
-    //    break;
+    case C('x'): /* DECREQTPARAM */
+        if (term->vt_version < 200) {
+            uint32_t p = PARAM(0, 0);
+            if (p < 2)
+                term_answerback(term, "\233%d;1;1;128;128;1;0x", p + 2);
+        }
+        break;
     //case C('@') | I0(' '): /* SL */
     //    break;
     //case C('A') | I0(' '): /* SR */
@@ -1763,24 +1868,16 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     }
     case C('p') | I0('!'): /* DECSTR */
+        CHK_VT(2);
         term_reset(term, 0);
         break;
     case C('p') | I0('"'): /* DECSCL */
-        term_reset(term, 1);
-        switch(PARAM(0, 62)) { /* TODO Compatablility restrictions */
-        case 61: /* VT100 */
-            break;
-        case 62: /* VT200 */
-            break;
-        case 63: /* VT300 */
-            break;
-        case 64: /* VT400 */
-            break;
-        case 65: /* VT500 */
-            break;
-        default:
-            term_esc_dump(term);
-        }
+        if (term->vt_version < 200) break;
+
+        term_reset(term, 0);
+        term->vt_level = PARAM(0, 65) - 60;
+        if (!term->vt_level || term->vt_level > 5)
+            term->vt_level = 5;
         switch(PARAM(1, 2)) {
         case 2:
             term->mode |= nss_tm_8bit;
@@ -1856,8 +1953,81 @@ static void term_dispatch_csi(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static void term_dispatch_esc(nss_term_t *term) {
+static enum nss_char_set parse_nrcs(uint32_t selector, _Bool is96, uint32_t vt_level, _Bool nrcs) {
+    #define NRC {if (!nrcs) return -1;}
+    selector &= (I1_MASK | E_MASK);
+    if (!is96) {
+        switch (vt_level) {
+        default:
+            switch (selector) {
+            case E('4') | I1('"'): return nss_94cs_dec_hebrew;
+            case E('?') | I1('"'): return nss_94cs_dec_greek;
+            case E('0') | I1('%'): return nss_94cs_dec_turkish;
+            case E('=') | I1('%'): NRC; return nss_nrcs_hebrew;
+            case E('>') | I1('"'): NRC; return nss_nrcs_greek;
+            case E('2') | I1('%'): NRC; return nss_nrcs_turkish;
+            case E('4') | I1('&'): NRC; return nss_nrcs_cyrillic;
+            }
+        case 4: case 3:
+            switch (selector) {
+            case E('5') | I1('%'): return nss_94cs_dec_sup_graph;
+            case E('`'): NRC; return nss_nrcs_norwegian_dannish3;
+            case E('9'): NRC; return nss_nrcs_french_canadian2;
+            case E('>'): return nss_94cs_dec_tech;
+            case E('6') | I1('%'): NRC; return nss_nrcs_portuguese;
+            }
+        case 2:
+            switch (selector) {
+            case E('C'): NRC; return nss_nrcs_finnish;
+            case E('5'): NRC; return nss_nrcs_finnish2;
+            case E('H'): NRC; return nss_nrcs_swedish;
+            case E('7'): NRC; return nss_nrcs_swedish2;
+            case E('K'): NRC; return nss_nrcs_german;
+            case E('Q'): NRC; return nss_nrcs_french_canadian;
+            case E('R'): NRC; return nss_nrcs_french;
+            case E('f'): NRC; return nss_nrcs_french2;
+            case E('Y'): NRC; return nss_nrcs_itallian;
+            case E('Z'): NRC; return nss_nrcs_spannish;
+            case E('4'): NRC; return nss_nrcs_dutch;
+            case E('='): NRC; return nss_nrcs_swiss;
+            case E('E'): NRC; return nss_nrcs_norwegian_dannish;
+            case E('6'): NRC; return nss_nrcs_norwegian_dannish2;
+            case E('<'): return nss_94cs_dec_sup;
+            }
+        case 1:
+            switch (selector) {
+            case E('A'): return nss_94cs_british;
+            case E('B'): return nss_94cs_ascii;
+            case E('0'): return nss_94cs_dec_graph;
+            case E('1'): if (vt_level != 1) break;
+                         return nss_94cs_dec_altchars;
+            case E('2'): if (vt_level != 1) break;
+                         return nss_94cs_dec_altgraph;
+            }
+        case 0: break;
+        }
+    } else {
+        switch (vt_level) {
+        default:
+            switch (selector) {
+            case E('F'): return nss_96cs_greek;
+            case E('H'): return nss_96cs_hebrew;
+            case E('L'): return nss_96cs_latin_cyrillic;
+            case E('M'): return nss_96cs_latin_5;
+            }
+        case 4: case 3:
+            switch (selector) {
+            case E('A'): return nss_96cs_latin_1;
+            }
+        case 2: case 1: case 0:
+            break;
+        }
+    }
+    return -1;
+#undef NRC
+}
 
+static void term_dispatch_esc(nss_term_t *term) {
     //DUMP
     //if (term->esc.selector != E('['))
     //    term_esc_dump(term);
@@ -1916,6 +2086,7 @@ static void term_dispatch_esc(nss_term_t *term) {
         term->esc.state = esc_ign_entry;
         return;
     //case E('6'): /* DECBI */
+    //    CHK_VT(4);
     //    break;
     case E('7'): /* DECSC */
         term_cursor_mode(term, 1);
@@ -1924,6 +2095,7 @@ static void term_dispatch_esc(nss_term_t *term) {
         term_cursor_mode(term, 0);
         break;
     //case E('9'): /* DECFI */
+    //    CHK_VT(4);
     //    break;
     case E('='): /* DECKPAM */
         term->in_mode->appkey = 1;
@@ -1945,18 +2117,23 @@ static void term_dispatch_esc(nss_term_t *term) {
         term_set_tb_margins(term, 0, term->height - 1);
         break;
     case E('n'): /* LS2 */
+        term_esc_dump(term);
         term->c.gl = term->c.gl_ss = 2;
         break;
     case E('o'): /* LS3 */
+        term_esc_dump(term);
         term->c.gl = term->c.gl_ss = 3;
         break;
     case E('|'): /* LS3R */
+        term_esc_dump(term);
         term->c.gr = 3;
         break;
     case E('}'): /* LS2R */
+        term_esc_dump(term);
         term->c.gr = 2;
         break;
     case E('~'): /* LS1R */
+        term_esc_dump(term);
         term->c.gr = 1;
         break;
     case E('F') | I0(' '): /* S7C1T */
@@ -1967,11 +2144,11 @@ static void term_dispatch_esc(nss_term_t *term) {
         break;
     case E('L') | I0(' '): /* ANSI_LEVEL_1 */
     case E('M') | I0(' '): /* ANSI_LEVEL_2 */
-        term->c.gn[1] = nss_cs_dec_sup;
+        term->c.gn[1] = nss_94cs_ascii;
         term->c.gr = 1;
         /* fallthrough */
     case E('N') | I0(' '): /* ANSI_LEVEL_3 */
-        term->c.gn[0] = nss_cs_dec_ascii;
+        term->c.gn[0] = nss_94cs_ascii;
         term->c.gl = term->c.gl_ss = 0;
         break;
     //case E('3') | I0('#'): /* DECDHL */
@@ -1995,49 +2172,32 @@ static void term_dispatch_esc(nss_term_t *term) {
     case E('G') | I0('%'): /* Eable UTF-8 */
         term->mode |= nss_tm_utf8;
         break;
-    default:
+    default: {
         /* Decode select charset */
+        enum nss_char_set set;
         switch(term->esc.selector & I0_MASK) {
+        case I0('*'): /* G2D4 */
+        case I0('+'): /* G3D4 */
+            CHK_VT(2);
         case I0('('): /* GZD4 */
         case I0(')'): /* G1D4 */
-        case I0('*'): /* G2D4 */
-        case I0('+'): /* G3D4 */ {
-            enum nss_char_set *set = &term->c.gn[((term->esc.selector & I0_MASK) - I0('(')) >> 9];
-            switch (term->esc.selector & (I1_MASK | E_MASK)) {
-            case E('A'): *set = nss_cs_british_latin1; break;
-            case E('B'): *set = nss_cs_dec_ascii; break;
-            case E('C'):
-            case E('5'): *set = nss_cs_finnish; break;
-            case E('H'):
-            case E('7'): *set = nss_cs_swedish; break;
-            case E('K'): *set = nss_cs_german; break;
-            case E('Q'):
-            case E('9'): *set = nss_cs_french_canadian; break;
-            case E('R'):
-            case E('f'): *set = nss_cs_french; break;
-            case E('Y'): *set = nss_cs_itallian; break;
-            case E('Z'): *set = nss_cs_spannish; break;
-            case E('4'): *set = nss_cs_dutch; break;
-            case E('='): *set = nss_cs_swiss; break;
-            case E('`'):
-            case E('E'):
-            case E('6'): *set = nss_cs_norwegian_dannish; break;
-            case E('0'): *set = nss_cs_dec_graph; break;
-            case E('<'): *set = nss_cs_dec_sup; break;
-            default:
-                term_esc_dump(term);
-            }
+            if ((set = parse_nrcs(term->esc.selector, 0, term->vt_level, term->mode & nss_tm_enable_nrcs)) > 0)
+                term->c.gn[((term->esc.selector & I0_MASK) - I0('(')) >> 9] = set;
             break;
-        }
         case I0('-'): /* G1D6 */
         case I0('.'): /* G2D6 */
         case I0('/'): /* G3D6 */
+            CHK_VT(3);
+            if ((set = parse_nrcs(term->esc.selector, 1, term->vt_level, term->mode & nss_tm_enable_nrcs)) > 0)
+                term->c.gn[1 + (((term->esc.selector & I0_MASK) - I0('-')) >> 9)] = set;
+            break;
         default:
-            // We got unknown C1
+            // If we got unknown C1
             if (term->esc.state == esc_ground)
                 term->esc.state = esc_esc_entry;
             term_esc_dump(term);
         }
+    }
     }
 
     term->esc.state = esc_ground;
@@ -2045,7 +2205,7 @@ static void term_dispatch_esc(nss_term_t *term) {
 
 static void term_dispatch_c0(nss_term_t *term, uint32_t ch) {
     // DUMP
-    // if (ch != 0x1B) warn("^%c", ch ^ 0x40);
+    //if (ch != 0x1B) warn("^%c", ch ^ 0x40);
 
     switch (ch) {
     case 0x00: /* NUL (IGNORE) */
@@ -2166,6 +2326,11 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
         else if (ch == 0x3B) {
             if (term->esc.i < ESC_MAX_PARAM - 1)
                 term->esc.param[++term->esc.i] = -1;
+        } else if (ch == 0x3A) {
+            if (term->esc.i < ESC_MAX_PARAM - 1) {
+                term->esc.param[++term->esc.i] = -1;
+                term->esc.subpar_mask |= 1 << term->esc.i;
+            }
         } else
     case esc_csi_1:
     case esc_dcs_1:
@@ -2201,7 +2366,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
         term->esc.state++;
         if (ch == 'l' || ch == 'L') {
             term->esc.selector = 1 + (ch == 'L');
-            term->esc.state = esc_osc_2;
+            term->esc.state = esc_osc_string;
         } else
     case esc_osc_1:
         if (0x30 <= ch && ch <= 0x39)
@@ -2242,15 +2407,15 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
             term->esc.si += char_len;
         }
         break;
-    case esc_ground:
+    case esc_ground:;
+        uint8_t glv = term->c.gn[term->c.gl_ss];
         if (ch <= 0x1F)
             term_dispatch_c0(term, ch);
-        else if (ch == 0x7F && term->c.gn[term->c.gl_ss] ==
-                nss_cs_british_latin1 && !(term->mode & nss_tm_enable_nrcs))
+        else if (ch == 0x7F && (!(term->mode & nss_tm_enable_nrcs) && (glv == nss_96cs_latin_1 || glv == nss_94cs_british)))
             /* ignore */;
         else {
             int16_t width = wcwidth(ch);
-            if (width < 0) ch = UTF_INVAL, width = 1;
+            if (width < 0) /*ch = UTF_INVAL,*/ width = 1;
 
             //DUMP
             //info("%c (%u)", ch, ch);
@@ -2400,7 +2565,7 @@ void term_tty_write(nss_term_t *term, const uint8_t *buf, size_t len) {
 static size_t term_encode_c1(nss_term_t *term, const uint8_t *in, uint8_t *out) {
     uint8_t *fmtp = out;
     for (uint8_t *it = (uint8_t *)in; *it && fmtp - out < MAX_REPORT - 1; it++) {
-        if (IS_C1(*it) && !(term->mode & nss_tm_8bit)) {
+        if (IS_C1(*it) && (!(term->mode & nss_tm_8bit ) || term->vt_level < 2)) {
             *fmtp++ = 0x1B;
             *fmtp++ = *it ^ 0xC0;
         } else if ((*it > 0x7F) && term->mode & nss_tm_utf8) {
@@ -2415,10 +2580,10 @@ static size_t term_encode_c1(nss_term_t *term, const uint8_t *in, uint8_t *out) 
 }
 
 void term_answerback(nss_term_t *term, const char *str, ...) {
-    uint8_t fmt[MAX_REPORT], csi[MAX_REPORT];
-    term_encode_c1(term, (const uint8_t *)str, fmt);
+    static uint8_t fmt[MAX_REPORT], csi[MAX_REPORT];
     va_list vl;
     va_start(vl, str);
+    term_encode_c1(term, (const uint8_t *)str, fmt);
     vsnprintf((char *)csi, sizeof(csi), (char *)fmt, vl);
     va_end(vl);
     term_tty_write(term, csi, (uint8_t *)memchr(csi, 0, MAX_REPORT) - csi);
@@ -2489,15 +2654,12 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
     nss_line_t **new = realloc(term->screen, height * sizeof(term->screen[0]));
     nss_line_t **new_back = realloc(term->back_screen, height * sizeof(term->back_screen[0]));
-    nss_rect_t *new_rend = realloc(term->render_buffer, height * sizeof(term->render_buffer[0]));
 
     if (!new) die("Can't create lines");
     if (!new_back) die("Can't create lines");
-    if (!new_rend) die("Can't create lines");
 
     term->screen = new;
     term->back_screen = new_back;
-    term->render_buffer = new_rend;
 
     // Create new lines
 
@@ -2573,10 +2735,10 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
     term->c = term->back_cs = term->cs = (nss_cursor_t) {
         .cel = MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, ' '),
         .gl = 0, .gl_ss = 0, .gr = 2,
-        .gn = {nss_cs_dec_ascii, nss_cs_british_latin1, nss_cs_british_latin1, nss_cs_british_latin1}
+        .gn = {nss_94cs_ascii, nss_94cs_ascii, nss_94cs_ascii, nss_94cs_ascii}
     };
-    term->vt_verion = nss_config_integer(NSS_ICONFIG_VT_VERION);
-    term->vt_level = term->vt_verion / 100;
+    term->vt_version = nss_config_integer(NSS_ICONFIG_VT_VERION);
+    term->vt_level = term->vt_version / 100;
 
     clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
 
@@ -2675,7 +2837,6 @@ void nss_free_term(nss_term_t *term) {
     }
     free(term->screen);
     free(term->back_screen);
-    free(term->render_buffer);
 
     nss_line_t *next, *line = term->scrollback;
     while (line) {
