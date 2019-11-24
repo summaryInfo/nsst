@@ -819,13 +819,14 @@ static void push_cell(nss_window_t *win, int16_t x, int16_t y, nss_color_t *pale
         con.cbufsize = new_size;
     }
 
+	if (cell.ch == ' ' || cell.fg == cell.bg) cell.ch = 0;
     con.cbuffer[con.cbufpos++] = (struct cell_desc) {
         .x = x * win->char_width,
         .y = y * (win->char_height + win->char_depth),
         .fg = fg, .bg = bg,
-        .glyph = (cell.ch ? cell.ch : ' ') | ((cell.attr & nss_font_attrib_mask) << 24),
-        .underlined = !!(cell.attr & nss_attrib_underlined),
-        .strikethrough = !!(cell.attr & nss_attrib_strikethrough),
+        .glyph = cell.ch ? cell.ch | ((cell.attr & nss_font_attrib_mask) << 24) : 0,
+        .underlined = !!(cell.attr & nss_attrib_underlined) && (fg != bg),
+        .strikethrough = !!(cell.attr & nss_attrib_strikethrough) && (fg != bg),
     };
 
     cel->attr |= nss_attrib_drawn;
@@ -1018,13 +1019,12 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
     // Set clip rectangles for text rendering
     con.bufpos = 0;
     for (size_t i = 0; i < con.cbufpos; ) {
-        while (i < con.cbufpos && (con.cbuffer[i].fg == con.cbuffer[i].bg || (con.cbuffer[i].glyph & 0x1FFFF) == ' ')) i++;
+        while (i < con.cbufpos && !con.cbuffer[i].glyph) i++;
         if (i >= con.cbufpos) break;
         size_t k = i;
         do i++;
         while (i < con.cbufpos && con.cbuffer[k].y == con.cbuffer[i].y &&
-                con.cbuffer[i - 1].x + win->char_width == con.cbuffer[i].x &&
-                con.cbuffer[i].fg != con.cbuffer[i].bg && (con.cbuffer[i].glyph & 0x1FFFF) != ' ');
+                con.cbuffer[i - 1].x + win->char_width == con.cbuffer[i].x && con.cbuffer[i].glyph);
         push_rect(win, &(xcb_rectangle_t) {
             .x = con.cbuffer[k].x,
             .y = con.cbuffer[k].y,
@@ -1042,6 +1042,9 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
 
     // Draw chars
     for (size_t i = 0; i < con.cbufpos; ) {
+        while (i < con.cbufpos && !con.cbuffer[i].glyph) i++;
+        if (i >= con.cbufpos) break;
+
         xcb_render_color_t col = MAKE_COLOR(con.cbuffer[i].fg);
         xcb_rectangle_t rect2 = { .x = 0, .y = 0, .width = 1, .height = 1 };
         xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pen, col, 1, &rect2);
@@ -1071,11 +1074,14 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
                 i++;
             } while (i < con.cbufpos && con.cbuffer[k].y == con.cbuffer[i].y &&
                     con.cbuffer[i - 1].x + win->char_width == con.cbuffer[i].x &&
-                    con.cbuffer[k].fg == con.cbuffer[i].fg && i - k < CHARS_PER_MESG);
+                    con.cbuffer[k].fg == con.cbuffer[i].fg &&
+                    con.cbuffer[i].glyph && i - k < CHARS_PER_MESG);
             head->len = i - k;
 
             ox = con.cbuffer[i - 1].x + win->char_width;
             oy = con.cbuffer[i - 1].y + win->char_height;
+
+            while (i < con.cbufpos && !con.cbuffer[i].glyph) i++;
         }
         if (con.bufpos)
             xcb_render_composite_glyphs_32(con.con, XCB_RENDER_PICT_OP_OVER,
