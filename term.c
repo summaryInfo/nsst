@@ -764,6 +764,7 @@ static inline void term_esc_start_string(nss_term_t *term) {
 }
 
 static void term_esc_dump(nss_term_t *term) {
+    return;
     char buf[ESC_DUMP_MAX] = "^[";
     size_t pos = 2;
     switch(term->esc.state) {
@@ -2651,6 +2652,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
         else {
             int16_t width = wcwidth(ch);
             if (width < 0) /*ch = UTF_INVAL,*/ width = 1;
+            else if (width == 0) return;
 
             //DUMP
             //info("%c (%u)", ch, ch);
