@@ -1,6 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 
-
 #include <errno.h>
 #include <inttypes.h>
 #include <poll.h>
@@ -36,6 +35,11 @@
 #define CR(c) ((((c) >> 16) & 0xff) * 0x100)
 #define CA(c) ((((c) >> 24) & 0xff) * 0x100)
 #define MAKE_COLOR(c) {.red=CR(c), .green=CG(c), .blue=CB(c), .alpha=CA(c)}
+
+#define FPS 60
+#define REDRAW_TIME (1000000/FPS)
+#define REDRAW_SCROLL_TIME 3*REDRAW_TIME/2
+#define SCROLL_DELAY REDRAW_TIME/2
 
 struct nss_shortcut {
     uint32_t ksym;
@@ -91,8 +95,9 @@ struct nss_window {
     int16_t top_border;
     int16_t font_size;
     uint32_t blink_time;
-    struct timespec prev_blink;
-    struct timespec prev_draw;
+    struct timespec last_blink;
+    struct timespec last_scroll;
+    struct timespec last_draw;
 
     nss_color_t bg;
     nss_color_t cursor_fg;
@@ -628,7 +633,6 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
     }
     win->width = nss_config_integer(NSS_ICONFIG_WINDOW_WIDTH);
     win->height = nss_config_integer(NSS_ICONFIG_WINDOW_HEIGHT);
-    clock_gettime(CLOCK_MONOTONIC, &win->prev_blink);
 
     set_config(win, tag, values);
 
@@ -1166,32 +1170,33 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
                       win->top_border, win->cw * win->char_width, win->ch * (win->char_depth + win->char_height));
 }
 
-static void redraw_damage(nss_window_t *win, nss_rect_t damage) {
-
+static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right) {
         int16_t width = win->cw * win->char_width + win->left_border;
         int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
-
-        size_t num_damaged = 0;
-        nss_rect_t damaged[NUM_BORDERS], borders[NUM_BORDERS] = {
+        xcb_rectangle_t borders[NUM_BORDERS] = {
             {0, 0, win->left_border, height},
             {win->left_border, 0, width, win->top_border},
             {width, 0, win->width - width, win->height},
             {0, height, width, win->height - height},
         };
-        for (size_t i = 0; i < NUM_BORDERS; i++)
-            if (intersect_with(&borders[i], &damage))
-                    damaged[num_damaged++] = borders[i];
-        if (num_damaged)
-            xcb_poly_fill_rectangle(con.con, win->wid, win->gc, num_damaged, (xcb_rectangle_t*)damaged);
-
-        nss_rect_t inters = { win->left_border, win->top_border, width, height };
-        if (intersect_with(&inters, &damage)) {
-            xcb_copy_area(con.con, win->pid, win->wid, win->gc, inters.x - win->left_border, inters.y - win->top_border,
-                          inters.x, inters.y, inters.width, inters.height);
-        }
+        size_t count = 4, offset = 0;
+        if (!top_left) count -= 2, offset += 2;
+        if (!bottom_right) count -= 2;
+        if (count) xcb_poly_fill_rectangle(con.con, win->wid, win->gc, count, borders + offset);
 }
 
 void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height) {
+
+    struct timespec cur;
+    clock_gettime(CLOCK_MONOTONIC, &cur);
+
+    win->last_scroll = cur;
+
+    if (TIMEDIFF(win->last_scroll, cur) < SCROLL_DELAY) {
+        nss_term_damage(win->term, (nss_rect_t){ .y = yd, .width = win->cw, .height = height });
+        return;
+    }
+
     ys = MAX(0, MIN(ys, win->ch));
     yd = MAX(0, MIN(yd, win->ch));
     height = MIN(height, MIN(win->ch - ys, win->ch - yd));
@@ -1221,8 +1226,8 @@ void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values)
         inval_screen = 1;
     }
    if (inval_screen) {
-        nss_term_invalidate_screen(win->term);
-        redraw_damage(win, (nss_rect_t) {0, 0, win->width, win->height});
+        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
+        win->force_redraw = 1;
    }
    if (tag & nss_wc_mouse) {
        if (win->mouse_events)
@@ -1241,8 +1246,8 @@ void nss_window_set_font(nss_window_t *win, const char * name) {
     free(win->font_name);
     win->font_name = strdup(name);
     reload_font(win, 1);
-    nss_term_invalidate_screen(win->term);
-    redraw_damage(win, (nss_rect_t) {0, 0, win->width, win->height});
+    nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
+    win->force_redraw = 1;
     xcb_flush(con.con);
 }
 
@@ -1275,7 +1280,7 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
 
 static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
 
-    _Bool redraw_borders = width < win->width || height < win->height;
+    _Bool do_redraw_borders = width < win->width || height < win->height;
     //Handle resize
 
     win->width = width;
@@ -1328,11 +1333,12 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
         xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, color, rectc, (xcb_rectangle_t*)rectv);
     }
 
-    if (redraw_borders) { //Update borders
-        int16_t width = win->cw * win->char_width + win->left_border;
-        int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
-        redraw_damage(win, (nss_rect_t) {width, 0, win->width - width, win->height});
-        redraw_damage(win, (nss_rect_t) {0, height, width, win->height - height});
+    if (do_redraw_borders) { //Update borders
+        //int16_t width = win->cw * win->char_width + win->left_border;
+        //int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
+        redraw_borders(win, 0, 1);
+        //redraw_damage(win, (nss_rect_t) {width, 0, win->width - width, win->height});
+        //redraw_damage(win, (nss_rect_t) {0, height, width, win->height - height});
         //TIP: May be redraw all borders here
     }
 
@@ -1399,11 +1405,11 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     nss_handle_input(key, win->inmode, win->term);
 }
 
-#define POLL_TIMEOUT (1000/NSS_WIN_FPS)
 /* Start window logic, handling all windows in context */
 void nss_context_run(void) {
+    int64_t next_timeout = REDRAW_TIME;
     for (;;) {
-        if (poll(con.pfds, con.pfdcap, POLL_TIMEOUT) < 0 && errno != EINTR)
+        if (poll(con.pfds, con.pfdcap, next_timeout/1000) < 0 && errno != EINTR)
             warn("Poll error: %s", strerror(errno));
         if (con.pfds[0].revents & POLLIN) {
             xcb_generic_event_t *event;
@@ -1415,9 +1421,29 @@ void nss_context_run(void) {
                     if (!win) break;
 
                     nss_rect_t damage = {ev->x, ev->y, ev->width, ev->height};
-                    //info("Damage: %d %d %d %d", damage.x, damage.y, damage.width, damage.height);
 
-                    redraw_damage(win, damage);
+                    int16_t width = win->cw * win->char_width + win->left_border;
+                    int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
+
+                    size_t num_damaged = 0;
+                    nss_rect_t damaged[NUM_BORDERS], borders[NUM_BORDERS] = {
+                        {0, 0, win->left_border, height},
+                        {win->left_border, 0, width, win->top_border},
+                        {width, 0, win->width - width, win->height},
+                        {0, height, width, win->height - height},
+                    };
+                    for (size_t i = 0; i < NUM_BORDERS; i++)
+                        if (intersect_with(&borders[i], &damage))
+                                damaged[num_damaged++] = borders[i];
+                    if (num_damaged)
+                        xcb_poly_fill_rectangle(con.con, win->wid, win->gc, num_damaged, (xcb_rectangle_t*)damaged);
+
+                    nss_rect_t inters = { win->left_border, win->top_border, width, height };
+                    if (intersect_with(&inters, &damage)) {
+                        xcb_copy_area(con.con, win->pid, win->wid, win->gc, inters.x - win->left_border, inters.y - win->top_border,
+                                      inters.x, inters.y, inters.width, inters.height);
+                    }
+
                     xcb_flush(con.con);
                     break;
                 }
@@ -1431,7 +1457,7 @@ void nss_context_run(void) {
                         xcb_flush(con.con);
                     }
                     if (!win->got_configure) {
-                        nss_term_invalidate_screen(win->term);
+                        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
                         win->force_redraw = 1;
                     }
                     win->got_configure |= 1;
@@ -1580,26 +1606,32 @@ void nss_context_run(void) {
                 }
             }
         }
+
+        next_timeout = REDRAW_TIME;
         struct timespec cur;
         clock_gettime(CLOCK_MONOTONIC, &cur);
+
         for (nss_window_t *win = con.first; win; win = win->next) {
-            struct timespec *lastscroll = nss_term_last_scroll_time(win->term);
-            long long ms_diff1 = TIMEDIFF(win->prev_blink, cur);
-            long long ms_diff2 = TIMEDIFF(win->prev_draw, cur);
-            long long ms_diff3 = TIMEDIFF(*lastscroll, cur);
-            if (ms_diff1 > win->blink_time && win->active) {
+            if (TIMEDIFF(win->last_blink, cur) > win->blink_time && win->active) {
                 win->blink_state = !win->blink_state;
                 win->blink_commited = 0;
-                win->prev_blink = cur;
+                win->last_blink = cur;
             }
-            if (win->force_redraw || (ms_diff2 > NSS_TERM_REDRAW_RATE && ms_diff3 > NSS_TERM_SCROLL_DELAY) || ms_diff2 > NSS_TERM_MAX_DELAY_SKIP) {
-                win->prev_draw = cur;
+
+            int64_t frame_time = (TIMEDIFF(win->last_scroll, cur) < SCROLL_DELAY) ? REDRAW_SCROLL_TIME : REDRAW_TIME;
+            int64_t remains = (frame_time - TIMEDIFF(win->last_draw, cur));
+
+            if (remains/1000 <= 0 || win->force_redraw) {
+                if (win->force_redraw)
+                    redraw_borders(win, 1, 1);
                 nss_term_redraw_dirty(win->term, 1);
+                win->last_draw = cur;
                 win->force_redraw = 0;
                 win->blink_commited = 1;
-            }
+                remains = REDRAW_TIME;
+             }
+            next_timeout = MIN(next_timeout,  remains);
         }
-        // TODO Adjust timeouts like in st
         xcb_flush(con.con);
 
         if (!con.daemon_mode && !con.first) break;

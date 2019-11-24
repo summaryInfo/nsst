@@ -143,8 +143,6 @@ struct nss_term {
     int16_t bottom;
     uint8_t *tabs;
 
-    struct timespec lastscroll;
-
     enum nss_term_mode {
         nss_tm_echo = 1 << 0,
         nss_tm_crlf = 1 << 1,
@@ -651,22 +649,14 @@ static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t a
     }
 
     if (!term->view) {
-            struct timespec cur;
-        clock_gettime(CLOCK_MONOTONIC, &cur);
-        if (TIMEDIFF(term->lastscroll, cur) > NSS_TERM_SCROLL_DELAY/2) {
-            if (amount > 0)
-                nss_window_shift(term->win, top + amount, top, bottom + 1 - top - amount);
-            else if (amount < 0)
-                nss_window_shift(term->win, top, top - amount, bottom + 1 - top + amount);
-            term->lastscroll = cur;
-        } else {
-            nss_term_invalidate_screen(term);
-        }
-    } else nss_term_invalidate_screen(term);
-}
-
-struct timespec *nss_term_last_scroll_time(nss_term_t *term) {
-    return &term->lastscroll;
+        if (amount > 0)
+            nss_window_shift(term->win, top + amount, top, bottom + 1 - top - amount);
+        else if (amount < 0)
+            nss_window_shift(term->win, top, top - amount, bottom + 1 - top + amount);
+    } else {
+        nss_term_damage(term, (nss_rect_t){ .y = top - MAX(0, amount),
+                .width = term->width, .height = bottom + 1 - top - abs(amount) });
+    }
 }
 
 static void term_set_tb_margins(nss_term_t *term, int16_t top, int16_t bottom) {
@@ -2988,8 +2978,6 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
     term->vt_version = nss_config_integer(NSS_ICONFIG_VT_VERION);
     term->vt_level = term->vt_version / 100;
 
-    clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
-
     term_resize(term, width, height);
 
     for(size_t i = 0; i < 2; i++) {
@@ -3019,9 +3007,6 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
     if (ioctl(term->fd, TIOCSWINSZ, &wsz) < 0)
         warn("Can't change tty size");
-
-    // Add delay to remove flickering
-    clock_gettime(CLOCK_MONOTONIC, &term->lastscroll);
 }
 
 void nss_term_focus(nss_term_t *term, _Bool focused) {

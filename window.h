@@ -8,8 +8,6 @@
 #include "util.h"
 #include "attr.h"
 
-#define NSS_WIN_FPS 120
-
 typedef enum nss_cursor_type {
     nss_cursor_block = 2,
     nss_cursor_bar = 4,
