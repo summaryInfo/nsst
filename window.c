@@ -819,7 +819,9 @@ static void push_cell(nss_window_t *win, int16_t x, int16_t y, nss_color_t *pale
         con.cbufsize = new_size;
     }
 
-	if (cell.ch == ' ' || cell.fg == cell.bg) cell.ch = 0;
+	// U+2588 FULL BLOCK
+	if (cell.ch == 0x2588) bg = fg;
+	if (cell.ch == ' ' || fg == bg) cell.ch = 0;
     con.cbuffer[con.cbufpos++] = (struct cell_desc) {
         .x = x * win->char_width,
         .y = y * (win->char_height + win->char_depth),
