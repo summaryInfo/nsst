@@ -39,14 +39,16 @@ static struct {
     [NSS_ICONFIG_LEFT_BORDER] = {8, 8, 0, 100},
     [NSS_ICONFIG_TOP_BORDER] = {8, 8, 0 , 100},
     [NSS_ICONFIG_BLINK_TIME] = {800000, 800000, 0, 10000000},
-    [NSS_ICONFIG_FONT_SIZE] = {13, 13, 1, 200}
+    [NSS_ICONFIG_FONT_SIZE] = {13, 13, 1, 200},
+    [NSS_ICONFIG_FONT_SPACING] = {-1, 0, -100, -100},
+    [NSS_ICONFIG_GAMMA] = {15000, 10000, 2000, 200000},
 };
 
 static struct {
     const char *dflt;
     char *val;
 } soptions[] = {
-        [NSS_SCONFIG_FONT_NAME - NSS_ICONFIG_MAX] = { "Iosevka-13,MaterialDesignIcons-13" },
+        [NSS_SCONFIG_FONT_NAME - NSS_ICONFIG_MAX] = { "Iosevka-13:style=Thin,MaterialDesignIcons-13" },
         [NSS_SCONFIG_ANSWERBACK_STRING - NSS_ICONFIG_MAX] = { "" },
         [NSS_SCONFIG_SHELL - NSS_ICONFIG_MAX] = { "/bin/sh" },
         [NSS_SCONFIG_TERM_NAME - NSS_ICONFIG_MAX] = { "xterm" },

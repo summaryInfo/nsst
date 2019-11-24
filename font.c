@@ -3,11 +3,13 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <math.h>
 
 #include <fontconfig/fontconfig.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
+#include "attr.h"
 #include "font.h"
 #include "window.h"
 #include "util.h"
@@ -306,18 +308,22 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     if (pitch < 0)
         src -= pitch*(face->glyph->bitmap.rows - 1);
 
+    double gamma = nss_config_integer(NSS_ICONFIG_GAMMA) / 10000.0;
     if (lcd) {
         for (size_t i = 0; i < glyph->height; i++) {
             for (size_t j = 0; j < glyph->width; j++) {
-                glyph->data[4*j + stride*i + 0] = src[pitch*i + 3*j + 2];
-                glyph->data[4*j + stride*i + 1] = src[pitch*i + 3*j + 1];
-                glyph->data[4*j + stride*i + 2] = src[pitch*i + 3*j + 0];
+                glyph->data[4*j + stride*i + 0] = 255 * pow(src[pitch*i + 3*j + 2] / 255.0, gamma);
+                glyph->data[4*j + stride*i + 1] = 255 * pow(src[pitch*i + 3*j + 2] / 255.0, gamma);
+                glyph->data[4*j + stride*i + 2] = 255 * pow(src[pitch*i + 3*j + 2] / 255.0, gamma);
                 glyph->data[4*j + stride*i + 3] = 0xff;
             }
         }
     } else {
+        //for (size_t i = 0; i < glyph->height; i++)
+        //    memcpy(glyph->data + stride*i, src + pitch*i, glyph->width);
         for (size_t i = 0; i < glyph->height; i++)
-            memcpy(glyph->data + stride*i, src + pitch*i, glyph->width);
+            for (size_t j = 0; j < glyph->width; j++)
+                glyph->data[stride*i + j] = 255 * pow(src[pitch*i + j] / 255., gamma);
     }
 
     /*

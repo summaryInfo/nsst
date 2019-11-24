@@ -534,7 +534,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
         }
 
         // TODO Make character width adjustment configurable
-        win->char_width = (total - 1) / ('~' - ' ' + 1);
+        win->char_width = total / ('~' - ' ' + 1) + nss_config_integer(NSS_ICONFIG_FONT_SPACING);
         win->char_height = maxh;
         win->char_depth = maxd;
 
@@ -807,8 +807,8 @@ static void push_cell(nss_window_t *win, int16_t x, int16_t y, nss_color_t *pale
     if (cell.attr & nss_attrib_inverse) SWAP(nss_color_t, fg, bg);
     if (cell.attr & nss_attrib_invisible || (cell.attr & nss_attrib_blink && win->blink_state)) fg = bg;
 
-    if (con.cbufpos + 1 >= con.cbufsize) {
-        size_t new_size = (3 * con.cbufsize / 2);
+    if (2*(con.cbufpos + 1) >= con.cbufsize) {
+        size_t new_size = MAX(3 * con.cbufsize / 2, 2 * con.cbufpos + 1);
         struct cell_desc *new = realloc(con.cbuffer, new_size * sizeof(*con.cbuffer));
         if (!new) return;
         con.cbuffer = new;
@@ -852,6 +852,16 @@ static inline _Bool cmp_bg(const struct cell_desc *ad, const struct cell_desc *b
     return 0;
 }
 
+static inline _Bool cmp_fg(const struct cell_desc *ad, const struct cell_desc *bd) {
+    if (ad->fg < bd->fg) return 1;
+    if (ad->fg > bd->fg) return 0;
+    if (ad->y < bd->y) return 1;
+    if (ad->y > bd->y) return 0;
+    if (ad->x < bd->x) return 1;
+    return 0;
+}
+
+/*
 static inline void shell_sort_bg(struct cell_desc *array, size_t size) {
     size_t hmax = size/9;
     size_t h;
@@ -869,15 +879,6 @@ static inline void shell_sort_bg(struct cell_desc *array, size_t size) {
     }
 }
 
-static inline _Bool cmp_fg(const struct cell_desc *ad, const struct cell_desc *bd) {
-    if (ad->fg < bd->fg) return 1;
-    if (ad->fg > bd->fg) return 0;
-    if (ad->y < bd->y) return 1;
-    if (ad->y > bd->y) return 0;
-    if (ad->x < bd->x) return 1;
-    return 0;
-}
-
 static inline void shell_sort_fg(struct cell_desc *array, size_t size) {
     size_t hmax = size/9;
     size_t h;
@@ -893,6 +894,41 @@ static inline void shell_sort_fg(struct cell_desc *array, size_t size) {
             array[j] = v;
         }
     }
+}
+*/
+
+static inline void merge_sort_fg(struct cell_desc *src, size_t size) {
+    struct cell_desc *dst = src + size;
+    for (size_t k = 2; k < size; k += k) {
+        for (size_t i = 0; i < size; ) {
+            size_t l_1 = i, h_1 = MIN(i + k/2, size);
+            size_t l_2 = h_1, h_2 = MIN(i + k, size);
+            while (l_1 < h_1 && l_2 < h_2)
+                dst[i++] = src[cmp_fg(&src[l_1], &src[l_2]) ? l_1++ : l_2++];
+            while (l_1 < h_1) dst[i++] = src[l_1++];
+            while (l_2 < h_2) dst[i++] = src[l_2++];
+        }
+        SWAP(struct cell_desc *, dst, src);
+    }
+    if (dst < src) for (size_t i = 0; i < size; i++)
+        dst[i] = src[i];
+}
+
+static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
+    struct cell_desc *dst = src + size;
+    for (size_t k = 2; k < size; k += k) {
+        for (size_t i = 0; i < size; ) {
+            size_t l_1 = i, h_1 = MIN(i + k/2, size);
+            size_t l_2 = h_1, h_2 = MIN(i + k, size);
+            while (l_1 < h_1 && l_2 < h_2)
+                dst[i++] = src[cmp_bg(&src[l_1], &src[l_2]) ? l_1++ : l_2++];
+            while (l_1 < h_1) dst[i++] = src[l_1++];
+            while (l_2 < h_2) dst[i++] = src[l_2++];
+        }
+        SWAP(struct cell_desc *, dst, src);
+    }
+    if (dst < src) for (size_t i = 0; i < size; i++)
+        dst[i] = src[i];
 }
 
 /* new method of rendering: whole screen in a time */
@@ -947,7 +983,8 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
     }
 
     //qsort(con.cbuffer, con.cbufpos, sizeof(con.cbuffer[0]), cmp_by_bg);
-    shell_sort_bg(con.cbuffer, con.cbufpos);
+    //shell_sort_bg(con.cbuffer, con.cbufpos);
+    merge_sort_bg(con.cbuffer, con.cbufpos);
 
     // Draw background
     for (size_t i = 0; i < con.cbufpos; ) {
@@ -996,7 +1033,8 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
             con.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)con.buffer);
 
     //qsort(con.cbuffer, con.cbufpos, sizeof(con.cbuffer[0]), cmp_by_fg);
-    shell_sort_fg(con.cbuffer, con.cbufpos);
+    //shell_sort_fg(con.cbuffer, con.cbufpos);
+    merge_sort_fg(con.cbuffer, con.cbufpos);
 
     // Draw chars
     for (size_t i = 0; i < con.cbufpos; ) {

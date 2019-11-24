@@ -574,7 +574,7 @@ static void term_selective_erase(nss_term_t *term, int16_t xs, int16_t ys, int16
         nss_line_t *line = term->screen[ys];
         for(int16_t i = xs; i < xe; i++)
             if (!(line->cell[i].attr & nss_attrib_protected))
-                line->cell[i] = MKCELLWITH(line->cell[i], 0);
+                line->cell[i] = MKCELLWITH(line->cell[i], ' ');
     }
 }
 
