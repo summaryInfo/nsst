@@ -7,6 +7,7 @@ IN=window.c nsst.c util.c font.c term.c attr.c input.c
 OBJ=$(patsubst %.c,%.o,$(IN))
 LIBS=`pkg-config xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --libs`
 INCLUES=`pkg-config xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --cflags`
+CC=gcc
 
 all: nsst
 
@@ -16,7 +17,7 @@ $(PROG): $(OBJ)
 %.o: %.c
 	$(CC) -c $(INCLUES) $(CFLAGS) $< -o $@
 
-fonts.o: window.h util.h
+fonts.o: window.h util.h attr.h
 window.o: window.h util.h term.h attr.h input.h
 input.o: input.h util.h term.h
 term.o: window.h util.h term.h attr.h input.h
