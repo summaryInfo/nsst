@@ -1193,7 +1193,7 @@ void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height)
     win->last_scroll = cur;
 
     if (TIMEDIFF(win->last_scroll, cur) < SCROLL_DELAY) {
-        nss_term_damage(win->term, (nss_rect_t){ .y = yd, .width = win->cw, .height = height });
+        nss_term_damage(win->term, (nss_rect_t){ .x = 0, .y = yd, .width = win->cw, .height = height });
         return;
     }
 

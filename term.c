@@ -402,26 +402,15 @@ _Bool nss_term_is_utf8(nss_term_t *term) {
     return term->mode & nss_tm_utf8;
 }
 
-void nss_term_invalidate_screen(nss_term_t *term) {
-    int16_t i = 0;
-    nss_line_t *view = term->view;
-    for (; view && i < term->height; i++) {
-        term_line_dirt(view);
-        view = view->next;
-    }
-    for (int16_t j = 0; j < term->height; j++)
-        term_line_dirt(term->screen[j - i]);
-}
-
 void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
     if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
-        int16_t i = 0;
+        int16_t i = 0, h = damage.height + damage.y;
         nss_line_t *view = term->view;
-        for (; view && i < damage.y; i++);
-        for (; view && i < term->height; view = view->next, i++)
+        for (; view && i < damage.y; view = view->next, i++);
+        for (; view && i < h; view = view->next, i++)
             for (int16_t j = damage.x; j < MIN(damage.width, view->width); j++)
-                view->cell[i].attr &= ~nss_attrib_drawn;
-        for (int16_t j = 0; j < term->height; j++)
+                view->cell[j].attr &= ~nss_attrib_drawn;
+        for (int16_t j = i; j < h; j++)
             for (int16_t k = damage.x; k < MIN(damage.width, term->screen[j - i]->width); k++)
                 term->screen[j - i]->cell[k].attr &= ~nss_attrib_drawn;
     }
@@ -454,7 +443,6 @@ void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
                     term_line_dirt(term->view);
             }
         }
-
         nss_window_shift(term->win, 0, scrolled, term->height - scrolled);
     } else if (amount < 0) {
         while (scrolled < -amount && term->view)
@@ -495,7 +483,7 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
             if (term->scrollback_top == term->view) {
                 // TODO Dont invalidate whole screen
                 term->view = term->scrollback_top->next;
-                nss_term_invalidate_screen(term);
+                nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
             }
             nss_line_t *next = term->scrollback_top->next;
             term_free_line(term, term->scrollback_top);
@@ -2728,7 +2716,7 @@ ssize_t nss_term_read(nss_term_t *term) {
 
     if (term->mode & nss_tm_scoll_on_output && term->view) {
         term->view = NULL;
-        nss_term_invalidate_screen(term);
+        nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
     }
 
     ssize_t res;
@@ -2834,7 +2822,7 @@ void nss_term_sendkey(nss_term_t *term, const char *str, _Bool encode) {
 
     if (!(term->mode & nss_tm_dont_scroll_on_input) && term->view) {
         term->view = NULL;
-        nss_term_invalidate_screen(term);
+        nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
     }
     uint8_t rep[MAX_REPORT];
     size_t len;
@@ -2873,7 +2861,7 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
         int16_t delta = MAX(0, term->c.y - height + 1);
 
-        if (delta) nss_term_invalidate_screen(term);
+        if (delta) nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
 
         for (int16_t i = height; i < term->height; i++) {
             if (i < height + delta)
@@ -3020,7 +3008,7 @@ void nss_term_focus(nss_term_t *term, _Bool focused) {
 
 void nss_term_visibility(nss_term_t *term, _Bool visible) {
     ENABLE_IF(visible, term->mode, nss_tm_visible);
-    if (visible) nss_term_invalidate_screen(term);
+    if (visible) nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
 }
 
 _Bool nss_term_mouse(nss_term_t *term, int16_t x, int16_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
