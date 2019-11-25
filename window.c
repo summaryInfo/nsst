@@ -821,9 +821,9 @@ static void push_cell(nss_window_t *win, int16_t x, int16_t y, nss_color_t *pale
         con.cbufsize = new_size;
     }
 
-	// U+2588 FULL BLOCK
-	if (cell.ch == 0x2588) bg = fg;
-	if (cell.ch == ' ' || fg == bg) cell.ch = 0;
+    // U+2588 FULL BLOCK
+    if (cell.ch == 0x2588) bg = fg;
+    if (cell.ch == ' ' || fg == bg) cell.ch = 0;
     con.cbuffer[con.cbufpos++] = (struct cell_desc) {
         .x = x * win->char_width,
         .y = y * (win->char_height + win->char_depth),
@@ -1332,6 +1332,7 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
         if (delta_x > 0)
             rectv[rectc++] = (nss_rect_t) { win->cw - delta_x, 0, delta_x, MAX(win->ch, win->ch - delta_y) };
 
+        clock_gettime(CLOCK_MONOTONIC, &win->last_scroll);
         nss_term_resize(win->term, win->cw, win->ch);
 
         for (size_t i = 0; i < rectc; i++)
