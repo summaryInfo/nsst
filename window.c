@@ -1641,6 +1641,7 @@ void nss_context_run(void) {
         }
         xcb_flush(con.con);
 
-        if (!con.daemon_mode && !con.first) break;
+        // TODO Try reconnect after timeout
+        if ((!con.daemon_mode && !con.first) || xcb_connection_has_error(con.con)) break;
     }
 }
