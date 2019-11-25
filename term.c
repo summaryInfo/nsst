@@ -1636,7 +1636,8 @@ static void term_print_char(nss_term_t *term, uint32_t ch) {
     uint8_t buf[5];
     if (write(term->printerfd, buf, utf8_encode(ch, buf, buf + 5)) < 0) {
         warn("Printer error");
-        close(term->printerfd);
+        if (term->printerfd != STDOUT_FILENO)
+            close(term->printerfd);
         term->printerfd = -1;
     }
 }
@@ -2841,6 +2842,8 @@ void nss_term_sendbreak(nss_term_t *term) {
 void nss_term_hang(nss_term_t *term) {
     if(term->fd >= 0) {
         close(term->fd);
+        if (term->printerfd != STDOUT_FILENO)
+            close(term->printerfd);
         term->fd = -1;
     }
     kill(term->child, SIGHUP);
@@ -2938,7 +2941,7 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
         term->screen[term->c.y]->cell[MAX(term->c.x - 1, 0)].attr &= ~nss_attrib_drawn;
     }
 
-	// Notify application
+    // Notify application
 
     struct winsize wsz = {
         .ws_col = width,
@@ -2992,6 +2995,14 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
         warn("Can't create tty");
         nss_free_term(term);
         return NULL;
+    }
+
+    const char *printer_path = nss_config_string(NSS_SCONFIG_PRINTER);
+    if (printer_path) {
+        if (printer_path[0] == '-' && !printer_path[1])
+            term->printerfd = STDOUT_FILENO;
+        else
+            term->printerfd = open(printer_path, O_WRONLY | O_CREAT, 0660);
     }
 
     return term;
