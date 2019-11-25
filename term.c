@@ -1494,8 +1494,10 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             //    break;
             case 47: /* Enable altscreen */
                 if (term->mode & nss_tm_disable_altscreen) break;
-                if (set ^ !!(term->mode & nss_tm_altscreen))
+                if (set ^ !!(term->mode & nss_tm_altscreen)) {
                     term_swap_screen(term);
+                    nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
+                }
                 break;
             case 66: /* DECNKM */
                 term->in_mode->appkey = set;
@@ -1570,8 +1572,10 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             case 1047: /* Enable altscreen and clear screen */
                 if (term->mode & nss_tm_disable_altscreen) break;
                 if (set) term_erase(term, 0, 0, term->width, term->height);
-                if (set ^ !!(term->mode & nss_tm_altscreen))
+                if (set ^ !!(term->mode & nss_tm_altscreen)) {
                     term_swap_screen(term);
+                    if (!set) nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
+                }
                 break;
             case 1048: /* Save cursor  */
                 term_cursor_mode(term, set);
@@ -1579,13 +1583,14 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             case 1049: /* Save cursor and switch to altscreen */
                 if (term->mode & nss_tm_disable_altscreen) break;
                 if (set) term_erase(term, 0, 0, term->width, term->height);
-                if (!(term->mode & nss_tm_altscreen) && set) {
+                if (!(term->mode & nss_tm_altscreen) && set)
                     term_cursor_mode(term, 1);
+                if (!!(term->mode & nss_tm_altscreen) ^ set) {
                     term_swap_screen(term);
-                } else if (term->mode & nss_tm_altscreen && !set) {
-                    term_swap_screen(term);
-                    term_cursor_mode(term, 0);
+                    if (!set) nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
                 }
+                if (term->mode & nss_tm_altscreen && !set)
+                    term_cursor_mode(term, 0);
                 break;
             case 1051: /* SUN function keys */
                 term->in_mode->keyboard_mapping = set ? nss_km_sun : nss_km_default;
