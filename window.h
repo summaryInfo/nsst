@@ -57,7 +57,6 @@ typedef struct nss_line nss_line_t;
 
 void nss_init_context(void);
 void nss_free_context(void);
-uint16_t nss_context_get_dpi(void);
 void nss_context_run(void);
 
 nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const uint32_t *values);

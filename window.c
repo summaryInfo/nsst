@@ -307,6 +307,31 @@ cleanup_context:
     return 0;
 }
 
+#define OPT_NAME_MAX 256
+void load_params(void) {
+    long dpi = 0;
+    char name[OPT_NAME_MAX];
+    xcb_xrm_database_t *xrmdb = xcb_xrm_database_from_default(con.con);
+    if (xrmdb) {
+        const char *clases[2] = {"Nsst", nss_config_string(NSS_SCONFIG_TERM_CLASS)};
+        for (size_t i = 0; i < sizeof(clases)/sizeof(*clases) && clases[i]; i++) {
+            snprintf(name, OPT_NAME_MAX, "%s.dpi", clases[i]);
+            xcb_xrm_resource_get_long(xrmdb, name, NULL, &dpi);
+            if (dpi > 0) break;
+        }
+        xcb_xrm_database_free(xrmdb);
+    }
+    if (dpi <= 0) {
+        warn("Can't fetch Xft.dpi, defaulting to highest dpi value");
+
+        xcb_screen_iterator_t it = xcb_setup_roots_iterator(xcb_get_setup(con.con));
+        for (; it.rem; xcb_screen_next(&it))
+            if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
+    }
+    if (dpi > 0) nss_config_set_integer(NSS_ICONFIG_DPI, dpi);
+}
+
+
 /* Initialize global state object */
 void nss_init_context(void) {
     con.daemon_mode = 0;
@@ -422,10 +447,12 @@ void nss_init_context(void) {
     con.atom_wm_protocols = intern_atom("WM_PROTOCOLS");
     con.atom_utf8_string = intern_atom("UTF8_STRING");
     con.atom_net_wm_name = intern_atom("_NET_WM_NAME");
+
+    load_params();
 }
 
 void nss_window_set_title(nss_window_t *win, const char *title) {
-    if (!title) title = "Not So Simple Terminal";
+    if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
     xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_NAME, con.atom_utf8_string, 8, strlen(title), title);
     xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, con.atom_net_wm_name, con.atom_utf8_string, 8, strlen(title), title);
 }
@@ -492,7 +519,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
     }
 
     nss_font_t *new = found_font ? nss_font_reference(found->font) :
-        nss_create_font(win->font_name, win->font_size, nss_context_get_dpi());
+        nss_create_font(win->font_name, win->font_size, nss_config_integer(NSS_ICONFIG_DPI));
     if (!new) {
         warn("Can't create new font: %s", win->font_name);
         return 0;
@@ -602,8 +629,10 @@ static void set_wm_props(nss_window_t *win) {
     uint32_t pid = getpid();
     xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, con.atom_net_wm_pid, XCB_ATOM_CARDINAL, 32, 1, &pid);
     xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, con.atom_wm_protocols, XCB_ATOM_ATOM, 32, 1, &con.atom_wm_delete_window);
-    const char class[] = "nsst\0Nsst";
+    const char class[] = "Nsst", *extra;
     xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(class), class);
+    if ((extra = nss_config_string(NSS_SCONFIG_TERM_CLASS)))
+        xcb_change_property(con.con, XCB_PROP_MODE_APPEND, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, strlen(extra), extra);
 }
 
 /* Create new window */
@@ -659,15 +688,13 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
     }
 
     set_wm_props(win);
+    nss_window_set_title(win, NULL);
 
     if (!reload_font(win, 0)) {
         warn("Can't create window");
         nss_free_window(win);
         return NULL;
     }
-
-    info("Font size: %d %d %d", win->char_height, win->char_depth, win->char_width);
-
 
     win->next = con.first;
     win->prev = NULL;
@@ -732,7 +759,6 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
 
 /* Free previously created windows */
 void nss_free_window(nss_window_t *win) {
-    info("Freeing window");
     if (win->wid) {
         xcb_unmap_window(con.con, win->wid);
         xcb_render_free_picture(con.con, win->pen);
@@ -765,30 +791,6 @@ void nss_free_window(nss_window_t *win) {
     free(win->font_name);
     free(win);
 };
-
-/* Get monitor DPI */
-uint16_t nss_context_get_dpi(void) {
-    xcb_xrm_database_t *xrmdb = xcb_xrm_database_from_default(con.con);
-    long dpi = 0;
-    if (xrmdb) {
-        if (xcb_xrm_resource_get_long(xrmdb, "Xft.dpi", NULL, &dpi) >= 0) {
-            xcb_xrm_database_free(xrmdb);
-            return dpi;
-        }
-        xcb_xrm_database_free(xrmdb);
-    }
-    warn("Can't fetch Xft.dpi, defaulting to highest dpi value");
-
-    xcb_screen_iterator_t it = xcb_setup_roots_iterator(xcb_get_setup(con.con));
-    for (; it.rem; xcb_screen_next(&it))
-        if (it.data)
-            dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
-    if (!dpi) {
-        warn("Can't get highest dpi, defaulting to 96");
-        dpi = 96;
-    }
-    return dpi;
-}
 
 static void push_cell(nss_window_t *win, int16_t x, int16_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
     nss_cell_t cell = *cel;
@@ -1341,12 +1343,8 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
         xcb_render_fill_rectangles(con.con, XCB_RENDER_PICT_OP_SRC, win->pic, color, rectc, (xcb_rectangle_t*)rectv);
     }
 
-    if (do_redraw_borders) { //Update borders
-        //int16_t width = win->cw * win->char_width + win->left_border;
-        //int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
+    if (do_redraw_borders) {
         redraw_borders(win, 0, 1);
-        //redraw_damage(win, (nss_rect_t) {width, 0, win->width - width, win->height});
-        //redraw_damage(win, (nss_rect_t) {0, height, width, win->height - height});
         //TIP: May be redraw all borders here
     }
 
@@ -1465,10 +1463,11 @@ void nss_context_run(void) {
                         xcb_flush(con.con);
                     }
                     if (!win->got_configure) {
+                        nss_term_resize(win->term, win->cw, win->ch);
                         nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
                         win->force_redraw = 1;
+                        win->got_configure = 1;
                     }
-                    win->got_configure |= 1;
                     break;
                 }
                 case XCB_KEY_RELEASE: /* ignore */ break;

@@ -83,7 +83,7 @@ static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_pate
             index.u.i = 0;
         }
 
-        info("Font file: %s:%d", file.u.s, index.u.i);
+        //info("Font file: %s:%d", file.u.s, index.u.i);
         FT_Error err = FT_New_Face(global.library, (const char*)file.u.s, index.u.i, &faces->faces[faces->length]);
         if (err != FT_Err_Ok) {
             if (err == FT_Err_Unknown_File_Format) warn("Wrong font file format");

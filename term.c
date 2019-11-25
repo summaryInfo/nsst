@@ -2850,7 +2850,7 @@ int nss_term_fd(nss_term_t *term) {
     return term->fd;
 }
 
-static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
+void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
     _Bool cur_moved = term->c.x == term->width;
 
     // Free extra lines, scrolling screen upwards
@@ -2938,6 +2938,18 @@ static void term_resize(nss_term_t *term, int16_t width, int16_t height) {
         term->screen[term->c.y]->cell[MAX(term->c.x - 1, 0)].attr &= ~nss_attrib_drawn;
     }
 
+	// Notify application
+
+    struct winsize wsz = {
+        .ws_col = width,
+        .ws_row = height,
+        .ws_xpixel = nss_window_get(term->win, nss_wc_width),
+        .ws_ypixel = nss_window_get(term->win, nss_wc_height)
+    };
+
+    if (ioctl(term->fd, TIOCSWINSZ, &wsz) < 0)
+        warn("Can't change tty size");
+
 }
 
 nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t width, int16_t height) {
@@ -2968,7 +2980,7 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
     term->vt_version = nss_config_integer(NSS_ICONFIG_VT_VERION);
     term->vt_level = term->vt_version / 100;
 
-    term_resize(term, width, height);
+    nss_term_resize(term, width, height);
 
     for(size_t i = 0; i < 2; i++) {
         term_cursor_mode(term, 1);
@@ -2976,27 +2988,13 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
         term_swap_screen(term);
     }
 
-    if (tty_open(term, nss_config_string(NSS_SCONFIG_SHELL), NULL) < 0) {
+    if (tty_open(term, nss_config_string(NSS_SCONFIG_SHELL), nss_config_argv()) < 0) {
         warn("Can't create tty");
         nss_free_term(term);
         return NULL;
     }
 
     return term;
-}
-
-void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
-    term_resize(term, width, height);
-
-    struct winsize wsz = {
-        .ws_col = width,
-        .ws_row = height,
-        .ws_xpixel = nss_window_get(term->win, nss_wc_width),
-        .ws_ypixel = nss_window_get(term->win, nss_wc_height)
-    };
-
-    if (ioctl(term->fd, TIOCSWINSZ, &wsz) < 0)
-        warn("Can't change tty size");
 }
 
 void nss_term_focus(nss_term_t *term, _Bool focused) {

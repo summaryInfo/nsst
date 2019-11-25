@@ -42,6 +42,7 @@ static struct {
     [NSS_ICONFIG_FONT_SIZE] = {13, 13, 1, 200},
     [NSS_ICONFIG_FONT_SPACING] = {-1, 0, -100, -100},
     [NSS_ICONFIG_GAMMA] = {15000, 10000, 2000, 200000},
+    [NSS_ICONFIG_DPI] = {96, 96, 10, 10000},
 };
 
 static struct {
@@ -52,6 +53,9 @@ static struct {
         [NSS_SCONFIG_ANSWERBACK_STRING - NSS_ICONFIG_MAX] = { "" },
         [NSS_SCONFIG_SHELL - NSS_ICONFIG_MAX] = { "/bin/sh" },
         [NSS_SCONFIG_TERM_NAME - NSS_ICONFIG_MAX] = { "xterm" },
+        [NSS_SCONFIG_TITLE - NSS_ICONFIG_MAX] = { "Not So Simple Terminal" },
+        [NSS_SCONFIG_PRINTER - NSS_ICONFIG_MAX] = { },
+        [NSS_SCONFIG_TERM_CLASS - NSS_ICONFIG_MAX] = { },
 };
 
 static nss_color_t coptions[NSS_PALETTE_SIZE];
@@ -196,4 +200,16 @@ nss_input_mode_t nss_config_input_mode(void) {
 }
 void nss_config_set_input_mode(nss_input_mode_t mode) {
     input_mode = mode;
+}
+
+static const char **argv = NULL;
+
+const char **nss_config_argv(void) {
+    const char **res = argv;
+    argv = NULL;
+    return res;
+}
+
+void nss_config_set_argv(const char **val) {
+    argv = val;
 }
