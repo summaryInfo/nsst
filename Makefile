@@ -5,7 +5,7 @@ CFLAGS= -Os -flto -Wall -Wextra -Wno-unused-parameter -Wno-implicit-fallthrough 
 PROG=nsst
 PERFIX?=/usr/local
 
-IN=window.c nsst.c util.c font.c term.c attr.c input.c
+IN=window.c nsst.c util.c font.c term.c config.c input.c
 OBJ=$(patsubst %.c,%.o,$(IN))
 LIBS=`pkg-config xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --libs`
 INCLUES=`pkg-config xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --cflags`
@@ -27,10 +27,10 @@ $(PROG): $(OBJ)
 %.o: %.c
 	$(CC) -c $(INCLUES) $(CFLAGS) $< -o $@
 
-fonts.o: util.h attr.h window.h
-window.o: util.h attr.h term.h input.h window.h
-input.o: attr.h util.h term.h input.h
-term.o: attr.h util.h term.h input.h window.h
-nsst.o: attr.h util.h term.h window.h
+fonts.o: util.h config.h window.h
+window.o: util.h config.h term.h input.h window.h
+input.o: config.h util.h term.h input.h
+term.o: config.h util.h term.h input.h window.h
+nsst.o: config.h util.h term.h window.h
 util.o: util.h
-attr.o: attr.h util.h input.h
+config.o: config.h util.h input.h
