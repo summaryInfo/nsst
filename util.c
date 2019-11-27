@@ -1,3 +1,5 @@
+/* Copyright (c) 2019, Evgeny Baskov. All rights reserved */
+
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -6,7 +8,6 @@
 #include <stddef.h>
 
 #include "util.h"
-#define NSS_NOLOGS
 
 _Noreturn void die(const char *fmt, ...) {
     va_list args;

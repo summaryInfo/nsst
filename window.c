@@ -1,3 +1,5 @@
+/* Copyright (c) 2019, Evgeny Baskov. All rights reserved */
+
 #define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
@@ -21,6 +23,7 @@
 #include "font.h"
 #include "term.h"
 #include "input.h"
+#include "config.h"
 
 #define TRUE_COLOR_ALPHA_DEPTH 32
 #define NUM_BORDERS 4

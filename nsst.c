@@ -1,7 +1,10 @@
+/* Copyright (c) 2019, Evgeny Baskov. All rights reserved */
+
 #define _POSIX_C_SOURCE 200809L
 
 #include "window.h"
 #include "util.h"
+#include "config.h"
 
 void usage(char *argv0) {
     die("%s [-c class ] [-a] [-f font] [-o dump_file] [-[tT] title] [-v] [-e] [command [args]]", argv0);

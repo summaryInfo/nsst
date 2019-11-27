@@ -1,3 +1,5 @@
+/* Copyright (c) 2019, Evgeny Baskov. All rights reserved */
+
 #ifndef UTIL_H_
 #define UTIL_H_ 1
 

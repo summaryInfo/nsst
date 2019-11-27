@@ -1,3 +1,5 @@
+/* Copyright (c) 2019, Evgeny Baskov. All rights reserved */
+
 #define _XOPEN_SOURCE
 #include <errno.h>
 #include <inttypes.h>
@@ -28,6 +30,7 @@
 #include "term.h"
 #include "input.h"
 #include "window.h"
+#include "config.h"
 
 #define TTY_MAX_WRITE 256
 #define NSS_FD_BUF_SZ 512

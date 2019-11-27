@@ -1,3 +1,5 @@
+/* Copyright (c) 2019, Evgeny Baskov. All rights reserved */
+
 #ifndef FONT_H_
 #define FONT_H_ 1
 

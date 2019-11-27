@@ -1,3 +1,5 @@
+/* Copyright (c) 2019, Evgeny Baskov. All rights reserved */
+
 #ifndef WINDOW_H_
 #define WINDOW_H_ 1
 
@@ -6,7 +8,6 @@
 
 #include "font.h"
 #include "util.h"
-#include "attr.h"
 
 typedef enum nss_cursor_type {
     nss_cursor_block = 2,
@@ -54,6 +55,7 @@ typedef enum nss_mouse_state {
 
 typedef struct nss_window nss_window_t;
 typedef struct nss_line nss_line_t;
+typedef uint32_t nss_color_t;
 
 void nss_init_context(void);
 void nss_free_context(void);

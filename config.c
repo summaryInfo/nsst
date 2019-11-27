@@ -1,7 +1,9 @@
+/* Copyright (c) 2019, Evgeny Baskov. All rights reserved */
+
 #define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
 #include <string.h>
-#include "attr.h"
+#include "config.h"
 #include "util.h"
 #include "window.h"
 #include "input.h"

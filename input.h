@@ -1,3 +1,5 @@
+/* Copyright (c) 2019, Evgeny Baskov. All rights reserved */
+
 #ifndef INPUT_H_
 #define INPUT_H_ 1
 

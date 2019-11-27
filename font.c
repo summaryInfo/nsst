@@ -1,3 +1,5 @@
+/* Copyright (c) 2019, Evgeny Baskov. All rights reserved */
+
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdlib.h>
@@ -9,7 +11,7 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
-#include "attr.h"
+#include "config.h"
 #include "font.h"
 #include "window.h"
 #include "util.h"
