@@ -1140,7 +1140,7 @@ static void term_dispatch_osc(nss_term_t *term) {
 
             char *parg  = pnext + 1;
             if ((pnext = strchr(parg, ';'))) *pnext = '\0';
-            else pnext = pend - 1;
+            else pnext = pend;
 
             if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
 
