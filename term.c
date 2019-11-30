@@ -775,10 +775,8 @@ static void term_esc_dump(nss_term_t *term) {
             if (term->esc.selector & P_MASK)
                 buf[pos++] = '<' + ((term->esc.selector >> 7) & 3);
             for (size_t i = 0; i <= term->esc.i; i++) {
-                size_t w = 0;
                 if (term->esc.param[i] >= 0)
-                    snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRId32"%zn", term->esc.param[i], &w);
-                pos += w;
+                    pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRId32, term->esc.param[i]);
                 if (i < term->esc.i) buf[pos++] = term->esc.subpar_mask & (1 << (i + 1)) ? ':' : ';' ;
             }
             if (term->esc.selector & I0_MASK)
