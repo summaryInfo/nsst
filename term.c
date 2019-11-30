@@ -2818,9 +2818,9 @@ void term_answerback(nss_term_t *term, const char *str, ...) {
     va_list vl;
     va_start(vl, str);
     term_encode_c1(term, (const uint8_t *)str, fmt);
-    vsnprintf((char *)csi, sizeof(csi), (char *)fmt, vl);
+    ssize_t res = vsnprintf((char *)csi, sizeof(csi), (char *)fmt, vl);
     va_end(vl);
-    term_tty_write(term, csi, (uint8_t *)memchr(csi, 0, MAX_REPORT) - csi);
+    term_tty_write(term, csi, res);
 }
 
 void nss_term_sendkey(nss_term_t *term, const char *str, _Bool encode) {
