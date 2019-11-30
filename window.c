@@ -1293,7 +1293,6 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
 
 static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
 
-    _Bool do_redraw_borders = width < win->width || height < win->height;
     //Handle resize
 
     win->width = width;
@@ -1305,6 +1304,8 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
     int16_t delta_y = new_ch - win->ch;
     win->cw = new_cw;
     win->ch = new_ch;
+
+    _Bool do_redraw_borders = delta_x < 0 || delta_y < 0;
 
     if (delta_x || delta_y) {
 
@@ -1448,12 +1449,11 @@ void nss_context_run(void) {
                     if (num_damaged)
                         xcb_poly_fill_rectangle(con.con, win->wid, win->gc, num_damaged, (xcb_rectangle_t*)damaged);
 
-                    nss_rect_t inters = { win->left_border, win->top_border, width, height };
+                    nss_rect_t inters = { win->left_border, win->top_border, width - win->left_border, height  - win->top_border};
                     if (intersect_with(&inters, &damage)) {
                         xcb_copy_area(con.con, win->pid, win->wid, win->gc, inters.x - win->left_border, inters.y - win->top_border,
                                       inters.x, inters.y, inters.width, inters.height);
                     }
-
                     xcb_flush(con.con);
                     break;
                 }
