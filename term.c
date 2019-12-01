@@ -2993,8 +2993,6 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
     term->vt_version = nss_config_integer(NSS_ICONFIG_VT_VERION);
     term->vt_level = term->vt_version / 100;
 
-    nss_term_resize(term, width, height);
-
     for(size_t i = 0; i < 2; i++) {
         term_cursor_mode(term, 1);
         term_erase(term, 0, 0, term->width, term->height);
@@ -3006,6 +3004,8 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
         nss_free_term(term);
         return NULL;
     }
+
+    nss_term_resize(term, width, height);
 
     const char *printer_path = nss_config_string(NSS_SCONFIG_PRINTER);
     if (printer_path) {
