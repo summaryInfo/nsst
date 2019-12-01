@@ -224,6 +224,8 @@ static void sigchld_fn(int arg) {
         return;
     }
 
+    // TODO Need to hang terminal here
+
     if (WIFEXITED(status) && WEXITSTATUS(status))
         info("Child exited with status: %d", WEXITSTATUS(status));
     else if (WIFSIGNALED(status))
@@ -2956,8 +2958,10 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
         .ws_ypixel = nss_window_get(term->win, nss_wc_height)
     };
 
-    if (ioctl(term->fd, TIOCSWINSZ, &wsz) < 0)
+    if (ioctl(term->fd, TIOCSWINSZ, &wsz) < 0) {
         warn("Can't change tty size");
+        nss_term_hang(term);
+    }
 
 }
 
