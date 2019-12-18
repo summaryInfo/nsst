@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <unistd.h>
 #include <xcb/render.h>
 #include <xcb/xcb.h>
@@ -33,10 +34,10 @@
 #define HEADER_WORDS ((sizeof(nss_glyph_mesg_t)+sizeof(uint32_t))/sizeof(uint32_t))
 #define CHARS_PER_MESG (WORDS_IN_MESSAGE - HEADER_WORDS)
 
-#define CB(c) (((c) & 0xff) * 0x100)
-#define CG(c) ((((c) >> 8) & 0xff) * 0x100)
-#define CR(c) ((((c) >> 16) & 0xff) * 0x100)
-#define CA(c) ((((c) >> 24) & 0xff) * 0x100)
+#define CB(c) (((c) & 0xff) * 0x101)
+#define CG(c) ((((c) >> 8) & 0xff) * 0x101)
+#define CR(c) ((((c) >> 16) & 0xff) * 0x101)
+#define CA(c) ((((c) >> 24) & 0xff) * 0x101)
 #define MAKE_COLOR(c) {.red=CR(c), .green=CG(c), .blue=CB(c), .alpha=CA(c)}
 
 #define FPS 60
@@ -312,16 +313,66 @@ cleanup_context:
 
 #define OPT_NAME_MAX 256
 void load_params(void) {
-    long dpi = 0;
+    long dpi = -1;
     char name[OPT_NAME_MAX];
     xcb_xrm_database_t *xrmdb = xcb_xrm_database_from_default(con.con);
     if (xrmdb) {
-        const char *clases[2] = {"Nsst", nss_config_string(NSS_SCONFIG_TERM_CLASS)};
-        for (size_t i = 0; i < sizeof(clases)/sizeof(*clases) && clases[i]; i++) {
-            snprintf(name, OPT_NAME_MAX, "%s.dpi", clases[i]);
-            xcb_xrm_resource_get_long(xrmdb, name, NULL, &dpi);
-            if (dpi > 0) break;
+        const char *classes[2] = {"Nsst", nss_config_string(NSS_SCONFIG_TERM_CLASS)};
+        _Bool cloaded[16] = { 0 };
+        _Bool aloaded = 0, sloaded[4] = {0};
+        const char *snames[4] = {"background", "foreground", "cursorBackground", "cursorForeground"};
+
+        for (size_t i = 0; i < sizeof(classes)/sizeof(*classes) && classes[i]; i++) {
+            if (dpi < 0) {
+                snprintf(name, OPT_NAME_MAX, "%s.dpi", classes[i]);
+                xcb_xrm_resource_get_long(xrmdb, name, NULL, &dpi);
+            }
+            for (unsigned j = 0; j < 16; j++) {
+                if (!cloaded[j]) {
+                    snprintf(name, OPT_NAME_MAX, "%s.color%u", classes[i], j);
+                    char *res = NULL;
+                    if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
+                        nss_color_t col = parse_color(res, res + strlen(res));
+                        if (col) {
+                            nss_config_set_color(NSS_CCONFIG_COLOR_0 + j, col);
+                            cloaded[j] = 1;
+                        }
+                        free(res);
+                    }
+                }
+            }
+            for (size_t j = 0; j < sizeof(snames)/sizeof(snames[0]); j++) {
+                if (!sloaded[j]) {
+                    snprintf(name, OPT_NAME_MAX, "%s.%s", classes[i], snames[j]);
+                    char *res = NULL;
+                    if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
+                        nss_color_t col = parse_color(res, res + strlen(res));
+                        if (!j) {
+                            col &= 0xFFFFFF;
+                            col |= nss_config_color(NSS_CCONFIG_BG) & 0xFF000000;
+                        }
+                        if (col) {
+                            nss_config_set_color(NSS_CCONFIG_BG + j, col);
+                            sloaded[j] = 1;
+                        }
+                        free(res);
+                    }
+                }
+            }
+            if (!aloaded) {
+                snprintf(name, OPT_NAME_MAX, "%s.alpha", classes[i]);
+                long res;
+                if (!xcb_xrm_resource_get_long(xrmdb, name, NULL, &res)) {
+                    nss_color_t col = nss_config_color(NSS_CCONFIG_BG);
+                    col &= 0xFFFFFF;
+                    col |= MAX(0, MIN(res, 255)) << 24;
+
+                    nss_config_set_color(NSS_CCONFIG_BG, col);
+                    aloaded = 1;
+                }
+            }
         }
+
         xcb_xrm_database_free(xrmdb);
     }
     if (dpi <= 0) {
@@ -334,6 +385,12 @@ void load_params(void) {
     if (dpi > 0) nss_config_set_integer(NSS_ICONFIG_DPI, dpi);
 }
 
+
+volatile sig_atomic_t reload_config;
+
+void handle_sigusr1(int sig) {
+    reload_config = 1;
+}
 
 /* Initialize global state object */
 void nss_init_context(void) {
@@ -452,6 +509,7 @@ void nss_init_context(void) {
     con.atom_net_wm_name = intern_atom("_NET_WM_NAME");
 
     load_params();
+    sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART}, NULL);
 }
 
 void nss_window_set_title(nss_window_t *win, const char *title) {
@@ -1647,5 +1705,10 @@ void nss_context_run(void) {
 
         // TODO Try reconnect after timeout
         if ((!con.daemon_mode && !con.first) || xcb_connection_has_error(con.con)) break;
+
+        if (reload_config) {
+            reload_config = 0;
+            load_params();
+        }
     }
 }

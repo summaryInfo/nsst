@@ -8,6 +8,7 @@
 #include <stddef.h>
 
 #include "util.h"
+#include "config.h"
 
 _Noreturn void die(const char *fmt, ...) {
     va_list args;
@@ -99,5 +100,66 @@ _Bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end) {
     }
     *res = part;
     return 1;
+}
+
+uint8_t *hex_decode(uint8_t *hex) {
+    uint8_t val = 0;
+    uint8_t *dst = hex;
+    _Bool state = 0;
+    while(*hex) {
+        val <<= 4;
+        if ('0' <= *hex && *hex <= '9')
+            val |= *hex - '0';
+        else if ('A' <= *hex && *hex <= 'F')
+            val |= *hex - 'A' + 10;
+        else break;
+        hex++;
+        if (!(state = !state))
+            *dst++ = val, val = 0;
+    }
+    return dst;
+
+}
+
+nss_color_t parse_color(char *str, char *end) {
+    uint64_t val = 0;
+    ptrdiff_t sz = end - str;
+    if (*str != '#') return 0;
+    while (++str < end) {
+        if (*str - '0' < 10)
+            val = (val << 4) + *str - '0';
+        else if (*str - 'A' < 6)
+            val = (val << 4) + 10 + *str - 'A';
+        else if (*str - 'a' < 6)
+            val = (val << 4) + 10 + *str - 'a';
+        else return 0;
+    }
+    nss_color_t col = 0xFF000000;
+    switch (sz) {
+    case 4:
+        for (size_t i = 0; i < 3; i++) {
+            col |= (val & 0xF) << (8*i + 4);
+            val >>= 4;
+        }
+        break;
+    case 7:
+        col |= val;
+        break;
+    case 10:
+        for (size_t i = 0; i < 3; i++) {
+            col |= ((val >> 4) & 0xFF) << 8*i;
+            val >>= 12;
+        }
+        break;
+    case 13:
+        for (size_t i = 0; i < 3; i++) {
+            col |= ((val >> 8) & 0xFF) << 8*i;
+            val >>= 16;
+        }
+        break;
+    default:
+        return 0;
+    }
+    return col;
 }
 

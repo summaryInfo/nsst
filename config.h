@@ -56,7 +56,7 @@ nss_color_t *nss_create_palette(void);
 nss_color_t nss_config_color(uint32_t opt);
 int32_t nss_config_integer(uint32_t opt);
 const char *nss_config_string(uint32_t opt);
-void nss_config_set__color(uint32_t opt, nss_color_t val);
+void nss_config_set_color(uint32_t opt, nss_color_t val);
 void nss_config_set_integer(uint32_t opt, int32_t val);
 void nss_config_set_string(uint32_t opt, const char *val);
 nss_input_mode_t nss_config_input_mode(void);

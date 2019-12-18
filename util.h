@@ -13,6 +13,7 @@
 #define SWAP(T, a, b) {T tmp_ = (a); (a) = (b); (b) = tmp_; }
 #define TIMEDIFF(t, d)  ((((d).tv_sec - (t).tv_sec) * 1000000000 + ((d).tv_nsec - (t).tv_nsec)) / 1000)
 
+typedef uint32_t nss_color_t;
 typedef struct nss_rect {
     int16_t x;
     int16_t y;
@@ -73,5 +74,7 @@ inline static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst) {
 
 size_t utf8_encode(uint32_t u, uint8_t *buf, uint8_t *end);
 _Bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end);
+uint8_t *hex_decode(uint8_t *hex);
+nss_color_t parse_color(char *str, char *end);
 
 #endif 

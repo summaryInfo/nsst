@@ -179,6 +179,10 @@ struct nss_term {
         nss_tm_print_form_feed = 1 << 26,
         nss_tm_print_enabled = 1 << 27,
         nss_tm_print_auto = 1 << 28,
+        nss_tm_title_set_utf8 = 1 << 29,
+        nss_tm_title_query_utf8 = 1 << 30,
+        nss_tm_title_set_hex = 1 << 31,
+        nss_tm_title_query_hex = 1LL << 32,
     } mode, vt52mode;
 
     struct nss_escape {
@@ -1080,54 +1084,38 @@ static void term_dispatch_dcs(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static nss_color_t parse_color(char *str, char *end) {
-    uint64_t val = 0;
-    ptrdiff_t sz = end - str;
-    if (*str != '#') return 0;
-    while (++str < end) {
-        if (*str - '0' < 10)
-            val = (val << 4) + *str - '0';
-        else if (*str - 'A' < 6)
-            val = (val << 4) + 10 + *str - 'A';
-        else if (*str - 'a' < 6)
-            val = (val << 4) + 10 + *str - 'a';
-        else return 0;
-    }
-    nss_color_t col = 0xFF000000;
-    switch (sz) {
-    case 4:
-        for (size_t i = 0; i < 3; i++) {
-            col |= (val & 0xF) << (8*i + 4);
-            val >>= 4;
-        }
-        break;
-    case 7:
-        col |= val;
-        break;
-    case 10:
-        for (size_t i = 0; i < 3; i++) {
-            col |= ((val >> 4) & 0xFF) << 8*i;
-            val >>= 12;
-        }
-        break;
-    case 13:
-        for (size_t i = 0; i < 3; i++) {
-            col |= ((val >> 8) & 0xFF) << 8*i;
-            val >>= 16;
-        }
-        break;
-    default:
-        return 0;
-    }
-    return col;
-}
-
 static void term_dispatch_osc(nss_term_t *term) {
     switch(term->esc.selector) {
         uint32_t args[2];
     case 0: /* Change window icon name and title */
     case 1: /* Change window icon name */
     case 2: /* Change window title */
+        if (term->mode & nss_tm_title_set_hex) {
+            uint8_t *end = hex_decode(term->esc.str);
+            if (*(end + (end - term->esc.str))) {
+                term_esc_dump(term);
+                break;
+            } else *end = '\0';
+        }
+        if (!(term->mode & nss_tm_title_set_utf8) && (term->mode & nss_tm_utf8)) {
+            uint8_t *dst = term->esc.str;
+            const uint8_t *ptr = dst;
+            uint32_t val = 0;
+            while (*ptr && utf8_decode(&val, &ptr, term->esc.str + term->esc.si))
+                *dst++ = val;
+            *dst = '\0';
+        } else if (term->mode & nss_tm_title_set_utf8 && !(term->mode & nss_tm_utf8)) {
+            uint8_t *ds = (uint8_t *)strdup((char *)term->esc.str);
+            uint8_t *dst = term->esc.str;
+            if (!ds) break;
+            term->esc.si = 0;
+            while (*ds) {
+                uint32_t val = *ds++;
+                dst += utf8_encode(val, dst, term->esc.str + ESC_MAX_STR);
+            }
+            *dst = '\0';
+            free(ds);
+        }
         nss_window_set_title(term->win, (char *)term->esc.str);
         break;
     case 4: /* Set color */ {
@@ -1258,6 +1246,19 @@ static void term_dispatch_osc(nss_term_t *term) {
     case 119: /*Reset  Highlight foreground color */
         term_esc_dump(term);
         break;
+    case 13001: {
+        char *end = (char *)term->esc.str;
+        errno = 0;
+        unsigned long res = strtoul(end, &end, 10);
+        if (res > 255 || errno || *end) {
+            term_esc_dump(term);
+            break;
+        }
+        term->palette[NSS_SPECIAL_BG] &= 0x00FFFFFF;
+        term->palette[NSS_SPECIAL_BG] |= res << 24;
+        nss_window_set(term->win, nss_wc_background, &term->palette[NSS_SPECIAL_BG]);
+        break;
+    }
     default:
         term_esc_dump(term);
     }
@@ -1428,7 +1429,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                     term->in_mode->keyboad_vt52 = 1;
                     term->vt_level = 0;
                     term->c.gl_ss = term->c.gl = 0;
-                    term->c.gr = 2, 
+                    term->c.gr = 2,
                     term->c.gn[0] = term->c.gn[2] = term->c.gn[3] = nss_94cs_ascii;
                     term->c.gn[1] = nss_94cs_dec_graph;
                     term->mode &= nss_tm_visible | nss_tm_focused | nss_tm_reverse_video;
@@ -1710,6 +1711,28 @@ static void term_dispatch_mc(nss_term_t *term) {
     }
 }
 
+static void term_dispatch_tmode(nss_term_t *term, _Bool set) {
+    size_t pnum = term->esc.i - (term->esc.param[term->esc.i] < 0);
+    for (size_t i = 0; i < pnum; i++) {
+        switch(term->esc.param[i]) {
+        case 0:
+            ENABLE_IF(set, term->mode, nss_tm_title_set_hex);
+            break;
+        case 1:
+            ENABLE_IF(set, term->mode, nss_tm_title_query_hex);
+            break;
+        case 2:
+            ENABLE_IF(set, term->mode, nss_tm_title_set_utf8);
+            break;
+        case 3:
+            ENABLE_IF(set, term->mode, nss_tm_title_query_utf8);
+            break;
+        default:
+            term_esc_dump(term);
+        }
+    }
+}
+
 static void term_dispatch_csi(nss_term_t *term) {
     //DUMP
     //term_esc_dump(term);
@@ -1820,8 +1843,9 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('S'): /* SU */
         term_scroll(term, term->top, term->bottom, PARAM(0, 1), 0);
         break;
-    //case C('T') | P('>'): /* Reset title, xterm */
-    //    break;
+    case C('T') | P('>'): /* Reset title, xterm */
+        term_dispatch_tmode(term, 0);
+        break;
     case C('T'): /* SD */
     case C('^'): /* SD */
         term_scroll(term, term->top, term->bottom, -PARAM(0, 1), 0);
@@ -1943,8 +1967,9 @@ static void term_dispatch_csi(nss_term_t *term) {
     //    break
     //case C('t'): /* Window operations, xterm */
     //    break
-    //case C('t') | P('>'):/* Title mode, xterm */
-    //    break
+    case C('t') | P('>'):/* Set title mode, xterm */
+        term_dispatch_tmode(term, 1);
+        break;
     case C('u'): /* (SCORC) */
         term_cursor_mode(term, 0);
         break;
