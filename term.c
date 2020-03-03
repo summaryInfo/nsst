@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
 #define _XOPEN_SOURCE
 #include <errno.h>
