@@ -1796,7 +1796,8 @@ static void term_dispatch_csi(nss_term_t *term) {
         case 2: /* All */
             erase(term, 0, 0, term->width, term->height);
             break;
-        case 3: /* Saved Lines?, xterm */
+        case 3:
+            /* UNIMPLEMENTED - Erase scrollback, xterm */
         default:
             term_esc_dump(term);
         }
@@ -2854,6 +2855,8 @@ void nss_term_sendkey(nss_term_t *term, const char *str, _Bool encode) {
     if (term->mode & nss_tm_echo)
         term_write(term, (uint8_t *)str, strlen(str), 1);
 
+    // TODO Encode NRCSs here
+
     if (!(term->mode & nss_tm_dont_scroll_on_input) && term->view) {
         term->view = NULL;
         nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
@@ -2949,6 +2952,7 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
     // Set parameters
 
     int16_t minh = MIN(height, term->height);
+    int16_t oldw = term->width;
 
     term->width = width;
     term->height = height;
@@ -2956,10 +2960,17 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
     // Clear new regions
 
     nss_line_t *view = term->view;
-    for (size_t i = 0; i < 2; i++) {
+    for (size_t j = 0; j < 2; j++) {
         for (int16_t i = 0; i < minh; i++)
-            if (term->screen[i]->width < width)
+            if (term->screen[i]->width < width) {
+                // Reallocate line if it is not wide enough
                 term->screen[i] = term_realloc_line(term, term->screen[i], width);
+            } else {
+                // If line is already wider than screen
+                // it still needs to be redrawn
+                for (int16_t k = oldw; k < width; k++)
+                    term->screen[i]->cell[k].attr &= ~nss_attrib_drawn;
+            }
         term_swap_screen(term);
     }
     term->view = view;
