@@ -761,7 +761,6 @@ static inline void term_esc_start_string(nss_term_t *term) {
 }
 
 static void term_esc_dump(nss_term_t *term) {
-    return;
     char buf[ESC_DUMP_MAX] = "^[";
     size_t pos = 2;
     switch(term->esc.state) {
@@ -779,7 +778,7 @@ static void term_esc_dump(nss_term_t *term) {
         case esc_dcs_string:
             buf[pos++] = term->esc.state == esc_dcs_string ? 'P' :'[';
             if (term->esc.selector & P_MASK)
-                buf[pos++] = '<' + ((term->esc.selector >> 7) & 3);
+                buf[pos++] = '<' + ((term->esc.selector & P_MASK) >> 6) - 1;
             for (size_t i = 0; i <= term->esc.i; i++) {
                 if (term->esc.param[i] >= 0)
                     pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRId32, term->esc.param[i]);
@@ -1412,7 +1411,7 @@ static void term_dispatch_sgr(nss_term_t *term) {
 }
 
 static void term_dispatch_srm(nss_term_t *term, _Bool set) {
-
+	term_esc_dump(term);
     if (term->esc.selector & P_MASK) {
         for(uint32_t i = 0; i <= term->esc.i; i++) {
             uint32_t arg = set;
@@ -1575,24 +1574,26 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 break;
             case 1047: /* Enable altscreen and clear screen */
                 if (term->mode & nss_tm_disable_altscreen) break;
-                if (set) term_erase(term, 0, 0, term->width, term->height);
-                if (set ^ !!(term->mode & nss_tm_altscreen)) {
+                if (set ^ !!(term->mode & nss_tm_altscreen))
                     term_swap_screen(term);
-                    if (!set) nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
-                }
+                if (set)
+                    term_erase(term, 0, 0, term->width, term->height);
+                else
+                    nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
                 break;
             case 1048: /* Save cursor  */
                 term_cursor_mode(term, set);
                 break;
             case 1049: /* Save cursor and switch to altscreen */
                 if (term->mode & nss_tm_disable_altscreen) break;
-                if (set) term_erase(term, 0, 0, term->width, term->height);
                 if (!(term->mode & nss_tm_altscreen) && set)
                     term_cursor_mode(term, 1);
-                if (!!(term->mode & nss_tm_altscreen) ^ set) {
+                if (!!(term->mode & nss_tm_altscreen) ^ set)
                     term_swap_screen(term);
-                    if (!set) nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
-                }
+                if (set)
+                    term_erase(term, 0, 0, term->width, term->height);
+                else
+                    nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
                 if (term->mode & nss_tm_altscreen && !set)
                     term_cursor_mode(term, 0);
                 break;
@@ -2952,7 +2953,6 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
     // Set parameters
 
     int16_t minh = MIN(height, term->height);
-    int16_t oldw = term->width;
 
     term->width = width;
     term->height = height;
@@ -2961,16 +2961,10 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
     nss_line_t *view = term->view;
     for (size_t j = 0; j < 2; j++) {
+        // Reallocate line if it is not wide enough
         for (int16_t i = 0; i < minh; i++)
-            if (term->screen[i]->width < width) {
-                // Reallocate line if it is not wide enough
+            if (term->screen[i]->width < width)
                 term->screen[i] = term_realloc_line(term, term->screen[i], width);
-            } else {
-                // If line is already wider than screen
-                // it still needs to be redrawn
-                for (int16_t k = oldw; k < width; k++)
-                    term->screen[i]->cell[k].attr &= ~nss_attrib_drawn;
-            }
         term_swap_screen(term);
     }
     term->view = view;
