@@ -87,7 +87,7 @@ struct nss_window {
     unsigned got_configure : 1;
     unsigned blink_state : 1;
     unsigned mouse_events : 1;
-    unsigned force_redraw : 1; //TODO
+    unsigned force_redraw : 1;
     unsigned blink_commited : 1;
 
     int16_t width;
@@ -626,7 +626,6 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
             maxh = MAX(maxh, glyphs[i - ' '][0]->y);
         }
 
-        // TODO Make character width adjustment configurable
         win->char_width = total / ('~' - ' ' + 1) + nss_config_integer(NSS_ICONFIG_FONT_SPACING);
         win->char_height = maxh;
         win->char_depth = maxd;
