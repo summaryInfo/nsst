@@ -214,7 +214,7 @@ struct nss_term {
     pid_t child;
     int fd;
     int printerfd;
-    // Make this just 4 bytes for incomplete utf-8
+    //TODO: Make this just 4 bytes for incomplete utf-8
     size_t fd_buf_pos;
     uint8_t fd_buf[NSS_FD_BUF_SZ];
 };
@@ -243,7 +243,7 @@ static void exec_shell(const char *cmd, const char **args) {
     if (!(pw = getpwuid(getuid()))) {
         if (errno) die("getpwuid(): %s", strerror(errno));
         else die("I don't know you");
-    }
+     }
 
     const char *sh = cmd;
     if (!(sh = getenv("SHELL")))
@@ -1115,6 +1115,7 @@ static void term_dispatch_osc(nss_term_t *term) {
             *dst = '\0';
             free(ds);
         }
+        // Input could be not UTF-8 but property always is UTF-8
         nss_window_set_title(term->win, (char *)term->esc.str);
         break;
     case 4: /* Set color */ {
@@ -1411,7 +1412,6 @@ static void term_dispatch_sgr(nss_term_t *term) {
 }
 
 static void term_dispatch_srm(nss_term_t *term, _Bool set) {
-	term_esc_dump(term);
     if (term->esc.selector & P_MASK) {
         for(uint32_t i = 0; i <= term->esc.i; i++) {
             uint32_t arg = set;
@@ -1574,7 +1574,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 break;
             case 1047: /* Enable altscreen and clear screen */
                 if (term->mode & nss_tm_disable_altscreen) break;
-                if (set ^ !!(term->mode & nss_tm_altscreen))
+                if (set == !(term->mode & nss_tm_altscreen))
                     term_swap_screen(term);
                 if (set)
                     term_erase(term, 0, 0, term->width, term->height);
@@ -1586,16 +1586,15 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 break;
             case 1049: /* Save cursor and switch to altscreen */
                 if (term->mode & nss_tm_disable_altscreen) break;
-                if (!(term->mode & nss_tm_altscreen) && set)
-                    term_cursor_mode(term, 1);
-                if (!!(term->mode & nss_tm_altscreen) ^ set)
+                if (set == !(term->mode & nss_tm_altscreen)) {
+                    if (set) term_cursor_mode(term, 1);
                     term_swap_screen(term);
+                    if (!set) term_cursor_mode(term, 0);
+                }
                 if (set)
                     term_erase(term, 0, 0, term->width, term->height);
                 else
                     nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
-                if (term->mode & nss_tm_altscreen && !set)
-                    term_cursor_mode(term, 0);
                 break;
             case 1051: /* SUN function keys */
                 term->in_mode->keyboard_mapping = set ? nss_km_sun : nss_km_default;
@@ -2064,10 +2063,14 @@ static void term_dispatch_csi(nss_term_t *term) {
     //    break;
     //case C('x') | I0('$'): /* DECFRA */
     //    break;
-    //case C('z') | I0('$'): /* DECERA */
-    //    break;
-    //case C('{') | I0('$'): /* DECSERA */
-    //    break;
+    case C('z') | I0('$'): /* DECERA */
+        term_erase(term, PARAM(0,1) - 1, PARAM(1,1) - 1, PARAM(2,1) - 1, PARAM(3,1) - 1);
+        term_move_to(term, term->c.x, term->c.y);
+        break;
+    case C('{') | I0('$'): /* DECSERA */
+        term_selective_erase(term, PARAM(0,1) - 1, PARAM(1,1) - 1, PARAM(2,1) - 1, PARAM(3,1) - 1);
+        term_move_to(term, term->c.x, term->c.y);
+        break;
     //case C('w') | I0('\''): /* DECEFR */
     //    break;
     //case C('z') | I0('\''): /* DECELR */
