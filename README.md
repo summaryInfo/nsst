@@ -33,9 +33,11 @@ Colors and background opacity are can be customized through xrdb
 	* C99 compatible comiler
 
 ### Runtime
-	* xcb
-	* xcb-xkb
-	* xcb-render
+	* xcb-util
+    * xcb-util-wm
+    * xcb-util-renderutil
+    * xcb-util-keysyms
+    * xcb-util-xrm
 	* fontconfig
 	* freetype2
 	* xkbcommon
