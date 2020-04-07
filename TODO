@@ -1,0 +1,27 @@
+Make all of the options accessible through command line flags and xrdb
+NRCS input encoding should be happenning in term.c
+
+Input
+    DECUDK
+    input NRCSs
+Render
+    Double width/height, Down-Line-Loadable fonts
+	Better font handling
+    (Box drawing characters -- draw them manually to make pixel-prefect)
+Term
+    Capability restriction
+	Printing with attributes
+	DEC Locator
+    Left/Right margins
+	Rectangular ops
+	Reports
+    DCS
+    Window operations
+		Title stack (!)
+    SIXEL
+    Reset is incorrect
+
+    Selections (copy/paste)
+	Mouse selection
+	Hightlight tracking
+	Title operations
