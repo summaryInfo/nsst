@@ -1,6 +1,6 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
-#define _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
 #include <errno.h>
 #include <inttypes.h>
 #include <poll.h>
@@ -318,6 +318,7 @@ int tty_open(nss_term_t *term, const char *cmd, const char **args) {
 }
 
 static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
+    // Buffer here causes a leak in theory
     static nss_cid_t *buf = NULL, buf_len = 0, *new;
 
     if (line->extra_size > 0 && line->extra[line->extra_size - 1] == col)
@@ -1104,7 +1105,9 @@ static void term_dispatch_osc(nss_term_t *term) {
                 *dst++ = val;
             *dst = '\0';
         } else if (term->mode & nss_tm_title_set_utf8 && !(term->mode & nss_tm_utf8)) {
-            uint8_t *ds = (uint8_t *)strdup((char *)term->esc.str);
+            uint8_t *ds = malloc((term->esc.si + 1)*sizeof(uint8_t));
+            memcpy(ds, term->esc.str, term->esc.si + 1);
+
             uint8_t *dst = term->esc.str;
             if (!ds) break;
             term->esc.si = 0;
