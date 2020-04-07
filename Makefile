@@ -7,7 +7,7 @@ PERFIX?=/usr/local
 
 IN=window.c nsst.c util.c font.c term.c config.c input.c
 OBJ=$(patsubst %.c,%.o,$(IN))
-LIBS=`pkg-config xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --libs`
+LIBS=-lm -lutil `pkg-config xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --libs`
 INCLUES=`pkg-config xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --cflags`
 
 all: nsst
