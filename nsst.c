@@ -11,73 +11,91 @@
 #include "util.h"
 #include "config.h"
 
-void usage(char *argv0) {
-    die("%s [-c class ] [-a] [-f font] [-o dump_file] [-[tT] title] [-v] [-e] [command [args]]", argv0);
-/*
-  -g[=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]
 
-  --scrollback-size=10000
-        -H<lines>
-  --vt-version=220
-        -V<version>
-  --tab-width=8
-  --cursor-shape=
-  --underline-width=
-  --cursor-width=
-  --vertical-border=
-  --horizontal-border=
-  --blink-time=
-  --font-size=
-  --font-spacing=
-  --font-subpixel=
-  --font-gamma=
-  --display-dpi=96
-  --use-utf8=1
-  --allow-charsets=1
-  --enable-autowrap=1
-  --scroll-on-input=1
-  --scroll-on-output=0
-  --enable-reverse-video=0
-  --allow-alternate=1
-
-    //Input options
-  --modify-function=3
-  --modify-cursor=3
-  --modify-keypad=3
-  --modify-other=0
-  --modify-other-fmt=0
-  --modkey-allow-keypad=0
-  --modkey-allow-edit-keypad=0
-  --modkey-allow-function=0
-  --modkey-allow-misc=0
-  --appkey=0
-  --appcursor=0
-  --numlock=1
-  --lock-keyboard=0
-  --has-meta=1
-  --meta-sends-escape=1
-  --backspace-is-delete=1
-  --delete-is-delete=0
-  --fkey-increment=10
-  --keyboard-mapping=default
-*/
-
-}
-
-void version(void) {
-    fprintf(stderr, "Not So Simple Terminal v1.0.0\n");
-    exit(EXIT_SUCCESS);
-}
-
-struct optmap_item {
+static struct optmap_item {
     const char *name;
     enum nss_config_opt opt;
+} map[] = {
+    {"allow-alternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
+    {"allow-charsets", NSS_ICONFIG_ALLOW_CHARSETS},
+    {"answerback-string", NSS_SCONFIG_ANSWERBACK_STRING},
+    {"appcursor", NSS_ICONFIG_INPUT_APPCURSOR},
+    {"appkey", NSS_ICONFIG_INPUT_APPKEY},
+    {"backspace-is-delete", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
+    {"blink-time",NSS_ICONFIG_BLINK_TIME},
+    {"cursor-shape", NSS_ICONFIG_CURSOR_SHAPE},
+    {"cursor-width",NSS_ICONFIG_CURSOR_WIDTH},
+    {"delete-is-delete", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
+    {"enable-autowrap", NSS_ICONFIG_INIT_WRAP},
+    {"enable-reverse-video", NSS_ICONFIG_REVERSE_VIDEO},
+    {"fkey-increment", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
+    {"font", NSS_SCONFIG_FONT_NAME},
+    {"font-gamma",NSS_ICONFIG_GAMMA},
+    {"font-size",NSS_ICONFIG_FONT_SIZE},
+    {"font-spacing", NSS_ICONFIG_FONT_SPACING},
+    {"font-subpixel",NSS_ICONFIG_SUBPIXEL_FONTS},
+    {"force-dpi",NSS_ICONFIG_DPI},
+    {"has-meta", NSS_ICONFIG_INPUT_HAS_META},
+    {"horizontal-border",NSS_ICONFIG_TOP_BORDER},
+    {"keyboard-mapping", NSS_ICONFIG_INPUT_MAPPING},
+    {"lock-keyboard", NSS_ICONFIG_INPUT_LOCK},
+    {"meta-sends-escape", NSS_ICONFIG_INPUT_META_IS_ESC},
+    {"modify-cursor", NSS_ICONFIG_INPUT_MODIFY_CURSOR},
+    {"modify-function", NSS_ICONFIG_INPUT_MODIFY_FUNCTION},
+    {"modify-keypad", NSS_ICONFIG_INPUT_MODIFY_KEYPAD},
+    {"modify-other", NSS_ICONFIG_INPUT_MODIFY_OTHER},
+    {"modify-other-fmt", NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT},
+    {"modkey-allow-edit-keypad", NSS_ICONFIG_INPUT_MALLOW_EDIT},
+    {"modkey-allow-function", NSS_ICONFIG_INPUT_MALLOW_FUNCTION},
+    {"modkey-allow-keypad", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
+    {"modkey-allow-misc", NSS_ICONFIG_INPUT_MALLOW_MISC},
+    {"numlock", NSS_ICONFIG_INPUT_NUMLOCK},
+    {"printer", NSS_SCONFIG_PRINTER},
+    {"scroll-on-input", NSS_ICONFIG_SCROLL_ON_INPUT},
+    {"scroll-on-output", NSS_ICONFIG_SCROLL_ON_OUTPUT},
+    {"scrollback-size", NSS_ICONFIG_HISTORY_LINES},
+    {"shell", NSS_SCONFIG_SHELL},
+    {"tab-width", NSS_ICONFIG_TAB_WIDTH},
+    {"term-name", NSS_SCONFIG_TERM_NAME},
+    {"title", NSS_SCONFIG_TITLE},
+    {"underline-width",NSS_ICONFIG_UNDERLINE_WIDTH},
+    {"use-utf8", NSS_ICONFIG_UTF8},
+    {"vertical-border",NSS_ICONFIG_LEFT_BORDER},
+    {"vt-version", NSS_ICONFIG_VT_VERION},
+    {"window-class", NSS_SCONFIG_TERM_CLASS},
 };
 
 static int optmap_cmp(const void *a, const void *b) {
     const char *a_name = ((const struct optmap_item *)a)->name;
     const char *b_name = ((const struct optmap_item *)b)->name;
     return strcmp(a_name, b_name);
+}
+
+
+static void usage(char *argv0, int code) {
+    fprintf(stderr, "%s%s", argv0, " [-options] [-e] [command [args]]\n"
+        "Where options are:\n"
+            "\t-g[=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]\n"
+            "\t-c<class>\n"
+            "\t-f<font>\n"
+            "\t-o<dump_file>\n"
+            "\t-[tT]<title>\n"
+            "\t-D<term_name>\n"
+            "\t-s<shell>\n"
+            "\t-H<scrollback_size>\n"
+            "\t-V<vt_version>\n"
+            "\t-h or --help\n"
+            "\t-v or --version\n");
+    for (size_t i = 0; i < sizeof(map)/sizeof(map[0]); i++)
+        fprintf(stderr, "\t--%s=<x>\n", map[i].name);
+    nss_free_context();
+    exit(code);
+}
+
+static void version(void) {
+    fprintf(stderr, "Not So Simple Terminal v1.0.0\n");
+    nss_free_context();
+    exit(EXIT_SUCCESS);
 }
 
 static void parse_geometry(char *arg, char *argv0) {
@@ -87,7 +105,7 @@ static void parse_geometry(char *arg, char *argv0) {
     if (arg[0] == '+' || arg[0] == '-') {
         _Bool scanned = sscanf(arg, "%c%"SCNd16"%c%"SCNd16, &xsgn, &x, &ysgn, &y) == 4;
         if (!scanned || (xsgn != '+' && xsgn != '-') || (ysgn != '+' && ysgn != '-'))
-            usage(argv0);
+            usage(argv0, EXIT_FAILURE);
         if (xsgn == '-') x = -x;
         if (ysgn == '-') y = -y;
     } else {
@@ -95,10 +113,10 @@ static void parse_geometry(char *arg, char *argv0) {
                 &w, &h, &xsgn, &x, &ysgn, &y);
         if (res == 6) {
             if ((xsgn != '+' && xsgn != '-') || (ysgn != '+' && ysgn != '-'))
-                usage(argv0);
+                usage(argv0, EXIT_FAILURE);
             if (xsgn == '-') x = -x;
             if (ysgn == '-') y = -y;
-        } else if (res != 2) usage(argv0);
+        } else if (res != 2) usage(argv0, EXIT_FAILURE);
         nss_config_set_integer(NSS_ICONFIG_WINDOW_WIDTH, w);
         nss_config_set_integer(NSS_ICONFIG_WINDOW_HEIGHT, h);
     }
@@ -114,7 +132,7 @@ static char **parse_options(int argc, char **argv) {
     char *arg;
     while (argv[ind] && argv[ind][0] == '-') {
         size_t cind = 0;
-        if (!argv[ind][1]) usage(argv[0]);
+        if (!argv[ind][1]) usage(argv[0], EXIT_FAILURE);
         if (argv[ind][1] == '-') {
             if (!argv[ind][2]) {
                 ind++;
@@ -126,79 +144,34 @@ static char **parse_options(int argc, char **argv) {
                 if (arg[1]) *arg++ = '\0';
                 else arg = argv[++ind];
             }
-            if (!arg) usage(argv[0]);
+            if (!arg) usage(argv[0], EXIT_FAILURE);
 
-            static struct optmap_item *res, map[] = {
-                {"allow-alternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
-                {"allow-charsets", NSS_ICONFIG_ALLOW_CHARSETS},
-                {"answerback-string", NSS_SCONFIG_ANSWERBACK_STRING},
-                {"appcursor", NSS_ICONFIG_INPUT_APPCURSOR},
-                {"appkey", NSS_ICONFIG_INPUT_APPKEY},
-                {"backspace-is-delete", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
-                {"blink-time",NSS_ICONFIG_BLINK_TIME},
-                {"cursor-shape", NSS_ICONFIG_CURSOR_SHAPE},
-                {"cursor-width",NSS_ICONFIG_CURSOR_WIDTH},
-                {"delete-is-delete", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
-                {"enable-autowrap", NSS_ICONFIG_INIT_WRAP},
-                {"enable-reverse-video", NSS_ICONFIG_REVERSE_VIDEO},
-                {"fkey-increment", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
-                {"font", NSS_SCONFIG_FONT_NAME},
-                {"font-gamma",NSS_ICONFIG_GAMMA},
-                {"font-size",NSS_ICONFIG_FONT_SIZE},
-                {"font-spacing", NSS_ICONFIG_FONT_SPACING},
-                {"font-subpixel",NSS_ICONFIG_SUBPIXEL_FONTS},
-                {"force-dpi",NSS_ICONFIG_DPI},
-                {"has-meta", NSS_ICONFIG_INPUT_HAS_META},
-                {"horizontal-border",NSS_ICONFIG_TOP_BORDER},
-                {"keyboard-mapping", NSS_ICONFIG_INPUT_MAPPING},
-                {"lock-keyboard", NSS_ICONFIG_INPUT_LOCK},
-                {"meta-sends-escape", NSS_ICONFIG_INPUT_META_IS_ESC},
-                {"modify-cursor", NSS_ICONFIG_INPUT_MODIFY_CURSOR},
-                {"modify-function", NSS_ICONFIG_INPUT_MODIFY_FUNCTION},
-                {"modify-keypad", NSS_ICONFIG_INPUT_MODIFY_KEYPAD},
-                {"modify-other", NSS_ICONFIG_INPUT_MODIFY_OTHER},
-                {"modify-other-fmt", NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT},
-                {"modkey-allow-edit-keypad", NSS_ICONFIG_INPUT_MALLOW_EDIT},
-                {"modkey-allow-function", NSS_ICONFIG_INPUT_MALLOW_FUNCTION},
-                {"modkey-allow-keypad", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
-                {"modkey-allow-misc", NSS_ICONFIG_INPUT_MALLOW_MISC},
-                {"numlock", NSS_ICONFIG_INPUT_NUMLOCK},
-                {"printer", NSS_SCONFIG_PRINTER},
-                {"scroll-on-input", NSS_ICONFIG_SCROLL_ON_INPUT},
-                {"scroll-on-output", NSS_ICONFIG_SCROLL_ON_OUTPUT},
-                {"scrollback-size", NSS_ICONFIG_HISTORY_LINES},
-                {"shell", NSS_SCONFIG_SHELL},
-                {"tab-width", NSS_ICONFIG_TAB_WIDTH},
-                {"term-name", NSS_SCONFIG_TERM_NAME},
-                {"title", NSS_SCONFIG_TITLE},
-                {"underline-width",NSS_ICONFIG_UNDERLINE_WIDTH},
-                {"use-utf8", NSS_ICONFIG_UTF8},
-                {"vertical-border",NSS_ICONFIG_LEFT_BORDER},
-                {"vt-version", NSS_ICONFIG_VT_VERION},
-                {"window-class", NSS_SCONFIG_TERM_CLASS},
-            };
-            res = bsearch(&(struct optmap_item){argv[ind] + 2}, map,
-                    sizeof(map)/sizeof(*map), sizeof(*map), optmap_cmp);
+            struct optmap_item *res = bsearch(&(struct optmap_item){argv[ind] + 2},
+                    map, sizeof(map)/sizeof(*map), sizeof(*map), optmap_cmp);
             if (res) nss_config_set_string(res->opt, arg);
             else if (!strcmp(argv[ind] + 2, "geometry"))
-				parse_geometry(arg, argv[0]);
-            else usage(argv[0]);
+                parse_geometry(arg, argv[0]);
+            else if (!strcmp(argv[ind] + 2, "help"))
+                usage(argv[0], EXIT_SUCCESS);
+            else if (!strcmp(argv[ind] + 2, "verion"))
+                version();
+            else usage(argv[0], EXIT_FAILURE);
         } else while (argv[ind] && argv[ind][++cind]) {
             char letter = argv[ind][cind];
             // One letter options
             switch (letter) {
             case 'e':
-                if (!argv[++ind]) usage(argv[0]);
+                if (!argv[++ind]) usage(argv[0], EXIT_FAILURE);
                 return &argv[ind];
             case 'h':
-                usage(argv[0]);
+                usage(argv[0], EXIT_FAILURE);
                 break;
             case 'v':
                 version();
             default:
                 // Has arguments
                 if (!argv[ind][++cind]) ind++, cind = 0;
-                if (!argv[ind]) usage(argv[0]);
+                if (!argv[ind]) usage(argv[0], EXIT_FAILURE);
                 arg = argv[ind] + cind;
 
                 enum nss_config_opt opt = 0;
@@ -243,5 +216,5 @@ int main(int argc, char **argv) {
     nss_create_window(NULL, 0, NULL);
     nss_context_run();
     nss_free_context();
-    return 0;
+    return EXIT_SUCCESS;
 }
