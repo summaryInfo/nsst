@@ -1715,6 +1715,7 @@ static void term_dispatch_mc(nss_term_t *term) {
 }
 
 static void term_dispatch_tmode(nss_term_t *term, _Bool set) {
+    if (!term->esc.i) return;
     size_t pnum = term->esc.i - (term->esc.param[term->esc.i] < 0);
     for (size_t i = 0; i < pnum; i++) {
         switch(term->esc.param[i]) {
