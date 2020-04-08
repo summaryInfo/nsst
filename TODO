@@ -1,5 +1,6 @@
-Make all of the options accessible through command line flags and xrdb
-NRCS input encoding should be happenning in term.c
+Make all of the options accessible through xrdb
+FIX: Geometry should be in characters?
+Make command line options descriptions
 
 Input
     DECUDK
@@ -25,3 +26,4 @@ Term
 	Mouse selection
 	Hightlight tracking
 	Title operations
+    NRCS input encoding should be happenning in term.c
