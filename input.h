@@ -63,6 +63,7 @@ typedef struct nss_input_mode {
         nss_km_hp,
         nss_km_sun,
         nss_km_sco,
+        nss_km_MAX
     } keyboard_mapping : 3;
     // 32 bits total
 } nss_input_mode_t;

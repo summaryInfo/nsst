@@ -40,6 +40,7 @@
 #define CA(c) ((((c) >> 24) & 0xff) * 0x101)
 #define MAKE_COLOR(c) {.red=CR(c), .green=CG(c), .blue=CB(c), .alpha=CA(c)}
 
+//TODO Make them configurable
 #define FPS 60
 #define REDRAW_TIME (1000000/FPS)
 #define REDRAW_SCROLL_TIME 3*REDRAW_TIME/2
@@ -736,6 +737,13 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
     uint32_t values1[5] = { win->bg, win->bg, XCB_GRAVITY_NORTH_WEST, win->ev_mask, con.mid };
     int16_t x = nss_config_integer(NSS_ICONFIG_WINDOW_X);
     int16_t y = nss_config_integer(NSS_ICONFIG_WINDOW_Y);
+
+	// Adjust geometry
+    if (nss_config_integer(NSS_ICONFIG_WINDOW_NEGATIVE_X))
+        x += con.screen->width_in_pixels - win->width - 2;
+    if (nss_config_integer(NSS_ICONFIG_WINDOW_NEGATIVE_Y))
+        y += con.screen->height_in_pixels - win->height - 2;
+
     win->wid = xcb_generate_id(con.con);
     c = xcb_create_window_checked(con.con, TRUE_COLOR_ALPHA_DEPTH, win->wid, con.screen->root,
                                   x, y, win->width, win->height, 0,
