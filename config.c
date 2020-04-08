@@ -38,7 +38,7 @@ static struct {
     [NSS_ICONFIG_INIT_WRAP - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
     [NSS_ICONFIG_SCROLL_ON_INPUT - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
     [NSS_ICONFIG_SCROLL_ON_OUTPUT - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_CURSOR_SHAPE - NSS_ICONFIG_MIN] = {nss_cursor_bar, nss_cursor_bar, 0, 6},
+    [NSS_ICONFIG_CURSOR_SHAPE - NSS_ICONFIG_MIN] = {nss_cursor_bar, nss_cursor_bar, 1, 6},
     [NSS_ICONFIG_UNDERLINE_WIDTH - NSS_ICONFIG_MIN] = {1, 1, 0, 16},
     [NSS_ICONFIG_CURSOR_WIDTH - NSS_ICONFIG_MIN] = {2, 2, 0, 16},
     [NSS_ICONFIG_SUBPIXEL_FONTS - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
@@ -154,6 +154,8 @@ void nss_config_set_integer(uint32_t opt, int32_t val) {
     if (opt < NSS_ICONFIG_INPUT_MIN) {
         if (val > ioptions[opt].max) val = ioptions[opt].max;
         else if (val < ioptions[opt].min) val = ioptions[opt].min;
+        if(opt == NSS_ICONFIG_CURSOR_SHAPE)
+            val = (val + 1) & ~1;
         ioptions[opt].val = val;
     } else if (opt < NSS_ICONFIG_MAX) {
         switch(opt) {
