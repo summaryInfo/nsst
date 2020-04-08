@@ -27,7 +27,7 @@ $(PROG): $(OBJ)
 %.o: %.c
 	$(CC) -c $(INCLUES) $(CFLAGS) $< -o $@
 
-fonts.o: util.h config.h window.h
+font.o: util.h config.h window.h
 window.o: util.h config.h term.h input.h window.h
 input.o: config.h util.h term.h input.h
 term.o: config.h util.h term.h input.h window.h
