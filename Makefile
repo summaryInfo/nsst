@@ -24,8 +24,11 @@ clean:
 
 force: clean all
 
+install-strip: all
+	strip $(PROG)
+	install $(PROG) $(PERFIX)/bin/$(PROG)
 install: all
-	install nsst $(PERFIX)/bin/$(PROG)
+	install $(PROG) $(PERFIX)/bin/$(PROG)
 uninstall:
 	rm -f $(PERFIX)/bin/$(PROG)
 
