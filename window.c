@@ -312,66 +312,114 @@ cleanup_context:
     return 0;
 }
 
+#define NSS_CLASS "Nsst"
 #define OPT_NAME_MAX 256
 void load_params(void) {
     long dpi = -1;
     char name[OPT_NAME_MAX];
     xcb_xrm_database_t *xrmdb = xcb_xrm_database_from_default(con.con);
     if (xrmdb) {
-        const char *classes[2] = {"Nsst", nss_config_string(NSS_SCONFIG_TERM_CLASS)};
-        _Bool cloaded[16] = { 0 };
-        _Bool aloaded = 0, sloaded[4] = {0};
-        const char *snames[4] = {"background", "foreground", "cursorBackground", "cursorForeground"};
+        xcb_xrm_resource_get_long(xrmdb, NSS_CLASS".dpi", NULL, &dpi);
 
-        for (size_t i = 0; i < sizeof(classes)/sizeof(*classes) && classes[i]; i++) {
-            if (dpi < 0) {
-                snprintf(name, OPT_NAME_MAX, "%s.dpi", classes[i]);
-                xcb_xrm_resource_get_long(xrmdb, name, NULL, &dpi);
-            }
-            for (unsigned j = 0; j < 16; j++) {
-                if (!cloaded[j]) {
-                    snprintf(name, OPT_NAME_MAX, "%s.color%u", classes[i], j);
-                    char *res = NULL;
-                    if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
-                        nss_color_t col = parse_color(res, res + strlen(res));
-                        if (col) {
-                            nss_config_set_color(NSS_CCONFIG_COLOR_0 + j, col);
-                            cloaded[j] = 1;
-                        }
-                        free(res);
-                    }
+        for (unsigned j = 0; j < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; j++) {
+            snprintf(name, OPT_NAME_MAX, NSS_CLASS".color%u", j);
+            char *res = NULL;
+            if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
+                nss_color_t col = parse_color(res, res + strlen(res));
+                if (col) {
+                    nss_config_set_color(NSS_CCONFIG_COLOR_0 + j, col);
                 }
+                free(res);
             }
-            for (size_t j = 0; j < sizeof(snames)/sizeof(snames[0]); j++) {
-                if (!sloaded[j]) {
-                    snprintf(name, OPT_NAME_MAX, "%s.%s", classes[i], snames[j]);
-                    char *res = NULL;
-                    if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
-                        nss_color_t col = parse_color(res, res + strlen(res));
-                        if (!j) {
-                            col &= 0xFFFFFF;
-                            col |= nss_config_color(NSS_CCONFIG_BG) & 0xFF000000;
-                        }
-                        if (col) {
-                            nss_config_set_color(NSS_CCONFIG_BG + j, col);
-                            sloaded[j] = 1;
-                        }
-                        free(res);
-                    }
-                }
-            }
-            if (!aloaded) {
-                snprintf(name, OPT_NAME_MAX, "%s.alpha", classes[i]);
-                long res;
-                if (!xcb_xrm_resource_get_long(xrmdb, name, NULL, &res)) {
-                    nss_color_t col = nss_config_color(NSS_CCONFIG_BG);
+        }
+
+        static const char *snames[4] = {"background", "foreground", "cursorBackground", "cursorForeground"};
+
+        for (size_t j = 0; j < sizeof(snames)/sizeof(snames[0]); j++) {
+            snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", snames[j]);
+            char *res = NULL;
+            if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
+                nss_color_t col = parse_color(res, res + strlen(res));
+                if (!j) {
+                    //Backround color preserves alpha
                     col &= 0xFFFFFF;
-                    col |= MAX(0, MIN(res, 255)) << 24;
-
-                    nss_config_set_color(NSS_CCONFIG_BG, col);
-                    aloaded = 1;
+                    col |= nss_config_color(NSS_CCONFIG_BG) & 0xFF000000;
                 }
+                if (col) {
+                    nss_config_set_color(NSS_CCONFIG_BG + j, col);
+                }
+                free(res);
             }
+        }
+
+        long res;
+        if (!xcb_xrm_resource_get_long(xrmdb, NSS_CLASS".alpha", NULL, &res)) {
+            nss_color_t col = nss_config_color(NSS_CCONFIG_BG);
+            col &= 0xFFFFFF;
+            col |= MAX(0, MIN(res, 255)) << 24;
+
+            nss_config_set_color(NSS_CCONFIG_BG, col);
+        }
+
+        static const struct optmap_item {
+        const char *name;
+        enum nss_config_opt opt;
+        } map[] = {
+            {"allowAlternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
+            {"allowCharsets", NSS_ICONFIG_ALLOW_CHARSETS},
+            {"answerbackString", NSS_SCONFIG_ANSWERBACK_STRING},
+            {"appcursor", NSS_ICONFIG_INPUT_APPCURSOR},
+            {"appkey", NSS_ICONFIG_INPUT_APPKEY},
+            {"backspaceIsDelete", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
+            {"blinkTime",NSS_ICONFIG_BLINK_TIME},
+            {"cursorShape", NSS_ICONFIG_CURSOR_SHAPE},
+            {"cursorWidth",NSS_ICONFIG_CURSOR_WIDTH},
+            {"deleteIsDelete", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
+            {"enableAutowrap", NSS_ICONFIG_INIT_WRAP},
+            {"enableReverseVideo", NSS_ICONFIG_REVERSE_VIDEO},
+            {"fkeyIncrement", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
+            {"font", NSS_SCONFIG_FONT_NAME},
+            {"fontGamma",NSS_ICONFIG_GAMMA},
+            {"fontSize",NSS_ICONFIG_FONT_SIZE},
+            {"fontSpacing", NSS_ICONFIG_FONT_SPACING},
+            {"fontSubpixel",NSS_ICONFIG_SUBPIXEL_FONTS},
+            {"dpi",NSS_ICONFIG_DPI},
+            {"hasMeta", NSS_ICONFIG_INPUT_HAS_META},
+            {"horizontalBorder",NSS_ICONFIG_TOP_BORDER},
+            {"keyboardMapping", NSS_ICONFIG_INPUT_MAPPING},
+            {"lockKeyboard", NSS_ICONFIG_INPUT_LOCK},
+            {"metaSendsEscape", NSS_ICONFIG_INPUT_META_IS_ESC},
+            {"modifyCursor", NSS_ICONFIG_INPUT_MODIFY_CURSOR},
+            {"modifyFunction", NSS_ICONFIG_INPUT_MODIFY_FUNCTION},
+            {"modifyKeypad", NSS_ICONFIG_INPUT_MODIFY_KEYPAD},
+            {"modifyOther", NSS_ICONFIG_INPUT_MODIFY_OTHER},
+            {"modifyOtherFmt", NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT},
+            {"modkeyAllowEditKeypad", NSS_ICONFIG_INPUT_MALLOW_EDIT},
+            {"modkeyAllowFunction", NSS_ICONFIG_INPUT_MALLOW_FUNCTION},
+            {"modkeyAllowKeypad", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
+            {"modkeyAllowMisc", NSS_ICONFIG_INPUT_MALLOW_MISC},
+            {"numlock", NSS_ICONFIG_INPUT_NUMLOCK},
+            {"printer", NSS_SCONFIG_PRINTER},
+            {"scrollOnInput", NSS_ICONFIG_SCROLL_ON_INPUT},
+            {"scrollOnOutput", NSS_ICONFIG_SCROLL_ON_OUTPUT},
+            {"scrollbackSize", NSS_ICONFIG_HISTORY_LINES},
+            {"shell", NSS_SCONFIG_SHELL},
+            {"tabWidth", NSS_ICONFIG_TAB_WIDTH},
+            {"termName", NSS_SCONFIG_TERM_NAME},
+            {"title", NSS_SCONFIG_TITLE},
+            {"underlineWidth",NSS_ICONFIG_UNDERLINE_WIDTH},
+            {"useUtf8", NSS_ICONFIG_UTF8},
+            {"verticalBorder",NSS_ICONFIG_LEFT_BORDER},
+            {"vtVersion", NSS_ICONFIG_VT_VERION},
+            {"windowClass", NSS_SCONFIG_TERM_CLASS},
+        };
+        for(size_t i = 0; i < sizeof(map)/sizeof(*map); i++) {
+            snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", map[i].name);
+            char *res = NULL;
+            if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
+                nss_config_set_string(map[i].opt, res);
+            }
+            if (res) free(res);
         }
 
         xcb_xrm_database_free(xrmdb);
@@ -738,7 +786,7 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
     int16_t x = nss_config_integer(NSS_ICONFIG_WINDOW_X);
     int16_t y = nss_config_integer(NSS_ICONFIG_WINDOW_Y);
 
-	// Adjust geometry
+    // Adjust geometry
     if (nss_config_integer(NSS_ICONFIG_WINDOW_NEGATIVE_X))
         x += con.screen->width_in_pixels - win->width - 2;
     if (nss_config_integer(NSS_ICONFIG_WINDOW_NEGATIVE_Y))
