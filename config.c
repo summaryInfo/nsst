@@ -15,7 +15,7 @@
 #define CN_BASE 16
 #define CN_EXT (6*6*6)
 #define CN_GRAY (NSS_PALETTE_SIZE - CN_BASE - CN_EXT)
-#define SD28B(x) ((x) ? 0 : 0x37 + 0x28 * (x))
+#define SD28B(x) ((x) ? 0x37 + 0x28 * (x) : 0)
 
 
 static struct {
@@ -132,8 +132,8 @@ static nss_color_t color(uint32_t opt) {
 
     if (opt < CN_BASE) return base[opt];
     else if (opt < CN_EXT + CN_BASE) {
-        return 0xFF000000 + SD28B(((opt - CN_BASE) / 36) % 6) +
-                (SD28B(((opt - CN_BASE) / 36) % 6) << 8) + (SD28B(((opt - CN_BASE) / 36) % 6) << 16);
+        return 0xFF000000 | SD28B(((opt - CN_BASE) / 1) % 6) |
+            (SD28B(((opt - CN_BASE) / 6) % 6) << 8) | (SD28B(((opt - CN_BASE) / 36) % 6) << 16);
     } else if (opt < CN_GRAY + CN_EXT + CN_BASE) {
         uint8_t val = MIN(0x08 + 0x0A * (opt - CN_BASE - CN_EXT), 0xFF);
         return 0xFF000000 + val * 0x10101;
