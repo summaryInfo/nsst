@@ -1,9 +1,13 @@
-FIX: Geometry should be in characters?
+Slow scrolling of full-color images (small font, chafa)
+After resizing window new lines are not rerendered
 Make command line options descriptions
+Implement a way to skip loading Xrmdb
+
+FIX: Geometry should be in characters?
 
 Input
     DECUDK
-    input NRCSs
+    NRCS input encoding should be happenning in term.c
 Render
     Double width/height, Down-Line-Loadable fonts
 	Better font handling
@@ -19,10 +23,7 @@ Term
     Window operations
 		Title stack (!)
     SIXEL
-    Reset is incorrect
-
+	Is reset not completly correct?
     Selections (copy/paste)
 	Mouse selection
 	Hightlight tracking
-	Title operations
-    NRCS input encoding should be happenning in term.c
