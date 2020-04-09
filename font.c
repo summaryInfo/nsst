@@ -133,7 +133,7 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
     nss_paterns_holder_t pats = {
         .length = 0,
         .caps = CAPS_STEP,
-        .pats = calloc(pats.caps, sizeof(*pats.pats))
+        .pats = calloc(CAPS_STEP, sizeof(*pats.pats))
     };
 
     for (char *tok = strtok(tmp, ","); tok; tok = strtok(NULL, ",")) {

@@ -72,7 +72,7 @@ static int optmap_cmp(const void *a, const void *b) {
 }
 
 
-static void usage(char *argv0, int code) {
+static _Noreturn void usage(char *argv0, int code) {
     fprintf(stderr, "%s%s", argv0, " [-options] [-e] [command [args]]\n"
         "Where options are:\n"
             "\t-g[=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]\n"
@@ -92,7 +92,7 @@ static void usage(char *argv0, int code) {
     exit(code);
 }
 
-static void version(void) {
+static _Noreturn void version(void) {
     fprintf(stderr, "Not So Simple Terminal v1.0.0\n");
     nss_free_context();
     exit(EXIT_SUCCESS);

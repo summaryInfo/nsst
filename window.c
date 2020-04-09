@@ -843,8 +843,8 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
         struct pollfd *new = realloc(con.pfds, con.pfdcap + INIT_PFD_NUM);
         if (new) {
             for (size_t i = 0; i < INIT_PFD_NUM; i++) {
-                con.pfds[i + con.pfdn].fd = -1;
-                con.pfds[i + con.pfdn].events = 0;
+                new[i + con.pfdn].fd = -1;
+                new[i + con.pfdn].events = 0;
             }
             con.pfdcap += INIT_PFD_NUM;
             con.pfds = new;

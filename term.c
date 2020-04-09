@@ -528,7 +528,7 @@ static nss_line_t *term_realloc_line(nss_term_t *term, nss_line_t *line, size_t 
     nss_line_t *new = realloc(line, sizeof(*new) + width * sizeof(new->cell[0]));
     if (!new) die("Can't create lines");
 
-    nss_cell_t cell = fixup_color(line, &term->c);
+    nss_cell_t cell = fixup_color(new, &term->c);
     cell.attr = 0;
 
     for(size_t i = new->width; i < width; i++)
@@ -1106,13 +1106,13 @@ static void term_dispatch_osc(nss_term_t *term) {
             *dst = '\0';
         } else if (term->mode & nss_tm_title_set_utf8 && !(term->mode & nss_tm_utf8)) {
             uint8_t *ds = malloc((term->esc.si + 1)*sizeof(uint8_t));
-            memcpy(ds, term->esc.str, term->esc.si + 1);
-
-            uint8_t *dst = term->esc.str;
             if (!ds) break;
+
+            memcpy(ds, term->esc.str, term->esc.si + 1);
+            uint8_t *dst = term->esc.str, *src = ds;
             term->esc.si = 0;
-            while (*ds) {
-                uint32_t val = *ds++;
+            while (*src) {
+                uint32_t val = *src++;
                 dst += utf8_encode(val, dst, term->esc.str + ESC_MAX_STR);
             }
             *dst = '\0';
