@@ -1,22 +1,27 @@
+PROG = nsst
+PERFIX ?= /usr/local
 
-CFLAGS= -O2 -march=native -flto
-#CFLAGS= -g -Og
+CFLAGS = -O2 -march=native -flto
+#CFLAGS = -g -Og
 
-CFLAGS+= -std=c11 -Wall -Wextra -Wno-implicit-fallthrough\
-	     -Wno-missing-field-initializers -Wno-unused-parameter
+CFLAGS += -std=c11 -Wall -Wextra -Wno-implicit-fallthrough\
+	      -Wno-missing-field-initializers -Wno-unused-parameter
 
-PROG=nsst
-PERFIX?=/usr/local
+OBJ := window.o nsst.o util.o font.o term.o config.o input.o
 
-IN=window.c nsst.c util.c font.c term.c config.c input.c
-OBJ=$(patsubst %.c,%.o,$(IN))
-LIBS=-lm -lutil `pkg-config xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --libs`
-INCLUES=`pkg-config xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11 --cflags`
+DEPS := xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11
+LIBS != pkg-config $(DEPS) --libs
+LIBS += -lm -lutil
+INCLUES != pkg-config $(DEPS) --cflags
 
-all: nsst
+LDFLAGS += $(LIBS)
+CFLAGS += $(INCLUES)
+
+all: $(PROG)
 
 clean:
 	rm -rf *.o $(PROG)
+
 force: clean all
 
 install: all
@@ -25,10 +30,8 @@ uninstall:
 	rm -f $(PERFIX)/bin/$(PROG)
 
 $(PROG): $(OBJ)
-	$(CC) $(LIBS) $(CFLAGS) $^ -o $@
+	$(CC) $(LDFLAGS) $(CFLAGS) $(OBJ) -o $@
 
-%.o: %.c
-	$(CC) -c $(INCLUES) $(CFLAGS) $< -o $@
 
 font.o: util.h config.h window.h
 window.o: util.h config.h term.h input.h window.h
