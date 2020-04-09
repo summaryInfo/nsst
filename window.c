@@ -664,7 +664,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
             warn("Can't create glyph set");
 
         //Preload ASCII
-        nss_glyph_t *glyphs['~' - ' ' + 1][nss_font_attrib_max] = { NULL };
+        nss_glyph_t *glyphs['~' - ' ' + 1][nss_font_attrib_max] = {{ NULL }};
         int16_t total = 0, maxd = 0, maxh = 0;
         for (uint32_t i = ' '; i <= '~'; i++) {
             for (size_t j = 0; j < nss_font_attrib_max; j++)
