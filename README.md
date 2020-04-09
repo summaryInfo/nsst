@@ -11,6 +11,7 @@ Inspired by [Simple Terminal](https://st.suckless.org/)
 	* Small size and almost no dependencies
 	* Multiple terminal windows
 		* This would be extended to full daemon mode
+	* Configuration with Xrmdb and command line arguments
 
 See TODO file for things that are to be implemented.
 
@@ -19,18 +20,18 @@ See TODO file for things that are to be implemented.
 Use TERM=xterm. The only unimplemented thing I encountered so far is unimplemented title stack.
 There are other missing escape sequences, but they are not generally used (and still would be eventually implemented).
 
-To change all settings edit file `config.c`
+Works well with [Iosevka](https://github.com/be5invis/Iosevka) font. (Set font spacing to -1.) 
+Multiple fonts could be loaded by enumerating them in parameter:
 
-Works well with [Iosevka](https://github.com/be5invis/Iosevka) font.
-To make other fonts look better try changing intercharecter distance.
+    Nsst.font: Iosevka-13:style=Thin,MaterialDesignIcons-13
 
-Colors and background opacity are can be customized through xrdb
+All options are now available though Xrmdb and command line arguments.
 
 ## Dependencies
 ### Build
 	* pkg-config
-	* GNU make
-	* C99 compatible comiler
+	* GNU make or BSD make 
+	* C11 compatible comiler
 
 ### Runtime
 	* xcb-util
