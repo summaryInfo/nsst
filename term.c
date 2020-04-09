@@ -2372,7 +2372,7 @@ static void term_dispatch_c0(nss_term_t *term, uint32_t ch) {
             term_dispatch_dcs(term);
         else if (term->esc.state == esc_osc_string)
             term_dispatch_osc(term);
-        else /* term_bell() -- TODO */;
+        else {}/* term_bell() -- TODO */;
         break;
     case 0x08: /* BS */
         term_move_to(term, MIN(term->c.x, term->width - 1) - 1, term->c.y);

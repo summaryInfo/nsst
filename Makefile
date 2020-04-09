@@ -1,6 +1,9 @@
 
-CFLAGS= -Os -flto -Wall -Wextra -Wno-unused-parameter -Wno-implicit-fallthrough -Wno-empty-body -Wno-missing-field-initializers -std=c11
-#CFLAGS= -g -Wall -Wextra -Wno-unused-parameter -Wno-implicit-fallthrough -Wno-empty-body -Wno-missing-field-initializers -std=c11
+CFLAGS= -O2 -march=native -flto
+#CFLAGS= -g -Og
+
+CFLAGS+= -std=c11 -Wall -Wextra -Wno-implicit-fallthrough\
+	     -Wno-missing-field-initializers -Wno-unused-parameter
 
 PROG=nsst
 PERFIX?=/usr/local
