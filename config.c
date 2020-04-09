@@ -48,8 +48,8 @@ static struct {
     [NSS_ICONFIG_TOP_BORDER - NSS_ICONFIG_MIN] = {8, 8, 0 , 100},
     [NSS_ICONFIG_BLINK_TIME - NSS_ICONFIG_MIN] = {800000, 800000, 0, 10000000},
     [NSS_ICONFIG_FONT_SIZE - NSS_ICONFIG_MIN] = {0, 0, 1, 200},
-    [NSS_ICONFIG_FONT_SPACING - NSS_ICONFIG_MIN] = {-1, 0, -100, 100},
-    [NSS_ICONFIG_GAMMA - NSS_ICONFIG_MIN] = {15000, 10000, 2000, 200000},
+    [NSS_ICONFIG_FONT_SPACING - NSS_ICONFIG_MIN] = {0, 0, -100, 100},
+    [NSS_ICONFIG_GAMMA - NSS_ICONFIG_MIN] = {10000, 10000, 2000, 200000},
     [NSS_ICONFIG_DPI - NSS_ICONFIG_MIN] = {96, 96, 10, 10000},
 
 };
@@ -58,7 +58,7 @@ static struct {
     const char *dflt;
     char *val;
 } soptions[] = {
-        [NSS_SCONFIG_FONT_NAME - NSS_SCONFIG_MIN] = { "Iosevka-13:style=Thin,MaterialDesignIcons-13" },
+        [NSS_SCONFIG_FONT_NAME - NSS_SCONFIG_MIN] = { "mono" },
         [NSS_SCONFIG_ANSWERBACK_STRING - NSS_SCONFIG_MIN] = { "" },
         [NSS_SCONFIG_SHELL - NSS_SCONFIG_MIN] = { "/bin/sh" },
         [NSS_SCONFIG_TERM_NAME - NSS_SCONFIG_MIN] = { "xterm" },
