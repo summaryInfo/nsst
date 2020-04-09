@@ -453,7 +453,7 @@ void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
                     term_line_dirt(term->view);
             }
         }
-        nss_window_shift(term->win, 0, scrolled, term->height - scrolled);
+        nss_window_shift(term->win, 0, scrolled, term->height - scrolled, 0);
     } else if (amount < 0) {
         while (scrolled < -amount && term->view)
             term->view = term->view->next, scrolled++;
@@ -475,7 +475,7 @@ void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
                 term_line_dirt(term->screen[y]);
         }
 
-        nss_window_shift(term->win, scrolled, 0, term->height - scrolled);
+        nss_window_shift(term->win, scrolled, 0, term->height - scrolled, 0);
     }
 }
 
@@ -493,7 +493,8 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
             if (term->scrollback_top == term->view) {
                 // TODO Dont invalidate whole screen
                 term->view = term->scrollback_top->next;
-                nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
+                nss_window_shift(term->win, 1, 0, term->height, 1);
+                nss_term_damage(term, (nss_rect_t){0, term->height - 1, term->width, 1});
             }
             nss_line_t *next = term->scrollback_top->next;
             term_free_line(term, term->scrollback_top);
@@ -648,9 +649,9 @@ static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t a
 
     if (!term->view) {
         if (amount > 0)
-            nss_window_shift(term->win, top + amount, top, bottom + 1 - top - amount);
+            nss_window_shift(term->win, top + amount, top, bottom + 1 - top - amount, 1);
         else if (amount < 0)
-            nss_window_shift(term->win, top, top - amount, bottom + 1 - top + amount);
+            nss_window_shift(term->win, top, top - amount, bottom + 1 - top + amount, 1);
     } else {
         nss_term_damage(term, (nss_rect_t){ .y = top - MAX(0, amount),
                 .width = term->width, .height = bottom + 1 - top - abs(amount) });

@@ -1311,17 +1311,18 @@ static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right
         if (count) xcb_poly_fill_rectangle(con.con, win->wid, win->gc, count, borders + offset);
 }
 
-void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height) {
+void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height, _Bool delay) {
 
     struct timespec cur;
     clock_gettime(CLOCK_MONOTONIC, &cur);
 
-    win->last_scroll = cur;
 
-    if (TIMEDIFF(win->last_scroll, cur) < SCROLL_DELAY) {
+    if (delay && TIMEDIFF(win->last_scroll, cur) <  SCROLL_DELAY/2) {
         nss_term_damage(win->term, (nss_rect_t){ .x = 0, .y = yd, .width = win->cw, .height = height });
+        win->last_scroll = cur;
         return;
     }
+    win->last_scroll = cur;
 
     ys = MAX(0, MIN(ys, win->ch));
     yd = MAX(0, MIN(yd, win->ch));
