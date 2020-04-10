@@ -14,55 +14,56 @@
 
 static struct optmap_item {
     const char *name;
+    const char *descr;
     enum nss_config_opt opt;
 } map[] = {
-    {"allow-alternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
-    {"allow-charsets", NSS_ICONFIG_ALLOW_CHARSETS},
-    {"answerback-string", NSS_SCONFIG_ANSWERBACK_STRING},
-    {"appcursor", NSS_ICONFIG_INPUT_APPCURSOR},
-    {"appkey", NSS_ICONFIG_INPUT_APPKEY},
-    {"backspace-is-delete", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
-    {"blink-time",NSS_ICONFIG_BLINK_TIME},
-    {"cursor-shape", NSS_ICONFIG_CURSOR_SHAPE},
-    {"cursor-width",NSS_ICONFIG_CURSOR_WIDTH},
-    {"delete-is-delete", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
-    {"enable-autowrap", NSS_ICONFIG_INIT_WRAP},
-    {"enable-reverse-video", NSS_ICONFIG_REVERSE_VIDEO},
-    {"fkey-increment", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
-    {"font", NSS_SCONFIG_FONT_NAME},
-    {"font-gamma",NSS_ICONFIG_GAMMA},
-    {"font-size",NSS_ICONFIG_FONT_SIZE},
-    {"font-spacing", NSS_ICONFIG_FONT_SPACING},
-    {"font-subpixel",NSS_ICONFIG_SUBPIXEL_FONTS},
-    {"force-dpi",NSS_ICONFIG_DPI},
-    {"has-meta", NSS_ICONFIG_INPUT_HAS_META},
-    {"horizontal-border",NSS_ICONFIG_TOP_BORDER},
-    {"keyboard-mapping", NSS_ICONFIG_INPUT_MAPPING},
-    {"lock-keyboard", NSS_ICONFIG_INPUT_LOCK},
-    {"meta-sends-escape", NSS_ICONFIG_INPUT_META_IS_ESC},
-    {"modify-cursor", NSS_ICONFIG_INPUT_MODIFY_CURSOR},
-    {"modify-function", NSS_ICONFIG_INPUT_MODIFY_FUNCTION},
-    {"modify-keypad", NSS_ICONFIG_INPUT_MODIFY_KEYPAD},
-    {"modify-other", NSS_ICONFIG_INPUT_MODIFY_OTHER},
-    {"modify-other-fmt", NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT},
-    {"modkey-allow-edit-keypad", NSS_ICONFIG_INPUT_MALLOW_EDIT},
-    {"modkey-allow-function", NSS_ICONFIG_INPUT_MALLOW_FUNCTION},
-    {"modkey-allow-keypad", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
-    {"modkey-allow-misc", NSS_ICONFIG_INPUT_MALLOW_MISC},
-    {"numlock", NSS_ICONFIG_INPUT_NUMLOCK},
-    {"printer", NSS_SCONFIG_PRINTER},
-    {"scroll-on-input", NSS_ICONFIG_SCROLL_ON_INPUT},
-    {"scroll-on-output", NSS_ICONFIG_SCROLL_ON_OUTPUT},
-    {"scrollback-size", NSS_ICONFIG_HISTORY_LINES},
-    {"shell", NSS_SCONFIG_SHELL},
-    {"tab-width", NSS_ICONFIG_TAB_WIDTH},
-    {"term-name", NSS_SCONFIG_TERM_NAME},
-    {"title", NSS_SCONFIG_TITLE},
-    {"underline-width",NSS_ICONFIG_UNDERLINE_WIDTH},
-    {"use-utf8", NSS_ICONFIG_UTF8},
-    {"vertical-border",NSS_ICONFIG_LEFT_BORDER},
-    {"vt-version", NSS_ICONFIG_VT_VERION},
-    {"window-class", NSS_SCONFIG_TERM_CLASS},
+    {"allow-alternate", "\t(Enable alternate screen)", NSS_ICONFIG_ALLOW_ALTSCREEN},
+    {"allow-charsets", "\t(Enable charsets support)", NSS_ICONFIG_ALLOW_CHARSETS},
+    {"answerback-string", "\t(ENQ report)", NSS_SCONFIG_ANSWERBACK_STRING},
+    {"appcursor", "\t\t(Initial application cursor mode value)", NSS_ICONFIG_INPUT_APPCURSOR},
+    {"appkey", "\t\t(Initial application keypad mode value)", NSS_ICONFIG_INPUT_APPKEY},
+    {"backspace-is-delete", "\t(Backspace sends DEL instead of BS)", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
+    {"blink-time", "\t\t(Text blink interval)",NSS_ICONFIG_BLINK_TIME},
+    {"cursor-shape", "\t\t(Shape of cursor)", NSS_ICONFIG_CURSOR_SHAPE},
+    {"cursor-width", "\t\t(Width of lines that forms cursor)",NSS_ICONFIG_CURSOR_WIDTH},
+    {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
+    {"enable-autowrap", "\t(Initial autowrap setting)", NSS_ICONFIG_INIT_WRAP},
+    {"enable-reverse-video", "\t(Initial reverse video setting)", NSS_ICONFIG_REVERSE_VIDEO},
+    {"fkey-increment", "\t(Step in numbering function keys)", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
+    {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)", NSS_SCONFIG_FONT_NAME},
+    {"font-gamma", "\t\t(Factor of sharpenning\t(king of hack))",NSS_ICONFIG_GAMMA},
+    {"font-size", "\t\t(Font size in points)",NSS_ICONFIG_FONT_SIZE},
+    {"font-spacing", "\t\t(Additional spacing for individual symbols)", NSS_ICONFIG_FONT_SPACING},
+    {"font-subpixel", "\t\t(Use subpixel rendering)",NSS_ICONFIG_SUBPIXEL_FONTS},
+    {"force-dpi", "\t\t(DPI value for fonts)",NSS_ICONFIG_DPI},
+    {"has-meta", "\t\t(Handle meta/alt)", NSS_ICONFIG_INPUT_HAS_META},
+    {"horizontal-border", "\t(Top and bottom botders)",NSS_ICONFIG_TOP_BORDER},
+    {"keyboard-mapping", "\t(Initial keyboad mapping)", NSS_ICONFIG_INPUT_MAPPING},
+    {"lock-keyboard", "\t\t(Disable keyboad input)", NSS_ICONFIG_INPUT_LOCK},
+    {"meta-sends-escape", "\t(Alt/Meta sends escape prefix instead of setting 8-th bit)", NSS_ICONFIG_INPUT_META_IS_ESC},
+    {"modify-cursor", "\t\t(Enable encoding modifiers for cursor keys)", NSS_ICONFIG_INPUT_MODIFY_CURSOR},
+    {"modify-function", "\t(Enable encoding modifiers for function keys)", NSS_ICONFIG_INPUT_MODIFY_FUNCTION},
+    {"modify-keypad", "\t\t(Enable encoding modifiers keypad keys)", NSS_ICONFIG_INPUT_MODIFY_KEYPAD},
+    {"modify-other", "\t\t(Enable encoding modifiers for other keys)", NSS_ICONFIG_INPUT_MODIFY_OTHER},
+    {"modify-other-fmt", "\t(Format of encoding modifers)", NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT},
+    {"modkey-allow-edit-keypad", " (Allow modifing edit keypad keys)", NSS_ICONFIG_INPUT_MALLOW_EDIT},
+    {"modkey-allow-function", "\t(Allow modifing function keys)", NSS_ICONFIG_INPUT_MALLOW_FUNCTION},
+    {"modkey-allow-keypad", "\t(Allow modifing keypad keys)", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
+    {"modkey-allow-misc", "\t(Allow modifing miscelleneous keys)", NSS_ICONFIG_INPUT_MALLOW_MISC},
+    {"numlock", "\t\t(Initial numlock state)", NSS_ICONFIG_INPUT_NUMLOCK},
+    {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", NSS_SCONFIG_PRINTER},
+    {"scroll-on-input", "\t(Scroll view to bottom on key press)", NSS_ICONFIG_SCROLL_ON_INPUT},
+    {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", NSS_ICONFIG_SCROLL_ON_OUTPUT},
+    {"scrollback-size", ", -H<value> (Number of saved lines)", NSS_ICONFIG_HISTORY_LINES},
+    {"shell", ", -s<value>\t(Shell to start in new instance)", NSS_SCONFIG_SHELL},
+    {"tab-width", "\t\t(Initial width of tab characher)", NSS_ICONFIG_TAB_WIDTH},
+    {"term-name", ", -D<value>\t(TERM value)", NSS_SCONFIG_TERM_NAME},
+    {"title", ", -T<value>, -t<value> (Initial window title)", NSS_SCONFIG_TITLE},
+    {"underline-width", "\t(Text underline width)",NSS_ICONFIG_UNDERLINE_WIDTH},
+    {"use-utf8", "\t\t(Enable uft-8 i/o)", NSS_ICONFIG_UTF8},
+    {"vertical-border", "\t(Left and right borders)",NSS_ICONFIG_LEFT_BORDER},
+    {"vt-version", ", -V<value>\t(Emulated VT version)", NSS_ICONFIG_VT_VERION},
+    {"window-class", ", -c<value> (X11 Window class)", NSS_SCONFIG_TERM_CLASS},
 };
 
 static int optmap_cmp(const void *a, const void *b) {
@@ -75,19 +76,11 @@ static int optmap_cmp(const void *a, const void *b) {
 static _Noreturn void usage(char *argv0, int code) {
     fprintf(stderr, "%s%s", argv0, " [-options] [-e] [command [args]]\n"
         "Where options are:\n"
-            "\t-g[=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]\n"
-            "\t-c<class>\n"
-            "\t-f<font>\n"
-            "\t-o<dump_file>\n"
-            "\t-[tT]<title>\n"
-            "\t-D<term_name>\n"
-            "\t-s<shell>\n"
-            "\t-H<scrollback_size>\n"
-            "\t-V<vt_version>\n"
-            "\t-h or --help\n"
-            "\t-v or --version\n");
+            "\t--geometry=<value>, -g[=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>] (Window geometry)\n"
+            "\t--help, -h\t\t\t(Print this message and exit)\n"
+            "\t--version, -v\t\t\t(Print version and exit)\n");
     for (size_t i = 0; i < sizeof(map)/sizeof(map[0]); i++)
-        fprintf(stderr, "\t--%s=<x>\n", map[i].name);
+        fprintf(stderr, "\t--%s=<value>%s\n", map[i].name, map[i].descr);
     nss_free_context();
     exit(code);
 }
