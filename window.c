@@ -557,7 +557,9 @@ void nss_init_context(void) {
     con.atom_utf8_string = intern_atom("UTF8_STRING");
     con.atom_net_wm_name = intern_atom("_NET_WM_NAME");
 
-    load_params();
+    if (!nss_config_integer(NSS_ICONFIG_SKIP_CONFIG_FILE)) load_params();
+    else nss_config_set_integer(NSS_ICONFIG_SKIP_CONFIG_FILE, 0);
+
     sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART}, NULL);
 }
 

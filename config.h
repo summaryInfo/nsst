@@ -53,6 +53,7 @@ enum nss_config_opt {
     NSS_ICONFIG_FONT_SPACING,
     NSS_ICONFIG_GAMMA,
     NSS_ICONFIG_DPI,
+    NSS_ICONFIG_SKIP_CONFIG_FILE,
 
     // These can't be read with nss_config_integer
     // Use nss_config_input_mode to get the copy of the whole structure

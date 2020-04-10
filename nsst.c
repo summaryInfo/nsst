@@ -137,18 +137,19 @@ static char **parse_options(int argc, char **argv) {
                 if (arg[1]) *arg++ = '\0';
                 else arg = argv[++ind];
             }
-            if (!arg) usage(argv[0], EXIT_FAILURE);
 
             struct optmap_item *res = bsearch(&(struct optmap_item){argv[ind] + 2},
                     map, sizeof(map)/sizeof(*map), sizeof(*map), optmap_cmp);
-            if (res) nss_config_set_string(res->opt, arg);
+            if (res && arg)
+                nss_config_set_string(res->opt, arg);
             else if (!strcmp(argv[ind] + 2, "geometry"))
                 parse_geometry(arg, argv[0]);
             else if (!strcmp(argv[ind] + 2, "help"))
                 usage(argv[0], EXIT_SUCCESS);
-            else if (!strcmp(argv[ind] + 2, "verion"))
+            else if (!strcmp(argv[ind] + 2, "version"))
                 version();
-            else usage(argv[0], EXIT_FAILURE);
+            else if (strcmp(argv[ind] + 2, "no-config-file"))
+                usage(argv[0], EXIT_FAILURE);
         } else while (argv[ind] && argv[ind][++cind]) {
             char letter = argv[ind][cind];
             // One letter options
@@ -201,6 +202,9 @@ static char **parse_options(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+    for (char **opt = argv; *opt; opt++)
+        if (!strcmp("--no-config-file", *opt))
+            nss_config_set_integer(NSS_ICONFIG_SKIP_CONFIG_FILE, 1);
     nss_init_context();
 
     const char **res = (const char **)parse_options(argc, argv);
