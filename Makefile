@@ -1,8 +1,8 @@
 PROG = nsst
 PERFIX ?= /usr/local
 
-CFLAGS = -O2 -march=native -flto
-#CFLAGS = -g -Og
+CFLAGS += -O2 -march=native -flto
+#CFLAGS += -g -Og
 
 CFLAGS += -std=c11 -Wall -Wextra -Wno-implicit-fallthrough\
 	      -Wno-missing-field-initializers -Wno-unused-parameter
@@ -33,7 +33,7 @@ uninstall:
 	rm -f $(PERFIX)/bin/$(PROG)
 
 $(PROG): $(OBJ)
-	$(CC) $(LDFLAGS) $(CFLAGS) $(OBJ) -o $@
+	$(CC) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
 
 
 font.o: util.h config.h window.h
@@ -43,3 +43,5 @@ term.o: config.h util.h term.h input.h window.h
 nsst.o: config.h util.h term.h window.h
 util.o: util.h
 config.o: config.h util.h input.h
+
+.PHONY: all clean install install-strip uninstall force
