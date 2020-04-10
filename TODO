@@ -1,6 +1,5 @@
 Slow scrolling of full-color images (small font, chafa)
 After resizing window new lines are not rerendered
-Implement a way to skip loading Xrmdb
 
 FIX: Geometry should be in characters?
 
