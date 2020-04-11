@@ -356,6 +356,20 @@ static nss_line_t *term_create_line(nss_term_t *term, size_t width) {
     return line;
 }
 
+static nss_line_t *term_realloc_line(nss_term_t *term, nss_line_t *line, size_t width) {
+    nss_line_t *new = realloc(line, sizeof(*new) + width * sizeof(new->cell[0]));
+    if (!new) die("Can't create lines");
+
+    nss_cell_t cell = fixup_color(new, &term->c);
+    cell.attr = 0;
+
+    for(size_t i = new->width; i < width; i++)
+        new->cell[i] = cell;
+
+    new->width = width;
+    return new;
+}
+
 static void term_free_line(nss_term_t *term, nss_line_t *line) {
     free(line->extra);
     free(line);
@@ -366,14 +380,38 @@ static void term_line_dirt(nss_line_t *line) {
         line->cell[i].attr &= ~nss_attrib_drawn;
 }
 
+static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
+    // In theory this should be disabled while in UTF-8 mode, but
+    // in practive applications use these symbols, so keep translating
+
+    if (!(term->mode & nss_tm_utf8) || nss_config_integer(NSS_ICONFIG_ALLOW_CHARSETS)) {
+        ch = nrcs_decode(term->c.gn[term->c.gl_ss], term->c.gn[term->c.gr], ch, term->mode & nss_tm_enable_nrcs);
+    }
+
+    nss_cell_t cel = fixup_color(term->screen[y], &term->c);
+    cel.ch = ch;
+
+    term->screen[y]->cell[x] = cel;
+
+    term->c.gl_ss = term->c.gl; // Reset single shift
+    term->prev_ch = ch; // For REP CSI Ps b
+}
+
+
 _Bool nss_term_is_altscreen(nss_term_t *term) {
     return term->mode & nss_tm_altscreen;
 }
+
 _Bool nss_term_is_utf8(nss_term_t *term) {
     return term->mode & nss_tm_utf8;
 }
+
 _Bool nss_term_is_nrcs_enabled(nss_term_t *term) {
     return !!(term->mode & nss_tm_enable_nrcs);
+}
+
+int nss_term_fd(nss_term_t *term) {
+    return term->fd;
 }
 
 void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
@@ -486,20 +524,6 @@ static void term_erase(nss_term_t *term, int16_t xs, int16_t ys, int16_t xe, int
         for(int16_t i = xs; i < xe; i++)
             line->cell[i] = cell;
     }
-}
-
-static nss_line_t *term_realloc_line(nss_term_t *term, nss_line_t *line, size_t width) {
-    nss_line_t *new = realloc(line, sizeof(*new) + width * sizeof(new->cell[0]));
-    if (!new) die("Can't create lines");
-
-    nss_cell_t cell = fixup_color(new, &term->c);
-    cell.attr = 0;
-
-    for(size_t i = new->width; i < width; i++)
-        new->cell[i] = cell;
-
-    new->width = width;
-    return new;
 }
 
 static void term_protective_erase(nss_term_t *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
@@ -797,6 +821,10 @@ static void term_load_config(nss_term_t *term) {
 
 }
 
+static void term_reset_margins(nss_term_t *term) {
+    term->top = 0;
+    term->bottom = term->height - 1;
+}
 
 static void term_reset(nss_term_t *term, _Bool hard) {
 
@@ -806,15 +834,13 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     int16_t cx = term->c.x, cy = term->c.y;
 
     term_load_config(term);
+    term_reset_margins(term);
 
     uint32_t args[] = {
         term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG],
         nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE), 0
     };
     nss_window_set(term->win, nss_wc_background | nss_wc_cursor_foreground | nss_wc_cursor_type | nss_wc_mouse, args);
-
-    term->top = 0;
-    term->bottom = term->height - 1;
 
     if (hard) {
         memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
@@ -890,24 +916,6 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
     }
 
     return term;
-}
-
-
-static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
-    // In theory this should be disabled while in UTF-8 mode, but
-    // in practive applications use these symbols, so keep translating
-
-    if (!(term->mode & nss_tm_utf8) || nss_config_integer(NSS_ICONFIG_ALLOW_CHARSETS)) {
-        ch = nrcs_decode(term->c.gn[term->c.gl_ss], term->c.gn[term->c.gr], ch, term->mode & nss_tm_enable_nrcs);
-    }
-
-    nss_cell_t cel = fixup_color(term->screen[y], &term->c);
-    cel.ch = ch;
-
-    term->screen[y]->cell[x] = cel;
-
-    term->c.gl_ss = term->c.gl; // Reset single shift
-    term->prev_ch = ch; // For REP CSI Ps b
 }
 
 static void term_dispatch_da(nss_term_t *term, uint32_t mode) {
@@ -2214,7 +2222,7 @@ static void term_dispatch_esc(nss_term_t *term) {
         term_set_tb_margins(term, term->c.y, term->height - 1);
         break;
     case E('m'): /* HP Memory unlock */
-        term_set_tb_margins(term, 0, term->height - 1);
+        term_reset_margins(term);
         break;
     case E('n'): /* LS2 */
         term_esc_dump(term);
@@ -2259,7 +2267,7 @@ static void term_dispatch_esc(nss_term_t *term) {
     //case E('6') | I0('#'): /* DECDWL */
     //    break;
     case E('8') | I0('#'): /* DECALN*/
-        term_set_tb_margins(term, 0, 0);
+        term_reset_margins(term);
         term->c.x = term->c.y = 0;
         term->c.cel.attr = 0;
         term->c.cel.fg = NSS_SPECIAL_FG;
@@ -2833,20 +2841,6 @@ void nss_term_sendbreak(nss_term_t *term) {
         warn("Can't send break");
 }
 
-void nss_term_hang(nss_term_t *term) {
-    if(term->fd >= 0) {
-        close(term->fd);
-        if (term->printerfd != STDOUT_FILENO)
-            close(term->printerfd);
-        term->fd = -1;
-    }
-    kill(term->child, SIGHUP);
-}
-
-int nss_term_fd(nss_term_t *term) {
-    return term->fd;
-}
-
 void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
     _Bool cur_moved = term->c.x == term->width;
 
@@ -2928,8 +2922,7 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
     // Reset scroll region
 
-    term->top = 0;
-    term->bottom = height - 1;
+    term_reset_margins(term);
     term_move_to(term, term->c.x, term->c.y);
     if (cur_moved) {
         term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
@@ -3003,6 +2996,16 @@ _Bool nss_term_mouse(nss_term_t *term, int16_t x, int16_t y, nss_mouse_state_t m
     term->prev_mouse_x = x;
     term->prev_mouse_y = y;
     return 1;
+}
+
+void nss_term_hang(nss_term_t *term) {
+    if(term->fd >= 0) {
+        close(term->fd);
+        if (term->printerfd != STDOUT_FILENO)
+            close(term->printerfd);
+        term->fd = -1;
+    }
+    kill(term->child, SIGHUP);
 }
 
 void nss_free_term(nss_term_t *term) {
