@@ -243,17 +243,6 @@ nss_color_t nss_config_color(uint32_t opt) {
     return val ? val : color(opt);
 }
 
-nss_color_t *nss_create_palette(void) {
-    if (!color_init) {
-        for (size_t i = 0; i < NSS_PALETTE_SIZE; i++)
-            coptions[i] = color(i + NSS_CCONFIG_COLOR_0);
-        color_init = 1;
-    }
-    nss_color_t *palette = malloc(NSS_PALETTE_SIZE * sizeof(nss_color_t));
-    memcpy(palette, coptions, sizeof(coptions));
-    return palette;
-}
-
 nss_input_mode_t nss_config_input_mode(void) {
     return input_mode;
 }

@@ -105,9 +105,6 @@ enum nss_config_opt {
     NSS_CONFIG_MAX = NSS_CCONFIG_MAX,
 };
 
-/* Allocates an array of NSS_PALETTE_SIZE colors with all configured values */
-nss_color_t *nss_create_palette(void);
-
 /* Getters for options */
 nss_color_t nss_config_color(uint32_t opt);
 int32_t nss_config_integer(uint32_t opt);

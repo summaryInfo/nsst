@@ -771,26 +771,7 @@ static void term_esc_dump(nss_term_t *term) {
     warn("%s", buf);
 }
 
-static void term_reset(nss_term_t *term, _Bool hard) {
-    term->mode &= nss_tm_focused | nss_tm_visible;
-
-    for(size_t i = 0; i < NSS_PALETTE_SIZE; i++)
-        term->palette[i] = nss_config_color(NSS_CCONFIG_COLOR_0 + i);
-    if (nss_config_integer(NSS_ICONFIG_REVERSE_VIDEO)) {
-        SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
-        SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
-        term->mode |= nss_tm_reverse_video;
-    }
-    uint32_t args[] = {
-        term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG],
-        nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE), 0
-    };
-
-    nss_window_set(term->win, nss_wc_background | nss_wc_cursor_foreground | nss_wc_cursor_type | nss_wc_mouse, args);
-    *term->in_mode = nss_config_input_mode();
-
-    int16_t cx = term->c.x, cy = term->c.y;
-
+static void term_load_config(nss_term_t *term) {
     term->c = term->back_cs = term->cs = (nss_cursor_t) {
         .cel = MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, ' '),
         .fg = nss_config_color(NSS_CCONFIG_FG),
@@ -799,11 +780,38 @@ static void term_reset(nss_term_t *term, _Bool hard) {
         .gn = {nss_94cs_ascii, nss_94cs_ascii, nss_94cs_ascii, nss_94cs_ascii}
     };
 
+    for(size_t i = 0; i < NSS_PALETTE_SIZE; i++)
+        term->palette[i] = nss_config_color(NSS_CCONFIG_COLOR_0 + i);
+    if (nss_config_integer(NSS_ICONFIG_REVERSE_VIDEO)) {
+        SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
+        SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
+        term->mode |= nss_tm_reverse_video;
+    }
+
     if (nss_config_integer(NSS_ICONFIG_UTF8)) term->mode |= nss_tm_utf8;
     if (!nss_config_integer(NSS_ICONFIG_ALLOW_ALTSCREEN)) term->mode |= nss_tm_disable_altscreen;
     if (nss_config_integer(NSS_ICONFIG_INIT_WRAP)) term->mode |= nss_tm_wrap;
     if (!nss_config_integer(NSS_ICONFIG_SCROLL_ON_INPUT)) term->mode |= nss_tm_dont_scroll_on_input;
     if (nss_config_integer(NSS_ICONFIG_SCROLL_ON_OUTPUT)) term->mode |= nss_tm_scoll_on_output;
+    if (nss_config_integer(NSS_ICONFIG_ALLOW_NRCS)) term->mode |= nss_tm_enable_nrcs;
+
+}
+
+
+static void term_reset(nss_term_t *term, _Bool hard) {
+
+    term->mode &= nss_tm_focused | nss_tm_visible;
+    *term->in_mode = nss_config_input_mode();
+
+    int16_t cx = term->c.x, cy = term->c.y;
+
+    term_load_config(term);
+
+    uint32_t args[] = {
+        term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG],
+        nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE), 0
+    };
+    nss_window_set(term->win, nss_wc_background | nss_wc_cursor_foreground | nss_wc_cursor_type | nss_wc_mouse, args);
 
     term->top = 0;
     term->bottom = term->height - 1;
@@ -830,7 +838,9 @@ static void term_reset(nss_term_t *term, _Bool hard) {
         term->scrollback_top = NULL;
         term->scrollback = NULL;
         term->scrollback_size = 0;
+
         nss_window_set_title(term->win, NULL);
+        nss_window_set_icon_name(term->win, NULL);
 
         // Hmm?..
         // term->mode |= nss_tm_echo;
@@ -841,6 +851,47 @@ static void term_reset(nss_term_t *term, _Bool hard) {
 
     term->esc.state = esc_ground;
 }
+
+nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t width, int16_t height) {
+    nss_term_t *term = calloc(1, sizeof(nss_term_t));
+
+    term->palette = malloc(NSS_PALETTE_SIZE * sizeof(nss_color_t));
+    term->win = win;
+
+    term->in_mode = mode;
+    term->mode = nss_tm_visible;
+    term->printerfd = -1;
+    term->scrollback_limit = nss_config_integer(NSS_ICONFIG_HISTORY_LINES);
+    term->vt_version = nss_config_integer(NSS_ICONFIG_VT_VERION);
+    term->vt_level = term->vt_version / 100;
+
+    term_load_config(term);
+
+    for(size_t i = 0; i < 2; i++) {
+        term_cursor_mode(term, 1);
+        term_erase(term, 0, 0, term->width, term->height);
+        term_swap_screen(term);
+    }
+
+    if (tty_open(term, nss_config_string(NSS_SCONFIG_SHELL), nss_config_argv()) < 0) {
+        warn("Can't create tty");
+        nss_free_term(term);
+        return NULL;
+    }
+
+    nss_term_resize(term, width, height);
+
+    const char *printer_path = nss_config_string(NSS_SCONFIG_PRINTER);
+    if (printer_path) {
+        if (printer_path[0] == '-' && !printer_path[1])
+            term->printerfd = STDOUT_FILENO;
+        else
+            term->printerfd = open(printer_path, O_WRONLY | O_CREAT, 0660);
+    }
+
+    return term;
+}
+
 
 static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
     // In theory this should be disabled while in UTF-8 mode, but
@@ -2899,59 +2950,6 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
         nss_term_hang(term);
     }
 
-}
-
-nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t width, int16_t height) {
-    nss_term_t *term = calloc(1, sizeof(nss_term_t));
-    term->palette = nss_create_palette();
-    term->mode = nss_tm_visible;
-    if (nss_config_integer(NSS_ICONFIG_REVERSE_VIDEO)) {
-        SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
-        SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
-        term->mode |= nss_tm_reverse_video;
-    }
-    term->win = win;
-    term->in_mode = mode;
-    term->printerfd = -1;
-    term->scrollback_limit = nss_config_integer(NSS_ICONFIG_HISTORY_LINES);
-
-    if (nss_config_integer(NSS_ICONFIG_UTF8)) term->mode |= nss_tm_utf8;
-    if (!nss_config_integer(NSS_ICONFIG_ALLOW_ALTSCREEN)) term->mode |= nss_tm_disable_altscreen;
-    if (nss_config_integer(NSS_ICONFIG_INIT_WRAP)) term->mode |= nss_tm_wrap;
-    if (!nss_config_integer(NSS_ICONFIG_SCROLL_ON_INPUT)) term->mode |= nss_tm_dont_scroll_on_input;
-    if (nss_config_integer(NSS_ICONFIG_SCROLL_ON_OUTPUT)) term->mode |= nss_tm_scoll_on_output;
-
-    term->c = term->back_cs = term->cs = (nss_cursor_t) {
-        .cel = MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, ' '),
-        .gl = 0, .gl_ss = 0, .gr = 2,
-        .gn = {nss_94cs_ascii, nss_94cs_ascii, nss_94cs_ascii, nss_94cs_ascii}
-    };
-    term->vt_version = nss_config_integer(NSS_ICONFIG_VT_VERION);
-    term->vt_level = term->vt_version / 100;
-
-    for(size_t i = 0; i < 2; i++) {
-        term_cursor_mode(term, 1);
-        term_erase(term, 0, 0, term->width, term->height);
-        term_swap_screen(term);
-    }
-
-    if (tty_open(term, nss_config_string(NSS_SCONFIG_SHELL), nss_config_argv()) < 0) {
-        warn("Can't create tty");
-        nss_free_term(term);
-        return NULL;
-    }
-
-    nss_term_resize(term, width, height);
-
-    const char *printer_path = nss_config_string(NSS_SCONFIG_PRINTER);
-    if (printer_path) {
-        if (printer_path[0] == '-' && !printer_path[1])
-            term->printerfd = STDOUT_FILENO;
-        else
-            term->printerfd = open(printer_path, O_WRONLY | O_CREAT, 0660);
-    }
-
-    return term;
 }
 
 void nss_term_focus(nss_term_t *term, _Bool focused) {
