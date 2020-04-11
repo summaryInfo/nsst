@@ -1588,8 +1588,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 term->in_mode->has_meta = set;
                 break;
             case 1035: /* Numlock */
-                // TODO That is not correct
-                term->in_mode->numlock = set;
+                term->in_mode->allow_numlock = set;
                 break;
             case 1036: /* Meta sends escape */
                 term->in_mode->meta_escape = set;

@@ -9,6 +9,10 @@
 #define NSS_M_ALL (0xff)
 #define NSS_M_TERM (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)
 
+/* mod1 is alt
+ * mod2 is numlock
+ * mod4 is super
+ */
 enum mode_mask {
     nss_mm_shift = 1 << 0,
     nss_mm_lock = 1 << 1,
@@ -45,7 +49,7 @@ typedef struct nss_input_mode {
 
     uint32_t appkey : 1;
     uint32_t appcursor : 1;
-    uint32_t numlock : 1;
+    uint32_t allow_numlock : 1;
     uint32_t keylock : 1;
 
     uint32_t has_meta : 1;

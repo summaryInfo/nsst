@@ -70,7 +70,7 @@ struct nss_shortcut {
     {XKB_KEY_Home, NSS_M_ALL, NSS_M_TERM, nss_sa_font_default},
     {XKB_KEY_End, NSS_M_ALL, NSS_M_TERM, nss_sa_font_subpixel},
     {XKB_KEY_N, NSS_M_ALL, NSS_M_TERM, nss_sa_new_window},
-    {XKB_KEY_Num_Lock, NSS_M_ALL, NSS_M_TERM, nss_sa_numlock},
+    {XKB_KEY_Num_Lock, NSS_M_TERM, NSS_M_TERM, nss_sa_numlock},
     {XKB_KEY_Break, 0, 0, nss_sa_break},
 };
 
@@ -1501,7 +1501,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         nss_term_sendbreak(win->term);
         return;
     case nss_sa_numlock:
-        win->inmode.numlock = !win->inmode.numlock;
+        win->inmode.allow_numlock = !win->inmode.allow_numlock;
         return;
     case nss_sa_scroll_up:
         nss_term_scroll_view(win->term, -2); //TODO Amount configurable

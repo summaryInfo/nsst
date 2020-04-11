@@ -40,7 +40,6 @@ Term
         1001 -- Hightlight mouse tracking [mouse]
         1005 -- UTF-8 mouse [mouse]
         1015 -- URXVT mouse [mouse]
-        1035 -- Incorrect [input] !!!!!!!!!!
         1039 -- Alt sends escape [input]
         1040 -- Keep selection [clipboard]
         1041 -- Use CLIPBOARD selection [clipboard]

@@ -341,8 +341,8 @@ static void translate_adjust(nss_key_t *k, nss_input_mode_t *mode) {
                 k->sym = XKB_KEY_KP_Subtract;
                 k->mask &= ~nss_mm_control;
             }
-            // TODO Calculate real NumLock modifier
-            mode->appkey &= (k->utf8len == 1 && is_keypad(k->sym) && mode->numlock);
+
+            mode->appkey &= (k->utf8len == 1 && mode->allow_numlock && (k->mask & nss_mm_mod2));
         }
         if (k->sym != XKB_KEY_Delete || !mode->delete_is_del) {
             struct { uint32_t from, to; } tab[] = {

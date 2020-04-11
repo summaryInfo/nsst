@@ -80,7 +80,7 @@ static nss_input_mode_t input_mode = {
     .modkey_legacy_allow_misc = 0,
     .appkey = 0,
     .appcursor = 0,
-    .numlock = 1,
+    .allow_numlock = 1,
     .keylock = 0,
     .has_meta = 1,
     .meta_escape = 1,
@@ -178,7 +178,7 @@ void nss_config_set_integer(uint32_t opt, int32_t val) {
         case NSS_ICONFIG_INPUT_MALLOW_FUNCTION: input_mode.modkey_legacy_allow_function = !!val; break;
         case NSS_ICONFIG_INPUT_MALLOW_KEYPAD: input_mode.modkey_legacy_allow_keypad = !!val; break;
         case NSS_ICONFIG_INPUT_MALLOW_MISC: input_mode.modkey_legacy_allow_misc = !!val; break;
-        case NSS_ICONFIG_INPUT_NUMLOCK: input_mode.numlock = !!val; break;
+        case NSS_ICONFIG_INPUT_NUMLOCK: input_mode.allow_numlock = !!val; break;
         }
     } else {
         warn("Unknown integer option %d", opt);
