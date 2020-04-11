@@ -1058,16 +1058,33 @@ static void term_dispatch_dsr(nss_term_t *term) {
             CHK_VT(2);
             term_answerback(term, "\x9B?21n"); //TODO Unlocked - 20
             break;
-        case 26: /* Keyboard Language -- North American */
+        case 26: /* Keyboard language -- North American */
             CHK_VT(2);
             term_answerback(term, "\x9B?27;1%sn",
-                    term->vt_level >= 4 ? ";0;0" :
-                    term->vt_level >= 3 ? ";0" : "");
+                    term->vt_level >= 4 ? ";0;0" : // ready, LK201
+                    term->vt_level >= 3 ? ";0" : ""); // ready
+            break;
+        case 62: /* DECMSR, Macro space -- No data, no space for macros */
+            CHK_VT(4);
+            //TODO Why is it hex?
+            term_answerback(term, "\x9B""0000*{");
+            break;
+        case 63: /* DECCKSR, Memory checksum -- 0000 (hex) */
+            CHK_VT(4);
+            term_answerback(term, "\x90%"PRId16"!~0000\x9C", term->esc.param[1]);
+            break;
+        case 75: /* Data integrity -- Ready, no errors */
+            CHK_VT(4);
+            term_answerback(term, "\x9B?70n");
+            break;
+        case 85: /* Multi-session configuration -- Not configured */
+            CHK_VT(4);
+            term_answerback(term, "\x9B?83n");
         }
     } else {
         switch(term->esc.param[0]) {
         case 5: /* Health report -- OK */
-            term_answerback(term, "\2330n");
+            term_answerback(term, "\x9B""0n");
             break;
         case 6: /* Cursor position -- Y;X */
             term_answerback(term, "\x9B%"PRIu16";%"PRIu16"R",
