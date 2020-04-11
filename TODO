@@ -3,27 +3,163 @@ Input
     NRCS input encoding should be happenning in term.c
 Render
     Double width/height, Down-Line-Loadable fonts
-    Better font handling
+		DECDLD
     (?) Box drawing characters -- draw them manually to make pixel-prefect
     Add options to select width of ambigues characters
-    Diacritics support
+    Combining characters support
     (?) Add fallback fonts support back
     Slow scrolling of full-color images (with small font in chafa)
     After resizing window (only jump resize) new lines are not rerendered
+
+	Rendering refactoring:
+		-Use multiple separate buffers for cells parts:
+			1. Background
+			2. Lines
+			3. Glyphs
+		-Merge adjacent cells with same color while pushing
+		-Then sort and draw, groupping by color
 Term
-    (?) Geometry should be in characters
+    (?) Geometry should be measured in characters
     Capability restriction
         Now this works like in xterm
     Printing with attributes
-    DEC Locator
-    Left/Right margins
-    Rectangular ops
-    Reports
-    DCS
-    Window operations
-        (!) Title stack
-    SIXEL
     Is reset not completly correct?
     Selections (copy/paste)
     Mouse selection
-    Hightlight tracking
+	NOTE: Tectronix mode would probably be ommited
+	Private modes
+		4 -- DECSCLM
+		8 -- DECARM (When ported to wayland)
+		12,13,14 -- Cursor blinking
+		35 -- font shifting functions
+	(?) 38 -- Tectronix mode
+		44 -- margin bell [bell]
+		45 -- reverse wrapping
+		69 -- DECLRMM [left/right margins]
+		80 -- DECSDM [SIXEL]
+		1001 -- Hightlight mouse tracking [mouse]
+		1005 -- UTF-8 mouse [mouse]
+		1015 -- URXVT mouse [mouse]
+		1035 -- Incorrect [input] !!!!!!!!!!
+		1039 -- Alt sends escape [input]
+		1040 -- Keep selection [clipboard]
+		1041 -- Use CLIPBOARD selection [clipboard]
+		1042 -- bell is window urgency [bell]
+		1043 -- raise on bell [bell]
+		1044 -- reuse clipboard [clipboard]
+		1040 -- terminfo/termcap function key mode [input]
+		1070 -- Use private resgisters [SIXEL]
+		2004 -- bracketed paste [clipboard]
+		8452 -- Sixel scrolling leaves cursor to the right of graphics [SIXEL]
+    DEC Locator [mouse]
+		CSI ? 53 n
+		CSI ? 55 n
+		CSI ? 56 n
+		CSI Pt ; Pl ; Pb ; Pr ' w -- DECEFR
+		CSI Ps ; Pu ' z -- DECELR
+		CSI Pm ' { -- DECSLE
+		CSI Ps ' | -- DECRQLP ->  CSI Pe ; Pb ; Pr ; Pc ; Pp & w
+    Window operations
+		CSI 1 ; 0 ; 0 t -- Deiconify
+		CSI 2 ; 0 ; 0 t -- Iconfiy
+		CSI 3 ; Px ; Py t -- Mode to x ; y
+		CSI 4 ; Ph ; Pw t -- Resize (in pixels), defaults are current, zero are fullscreen
+		CSI 5 ; 0 ; 0 t -- Raise
+		CSI 6 ; 0 ; 0 t -- Lower
+		CSI 7 ; 0 ; 0 t -- Refresh
+		CSI 8 ; Px ; Py t -- Resize (in chars), defaults are current, zero are fullscreen
+		CSI 9 ; 0 ; 0 t -- Restore maximized
+		CSI 9 ; 1 ; 0 t -- Maximize
+		CSI 9 ; 2 ; 0 t -- Maximize vertically
+		CSI 9 ; 3 ; 0 t -- Maximize horizontally
+		CSI 10 ; 0 ; 0 t -- Undo fullscreen
+		CSI 10 ; 1 ; 0 t -- Set fullscreen
+		CSI 10 ; 2 ; 0 t -- Toggle fullscreen
+		CSI 11 ; 0 ; 0 t -- Report state (CSI 1 t/ CSI 2 t -- mapped/unmapped)
+		CSI 13 ; 0 ; 0 t -- Report position (as uint16_t, two's complement) -> CSI 3 ; Px ; Py t
+		CSI 13 ; 2 ; 0 t -- Report text area position -> CSI 3 ; Px ; Py t
+		CSI 14 ; 0 ; 0 t -- Report text area size in pixels -> CSI 4 ; Ph ; Pw t
+		CSI 14 ; 2 ; 0 t -- Report window size in pixels -> CSI 4 ; Ph ; Pw t
+		CSI 15 ; 0 ; 0 t -- Report screen size in pixels -> CSI 5 ; Ph ; Pw t
+		CSI 16 ; 0 ; 0 t -- Report cell size in pixels -> CSI 6 ; Ph ; Pw t
+		CSI 18 ; 0 ; 0 t -- Report text area size in chars -> CSI 8 ; Ph ; Pw t
+		CSI 19 ; 0 ; 0 t -- Report screen size in chars -> CSI 9 ; Ph ; Pw t
+		CSI 20 ; 0 ; 0 t -- Report icon label -> OSC L Pt ST
+		CSI 21 ; 0 ; 0 t -- Report title -> OSC L Pt ST
+		CSI 22 ; 0 ; 0 t -- Save icon label and title
+		CSI 22 ; 1 ; 0 t -- Save icon label
+		CSI 22 ; 2 ; 0 t -- Save title
+		CSI 23 ; 0 ; 0 t -- Restore icon lable and title
+		CSI 23 ; 1 ; 0 t -- Restore icon label
+		CSI 23 ; 2 ; 0 t -- Restore title
+		CSI Ps t -- Ps > 23,Resize window to Ps lines
+		CSI Ps $ | -- DECSCPP
+		CSI Ps * | -- DECSNLS
+    Left/Right margins
+		CSI Ps SP @ -- Shift left
+		CSI Ps SP A -- Shift right
+		CSI Pl ; Pr s -- DECSLRM
+		CSI Ps ' } -- DECIC
+		CSI Ps ' ~ -- DECDC
+    Rectangular ops
+		CSI Pt ; Pl ; Pb ; Pr ; Ps $ r -- DECCARA
+		CSI Pt ; Pl ; Pb ; Pr ; Ps $ t -- DECRARA
+		CSI Pt ; Pl ; Pb ; Pr ; Pp ; Pt; Pl; Pp $ v -- DECCRA
+		CSI Ps * x -- DECSACE
+		CSI Pc ; Pt ; Pl ; Pb ; Pr $ x -- DECFRA
+		CSI Pt ; Pl ; Pb ; Pr # | -- XTREPORTSGR
+    	CSI Ps # y -- XTCHECKSUM
+		CSI Pi ; Pg ; Pt ; Pl ; Pb ; Pr * y -- DECRQCRA
+    Reports
+		DCS $ q m ST -- DECRQSS -> SGR
+		DCS $ q " p ST -- DECRQSS -> DECSCL
+		DCS $ q SP q ST -- DECRQSS -> DECSCUSR
+		DCS $ q " q ST -- DECRQSS -> DECSCA
+		DCS $ q r ST -- DECRQSS -> DECSTBM
+		DCS $ q s ST -- DECRQSS -> DECSLRM
+		DCS $ q t ST -- DECRQSS -> DECSLPP
+		DCS $ q $ | ST -- DECRQSS -> DECSCPP
+		DCS $ q * | ST -- DECRQSS -> DECSNLS
+		DCS 1 $ t Pt ST -- DECRSPS -> DECCIR
+		DCS 2 $ t Pt ST -- DECRSPS -> DECTABSR
+		CSI Ps $ p -- RQM
+		CSI ? Ps $ p -- DECRQM
+    	CSI 0 # w -- DECRQPSR -> Error
+    	CSI 1 # w -- DECRQPSR -> DECCIR
+    	CSI 2 # w -- DECRQPSR -> DECTABSR
+    SIXEL
+		CSI ? Pi ; Pa; Pv S -- Set/request graphics attributes (Pi = 1, 2; Pa = 1, 2, 3, 4)
+		DSC Pa ; Pb ; Ph q Ps..Ps ST -- Send sixel image
+	Hightlight tracking
+		CSI Ps ; Ps ; Ps ; Ps ; Ps T
+	Other sequences
+		CSI Ps b -- REP
+		CSI > Ps p -- Pointer mode
+		CSI Pm # p, CSI Pm # { -- XPUSHSGR
+		CSI # q, CSI # } -- XPOPSGR
+		CSI ? Pm r -- Restore DEC private modes
+		CSI ? s -- Save DEC private modes
+		CSI Ps q -- DECLL
+		DCS + Q Pt ST -- XTGETXRES -> DCS Ps + R Pt ST
+		DSC + p Pt ST -- XTSETTCAP
+		DSC + q Pt ST -- XTGETTCAP
+		DCS Ps ; Ps | Pt ST -- DECUDK
+    	OSC 3 ; Pt ST -- Set X property
+		OSC 5 ; Pt ST -- Set special color
+		OSC 6 ; Pc ; Pt ST -- Enable/disable special color
+		OSC 50 ; Pt ST -- Set font
+		OSC 52 ; Pt ST -- Manipulate selection
+		OSC 105 ; Pt ST -- Reset special color
+		OSC 106 ; Pc ; Pf ST -- Enable/disable special color
+		OSC 13 Pt ST -- Set mouse foreground color
+		OSC 13 Pt ST -- Set mouse background color
+		OSC 17 Pt ST -- Set hightlight background color
+		OSC 18 Pt ST -- Set hightlight foreground color
+		OSC 113 Pt ST -- Reset color mouse foreground color
+		OSC 113 Pt ST -- Reset color mouse background color
+		OSC 117 Pt ST -- Reset color hightlight background color
+		OSC 118 Pt ST -- Reset color hightlight foreground color
+		OSC I Pt ST -- Set icon XPM file
+	Bell
+		CSI Ps SP t -- DECSWBV
+		CSI Ps SP u -- DECSMBV
