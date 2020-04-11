@@ -40,51 +40,58 @@ static const unsigned short tech_tr[] = {
     0x03BE, 0x03C5, 0x03B6, 0x2190, 0x2191, 0x2192, 0x2193,
 };
 
-uint32_t nrcs_encode(uint32_t set, uint32_t ch, _Bool nrcs) {
-    switch(set) {
+_Bool nrcs_encode(uint32_t set, uint32_t *ch, _Bool nrcs) {
+    _Bool done = 0;
+    switch (set) {
     case nss_94cs_ascii:
     case nss_94cs_dec_altchars:
     case nss_94cs_dec_altgraph:
+        done = *ch < 0x80;
         break;
     case nss_94cs_british:
     case nss_96cs_latin_1:
         if (!nrcs) {
-            if (0x80 <= ch && ch < 0x100)
-                ch -= 0x80;
+            if (0x80 <= *ch && *ch < 0x100)
+                *ch -= 0x80, done = 1;
         } else {
-            if (ch == U'£') ch = '$';
+            if (*ch == U'£') *ch = '$', done = 1;
+            else done = *ch != '$';
         }
         break;
     case nss_94cs_dec_sup:
     case nss_94cs_dec_sup_graph:
-        switch (ch) {
-        case U'¤': ch = 0xA8 - 0x80; break;
-        case U'Œ': ch = 0xD7 - 0x80; break;
-        case U'Ÿ': ch = 0xDD - 0x80; break;
-        case U'œ': ch = 0xF7 - 0x80; break;
-        case U'ÿ': ch = 0xFD - 0x80; break;
+        switch (*ch) {
+        case U'¤': *ch = 0xA8 - 0x80; done = 1; break;
+        case U'Œ': *ch = 0xD7 - 0x80; done = 1; break;
+        case U'Ÿ': *ch = 0xDD - 0x80; done = 1; break;
+        case U'œ': *ch = 0xF7 - 0x80; done = 1; break;
+        case U'ÿ': *ch = 0xFD - 0x80; done = 1; break;
         }
-        if (ch >= 0x80 && ch < 0x100) {
-            if(ch != 0xA8 && ch != 0xD7 && ch != 0xDD
-                    && ch != 0xF7 && ch != 0xFD)
-                ch -= 0x80;
+        if (*ch >= 0x80 && *ch < 0x100) {
+            done = (*ch != 0xA8 && *ch != 0xD7 && *ch != 0xDD
+                    && *ch != 0xF7 && *ch != 0xFD);
+            if (done) *ch -= 0x80;
         }
         break;
     case nss_94cs_dec_graph:
         for (size_t i = 0; i < sizeof(graph_tr)/sizeof(*graph_tr); i++) {
-            if (graph_tr[i] == ch) {
-                ch = i + 0x5F;
+            if (graph_tr[i] == *ch) {
+                *ch = i + 0x5F;
+                done = 1;
                 break;
             }
         }
+        done |= *ch < 0x5F || *ch == 0x7F;
         break;
     case nss_94cs_dec_tech:
         for (size_t i = 0; i < sizeof(tech_tr)/sizeof(*tech_tr); i++) {
-            if (tech_tr[i] == ch) {
-                ch = i + 0x21;
+            if (tech_tr[i] == *ch) {
+                *ch = i + 0x21;
+                done = 1;
                 break;
             }
         }
+        done |= *ch < 0x21 || *ch == 0x7F;
         break;
     case nss_nrcs_french_canadian2:
         set = nss_nrcs_french_canadian; break;
@@ -98,20 +105,23 @@ uint32_t nrcs_encode(uint32_t set, uint32_t ch, _Bool nrcs) {
     case nss_nrcs_french2:
         set = nss_nrcs_french; break;
     case nss_nrcs_turkish:
-        if (ch == U'ğ') ch = 0x26;
+        if (*ch == U'ğ') *ch = 0x26, done = 1;
         break;
     }
 
     if (set <= nss_nrcs_turkish) {
         for (size_t i = 0; i < sizeof(trans_idx)/sizeof(*trans_idx); i++) {
-            if (nrcs_trs[set][i] == ch) {
-                ch = trans_idx[i];
+            if (nrcs_trs[set][i] == *ch) {
+                *ch = trans_idx[i];
+                done = 1;
                 break;
             }
         }
+        done |= (*ch < 0x7B && *ch != 0x23 && *ch != 0x40
+                 && !(0x5B <= *ch && *ch <= 0x60)) || *ch == 0x7F;
     }
 
-    return ch;
+    return done;
 }
 
 uint32_t nrcs_decode(uint32_t gl, uint32_t gr, uint32_t ch, _Bool nrcs) {
