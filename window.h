@@ -67,6 +67,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
 void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height, _Bool delay);
 void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values);
 void nss_window_set_title(nss_window_t *win, const char *name);
+void nss_window_set_icon_name(nss_window_t *win, const char *name);
 uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag);
 
 void nss_window_set_font(nss_window_t *win, const char *name);

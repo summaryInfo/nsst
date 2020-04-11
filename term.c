@@ -978,7 +978,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
 }
 
 static void term_dispatch_osc(nss_term_t *term) {
-    switch(term->esc.selector) {
+    switch (term->esc.selector) {
         uint32_t args[2];
     case 0: /* Change window icon name and title */
     case 1: /* Change window icon name */
@@ -1012,7 +1012,10 @@ static void term_dispatch_osc(nss_term_t *term) {
             free(ds);
         }
         // Input could be not UTF-8 but property always is UTF-8
-        nss_window_set_title(term->win, (char *)term->esc.str);
+        if (term->esc.selector < 2)
+            nss_window_set_icon_name(term->win, (char *)term->esc.str);
+        if (term->esc.selector & 2)
+            nss_window_set_title(term->win, (char *)term->esc.str);
         break;
     case 4: /* Set color */ {
         char *pstr = (char *)term->esc.str, *pnext, *s_end;

@@ -140,6 +140,7 @@ struct nss_context {
 
     xcb_atom_t atom_net_wm_pid;
     xcb_atom_t atom_net_wm_name;
+    xcb_atom_t atom_net_wm_icon_name;
     xcb_atom_t atom_wm_delete_window;
     xcb_atom_t atom_wm_protocols;
     xcb_atom_t atom_utf8_string;
@@ -560,6 +561,7 @@ void nss_init_context(void) {
     con.atom_wm_protocols = intern_atom("WM_PROTOCOLS");
     con.atom_utf8_string = intern_atom("UTF8_STRING");
     con.atom_net_wm_name = intern_atom("_NET_WM_NAME");
+    con.atom_net_wm_icon_name = intern_atom("_NET_WM_ICON_NAME");
 
     if (!nss_config_integer(NSS_ICONFIG_SKIP_CONFIG_FILE)) load_params();
     else nss_config_set_integer(NSS_ICONFIG_SKIP_CONFIG_FILE, 0);
@@ -572,6 +574,13 @@ void nss_window_set_title(nss_window_t *win, const char *title) {
     xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_NAME, con.atom_utf8_string, 8, strlen(title), title);
     xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, con.atom_net_wm_name, con.atom_utf8_string, 8, strlen(title), title);
 }
+
+void nss_window_set_icon_name(nss_window_t *win, const char *title) {
+    if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
+    xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_ICON_NAME, con.atom_utf8_string, 8, strlen(title), title);
+    xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, con.atom_net_wm_icon_name, con.atom_utf8_string, 8, strlen(title), title);
+}
+
 
 /* Free all resources */
 void nss_free_context(void) {
