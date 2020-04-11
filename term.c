@@ -491,7 +491,6 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
 
         if (term->scrollback_limit >= 0 && ++term->scrollback_size > term->scrollback_limit) {
             if (term->scrollback_top == term->view) {
-                // TODO Dont invalidate whole screen
                 term->view = term->scrollback_top->next;
                 nss_window_shift(term->win, 1, 0, term->height, 1);
                 nss_term_damage(term, (nss_rect_t){0, term->height - 1, term->width, 1});
