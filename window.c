@@ -110,8 +110,8 @@ struct nss_window {
 
 
     /*     * Glyph encoding:
-     *  0xTTUUUUUU, where
-     *      * 0xTT - font fase
+     *  0x0TUUUUUU, where
+     *      * 0xT - font fase
      *      * 0xUUUUUU - unicode character
      */
     nss_font_t *font;
@@ -163,7 +163,8 @@ struct nss_context {
         int16_t y;
         nss_color_t bg;
         nss_color_t fg;
-        uint32_t glyph : 30;
+        uint32_t glyph : 29;
+        uint32_t wide : 1;
         uint32_t underlined : 1;
         uint32_t strikethrough : 1;
     } *cbuffer;
@@ -947,6 +948,7 @@ static void push_cell(nss_window_t *win, int16_t x, int16_t y, nss_color_t *pale
         .y = y * (win->char_height + win->char_depth),
         .fg = fg, .bg = bg,
         .glyph = cell.ch ? cell.ch | ((cell.attr & nss_font_attrib_mask) << 24) : 0,
+        .wide = !!(cell.attr & nss_attrib_wide),
         .underlined = !!(cell.attr & nss_attrib_underlined) && (fg != bg),
         .strikethrough = !!(cell.attr & nss_attrib_strikethrough) && (fg != bg),
     };
@@ -1150,7 +1152,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         push_rect(win, &(xcb_rectangle_t) {
             .x = con.cbuffer[k].x,
             .y = con.cbuffer[k].y,
-            .width = con.cbuffer[i - 1].x - con.cbuffer[k].x + win->char_width,
+            .width = con.cbuffer[i - 1].x - con.cbuffer[k].x + win->char_width*(1 + con.cbuffer[k].wide),
             .height = win->char_depth + win->char_height
         });
     }
