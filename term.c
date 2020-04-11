@@ -1492,8 +1492,12 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 term->mode &= ~nss_tm_mouse_mask;
                 ENABLE_IF(set, term->mode, nss_tm_mouse_x10);
                 break;
+            case 10: /* Show toolbar */
+                // IGNORE - There is no toolbar
+                break;
             case 12: /* Start blinking cursor */
             case 13:
+            case 14: /* Enable XOR of controll sequence and menu for blinking */
                 // IGNORE
                 break;
             case 18: /* DECPFF */
@@ -1506,6 +1510,9 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 if (set ^ !!(term->mode & nss_tm_hide_cursor))
                     term->screen[term->c.y]->cell[MIN(term->c.x, term->width -1 )].attr &= ~nss_attrib_drawn;
                 ENABLE_IF(!set, term->mode, nss_tm_hide_cursor);
+                break;
+            case 30: /* Show scrollbar */
+                // IGNORE - There is no scrollbar
                 break;
             case 40: /* 132COLS */
                 ENABLE_IF(set, term->mode, nss_tm_132cols);
