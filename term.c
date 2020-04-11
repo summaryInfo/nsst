@@ -2219,10 +2219,10 @@ static void term_dispatch_esc(nss_term_t *term) {
         term->esc.selector = 2;
         return;
     case E('l'): /* HP Memory lock */
-        term_set_tb_margins(term, term->c.y, term->height - 1);
+        term_set_tb_margins(term, term->c.y, term->bottom);
         break;
     case E('m'): /* HP Memory unlock */
-        term_reset_margins(term);
+        term_set_tb_margins(term, 0, term->bottom);
         break;
     case E('n'): /* LS2 */
         term_esc_dump(term);
