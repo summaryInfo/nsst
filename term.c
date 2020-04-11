@@ -1399,6 +1399,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                     if (!(term->mode & nss_tm_132_preserve_display))
                         term_erase(term, 0, 0, term->width, term->height);
                     term_move_to(term, 0, 0);
+                    term_reset_margins(term);
                 }
                 break;
             case 4: /* DECSCLM */
