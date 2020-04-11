@@ -1,27 +1,29 @@
-Slow scrolling of full-color images (small font, chafa)
-After resizing window new lines are not rerendered
-
-FIX: Geometry should be in characters?
-
 Input
     DECUDK
     NRCS input encoding should be happenning in term.c
 Render
     Double width/height, Down-Line-Loadable fonts
-	Better font handling
-    (Box drawing characters -- draw them manually to make pixel-prefect)
+    Better font handling
+    (?) Box drawing characters -- draw them manually to make pixel-prefect
+    Add options to select width of ambigues characters
+    Diacritics support
+    (?) Add fallback fonts support back
+    Slow scrolling of full-color images (with small font in chafa)
+    After resizing window (only jump resize) new lines are not rerendered
 Term
+    (?) Geometry should be in characters
     Capability restriction
-	Printing with attributes
-	DEC Locator
+        Now this works like in xterm
+    Printing with attributes
+    DEC Locator
     Left/Right margins
-	Rectangular ops
-	Reports
+    Rectangular ops
+    Reports
     DCS
     Window operations
-		Title stack (!)
+        (!) Title stack
     SIXEL
-	Is reset not completly correct?
+    Is reset not completly correct?
     Selections (copy/paste)
-	Mouse selection
-	Hightlight tracking
+    Mouse selection
+    Hightlight tracking
