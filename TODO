@@ -1,6 +1,10 @@
 Input
+    What if nss_term_read would be called recursively?
+        It could happen because like:
+            nss_term_read -> term_write -> ... -> term_answerback -> term_tty_wirte -> term_tty_wirte_raw -> nss_term_read
+        Should add term_tty_read_refill(nss_term_t*) and make terminal buffer dynamically allocatable
+        And also term->fd_read_lock flag
     DECUDK
-    NRCS input encoding should be happenning in term.c
 Render
     Double width/height, Down-Line-Loadable fonts
         DECDLD
