@@ -4,7 +4,9 @@
 #include <string.h>
 
 #include "input.h"
+#include "config.h"
 #include "term.h"
+#include "nrcs.h"
 
 typedef struct nss_esc_reply {
     uint8_t idx;
@@ -498,6 +500,7 @@ void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
             modify_others(val, mask_to_param(k.mask), mode.modkey_other_fmt, &reply);
             dump_reply(term, &reply);
         } else {
+
             if (nss_term_is_utf8(term)) {
                 if ((k.mask & nss_mm_mod1) && mode.has_meta) {
                     if (!mode.meta_escape) {
@@ -511,7 +514,11 @@ void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
                     }
                 }
             } else {
+                if (nss_term_is_nrcs_enabled(term))
+                    k.utf32 = nrcs_encode(nss_config_integer(NSS_ICONFIG_KEYBOARD_NRCS), k.utf32, 1);
+
                 if (k.utf32 > 0xFF) return;
+
                 k.utf8len = 1;
                 k.utf8data[0] = k.utf32;
                 if (k.mask & nss_mm_mod1 && mode.has_meta) {
@@ -524,7 +531,6 @@ void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
                 }
             }
             k.utf8data[k.utf8len] = '\0';
-            // TODO NRCSs
             nss_term_sendkey(term, (char *)k.utf8data, 0);
         }
     }

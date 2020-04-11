@@ -11,6 +11,7 @@
 #include "input.h"
 #include "util.h"
 #include "window.h"
+#include "nrcs.h"
 
 #define CN_BASE 16
 #define CN_EXT (6*6*6)
@@ -52,6 +53,7 @@ static struct {
     [NSS_ICONFIG_LINE_SPACING - NSS_ICONFIG_MIN] = {0, 0, -100, 100},
     [NSS_ICONFIG_GAMMA - NSS_ICONFIG_MIN] = {10000, 10000, 2000, 200000},
     [NSS_ICONFIG_DPI - NSS_ICONFIG_MIN] = {96, 96, 10, 10000},
+    [NSS_ICONFIG_KEYBOARD_NRCS] = {nss_94cs_ascii, nss_94cs_ascii, 0, nss_nrcs_MAX},
     [NSS_ICONFIG_SKIP_CONFIG_FILE] = {0, 0, 0, 1}
 };
 
