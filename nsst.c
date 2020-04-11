@@ -56,7 +56,7 @@ static struct optmap_item {
     {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", NSS_ICONFIG_SCROLL_ON_OUTPUT},
     {"scrollback-size", ", -H<value> (Number of saved lines)", NSS_ICONFIG_HISTORY_LINES},
     {"shell", ", -s<value>\t(Shell to start in new instance)", NSS_SCONFIG_SHELL},
-    {"tab-width", "\t\t(Initial width of tab characher)", NSS_ICONFIG_TAB_WIDTH},
+    {"tab-width", "\t\t(Initial width of tab character)", NSS_ICONFIG_TAB_WIDTH},
     {"term-name", ", -D<value>\t(TERM value)", NSS_SCONFIG_TERM_NAME},
     {"title", ", -T<value>, -t<value> (Initial window title)", NSS_SCONFIG_TITLE},
     {"underline-width", "\t(Text underline width)",NSS_ICONFIG_UNDERLINE_WIDTH},
