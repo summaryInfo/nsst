@@ -39,6 +39,7 @@ static struct optmap_item {
     {"has-meta", "\t\t(Handle meta/alt)", NSS_ICONFIG_INPUT_HAS_META},
     {"horizontal-border", "\t(Top and bottom botders)",NSS_ICONFIG_TOP_BORDER},
     {"keyboard-mapping", "\t(Initial keyboad mapping)", NSS_ICONFIG_INPUT_MAPPING},
+    {"line-spacing", "\t\t(Additional lines vertical spacing)", NSS_ICONFIG_LINE_SPACING},
     {"lock-keyboard", "\t\t(Disable keyboad input)", NSS_ICONFIG_INPUT_LOCK},
     {"meta-sends-escape", "\t(Alt/Meta sends escape prefix instead of setting 8-th bit)", NSS_ICONFIG_INPUT_META_IS_ESC},
     {"modify-cursor", "\t\t(Enable encoding modifiers for cursor keys)", NSS_ICONFIG_INPUT_MODIFY_CURSOR},

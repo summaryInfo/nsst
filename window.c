@@ -383,6 +383,7 @@ void load_params(void) {
             {"fontGamma",NSS_ICONFIG_GAMMA},
             {"fontSize",NSS_ICONFIG_FONT_SIZE},
             {"fontSpacing", NSS_ICONFIG_FONT_SPACING},
+            {"lineSpacing", NSS_ICONFIG_LINE_SPACING},
             {"fontSubpixel",NSS_ICONFIG_SUBPIXEL_FONTS},
             {"dpi",NSS_ICONFIG_DPI},
             {"hasMeta", NSS_ICONFIG_INPUT_HAS_META},
@@ -680,7 +681,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
 
         win->char_width = total / ('~' - ' ' + 1) + nss_config_integer(NSS_ICONFIG_FONT_SPACING);
         win->char_height = maxh;
-        win->char_depth = maxd;
+        win->char_depth = maxd + nss_config_integer(NSS_ICONFIG_LINE_SPACING);
 
         for (uint32_t i = ' '; i <= '~'; i++) {
             for (size_t j = 0; j < nss_font_attrib_max; j++) {
