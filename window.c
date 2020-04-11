@@ -368,6 +368,7 @@ void load_params(void) {
         } map[] = {
             {"allowAlternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
             {"allowCharsets", NSS_ICONFIG_ALLOW_CHARSETS},
+            {"allowNRCSs", NSS_ICONFIG_ALLOW_NRCS},
             {"answerbackString", NSS_SCONFIG_ANSWERBACK_STRING},
             {"appcursor", NSS_ICONFIG_INPUT_APPCURSOR},
             {"appkey", NSS_ICONFIG_INPUT_APPKEY},
@@ -389,6 +390,7 @@ void load_params(void) {
             {"hasMeta", NSS_ICONFIG_INPUT_HAS_META},
             {"horizontalBorder",NSS_ICONFIG_TOP_BORDER},
             {"keyboardMapping", NSS_ICONFIG_INPUT_MAPPING},
+            {"keyboardDialect", NSS_ICONFIG_KEYBOARD_NRCS},
             {"lockKeyboard", NSS_ICONFIG_INPUT_LOCK},
             {"metaSendsEscape", NSS_ICONFIG_INPUT_META_IS_ESC},
             {"modifyCursor", NSS_ICONFIG_INPUT_MODIFY_CURSOR},

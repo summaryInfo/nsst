@@ -19,6 +19,7 @@ static struct optmap_item {
 } map[] = {
     {"allow-alternate", "\t(Enable alternate screen)", NSS_ICONFIG_ALLOW_ALTSCREEN},
     {"allow-charsets", "\t(Enable charsets support)", NSS_ICONFIG_ALLOW_CHARSETS},
+    {"allow-nrcs", "\t(Enable NRCSs support)", NSS_ICONFIG_ALLOW_NRCS},
     {"answerback-string", "\t(ENQ report)", NSS_SCONFIG_ANSWERBACK_STRING},
     {"appcursor", "\t\t(Initial application cursor mode value)", NSS_ICONFIG_INPUT_APPCURSOR},
     {"appkey", "\t\t(Initial application keypad mode value)", NSS_ICONFIG_INPUT_APPKEY},
@@ -38,6 +39,7 @@ static struct optmap_item {
     {"force-dpi", "\t\t(DPI value for fonts)",NSS_ICONFIG_DPI},
     {"has-meta", "\t\t(Handle meta/alt)", NSS_ICONFIG_INPUT_HAS_META},
     {"horizontal-border", "\t(Top and bottom botders)",NSS_ICONFIG_TOP_BORDER},
+    {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", NSS_ICONFIG_KEYBOARD_NRCS},
     {"keyboard-mapping", "\t(Initial keyboad mapping)", NSS_ICONFIG_INPUT_MAPPING},
     {"line-spacing", "\t\t(Additional lines vertical spacing)", NSS_ICONFIG_LINE_SPACING},
     {"lock-keyboard", "\t\t(Disable keyboad input)", NSS_ICONFIG_INPUT_LOCK},
