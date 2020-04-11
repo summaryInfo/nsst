@@ -214,8 +214,8 @@ struct nss_term {
     pid_t child;
     int fd;
     int printerfd;
-    //TODO: Make this just 4 bytes for incomplete utf-8
-    size_t fd_buf_pos;
+
+    size_t fd_pos;
     uint8_t fd_buf[NSS_FD_BUF_SZ];
 };
 
@@ -2786,20 +2786,19 @@ ssize_t nss_term_read(nss_term_t *term) {
         nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
     }
 
-    ssize_t res;
-    if ((res = read(term->fd, term->fd_buf + term->fd_buf_pos,
-            NSS_FD_BUF_SZ - term->fd_buf_pos)) < 0) {
+    ssize_t inc = read(term->fd, term->fd_buf + term->fd_pos, sizeof(term->fd_buf) - term->fd_pos);
+    if (inc < 0) {
         warn("Can't read from tty");
         nss_term_hang(term);
         return -1;
     }
-    term->fd_buf_pos += res;
-    ssize_t written = term_write(term, term->fd_buf, term->fd_buf_pos, 0);
+    term->fd_pos += inc;
 
-    term->fd_buf_pos -= written;
-    if (term->fd_buf_pos > 0)
-        memmove(term->fd_buf, term->fd_buf + written, term->fd_buf_pos);
-    return res;
+    ssize_t dec = term_write(term, term->fd_buf, term->fd_pos, 0);
+    term->fd_pos -= dec;
+    if (term->fd_pos)
+        memmove(term->fd_buf, term->fd_buf + dec, term->fd_pos);
+    return inc;
 }
 
 static void tty_write_raw(nss_term_t *term, const uint8_t *buf, size_t len) {
