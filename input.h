@@ -78,6 +78,7 @@ typedef struct nss_key {
     uint32_t mask;
     uint8_t utf8data[6]; // zero terminated
     uint8_t utf8len;
+    uint8_t ascii : 7;
     uint8_t is_fkey : 1;
 } nss_key_t;
 

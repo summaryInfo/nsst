@@ -427,7 +427,7 @@ static void dump_reply(nss_term_t *term, nss_reply_t *reply) {
     }
     str[strp++] = reply->final;
     str[strp] = '\0';
-    nss_term_sendkey(term, (const char *)str, 1);
+    nss_term_sendkey(term, (const char *)str, 0);
 }
 
 void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
@@ -446,6 +446,7 @@ void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
     case nss_km_sco: fnkey_sco(k.sym, k.is_fkey, &reply); break;
     default: break;
     }
+
 
     if (reply.final) { // Applied in one of fnkey_* functions
         modify_cursor(param, (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode.delete_is_del)) ? 
@@ -485,8 +486,8 @@ void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
             if(mode.keyboad_vt52) reply.priv = '?';
             dump_reply(term, &reply);
         } else {
-            char str[2] = {" XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXXXXXXXXXXXXX*+,-./0123456789XXX=" [k.sym - XKB_KEY_KP_Space], '\0'};
-            nss_term_sendkey(term, str, 0);
+            char ch = " XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXXXXXXXXXXXXX*+,-./0123456789XXX=" [k.sym - XKB_KEY_KP_Space];
+            nss_term_sendkey(term, &ch, 1);
         }
     } else if (is_cursor(k.sym)) {
         reply.init = mode.keyboad_vt52 ? '\033' : mode.appcursor ? '\217' : '\233';
@@ -496,7 +497,8 @@ void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
     } else if (k.utf8len > 0) {
         if (is_modify_others_allowed(&k, mode)) {
             // This is done in order to override XKB control transformation
-            uint32_t val = k.sym < 0xFF ? k.sym : k.utf32;
+            // TODO Check if k.ascii can be used here
+            uint32_t val = k.sym < 0x100 ? k.sym : k.utf32;
             modify_others(val, mask_to_param(k.mask), mode.modkey_other_fmt, &reply);
             dump_reply(term, &reply);
         } else {
@@ -530,7 +532,7 @@ void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
                 }
             }
             k.utf8data[k.utf8len] = '\0';
-            nss_term_sendkey(term, (char *)k.utf8data, 0);
+            nss_term_sendkey(term, (char *)k.utf8data, k.utf8len);
         }
     }
 }

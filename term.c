@@ -2820,19 +2820,21 @@ void term_answerback(nss_term_t *term, const char *str, ...) {
     term_tty_write(term, csi, res);
 }
 
-void nss_term_sendkey(nss_term_t *term, const char *str, _Bool encode) {
+/* If len == 0 encodes C1 controls and determines length by NUL character */
+void nss_term_sendkey(nss_term_t *term, const char *str, size_t len) {
+    _Bool encode = !len;
+    if (!len) len = strlen(str);
+
     if (term->mode & nss_tm_echo)
-        term_write(term, (uint8_t *)str, strlen(str), 1);
+        term_write(term, (uint8_t *)str, len, 1);
 
     if (!(term->mode & nss_tm_dont_scroll_on_input) && term->view) {
         term->view = NULL;
         nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
     }
     uint8_t rep[MAX_REPORT];
-    size_t len;
 
     if (encode) len = term_encode_c1(term, (const uint8_t *)str, rep);
-    else len = strlen(str);
 
     term_tty_write(term, encode ? rep : (uint8_t *)str, len);
 }

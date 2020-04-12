@@ -62,7 +62,7 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height);
 void nss_term_visibility(nss_term_t *term, _Bool visible);
 void nss_term_focus(nss_term_t *term, _Bool focused);
 _Bool nss_term_mouse(nss_term_t *term, int16_t x, int16_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button);
-void nss_term_sendkey(nss_term_t *term, const char *str, _Bool encode);
+void nss_term_sendkey(nss_term_t *term, const char *str, size_t size);
 void nss_term_sendbreak(nss_term_t *term);
 void nss_term_scroll_view(nss_term_t *term, int16_t amount);
 ssize_t nss_term_read(nss_term_t *term);

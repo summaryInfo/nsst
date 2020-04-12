@@ -1490,14 +1490,68 @@ static void handle_focus(nss_window_t *win, _Bool focused) {
     nss_term_focus(win->term, focused);
 }
 
-static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
-    nss_key_t key = { 0 };
-    if ((key.sym = xkb_state_key_get_one_sym(con.xkb_state, keycode)) == XKB_KEY_NoSymbol) return;
-    key.mask = xkb_state_serialize_mods(con.xkb_state, XKB_STATE_MODS_EFFECTIVE);
-    if ((key.utf32 = xkb_state_key_get_utf32(con.xkb_state, keycode))) {
-        key.utf8len = utf8_encode(key.utf32, key.utf8data, key.utf8data + sizeof(key.utf8data));
-        key.utf8data[key.utf8len] = '\0';
+
+/* And now I should duplicate some code of xkbcommon
+ * in order to be able to distunguish NUL symbol and error condition...
+ */
+
+/* Verbatim from libX11:src/xkb/XKBBind.c */
+static char to_control(char ch) {
+    if ((ch >= '@' && ch < '\177') || ch == ' ') ch &= 0x1F;
+    else if (ch == '2') ch = '\000';
+    else if (ch >= '3' && ch <= '7') ch -= ('3' - '\033');
+    else if (ch == '8') ch = '\177';
+    else if (ch == '/') ch = '_' & 0x1F;
+    return ch;
+}
+
+static nss_key_t get_key_desc(xkb_keycode_t keycode) {
+    nss_key_t k = { .sym = XKB_KEY_NoSymbol };
+
+    k.mask = xkb_state_serialize_mods(con.xkb_state, XKB_STATE_MODS_EFFECTIVE) &
+              ~xkb_state_key_get_consumed_mods(con.xkb_state, keycode);
+
+    struct xkb_keymap *keymap = xkb_state_get_keymap(con.xkb_state);
+    xkb_layout_index_t layout = xkb_state_key_get_layout(con.xkb_state, keycode);
+    xkb_layout_index_t num_layouts = xkb_keymap_num_layouts_for_key(keymap, keycode);
+    xkb_level_index_t level = xkb_state_key_get_level(con.xkb_state, keycode, layout);
+    if (layout == XKB_LAYOUT_INVALID || !num_layouts || level == XKB_LEVEL_INVALID)
+        return k;
+
+    const xkb_keysym_t *syms;
+    int nsyms = xkb_keymap_key_get_syms_by_level(keymap, keycode, layout, level, &syms);
+    if (nsyms != 1) return k;
+
+    k.ascii = k.sym = *syms;
+
+    if (k.mask && k.sym >= 0x80) {
+        for (xkb_layout_index_t i = 0; i < num_layouts; i++) {
+            if ((level = xkb_state_key_get_level(con.xkb_state, keycode, i)) != XKB_LEVEL_INVALID) {
+                nsyms = xkb_keymap_key_get_syms_by_level(keymap, keycode, i, level, &syms);
+                if (nsyms == 1 && syms[0] < 0x80) {
+                    k.ascii = syms[0];
+                    break;
+                }
+            }
+        }
     }
+
+    if (k.mask & nss_mm_lock) k.sym = xkb_keysym_to_upper(k.sym);
+
+    if ((k.utf32 = xkb_keysym_to_utf32(k.sym))) {
+        if ((k.mask & nss_mm_control) && k.sym < 0x80)
+            k.utf32 = to_control(k.ascii);
+        k.utf8len = utf8_encode(k.utf32, k.utf8data, k.utf8data + sizeof(k.utf8data));
+        k.utf8data[k.utf8len] = '\0';
+    }
+
+    return k;
+}
+
+static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
+    nss_key_t key = get_key_desc(keycode);
+
+    if (key.sym == XKB_KEY_NoSymbol) return;
 
     enum nss_shortcut_action action = nss_sa_none;
     for (size_t i = 0; i < sizeof(cshorts)/sizeof(*cshorts); i++) {
