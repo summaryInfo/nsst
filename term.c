@@ -1924,6 +1924,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     //    break;
     case C('r'): /* DECSTBM */
         term_set_tb_margins(term, PARAM(0, 1) - 1, PARAM(1, (size_t)term->height) - 1);
+        term_move_to(term, 0, 0);
         break;
     //case C('r') | P('?'): /* Restore DEC privite mode */
     //    break
