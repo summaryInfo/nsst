@@ -68,11 +68,29 @@ _Bool nrcs_encode(uint32_t set, uint32_t *ch, _Bool nrcs) {
         case U'ÿ': *ch = 0xFD - 0x80; done = 1; break;
         }
         if (*ch >= 0x80 && *ch < 0x100) {
-            done = (*ch != 0xA8 && *ch != 0xD7 && *ch != 0xDD
-                    && *ch != 0xF7 && *ch != 0xFD);
+            done = (*ch != 0xA8 &&
+                   (*ch & ~0x20) != 0xD7 &&
+                   (*ch & ~0x20) != 0xDD);
             if (done) *ch -= 0x80;
         }
         break;
+    case nss_96cs_latin_5:
+        switch (*ch) {
+        case U'Ğ': *ch = 0xD0 - 0x80; done = 1; break;
+        case U'İ': *ch = 0xDD - 0x80; done = 1; break;
+        case U'Ş': *ch = 0xDE - 0x80; done = 1; break;
+        case U'ğ': *ch = 0xF0 - 0x80; done = 1; break;
+        case U'ı': *ch = 0xFD - 0x80; done = 1; break;
+        case U'ş': *ch = 0xFE - 0x80; done = 1; break;
+        }
+        if (*ch >= 0x80 && *ch < 0x100) {
+            done = ((*ch & ~0x20) != 0xD0 &&
+                    (*ch & ~0x20) != 0xDD &&
+                    (*ch & ~0x20) != 0xDE);
+            if (done) *ch -= 0x80;
+        }
+        break;
+
     case nss_94cs_dec_graph:
         for (size_t i = 0; i < sizeof(graph_tr)/sizeof(*graph_tr); i++) {
             if (graph_tr[i] == *ch) {
@@ -158,6 +176,16 @@ uint32_t nrcs_decode(uint32_t gl, uint32_t gr, uint32_t ch, _Bool nrcs) {
             return ch;
         }
         return ch | 0x80;
+    case nss_96cs_latin_5:
+        switch(ch |= 0x80) {
+        case 0xD0: ch = U'Ğ'; break;
+        case 0xDD: ch = U'İ'; break;
+        case 0xDE: ch = U'Ş'; break;
+        case 0xF0: ch = U'ğ'; break;
+        case 0xFD: ch = U'ı'; break;
+        case 0xFE: ch = U'ş'; break;
+        }
+        return ch;
     case nss_94cs_dec_tech:
         ch &= 0x7F;
         if (0x20 < ch && ch < 0x7F)

@@ -34,16 +34,16 @@ enum nss_char_set {
     nss_94cs_dec_sup_graph,
     nss_94cs_dec_graph,
     nss_94cs_dec_tech,
-    nss_94cs_dec_hebrew, // Not implemented
     nss_94cs_dec_greek, // Not implemented
+    nss_94cs_dec_hebrew, // Not implemented
     nss_94cs_dec_turkish, // Not implemented
 
     nss_96cs_latin_1,
     nss_96cs_greek, // Not implemented
     nss_96cs_hebrew, // Not implemented
     nss_96cs_latin_cyrillic, // Not implemented
-    nss_96cs_latin_5, // Not implemented
-    nss_nrcs_MAX = nss_96cs_latin_1,
+    nss_96cs_latin_5,
+    nss_nrcs_MAX = nss_96cs_latin_5,
 };
 
 _Bool nrcs_encode(uint32_t set, uint32_t *ch, _Bool nrcs);
