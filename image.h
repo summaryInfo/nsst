@@ -8,6 +8,7 @@
 typedef struct nss_image {
     int16_t width;
     int16_t height;
+    uint32_t shmid;
     nss_color_t data[];
 } nss_image_t;
 

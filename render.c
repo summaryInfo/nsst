@@ -7,6 +7,8 @@
 #include "window-private.h"
 
 #include <string.h>
+#include <sys/shm.h>
+#include <sys/ipc.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_renderutil.h>
 
@@ -14,13 +16,60 @@ typedef struct nss_render_context nss_render_context_t;
 
 
 struct nss_render_context {
-    /* nothing */
+    _Bool has_shm;
 };
 
 nss_render_context_t rctx;
 
+/* WARNING: don't try to use shm image functions and normal image functions interchangeably */
+
+static nss_image_t *nss_create_image_shm(nss_window_t *win, int16_t width, int16_t height) {
+    if (rctx.has_shm) {
+        size_t size = width * height * sizeof(nss_color_t) + sizeof(nss_image_t);
+
+        uint32_t shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0666);
+        if (shmid == -1U) return 0;
+
+        nss_image_t *im = shmat(shmid, 0, 0);
+        if ((void *)im == (void *) -1) goto error;
+
+        im->shmid = shmid;
+        im->width = width;
+        im->height = height;
+
+        xcb_void_cookie_t c;
+        if(!win->ren.shm_seg) {
+            win->ren.shm_seg = xcb_generate_id(con);
+        } else {
+            c = xcb_shm_detach_checked(con, win->ren.shm_seg);
+            check_void_cookie(c);
+        }
+
+        c = xcb_shm_attach_checked(con, win->ren.shm_seg, shmid, 0);
+        if (check_void_cookie(c)) goto error;
+
+        xcb_flush(con);
+
+        return im;
+    error:
+        if (im) free(im);
+        if ((void *)im != (void *) -1 && im) shmdt(im);
+        if (shmid != -1U) shmctl(shmid, IPC_RMID, NULL);
+        return NULL;
+    } else return nss_create_image(width, height);
+}
+
+static void nss_free_image_shm(nss_window_t *win, nss_image_t *im) {
+    if (rctx.has_shm) {
+        shmctl(im->shmid, IPC_RMID, NULL);
+        shmdt(im);
+    } else {
+        nss_free_image(im);
+    }
+}
+
 /* Reload font using win->font_size and win->font_name */
- _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
+_Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     //Try find already existing font
     _Bool found_font = 0, found_cache = 0;
     nss_window_t *found = 0;
@@ -80,7 +129,7 @@ nss_render_context_t rctx;
 
     if (need_free) {
         xcb_free_gc(con, win->ren.gc);
-        nss_free_image(win->ren.im);
+        nss_free_image_shm(win, win->ren.im);
     } else {
         win->ren.gc = xcb_generate_id(con);
     }
@@ -93,7 +142,7 @@ nss_render_context_t rctx;
         return 0;
     }
 
-    win->ren.im = nss_create_image(bound.width, bound.height);
+    win->ren.im = nss_create_image_shm(win, bound.width, bound.height);
     if (!win->ren.im) {
         warn("Can't allocate image");
         return 0;
@@ -109,8 +158,10 @@ nss_render_context_t rctx;
 
 void nss_renderer_free(nss_window_t *win) {
     xcb_free_gc(con, win->ren.gc);
+    if (rctx.has_shm)
+        xcb_shm_detach(con, win->ren.shm_seg);
     if (win->ren.im)
-        nss_free_image(win->ren.im);
+        nss_free_image_shm(win, win->ren.im);
     if (win->ren.cache)
         nss_free_cache(win->ren.cache);
 }
@@ -120,7 +171,14 @@ void nss_free_render_context() {
 }
 
 void nss_init_render_context() {
-    /* nothing */
+    xcb_shm_query_version_cookie_t q = xcb_shm_query_version(con);
+    xcb_generic_error_t *er = NULL;
+    xcb_shm_query_version_reply_t *qr = xcb_shm_query_version_reply(con, q, &er);
+    if (er) free(er);
+    if (qr) free(qr);
+    if (!(rctx.has_shm = qr && !er)) {
+        warn("MIT-SHM is not available");
+    }
 }
 
 static _Bool draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
@@ -264,10 +322,15 @@ void nss_renderer_clear(nss_window_t *win, size_t count, nss_rect_t *rects) {
     */
 }
 void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
-    xcb_put_image(con, XCB_IMAGE_FORMAT_Z_PIXMAP, win->wid, win->ren.gc,
-            win->ren.im->width, rect.height, win->left_border,
-            win->top_border + rect.y, 0, 32, rect.height * win->ren.im->width * sizeof(nss_color_t),
-            (const uint8_t *)(win->ren.im->data+rect.y*win->ren.im->width));
+    if (rctx.has_shm) {
+        xcb_shm_put_image(con, win->wid, win->ren.gc, win->ren.im->width, win->ren.im->height, rect.x, rect.y, rect.width, rect.height,
+                rect.x + win->left_border, rect.y + win->top_border, 32, XCB_IMAGE_FORMAT_Z_PIXMAP, 0, win->ren.shm_seg, sizeof(nss_image_t));
+    } else {
+        xcb_put_image(con, XCB_IMAGE_FORMAT_Z_PIXMAP, win->wid, win->ren.gc,
+                win->ren.im->width, rect.height, win->left_border,
+                win->top_border + rect.y, 0, 32, rect.height * win->ren.im->width * sizeof(nss_color_t),
+                (const uint8_t *)(win->ren.im->data+rect.y*win->ren.im->width));
+    }
 }
 void nss_renderer_background_changed(nss_window_t *win) {
     uint32_t values2[2];
@@ -297,10 +360,10 @@ void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
     int16_t common_w = MIN(width, width  - delta_x * win->char_width);
     int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth)) ;
 
-    nss_image_t *new = nss_create_image(width, height);
+    nss_image_t *new = nss_create_image_shm(win, width, height);
     nss_image_copy(new, (nss_rect_t){0, 0, common_w, common_h}, win->ren.im, 0, 0);
     SWAP(nss_image_t *, win->ren.im, new);
-    nss_free_image(new);
+    nss_free_image_shm(win, new);
         
     if (delta_y > 0)
         nss_image_draw_rect(win->ren.im, (nss_rect_t) {

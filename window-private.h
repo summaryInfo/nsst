@@ -7,7 +7,7 @@
 
 #include <inttypes.h>
 #include <xcb/xcb.h>
-#include <xcb/render.h>
+#include <xcb/shm.h>
 
 #define TRUE_COLOR_ALPHA_DEPTH 32
 
@@ -15,6 +15,7 @@ typedef struct nss_renderer nss_renderer_t;
 
 struct nss_renderer {
     xcb_gcontext_t gc;
+    xcb_shm_seg_t shm_seg;
     nss_image_t *im;
     nss_glyph_cache_t *cache;
     _Bool shifted;

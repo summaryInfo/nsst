@@ -9,7 +9,7 @@ CFLAGS += -std=c11 -Wall -Wextra -Wno-implicit-fallthrough\
 
 OBJ := window.o nsst.o util.o font.o term.o config.o input.o nrcs.o image.o boxdraw.o render.o
 
-DEPS := xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11
+DEPS := xcb xcb-xkb xcb-shm xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11
 LIBS != pkg-config $(DEPS) --libs
 LIBS += -lm -lutil
 INCLUES != pkg-config $(DEPS) --cflags

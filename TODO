@@ -1,3 +1,9 @@
+MIT-SHM
+	[x] Software rendering
+	[x] Wide glyphs rendering
+	[ ] Font cache
+	[x] Use xcb_shm_put_image
+
 Set WM_NORMAL_HINTS
 Selections:
     X11 selection pasting
