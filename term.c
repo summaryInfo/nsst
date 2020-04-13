@@ -1077,7 +1077,7 @@ static void term_dispatch_osc(nss_term_t *term) {
             nss_window_set_title(term->win, (char *)term->esc.str);
         break;
     case 4: /* Set color */ {
-        char *pstr = (char *)term->esc.str, *pnext, *s_end;
+        char *pstr = (char *)term->esc.str, *pnext = NULL, *s_end;
         char *pend = pstr + term->esc.si;
         while(pstr < pend && (pnext = strchr(pstr, ';'))) {
             *pnext = '\0';
