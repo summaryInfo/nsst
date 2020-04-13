@@ -37,7 +37,6 @@ struct nss_font {
     uint16_t dpi;
     double pixel_size;
     double size;
-    uint32_t *loaded_map;
     nss_face_list_t face_types[nss_font_attrib_max];
 };
 
@@ -58,7 +57,6 @@ void nss_free_font(nss_font_t *font) {
             FcFini();
             FT_Done_FreeType(global.library);
         }
-        free(font->loaded_map);
         free(font);
     }
 }
@@ -242,12 +240,6 @@ nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi) {
         warn("Can't allocate font");
         return NULL;
     }
-    font->loaded_map = calloc(LOADED_MAP_SIZE, sizeof(font->loaded_map[0]));
-    if (!font->loaded_map) {
-        warn("Can't allocate font glyph map");
-        free(font);
-        return NULL;
-    }
 
     font->refs = 1;
     font->pixel_size = 0;
@@ -365,21 +357,61 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
         }
     }
 
-    nss_font_glyph_mark_loaded(font, ch);
-
     return glyph;
-}
-
-void nss_font_glyph_mark_loaded(nss_font_t *font, tchar_t ch) {
-    if (ch < LOADED_MAP_SIZE * 32)
-        font->loaded_map[ch / 32] |= 1 << (ch % 32);
-}
-
-_Bool nss_font_glyph_is_loaded(nss_font_t *font, tchar_t ch) {
-    if (ch >= 32 * LOADED_MAP_SIZE) return 0;
-    else return font->loaded_map[ch / 32] & (1 << (ch % 32));
 }
 
 int16_t nss_font_get_size(nss_font_t *font) {
     return font->size;
 }
+
+struct nss_glyph_cache {
+    //TODO Make it tree/hash table
+    nss_font_t *font;
+    _Bool lcd;
+    size_t refc;
+    nss_glyph_t *data[127-32+1][nss_font_attrib_max];
+};
+
+
+nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd) {
+    nss_glyph_cache_t *cache = calloc(1, sizeof(nss_glyph_cache_t));
+    cache->refc = 1;
+    cache->font = font;
+    cache->lcd = lcd;
+
+    for(size_t j = 0; j < nss_font_attrib_max; j++) {
+        for(size_t i = 32; i < 127; i++) {
+            cache->data[i - 32][j] = nss_font_render_glyph(font, i, j, lcd);
+        }
+    }
+    return cache;
+}
+
+nss_glyph_cache_t *nss_cache_reference(nss_glyph_cache_t *ref) {
+    ref->refc++;
+    return ref;
+}
+
+void nss_free_cache(nss_glyph_cache_t *cache) {
+    if (!--cache->refc) {
+        for(size_t j = 0; j < nss_font_attrib_max; j++) {
+            for(size_t i = 32; i < 127; i++) {
+                free(cache->data[i - 32][j]);
+            }
+        }
+    }
+    free(cache);
+}
+
+nss_glyph_t *nss_cache_glyph(nss_glyph_cache_t *cache, nss_font_attrib_t face, uint32_t ch) {
+    //if (32 <= ch && ch < 127) {
+    //    return cache->data[ch - 32][face];
+    //}
+    return nss_font_render_glyph(cache->font, ch, face, cache->lcd);
+}
+
+void nss_cache_post(nss_glyph_cache_t *cache, nss_font_attrib_t face, uint32_t ch, nss_glyph_t *glyph) {
+    //if (32 <= ch && ch < 127)
+    free(glyph);
+}
+

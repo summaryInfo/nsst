@@ -3,6 +3,7 @@
 
 #include "window.h"
 #include "term.h"
+#include "image.h"
 
 #include <inttypes.h>
 #include <xcb/xcb.h>
@@ -13,14 +14,10 @@
 typedef struct nss_renderer nss_renderer_t;
 
 struct nss_renderer {
-    xcb_pixmap_t pid;
-    xcb_render_picture_t pic;
-    xcb_render_picture_t pen;
-    xcb_render_glyphset_t gsid;
-    xcb_render_pictformat_t pfglyph;
     xcb_gcontext_t gc;
-
-    nss_color_t current_fg;
+    nss_image_t *im;
+    nss_glyph_cache_t *cache;
+    _Bool shifted;
 };
 
 struct nss_window {
