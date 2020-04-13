@@ -1485,6 +1485,30 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
 
 }
 
+static void handle_expose(nss_window_t *win, nss_rect_t damage) {
+    int16_t width = win->cw * win->char_width + win->left_border;
+    int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
+
+    size_t num_damaged = 0;
+    nss_rect_t damaged[NUM_BORDERS], borders[NUM_BORDERS] = {
+        {0, 0, win->left_border, height},
+        {win->left_border, 0, width, win->top_border},
+        {width, 0, win->width - width, win->height},
+        {0, height, width, win->height - height},
+    };
+    for (size_t i = 0; i < NUM_BORDERS; i++)
+        if (intersect_with(&borders[i], &damage))
+                damaged[num_damaged++] = borders[i];
+    if (num_damaged)
+        xcb_poly_fill_rectangle(con.con, win->wid, win->gc, num_damaged, (xcb_rectangle_t*)damaged);
+
+    nss_rect_t inters = { win->left_border, win->top_border, width - win->left_border, height  - win->top_border};
+    if (intersect_with(&inters, &damage)) {
+        xcb_copy_area(con.con, win->pid, win->wid, win->gc, inters.x - win->left_border, inters.y - win->top_border,
+                      inters.x, inters.y, inters.width, inters.height);
+    }
+}
+
 static void handle_focus(nss_window_t *win, _Bool focused) {
     win->focused = focused;
     nss_term_focus(win->term, focused);
@@ -1614,31 +1638,7 @@ void nss_context_run(void) {
                     xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
                     nss_window_t *win = window_for_xid(ev->window);
                     if (!win) break;
-
-                    nss_rect_t damage = {ev->x, ev->y, ev->width, ev->height};
-
-                    int16_t width = win->cw * win->char_width + win->left_border;
-                    int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
-
-                    size_t num_damaged = 0;
-                    nss_rect_t damaged[NUM_BORDERS], borders[NUM_BORDERS] = {
-                        {0, 0, win->left_border, height},
-                        {win->left_border, 0, width, win->top_border},
-                        {width, 0, win->width - width, win->height},
-                        {0, height, width, win->height - height},
-                    };
-                    for (size_t i = 0; i < NUM_BORDERS; i++)
-                        if (intersect_with(&borders[i], &damage))
-                                damaged[num_damaged++] = borders[i];
-                    if (num_damaged)
-                        xcb_poly_fill_rectangle(con.con, win->wid, win->gc, num_damaged, (xcb_rectangle_t*)damaged);
-
-                    nss_rect_t inters = { win->left_border, win->top_border, width - win->left_border, height  - win->top_border};
-                    if (intersect_with(&inters, &damage)) {
-                        xcb_copy_area(con.con, win->pid, win->wid, win->gc, inters.x - win->left_border, inters.y - win->top_border,
-                                      inters.x, inters.y, inters.width, inters.height);
-                    }
-                    xcb_flush(con.con);
+					handle_expose(win, (nss_rect_t){ev->x, ev->y, ev->width, ev->height});
                     break;
                 }
                 case XCB_CONFIGURE_NOTIFY:{
@@ -1646,10 +1646,8 @@ void nss_context_run(void) {
                     nss_window_t *win = window_for_xid(ev->window);
                     if (!win) break;
 
-                    if (ev->width != win->width || ev->height != win->height) {
+                    if (ev->width != win->width || ev->height != win->height)
                         handle_resize(win, ev->width, ev->height);
-                        xcb_flush(con.con);
-                    }
                     if (!win->got_configure) {
                         nss_term_resize(win->term, win->cw, win->ch);
                         nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
@@ -1671,9 +1669,7 @@ void nss_context_run(void) {
                     xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
                     nss_window_t *win = window_for_xid(ev->event);
                     if (!win) break;
-
                     handle_focus(win, event->response_type == XCB_FOCUS_IN);
-                    xcb_flush(con.con);
                     break;
                 }
                 case XCB_BUTTON_RELEASE: /* All these events have same structure */
@@ -1708,15 +1704,6 @@ void nss_context_run(void) {
                             !mask) {
                         nss_term_scroll_view(win->term, button == 3 ? 2 : -2);
                     } else nss_term_mouse(win->term, x, y, mask, evtype, button);
-
-                    // What is that?
-                    //if (ev->detail == XCB_BUTTON_INDEX_4 && !mask) {
-                    //    nss_term_answerback(win->term, "\031");
-                    //    return;
-                    //} else if (ev->detail == XCB_BUTTON_INDEX_5 && !mask) {
-                    //    nss_term_answerback(win->term, "\005");
-                    //    return;
-                    //}
                     break;
                 }
                 case XCB_CLIENT_MESSAGE: {
