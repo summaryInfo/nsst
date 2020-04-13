@@ -123,7 +123,7 @@ void nss_init_render_context() {
     /* nothing */
 }
 
-static void draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
+static _Bool draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
     nss_cell_t cell = *cel;
 
     // Calculate colors
@@ -139,6 +139,9 @@ static void draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *pale
     if (cell.ch == 0x2588) bg = fg;
     if (cell.ch == ' ' || fg == bg) cell.ch = 0;
 
+    int16_t width = win->char_width*(1 + !!(cell.attr & nss_attrib_wide));
+    int16_t height = win->char_depth + win->char_height;
+
     // Scale position
     x *= win->char_width;
     y *= win->char_height + win->char_depth;
@@ -146,12 +149,12 @@ static void draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *pale
     // And draw...
 
     // Backround
-    nss_image_draw_rect(win->ren.im, (nss_rect_t) { x, y, win->char_width, win->char_depth + win->char_height }, bg);
+    nss_image_draw_rect(win->ren.im, (nss_rect_t) { x, y, width, height }, bg);
 
     // Glyph
     if (cell.ch && fg != bg) {
         nss_glyph_t *glyph = nss_cache_glyph(win->ren.cache, cell.attr & nss_font_attrib_mask, cell.ch);
-        nss_rect_t clip = {x, y, win->char_width * (1 + !!(cell.attr & nss_attrib_wide)), win->char_depth + win->char_height};
+        nss_rect_t clip = {x, y, width, height};
         nss_image_composite_glyph(win->ren.im, x, y + win->char_height, glyph, fg, clip);
         nss_cache_post(win->ren.cache, cell.attr & nss_font_attrib_mask, cell.ch, glyph);
     }
@@ -165,10 +168,11 @@ static void draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *pale
 
     win->ren.shifted = 1;
     cel->attr |= nss_attrib_drawn;
+
+    return !!(cell.attr & nss_attrib_wide);
 }
 
-
-void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, int16_t cur_x, int16_t cur_y, _Bool cursor) {
+void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, coord_t cur_x, coord_t cur_y, _Bool cursor) {
     _Bool marg = win->cw == cur_x;
     cur_x -= marg;
     if (cursor && win->focused) {
@@ -176,7 +180,9 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         if (win->cursor_type == nss_cursor_block)
             cur_cell.attr ^= nss_attrib_inverse;
         array[cur_y]->cell[cur_x].attr |= nss_attrib_drawn;
-        draw_cell(win, cur_x, cur_y, palette, array[cur_y]->extra, &cur_cell);
+        if (draw_cell(win, cur_x, cur_y, palette, array[cur_y]->extra, &cur_cell)) {
+            array[cur_y]->cell[MIN(cur_x + 1, array[cur_y]->width)].attr &= ~nss_attrib_drawn;
+        }
     }
 
     coord_t h = 0;
@@ -192,7 +198,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         for (coord_t i = 0; i < MIN(win->cw, list->width); i++)
             if (!(list->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (list->cell[i].attr & nss_attrib_blink)))
-                draw_cell(win, i, h, palette, list->extra, &list->cell[i]);
+                i += draw_cell(win, i, h, palette, list->extra, &list->cell[i]);
     }
     for (coord_t j = 0; j < win->ch - h; j++) {
         if (win->cw > array[j]->width) {
@@ -206,7 +212,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         for (coord_t i = 0; i < MIN(win->cw, array[j]->width); i++)
             if (!(array[j]->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (array[j]->cell[i].attr & nss_attrib_blink)))
-                draw_cell(win, i, j + h, palette, array[j]->extra, &array[j]->cell[i]);
+                i += draw_cell(win, i, j + h, palette, array[j]->extra, &array[j]->cell[i]);
     }
 
     if (cursor) {
@@ -239,7 +245,6 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         }
         for (size_t i = 0; i < count; i++) {
             nss_image_draw_rect(win->ren.im, rects[i + off], win->cursor_fg);
-
         }
     }
 
