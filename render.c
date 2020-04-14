@@ -17,6 +17,7 @@ typedef struct nss_render_context nss_render_context_t;
 
 struct nss_render_context {
     _Bool has_shm;
+    _Bool has_shm_pixmaps;
 };
 
 nss_render_context_t rctx;
@@ -62,12 +63,21 @@ static nss_image_t *nss_create_image_shm(nss_window_t *win, int16_t width, int16
         if(!win->ren.shm_seg) {
             win->ren.shm_seg = xcb_generate_id(con);
         } else {
+            if (rctx.has_shm_pixmaps && win->ren.shm_pixmap)
+                xcb_free_pixmap(con, win->ren.shm_pixmap);
             c = xcb_shm_detach_checked(con, win->ren.shm_seg);
             check_void_cookie(c);
         }
 
         c = xcb_shm_attach_checked(con, win->ren.shm_seg, shmid, 0);
         if (check_void_cookie(c)) goto error;
+
+        if (rctx.has_shm_pixmaps) {
+            if (!win->ren.shm_pixmap)
+                win->ren.shm_pixmap = xcb_generate_id(con);
+            xcb_shm_create_pixmap(con, win->ren.shm_pixmap,
+                    win->wid, width, height, 32, win->ren.shm_seg, sizeof(nss_image_t));
+        }
 
         xcb_flush(con);
 
@@ -167,6 +177,8 @@ void nss_renderer_free(nss_window_t *win) {
     xcb_free_gc(con, win->ren.gc);
     if (rctx.has_shm)
         xcb_shm_detach(con, win->ren.shm_seg);
+    if (rctx.has_shm_pixmaps)
+        xcb_free_pixmap(con, win->ren.shm_pixmap);
     if (win->ren.im)
         nss_free_image_shm(win, win->ren.im);
     if (win->ren.cache)
@@ -184,10 +196,16 @@ void nss_init_render_context() {
     xcb_generic_error_t *er = NULL;
     xcb_shm_query_version_reply_t *qr = xcb_shm_query_version_reply(con, q, &er);
     if (er) free(er);
-    if (qr) free(qr);
+
+    if (qr) {
+        rctx.has_shm_pixmaps = qr->shared_pixmaps &&
+                qr->pixmap_format == XCB_IMAGE_FORMAT_Z_PIXMAP;
+        free(qr);
+    }
     if (!(rctx.has_shm = qr && !er)) {
         warn("MIT-SHM is not available");
     }
+
 }
 
 static _Bool draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
@@ -370,7 +388,10 @@ void nss_renderer_clear(nss_window_t *win, size_t count, nss_rect_t *rects) {
     */
 }
 void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
-    if (rctx.has_shm) {
+    if (rctx.has_shm_pixmaps) {
+        xcb_copy_area(con, win->ren.shm_pixmap, win->wid, win->ren.gc, rect.x, rect.y,
+                rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
+    } else if (rctx.has_shm) {
         xcb_shm_put_image(con, win->wid, win->ren.gc, win->ren.im->width, win->ren.im->height, rect.x, rect.y, rect.width, rect.height,
                 rect.x + win->left_border, rect.y + win->top_border, 32, XCB_IMAGE_FORMAT_Z_PIXMAP, 0, win->ren.shm_seg, sizeof(nss_image_t));
     } else {
