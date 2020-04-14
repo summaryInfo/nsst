@@ -18,8 +18,10 @@ struct nss_renderer {
     xcb_shm_seg_t shm_seg;
     nss_image_t *im;
     nss_glyph_cache_t *cache;
-    _Bool shifted;
-    nss_rect_t shift_bound;
+
+    // It's size is 2*win->ch
+    nss_rect_t *bounds;
+    size_t boundc;
 };
 
 struct nss_window {
