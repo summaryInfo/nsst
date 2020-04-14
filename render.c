@@ -211,7 +211,7 @@ static _Bool draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *pal
     if (cell.ch && fg != bg) {
         nss_glyph_t *glyph = nss_cache_fetch(win->ren.cache, cell.ch, cell.attr & nss_font_attrib_mask);
         nss_rect_t clip = {x, y, width, height};
-        nss_image_composite_glyph(win->ren.im, x, y + win->char_height, glyph, fg, clip);
+        nss_image_composite_glyph(win->ren.im, x, y + win->char_height, glyph, fg, clip, win->subpixel_fonts);
     }
 
     // Underline

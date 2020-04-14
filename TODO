@@ -1,6 +1,7 @@
 MIT-SHM
 	[x] Software rendering
 	[x] Wide glyphs rendering
+    [x] Implement lcd mode
 	[ ] Font cache
 	[x] Use xcb_shm_put_image
 
