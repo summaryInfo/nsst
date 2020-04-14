@@ -1639,7 +1639,7 @@ void nss_context_run(void) {
                     xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
                     nss_window_t *win = window_for_xid(ev->window);
                     if (!win) break;
-					handle_expose(win, (nss_rect_t){ev->x, ev->y, ev->width, ev->height});
+                    handle_expose(win, (nss_rect_t){ev->x, ev->y, ev->width, ev->height});
                     break;
                 }
                 case XCB_CONFIGURE_NOTIFY:{

@@ -32,9 +32,9 @@ typedef enum nss_wc_tag {
 } nss_wc_tag_t;
 
 typedef enum nss_mouse_event {
-	nss_me_motion,
-	nss_me_press,
-	nss_me_release
+    nss_me_motion,
+    nss_me_press,
+    nss_me_release
 } nss_mouse_event_t;
 
 typedef enum nss_mouse_state {

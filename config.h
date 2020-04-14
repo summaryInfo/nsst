@@ -19,7 +19,7 @@
  *
  * NSS_ICONFIG_* are accessed through nss_config_integer/nss_config_set_integer
  *      NSS_ICONFIG_INPUT are write only but can be read with nss_config_input_mode
- * 		nss_config_string can set NSS_ICONFIG_* by parsing string
+ *      nss_config_string can set NSS_ICONFIG_* by parsing string
  * NSS_SCONFIG_* are accessed through nss_config_string/nss_config_set_string
  * NSS_CCONFIG_* are accessed through nss_config_color/nss_config_set_color
  *      and also though nss_create_palette
