@@ -317,7 +317,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
                 glyph->data[4*j + stride*i + 0] = 255 * pow(src[pitch*i + 3*j + 2] / 255.0, gamma);
                 glyph->data[4*j + stride*i + 1] = 255 * pow(src[pitch*i + 3*j + 2] / 255.0, gamma);
                 glyph->data[4*j + stride*i + 2] = 255 * pow(src[pitch*i + 3*j + 2] / 255.0, gamma);
-                glyph->data[4*j + stride*i + 3] = 0xff;
+                glyph->data[4*j + stride*i + 3] = 0;
             }
         }
     } else {
