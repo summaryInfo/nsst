@@ -1532,8 +1532,8 @@ static char to_control(char ch) {
 static nss_key_t get_key_desc(xkb_keycode_t keycode) {
     nss_key_t k = { .sym = XKB_KEY_NoSymbol };
 
-    k.mask = xkb_state_serialize_mods(con.xkb_state, XKB_STATE_MODS_EFFECTIVE) &
-              ~xkb_state_key_get_consumed_mods(con.xkb_state, keycode);
+    k.mask = xkb_state_serialize_mods(con.xkb_state, XKB_STATE_MODS_EFFECTIVE);
+    uint32_t consumed = xkb_state_key_get_consumed_mods(con.xkb_state, keycode);
 
     struct xkb_keymap *keymap = xkb_state_get_keymap(con.xkb_state);
     xkb_layout_index_t layout = xkb_state_key_get_layout(con.xkb_state, keycode);
@@ -1560,10 +1560,10 @@ static nss_key_t get_key_desc(xkb_keycode_t keycode) {
         }
     }
 
-    if (k.mask & nss_mm_lock) k.sym = xkb_keysym_to_upper(k.sym);
+    if (k.mask & ~consumed & nss_mm_lock) k.sym = xkb_keysym_to_upper(k.sym);
 
     if ((k.utf32 = xkb_keysym_to_utf32(k.sym))) {
-        if ((k.mask & nss_mm_control) && k.sym < 0x80)
+        if ((k.mask & ~consumed & nss_mm_control) && k.sym < 0x80)
             k.utf32 = to_control(k.ascii);
         k.utf8len = utf8_encode(k.utf32, k.utf8data, k.utf8data + sizeof(k.utf8data));
         k.utf8data[k.utf8len] = '\0';
@@ -1584,6 +1584,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
             break;
         }
     }
+
     switch (action) {
         uint32_t arg;
     case nss_sa_break:
