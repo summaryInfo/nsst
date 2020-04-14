@@ -46,8 +46,15 @@ inline static nss_rect_t rect_shift(nss_rect_t rect, int16_t x_off, int16_t y_of
     return rect;
 }
 inline static nss_rect_t rect_resize(nss_rect_t rect, int16_t x_off, int16_t y_off) {
-    rect.x += x_off;
-    rect.y += y_off;
+    rect.width += x_off;
+    rect.height += y_off;
+    return rect;
+}
+inline static nss_rect_t rect_union(nss_rect_t rect, nss_rect_t other) {
+    rect.width = MAX(rect.width + rect.x, other.width + other.x);
+    rect.height = MAX(rect.height + rect.y, other.height + other.y);
+    rect.width -= rect.x = MIN(rect.x, other.x);
+    rect.height -= rect.y = MIN(rect.y, other.y);
     return rect;
 }
 
