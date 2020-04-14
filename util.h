@@ -42,8 +42,8 @@ inline static nss_rect_t rect_scale_up(nss_rect_t rect, coord_t x_factor, coord_
 inline static nss_rect_t rect_scale_down(nss_rect_t rect, coord_t x_factor, coord_t y_factor) {
     rect.x /= x_factor;
     rect.y /= y_factor;
-    rect.width /= x_factor;
-    rect.height /= y_factor;
+    rect.width = (rect.x + rect.width)/x_factor;
+    rect.height = (rect.y + rect.height)/y_factor;
     return rect;
 }
 inline static nss_rect_t rect_shift(nss_rect_t rect, coord_t x_off, coord_t y_off) {

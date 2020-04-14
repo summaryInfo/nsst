@@ -19,6 +19,7 @@ struct nss_renderer {
     nss_image_t *im;
     nss_glyph_cache_t *cache;
     _Bool shifted;
+    nss_rect_t shift_bound;
 };
 
 struct nss_window {
