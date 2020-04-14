@@ -1,10 +1,3 @@
-MIT-SHM
-	[x] Software rendering
-	[x] Wide glyphs rendering
-    [x] Implement lcd mode
-	[ ] Font cache
-	[x] Use xcb_shm_put_image
-
 Set WM_NORMAL_HINTS
 Selections:
     X11 selection pasting
@@ -19,7 +12,6 @@ Window operations
         It is simpler to implement window operations on window side
         and express other window operations in terms of CSI t
 
-===================
 Input
     What if nss_term_read would be called recursively?
         It could happen because like:
@@ -30,19 +22,18 @@ Input
 Render
     Double width/height, Down-Line-Loadable fonts
         DECDLD
+    [ ] MIT-SHM
+        [x] Software rendering
+        [x] Wide glyphs rendering
+        [x] Font cache
+        [x] Use xcb_shm_put_image
+        [x] Implement lcd mode
+        [x] Implement uploading subranges
+        [ ] Implement shm pixmaps
+    [x] Box drawing characters -- draw them manually to make pixel-prefect
     Add options to select width of ambigues characters
-    Combining characters support
     (?) Add fallback fonts support back
-    Slow scrolling of full-color images (with small font in chafa)
-    After resizing window (only jump resize) new lines are not rerendered
-
-    Rendering refactoring:
-        -Use multiple separate buffers for cells parts:
-            1. Background
-            2. Lines
-            3. Glyphs
-        -Merge adjacent cells with same color while pushing
-        -Then sort and draw, groupping by color
+    Combining characters support
 Term
     (?) Geometry should be measured in characters
     Capability restriction

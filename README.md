@@ -3,6 +3,18 @@ Not So Simple Terminal
 This is an implementation of VT220-compatible X11 terminal emulator.
 Inspired by [Simple Terminal](https://st.suckless.org/)
 
+## MIT-SHM
+
+This branch is nsst variant that uses MIT-SHM X11 extension (or just `xcb_put_image`) and
+memory buffer for rendering, unlike master branch which uses XRender.
+
+This behaves a lot better with corner cases (a lot of true color cells) and huge screen
+and doen't cause lag in X server.
+
+Also, it would be easier to implement SIXEL, DECDLD and port to Wayland with software rendering.
+
+**WARNING: I do push --force here to keep commits relevant to MIT-SHM on top**
+
 ## Features
     * Most escape sequences are already implemented
     * Ful keyboard mode from XTerm
@@ -36,7 +48,6 @@ All options are now available though Xrmdb and command line arguments.
 ### Runtime
     * xcb-util
     * xcb-util-wm
-    * xcb-util-renderutil
     * xcb-util-keysyms
     * xcb-util-xrm
     * fontconfig
