@@ -108,13 +108,11 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
         win->ren.cache = nss_create_cache(win->font, win->subpixel_fonts);
         int16_t total = 0, maxd = 0, maxh = 0;
         for (uint32_t i = ' '; i <= '~'; i++) {
-            nss_glyph_t *g = nss_cache_glyph(win->ren.cache, nss_font_attrib_normal, i);
+            nss_glyph_t *g = nss_cache_fetch(win->ren.cache, i, nss_font_attrib_normal);
 
             total += g->x_off;
             maxd = MAX(maxd, g->height - g->y);
             maxh = MAX(maxh, g->y);
-
-            nss_cache_post(win->ren.cache, nss_font_attrib_normal, i, g);
         }
 
         win->char_width = total / ('~' - ' ' + 1) + nss_config_integer(NSS_ICONFIG_FONT_SPACING);
@@ -211,10 +209,9 @@ static _Bool draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *pal
 
     // Glyph
     if (cell.ch && fg != bg) {
-        nss_glyph_t *glyph = nss_cache_glyph(win->ren.cache, cell.attr & nss_font_attrib_mask, cell.ch);
+        nss_glyph_t *glyph = nss_cache_fetch(win->ren.cache, cell.ch, cell.attr & nss_font_attrib_mask);
         nss_rect_t clip = {x, y, width, height};
         nss_image_composite_glyph(win->ren.im, x, y + win->char_height, glyph, fg, clip);
-        nss_cache_post(win->ren.cache, cell.attr & nss_font_attrib_mask, cell.ch, glyph);
     }
 
     // Underline

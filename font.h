@@ -17,6 +17,10 @@ typedef enum nss_font_attrib {
 } nss_font_attrib_t;
 
 typedef struct nss_glyph {
+    // Tree elements
+    struct nss_glyph *l,*r,*p;
+    uint32_t g;
+
     uint16_t width, height;
     int16_t x, y;
     int16_t x_off, y_off;
@@ -38,7 +42,6 @@ int16_t nss_font_get_size(nss_font_t *font);
 nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd);
 nss_glyph_cache_t *nss_cache_reference(nss_glyph_cache_t *ref);
 void nss_free_cache(nss_glyph_cache_t *cache);
-nss_glyph_t *nss_cache_glyph(nss_glyph_cache_t *cache, nss_font_attrib_t face, uint32_t ch);
-void nss_cache_post(nss_glyph_cache_t *cache, nss_font_attrib_t face, uint32_t ch, nss_glyph_t *glyph);
+nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_attrib_t face);
 #endif
 

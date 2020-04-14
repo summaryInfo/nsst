@@ -29,15 +29,19 @@ typedef struct nss_face_list {
         FT_Face *faces;
 } nss_face_list_t;
 
-/* Cache first two unicode planes */
-#define LOADED_MAP_SIZE (2 * 65536 / 32)
-
 struct nss_font {
     size_t refs;
     uint16_t dpi;
     double pixel_size;
     double size;
     nss_face_list_t face_types[nss_font_attrib_max];
+};
+
+struct nss_glyph_cache {
+    nss_font_t *font;
+    _Bool lcd;
+    size_t refc;
+    nss_glyph_t *root;
 };
 
 typedef struct nss_paterns_holder {
@@ -283,6 +287,8 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     }
 
     nss_glyph_t *glyph = malloc(sizeof(*glyph) + stride * face->glyph->bitmap.rows);
+    glyph->g = ch | (attr << 24);
+    glyph->p = glyph->r = glyph->l = NULL;
     glyph->x = -face->glyph->bitmap_left;
     glyph->y = face->glyph->bitmap_top;
 
@@ -364,14 +370,60 @@ int16_t nss_font_get_size(nss_font_t *font) {
     return font->size;
 }
 
-struct nss_glyph_cache {
-    //TODO Make it tree/hash table
-    nss_font_t *font;
-    _Bool lcd;
-    size_t refc;
-    nss_glyph_t *data[127-32+1][nss_font_attrib_max];
-};
+static void rotate_left(nss_glyph_t **root, nss_glyph_t *n) {
+    nss_glyph_t *r = n->r;
+    if (r) {
+        if ((n->r = r->l))
+            r->l->p = n;
+        r->p = n->p;
+    }
+    if (!n->p) *root = r;
+    else if (n == n->p->l) n->p->l = r;
+    else n->p->r = r;
 
+    if(r) r->l = n;
+    n->p = r;
+}
+
+static void rotate_right(nss_glyph_t **root, nss_glyph_t *n) {
+    nss_glyph_t *l = n->l;
+    if (l) {
+        if ((n->l = l->r))
+            l->r->p = n;
+        l->p = n->p;
+    }
+    if (!n->p) *root = l;
+    else if (n == n->p->l) n->p->l = l;
+    else n->p->r = l;
+
+    if(l) l->r = n;
+    n->p = l;
+}
+
+static void splay(nss_glyph_t **root, nss_glyph_t *n) {
+    while (n->p) {
+        if (!n->p->p) {
+            if (n->p->l == n) rotate_right(root, n->p);
+            else rotate_left(root, n->p);
+        } else if (n->p->l == n) {
+            if (n->p->p->l == n->p) {
+                rotate_right(root, n->p->p);
+                rotate_right(root, n->p);
+            } else {
+                rotate_right(root, n->p);
+                rotate_left(root, n->p);
+            }
+        } else {
+            if (n->p->p->l == n->p) {
+                rotate_left(root, n->p);
+                rotate_right(root, n->p);
+            } else {
+                rotate_left(root, n->p->p);
+                rotate_left(root, n->p);
+            }
+        }
+    }
+}
 
 nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd) {
     nss_glyph_cache_t *cache = calloc(1, sizeof(nss_glyph_cache_t));
@@ -379,11 +431,6 @@ nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd) {
     cache->font = font;
     cache->lcd = lcd;
 
-    for(size_t j = 0; j < nss_font_attrib_max; j++) {
-        for(size_t i = 32; i < 127; i++) {
-            cache->data[i - 32][j] = nss_font_render_glyph(font, i, j, lcd);
-        }
-    }
     return cache;
 }
 
@@ -392,26 +439,37 @@ nss_glyph_cache_t *nss_cache_reference(nss_glyph_cache_t *ref) {
     return ref;
 }
 
-void nss_free_cache(nss_glyph_cache_t *cache) {
-    if (!--cache->refc) {
-        for(size_t j = 0; j < nss_font_attrib_max; j++) {
-            for(size_t i = 32; i < 127; i++) {
-                free(cache->data[i - 32][j]);
-            }
-        }
+static void free_dfs(nss_glyph_t *n) {
+    while(n) {
+        free_dfs(n->l);
+        nss_glyph_t *t = n->r;
+        free(n);
+        n = t;
     }
+}
+
+void nss_free_cache(nss_glyph_cache_t *cache) {
+    free_dfs(cache->root);
     free(cache);
 }
 
-nss_glyph_t *nss_cache_glyph(nss_glyph_cache_t *cache, nss_font_attrib_t face, uint32_t ch) {
-    //if (32 <= ch && ch < 127) {
-    //    return cache->data[ch - 32][face];
-    //}
-    return nss_font_render_glyph(cache->font, ch, face, cache->lcd);
-}
+nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_attrib_t face) {
+    uint32_t g = ch | (face << 24);
+    nss_glyph_t *n = cache->root, *p = NULL;
+    while (n) {
+        p = n;
+        if (n->g < g) n = n->r;
+        else if (n->g > g) n = n->l;
+        else return n;
+    }
+    nss_glyph_t *new = nss_font_render_glyph(cache->font,
+            g & 0xFFFFFF, (g >> 24) & nss_font_attrib_mask, cache->lcd);
 
-void nss_cache_post(nss_glyph_cache_t *cache, nss_font_attrib_t face, uint32_t ch, nss_glyph_t *glyph) {
-    //if (32 <= ch && ch < 127)
-    free(glyph);
-}
+    new->p = p;
+    if (!p) cache->root = new;
+    else if (p->g < new->g) p->r = new;
+    else p->l = new;
 
+    splay(&cache->root, new);
+    return new;
+}
