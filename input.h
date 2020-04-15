@@ -72,8 +72,10 @@ typedef struct nss_input_mode {
     // 32 bits total
 } nss_input_mode_t;
 
+typedef uint32_t tchar_t;
+
 typedef struct nss_key {
-    uint32_t utf32;
+    tchar_t utf32;
     uint32_t sym;
     uint32_t mask;
     uint8_t utf8data[6]; // zero terminated

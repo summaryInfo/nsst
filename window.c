@@ -5,12 +5,12 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <poll.h>
+#include <signal.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 #include <unistd.h>
 #include <xcb/render.h>
 #include <xcb/xcb.h>
@@ -19,12 +19,12 @@
 #include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
-#include "window.h"
-#include "util.h"
-#include "font.h"
-#include "term.h"
-#include "input.h"
 #include "config.h"
+#include "font.h"
+#include "input.h"
+#include "term.h"
+#include "util.h"
+#include "window.h"
 
 #define TRUE_COLOR_ALPHA_DEPTH 32
 #define NUM_BORDERS 4
@@ -93,7 +93,7 @@ struct nss_window {
 
     int16_t width;
     int16_t height;
-    int16_t cw, ch;
+    coord_t cw, ch;
     int16_t cursor_width;
     int16_t underline_width;
     int16_t left_border;
@@ -327,7 +327,7 @@ void load_params(void) {
             snprintf(name, OPT_NAME_MAX, NSS_CLASS".color%u", j);
             char *res = NULL;
             if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
-                nss_color_t col = parse_color(res, res + strlen(res));
+                nss_color_t col = parse_color((uint8_t*)res, (uint8_t*)res + strlen(res));
                 if (col) {
                     nss_config_set_color(NSS_CCONFIG_COLOR_0 + j, col);
                 }
@@ -341,7 +341,7 @@ void load_params(void) {
             snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", snames[j]);
             char *res = NULL;
             if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
-                nss_color_t col = parse_color(res, res + strlen(res));
+                nss_color_t col = parse_color((uint8_t*)res, (uint8_t*)res + strlen(res));
                 if (!j) {
                     //Backround color preserves alpha
                     col &= 0xFFFFFF;
@@ -681,7 +681,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
         //Preload ASCII
         nss_glyph_t *glyphs['~' - ' ' + 1][nss_font_attrib_max] = {{ NULL }};
         int16_t total = 0, maxd = 0, maxh = 0;
-        for (uint32_t i = ' '; i <= '~'; i++) {
+        for (tchar_t i = ' '; i <= '~'; i++) {
             for (size_t j = 0; j < nss_font_attrib_max; j++)
                 glyphs[i - ' '][j] = nss_font_render_glyph(win->font, i, j, win->subpixel_fonts);
 
@@ -694,7 +694,7 @@ static _Bool reload_font(nss_window_t *win, _Bool need_free) {
         win->char_height = maxh;
         win->char_depth = maxd + nss_config_integer(NSS_ICONFIG_LINE_SPACING);
 
-        for (uint32_t i = ' '; i <= '~'; i++) {
+        for (tchar_t i = ' '; i <= '~'; i++) {
             for (size_t j = 0; j < nss_font_attrib_max; j++) {
                 glyphs[i - ' '][j]->x_off = win->char_width;
                 register_glyph(win, i | (j << 24), glyphs[i - ' '][j]);
@@ -923,7 +923,7 @@ void nss_free_window(nss_window_t *win) {
     free(win);
 };
 
-static void push_cell(nss_window_t *win, int16_t x, int16_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
+static void push_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
     nss_cell_t cell = *cel;
 
     if (!nss_font_glyph_is_loaded(win->font, cell.ch)) {
@@ -1073,7 +1073,7 @@ static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
 }
 
 /* new method of rendering: whole screen in a time */
-void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, int16_t cur_x, int16_t cur_y, _Bool cursor) {
+void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, coord_t cur_x, coord_t cur_y, _Bool cursor) {
     con.cbufpos = 0;
     con.bufpos = 0;
 
@@ -1087,8 +1087,8 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         push_cell(win, cur_x, cur_y, palette, array[cur_y]->extra, &cur_cell);
     }
 
-    size_t h = 0;
-    for (; h < (size_t)win->ch && list; list = list->next, h++) {
+    coord_t h = 0;
+    for (; h < win->ch && list; list = list->next, h++) {
         if (win->cw > list->width) {
             push_rect(win, &(xcb_rectangle_t){
                 .x = list->width * win->char_width,
@@ -1097,12 +1097,12 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
                 .height = win->char_height + win->char_depth
             });
         }
-        for (int16_t i = 0; i < MIN(win->cw, list->width); i++)
+        for (coord_t i = 0; i < MIN(win->cw, list->width); i++)
             if (!(list->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (list->cell[i].attr & nss_attrib_blink)))
                 push_cell(win, i, h, palette, list->extra, &list->cell[i]);
     }
-    for (size_t j = 0; j < win->ch - h; j++) {
+    for (coord_t j = 0; j < win->ch - h; j++) {
         if (win->cw > array[j]->width) {
             push_rect(win, &(xcb_rectangle_t){
                 .x = array[j]->width * win->char_width,
@@ -1111,7 +1111,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
                 .height = win->char_height + win->char_depth
             });
         }
-        for (int16_t i = 0; i < MIN(win->cw, array[j]->width); i++)
+        for (coord_t i = 0; i < MIN(win->cw, array[j]->width); i++)
             if (!(array[j]->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (array[j]->cell[i].attr & nss_attrib_blink)))
                 push_cell(win, i, j + h, palette, array[j]->extra, &array[j]->cell[i]);
@@ -1327,7 +1327,7 @@ static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right
         if (count) xcb_poly_fill_rectangle(con.con, win->wid, win->gc, count, borders + offset);
 }
 
-void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height, _Bool delay) {
+void nss_window_shift(nss_window_t *win, coord_t ys, coord_t yd, coord_t height, _Bool delay) {
 
     struct timespec cur;
     clock_gettime(CLOCK_MONOTONIC, &cur);
@@ -1348,7 +1348,7 @@ void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height,
 
     ys *= win->char_height + win->char_depth;
     yd *= win->char_height + win->char_depth;
-    int16_t width = win->cw * win->char_width;
+    coord_t width = win->cw * win->char_width;
     height *= win->char_depth + win->char_height;
 
     xcb_copy_area(con.con, win->pid, win->pid, win->gc, 0, ys, 0, yd, width, height);
@@ -1428,10 +1428,10 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
     win->width = width;
     win->height = height;
 
-    int16_t new_cw = MAX(1, (win->width - 2*win->left_border)/win->char_width);
-    int16_t new_ch = MAX(1, (win->height - 2*win->top_border)/(win->char_height+win->char_depth));
-    int16_t delta_x = new_cw - win->cw;
-    int16_t delta_y = new_ch - win->ch;
+    coord_t new_cw = MAX(1, (win->width - 2*win->left_border)/win->char_width);
+    coord_t new_ch = MAX(1, (win->height - 2*win->top_border)/(win->char_height+win->char_depth));
+    coord_t delta_x = new_cw - win->cw;
+    coord_t delta_y = new_ch - win->ch;
     win->cw = new_cw;
     win->ch = new_ch;
 

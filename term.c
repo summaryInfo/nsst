@@ -49,7 +49,7 @@
 
 #define MAX_EXTRA_PALETTE (0x10000 - NSS_PALETTE_SIZE)
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
-#define PARAM(i, d) (term->esc.param[i] > 0 ? (uint32_t)term->esc.param[i] : (d))
+#define PARAM(i, d) (term->esc.param[i] > 0 ? (param_t)term->esc.param[i] : (d))
 #define CHK_VT(v) { if (term->vt_level < (v)) break; }
 
 #define C(c) ((c) & 0x3F)
@@ -66,8 +66,8 @@
 void term_answerback(nss_term_t *term, const char *str, ...);
 
 typedef struct nss_cursor {
-    int16_t x;
-    int16_t y;
+    coord_t x;
+    coord_t y;
     nss_cell_t cel;
     nss_color_t fg;
     nss_color_t bg;
@@ -86,26 +86,26 @@ struct nss_term {
     nss_line_t *view;
     nss_line_t *scrollback;
     nss_line_t *scrollback_top;
-    int32_t scrollback_limit;
-    int32_t scrollback_size;
+    ssize_t scrollback_limit;
+    ssize_t scrollback_size;
 
     nss_cursor_t c;
     nss_cursor_t cs;
     nss_cursor_t back_cs;
     nss_cursor_t vt52c;
-    uint32_t prev_ch;
+    tchar_t prev_ch;
 
-    int16_t prev_mouse_x;
-    int16_t prev_mouse_y;
+    coord_t prev_mouse_x;
+    coord_t prev_mouse_y;
     uint8_t prev_mouse_button;
-    int16_t prev_c_x;
-    int16_t prev_c_y;
+    coord_t prev_c_x;
+    coord_t prev_c_y;
 
-    int16_t width;
-    int16_t height;
-    int16_t top;
-    int16_t bottom;
-    uint8_t *tabs;
+    coord_t width;
+    coord_t height;
+    coord_t top;
+    coord_t bottom;
+    _Bool *tabs;
 
     enum nss_term_mode {
         nss_tm_echo = 1 << 0,
@@ -157,8 +157,8 @@ struct nss_term {
             esc_ign_entry, esc_ign_string,
             esc_vt52_entry, esc_vt52_cup_0, esc_vt52_cup_1,
         } state, old_state;
-        uint32_t selector;
-        uint32_t old_selector;
+        param_t selector;
+        param_t old_selector;
         size_t i;
         int32_t param[ESC_MAX_PARAM];
         uint32_t subpar_mask;
@@ -308,13 +308,13 @@ static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
                 buf = new, buf_len = line->extra_size;
             }
             memset(buf, 0, buf_len * sizeof(nss_cid_t));
-            for (int16_t i = 0; i < line->width; i++) {
+            for (coord_t i = 0; i < line->width; i++) {
                 if (line->cell[i].fg >= NSS_PALETTE_SIZE)
                     buf[line->cell[i].fg - NSS_PALETTE_SIZE] = 0xFFFF;
                 if (line->cell[i].bg >= NSS_PALETTE_SIZE)
                     buf[line->cell[i].bg - NSS_PALETTE_SIZE] = 0xFFFF;
             }
-            int16_t k = 0;
+            coord_t k = 0;
             for (nss_cid_t i = 0; i < line->extra_size; i++) {
                 if (buf[i] == 0xFFFF) {
                     line->extra[k] = line->extra[i];
@@ -325,7 +325,7 @@ static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
             }
             line->extra_size = k;
 
-            for (int16_t i = 0; i < line->width; i++) {
+            for (coord_t i = 0; i < line->width; i++) {
                 if (line->cell[i].fg >= NSS_PALETTE_SIZE && buf[line->cell[i].fg - NSS_PALETTE_SIZE] != 0xFFFF)
                         line->cell[i].fg = buf[line->cell[i].fg - NSS_PALETTE_SIZE] + NSS_PALETTE_SIZE;
                 if (line->cell[i].bg >= NSS_PALETTE_SIZE && buf[line->cell[i].bg - NSS_PALETTE_SIZE] != 0xFFFF)
@@ -353,8 +353,8 @@ static nss_cell_t fixup_color(nss_line_t *line, nss_cursor_t *cur) {
     return cel;
 }
 
-static nss_line_t *term_create_line(nss_term_t *term, size_t width) {
-    nss_line_t *line = malloc(sizeof(*line) + width * sizeof(line->cell[0]));
+static nss_line_t *term_create_line(nss_term_t *term, coord_t width) {
+    nss_line_t *line = malloc(sizeof(*line) + (size_t)width * sizeof(line->cell[0]));
     if (line) {
         line->width = width;
         line->wrap_at = 0;
@@ -363,20 +363,20 @@ static nss_line_t *term_create_line(nss_term_t *term, size_t width) {
         line->next = line->prev = NULL;
         line->extra = NULL;
         nss_cell_t cel = fixup_color(line, &term->c);
-        for (size_t i = 0; i < width; i++)
+        for (coord_t i = 0; i < width; i++)
             line->cell[i] = cel;
     } else warn("Can't allocate line");
     return line;
 }
 
-static nss_line_t *term_realloc_line(nss_term_t *term, nss_line_t *line, size_t width) {
-    nss_line_t *new = realloc(line, sizeof(*new) + width * sizeof(new->cell[0]));
+static nss_line_t *term_realloc_line(nss_term_t *term, nss_line_t *line, coord_t width) {
+    nss_line_t *new = realloc(line, sizeof(*new) + (size_t)width * sizeof(new->cell[0]));
     if (!new) die("Can't create lines");
 
     nss_cell_t cell = fixup_color(new, &term->c);
     cell.attr = 0;
 
-    for(size_t i = new->width; i < width; i++)
+    for(coord_t i = new->width; i < width; i++)
         new->cell[i] = cell;
 
     new->width = width;
@@ -389,11 +389,11 @@ static void term_free_line(nss_term_t *term, nss_line_t *line) {
 }
 
 static void term_line_dirt(nss_line_t *line) {
-    for (int16_t i = 0; i < line->width; i++)
+    for (coord_t i = 0; i < line->width; i++)
         line->cell[i].attr &= ~nss_attrib_drawn;
 }
 
-static void term_set_cell(nss_term_t *term, int16_t x, int16_t y, uint32_t ch) {
+static void term_set_cell(nss_term_t *term, coord_t x, coord_t y, tchar_t ch) {
     // In theory this should be disabled while in UTF-8 mode, but
     // in practive applications use these symbols, so keep translating
 
@@ -429,14 +429,14 @@ int nss_term_fd(nss_term_t *term) {
 
 void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
     if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
-        int16_t i = 0, h = damage.height + damage.y;
+        coord_t i = 0, h = damage.height + damage.y;
         nss_line_t *view = term->view;
         for (; view && i < damage.y; view = view->next, i++);
         for (; view && i < h; view = view->next, i++)
-            for (int16_t j = damage.x; j < MIN(damage.width, view->width); j++)
+            for (coord_t j = damage.x; j < MIN(damage.width, view->width); j++)
                 view->cell[j].attr &= ~nss_attrib_drawn;
-        for (int16_t j = i; j < h; j++)
-            for (int16_t k = damage.x; k < MIN(damage.width, term->screen[j - i]->width); k++)
+        for (coord_t j = i; j < h; j++)
+            for (coord_t k = damage.x; k < MIN(damage.width, term->screen[j - i]->width); k++)
                 term->screen[j - i]->cell[k].attr &= ~nss_attrib_drawn;
     }
 }
@@ -451,9 +451,9 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
 }
 
 
-void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
+void nss_term_scroll_view(nss_term_t *term, coord_t amount) {
     if (term->mode & nss_tm_altscreen) return;
-    int16_t scrolled = 0;
+    coord_t scrolled = 0;
     if (amount > 0) {
         if (!term->view && term->scrollback) {
             term->view = term->scrollback;
@@ -474,19 +474,19 @@ void nss_term_scroll_view(nss_term_t *term, int16_t amount) {
             term->view = term->view->next, scrolled++;
 
         nss_line_t *line = term->view;
-        size_t y0 = 0;
-        for (; line && y0 < (size_t)(term->height - scrolled); y0++)
+        coord_t y0 = 0;
+        for (; line && y0 < term->height - scrolled; y0++)
             line = line->next;
-        if (y0 < (size_t)(term->height - scrolled)) {
+        if (y0 < term->height - scrolled) {
             y0 = term->height - scrolled - y0;
-            for(size_t y = y0; y < y0 + scrolled; y++)
+            for(coord_t y = y0; y < y0 + scrolled; y++)
                 term_line_dirt(term->screen[y]);
         } else {
-            for (; line && y0 < (size_t)term->height; y0++) {
+            for (; line && y0 < term->height; y0++) {
                 term_line_dirt(line);
                 line = line->next;
             }
-            for(size_t y = 0; y < (size_t)term->height - y0; y++)
+            for(coord_t y = 0; y < term->height - y0; y++)
                 term_line_dirt(term->screen[y]);
         }
 
@@ -521,9 +521,9 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
     }
 }
 
-static void term_erase(nss_term_t *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
-    if (ye < ys) SWAP(int16_t, ye, ys);
-    if (xe < xs) SWAP(int16_t, xe, xs);
+static void term_erase(nss_term_t *term, coord_t xs, coord_t ys, coord_t xe, coord_t ye) {
+    if (ye < ys) SWAP(coord_t, ye, ys);
+    if (xe < xs) SWAP(coord_t, xe, xs);
 
     xs = MAX(0, MIN(xs, term->width));
     xe = MAX(0, MIN(xe, term->width));
@@ -534,14 +534,14 @@ static void term_erase(nss_term_t *term, int16_t xs, int16_t ys, int16_t xe, int
         nss_line_t *line = term->screen[ys];
         nss_cell_t cell = fixup_color(line, &term->c);
         cell.attr = 0;
-        for(int16_t i = xs; i < xe; i++)
+        for(coord_t i = xs; i < xe; i++)
             line->cell[i] = cell;
     }
 }
 
-static void term_protective_erase(nss_term_t *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
-    if (ye < ys) SWAP(int16_t, ye, ys);
-    if (xe < xs) SWAP(int16_t, xe, xs);
+static void term_protective_erase(nss_term_t *term, coord_t xs, coord_t ys, coord_t xe, coord_t ye) {
+    if (ye < ys) SWAP(coord_t, ye, ys);
+    if (xe < xs) SWAP(coord_t, xe, xs);
 
     xs = MAX(0, MIN(xs, term->width));
     xe = MAX(0, MIN(xe, term->width));
@@ -552,15 +552,15 @@ static void term_protective_erase(nss_term_t *term, int16_t xs, int16_t ys, int1
         nss_line_t *line = term->screen[ys];
         nss_cell_t cell = fixup_color(line, &term->c);
         cell.attr = 0;
-        for(int16_t i = xs; i < xe; i++)
+        for(coord_t i = xs; i < xe; i++)
             if (!(line->cell[i].attr & nss_attrib_protected))
                 line->cell[i] = cell;
     }
 }
 
-static void term_selective_erase(nss_term_t *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
-    if (ye < ys) SWAP(int16_t, ye, ys);
-    if (xe < xs) SWAP(int16_t, xe, xs);
+static void term_selective_erase(nss_term_t *term, coord_t xs, coord_t ys, coord_t xe, coord_t ye) {
+    if (ye < ys) SWAP(coord_t, ye, ys);
+    if (xe < xs) SWAP(coord_t, xe, xs);
 
     xs = MAX(0, MIN(xs, term->width));
     xe = MAX(0, MIN(xe, term->width));
@@ -569,13 +569,13 @@ static void term_selective_erase(nss_term_t *term, int16_t xs, int16_t ys, int16
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
-        for(int16_t i = xs; i < xe; i++)
+        for(coord_t i = xs; i < xe; i++)
             if (!(line->cell[i].attr & nss_attrib_protected))
                 line->cell[i] = MKCELLWITH(line->cell[i], ' ');
     }
 }
 
-static void term_adjust_wide_before(nss_term_t *term, int16_t x, int16_t y, _Bool left, _Bool right) {
+static void term_adjust_wide_before(nss_term_t *term, coord_t x, coord_t y, _Bool left, _Bool right) {
     if (x < 0 || x > term->screen[y]->width - 1) return;
     nss_cell_t *cell = &term->screen[y]->cell[x];
     if (left && x > 0 && cell[-1].attr & nss_attrib_wide) {
@@ -587,7 +587,7 @@ static void term_adjust_wide_before(nss_term_t *term, int16_t x, int16_t y, _Boo
     }
 }
 
-static void term_move_to(nss_term_t *term, int16_t x, int16_t y) {
+static void term_move_to(nss_term_t *term, coord_t x, coord_t y) {
     term->c.x = MAX(0, MIN(x, term->width - 1));
     if (term->c.origin)
         term->c.y = MIN(MAX(y, term->top), term->bottom);
@@ -595,7 +595,7 @@ static void term_move_to(nss_term_t *term, int16_t x, int16_t y) {
         term->c.y = MIN(MAX(y, 0), term->height - 1);
 }
 
-static void term_move_to_abs(nss_term_t *term, int16_t x, int16_t y) {
+static void term_move_to_abs(nss_term_t *term, coord_t x, coord_t y) {
     term_move_to(term, x, (term->c.origin ? term->top : 0) + y);
 }
 
@@ -616,7 +616,7 @@ static void term_swap_screen(nss_term_t *term) {
     term->view = NULL;
 }
 
-static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t amount, _Bool save) {
+static void term_scroll(nss_term_t *term, coord_t top, coord_t bottom, coord_t amount, _Bool save) {
     if (term->prev_c_y >= 0 && top <= term->prev_c_y && term->prev_c_y <= bottom) {
         term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
         if (amount >= 0) term->prev_c_y = MAX(0, term->prev_c_y - MIN(amount, (bottom - top + 1)));
@@ -625,23 +625,23 @@ static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t a
 
     if (amount > 0) { /* up */
         amount = MIN(amount, (bottom - top + 1));
-        size_t rest = (bottom - top + 1) - amount;
+        coord_t rest = (bottom - top + 1) - amount;
 
         if (save && !(term->mode & nss_tm_altscreen) && term->top == top) {
-            for (size_t i = 0; i < (size_t)amount; i++) {
+            for (coord_t i = 0; i < amount; i++) {
                 term_append_history(term, term->screen[top + i]);
                 term->screen[top + i] = term_create_line(term, term->width);
             }
         } else term_erase(term, 0, top, term->width, top + amount);
 
-        for (size_t i = 0; i < rest; i++)
+        for (coord_t i = 0; i < rest; i++)
             SWAP(nss_line_t *, term->screen[top + i], term->screen[top + amount + i]);
 
     } else { /* down */
         amount = MAX(amount, -(bottom - top + 1));
-        size_t rest = (bottom - top + 1) + amount;
+        coord_t rest = (bottom - top + 1) + amount;
 
-        for (size_t i = 0; i < rest; i++)
+        for (coord_t i = 0; i < rest; i++)
             SWAP(nss_line_t *, term->screen[bottom - i], term->screen[bottom + amount - i]);
 
         term_erase(term, 0, top, term->width, top - amount);
@@ -658,7 +658,7 @@ static void term_scroll(nss_term_t *term, int16_t top, int16_t bottom, int16_t a
     }
 }
 
-static void term_set_tb_margins(nss_term_t *term, int16_t top, int16_t bottom) {
+static void term_set_tb_margins(nss_term_t *term, coord_t top, coord_t bottom) {
     if (top < bottom) {
         term->top = MAX(0, MIN(term->height - 1, top));
         term->bottom = MAX(0, MIN(term->height - 1, bottom));
@@ -668,38 +668,38 @@ static void term_set_tb_margins(nss_term_t *term, int16_t top, int16_t bottom) {
     }
 }
 
-static void term_insert_cells(nss_term_t *term, int16_t n) {
-    int16_t cx = MIN(term->c.x, term->width - 1);
+static void term_insert_cells(nss_term_t *term, coord_t n) {
+    coord_t cx = MIN(term->c.x, term->width - 1);
     n = MAX(0, MIN(n, term->width - cx));
     nss_line_t *line = term->screen[term->c.y];
     term_adjust_wide_before(term, cx, term->c.y, 1, 1);
     memmove(line->cell + cx + n, line->cell + cx, (line->width - cx - n) * sizeof(nss_cell_t));
-    for (int16_t i = cx + n; i < term->width; i++)
+    for (coord_t i = cx + n; i < term->width; i++)
         line->cell[i].attr &= ~nss_attrib_drawn;
     term_erase(term, cx, term->c.y, cx + n, term->c.y + 1);
     term_move_to(term, term->c.x, term->c.y);
 }
 
-static void term_delete_cells(nss_term_t *term, int16_t n) {
-    int16_t cx = MIN(term->c.x, term->width - 1);
+static void term_delete_cells(nss_term_t *term, coord_t n) {
+    coord_t cx = MIN(term->c.x, term->width - 1);
     n = MAX(0, MIN(n, term->width - cx));
     nss_line_t *line = term->screen[term->c.y];
     term_adjust_wide_before(term, cx, term->c.y, 1, 0);
     term_adjust_wide_before(term, cx + n - 1, term->c.y, 0, 1);
     memmove(line->cell + cx, line->cell + cx + n, (term->width - cx - n) * sizeof(nss_cell_t));
-    for (int16_t i = cx; i < term->width - n; i++)
+    for (coord_t i = cx; i < term->width - n; i++)
         line->cell[i].attr &= ~nss_attrib_drawn;
     term_erase(term, term->width - n, term->c.y, term->width, term->c.y + 1);
     term_move_to(term, term->c.x, term->c.y);
 }
 
-static void term_insert_lines(nss_term_t *term, int16_t n) {
+static void term_insert_lines(nss_term_t *term, coord_t n) {
     if (term->top <= term->c.y && term->c.y <= term->bottom)
         term_scroll(term, term->c.y, term->bottom, -n, 0);
     term_move_to(term, 0, term->c.y);
 }
 
-static void term_delete_lines(nss_term_t *term, int16_t n) {
+static void term_delete_lines(nss_term_t *term, coord_t n) {
     if (term->top <= term->c.y && term->c.y <= term->bottom)
         term_scroll(term, term->c.y, term->bottom, n, 0);
     term_move_to(term, 0, term->c.y);
@@ -723,7 +723,7 @@ static void term_rindex(nss_term_t *term, _Bool cr) {
     }
 }
 
-static void term_tabs(nss_term_t *term, int16_t n) {
+static void term_tabs(nss_term_t *term, coord_t n) {
     if (n >= 0) {
         while(term->c.x < term->width - 1 && n--) {
             do term->c.x++;
@@ -843,7 +843,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term->mode &= nss_tm_focused | nss_tm_visible;
     *term->in_mode = nss_config_input_mode();
 
-    int16_t cx = term->c.x, cy = term->c.y;
+    coord_t cx = term->c.x, cy = term->c.y;
 
     term_load_config(term);
     term_reset_margins(term);
@@ -856,8 +856,8 @@ static void term_reset(nss_term_t *term, _Bool hard) {
 
     if (hard) {
         memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
-        size_t tabw = nss_config_integer(NSS_ICONFIG_TAB_WIDTH);
-        for(size_t i = tabw; i < (size_t)term->width; i += tabw)
+        coord_t tabw = nss_config_integer(NSS_ICONFIG_TAB_WIDTH);
+        for(coord_t i = tabw; i < term->width; i += tabw)
             term->tabs[i] = 1;
 
         for(size_t i = 0; i < 2; i++) {
@@ -890,7 +890,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term->esc.state = esc_ground;
 }
 
-nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t width, int16_t height) {
+nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, coord_t width, coord_t height) {
     nss_term_t *term = calloc(1, sizeof(nss_term_t));
 
     term->palette = malloc(NSS_PALETTE_SIZE * sizeof(nss_color_t));
@@ -930,7 +930,7 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t w
     return term;
 }
 
-static void term_dispatch_da(nss_term_t *term, uint32_t mode) {
+static void term_dispatch_da(nss_term_t *term, param_t mode) {
     if (PARAM(0, 0)) return;
     switch (mode) {
     case P('='):
@@ -938,7 +938,7 @@ static void term_dispatch_da(nss_term_t *term, uint32_t mode) {
         term_answerback(term, "\x90!|00000000\x9C");
         break;
     case P('>'): {
-        uint32_t ver = 0;
+        param_t ver = 0;
         switch(term->vt_version) {
         case 100: ver = 0; break;
         case 220: ver = 1; break;
@@ -1064,7 +1064,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         if (!(term->mode & nss_tm_title_set_utf8) && (term->mode & nss_tm_utf8)) {
             uint8_t *dst = term->esc.str;
             const uint8_t *ptr = dst;
-            uint32_t val = 0;
+            tchar_t val = 0;
             while (*ptr && utf8_decode(&val, &ptr, term->esc.str + term->esc.si))
                 *dst++ = val;
             *dst = '\0';
@@ -1076,7 +1076,7 @@ static void term_dispatch_osc(nss_term_t *term) {
             uint8_t *dst = term->esc.str, *src = ds;
             term->esc.si = 0;
             while (*src) {
-                uint32_t val = *src++;
+                tchar_t val = *src++;
                 dst += utf8_encode(val, dst, term->esc.str + ESC_MAX_STR);
             }
             *dst = '\0';
@@ -1102,7 +1102,7 @@ static void term_dispatch_osc(nss_term_t *term) {
 
             if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
 
-                nss_color_t col = parse_color(parg, pnext);
+                nss_color_t col = parse_color((uint8_t *)parg, (uint8_t *)pnext);
                 if (col) term->palette[idx] = col;
                 else if (parg[0] == '?' && parg[1] == '\0')
                     term_answerback(term, "\2354;#%06X\234", term->palette[idx] & 0x00FFFFFF);
@@ -1122,7 +1122,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         term_esc_dump(term);
         break;
     case 10: /* Set VT100 foreground color */ {
-        nss_color_t col = parse_color((char *)term->esc.str, (char *)term->esc.str + term->esc.si);
+        nss_color_t col = parse_color(term->esc.str, term->esc.str + term->esc.si);
         if (col) {
             if (term->mode & nss_tm_reverse_video) {
                 term->palette[NSS_SPECIAL_BG] = col;
@@ -1132,7 +1132,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         break;
     }
     case 11: /* Set VT100 background color */ {
-        nss_color_t col = parse_color((char *)term->esc.str, (char *)term->esc.str + term->esc.si);
+        nss_color_t col = parse_color(term->esc.str, term->esc.str + term->esc.si);
         if (col) {
             args[0] = args[1] = col;
             nss_color_t def = term->palette[NSS_SPECIAL_BG];
@@ -1148,7 +1148,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         break;
     }
     case 12: /* Set Cursor color */ {
-        nss_color_t col = parse_color((char *)term->esc.str, (char *)term->esc.str + term->esc.si);
+        nss_color_t col = parse_color(term->esc.str, term->esc.str + term->esc.si);
         if (col) {
             if (!(term->mode & nss_tm_reverse_video)) {
                 term->palette[NSS_SPECIAL_CURSOR_FG] = col;
@@ -1282,8 +1282,8 @@ static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) 
 static void term_dispatch_sgr(nss_term_t *term) {
     size_t argc = term->esc.i + (term->esc.param[term->esc.i] > 0);
     if (!argc) argc++;
-    for(uint32_t i = 0; i < argc; i++) {
-        uint32_t p = MAX(0, term->esc.param[i]);
+    for(size_t i = 0; i < argc; i++) {
+        param_t p = MAX(0, term->esc.param[i]);
         if ((term->esc.subpar_mask >> i) & 1) return;
         switch(p) {
         case 0:
@@ -1383,7 +1383,7 @@ static void term_dispatch_sgr(nss_term_t *term) {
 
 static void term_dispatch_srm(nss_term_t *term, _Bool set) {
     if (term->esc.selector & P_MASK) {
-        for(uint32_t i = 0; i <= term->esc.i; i++) {
+        for(size_t i = 0; i <= term->esc.i; i++) {
             uint32_t arg = set;
             switch(PARAM(i, 0)) {
             case 0: /* Default - nothing */
@@ -1595,7 +1595,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             }
         }
     } else {
-        for(uint32_t i = 0; i <= term->esc.i; i++) {
+        for(size_t i = 0; i <= term->esc.i; i++) {
             switch(PARAM(i, 0)) {
             case 0: /* Default - nothing */
                 break;
@@ -1618,7 +1618,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
     }
 }
 
-static void term_print_char(nss_term_t *term, uint32_t ch) {
+static void term_print_char(nss_term_t *term, tchar_t ch) {
     uint8_t buf[5];
     if (write(term->printerfd, buf, utf8_encode(ch, buf, buf + 5)) < 0) {
         warn("Printer error");
@@ -1631,7 +1631,7 @@ static void term_print_char(nss_term_t *term, uint32_t ch) {
 static void term_print_line(nss_term_t *term, nss_line_t *line) {
     if (term->printerfd < 0) return;
 
-    for (ssize_t i = 0; i < MIN(line->width, term->width); i++)
+    for (coord_t i = 0; i < MIN(line->width, term->width); i++)
         term_print_char(term, line->cell[i].ch);
     term_print_char(term, '\n');
 }
@@ -1639,8 +1639,8 @@ static void term_print_line(nss_term_t *term, nss_line_t *line) {
 static void term_print_screen(nss_term_t *term, _Bool ext) {
     if (term->printerfd < 0) return;
 
-    int16_t top = ext ? 0 : term->top;
-    int16_t bottom = ext ? term->height - 1 : term->bottom;
+    coord_t top = ext ? 0 : term->top;
+    coord_t bottom = ext ? term->height - 1 : term->bottom;
 
     while(top < bottom) term_print_line(term, term->screen[top++]);
     if (term->mode & nss_tm_print_form_feed)
@@ -1755,7 +1755,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('J') | P('?'): /* DECSED */
     case C('J'): /* ED */ {
-        void (*erase)(nss_term_t *, int16_t, int16_t, int16_t, int16_t) = term_erase;
+        void (*erase)(nss_term_t *, coord_t, coord_t, coord_t, coord_t) = term_erase;
         if (term->esc.selector & P_MASK)
             erase = term_selective_erase;
         else if (term->mode & nss_tm_protected)
@@ -1784,7 +1784,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     }
     case C('K') | P('?'): /* DECSEL */
     case C('K'): /* EL */ {
-        void (*erase)(nss_term_t *, int16_t, int16_t, int16_t, int16_t) = term_erase;
+        void (*erase)(nss_term_t *, coord_t, coord_t, coord_t, coord_t) = term_erase;
         if (term->esc.selector & P_MASK)
             erase = term_selective_erase;
         else if(term->mode & nss_tm_protected)
@@ -1873,7 +1873,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('m') | P('>'): /* Modify keys, xterm */ {
         nss_input_mode_t mode = nss_config_input_mode();
-        uint32_t p = PARAM(0, 0), inone = !term->esc.i && term->esc.param[0] < 0;
+        param_t p = PARAM(0, 0), inone = !term->esc.i && term->esc.param[0] < 0;
         if (term->esc.i > 0 && term->esc.param[1] >= 0) {
             switch(p) {
             case 0:
@@ -1913,7 +1913,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_dispatch_sgr(term);
         break;
     case C('n') | P('>'): /* Disable key modifires, xterm */ {
-            uint32_t p = term->esc.param[0];
+            param_t p = term->esc.param[0];
             if (p == 0) {
                 term->in_mode->modkey_legacy_allow_keypad = 0;
                 term->in_mode->modkey_legacy_allow_edit_keypad = 0;
@@ -1955,7 +1955,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('x'): /* DECREQTPARAM */
         if (term->vt_version < 200) {
-            uint32_t p = PARAM(0, 0);
+            param_t p = PARAM(0, 0);
             if (p < 2)
                 term_answerback(term, "\233%d;1;1;128;128;1;0x", p + 2);
         }
@@ -1993,7 +1993,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         if (term->vt_version < 200) break;
 
         term_reset(term, 0);
-        uint32_t p = PARAM(0, 65) - 60;
+        param_t p = PARAM(0, 65) - 60;
         if (p && p <= term->vt_version/100)
             term->vt_level = p;
         if (p > 1) switch(PARAM(1, 2)) {
@@ -2075,7 +2075,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static enum nss_char_set parse_nrcs(uint32_t selector, _Bool is96, uint32_t vt_level, _Bool nrcs) {
+static enum nss_char_set parse_nrcs(param_t selector, _Bool is96, uint16_t vt_level, _Bool nrcs) {
     #define NRC {if (!nrcs) return -1;}
     selector &= (I1_MASK | E_MASK);
     if (!is96) {
@@ -2286,8 +2286,8 @@ static void term_dispatch_esc(nss_term_t *term) {
         term->c.cel.attr = 0;
         term->c.cel.fg = NSS_SPECIAL_FG;
         term->c.cel.bg = NSS_SPECIAL_BG;
-        for (int16_t i = 0; i < term->height; i++)
-            for(int16_t j = 0; j < term->width; j++)
+        for (coord_t i = 0; i < term->height; i++)
+            for(coord_t j = 0; j < term->width; j++)
                 term_set_cell(term, j, i, 'E');
         break;
     case E('@') | I0('%'): /* Disable UTF-8 */
@@ -2326,7 +2326,7 @@ static void term_dispatch_esc(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static void term_dispatch_c0(nss_term_t *term, uint32_t ch) {
+static void term_dispatch_c0(nss_term_t *term, tchar_t ch) {
     // DUMP
     // if (ch != 0x1B) warn("^%c", ch ^ 0x40);
 
@@ -2401,7 +2401,7 @@ static void term_dispatch_c0(nss_term_t *term, uint32_t ch) {
     }
 }
 
-static void term_dispatch_vt52(nss_term_t *term, uint8_t ch) {
+static void term_dispatch_vt52(nss_term_t *term, tchar_t ch) {
     switch (ch) {
     case '<':
         if (term->vt_version >= 100) {
@@ -2493,7 +2493,7 @@ static void term_dispatch_vt52_cup(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static void term_putchar(nss_term_t *term, uint32_t ch) {
+static void term_putchar(nss_term_t *term, tchar_t ch) {
     //info("UTF %"PRIx32" '%s'", ch, buf);
 
     // TODO More sophisticated filtering
@@ -2656,7 +2656,7 @@ static void term_putchar(nss_term_t *term, uint32_t ch) {
         else if (ch == 0x7F && (!(term->mode & nss_tm_enable_nrcs) && (glv == nss_96cs_latin_1 || glv == nss_94cs_british)))
             /* ignore */;
         else {
-            int16_t width = wcwidth(ch);
+            coord_t width = wcwidth(ch);
             if (width < 0) /*ch = UTF_INVAL,*/ width = 1;
             else if (width == 0) return;
 
@@ -2703,7 +2703,7 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
     term->prev_c_y = term->c.y;
 
     while (start < end) {
-        uint32_t ch;
+        tchar_t ch;
         // Try to handle unencoded C1 bytes even if UTF-8 is enabled
         if (!(term->mode & nss_tm_utf8) || IS_C1(*start)) ch = *start++;
         else if (!utf8_decode(&ch, &start, end)) break;
@@ -2752,9 +2752,8 @@ ssize_t nss_term_read(nss_term_t *term) {
     return inc;
 }
 
-static void tty_write_raw(nss_term_t *term, const uint8_t *buf, size_t len) {
-    ssize_t res;
-    size_t lim = TTY_MAX_WRITE;
+static void tty_write_raw(nss_term_t *term, const uint8_t *buf, ssize_t len) {
+    ssize_t res, lim = TTY_MAX_WRITE;
     struct pollfd pfd = {
         .events = POLLIN | POLLOUT,
         .fd = term->fd
@@ -2834,12 +2833,12 @@ void term_answerback(nss_term_t *term, const char *str, ...) {
 }
 
 /* If len == 0 encodes C1 controls and determines length by NUL character */
-void nss_term_sendkey(nss_term_t *term, const char *str, size_t len) {
+void nss_term_sendkey(nss_term_t *term, const uint8_t *str, size_t len) {
     _Bool encode = !len;
-    if (!len) len = strlen(str);
+    if (!len) len = strlen((char *)str);
 
     if (term->mode & nss_tm_echo)
-        term_write(term, (uint8_t *)str, len, 1);
+        term_write(term, str, len, 1);
 
     if (!(term->mode & nss_tm_dont_scroll_on_input) && term->view) {
         term->view = NULL;
@@ -2847,9 +2846,9 @@ void nss_term_sendkey(nss_term_t *term, const char *str, size_t len) {
     }
     uint8_t rep[MAX_REPORT];
 
-    if (encode) len = term_encode_c1(term, (const uint8_t *)str, rep);
+    if (encode) len = term_encode_c1(term, str, rep);
 
-    term_tty_write(term, encode ? rep : (uint8_t *)str, len);
+    term_tty_write(term, encode ? rep : str, len);
 }
 
 void nss_term_sendbreak(nss_term_t *term) {
@@ -2857,7 +2856,7 @@ void nss_term_sendbreak(nss_term_t *term) {
         warn("Can't send break");
 }
 
-void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
+void nss_term_resize(nss_term_t *term, coord_t width, coord_t height) {
     _Bool cur_moved = term->c.x == term->width;
 
     // Free extra lines, scrolling screen upwards
@@ -2866,11 +2865,11 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
         if (term->mode & nss_tm_altscreen)
             SWAP(nss_line_t **, term->screen, term->back_screen);
 
-        int16_t delta = MAX(0, term->c.y - height + 1);
+        coord_t delta = MAX(0, term->c.y - height + 1);
 
         if (delta) nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
 
-        for (int16_t i = height; i < term->height; i++) {
+        for (coord_t i = height; i < term->height; i++) {
             if (i < height + delta)
                 term_append_history(term, term->screen[i - height]);
             else
@@ -2898,7 +2897,7 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
     // Create new lines
 
     if (height > term->height) {
-        for (int16_t i = term->height; i < height; i++) {
+        for (coord_t i = term->height; i < height; i++) {
             term->screen[i] = term_create_line(term, width);
             term->back_screen[i] = term_create_line(term, width);
         }
@@ -2906,20 +2905,20 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
 
     // Resize tabs
 
-    uint8_t *new_tabs = realloc(term->tabs, width * sizeof(*term->tabs));
+    _Bool *new_tabs = realloc(term->tabs, width * sizeof(*term->tabs));
     if (!new_tabs) die("Can't alloc tabs");
     term->tabs = new_tabs;
 
     if(width > term->width) {
         memset(new_tabs + term->width, 0, (width - term->width) * sizeof(new_tabs[0]));
-        int16_t tab = term->width ? term->width - 1: 0, tabw = nss_config_integer(NSS_ICONFIG_TAB_WIDTH);
+        coord_t tab = term->width ? term->width - 1: 0, tabw = nss_config_integer(NSS_ICONFIG_TAB_WIDTH);
         while (tab > 0 && !new_tabs[tab]) tab--;
         while ((tab += tabw) < width) new_tabs[tab] = 1;
     }
 
     // Set parameters
 
-    int16_t minh = MIN(height, term->height);
+    coord_t minh = MIN(height, term->height);
 
     term->width = width;
     term->height = height;
@@ -2929,7 +2928,7 @@ void nss_term_resize(nss_term_t *term, int16_t width, int16_t height) {
     nss_line_t *view = term->view;
     for (size_t j = 0; j < 2; j++) {
         // Reallocate line if it is not wide enough
-        for (int16_t i = 0; i < minh; i++)
+        for (coord_t i = 0; i < minh; i++)
             if (term->screen[i]->width < width)
                 term->screen[i] = term_realloc_line(term, term->screen[i], width);
         term_swap_screen(term);
@@ -2973,7 +2972,7 @@ void nss_term_visibility(nss_term_t *term, _Bool visible) {
     if (visible) nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
 }
 
-_Bool nss_term_mouse(nss_term_t *term, int16_t x, int16_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
+_Bool nss_term_mouse(nss_term_t *term, coord_t x, coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
     if (term->mode & nss_tm_mouse_x10 && button > 2) return 0;
     if (!(term->mode & nss_tm_mouse_mask)) return 0;
 
@@ -3026,7 +3025,7 @@ void nss_term_hang(nss_term_t *term) {
 
 void nss_free_term(nss_term_t *term) {
     nss_term_hang(term);
-    for (size_t i = 0; i < (size_t)term->height; i++) {
+    for (coord_t i = 0; i < term->height; i++) {
         term_free_line(term, term->screen[i]);
         term_free_line(term, term->back_screen[i]);
     }

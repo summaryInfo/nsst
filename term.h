@@ -4,11 +4,15 @@
 #define TERM_H_ 1
 
 #include <sys/types.h>
-#include "window.h"
+
 #include "util.h"
+#include "window.h"
 
 typedef uint16_t nss_cid_t;
 typedef uint32_t nss_color_t;
+typedef uint32_t tchar_t;
+typedef int16_t coord_t;
+typedef uint32_t param_t;
 
 #define NSS_SPECIAL_COLORS 4
 #define NSS_PALETTE_SIZE (256 + NSS_SPECIAL_COLORS)
@@ -55,16 +59,16 @@ typedef struct nss_line {
 typedef struct nss_input_mode nss_input_mode_t;
 typedef struct nss_term nss_term_t;
 
-nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, int16_t width, int16_t height);
+nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, coord_t width, coord_t height);
 void nss_free_term(nss_term_t *term);
 void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor);
-void nss_term_resize(nss_term_t *term, int16_t width, int16_t height);
+void nss_term_resize(nss_term_t *term, coord_t width, coord_t height);
 void nss_term_visibility(nss_term_t *term, _Bool visible);
 void nss_term_focus(nss_term_t *term, _Bool focused);
-_Bool nss_term_mouse(nss_term_t *term, int16_t x, int16_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button);
-void nss_term_sendkey(nss_term_t *term, const char *str, size_t size);
+_Bool nss_term_mouse(nss_term_t *term, coord_t x, coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button);
+void nss_term_sendkey(nss_term_t *term, const uint8_t *data, size_t size);
 void nss_term_sendbreak(nss_term_t *term);
-void nss_term_scroll_view(nss_term_t *term, int16_t amount);
+void nss_term_scroll_view(nss_term_t *term, coord_t amount);
 ssize_t nss_term_read(nss_term_t *term);
 int nss_term_fd(nss_term_t *term);
 void nss_term_hang(nss_term_t *term);

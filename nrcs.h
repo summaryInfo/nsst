@@ -46,8 +46,10 @@ enum nss_char_set {
     nss_nrcs_MAX = nss_96cs_latin_5,
 };
 
-_Bool nrcs_encode(uint32_t set, uint32_t *ch, _Bool nrcs);
-uint32_t nrcs_decode(uint32_t gl, uint32_t gr, uint32_t ch, _Bool nrcs);
+typedef uint32_t tchar_t;
+
+_Bool nrcs_encode(tchar_t set, enum nss_char_set *ch, _Bool nrcs);
+tchar_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, tchar_t ch, _Bool nrcs);
 
 #endif
 

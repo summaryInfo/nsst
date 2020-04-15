@@ -9,6 +9,7 @@
 #include "font.h"
 #include "util.h"
 
+
 typedef enum nss_cursor_type {
     nss_cursor_block = 2,
     nss_cursor_bar = 4,
@@ -56,6 +57,7 @@ typedef enum nss_mouse_state {
 typedef struct nss_window nss_window_t;
 typedef struct nss_line nss_line_t;
 typedef uint32_t nss_color_t;
+typedef int16_t coord_t;
 
 void nss_init_context(void);
 void nss_free_context(void);
@@ -63,8 +65,8 @@ void nss_context_run(void);
 
 nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const uint32_t *values);
 void nss_free_window(nss_window_t *win);
-void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, int16_t cur_x, int16_t cur_y, _Bool cursor);
-void nss_window_shift(nss_window_t *win, int16_t ys, int16_t yd, int16_t height, _Bool delay);
+void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, coord_t cur_x, coord_t cur_y, _Bool cursor);
+void nss_window_shift(nss_window_t *win, coord_t ys, coord_t yd, coord_t height, _Bool delay);
 void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values);
 void nss_window_set_title(nss_window_t *win, const char *name);
 void nss_window_set_icon_name(nss_window_t *win, const char *name);

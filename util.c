@@ -121,7 +121,7 @@ uint8_t *hex_decode(uint8_t *hex) {
 
 }
 
-nss_color_t parse_color(char *str, char *end) {
+nss_color_t parse_color(const uint8_t *str, const uint8_t *end) {
     uint64_t val = 0;
     ptrdiff_t sz = end - str;
     if (*str != '#') return 0;

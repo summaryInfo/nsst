@@ -40,7 +40,7 @@ static const unsigned short tech_tr[] = {
     0x03BE, 0x03C5, 0x03B6, 0x2190, 0x2191, 0x2192, 0x2193,
 };
 
-_Bool nrcs_encode(uint32_t set, uint32_t *ch, _Bool nrcs) {
+_Bool nrcs_encode(enum nss_char_set set, tchar_t *ch, _Bool nrcs) {
     _Bool done = 0;
     switch (set) {
     case nss_94cs_ascii:
@@ -125,6 +125,7 @@ _Bool nrcs_encode(uint32_t set, uint32_t *ch, _Bool nrcs) {
     case nss_nrcs_turkish:
         if (*ch == U'ğ') *ch = 0x26, done = 1;
         break;
+    default:;
     }
 
     if (set <= nss_nrcs_turkish) {
@@ -142,11 +143,11 @@ _Bool nrcs_encode(uint32_t set, uint32_t *ch, _Bool nrcs) {
     return done;
 }
 
-uint32_t nrcs_decode(uint32_t gl, uint32_t gr, uint32_t ch, _Bool nrcs) {
+tchar_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, tchar_t ch, _Bool nrcs) {
     if (ch > 0xFF) return ch;
     if (ch == 0x7F) return U' ';
 
-    uint32_t set = ch > 0x7F ? gr : gl;
+    enum nss_char_set set = ch > 0x7F ? gr : gl;
 
     switch (set) {
     case nss_94cs_ascii:
@@ -204,6 +205,7 @@ uint32_t nrcs_decode(uint32_t gl, uint32_t gr, uint32_t ch, _Bool nrcs) {
         set = nss_nrcs_french; break;
     case nss_nrcs_turkish:
         if ((ch & 0x7F) == 0x26) return U'ğ';
+    default:;
     }
     if (/* nrcs && */ set <= nss_nrcs_turkish) {
         ch &= 0x7F;

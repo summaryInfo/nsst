@@ -3,10 +3,10 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <assert.h>
-#include <stdlib.h>
 #include <errno.h>
-#include <string.h>
 #include <math.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <fontconfig/fontconfig.h>
 #include <ft2build.h>
@@ -15,8 +15,8 @@
 
 #include "config.h"
 #include "font.h"
-#include "window.h"
 #include "util.h"
+#include "window.h"
 
 struct nss_font_state {
     size_t fonts;
@@ -368,12 +368,12 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     return glyph;
 }
 
-void nss_font_glyph_mark_loaded(nss_font_t *font, uint32_t ch) {
+void nss_font_glyph_mark_loaded(nss_font_t *font, tchar_t ch) {
     if (ch < LOADED_MAP_SIZE * 32)
         font->loaded_map[ch / 32] |= 1 << (ch % 32);
 }
 
-_Bool nss_font_glyph_is_loaded(nss_font_t *font, uint32_t ch) {
+_Bool nss_font_glyph_is_loaded(nss_font_t *font, tchar_t ch) {
     if (ch >= 32 * LOADED_MAP_SIZE) return 0;
     else return font->loaded_map[ch / 32] & (1 << (ch % 32));
 }

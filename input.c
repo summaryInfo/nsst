@@ -12,12 +12,12 @@ typedef struct nss_esc_reply {
     uint8_t idx;
     uint8_t final;
     uint8_t priv;
-    uint32_t init;
-    uint32_t param[3];
+    tchar_t init;
+    tchar_t param[3];
 } nss_reply_t;
 
 
-static inline _Bool is_edit_keypad(uint32_t ks, _Bool deldel) {
+static inline _Bool is_edit_keypad(tchar_t ks, _Bool deldel) {
     switch (ks) {
     case XKB_KEY_Delete:
         return !deldel;
@@ -31,7 +31,7 @@ static inline _Bool is_edit_keypad(uint32_t ks, _Bool deldel) {
     }
     return 0;
 }
-static inline _Bool is_edit_function(uint32_t ks, _Bool deldel) {
+static inline _Bool is_edit_function(tchar_t ks, _Bool deldel) {
     switch (ks) {
     case XKB_KEY_KP_Insert:
     case XKB_KEY_KP_Delete:
@@ -40,31 +40,31 @@ static inline _Bool is_edit_function(uint32_t ks, _Bool deldel) {
     }
     return is_edit_keypad(ks, deldel);
 }
-static inline _Bool is_cursor(uint32_t ks) {
+static inline _Bool is_cursor(tchar_t ks) {
     return XKB_KEY_Home <= ks && ks <= XKB_KEY_Select;
 }
-static inline _Bool is_keypad(uint32_t ks) {
+static inline _Bool is_keypad(tchar_t ks) {
     return XKB_KEY_KP_Space <= ks && ks <= XKB_KEY_KP_Equal;
 }
-static inline _Bool is_keypad_function(uint32_t ks) {
+static inline _Bool is_keypad_function(tchar_t ks) {
     return XKB_KEY_KP_F1 <= ks && ks <= XKB_KEY_KP_F4;
 }
-static inline _Bool is_function(uint32_t ks) {
+static inline _Bool is_function(tchar_t ks) {
     return XKB_KEY_F1 <= ks && ks <= XKB_KEY_F35;
 }
-static inline _Bool is_misc_function(uint32_t ks) {
+static inline _Bool is_misc_function(tchar_t ks) {
     return XKB_KEY_Select <= ks && ks <= XKB_KEY_Break;
 }
-static inline _Bool is_special(uint32_t ks) {
+static inline _Bool is_special(tchar_t ks) {
     return XKB_KEY_ISO_Lock <= ks && ks <= XKB_KEY_Delete;
 }
-static inline _Bool is_privite(uint32_t ks) {
+static inline _Bool is_privite(tchar_t ks) {
     return 0x11000000 <= ks && ks <= 0x1100FFFF;
 }
-static inline _Bool is_ctrl_input(uint32_t ks) {
+static inline _Bool is_ctrl_input(tchar_t ks) {
     return ks >= 0x40 && ks <= 0x7F;
 }
-static inline _Bool is_ctrl_output(uint32_t ks) {
+static inline _Bool is_ctrl_output(tchar_t ks) {
     return ks < 0x20 || (ks >= 0x7F && ks < 0x100);
 }
 
@@ -90,8 +90,8 @@ static inline _Bool is_modify_allowed(nss_key_t *k, nss_input_mode_t mode) {
 
 
 
-static uint32_t filter_modifiers(nss_key_t *k, nss_input_mode_t mode) {
-    uint32_t res = k->mask & (nss_mm_control | nss_mm_shift | nss_mm_mod1);
+static tchar_t filter_modifiers(nss_key_t *k, nss_input_mode_t mode) {
+    tchar_t res = k->mask & (nss_mm_control | nss_mm_shift | nss_mm_mod1);
     if (mode.modkey_other < 2) {
         if (is_ctrl_input(k->sym) && !(res & ~nss_mm_control)) {
             if (!mode.modkey_other) res &= ~nss_mm_control;
@@ -111,8 +111,8 @@ static uint32_t filter_modifiers(nss_key_t *k, nss_input_mode_t mode) {
     return res;
 }
 
-static inline uint32_t mask_to_param(uint32_t mask) {
-    uint32_t res = 0;
+static inline tchar_t mask_to_param(tchar_t mask) {
+    tchar_t res = 0;
     if (mask & nss_mm_shift) res |= 1;
     if (mask & nss_mm_control) res |= 4;
     if (mask & nss_mm_mod1) res |= 2;
@@ -146,7 +146,7 @@ static _Bool is_modify_others_allowed(nss_key_t *k, nss_input_mode_t mode) {
             } else res = 1;
         }
         if (res) {
-            uint32_t new_mods = filter_modifiers(k, mode);
+            tchar_t new_mods = filter_modifiers(k, mode);
             if (new_mods) k->mask = new_mods;
             else return 0;
         }
@@ -174,18 +174,18 @@ static _Bool is_modify_others_allowed(nss_key_t *k, nss_input_mode_t mode) {
     }
 }
 
-static void modify_others(uint32_t ch, uint32_t param, _Bool fmt, nss_reply_t *reply) {
+static void modify_others(tchar_t ch, tchar_t param, _Bool fmt, nss_reply_t *reply) {
     if (!param) return;
     reply->init = '\233';
     reply->final = fmt ? 'u' : '~';
     reply->idx = 0;
-    if (fmt) SWAP(uint32_t, ch, param)
+    if (fmt) SWAP(tchar_t, ch, param)
     else reply->param[reply->idx++] = 27;
     reply->param[reply->idx++] = param;
     reply->param[reply->idx++] = ch;
 }
 
-static void modify_cursor(uint32_t param, uint32_t level, nss_reply_t *reply) {
+static void modify_cursor(tchar_t param, tchar_t level, nss_reply_t *reply) {
     if (!param) return;
     switch(level) {
     case 4: reply->priv = '>';
@@ -195,10 +195,10 @@ static void modify_cursor(uint32_t param, uint32_t level, nss_reply_t *reply) {
     }
 }
 
-static uint32_t fnkey_dec(uint32_t ks, _Bool is_fkey, nss_reply_t *reply) {
+static tchar_t fnkey_dec(tchar_t ks, _Bool is_fkey, nss_reply_t *reply) {
     if (is_fkey) {
         reply->final = '~';
-        uint32_t values[] = {
+        tchar_t values[] = {
             11, 12, 13, 14, 15, 17, 18, 19, 20, 21,
             23, 24, 25, 26, 28, 29, 31, 32, 33, 34
         };
@@ -207,7 +207,7 @@ static uint32_t fnkey_dec(uint32_t ks, _Bool is_fkey, nss_reply_t *reply) {
                 values[ks - XKB_KEY_F1] : 42 + ks - XKB_KEY_F21;
     } else {
         
-        uint32_t p;
+        tchar_t p;
         switch (ks) {
         case XKB_KEY_Find: p = 1; break;
         case XKB_KEY_Insert: p = 2; break;
@@ -231,10 +231,10 @@ static uint32_t fnkey_dec(uint32_t ks, _Bool is_fkey, nss_reply_t *reply) {
     }
 }
 
-static _Bool fnkey_hp(uint32_t ks, _Bool is_fkey, nss_reply_t *reply) {
-    uint32_t res;
+static _Bool fnkey_hp(tchar_t ks, _Bool is_fkey, nss_reply_t *reply) {
+    tchar_t res;
     if (is_fkey) {
-        uint32_t values[] = { 'p', 'q', 'r', 's', 't', 'u', 'v', 'w' };
+        tchar_t values[] = { 'p', 'q', 'r', 's', 't', 'u', 'v', 'w' };
         if (XKB_KEY_F1 <= ks && ks <= XKB_KEY_F8) {
             res = values[ks - XKB_KEY_F1];
         } else return 0;
@@ -265,8 +265,8 @@ static _Bool fnkey_hp(uint32_t ks, _Bool is_fkey, nss_reply_t *reply) {
     return 1;
 }
 
-static _Bool fnkey_sco(uint32_t ks, _Bool is_fkey, nss_reply_t *reply) {
-    uint32_t res;
+static _Bool fnkey_sco(tchar_t ks, _Bool is_fkey, nss_reply_t *reply) {
+    tchar_t res;
     if (is_fkey) {
         if (ks - XKB_KEY_F1 < 48)
             res = "MNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@[\\]^_`{"[ks - XKB_KEY_F1];
@@ -293,8 +293,8 @@ static _Bool fnkey_sco(uint32_t ks, _Bool is_fkey, nss_reply_t *reply) {
     return 1;
 }
 
-static _Bool fnkey_sun(uint32_t ks, _Bool is_fkey, nss_reply_t *reply) {
-    uint32_t arg = 0, fin = 0;
+static _Bool fnkey_sun(tchar_t ks, _Bool is_fkey, nss_reply_t *reply) {
+    tchar_t arg = 0, fin = 0;
     if (is_fkey) {
         if (ks - XKB_KEY_F1 < 37) {
             arg = (int32_t[]) {
@@ -347,7 +347,7 @@ static void translate_adjust(nss_key_t *k, nss_input_mode_t *mode) {
             mode->appkey &= (k->utf8len == 1 && mode->allow_numlock && (k->mask & nss_mm_mod2));
         }
         if (k->sym != XKB_KEY_Delete || !mode->delete_is_del) {
-            struct { uint32_t from, to; } tab[] = {
+            struct { tchar_t from, to; } tab[] = {
                 { XKB_KEY_Delete, XKB_KEY_DRemove },
                 { XKB_KEY_Home, XKB_KEY_Find },
                 { XKB_KEY_End, XKB_KEY_Select },
@@ -427,7 +427,7 @@ static void dump_reply(nss_term_t *term, nss_reply_t *reply) {
     }
     str[strp++] = reply->final;
     str[strp] = '\0';
-    nss_term_sendkey(term, (const char *)str, 0);
+    nss_term_sendkey(term, str, 0);
 }
 
 void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
@@ -436,7 +436,7 @@ void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
     translate_adjust(&k, &mode);
 
     nss_reply_t reply = { 0 };
-    uint32_t param = 0;
+    tchar_t param = 0;
     if (k.mask && is_modify_allowed(&k, mode))
         param = mask_to_param(k.mask);
 
@@ -453,7 +453,7 @@ void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
                 mode.modkey_fn : mode.modkey_cursor, &reply);
         dump_reply(term, &reply);
     } else if (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode.delete_is_del)) {
-        uint32_t deccode = fnkey_dec(k.sym, k.is_fkey, &reply);
+        tchar_t deccode = fnkey_dec(k.sym, k.is_fkey, &reply);
         if (k.mask & nss_mm_shift && mode.keyboard_mapping == nss_km_vt220) {
             /* TODO UDK Here. For now -- nothing */
             return;
@@ -486,7 +486,7 @@ void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
             if(mode.keyboad_vt52) reply.priv = '?';
             dump_reply(term, &reply);
         } else {
-            char ch = " XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXXXXXXXXXXXXX*+,-./0123456789XXX=" [k.sym - XKB_KEY_KP_Space];
+            uint8_t ch = " XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXXXXXXXXXXXXX*+,-./0123456789XXX=" [k.sym - XKB_KEY_KP_Space];
             nss_term_sendkey(term, &ch, 1);
         }
     } else if (is_cursor(k.sym)) {
@@ -498,7 +498,7 @@ void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
         if (is_modify_others_allowed(&k, mode)) {
             // This is done in order to override XKB control transformation
             // TODO Check if k.ascii can be used here
-            uint32_t val = k.sym < 0x100 ? k.sym : k.utf32;
+            tchar_t val = k.sym < 0x100 ? k.sym : k.utf32;
             modify_others(val, mask_to_param(k.mask), mode.modkey_other_fmt, &reply);
             dump_reply(term, &reply);
         } else {
@@ -532,7 +532,7 @@ void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term) {
                 }
             }
             k.utf8data[k.utf8len] = '\0';
-            nss_term_sendkey(term, (char *)k.utf8data, k.utf8len);
+            nss_term_sendkey(term, k.utf8data, k.utf8len);
         }
     }
 }

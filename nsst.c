@@ -127,11 +127,11 @@ static void parse_geometry(char *arg, char *argv0) {
 static char **parse_options(int argc, char **argv) {
     size_t ind = 1;
 
-	// Load locale
+    // Load locale
     setlocale(LC_ALL, "");
     char *charset = nl_langinfo(CODESET);
     _Bool bset = charset && !strcmp(charset, "UTF-8");
-	// Enable UTF-8 support if it is UTF-8
+    // Enable UTF-8 support if it is UTF-8
     nss_config_set_integer(NSS_ICONFIG_UTF8, bset);
 
     char *arg;
