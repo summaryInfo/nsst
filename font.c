@@ -2,6 +2,7 @@
 
 #define _POSIX_C_SOURCE 200809L
 
+#include <assert.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
@@ -9,6 +10,7 @@
 
 #include <fontconfig/fontconfig.h>
 #include <ft2build.h>
+#include FT_BITMAP_H
 #include FT_FREETYPE_H
 
 #include "config.h"
@@ -140,7 +142,7 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
         FcPattern *final_pat = NULL;
         FcPattern *pat = FcNameParse((FcChar8*) tok);
         FcPatternAddDouble(pat, FC_DPI, font->dpi);
-        FcPatternAddBool(pat, FC_SCALABLE, FcTrue);
+        //FcPatternAddBool(pat, FC_SCALABLE, FcTrue);
         FcPatternDel(pat, FC_STYLE);
         FcPatternDel(pat, FC_WEIGHT);
         FcPatternDel(pat, FC_SLANT);
@@ -277,7 +279,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
             face = faces->faces[i];
     //size_t sz = faces->faces[0]->size->metrics.x_ppem/font->dpi*72.0*64;
 
-    FT_Load_Glyph(face, glyph_index, FT_LOAD_NO_BITMAP);
+    FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT);
 
     size_t stride;
     if (lcd) {
@@ -299,36 +301,57 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     glyph->y_off = face->glyph->advance.y/64.;
     glyph->stride = stride;
 
-    /*
-    info("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
-    info("Num grays: %d", face->glyph->bitmap.num_grays);
-    */
 
     int pitch = face->glyph->bitmap.pitch;
     uint8_t *src = face->glyph->bitmap.buffer;
+    unsigned short num_grays = face->glyph->bitmap.num_grays;
 
     if (pitch < 0)
         src -= pitch*(face->glyph->bitmap.rows - 1);
 
     double gamma = nss_config_integer(NSS_ICONFIG_GAMMA) / 10000.0;
-    if (lcd) {
+
+    switch(face->glyph->bitmap.pixel_mode) {
+    case FT_PIXEL_MODE_MONO:
+        for (size_t i = 0; i < glyph->height; i++)
+            for (size_t j = 0; j < glyph->width; j++)
+                glyph->data[stride*i + j] = 0xFF * ((src[pitch*i + j/8] >> (7 - j%8)) & 0x1);
+        break;
+    case FT_PIXEL_MODE_GRAY:
+        for (size_t i = 0; i < glyph->height; i++)
+            for (size_t j = 0; j < glyph->width; j++)
+                glyph->data[stride*i + j] = 0xFF * pow(src[pitch*i + j] / (double)(num_grays - 1), gamma);
+        break;
+    case FT_PIXEL_MODE_GRAY2:
+        for (size_t i = 0; i < glyph->height; i++)
+            for (size_t j = 0; j < glyph->width; j++)
+                glyph->data[stride*i + j] = 0x55 * ((src[pitch*i + j/4] >> (3 - j%4)) & 0x3);
+        break;
+    case FT_PIXEL_MODE_GRAY4:
+        for (size_t i = 0; i < glyph->height; i++)
+            for (size_t j = 0; j < glyph->width; j++)
+                glyph->data[stride*i + j] = 0x11 * ((src[pitch*i + j/2] >> (1 - j%2)) & 0xF);
+        break;
+    case FT_PIXEL_MODE_LCD:
+    case FT_PIXEL_MODE_LCD_V:
         for (size_t i = 0; i < glyph->height; i++) {
             for (size_t j = 0; j < glyph->width; j++) {
-                glyph->data[4*j + stride*i + 0] = 255 * pow(src[pitch*i + 3*j + 2] / 255.0, gamma);
-                glyph->data[4*j + stride*i + 1] = 255 * pow(src[pitch*i + 3*j + 2] / 255.0, gamma);
-                glyph->data[4*j + stride*i + 2] = 255 * pow(src[pitch*i + 3*j + 2] / 255.0, gamma);
+                glyph->data[4*j + stride*i + 0] = 0xFF * pow(src[pitch*i + 3*j + 2] / 255, gamma);
+                glyph->data[4*j + stride*i + 1] = 0xFF * pow(src[pitch*i + 3*j + 2] / 255, gamma);
+                glyph->data[4*j + stride*i + 2] = 0xFF * pow(src[pitch*i + 3*j + 2] / 255, gamma);
                 glyph->data[4*j + stride*i + 3] = 0;
             }
         }
-    } else {
-        //for (size_t i = 0; i < glyph->height; i++)
-        //    memcpy(glyph->data + stride*i, src + pitch*i, glyph->width);
-        for (size_t i = 0; i < glyph->height; i++)
-            for (size_t j = 0; j < glyph->width; j++)
-                glyph->data[stride*i + j] = 255 * pow(src[pitch*i + j] / 255., gamma);
+        break;
+    case FT_PIXEL_MODE_BGRA:
+        warn("Colored glyph encountered");
+        free(glyph);
+        return nss_font_render_glyph(font, 0, attr, lcd);
     }
 
     /*
+    info("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
+    info("Num grays: %d", face->glyph->bitmap.num_grays);
     info("Glyph: %d %d", glyph->width, glyph->height);
     size_t img_width = glyph->width;
     if (lcd) img_width *= 3;
