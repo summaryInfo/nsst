@@ -336,10 +336,11 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     case FT_PIXEL_MODE_LCD_V:
         for (size_t i = 0; i < glyph->height; i++) {
             for (size_t j = 0; j < glyph->width; j++) {
-                glyph->data[4*j + stride*i + 0] = 0xFF * pow(src[pitch*i + 3*j + 2] / 255, gamma);
-                glyph->data[4*j + stride*i + 1] = 0xFF * pow(src[pitch*i + 3*j + 2] / 255, gamma);
-                glyph->data[4*j + stride*i + 2] = 0xFF * pow(src[pitch*i + 3*j + 2] / 255, gamma);
-                glyph->data[4*j + stride*i + 3] = 0;
+                int16_t acc = 0;
+                acc += glyph->data[4*j + stride*i + 0] = 0xFF * pow(src[pitch*i + 3*j + 2] / 255., gamma);
+                acc += glyph->data[4*j + stride*i + 1] = 0xFF * pow(src[pitch*i + 3*j + 1] / 255., gamma);
+                acc += glyph->data[4*j + stride*i + 2] = 0xFF * pow(src[pitch*i + 3*j + 0] / 255., gamma);
+                glyph->data[4*j + stride*i + 3] = acc/3;
             }
         }
         break;
