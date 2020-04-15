@@ -244,6 +244,19 @@ int tty_open(nss_term_t *term, const char *cmd, const char **args) {
         return -1;
     }
 
+
+    /* If IUTF8 is defined, enable it by default,
+     * when terminal itself is in UTF-8 mode
+     */
+#ifdef IUTF8
+    if (nss_config_integer(NSS_ICONFIG_UTF8)) {
+        struct termios tio;
+        tcgetattr(slave, &tio);
+            tio.c_iflag |= IUTF8;
+        tcsetattr(slave, TCSANOW, &tio);
+    }
+#endif
+
     pid_t pid;
     switch ((pid = fork())) {
     case -1:
@@ -812,13 +825,12 @@ static void term_load_config(nss_term_t *term) {
         term->mode |= nss_tm_reverse_video;
     }
 
-    if (nss_config_integer(NSS_ICONFIG_UTF8)) term->mode |= nss_tm_utf8;
+    if (nss_config_integer(NSS_ICONFIG_UTF8)) term->mode |= nss_tm_utf8 | nss_tm_title_query_utf8 | nss_tm_title_set_utf8;
     if (!nss_config_integer(NSS_ICONFIG_ALLOW_ALTSCREEN)) term->mode |= nss_tm_disable_altscreen;
     if (nss_config_integer(NSS_ICONFIG_INIT_WRAP)) term->mode |= nss_tm_wrap;
     if (!nss_config_integer(NSS_ICONFIG_SCROLL_ON_INPUT)) term->mode |= nss_tm_dont_scroll_on_input;
     if (nss_config_integer(NSS_ICONFIG_SCROLL_ON_OUTPUT)) term->mode |= nss_tm_scoll_on_output;
     if (nss_config_integer(NSS_ICONFIG_ALLOW_NRCS)) term->mode |= nss_tm_enable_nrcs;
-
 }
 
 static void term_reset_margins(nss_term_t *term) {

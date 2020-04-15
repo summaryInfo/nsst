@@ -2,14 +2,16 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include <string.h>
-#include <stdio.h>
-#include <stdint.h>
 #include <inttypes.h>
+#include <langinfo.h>
+#include <locale.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
-#include "window.h"
-#include "util.h"
 #include "config.h"
+#include "util.h"
+#include "window.h"
 
 
 static struct optmap_item {
@@ -124,6 +126,13 @@ static void parse_geometry(char *arg, char *argv0) {
 
 static char **parse_options(int argc, char **argv) {
     size_t ind = 1;
+
+	// Load locale
+    setlocale(LC_ALL, "");
+    char *charset = nl_langinfo(CODESET);
+    _Bool bset = charset && !strcmp(charset, "UTF-8");
+	// Enable UTF-8 support if it is UTF-8
+    nss_config_set_integer(NSS_ICONFIG_UTF8, bset);
 
     char *arg;
     while (argv[ind] && argv[ind][0] == '-') {
