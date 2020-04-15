@@ -45,19 +45,20 @@ static void resize_bounds(nss_window_t *win, _Bool h_changed) {
     }
 }
 
-static nss_image_t *nss_create_image_shm(nss_window_t *win, int16_t width, int16_t height) {
+static nss_image_t nss_create_image_shm(nss_window_t *win, int16_t width, int16_t height) {
+    nss_image_t im = {
+        .width = width,
+        .height = height,
+        .shmid = -1,
+    };
+    size_t size = width * height * sizeof(nss_color_t) + sizeof(nss_image_t);
+
     if (rctx.has_shm) {
-        size_t size = width * height * sizeof(nss_color_t) + sizeof(nss_image_t);
+        im.shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0600);
+        if (im.shmid == -1U) return im;
 
-        uint32_t shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0666);
-        if (shmid == -1U) return 0;
-
-        nss_image_t *im = shmat(shmid, 0, 0);
-        if ((void *)im == (void *) -1) goto error;
-
-        im->shmid = shmid;
-        im->width = width;
-        im->height = height;
+        im.data = shmat(im.shmid, 0, 0);
+        if ((void *)im.data == (void *) -1) goto error;
 
         xcb_void_cookie_t c;
         if(!win->ren.shm_seg) {
@@ -69,34 +70,39 @@ static nss_image_t *nss_create_image_shm(nss_window_t *win, int16_t width, int16
             check_void_cookie(c);
         }
 
-        c = xcb_shm_attach_checked(con, win->ren.shm_seg, shmid, 0);
+        c = xcb_shm_attach_checked(con, win->ren.shm_seg, im.shmid, 0);
         if (check_void_cookie(c)) goto error;
 
         if (rctx.has_shm_pixmaps) {
             if (!win->ren.shm_pixmap)
                 win->ren.shm_pixmap = xcb_generate_id(con);
             xcb_shm_create_pixmap(con, win->ren.shm_pixmap,
-                    win->wid, width, height, 32, win->ren.shm_seg, sizeof(nss_image_t));
+                    win->wid, width, height, 32, win->ren.shm_seg, 0);
         }
-
-        xcb_flush(con);
 
         return im;
     error:
-        if (im) free(im);
-        if ((void *)im != (void *) -1 && im) shmdt(im);
-        if (shmid != -1U) shmctl(shmid, IPC_RMID, NULL);
-        return NULL;
-    } else return nss_create_image(width, height);
+        if ((void *)im.data != (void *) -1) shmdt(im.data);
+        if (im.shmid != -1U) shmctl(im.shmid, IPC_RMID, NULL);
+
+        im.shmid = -1;
+        im.data = NULL;
+        return im;
+    } else {
+        im.data = malloc(size);
+        return im;
+    }
 }
 
 static void nss_free_image_shm(nss_window_t *win, nss_image_t *im) {
     if (rctx.has_shm) {
-        shmctl(im->shmid, IPC_RMID, NULL);
-        shmdt(im);
+        if (im->data) shmdt(im->data);
+        if (im->shmid != -1U) shmctl(im->shmid, IPC_RMID, NULL);
     } else {
-        nss_free_image(im);
+        if (im->data) free(im->data);
     }
+    im->shmid = -1;
+    im->data = NULL;
 }
 
 /* Reload font using win->font_size and win->font_name */
@@ -146,7 +152,7 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
 
     if (need_free) {
         xcb_free_gc(con, win->ren.gc);
-        nss_free_image_shm(win, win->ren.im);
+        nss_free_image_shm(win, &win->ren.im);
     } else {
         win->ren.gc = xcb_generate_id(con);
     }
@@ -160,12 +166,12 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     }
 
     win->ren.im = nss_create_image_shm(win, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height));
-    if (!win->ren.im) {
+    if (!win->ren.im.data) {
         warn("Can't allocate image");
         return 0;
     }
 
-    nss_image_draw_rect(win->ren.im, (nss_rect_t){0, 0, win->ren.im->width, win->ren.im->height}, win->bg);
+    nss_image_draw_rect(win->ren.im, (nss_rect_t){0, 0, win->ren.im.width, win->ren.im.height}, win->bg);
 
     if (need_free)
         nss_term_resize(win->term, win->cw, win->ch);
@@ -179,8 +185,8 @@ void nss_renderer_free(nss_window_t *win) {
         xcb_shm_detach(con, win->ren.shm_seg);
     if (rctx.has_shm_pixmaps)
         xcb_free_pixmap(con, win->ren.shm_pixmap);
-    if (win->ren.im)
-        nss_free_image_shm(win, win->ren.im);
+    if (win->ren.im.data)
+        nss_free_image_shm(win, &win->ren.im);
     if (win->ren.cache)
         nss_free_cache(win->ren.cache);
     if (win->ren.bounds)
@@ -373,7 +379,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
             for (size_t k = 0; k < win->ren.boundc; k++) {
                nss_renderer_update(win, rect_scale_up(win->ren.bounds[k], win->char_width, win->char_depth + win->char_height));
             }
-        } else nss_renderer_update(win, (nss_rect_t){win->ren.im->width, win->ren.im->height});
+        } else nss_renderer_update(win, (nss_rect_t){0, 0, win->ren.im.width, win->ren.im.height});
         win->ren.boundc = 0;
     }
 }
@@ -392,13 +398,13 @@ void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
         xcb_copy_area(con, win->ren.shm_pixmap, win->wid, win->ren.gc, rect.x, rect.y,
                 rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
     } else if (rctx.has_shm) {
-        xcb_shm_put_image(con, win->wid, win->ren.gc, win->ren.im->width, win->ren.im->height, rect.x, rect.y, rect.width, rect.height,
+        xcb_shm_put_image(con, win->wid, win->ren.gc, win->ren.im.width, win->ren.im.height, rect.x, rect.y, rect.width, rect.height,
                 rect.x + win->left_border, rect.y + win->top_border, 32, XCB_IMAGE_FORMAT_Z_PIXMAP, 0, win->ren.shm_seg, sizeof(nss_image_t));
     } else {
         xcb_put_image(con, XCB_IMAGE_FORMAT_Z_PIXMAP, win->wid, win->ren.gc,
-                win->ren.im->width, rect.height, win->left_border,
-                win->top_border + rect.y, 0, 32, rect.height * win->ren.im->width * sizeof(nss_color_t),
-                (const uint8_t *)(win->ren.im->data+rect.y*win->ren.im->width));
+                win->ren.im.width, rect.height, win->left_border,
+                win->top_border + rect.y, 0, 32, rect.height * win->ren.im.width * sizeof(nss_color_t),
+                (const uint8_t *)(win->ren.im.data+rect.y*win->ren.im.width));
     }
 }
 void nss_renderer_background_changed(nss_window_t *win) {
@@ -440,10 +446,10 @@ void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
     int16_t common_w = MIN(width, width  - delta_x * win->char_width);
     int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth)) ;
 
-    nss_image_t *new = nss_create_image_shm(win, width, height);
+    nss_image_t new = nss_create_image_shm(win, width, height);
     nss_image_copy(new, (nss_rect_t){0, 0, common_w, common_h}, win->ren.im, 0, 0);
-    SWAP(nss_image_t *, win->ren.im, new);
-    nss_free_image_shm(win, new);
+    SWAP(nss_image_t, win->ren.im, new);
+    nss_free_image_shm(win, &new);
 
     resize_bounds(win, delta_y);
 

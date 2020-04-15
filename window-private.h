@@ -18,7 +18,7 @@ struct nss_renderer {
     xcb_shm_seg_t shm_seg;
     xcb_pixmap_t shm_pixmap;
 
-    nss_image_t *im;
+    nss_image_t im;
     nss_glyph_cache_t *cache;
 
     // It's size is 2*win->ch
