@@ -42,6 +42,7 @@ int16_t nss_font_get_size(nss_font_t *font);
 nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd);
 nss_glyph_cache_t *nss_cache_reference(nss_glyph_cache_t *ref);
 void nss_free_cache(nss_glyph_cache_t *cache);
+void nss_cache_font_dim(nss_glyph_cache_t *cache, int16_t *w, int16_t *h, int16_t *d);
 nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_attrib_t face);
 #endif
 

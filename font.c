@@ -6,6 +6,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,6 +44,9 @@ struct nss_font {
 struct nss_glyph_cache {
     nss_font_t *font;
     _Bool lcd;
+    int16_t char_width;
+    int16_t char_height;
+    int16_t char_depth;
     size_t refc;
     nss_glyph_t *root;
 };
@@ -434,12 +438,34 @@ nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd) {
     cache->font = font;
     cache->lcd = lcd;
 
+    int16_t total = 0, maxd = 0, maxh = 0;
+    for (uint32_t i = ' '; i <= '~'; i++) {
+        nss_glyph_t *g = nss_cache_fetch(cache, i, nss_font_attrib_normal);
+
+        total += g->x_off;
+        maxd = MAX(maxd, g->height - g->y);
+        maxh = MAX(maxh, g->y);
+    }
+
+    cache->char_width = total / ('~' - ' ' + 1) + nss_config_integer(NSS_ICONFIG_FONT_SPACING);
+    cache->char_height = maxh;
+    cache->char_depth = maxd + nss_config_integer(NSS_ICONFIG_LINE_SPACING);
+
+    info("Font dim: width=%"PRId16", height=%"PRId16", depth=%"PRId16,
+            cache->char_width, cache->char_height, cache->char_depth);
+
     return cache;
 }
 
 nss_glyph_cache_t *nss_cache_reference(nss_glyph_cache_t *ref) {
     ref->refc++;
     return ref;
+}
+
+void nss_cache_font_dim(nss_glyph_cache_t *cache, int16_t *w, int16_t *h, int16_t *d) {
+    if (w) *w = cache->char_width;
+    if (h) *h = cache->char_height;
+    if (d) *d = cache->char_depth;
 }
 
 static void free_dfs(nss_glyph_t *n) {
@@ -465,7 +491,7 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_att
         else if (n->g > g) n = n->l;
         else return n;
     }
-    
+
     nss_glyph_t *new;
 #ifdef USE_BOXDRAWING
     if (is_boxdraw(ch) && nss_config_integer(NSS_ICONFIG_OVERRIDE_BOXDRAW))

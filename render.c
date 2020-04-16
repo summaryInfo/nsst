@@ -99,26 +99,11 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
 
     xcb_void_cookie_t c;
 
-    if (found_cache) {
+    if (found_cache)
         win->ren.cache = nss_cache_reference(found->ren.cache);
-        win->char_height = found->char_height;
-        win->char_depth = found->char_depth;
-        win->char_width = found->char_width;
-    } else {
+    else
         win->ren.cache = nss_create_cache(win->font, win->subpixel_fonts);
-        int16_t total = 0, maxd = 0, maxh = 0;
-        for (uint32_t i = ' '; i <= '~'; i++) {
-            nss_glyph_t *g = nss_cache_fetch(win->ren.cache, i, nss_font_attrib_normal);
-
-            total += g->x_off;
-            maxd = MAX(maxd, g->height - g->y);
-            maxh = MAX(maxh, g->y);
-        }
-
-        win->char_width = total / ('~' - ' ' + 1) + nss_config_integer(NSS_ICONFIG_FONT_SPACING);
-        win->char_height = maxh;
-        win->char_depth = maxd + nss_config_integer(NSS_ICONFIG_LINE_SPACING);
-    }
+    nss_cache_font_dim(win->ren.cache, &win->char_width, &win->char_height, &win->char_depth);
 
     win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
     win->ch = MAX(1, (win->height - 2*win->top_border) / (win->char_height + win->char_depth));
