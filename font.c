@@ -87,7 +87,7 @@ static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_pate
             index.u.i = 0;
         }
 
-        //info("Font file: %s:%d", file.u.s, index.u.i);
+        info("Font file: %s:%d", file.u.s, index.u.i);
         FT_Error err = FT_New_Face(global.library, (const char*)file.u.s, index.u.i, &faces->faces[faces->length]);
         if (err != FT_Err_Ok) {
             if (err == FT_Err_Unknown_File_Format) warn("Wrong font file format");
@@ -350,19 +350,21 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
         return nss_font_render_glyph(font, 0, attr, lcd);
     }
 
-    /*
-    info("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
-    info("Num grays: %d", face->glyph->bitmap.num_grays);
-    info("Glyph: %d %d", glyph->width, glyph->height);
-    size_t img_width = glyph->width;
-    if (lcd) img_width *= 3;
+    if(nss_config_integer(NSS_ICONFIG_LOG_LEVEL) == 4) {
 
-    for (size_t k = 0; k < glyph->height; k++) {
-        for (size_t m = 0 ;m < img_width; m++)
-            fprintf(stderr, "%02x", src[pitch*k+m]);
-        putc('\n', stderr);
+        debug("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
+        debug("Num grays: %d", face->glyph->bitmap.num_grays);
+        debug("Glyph: %d %d", glyph->width, glyph->height);
+        size_t img_width = glyph->width;
+        if (lcd) img_width *= 3;
+
+        for (size_t k = 0; k < glyph->height; k++) {
+            for (size_t m = 0 ;m < img_width; m++)
+                fprintf(stderr, "%02x", src[pitch*k+m]);
+            putc('\n', stderr);
+        }
     }
-    */
+
     nss_font_glyph_mark_loaded(font, ch);
 
     return glyph;

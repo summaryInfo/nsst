@@ -11,43 +11,59 @@
 #include "config.h"
 
 _Noreturn void die(const char *fmt, ...) {
-    va_list args;
-
-    va_start(args, fmt);
-    fputs("[\e[31;1mFATAL\e[0m] ", stderr);
-    vfprintf(stderr, fmt, args);
-    fputc('\n', stderr);
-    va_end(args);
-
+    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0) {
+        va_list args;
+        va_start(args, fmt);
+        fputs("[\e[31;1mFATAL\e[0m] ", stderr);
+        vfprintf(stderr, fmt, args);
+        fputc('\n', stderr);
+        va_end(args);
+    }
     exit(EXIT_FAILURE);
 }
 
 void fatal(const char *fmt, ...) {
-    va_list args;
-
-    va_start(args, fmt);
-    fputs("[\e[31;1mFATAL\e[0m] ", stderr);
-    vfprintf(stderr, fmt, args);
-    fputc('\n', stderr);
-    va_end(args);
+    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0) {
+        va_list args;
+        va_start(args, fmt);
+        fputs("[\e[31;1mFATAL\e[0m] ", stderr);
+        vfprintf(stderr, fmt, args);
+        fputc('\n', stderr);
+        va_end(args);
+    }
 }
 
 void warn(const char *fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    fputs("[\e[33;1mWARN\e[0m] ", stderr);
-    vfprintf(stderr, fmt, args);
-    fputc('\n', stderr);
-    va_end(args);
+    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 1) {
+        va_list args;
+        va_start(args, fmt);
+        fputs("[\e[33;1mWARN\e[0m] ", stderr);
+        vfprintf(stderr, fmt, args);
+        fputc('\n', stderr);
+        va_end(args);
+    }
 }
 
 void info(const char *fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    fputs("[\e[32;1mINFO\e[0m] ", stderr);
-    vfprintf(stderr, fmt, args);
-    fputc('\n', stderr);
-    va_end(args);
+    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 2) {
+        va_list args;
+        va_start(args, fmt);
+        fputs("[\e[32;1mINFO\e[0m] ", stderr);
+        vfprintf(stderr, fmt, args);
+        fputc('\n', stderr);
+        va_end(args);
+    }
+}
+
+void debug(const char *fmt, ...) {
+    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 3) {
+        va_list args;
+        va_start(args, fmt);
+        fputs("[DEBUG] ", stderr);
+        vfprintf(stderr, fmt, args);
+        fputc('\n', stderr);
+        va_end(args);
+    }
 }
 
 

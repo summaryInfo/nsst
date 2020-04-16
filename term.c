@@ -762,7 +762,9 @@ static inline void term_esc_start_string(nss_term_t *term) {
     term->esc.old_state = 0;
 }
 
-static void term_esc_dump(nss_term_t *term) {
+static void term_esc_dump(nss_term_t *term, _Bool use_info) {
+    if (use_info && nss_config_integer(NSS_ICONFIG_LOG_LEVEL) < 3) return;
+
     char buf[ESC_DUMP_MAX] = "^[";
     size_t pos = 2;
     switch(term->esc.state) {
@@ -805,7 +807,10 @@ static void term_esc_dump(nss_term_t *term) {
             return;
     }
     buf[pos] = 0;
-    warn("%s", buf);
+    if (use_info)
+        info("%s", buf);
+    else
+        warn("%s", buf);
 }
 
 static void term_load_config(nss_term_t *term) {
@@ -1043,12 +1048,13 @@ static void term_dispatch_dsr(nss_term_t *term) {
 
 static void term_dispatch_dcs(nss_term_t *term) {
     /* yet nothing here */
-    term_esc_dump(term);
+    term_esc_dump(term, 0);
 
     term->esc.state = esc_ground;
 }
 
 static void term_dispatch_osc(nss_term_t *term) {
+    term_esc_dump(term, 1);
     switch (term->esc.selector) {
         uint32_t args[2];
     case 0: /* Change window icon name and title */
@@ -1057,7 +1063,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         if (term->mode & nss_tm_title_set_hex) {
             uint8_t *end = hex_decode(term->esc.str);
             if (*(end + (end - term->esc.str))) {
-                term_esc_dump(term);
+                term_esc_dump(term, 0);
                 break;
             } else *end = '\0';
         }
@@ -1106,20 +1112,20 @@ static void term_dispatch_osc(nss_term_t *term) {
                 if (col) term->palette[idx] = col;
                 else if (parg[0] == '?' && parg[1] == '\0')
                     term_answerback(term, "\2354;#%06X\234", term->palette[idx] & 0x00FFFFFF);
-                else term_esc_dump(term);
+                else term_esc_dump(term, 0);
             }
             pstr = pnext + 1;
         }
         if (pstr < pend && !pnext) {
             for (size_t i = 0; i < term->esc.si; i++)
                 if (!term->esc.str[i]) term->esc.str[i] = ';';
-            term_esc_dump(term);
+            term_esc_dump(term, 0);
         }
         break;
     }
     case 5: /* Set special color */
     case 6: /* Enable/disable special color */
-        term_esc_dump(term);
+        term_esc_dump(term, 0);
         break;
     case 10: /* Set VT100 foreground color */ {
         nss_color_t col = parse_color(term->esc.str, term->esc.str + term->esc.si);
@@ -1128,7 +1134,7 @@ static void term_dispatch_osc(nss_term_t *term) {
                 term->palette[NSS_SPECIAL_BG] = col;
                 nss_window_set(term->win, nss_wc_background, &col);
             } else term->palette[NSS_SPECIAL_FG] = col;
-        } else term_esc_dump(term);
+        } else term_esc_dump(term, 0);
         break;
     }
     case 11: /* Set VT100 background color */ {
@@ -1144,7 +1150,7 @@ static void term_dispatch_osc(nss_term_t *term) {
                 term->palette[NSS_SPECIAL_CURSOR_FG] = term->palette[NSS_SPECIAL_FG] = col;
                 nss_window_set(term->win, nss_wc_cursor_foreground, &col);
             }
-        } else term_esc_dump(term);
+        } else term_esc_dump(term, 0);
         break;
     }
     case 12: /* Set Cursor color */ {
@@ -1154,7 +1160,7 @@ static void term_dispatch_osc(nss_term_t *term) {
                 term->palette[NSS_SPECIAL_CURSOR_FG] = col;
                 nss_window_set(term->win, nss_wc_cursor_foreground, &col);
             } else term->palette[NSS_SPECIAL_CURSOR_BG] = col;
-        } else term_esc_dump(term);
+        } else term_esc_dump(term, 0);
         break;
     }
     case 13: /* Set Mouse foreground color */
@@ -1163,7 +1169,7 @@ static void term_dispatch_osc(nss_term_t *term) {
     case 19: /* Set Highlight foreground color */
     case 50: /* Set Font */
     case 52: /* Manipulate selecion data */
-        term_esc_dump(term);
+        term_esc_dump(term, 0);
         break;
     case 104: /* Reset color */ {
         if (term->esc.si) {
@@ -1174,7 +1180,7 @@ static void term_dispatch_osc(nss_term_t *term) {
                 unsigned long idx = strtoul(pstr, &s_end, 10);
                 if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
                     term->palette[idx] = nss_config_color(NSS_CCONFIG_COLOR_0 + idx);
-                } else term_esc_dump(term);
+                } else term_esc_dump(term, 0);
                 pstr = pnext + 1;
             }
         } else {
@@ -1185,7 +1191,7 @@ static void term_dispatch_osc(nss_term_t *term) {
     }
     case 105: /* Reset special color */
     case 106: /* Enable/disable special color */
-        term_esc_dump(term);
+        term_esc_dump(term, 0);
         break;
     case 110: /*Reset  VT100 foreground color */
         if (!(term->mode & nss_tm_reverse_video)) {
@@ -1214,14 +1220,14 @@ static void term_dispatch_osc(nss_term_t *term) {
     case 114: /*Reset  Mouse background color */
     case 117: /*Reset  Highlight background color */
     case 119: /*Reset  Highlight foreground color */
-        term_esc_dump(term);
+        term_esc_dump(term, 0);
         break;
     case 13001: {
         char *end = (char *)term->esc.str;
         errno = 0;
         unsigned long res = strtoul(end, &end, 10);
         if (res > 255 || errno || *end) {
-            term_esc_dump(term);
+            term_esc_dump(term, 0);
             break;
         }
         term->palette[NSS_SPECIAL_BG] &= 0x00FFFFFF;
@@ -1230,7 +1236,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         break;
     }
     default:
-        term_esc_dump(term);
+        term_esc_dump(term, 0);
     }
 
     term->esc.state = esc_ground;
@@ -1254,7 +1260,7 @@ static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) 
                 wrong |= term->esc.param[arg + i] > 255;
                 col = (col << 8) + MIN(MAX(0, term->esc.param[arg + i]), 0xFF);
             }
-            if (wrong) term_esc_dump(term);
+            if (wrong) term_esc_dump(term, 0);
             if (foreground) {
                 term->c.cel.fg = 0xFFFF;
                 term->c.fg = col;
@@ -1269,13 +1275,13 @@ static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) 
                     term->c.cel.fg = term->esc.param[arg + 1];
                 else
                     term->c.cel.bg = term->esc.param[arg + 1];
-            } else term_esc_dump(term);
+            } else term_esc_dump(term, 0);
             if (!subpars) argc = MIN(argc, 2);
         } else {
             if (!subpars) argc = MIN(argc, 1);
-             term_esc_dump(term);
+             term_esc_dump(term, 0);
          }
-    } else term_esc_dump(term);
+    } else term_esc_dump(term, 0);
     return argc;
 }
 
@@ -1376,7 +1382,7 @@ static void term_dispatch_sgr(nss_term_t *term) {
             term->c.cel.bg = p - 100;
             break;
         default:
-            term_esc_dump(term);
+            term_esc_dump(term, 0);
         }
     }
 }
@@ -1488,7 +1494,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 break;
             case 69: /* DECLRMM */ //TODO
                 CHK_VT(4);
-                term_esc_dump(term);
+                term_esc_dump(term, 0);
                 break;
             //case 80: /* DECSDM */ //TODO SIXEL
             //    break;
@@ -1591,7 +1597,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             //case 2004: /* Bracketed paste */ //TODO Selections
             //    break;
             default:
-                term_esc_dump(term);
+                term_esc_dump(term, 0);
             }
         }
     } else {
@@ -1612,7 +1618,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 ENABLE_IF(set, term->mode, nss_tm_crlf);
                 break;
             default:
-                term_esc_dump(term);
+                term_esc_dump(term, 0);
             }
         }
     }
@@ -1668,7 +1674,7 @@ static void term_dispatch_mc(nss_term_t *term) {
             term_print_screen(term, 1);
             break;
         default:
-            term_esc_dump(term);
+            term_esc_dump(term, 0);
         }
     } else {
         switch(PARAM(0, 0)) {
@@ -1682,7 +1688,7 @@ static void term_dispatch_mc(nss_term_t *term) {
             term->mode |= nss_tm_print_enabled;
             break;
         default:
-            term_esc_dump(term);
+            term_esc_dump(term, 0);
         }
 
     }
@@ -1706,14 +1712,13 @@ static void term_dispatch_tmode(nss_term_t *term, _Bool set) {
             ENABLE_IF(set, term->mode, nss_tm_title_query_utf8);
             break;
         default:
-            term_esc_dump(term);
+            term_esc_dump(term, 0);
         }
     }
 }
 
 static void term_dispatch_csi(nss_term_t *term) {
-    //DUMP
-    //term_esc_dump(term);
+    term_esc_dump(term, 1);
 
     // Only SGR is allowed to have subparams
     if (term->esc.subpar_mask && term->esc.selector != C('m')) return;
@@ -1777,7 +1782,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         case 3:
             /* UNIMPLEMENTED - Erase scrollback, xterm */
         default:
-            term_esc_dump(term);
+            term_esc_dump(term, 0);
         }
         term_move_to(term, term->c.x, term->c.y);
         break;
@@ -1802,7 +1807,7 @@ static void term_dispatch_csi(nss_term_t *term) {
             erase(term, 0, term->c.y, term->width, term->c.y + 1);
             break;
         default:
-            term_esc_dump(term);
+            term_esc_dump(term, 0);
         }
         term_move_to(term, term->c.x, term->c.y);
         break;
@@ -2004,7 +2009,7 @@ static void term_dispatch_csi(nss_term_t *term) {
             term->mode &= ~nss_tm_8bit;
             break;
         default:
-            term_esc_dump(term);
+            term_esc_dump(term, 0);
         }
         break;
     case C('q') | I0('"'): /* DECSCA */
@@ -2069,7 +2074,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     //case C('|') | I0('*'): /* DECSNLS */
     //    break;
     default:
-        term_esc_dump(term);
+        term_esc_dump(term, 0);
     }
 
     term->esc.state = esc_ground;
@@ -2150,9 +2155,8 @@ static enum nss_char_set parse_nrcs(param_t selector, _Bool is96, uint16_t vt_le
 }
 
 static void term_dispatch_esc(nss_term_t *term) {
-    //DUMP
-    //if (term->esc.selector != E('['))
-    //    term_esc_dump(term);
+    if (term->esc.selector != E('['))
+        term_esc_dump(term, 1);
 
     switch(term->esc.selector) {
     case E('D'): /* IND */
@@ -2239,23 +2243,23 @@ static void term_dispatch_esc(nss_term_t *term) {
         term_set_tb_margins(term, 0, term->bottom);
         break;
     case E('n'): /* LS2 */
-        term_esc_dump(term);
+        term_esc_dump(term, 0);
         term->c.gl = term->c.gl_ss = 2;
         break;
     case E('o'): /* LS3 */
-        term_esc_dump(term);
+        term_esc_dump(term, 0);
         term->c.gl = term->c.gl_ss = 3;
         break;
     case E('|'): /* LS3R */
-        term_esc_dump(term);
+        term_esc_dump(term, 0);
         term->c.gr = 3;
         break;
     case E('}'): /* LS2R */
-        term_esc_dump(term);
+        term_esc_dump(term, 0);
         term->c.gr = 2;
         break;
     case E('~'): /* LS1R */
-        term_esc_dump(term);
+        term_esc_dump(term, 0);
         term->c.gr = 1;
         break;
     case E('F') | I0(' '): /* S7C1T */
@@ -2318,7 +2322,7 @@ static void term_dispatch_esc(nss_term_t *term) {
             // If we got unknown C1
             if (term->esc.state == esc_ground)
                 term->esc.state = esc_esc_entry;
-            term_esc_dump(term);
+            term_esc_dump(term, 0);
         }
     }
     }
@@ -2327,8 +2331,7 @@ static void term_dispatch_esc(nss_term_t *term) {
 }
 
 static void term_dispatch_c0(nss_term_t *term, tchar_t ch) {
-    // DUMP
-    // if (ch != 0x1B) warn("^%c", ch ^ 0x40);
+    if (ch != 0x1B) debug("^%c", ch ^ 0x40);
 
     switch (ch) {
     case 0x00: /* NUL (IGNORE) */
@@ -2660,8 +2663,7 @@ static void term_putchar(nss_term_t *term, tchar_t ch) {
             if (width < 0) /*ch = UTF_INVAL,*/ width = 1;
             else if (width == 0) return;
 
-            //DUMP
-            //info("%c (%u)", ch, ch);
+            info("%c (%u)", ch, ch);
 
             if (term->mode & nss_tm_wrap) {
                 if (term->c.x + width > term->width) {

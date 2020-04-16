@@ -5,6 +5,8 @@
 
 #define _POSIX_C_SOURCE 200809L
 
+#include "features.h"
+
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -24,10 +26,11 @@ typedef struct nss_rect {
     uint16_t height;
 } nss_rect_t;
 
-_Noreturn void die(const char *fmt, ...);
-void warn(const char *fmt, ...);
+void debug(const char *fmt, ...);
 void info(const char *fmt, ...);
+void warn(const char *fmt, ...);
 void fatal(const char *fmt, ...);
+_Noreturn void die(const char *fmt, ...);
 
 inline static nss_rect_t rect_scale_up(nss_rect_t rect, coord_t x_factor, coord_t y_factor) {
     rect.x *= x_factor;

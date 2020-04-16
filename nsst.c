@@ -48,6 +48,7 @@ static struct optmap_item {
     {"keyboard-mapping", "\t(Initial keyboad mapping)", NSS_ICONFIG_INPUT_MAPPING},
     {"line-spacing", "\t\t(Additional lines vertical spacing)", NSS_ICONFIG_LINE_SPACING},
     {"lock-keyboard", "\t\t(Disable keyboad input)", NSS_ICONFIG_INPUT_LOCK},
+    {"log-level","\t\t(Filering level of logged information)", NSS_ICONFIG_LOG_LEVEL},
     {"meta-sends-escape", "\t(Alt/Meta sends escape prefix instead of setting 8-th bit)", NSS_ICONFIG_INPUT_META_IS_ESC},
     {"modify-cursor", "\t\t(Enable encoding modifiers for cursor keys)", NSS_ICONFIG_INPUT_MODIFY_CURSOR},
     {"modify-function", "\t(Enable encoding modifiers for function keys)", NSS_ICONFIG_INPUT_MODIFY_FUNCTION},
@@ -86,20 +87,22 @@ static int optmap_cmp(const void *a, const void *b) {
 
 
 static _Noreturn void usage(char *argv0, int code) {
-    fprintf(stderr, "%s%s", argv0, " [-options] [-e] [command [args]]\n"
-        "Features: nsst"
+    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) == 0 && code != EXIT_SUCCESS) {
+        fprintf(stderr, "%s%s", argv0, " [-options] [-e] [command [args]]\n"
+            "Features: nsst"
 #ifdef USE_PPOLL
-        "+ppoll"
+            "+ppoll"
 #endif
 #ifdef USE_BOXDRAWING
-        "+boxdrawing"
+            "+boxdrawing"
 #endif
-        "\nWhere options are:\n"
-            "\t--geometry=<value>, -g[=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>] (Window geometry)\n"
-            "\t--help, -h\t\t\t(Print this message and exit)\n"
-            "\t--version, -v\t\t\t(Print version and exit)\n");
-    for (size_t i = 0; i < sizeof(map)/sizeof(map[0]); i++)
-        fprintf(stderr, "\t--%s=<value>%s\n", map[i].name, map[i].descr);
+            "\nWhere options are:\n"
+                "\t--geometry=<value>, -g[=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>] (Window geometry)\n"
+                "\t--help, -h\t\t\t(Print this message and exit)\n"
+                "\t--version, -v\t\t\t(Print version and exit)\n");
+        for (size_t i = 0; i < sizeof(map)/sizeof(map[0]); i++)
+            fprintf(stderr, "\t--%s=<value>%s\n", map[i].name, map[i].descr);
+    }
     nss_free_context();
     exit(code);
 }
