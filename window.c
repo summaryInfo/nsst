@@ -5,7 +5,7 @@
 #include "features.h"
 
 #ifdef USE_PPOLL
-#	define _GNU_SOURCE
+#   define _GNU_SOURCE
 #endif
 
 #include <errno.h>
@@ -26,7 +26,7 @@
 #include <xkbcommon/xkbcommon-x11.h>
 
 #ifdef USE_BOXDRAWING
-#	include "boxdraw.h"
+#   include "boxdraw.h"
 #endif
 #include "config.h"
 #include "font.h"
@@ -1647,7 +1647,7 @@ void nss_context_run(void) {
     int64_t next_timeout = SEC/nss_config_integer(NSS_ICONFIG_FPS);
     for (;;) {
 #ifdef USE_PPOLL
-		struct timespec ppoll_timeout = { .tv_sec = 0, .tv_nsec = next_timeout};
+        struct timespec ppoll_timeout = { .tv_sec = 0, .tv_nsec = next_timeout};
         if (ppoll(con.pfds, con.pfdcap, &ppoll_timeout, NULL) < 0 && errno != EINTR)
 #else
         if (poll(con.pfds, con.pfdcap, next_timeout/(SEC/1000)) < 0 && errno != EINTR)
@@ -1827,7 +1827,7 @@ void nss_context_run(void) {
                 win->last_blink = cur;
             }
 
-			int64_t frame_time = SEC/nss_config_integer(NSS_ICONFIG_FPS);
+            int64_t frame_time = SEC/nss_config_integer(NSS_ICONFIG_FPS);
             if (TIMEDIFF(win->last_scroll, cur) < frame_time/2) frame_time += frame_time/2;
             int64_t remains = (frame_time - TIMEDIFF(win->last_draw, cur));
 
