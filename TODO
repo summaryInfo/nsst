@@ -23,7 +23,6 @@ Input
 Render
     Double width/height, Down-Line-Loadable fonts
         DECDLD
-    (?) Box drawing characters -- draw them manually to make pixel-prefect
     Add options to select width of ambigues characters
     Combining characters support
     (?) Add fallback fonts support back

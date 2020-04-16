@@ -57,6 +57,7 @@ enum nss_config_opt {
     NSS_ICONFIG_SKIP_CONFIG_FILE,
     NSS_ICONFIG_KEYBOARD_NRCS,
     NSS_ICONFIG_ALLOW_NRCS,
+    NSS_ICONFIG_OVERRIDE_BOXDRAW,
 
     // These can't be read with nss_config_integer
     // Use nss_config_input_mode to get the copy of the whole structure

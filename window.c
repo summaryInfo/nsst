@@ -19,6 +19,7 @@
 #include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
+#include "boxdraw.h"
 #include "config.h"
 #include "font.h"
 #include "input.h"
@@ -404,6 +405,7 @@ void load_params(void) {
             {"modkeyAllowKeypad", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
             {"modkeyAllowMisc", NSS_ICONFIG_INPUT_MALLOW_MISC},
             {"numlock", NSS_ICONFIG_INPUT_NUMLOCK},
+            {"overrideBoxdraw", NSS_ICONFIG_OVERRIDE_BOXDRAW},
             {"printer", NSS_SCONFIG_PRINTER},
             {"scrollOnInput", NSS_ICONFIG_SCROLL_ON_INPUT},
             {"scrollOnOutput", NSS_ICONFIG_SCROLL_ON_OUTPUT},
@@ -928,7 +930,12 @@ static void push_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *pale
 
     if (!nss_font_glyph_is_loaded(win->font, cell.ch)) {
         for (size_t j = 0; j < nss_font_attrib_max; j++) {
-            nss_glyph_t *glyph = nss_font_render_glyph(win->font, cell.ch, j, win->subpixel_fonts);
+            nss_glyph_t *glyph;
+            if (is_boxdraw(cell.ch) && nss_config_integer(NSS_ICONFIG_OVERRIDE_BOXDRAW)) {
+                glyph = nss_make_boxdraw(cell.ch, win->char_width, win->char_height, win->char_depth, win->subpixel_fonts);
+                nss_font_glyph_mark_loaded(win->font, cell.ch | (j << 24));
+            } else
+                glyph = nss_font_render_glyph(win->font, cell.ch, j, win->subpixel_fonts);
             //In case of non-monospace fonts
             glyph->x_off = win->char_width;
             register_glyph(win, cell.ch | (j << 24) , glyph);

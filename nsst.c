@@ -56,6 +56,7 @@ static struct optmap_item {
     {"modkey-allow-keypad", "\t(Allow modifing keypad keys)", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
     {"modkey-allow-misc", "\t(Allow modifing miscelleneous keys)", NSS_ICONFIG_INPUT_MALLOW_MISC},
     {"numlock", "\t\t(Initial numlock state)", NSS_ICONFIG_INPUT_NUMLOCK},
+    {"override-boxdraw", "\t(Use built-in box drawing characters)", NSS_ICONFIG_OVERRIDE_BOXDRAW},
     {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", NSS_SCONFIG_PRINTER},
     {"scroll-on-input", "\t(Scroll view to bottom on key press)", NSS_ICONFIG_SCROLL_ON_INPUT},
     {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", NSS_ICONFIG_SCROLL_ON_OUTPUT},

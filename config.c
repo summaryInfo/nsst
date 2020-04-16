@@ -55,7 +55,8 @@ static struct {
     [NSS_ICONFIG_DPI - NSS_ICONFIG_MIN] = {96, 96, 10, 10000},
     [NSS_ICONFIG_KEYBOARD_NRCS] = {nss_94cs_ascii, nss_94cs_ascii, 0, nss_nrcs_MAX},
     [NSS_ICONFIG_SKIP_CONFIG_FILE] = {0, 0, 0, 1},
-    [NSS_ICONFIG_ALLOW_NRCS] = {1, 1, 0, 1}
+    [NSS_ICONFIG_ALLOW_NRCS] = {1, 1, 0, 1},
+    [NSS_ICONFIG_OVERRIDE_BOXDRAW] = {0, 0, 0, 1},
 };
 
 static struct {
