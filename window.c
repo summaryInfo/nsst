@@ -2,6 +2,12 @@
 
 #define _POSIX_C_SOURCE 200809L
 
+#include "features.h"
+
+#ifdef USE_PPOLL
+#	define _GNU_SOURCE
+#endif
+
 #include <errno.h>
 #include <inttypes.h>
 #include <poll.h>
@@ -19,7 +25,9 @@
 #include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
-#include "boxdraw.h"
+#ifdef USE_BOXDRAWING
+#	include "boxdraw.h"
+#endif
 #include "config.h"
 #include "font.h"
 #include "input.h"
@@ -41,11 +49,6 @@
 #define CA(c) ((((c) >> 24) & 0xff) * 0x101)
 #define MAKE_COLOR(c) {.red=CR(c), .green=CG(c), .blue=CB(c), .alpha=CA(c)}
 
-//TODO Make them configurable
-#define FPS 60
-#define REDRAW_TIME (1000000/FPS)
-#define REDRAW_SCROLL_TIME 3*REDRAW_TIME/2
-#define SCROLL_DELAY REDRAW_TIME/2
 
 struct nss_shortcut {
     uint32_t ksym;
@@ -379,6 +382,7 @@ void load_params(void) {
             {"cursorShape", NSS_ICONFIG_CURSOR_SHAPE},
             {"cursorWidth",NSS_ICONFIG_CURSOR_WIDTH},
             {"deleteIsDelete", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
+            {"dpi",NSS_ICONFIG_DPI},
             {"enableAutowrap", NSS_ICONFIG_INIT_WRAP},
             {"enableReverseVideo", NSS_ICONFIG_REVERSE_VIDEO},
             {"fkeyIncrement", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
@@ -386,13 +390,13 @@ void load_params(void) {
             {"fontGamma",NSS_ICONFIG_GAMMA},
             {"fontSize",NSS_ICONFIG_FONT_SIZE},
             {"fontSpacing", NSS_ICONFIG_FONT_SPACING},
-            {"lineSpacing", NSS_ICONFIG_LINE_SPACING},
             {"fontSubpixel",NSS_ICONFIG_SUBPIXEL_FONTS},
-            {"dpi",NSS_ICONFIG_DPI},
+            {"fps", NSS_ICONFIG_FPS},
             {"hasMeta", NSS_ICONFIG_INPUT_HAS_META},
             {"horizontalBorder",NSS_ICONFIG_TOP_BORDER},
-            {"keyboardMapping", NSS_ICONFIG_INPUT_MAPPING},
             {"keyboardDialect", NSS_ICONFIG_KEYBOARD_NRCS},
+            {"keyboardMapping", NSS_ICONFIG_INPUT_MAPPING},
+            {"lineSpacing", NSS_ICONFIG_LINE_SPACING},
             {"lockKeyboard", NSS_ICONFIG_INPUT_LOCK},
             {"metaSendsEscape", NSS_ICONFIG_INPUT_META_IS_ESC},
             {"modifyCursor", NSS_ICONFIG_INPUT_MODIFY_CURSOR},
@@ -405,7 +409,9 @@ void load_params(void) {
             {"modkeyAllowKeypad", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
             {"modkeyAllowMisc", NSS_ICONFIG_INPUT_MALLOW_MISC},
             {"numlock", NSS_ICONFIG_INPUT_NUMLOCK},
-            {"overrideBoxdraw", NSS_ICONFIG_OVERRIDE_BOXDRAW},
+#ifdef USE_BOXDRAWING
+            {"overrideBoxdrawing", NSS_ICONFIG_OVERRIDE_BOXDRAW},
+#endif
             {"printer", NSS_SCONFIG_PRINTER},
             {"scrollOnInput", NSS_ICONFIG_SCROLL_ON_INPUT},
             {"scrollOnOutput", NSS_ICONFIG_SCROLL_ON_OUTPUT},
@@ -931,10 +937,12 @@ static void push_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *pale
     if (!nss_font_glyph_is_loaded(win->font, cell.ch)) {
         for (size_t j = 0; j < nss_font_attrib_max; j++) {
             nss_glyph_t *glyph;
+#ifdef USE_BOXDRAWING
             if (is_boxdraw(cell.ch) && nss_config_integer(NSS_ICONFIG_OVERRIDE_BOXDRAW)) {
                 glyph = nss_make_boxdraw(cell.ch, win->char_width, win->char_height, win->char_depth, win->subpixel_fonts);
                 nss_font_glyph_mark_loaded(win->font, cell.ch | (j << 24));
             } else
+#endif
                 glyph = nss_font_render_glyph(win->font, cell.ch, j, win->subpixel_fonts);
             //In case of non-monospace fonts
             glyph->x_off = win->char_width;
@@ -1340,7 +1348,7 @@ void nss_window_shift(nss_window_t *win, coord_t ys, coord_t yd, coord_t height,
     clock_gettime(CLOCK_MONOTONIC, &cur);
 
 
-    if (delay && TIMEDIFF(win->last_scroll, cur) <  SCROLL_DELAY/2) {
+    if (delay && TIMEDIFF(win->last_scroll, cur) <  SEC/2/nss_config_integer(NSS_ICONFIG_FPS)) {
         nss_term_damage(win->term, (nss_rect_t){ .x = 0, .y = yd, .width = win->cw, .height = height });
         win->last_scroll = cur;
         return;
@@ -1634,9 +1642,14 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
 
 /* Start window logic, handling all windows in context */
 void nss_context_run(void) {
-    int64_t next_timeout = REDRAW_TIME;
+    int64_t next_timeout = SEC/nss_config_integer(NSS_ICONFIG_FPS);
     for (;;) {
-        if (poll(con.pfds, con.pfdcap, next_timeout/1000) < 0 && errno != EINTR)
+#ifdef USE_PPOLL
+		struct timespec ppoll_timeout = { .tv_sec = 0, .tv_nsec = next_timeout};
+        if (ppoll(con.pfds, con.pfdcap, &ppoll_timeout, NULL) < 0 && errno != EINTR)
+#else
+        if (poll(con.pfds, con.pfdcap, next_timeout/(SEC/1000)) < 0 && errno != EINTR)
+#endif
             warn("Poll error: %s", strerror(errno));
         if (con.pfds[0].revents & POLLIN) {
             xcb_generic_event_t *event;
@@ -1802,7 +1815,7 @@ void nss_context_run(void) {
             }
         }
 
-        next_timeout = REDRAW_TIME;
+        next_timeout = SEC/nss_config_integer(NSS_ICONFIG_FPS);
         struct timespec cur;
         clock_gettime(CLOCK_MONOTONIC, &cur);
 
@@ -1813,17 +1826,18 @@ void nss_context_run(void) {
                 win->last_blink = cur;
             }
 
-            int64_t frame_time = (TIMEDIFF(win->last_scroll, cur) < SCROLL_DELAY) ? REDRAW_SCROLL_TIME : REDRAW_TIME;
+			int64_t frame_time = SEC/nss_config_integer(NSS_ICONFIG_FPS);
+            if (TIMEDIFF(win->last_scroll, cur) < frame_time/2) frame_time += frame_time/2;
             int64_t remains = (frame_time - TIMEDIFF(win->last_draw, cur));
 
-            if (remains/1000 <= 0 || win->force_redraw) {
+            if (remains/1000000 <= 0 || win->force_redraw) {
                 if (win->force_redraw)
                     redraw_borders(win, 1, 1);
                 nss_term_redraw_dirty(win->term, 1);
                 win->last_draw = cur;
                 win->force_redraw = 0;
                 win->blink_commited = 1;
-                remains = REDRAW_TIME;
+                remains = SEC/nss_config_integer(NSS_ICONFIG_FPS);
              }
             next_timeout = MIN(next_timeout,  remains);
         }

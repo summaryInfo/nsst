@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "config.h"
+#include "features.h"
 #include "util.h"
 #include "window.h"
 
@@ -39,6 +40,7 @@ static struct optmap_item {
     {"font-spacing", "\t\t(Additional spacing for individual symbols)", NSS_ICONFIG_FONT_SPACING},
     {"font-subpixel", "\t\t(Use subpixel rendering)",NSS_ICONFIG_SUBPIXEL_FONTS},
     {"force-dpi", "\t\t(DPI value for fonts)",NSS_ICONFIG_DPI},
+    {"fps", "\t\t(Window refresh rate)", NSS_ICONFIG_FPS},
     {"has-meta", "\t\t(Handle meta/alt)", NSS_ICONFIG_INPUT_HAS_META},
     {"horizontal-border", "\t(Top and bottom botders)",NSS_ICONFIG_TOP_BORDER},
     {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", NSS_ICONFIG_KEYBOARD_NRCS},
@@ -56,7 +58,9 @@ static struct optmap_item {
     {"modkey-allow-keypad", "\t(Allow modifing keypad keys)", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
     {"modkey-allow-misc", "\t(Allow modifing miscelleneous keys)", NSS_ICONFIG_INPUT_MALLOW_MISC},
     {"numlock", "\t\t(Initial numlock state)", NSS_ICONFIG_INPUT_NUMLOCK},
-    {"override-boxdraw", "\t(Use built-in box drawing characters)", NSS_ICONFIG_OVERRIDE_BOXDRAW},
+#ifdef USE_BOXDRAWING
+    {"override-boxdrawing", "\t(Use built-in box drawing characters)", NSS_ICONFIG_OVERRIDE_BOXDRAW},
+#endif
     {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", NSS_SCONFIG_PRINTER},
     {"scroll-on-input", "\t(Scroll view to bottom on key press)", NSS_ICONFIG_SCROLL_ON_INPUT},
     {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", NSS_ICONFIG_SCROLL_ON_OUTPUT},
@@ -81,7 +85,14 @@ static int optmap_cmp(const void *a, const void *b) {
 
 static _Noreturn void usage(char *argv0, int code) {
     fprintf(stderr, "%s%s", argv0, " [-options] [-e] [command [args]]\n"
-        "Where options are:\n"
+        "Features: nsst"
+#ifdef USE_PPOLL
+        "+ppoll"
+#endif
+#ifdef USE_BOXDRAWING
+        "+boxdrawing"
+#endif
+        "\nWhere options are:\n"
             "\t--geometry=<value>, -g[=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>] (Window geometry)\n"
             "\t--help, -h\t\t\t(Print this message and exit)\n"
             "\t--version, -v\t\t\t(Print version and exit)\n");
@@ -216,7 +227,7 @@ int main(int argc, char **argv) {
     // Enable UTF-8 support if it is UTF-8
     nss_config_set_integer(NSS_ICONFIG_UTF8, bset);
 
-	//Initialize graphical context
+    //Initialize graphical context
     for (char **opt = argv; *opt; opt++)
         if (!strcmp("--no-config-file", *opt))
             nss_config_set_integer(NSS_ICONFIG_SKIP_CONFIG_FILE, 1);

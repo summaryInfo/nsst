@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 
+#include "features.h"
 #include "input.h"
 #include "term.h"
 
@@ -57,7 +58,10 @@ enum nss_config_opt {
     NSS_ICONFIG_SKIP_CONFIG_FILE,
     NSS_ICONFIG_KEYBOARD_NRCS,
     NSS_ICONFIG_ALLOW_NRCS,
+#ifdef USE_BOXDRAWING
     NSS_ICONFIG_OVERRIDE_BOXDRAW,
+#endif
+    NSS_ICONFIG_FPS,
 
     // These can't be read with nss_config_integer
     // Use nss_config_input_mode to get the copy of the whole structure

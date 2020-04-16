@@ -38,13 +38,13 @@ $(PROG): $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
 
 
-font.o: util.h config.h window.h
-window.o: util.h config.h term.h input.h window.h boxdraw.h
-input.o: config.h util.h term.h input.h nrcs.h
-term.o: config.h util.h term.h input.h window.h nrcs.h
-nsst.o: config.h util.h term.h window.h
-util.o: util.h
-config.o: config.h util.h input.h
-boxdraw.o: font.h
+font.o: util.h config.h window.h features.h
+window.o: util.h config.h term.h input.h window.h boxdraw.h features.h
+input.o: config.h util.h term.h input.h nrcs.h features.h
+term.o: config.h util.h term.h input.h window.h nrcs.h features.h
+nsst.o: config.h util.h term.h window.h features.h
+util.o: util.h features.h
+config.o: config.h util.h input.h features.h
+boxdraw.o: font.h features.h
 
 .PHONY: all clean install install-strip uninstall force
