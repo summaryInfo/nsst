@@ -198,20 +198,30 @@ void nss_free_render_context() {
 }
 
 void nss_init_render_context() {
-    xcb_shm_query_version_cookie_t q = xcb_shm_query_version(con);
-    xcb_generic_error_t *er = NULL;
-    xcb_shm_query_version_reply_t *qr = xcb_shm_query_version_reply(con, q, &er);
-    if (er) free(er);
+    // That's kind of hack
+    // Try guessing if DISPLAY refers to localhost
 
-    if (qr) {
-        rctx.has_shm_pixmaps = qr->shared_pixmaps &&
-                qr->pixmap_format == XCB_IMAGE_FORMAT_Z_PIXMAP;
-        free(qr);
-    }
-    if (!(rctx.has_shm = qr && !er)) {
-        warn("MIT-SHM is not available");
-    }
+    char *display = getenv("DISPLAY");
+    char *local[] = { "localhost:", "127.0.0.1:", "unix:", };
+    _Bool localhost = display[0] == ':';
+    for (size_t i = 0; !localhost && i < sizeof(local)/sizeof(*local); i++)
+        localhost = local[i] == strstr(display, local[i]);
 
+    if (localhost) {
+        xcb_shm_query_version_cookie_t q = xcb_shm_query_version(con);
+        xcb_generic_error_t *er = NULL;
+        xcb_shm_query_version_reply_t *qr = xcb_shm_query_version_reply(con, q, &er);
+        if (er) free(er);
+
+        if (qr) {
+            rctx.has_shm_pixmaps = qr->shared_pixmaps &&
+                    qr->pixmap_format == XCB_IMAGE_FORMAT_Z_PIXMAP;
+            free(qr);
+        }
+        if (!(rctx.has_shm = qr && !er)) {
+            warn("MIT-SHM is not available");
+        }
+    }
 }
 
 static _Bool draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
