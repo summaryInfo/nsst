@@ -387,8 +387,9 @@ void load_params(void) {
             {"enableReverseVideo", NSS_ICONFIG_REVERSE_VIDEO},
             {"fkeyIncrement", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
             {"font", NSS_SCONFIG_FONT_NAME},
-            {"fontGamma",NSS_ICONFIG_GAMMA},
-            {"fontSize",NSS_ICONFIG_FONT_SIZE},
+            {"fontGamma", NSS_ICONFIG_GAMMA},
+            {"fontSize", NSS_ICONFIG_FONT_SIZE},
+            {"fontSizeStep", NSS_ICONFIG_FONT_SIZE_STEP},
             {"fontSpacing", NSS_ICONFIG_FONT_SPACING},
             {"fontSubpixel",NSS_ICONFIG_SUBPIXEL_FONTS},
             {"fps", NSS_ICONFIG_FPS},
@@ -413,6 +414,7 @@ void load_params(void) {
             {"overrideBoxdrawing", NSS_ICONFIG_OVERRIDE_BOXDRAW},
 #endif
             {"printer", NSS_SCONFIG_PRINTER},
+            {"scrollAmout", NSS_ICONFIG_SCROLL_AMOUNT},
             {"scrollOnInput", NSS_ICONFIG_SCROLL_ON_INPUT},
             {"scrollOnOutput", NSS_ICONFIG_SCROLL_ON_OUTPUT},
             {"scrollbackSize", NSS_ICONFIG_HISTORY_LINES},
@@ -1609,21 +1611,21 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         win->inmode.allow_numlock = !win->inmode.allow_numlock;
         return;
     case nss_sa_scroll_up:
-        nss_term_scroll_view(win->term, -2); //TODO Amount configurable
+        nss_term_scroll_view(win->term, -nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));
         return;
     case nss_sa_scroll_down:
-        nss_term_scroll_view(win->term, 2);
+        nss_term_scroll_view(win->term, nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));
         return;
     case nss_sa_font_up:
-        arg = win->font_size + 1; // TODO Amount configurable
+        arg = win->font_size + nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
         nss_window_set(win, nss_wc_font_size, &arg);
         return;
     case nss_sa_font_down:
-        arg = win->font_size - 1;
+        arg = win->font_size - nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
         nss_window_set(win, nss_wc_font_size, &arg);
         return;
     case nss_sa_font_default:
-        arg = 0; // TODO Use config
+        arg = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
         nss_window_set(win, nss_wc_font_size, &arg);
         return;
     case nss_sa_font_subpixel:
@@ -1719,11 +1721,10 @@ void nss_context_run(void) {
                         break;
                     }
 
-                    if (evtype == nss_me_press &&
-                            !nss_term_is_altscreen(win->term) &&
-                            (button == 3 || button == 4) &&
-                            !mask) {
-                        nss_term_scroll_view(win->term, button == 3 ? 2 : -2);
+                    if (evtype == nss_me_press && !nss_term_is_altscreen(win->term) &&
+                            (button == 3 || button == 4) && !mask) {
+                        nss_term_scroll_view(win->term, (2 *(button == 3) - 1) *
+                                nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));
                     } else nss_term_mouse(win->term, x, y, mask, evtype, button);
                     break;
                 }

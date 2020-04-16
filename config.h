@@ -62,6 +62,8 @@ enum nss_config_opt {
     NSS_ICONFIG_OVERRIDE_BOXDRAW,
 #endif
     NSS_ICONFIG_FPS,
+    NSS_ICONFIG_SCROLL_AMOUNT,
+    NSS_ICONFIG_FONT_SIZE_STEP,
 
     // These can't be read with nss_config_integer
     // Use nss_config_input_mode to get the copy of the whole structure

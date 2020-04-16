@@ -60,6 +60,8 @@ static struct {
     [NSS_ICONFIG_OVERRIDE_BOXDRAW] = {0, 0, 0, 1},
 #endif
     [NSS_ICONFIG_FPS] = {60, 60, 1, 1000},
+    [NSS_ICONFIG_SCROLL_AMOUNT] = {2, 2, 1, 100},
+    [NSS_ICONFIG_FONT_SIZE_STEP] = {1, 1, 1, 250},
 };
 
 static struct {

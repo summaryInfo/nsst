@@ -37,6 +37,7 @@ static struct optmap_item {
     {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)", NSS_SCONFIG_FONT_NAME},
     {"font-gamma", "\t\t(Factor of sharpenning\t(king of hack))",NSS_ICONFIG_GAMMA},
     {"font-size", "\t\t(Font size in points)",NSS_ICONFIG_FONT_SIZE},
+    {"font-size-step", "\t\t(Font size step in points)",NSS_ICONFIG_FONT_SIZE_STEP},
     {"font-spacing", "\t\t(Additional spacing for individual symbols)", NSS_ICONFIG_FONT_SPACING},
     {"font-subpixel", "\t\t(Use subpixel rendering)",NSS_ICONFIG_SUBPIXEL_FONTS},
     {"force-dpi", "\t\t(DPI value for fonts)",NSS_ICONFIG_DPI},
@@ -62,6 +63,7 @@ static struct optmap_item {
     {"override-boxdrawing", "\t(Use built-in box drawing characters)", NSS_ICONFIG_OVERRIDE_BOXDRAW},
 #endif
     {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", NSS_SCONFIG_PRINTER},
+    {"scroll-amount", "\t\t(Number of lines scrolled in a time)", NSS_ICONFIG_SCROLL_AMOUNT},
     {"scroll-on-input", "\t(Scroll view to bottom on key press)", NSS_ICONFIG_SCROLL_ON_INPUT},
     {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", NSS_ICONFIG_SCROLL_ON_OUTPUT},
     {"scrollback-size", ", -H<value> (Number of saved lines)", NSS_ICONFIG_HISTORY_LINES},
