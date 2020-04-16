@@ -128,13 +128,6 @@ static void parse_geometry(char *arg, char *argv0) {
 static char **parse_options(int argc, char **argv) {
     size_t ind = 1;
 
-    // Load locale
-    setlocale(LC_ALL, "");
-    char *charset = nl_langinfo(CODESET);
-    _Bool bset = charset && !strcmp(charset, "UTF-8");
-    // Enable UTF-8 support if it is UTF-8
-    nss_config_set_integer(NSS_ICONFIG_UTF8, bset);
-
     char *arg;
     while (argv[ind] && argv[ind][0] == '-') {
         size_t cind = 0;
@@ -215,6 +208,15 @@ static char **parse_options(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+
+    // Load locale
+    setlocale(LC_ALL, "");
+    char *charset = nl_langinfo(CODESET);
+    _Bool bset = charset && !strcmp(charset, "UTF-8");
+    // Enable UTF-8 support if it is UTF-8
+    nss_config_set_integer(NSS_ICONFIG_UTF8, bset);
+
+	//Initialize graphical context
     for (char **opt = argv; *opt; opt++)
         if (!strcmp("--no-config-file", *opt))
             nss_config_set_integer(NSS_ICONFIG_SKIP_CONFIG_FILE, 1);
