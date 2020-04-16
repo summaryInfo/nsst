@@ -190,7 +190,7 @@ struct nss_context con;
 static _Bool check_void_cookie(xcb_void_cookie_t ck) {
     xcb_generic_error_t *err = xcb_request_check(con.con, ck);
     if (err) {
-        warn("X11 error: %"PRIu8" %"PRIu16" %"PRIu8, err->major_code, err->minor_code, err->error_code);
+        warn("[X11 Error] major=%"PRIu8", minor=%"PRIu16", error=%"PRIu8, err->major_code, err->minor_code, err->error_code);
         return 1;
     }
     free(err);
@@ -1746,6 +1746,11 @@ void nss_context_run(void) {
                 }
                 case XCB_DESTROY_NOTIFY: {
                    break;
+                }
+                case 0: {
+                    xcb_generic_error_t *err = (xcb_generic_error_t*)event;
+                    warn("[X11 Error] major=%"PRIu8", minor=%"PRIu16", error=%"PRIu8, err->major_code, err->minor_code, err->error_code);
+                    break;
                 }
                 default:
                     if (event->response_type == con.xkb_base_event) {
