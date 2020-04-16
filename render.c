@@ -265,15 +265,15 @@ static int rect_cmp(const void *a, const void *b) {
     return ((nss_rect_t*)a)->y - ((nss_rect_t*)b)->y;
 }
 
-static void optimize_bounds(nss_rect_t *bounds, size_t *boundc) {
+static void optimize_bounds(nss_rect_t *bounds, size_t *boundc, _Bool fine_grained) {
     qsort(bounds, *boundc, sizeof(nss_rect_t), rect_cmp);
     size_t j = 0;
     for(size_t i = 0; i < *boundc; ) {
         bounds[j] = bounds[i];
         while(++i < *boundc && (bounds[i].y <= bounds[j].y + bounds[j].height)) {
             nss_rect_t uni = rect_union(bounds[j], bounds[i]);
-            if (bounds[i].y >= bounds[j].y + bounds[j].height && 2*(bounds[j].height*bounds[j].width +
-                    bounds[i].height*bounds[i].width) > uni.width*uni.height) break;
+            if (fine_grained && bounds[i].y >= bounds[j].y + bounds[j].height &&
+                2*(bounds[j].height*bounds[j].width + bounds[i].height*bounds[i].width) > uni.width*uni.height) break;
             bounds[j] = uni;
         }
         j++;
@@ -374,12 +374,9 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
 
 
     if (win->ren.boundc) {
-        optimize_bounds(win->ren.bounds, &win->ren.boundc);
-        if (rctx.has_shm) {
-            for (size_t k = 0; k < win->ren.boundc; k++) {
-               nss_renderer_update(win, rect_scale_up(win->ren.bounds[k], win->char_width, win->char_depth + win->char_height));
-            }
-        } else nss_renderer_update(win, (nss_rect_t){0, 0, win->ren.im.width, win->ren.im.height});
+        optimize_bounds(win->ren.bounds, &win->ren.boundc, rctx.has_shm);
+        for (size_t k = 0; k < win->ren.boundc; k++)
+           nss_renderer_update(win, rect_scale_up(win->ren.bounds[k], win->char_width, win->char_depth + win->char_height));
         win->ren.boundc = 0;
     }
 }
@@ -399,7 +396,7 @@ void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
                 rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
     } else if (rctx.has_shm) {
         xcb_shm_put_image(con, win->wid, win->ren.gc, win->ren.im.width, win->ren.im.height, rect.x, rect.y, rect.width, rect.height,
-                rect.x + win->left_border, rect.y + win->top_border, 32, XCB_IMAGE_FORMAT_Z_PIXMAP, 0, win->ren.shm_seg, sizeof(nss_image_t));
+                rect.x + win->left_border, rect.y + win->top_border, 32, XCB_IMAGE_FORMAT_Z_PIXMAP, 0, win->ren.shm_seg, 0);
     } else {
         xcb_put_image(con, XCB_IMAGE_FORMAT_Z_PIXMAP, win->wid, win->ren.gc,
                 win->ren.im.width, rect.height, win->left_border,
@@ -425,7 +422,7 @@ void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy
 
     win->ren.bounds[win->ren.boundc++] = dst;
     if (win->ren.boundc > (size_t)win->ch)
-        optimize_bounds(win->ren.bounds, &win->ren.boundc);
+        optimize_bounds(win->ren.bounds, &win->ren.boundc, 0);
 
     /*
     xcb_copy_area(con, win->ren.pid, win->ren.pid, win->ren.gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
