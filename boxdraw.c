@@ -44,10 +44,10 @@ nss_glyph_t *nss_make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t
 
     glyph->y_off = glyph->x = 0;
     glyph->y = height;
-    glyph->height = height + depth; 
+    glyph->height = height + depth;
     glyph->x_off = glyph->width = width;
     glyph->stride = stride;
-    
+
     enum {
         NOC = 1 << 1, // No center
         CUR = 1 << 2, // Curved
@@ -109,8 +109,8 @@ nss_glyph_t *nss_make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t
     int16_t lw = MAX(w/8, 1), lw2 = MAX(lw/2, 1);
     int16_t mod, x0 = cw-lw+lw2, y0 = ch-lw+lw2;
     _Bool dt1 = desc & DT1, dt2 = desc & DT2, noc = desc & NOC, cur = desc & CUR;
-    _Bool td = desc & TD, bd = desc & BD, ld = desc & LD, rd = desc & RD;  
-    _Bool tl = desc & TL, bl = desc & BL, ll = desc & LL, rl = desc & RL;  
+    _Bool td = desc & TD, bd = desc & BD, ld = desc & LD, rd = desc & RD;
+    _Bool tl = desc & TL, bl = desc & BL, ll = desc & LL, rl = desc & RL;
 
     if (desc & BLK) {
         desc &= ~BLK;

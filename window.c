@@ -470,8 +470,6 @@ static void set_config(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *valu
     if (tag & nss_wc_mouse) win->mouse_events = *values++;
 }
 
-
-
 static void set_wm_props(nss_window_t *win) {
     uint32_t pid = getpid();
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom_net_wm_pid, XCB_ATOM_CARDINAL, 32, 1, &pid);
@@ -555,6 +553,7 @@ nss_window_t *nss_create_window(void) {
 
     if (ctx.pfdn + 1 > ctx.pfdcap) {
         struct pollfd *new = realloc(ctx.pfds, ctx.pfdcap + INIT_PFD_NUM);
+
         if (new) {
             for (size_t i = 0; i < INIT_PFD_NUM; i++) {
                 new[i + ctx.pfdn].fd = -1;
@@ -617,8 +616,6 @@ void nss_free_window(nss_window_t *win) {
     free(win->font_name);
     free(win);
 };
-
-
 
 static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right) {
         int16_t width = win->cw * win->char_width + win->left_border;
@@ -747,7 +744,6 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
         redraw_borders(win, 0, 1);
         //TIP: May be redraw all borders here
     }
-
 }
 
 static void handle_expose(nss_window_t *win, nss_rect_t damage) {

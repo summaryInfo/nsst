@@ -1,17 +1,17 @@
 Set WM_NORMAL_HINTS
 Selections:
-	X11 selection pasting
-   	Bracketed paste (Private mode 2004)
-	Visual selection (mouse and keyboard)
+    X11 selection pasting
+    Bracketed paste (Private mode 2004)
+    Visual selection (mouse and keyboard)
     X11 selection copying
-	OSC 52
-	Privite modes 1040, 1041, 1044
+    OSC 52
+    Privite modes 1040, 1041, 1044
 Window operations
-	--allow-window-ops/allowWindowOps
-	nss_window_dispatch_window_operation
-		It is simpler to implement window operations on window side
-		and express other window operations in terms of CSI t
-	
+    --allow-window-ops/allowWindowOps
+    nss_window_dispatch_window_operation
+        It is simpler to implement window operations on window side
+        and express other window operations in terms of CSI t
+
 ===================
 Input
     What if nss_term_read would be called recursively?

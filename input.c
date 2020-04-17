@@ -70,7 +70,7 @@ static inline _Bool is_ctrl_output(tchar_t ks) {
 }
 
 static inline _Bool is_xkb_ctrl(nss_key_t *k) {
-    // Detect if thats something like Ctrl-3 
+    // Detect if thats something like Ctrl-3
     // which gets translated to ESC by XKB
     return is_ctrl_output(k->utf32);
 }
@@ -133,7 +133,7 @@ static _Bool is_modify_others_allowed(nss_key_t *k, nss_input_mode_t mode) {
             res = 1;
             break;
         case XKB_KEY_ISO_Left_Tab:
-            res =  k->mask & (nss_mm_mod1 | nss_mm_control); 
+            res =  k->mask & (nss_mm_mod1 | nss_mm_control);
             break;
         case XKB_KEY_Return:
         case XKB_KEY_Tab:
@@ -207,7 +207,7 @@ static tchar_t fnkey_dec(tchar_t ks, _Bool is_fkey, nss_reply_t *reply) {
                 (XKB_KEY_F1 <= ks && ks <= XKB_KEY_F20) ?
                 values[ks - XKB_KEY_F1] : 42 + ks - XKB_KEY_F21;
     } else {
-        
+
         tchar_t p;
         switch (ks) {
         case XKB_KEY_Find: p = 1; break;
@@ -435,7 +435,7 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
     nss_input_mode_t mode = *nss_term_inmode(term);
 
     if (mode.keylock) return;
-    
+
     translate_adjust(&k, &mode);
 
     nss_reply_t reply = { 0 };
@@ -452,7 +452,7 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
 
 
     if (reply.final) { // Applied in one of fnkey_* functions
-        modify_cursor(param, (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode.delete_is_del)) ? 
+        modify_cursor(param, (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode.delete_is_del)) ?
                 mode.modkey_fn : mode.modkey_cursor, &reply);
         dump_reply(term, &reply);
     } else if (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode.delete_is_del)) {
@@ -462,7 +462,7 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
             return;
         } else if (mode.keyboard_mapping != nss_km_legacy && deccode - 11 <= 3) {
             reply.init = mode.keyboad_vt52 ? '\033' : '\217';
-            reply.final = deccode - 11 + 'P'; 
+            reply.final = deccode - 11 + 'P';
             reply.idx = 0;
             modify_cursor(param, mode.modkey_cursor, &reply);
         } else {
