@@ -2929,6 +2929,8 @@ void nss_term_resize(nss_term_t *term, coord_t width, coord_t height) {
 
     coord_t minh = MIN(height, term->height);
 
+    coord_t dx = width - term->width;
+    coord_t dy = height - term->height;
     term->width = width;
     term->height = height;
 
@@ -2967,6 +2969,12 @@ void nss_term_resize(nss_term_t *term, coord_t width, coord_t height) {
         nss_term_hang(term);
     }
 
+    // Damage screen
+
+    if (dy > 0) nss_term_damage(term, (nss_rect_t) { 0, term->height - dy,
+            MIN(term->width, term->width - dx), dy });
+    if (dx > 0) nss_term_damage(term, (nss_rect_t) { term->width - dx, 0,
+            dx, MAX(term->height, term->height - dy) });
 }
 
 void nss_term_focus(nss_term_t *term, _Bool focused) {
