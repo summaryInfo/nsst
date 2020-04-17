@@ -22,8 +22,6 @@ struct nss_render_context {
 
 nss_render_context_t rctx;
 
-/* WARNING: don't try to use shm image functions and normal image functions interchangeably */
-
 static void resize_bounds(nss_window_t *win, _Bool h_changed) {
     if (win->ren.bounds) {
         size_t j = 0;
@@ -82,6 +80,7 @@ static nss_image_t nss_create_image_shm(nss_window_t *win, int16_t width, int16_
 
         return im;
     error:
+        warn("Can't create image");
         if ((void *)im.data != (void *) -1) shmdt(im.data);
         if (im.shmid != -1U) shmctl(im.shmid, IPC_RMID, NULL);
 
@@ -288,6 +287,7 @@ static void optimize_bounds(nss_rect_t *bounds, size_t *boundc, _Bool fine_grain
         }
         j++;
     }
+    *boundc = j;
 }
 
 void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, coord_t cur_x, coord_t cur_y, _Bool cursor) {
@@ -430,9 +430,9 @@ void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy
     dst.width = (dst.width + dst.x + w - 1) / w;
     dst.width -= dst.x /= w;
 
-    win->ren.bounds[win->ren.boundc++] = dst;
-    if (win->ren.boundc > (size_t)win->ch)
+    if (win->ren.boundc + 1 > (size_t)win->ch)
         optimize_bounds(win->ren.bounds, &win->ren.boundc, 0);
+    win->ren.bounds[win->ren.boundc++] = dst;
 
     /*
     xcb_copy_area(con, win->ren.pid, win->ren.pid, win->ren.gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
