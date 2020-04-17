@@ -100,6 +100,7 @@ struct nss_term {
     uint8_t prev_mouse_button;
     coord_t prev_c_x;
     coord_t prev_c_y;
+    _Bool   prev_c_hidden;
 
     coord_t width;
     coord_t height;
@@ -444,7 +445,17 @@ void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
 void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
     if (!(term->mode & nss_tm_visible)) return;
 
-    cursor &= !term->view && !(term->mode & nss_tm_hide_cursor);
+    if (MIN(term->c.x, term->width - 1) != term->prev_c_x || term->c.y != term->prev_c_y) {
+        if (!(term->mode & nss_tm_hide_cursor) && !term->view)
+            term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
+        if (!term->prev_c_hidden)
+            term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
+    }
+
+    term->prev_c_x = MIN(term->c.x, term->width - 1);
+    term->prev_c_y = term->c.y;
+    term->prev_c_hidden = (term->mode & nss_tm_hide_cursor) || term->view;
+    cursor &= !term->prev_c_hidden;
     cursor &= !(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr & nss_attrib_drawn);
 
     nss_window_submit_screen(term->win, term->view, term->screen, term->palette, term->c.x, term->c.y, cursor);
@@ -2701,9 +2712,6 @@ static void term_putchar(nss_term_t *term, tchar_t ch) {
 static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool show_ctl) {
     const uint8_t *end = buf + len, *start = buf;
 
-    term->prev_c_x = MIN(term->c.x, term->width - 1);
-    term->prev_c_y = term->c.y;
-
     while (start < end) {
         tchar_t ch;
         // Try to handle unencoded C1 bytes even if UTF-8 is enabled
@@ -2721,11 +2729,6 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
             }
         }
         term_putchar(term, ch);
-    }
-
-    if (MIN(term->c.x, term->width - 1) != term->prev_c_x || term->c.y != term->prev_c_y) {
-        term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
-        term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
     }
 
     return start - buf;
