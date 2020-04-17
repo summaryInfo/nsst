@@ -59,7 +59,7 @@ typedef struct nss_line {
 typedef struct nss_input_mode nss_input_mode_t;
 typedef struct nss_term nss_term_t;
 
-nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, coord_t width, coord_t height);
+nss_term_t *nss_create_term(nss_window_t *win, coord_t width, coord_t height);
 void nss_free_term(nss_term_t *term);
 void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor);
 void nss_term_resize(nss_term_t *term, coord_t width, coord_t height);
@@ -72,6 +72,7 @@ void nss_term_scroll_view(nss_term_t *term, coord_t amount);
 ssize_t nss_term_read(nss_term_t *term);
 int nss_term_fd(nss_term_t *term);
 void nss_term_hang(nss_term_t *term);
+nss_input_mode_t *nss_term_inmode(nss_term_t *term);
 _Bool nss_term_is_altscreen(nss_term_t *term);
 _Bool nss_term_is_utf8(nss_term_t *term);
 _Bool nss_term_is_nrcs_enabled(nss_term_t *term);

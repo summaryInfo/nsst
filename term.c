@@ -171,7 +171,7 @@ struct nss_term {
     uint16_t vt_level;
 
     nss_window_t *win;
-    nss_input_mode_t *in_mode;
+    nss_input_mode_t inmode;
     nss_color_t *palette;
     pid_t child;
     int fd;
@@ -422,6 +422,10 @@ _Bool nss_term_is_utf8(nss_term_t *term) {
 
 _Bool nss_term_is_nrcs_enabled(nss_term_t *term) {
     return !!(term->mode & nss_tm_enable_nrcs);
+}
+
+nss_input_mode_t *nss_term_inmode(nss_term_t *term) {
+    return &term->inmode;
 }
 
 int nss_term_fd(nss_term_t *term) {
@@ -857,7 +861,7 @@ static void term_reset_margins(nss_term_t *term) {
 static void term_reset(nss_term_t *term, _Bool hard) {
 
     term->mode &= nss_tm_focused | nss_tm_visible;
-    *term->in_mode = nss_config_input_mode();
+    term->inmode = nss_config_input_mode();
 
     coord_t cx = term->c.x, cy = term->c.y;
 
@@ -906,13 +910,13 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term->esc.state = esc_ground;
 }
 
-nss_term_t *nss_create_term(nss_window_t *win, nss_input_mode_t *mode, coord_t width, coord_t height) {
+nss_term_t *nss_create_term(nss_window_t *win, coord_t width, coord_t height) {
     nss_term_t *term = calloc(1, sizeof(nss_term_t));
 
     term->palette = malloc(NSS_PALETTE_SIZE * sizeof(nss_color_t));
     term->win = win;
 
-    term->in_mode = mode;
+    term->inmode = nss_config_input_mode();
     term->mode = nss_tm_visible;
     term->printerfd = -1;
     term->scrollback_limit = nss_config_integer(NSS_ICONFIG_HISTORY_LINES);
@@ -999,7 +1003,7 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
              */
             term_answerback(term, "\x9B?%u;1;2;6%s;9;22c",
                     60 + term->vt_version/100,
-                    term->in_mode->keyboard_mapping == nss_km_vt220 ? ";8" : "");
+                    term->inmode.keyboard_mapping == nss_km_vt220 ? ";8" : "");
         }
     }
 }
@@ -1406,13 +1410,13 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             case 0: /* Default - nothing */
                 break;
             case 1: /* DECCKM */
-                term->in_mode->appcursor = set;
+                term->inmode.appcursor = set;
                 break;
             case 2: /* DECANM */
                 if (!set) {
                     term->vt52c = term->c;
                     term->vt52mode = term->mode;
-                    term->in_mode->keyboad_vt52 = 1;
+                    term->inmode.keyboad_vt52 = 1;
                     term->vt_level = 0;
                     term->c.gl_ss = term->c.gl = 0;
                     term->c.gr = 2,
@@ -1498,10 +1502,10 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 }
                 break;
             case 66: /* DECNKM */
-                term->in_mode->appkey = set;
+                term->inmode.appkey = set;
                 break;
             case 67: /* DECBKM */
-                term->in_mode->backspace_is_del = !set;
+                term->inmode.backspace_is_del = !set;
                 break;
             case 69: /* DECLRMM */ //TODO
                 CHK_VT(4);
@@ -1552,16 +1556,16 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 // IGNORE
                 break;
             case 1034: /* Interpret meta */
-                term->in_mode->has_meta = set;
+                term->inmode.has_meta = set;
                 break;
             case 1035: /* Numlock */
-                term->in_mode->allow_numlock = set;
+                term->inmode.allow_numlock = set;
                 break;
             case 1036: /* Meta sends escape */
-                term->in_mode->meta_escape = set;
+                term->inmode.meta_escape = set;
                 break;
             case 1037: /* Backspace is delete */
-                term->in_mode->backspace_is_del = set;
+                term->inmode.backspace_is_del = set;
                 break;
             case 1046: /* Allow altscreen */
                 ENABLE_IF(!set, term->mode, nss_tm_disable_altscreen);
@@ -1591,19 +1595,19 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                     nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
                 break;
             case 1051: /* SUN function keys */
-                term->in_mode->keyboard_mapping = set ? nss_km_sun : nss_km_default;
+                term->inmode.keyboard_mapping = set ? nss_km_sun : nss_km_default;
                 break;
             case 1052: /* HP function keys */
-                term->in_mode->keyboard_mapping = set ? nss_km_hp : nss_km_default;
+                term->inmode.keyboard_mapping = set ? nss_km_hp : nss_km_default;
                 break;
             case 1053: /* SCO function keys */
-                term->in_mode->keyboard_mapping = set ? nss_km_sco : nss_km_default;
+                term->inmode.keyboard_mapping = set ? nss_km_sco : nss_km_default;
                 break;
             case 1060: /* legacy xterm function keys */
-                term->in_mode->keyboard_mapping = set ? nss_km_legacy : nss_km_default;
+                term->inmode.keyboard_mapping = set ? nss_km_legacy : nss_km_default;
                 break;
             case 1061: /* vt220 function keys */
-                term->in_mode->keyboard_mapping = set ? nss_km_vt220 : nss_km_default;
+                term->inmode.keyboard_mapping = set ? nss_km_vt220 : nss_km_default;
                 break;
             //case 2004: /* Bracketed paste */ //TODO Selections
             //    break;
@@ -1617,7 +1621,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             case 0: /* Default - nothing */
                 break;
             case 2: /* KAM */
-                term->in_mode->keylock = set;
+                term->inmode.keylock = set;
                 break;
             case 4: /* IRM */
                 ENABLE_IF(set, term->mode, nss_tm_insert);
@@ -1893,35 +1897,35 @@ static void term_dispatch_csi(nss_term_t *term) {
         if (term->esc.i > 0 && term->esc.param[1] >= 0) {
             switch(p) {
             case 0:
-                term->in_mode->modkey_legacy_allow_keypad = PARAM(1, 0) & 1;
-                term->in_mode->modkey_legacy_allow_edit_keypad = PARAM(1, 0) & 2;
-                term->in_mode->modkey_legacy_allow_function = PARAM(1, 0) & 4;
-                term->in_mode->modkey_legacy_allow_misc = PARAM(1, 0) & 8;
+                term->inmode.modkey_legacy_allow_keypad = PARAM(1, 0) & 1;
+                term->inmode.modkey_legacy_allow_edit_keypad = PARAM(1, 0) & 2;
+                term->inmode.modkey_legacy_allow_function = PARAM(1, 0) & 4;
+                term->inmode.modkey_legacy_allow_misc = PARAM(1, 0) & 8;
                 break;
             case 1:
-                term->in_mode->modkey_cursor = PARAM(1, 0) + 1;
+                term->inmode.modkey_cursor = PARAM(1, 0) + 1;
                 break;
             case 2:
-                term->in_mode->modkey_fn = PARAM(1, 0) + 1;
+                term->inmode.modkey_fn = PARAM(1, 0) + 1;
                 break;
             case 3:
-                term->in_mode->modkey_keypad = PARAM(1, 0) + 1;
+                term->inmode.modkey_keypad = PARAM(1, 0) + 1;
                 break;
             case 4:
-                term->in_mode->modkey_other = PARAM(1, 0);
+                term->inmode.modkey_other = PARAM(1, 0);
                 break;
             }
         } else {
             if (inone || p == 0) {
-                term->in_mode->modkey_legacy_allow_keypad = mode.modkey_legacy_allow_keypad;
-                term->in_mode->modkey_legacy_allow_edit_keypad = mode.modkey_legacy_allow_edit_keypad;
-                term->in_mode->modkey_legacy_allow_function = mode.modkey_legacy_allow_function;
-                term->in_mode->modkey_legacy_allow_misc = mode.modkey_legacy_allow_misc;
+                term->inmode.modkey_legacy_allow_keypad = mode.modkey_legacy_allow_keypad;
+                term->inmode.modkey_legacy_allow_edit_keypad = mode.modkey_legacy_allow_edit_keypad;
+                term->inmode.modkey_legacy_allow_function = mode.modkey_legacy_allow_function;
+                term->inmode.modkey_legacy_allow_misc = mode.modkey_legacy_allow_misc;
             }
-            if (inone || p == 1) term->in_mode->modkey_cursor = mode.modkey_cursor;
-            if (inone || p == 2) term->in_mode->modkey_fn = mode.modkey_fn;
-            if (inone || p == 3) term->in_mode->modkey_keypad = mode.modkey_keypad;
-            if (inone || p == 4) term->in_mode->modkey_other = mode.modkey_other;
+            if (inone || p == 1) term->inmode.modkey_cursor = mode.modkey_cursor;
+            if (inone || p == 2) term->inmode.modkey_fn = mode.modkey_fn;
+            if (inone || p == 3) term->inmode.modkey_keypad = mode.modkey_keypad;
+            if (inone || p == 4) term->inmode.modkey_other = mode.modkey_other;
         }
         break;
     }
@@ -1931,15 +1935,15 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('n') | P('>'): /* Disable key modifires, xterm */ {
             param_t p = term->esc.param[0];
             if (p == 0) {
-                term->in_mode->modkey_legacy_allow_keypad = 0;
-                term->in_mode->modkey_legacy_allow_edit_keypad = 0;
-                term->in_mode->modkey_legacy_allow_function = 0;
-                term->in_mode->modkey_legacy_allow_misc = 0;
+                term->inmode.modkey_legacy_allow_keypad = 0;
+                term->inmode.modkey_legacy_allow_edit_keypad = 0;
+                term->inmode.modkey_legacy_allow_function = 0;
+                term->inmode.modkey_legacy_allow_misc = 0;
             }
-            if (p == 1) term->in_mode->modkey_cursor = 0;
-            if (p == 2) term->in_mode->modkey_fn = 0;
-            if (p == 3) term->in_mode->modkey_keypad = 0;
-            if (p == 4) term->in_mode->modkey_other = 0;
+            if (p == 1) term->inmode.modkey_cursor = 0;
+            if (p == 2) term->inmode.modkey_fn = 0;
+            if (p == 3) term->inmode.modkey_keypad = 0;
+            if (p == 4) term->inmode.modkey_other = 0;
             break;
     }
     case C('n') | P('?'): /* DECDSR */
@@ -2235,10 +2239,10 @@ static void term_dispatch_esc(nss_term_t *term) {
     //    CHK_VT(4);
     //    break;
     case E('='): /* DECKPAM */
-        term->in_mode->appkey = 1;
+        term->inmode.appkey = 1;
         break;
     case E('>'): /* DECKPNM */
-        term->in_mode->appkey = 0;
+        term->inmode.appkey = 0;
         break;
     case E('c'): /* RIS */
         term_reset(term, 1);
@@ -2419,7 +2423,7 @@ static void term_dispatch_vt52(nss_term_t *term, tchar_t ch) {
     switch (ch) {
     case '<':
         if (term->vt_version >= 100) {
-            term->in_mode->keyboad_vt52 = 0;
+            term->inmode.keyboad_vt52 = 0;
             term->vt_level = 1;
             term->mode = term->vt52mode;
             term->c.gl = term->vt52c.gl;
@@ -2432,10 +2436,10 @@ static void term_dispatch_vt52(nss_term_t *term, tchar_t ch) {
         }
         break;
     case '=':
-        term->in_mode->appkey = 1;
+        term->inmode.appkey = 1;
         break;
     case '>':
-        term->in_mode->appkey = 0;
+        term->inmode.appkey = 0;
         break;
     case 'A':
         term_move_to(term, term->c.x, term->c.y - 1);

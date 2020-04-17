@@ -4,10 +4,7 @@
 #define INPUT_H_ 1
 
 #include <xkbcommon/xkbcommon-keysyms.h>
-#include <xcb/xcb.h>
-
-#define NSS_M_ALL (0xff)
-#define NSS_M_TERM (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)
+#include <xkbcommon/xkbcommon.h>
 
 /* mod1 is alt
  * mod2 is numlock
@@ -85,6 +82,7 @@ typedef struct nss_key {
 } nss_key_t;
 
 typedef struct nss_term nss_term_t;
-void nss_handle_input(nss_key_t k, nss_input_mode_t mode, nss_term_t *term);
+void nss_handle_input(nss_key_t k, nss_term_t *term);
+nss_key_t nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode);
 
 #endif
