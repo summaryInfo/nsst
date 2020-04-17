@@ -1349,6 +1349,9 @@ void nss_window_shift(nss_window_t *win, coord_t ys, coord_t yd, coord_t height,
     struct timespec cur;
     clock_gettime(CLOCK_MONOTONIC, &cur);
 
+    ys = MAX(0, MIN(ys, win->ch));
+    yd = MAX(0, MIN(yd, win->ch));
+    height = MIN(height, MIN(win->ch - ys, win->ch - yd));
 
     if (delay && TIMEDIFF(win->last_scroll, cur) <  SEC/2/nss_config_integer(NSS_ICONFIG_FPS)) {
         nss_term_damage(win->term, (nss_rect_t){ .x = 0, .y = yd, .width = win->cw, .height = height });
@@ -1356,10 +1359,6 @@ void nss_window_shift(nss_window_t *win, coord_t ys, coord_t yd, coord_t height,
         return;
     }
     win->last_scroll = cur;
-
-    ys = MAX(0, MIN(ys, win->ch));
-    yd = MAX(0, MIN(yd, win->ch));
-    height = MIN(height, MIN(win->ch - ys, win->ch - yd));
 
     if (!height) return;
 

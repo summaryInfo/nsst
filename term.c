@@ -448,7 +448,7 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
     if (MIN(term->c.x, term->width - 1) != term->prev_c_x || term->c.y != term->prev_c_y) {
         if (!(term->mode & nss_tm_hide_cursor) && !term->view)
             term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
-        if (!term->prev_c_hidden)
+        if (!term->prev_c_hidden && term->prev_c_y < term->height && term->prev_c_x < term->width)
             term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
     }
 
