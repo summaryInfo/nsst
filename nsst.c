@@ -241,7 +241,7 @@ int main(int argc, char **argv) {
     const char **res = (const char **)parse_options(argc, argv);
     if (res) nss_config_set_argv(res);
 
-    nss_create_window(NULL, 0, NULL);
+    nss_create_window();
     nss_context_run();
     nss_free_context();
     return EXIT_SUCCESS;

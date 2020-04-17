@@ -772,7 +772,7 @@ static void set_wm_props(nss_window_t *win) {
 }
 
 /* Create new window */
-nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const uint32_t *values) {
+nss_window_t *nss_create_window(void) {
     nss_window_t *win = calloc(1, sizeof(nss_window_t));
     win->cursor_width = nss_config_integer(NSS_ICONFIG_CURSOR_WIDTH);
     win->underline_width = nss_config_integer(NSS_ICONFIG_UNDERLINE_WIDTH);
@@ -788,16 +788,13 @@ nss_window_t *nss_create_window(const char *font_name, nss_wc_tag_t tag, const u
 
     win->term_fd = -1;
     win->blink_time = nss_config_integer(NSS_ICONFIG_BLINK_TIME);
-    if (!font_name) font_name = nss_config_string(NSS_SCONFIG_FONT_NAME);
-    win->font_name = strdup(font_name);
+    win->font_name = strdup(nss_config_string(NSS_SCONFIG_FONT_NAME));
     if (!win->font_name) {
         nss_free_window(win);
         return NULL;
     }
     win->width = nss_config_integer(NSS_ICONFIG_WINDOW_WIDTH);
     win->height = nss_config_integer(NSS_ICONFIG_WINDOW_HEIGHT);
-
-    set_config(win, tag, values);
 
     xcb_void_cookie_t c;
 
@@ -1578,7 +1575,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         return;
     case nss_sa_new_window:
         arg = 0;
-        nss_create_window(NULL, 0, NULL);
+        nss_create_window();
         return;
     case nss_sa_none: break;
     }
