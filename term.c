@@ -897,8 +897,8 @@ static void term_reset(nss_term_t *term, _Bool hard) {
         term->scrollback = NULL;
         term->scrollback_size = 0;
 
-        nss_window_set_title(term->win, NULL);
-        nss_window_set_icon_name(term->win, NULL);
+        nss_window_set_title(term->win, NULL, term->mode & nss_tm_title_set_utf8);
+        nss_window_set_icon_name(term->win, NULL, term->mode & nss_tm_title_set_utf8);
 
         // Hmm?..
         // term->mode |= nss_tm_echo;
@@ -1103,11 +1103,11 @@ static void term_dispatch_osc(nss_term_t *term) {
             *dst = '\0';
             free(ds);
         }
-        // Input could be not UTF-8 but property always is UTF-8
+        // If it's not UTF-8, assume Latin-1
         if (term->esc.selector < 2)
-            nss_window_set_icon_name(term->win, (char *)term->esc.str);
+            nss_window_set_icon_name(term->win, (char *)term->esc.str, term->mode & nss_tm_utf8);
         if (term->esc.selector & 2)
-            nss_window_set_title(term->win, (char *)term->esc.str);
+            nss_window_set_title(term->win, (char *)term->esc.str, term->mode & nss_tm_utf8);
         break;
     case 4: /* Set color */ {
         char *pstr = (char *)term->esc.str, *pnext = NULL, *s_end;

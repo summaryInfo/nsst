@@ -581,16 +581,18 @@ void nss_init_context(void) {
     sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART}, NULL);
 }
 
-void nss_window_set_title(nss_window_t *win, const char *title) {
+void nss_window_set_title(nss_window_t *win, const char *title, _Bool utf8) {
     if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
-    xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_NAME, con.atom_utf8_string, 8, strlen(title), title);
-    xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, con.atom_net_wm_name, con.atom_utf8_string, 8, strlen(title), title);
+    xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid,
+            utf8 ? con.atom_net_wm_name : XCB_ATOM_WM_NAME,
+            utf8 ? con.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
-void nss_window_set_icon_name(nss_window_t *win, const char *title) {
+void nss_window_set_icon_name(nss_window_t *win, const char *title, _Bool utf8) {
     if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
-    xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_ICON_NAME, con.atom_utf8_string, 8, strlen(title), title);
-    xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid, con.atom_net_wm_icon_name, con.atom_utf8_string, 8, strlen(title), title);
+    xcb_change_property(con.con, XCB_PROP_MODE_REPLACE, win->wid,
+            utf8 ? con.atom_net_wm_icon_name : XCB_ATOM_WM_ICON_NAME,
+            utf8 ? con.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
 
@@ -826,7 +828,8 @@ nss_window_t *nss_create_window(void) {
     }
 
     set_wm_props(win);
-    nss_window_set_title(win, NULL);
+    nss_window_set_title(win, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
+    nss_window_set_icon_name(win, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
 
     if (!reload_font(win, 0)) {
         warn("Can't create window");
