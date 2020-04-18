@@ -10,4 +10,7 @@
 /* Ability to override box drawing characters */
 // #define USE_BOXDRAWING
 
+/* This should be defined in this branch */
+#define USE_X11SHM
+
 #endif

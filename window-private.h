@@ -1,13 +1,18 @@
 #ifndef WINDOW_PRIVATE_H_
 #define WINDOW_PRIVATE_H_ 1
 
+#include "features.h"
 #include "window.h"
 #include "term.h"
-#include "image.h"
+#ifdef USE_X11SHM
+#   include "image.h"
+#endif
 
 #include <inttypes.h>
 #include <xcb/xcb.h>
-#include <xcb/shm.h>
+#ifdef USE_X11SHM
+#   include <xcb/shm.h>
+#endif
 
 #define TRUE_COLOR_ALPHA_DEPTH 32
 
@@ -15,6 +20,7 @@ typedef struct nss_renderer nss_renderer_t;
 
 struct nss_renderer {
     xcb_gcontext_t gc;
+#ifdef USE_X11SHM
     xcb_shm_seg_t shm_seg;
     xcb_pixmap_t shm_pixmap;
 
@@ -24,6 +30,7 @@ struct nss_renderer {
     // It's size is 2*win->ch
     nss_rect_t *bounds;
     size_t boundc;
+#endif
 };
 
 struct nss_window {

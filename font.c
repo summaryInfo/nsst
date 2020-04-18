@@ -41,16 +41,6 @@ struct nss_font {
     nss_face_list_t face_types[nss_font_attrib_max];
 };
 
-struct nss_glyph_cache {
-    nss_font_t *font;
-    _Bool lcd;
-    int16_t char_width;
-    int16_t char_height;
-    int16_t char_depth;
-    size_t refc;
-    nss_glyph_t *root;
-};
-
 typedef struct nss_paterns_holder {
     size_t length;
     size_t caps;
@@ -294,8 +284,10 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     }
 
     nss_glyph_t *glyph = malloc(sizeof(*glyph) + stride * face->glyph->bitmap.rows);
+#ifdef USE_X11SHM
     glyph->g = ch | (attr << 24);
     glyph->p = glyph->r = glyph->l = NULL;
+#endif
     glyph->x = -face->glyph->bitmap_left;
     glyph->y = face->glyph->bitmap_top;
 
@@ -376,6 +368,18 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
 int16_t nss_font_get_size(nss_font_t *font) {
     return font->size;
 }
+
+#ifdef USE_X11SHM
+
+struct nss_glyph_cache {
+    nss_font_t *font;
+    _Bool lcd;
+    int16_t char_width;
+    int16_t char_height;
+    int16_t char_depth;
+    size_t refc;
+    nss_glyph_t *root;
+};
 
 static void rotate_left(nss_glyph_t **root, nss_glyph_t *n) {
     nss_glyph_t *r = n->r;
@@ -508,3 +512,5 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_att
     splay(&cache->root, new);
     return new;
 }
+
+#endif //USE_X11SHM

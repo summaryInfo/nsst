@@ -1,19 +1,25 @@
 #include "features.h"
+
 #ifdef USE_BOXDRAWING
 #   include "boxdraw.h"
 #endif
+
 #include "font.h"
 #include "config.h"
 #include "window-private.h"
 
 #include <string.h>
-#include <sys/shm.h>
-#include <sys/ipc.h>
 #include <xcb/xcb.h>
-#include <xcb/xcb_renderutil.h>
+
+#ifdef USE_X11SHM
+#   include <sys/shm.h>
+#   include <sys/ipc.h>
+#   include <xcb/shm.h>
+#endif
 
 typedef struct nss_render_context nss_render_context_t;
 
+#ifdef USE_X11SHM
 
 struct nss_render_context {
     _Bool has_shm;
@@ -469,3 +475,4 @@ void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
 
 }
 
+#endif

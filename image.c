@@ -1,6 +1,9 @@
 #include <stdint.h>
 
 #include "util.h"
+
+#ifdef USE_X11SHM
+
 #include "image.h"
 
 void nss_image_draw_rect(nss_image_t im, nss_rect_t rect, nss_color_t fg) {
@@ -75,3 +78,5 @@ void nss_image_copy(nss_image_t im, nss_rect_t rect, nss_image_t src, int16_t sx
         }
     }
 }
+
+#endif
