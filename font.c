@@ -37,7 +37,9 @@ struct nss_font {
     uint16_t dpi;
     double pixel_size;
     double size;
+#ifndef USE_X11SHM
     uint32_t *loaded_map;
+#endif
     nss_face_list_t face_types[nss_font_attrib_max];
 };
 
@@ -58,7 +60,9 @@ void nss_free_font(nss_font_t *font) {
             FcFini();
             FT_Done_FreeType(global.library);
         }
+#ifndef USE_X11SHM
         free(font->loaded_map);
+#endif
         free(font);
     }
 }
@@ -242,12 +246,14 @@ nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi) {
         warn("Can't allocate font");
         return NULL;
     }
+#ifndef USE_X11SHM
     font->loaded_map = calloc(LOADED_MAP_SIZE, sizeof(font->loaded_map[0]));
     if (!font->loaded_map) {
         warn("Can't allocate font glyph map");
         free(font);
         return NULL;
     }
+#endif
 
     font->refs = 1;
     font->pixel_size = 0;
@@ -365,11 +371,18 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
         }
     }
 
+#ifndef USE_X11SHM
     nss_font_glyph_mark_loaded(font, ch);
+#endif
 
     return glyph;
 }
 
+int16_t nss_font_get_size(nss_font_t *font) {
+    return font->size;
+}
+
+#ifndef USE_X11SHM
 void nss_font_glyph_mark_loaded(nss_font_t *font, tchar_t ch) {
     if (ch < LOADED_MAP_SIZE * 32)
         font->loaded_map[ch / 32] |= 1 << (ch % 32);
@@ -380,6 +393,4 @@ _Bool nss_font_glyph_is_loaded(nss_font_t *font, tchar_t ch) {
     else return font->loaded_map[ch / 32] & (1 << (ch % 32));
 }
 
-int16_t nss_font_get_size(nss_font_t *font) {
-    return font->size;
-}
+#endif

@@ -8,18 +8,13 @@
 
 #include <string.h>
 #include <xcb/xcb.h>
-#include <xcb/xcb_renderutil.h>
-
-typedef struct nss_glyph_mesg {
-    uint8_t len;
-    uint8_t pad[3];
-    int16_t dx, dy;
-    uint8_t data[];
-} nss_glyph_mesg_t;
-
+#ifndef USE_X11SHM
+#   include <xcb/xcb_renderutil.h>
+#endif
 
 typedef struct nss_render_context nss_render_context_t;
 
+#ifndef USE_X11SHM
 
 struct nss_render_context {
     xcb_render_pictformat_t pfargb;
@@ -42,6 +37,14 @@ struct nss_render_context {
     size_t bufsize;
     size_t bufpos;
 };
+
+typedef struct nss_glyph_mesg {
+    uint8_t len;
+    uint8_t pad[3];
+    int16_t dx, dy;
+    uint8_t data[];
+} nss_glyph_mesg_t;
+
 
 nss_render_context_t rctx;
 
@@ -749,3 +752,4 @@ void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
     xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, color, rectc, (xcb_rectangle_t*)rectv);
 }
 
+#endif
