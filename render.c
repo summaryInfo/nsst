@@ -469,12 +469,10 @@ void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
 
     resize_bounds(win, delta_y);
 
-    if (delta_y > 0)
-        nss_image_draw_rect(win->ren.im, (nss_rect_t) {
-                0, win->ch - delta_y, MIN(win->cw, win->cw - delta_x), delta_y }, win->bg);
-    if (delta_x > 0)
-        nss_image_draw_rect(win->ren.im, (nss_rect_t) {
-                win->cw - delta_x, 0, delta_x, MAX(win->ch, win->ch - delta_y) }, win->bg);
+    if (delta_y > 0) nss_image_draw_rect(win->ren.im,
+            (nss_rect_t) { 0, common_h, common_w, height - common_h }, win->bg);
+    if (delta_x > 0) nss_image_draw_rect(win->ren.im,
+            (nss_rect_t) { common_w, 0, width - common_w, height }, win->bg);
 
 }
 
