@@ -1,3 +1,5 @@
+/* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
+
 #ifndef WINDOW_PRIVATE_H_
 #define WINDOW_PRIVATE_H_ 1
 

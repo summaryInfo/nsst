@@ -1,3 +1,5 @@
+/* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
+
 #ifndef BOXDRAW_H_
 #define BOXDRAW_H_ 1
 

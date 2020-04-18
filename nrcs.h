@@ -1,3 +1,5 @@
+/* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
+
 #ifndef NRCS_H_
 #define NRCS_H_ 1
 

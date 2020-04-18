@@ -1,3 +1,5 @@
+/* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
+
 #ifndef FEATURES_H_
 #define FEATURES_H_ 1
 

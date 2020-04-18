@@ -1,3 +1,4 @@
+/* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
 #include <stdlib.h>
 #include <stdint.h>

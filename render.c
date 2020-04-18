@@ -1,3 +1,5 @@
+/* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
+
 #include "features.h"
 
 #ifdef USE_BOXDRAWING

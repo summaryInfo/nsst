@@ -1,3 +1,5 @@
+/* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
+
 #ifndef IMAGE_H_
 #define IMAGE_H_ 1
 
