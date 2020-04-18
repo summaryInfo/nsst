@@ -16,80 +16,28 @@
 #include <stdio.h>
 #include <string.h>
 
-static struct optmap_item {
-    const char *name;
-    const char *descr;
-    enum nss_config_opt opt;
-} map[] = {
-    {"allow-alternate", "\t(Enable alternate screen)", NSS_ICONFIG_ALLOW_ALTSCREEN},
-    {"allow-charsets", "\t(Enable charsets support)", NSS_ICONFIG_ALLOW_CHARSETS},
-    {"allow-nrcs", "\t(Enable NRCSs support)", NSS_ICONFIG_ALLOW_NRCS},
-    {"answerback-string", "\t(ENQ report)", NSS_SCONFIG_ANSWERBACK_STRING},
-    {"appcursor", "\t\t(Initial application cursor mode value)", NSS_ICONFIG_INPUT_APPCURSOR},
-    {"appkey", "\t\t(Initial application keypad mode value)", NSS_ICONFIG_INPUT_APPKEY},
-    {"backspace-is-delete", "\t(Backspace sends DEL instead of BS)", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
-    {"blink-time", "\t\t(Text blink interval)",NSS_ICONFIG_BLINK_TIME},
-    {"cursor-shape", "\t\t(Shape of cursor)", NSS_ICONFIG_CURSOR_SHAPE},
-    {"cursor-width", "\t\t(Width of lines that forms cursor)",NSS_ICONFIG_CURSOR_WIDTH},
-    {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
-    {"enable-autowrap", "\t(Initial autowrap setting)", NSS_ICONFIG_INIT_WRAP},
-    {"enable-reverse-video", "\t(Initial reverse video setting)", NSS_ICONFIG_REVERSE_VIDEO},
-    {"fkey-increment", "\t(Step in numbering function keys)", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
-    {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)", NSS_SCONFIG_FONT_NAME},
-    {"font-gamma", "\t\t(Factor of sharpenning\t(king of hack))",NSS_ICONFIG_GAMMA},
-    {"font-size", "\t\t(Font size in points)",NSS_ICONFIG_FONT_SIZE},
-    {"font-size-step", "\t\t(Font size step in points)",NSS_ICONFIG_FONT_SIZE_STEP},
-    {"font-spacing", "\t\t(Additional spacing for individual symbols)", NSS_ICONFIG_FONT_SPACING},
-    {"font-subpixel", "\t\t(Use subpixel rendering)",NSS_ICONFIG_SUBPIXEL_FONTS},
-    {"force-dpi", "\t\t(DPI value for fonts)",NSS_ICONFIG_DPI},
-    {"fps", "\t\t(Window refresh rate)", NSS_ICONFIG_FPS},
-    {"has-meta", "\t\t(Handle meta/alt)", NSS_ICONFIG_INPUT_HAS_META},
-    {"horizontal-border", "\t(Top and bottom botders)",NSS_ICONFIG_TOP_BORDER},
-    {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", NSS_ICONFIG_KEYBOARD_NRCS},
-    {"keyboard-mapping", "\t(Initial keyboad mapping)", NSS_ICONFIG_INPUT_MAPPING},
-    {"line-spacing", "\t\t(Additional lines vertical spacing)", NSS_ICONFIG_LINE_SPACING},
-    {"lock-keyboard", "\t\t(Disable keyboad input)", NSS_ICONFIG_INPUT_LOCK},
-    {"log-level","\t\t(Filering level of logged information)", NSS_ICONFIG_LOG_LEVEL},
-    {"meta-sends-escape", "\t(Alt/Meta sends escape prefix instead of setting 8-th bit)", NSS_ICONFIG_INPUT_META_IS_ESC},
-    {"modify-cursor", "\t\t(Enable encoding modifiers for cursor keys)", NSS_ICONFIG_INPUT_MODIFY_CURSOR},
-    {"modify-function", "\t(Enable encoding modifiers for function keys)", NSS_ICONFIG_INPUT_MODIFY_FUNCTION},
-    {"modify-keypad", "\t\t(Enable encoding modifiers keypad keys)", NSS_ICONFIG_INPUT_MODIFY_KEYPAD},
-    {"modify-other", "\t\t(Enable encoding modifiers for other keys)", NSS_ICONFIG_INPUT_MODIFY_OTHER},
-    {"modify-other-fmt", "\t(Format of encoding modifers)", NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT},
-    {"modkey-allow-edit-keypad", " (Allow modifing edit keypad keys)", NSS_ICONFIG_INPUT_MALLOW_EDIT},
-    {"modkey-allow-function", "\t(Allow modifing function keys)", NSS_ICONFIG_INPUT_MALLOW_FUNCTION},
-    {"modkey-allow-keypad", "\t(Allow modifing keypad keys)", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
-    {"modkey-allow-misc", "\t(Allow modifing miscelleneous keys)", NSS_ICONFIG_INPUT_MALLOW_MISC},
-    {"numlock", "\t\t(Initial numlock state)", NSS_ICONFIG_INPUT_NUMLOCK},
-#ifdef USE_BOXDRAWING
-    {"override-boxdrawing", "\t(Use built-in box drawing characters)", NSS_ICONFIG_OVERRIDE_BOXDRAW},
-#endif
-    {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", NSS_SCONFIG_PRINTER},
-    {"scroll-amount", "\t\t(Number of lines scrolled in a time)", NSS_ICONFIG_SCROLL_AMOUNT},
-    {"scroll-on-input", "\t(Scroll view to bottom on key press)", NSS_ICONFIG_SCROLL_ON_INPUT},
-    {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", NSS_ICONFIG_SCROLL_ON_OUTPUT},
-    {"scrollback-size", ", -H<value> (Number of saved lines)", NSS_ICONFIG_HISTORY_LINES},
-    {"shell", ", -s<value>\t(Shell to start in new instance)", NSS_SCONFIG_SHELL},
-    {"tab-width", "\t\t(Initial width of tab character)", NSS_ICONFIG_TAB_WIDTH},
-    {"term-name", ", -D<value>\t(TERM value)", NSS_SCONFIG_TERM_NAME},
-    {"title", ", -T<value>, -t<value> (Initial window title)", NSS_SCONFIG_TITLE},
-    {"underline-width", "\t(Text underline width)",NSS_ICONFIG_UNDERLINE_WIDTH},
-    {"use-utf8", "\t\t(Enable uft-8 i/o)", NSS_ICONFIG_UTF8},
-    {"vertical-border", "\t(Left and right borders)",NSS_ICONFIG_LEFT_BORDER},
-    {"vt-version", ", -V<value>\t(Emulated VT version)", NSS_ICONFIG_VT_VERION},
-    {"window-class", ", -c<value> (X11 Window class)", NSS_SCONFIG_TERM_CLASS},
-};
-
 static int optmap_cmp(const void *a, const void *b) {
-    const char *a_name = ((const struct optmap_item *)a)->name;
-    const char *b_name = ((const struct optmap_item *)b)->name;
-    return strcmp(a_name, b_name);
+    const char *a_arg_name = ((const struct nss_optmap_item *)a)->arg_name;
+    const char *b_arg_name = ((const struct nss_optmap_item *)b)->arg_name;
+    return strcmp(a_arg_name, b_arg_name);
 }
 
-
 static _Noreturn void usage(char *argv0, int code) {
-    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) == 0 && code != EXIT_SUCCESS) {
+    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0 || code == EXIT_SUCCESS) {
         fprintf(stderr, "%s%s", argv0, " [-options] [-e] [command [args]]\n"
+            "\nWhere options are:\n"
+                "\t--geometry=<value>, -g[=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>] (Window geometry)\n"
+                "\t--help, -h\t\t\t(Print this message and exit)\n"
+                "\t--version, -v\t\t\t(Print version and exit)\n");
+        for (size_t i = 0; i < sizeof(optmap)/sizeof(optmap[0]); i++)
+            fprintf(stderr, "\t--%s=<value>%s\n", optmap[i].arg_name, optmap[i].arg_desc);
+    }
+    nss_free_context();
+    exit(code);
+}
+
+static _Noreturn void version(void) {
+    fprintf(stderr, "Not So Simple Terminal v1.0.0\n"
             "Features: nsst"
 #ifdef USE_PPOLL
             "+ppoll"
@@ -97,19 +45,11 @@ static _Noreturn void usage(char *argv0, int code) {
 #ifdef USE_BOXDRAWING
             "+boxdrawing"
 #endif
-            "\nWhere options are:\n"
-                "\t--geometry=<value>, -g[=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>] (Window geometry)\n"
-                "\t--help, -h\t\t\t(Print this message and exit)\n"
-                "\t--version, -v\t\t\t(Print version and exit)\n");
-        for (size_t i = 0; i < sizeof(map)/sizeof(map[0]); i++)
-            fprintf(stderr, "\t--%s=<value>%s\n", map[i].name, map[i].descr);
-    }
-    nss_free_context();
-    exit(code);
-}
-
-static _Noreturn void version(void) {
-    fprintf(stderr, "Not So Simple Terminal v1.0.0\n");
+#ifdef USE_X11SHM
+			"+mitshm"
+#endif
+			"\n"
+    );
     nss_free_context();
     exit(EXIT_SUCCESS);
 }
@@ -161,8 +101,8 @@ static char **parse_options(int argc, char **argv) {
                 else arg = argv[++ind];
             }
 
-            struct optmap_item *res = bsearch(&(struct optmap_item){argv[ind] + 2},
-                    map, sizeof(map)/sizeof(*map), sizeof(*map), optmap_cmp);
+            nss_optmap_item_t *res = bsearch(&(nss_optmap_item_t){argv[ind] + 2},
+                    optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
             if (res && arg)
                 nss_config_set_string(res->opt, arg);
             else if (!strcmp(argv[ind] + 2, "geometry"))

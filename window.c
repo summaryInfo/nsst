@@ -262,73 +262,13 @@ void load_params(void) {
 
             nss_config_set_color(NSS_CCONFIG_BG, col);
         }
-
-        static const struct optmap_item {
-        const char *name;
-        enum nss_config_opt opt;
-        } map[] = {
-            {"allowAlternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
-            {"allowCharsets", NSS_ICONFIG_ALLOW_CHARSETS},
-            {"allowNRCSs", NSS_ICONFIG_ALLOW_NRCS},
-            {"answerbackString", NSS_SCONFIG_ANSWERBACK_STRING},
-            {"appcursor", NSS_ICONFIG_INPUT_APPCURSOR},
-            {"appkey", NSS_ICONFIG_INPUT_APPKEY},
-            {"backspaceIsDelete", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
-            {"blinkTime",NSS_ICONFIG_BLINK_TIME},
-            {"cursorShape", NSS_ICONFIG_CURSOR_SHAPE},
-            {"cursorWidth",NSS_ICONFIG_CURSOR_WIDTH},
-            {"deleteIsDelete", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
-            {"dpi",NSS_ICONFIG_DPI},
-            {"enableAutowrap", NSS_ICONFIG_INIT_WRAP},
-            {"enableReverseVideo", NSS_ICONFIG_REVERSE_VIDEO},
-            {"fkeyIncrement", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
-            {"font", NSS_SCONFIG_FONT_NAME},
-            {"fontGamma", NSS_ICONFIG_GAMMA},
-            {"fontSize", NSS_ICONFIG_FONT_SIZE},
-            {"fontSizeStep", NSS_ICONFIG_FONT_SIZE_STEP},
-            {"fontSpacing", NSS_ICONFIG_FONT_SPACING},
-            {"fontSubpixel",NSS_ICONFIG_SUBPIXEL_FONTS},
-            {"fps", NSS_ICONFIG_FPS},
-            {"hasMeta", NSS_ICONFIG_INPUT_HAS_META},
-            {"horizontalBorder",NSS_ICONFIG_TOP_BORDER},
-            {"keyboardDialect", NSS_ICONFIG_KEYBOARD_NRCS},
-            {"keyboardMapping", NSS_ICONFIG_INPUT_MAPPING},
-            {"lineSpacing", NSS_ICONFIG_LINE_SPACING},
-            {"lockKeyboard", NSS_ICONFIG_INPUT_LOCK},
-            {"metaSendsEscape", NSS_ICONFIG_INPUT_META_IS_ESC},
-            {"modifyCursor", NSS_ICONFIG_INPUT_MODIFY_CURSOR},
-            {"modifyFunction", NSS_ICONFIG_INPUT_MODIFY_FUNCTION},
-            {"modifyKeypad", NSS_ICONFIG_INPUT_MODIFY_KEYPAD},
-            {"modifyOther", NSS_ICONFIG_INPUT_MODIFY_OTHER},
-            {"modifyOtherFmt", NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT},
-            {"modkeyAllowEditKeypad", NSS_ICONFIG_INPUT_MALLOW_EDIT},
-            {"modkeyAllowFunction", NSS_ICONFIG_INPUT_MALLOW_FUNCTION},
-            {"modkeyAllowKeypad", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
-            {"modkeyAllowMisc", NSS_ICONFIG_INPUT_MALLOW_MISC},
-            {"numlock", NSS_ICONFIG_INPUT_NUMLOCK},
-#ifdef USE_BOXDRAWING
-            {"overrideBoxdrawing", NSS_ICONFIG_OVERRIDE_BOXDRAW},
-#endif
-            {"printer", NSS_SCONFIG_PRINTER},
-            {"scrollAmout", NSS_ICONFIG_SCROLL_AMOUNT},
-            {"scrollOnInput", NSS_ICONFIG_SCROLL_ON_INPUT},
-            {"scrollOnOutput", NSS_ICONFIG_SCROLL_ON_OUTPUT},
-            {"scrollbackSize", NSS_ICONFIG_HISTORY_LINES},
-            {"shell", NSS_SCONFIG_SHELL},
-            {"tabWidth", NSS_ICONFIG_TAB_WIDTH},
-            {"termName", NSS_SCONFIG_TERM_NAME},
-            {"title", NSS_SCONFIG_TITLE},
-            {"underlineWidth",NSS_ICONFIG_UNDERLINE_WIDTH},
-            {"useUtf8", NSS_ICONFIG_UTF8},
-            {"verticalBorder",NSS_ICONFIG_LEFT_BORDER},
-            {"vtVersion", NSS_ICONFIG_VT_VERION},
-            {"windowClass", NSS_SCONFIG_TERM_CLASS},
-        };
-        for(size_t i = 0; i < sizeof(map)/sizeof(*map); i++) {
-            snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", map[i].name);
+        
+		//optmap is defined in config.c
+        for(size_t i = 0; i < OPT_MAP_SIZE; i++) {
+            snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", optmap[i].name);
             char *res = NULL;
             if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
-                nss_config_set_string(map[i].opt, res);
+                nss_config_set_string(optmap[i].opt, res);
             }
             if (res) free(res);
         }

@@ -113,6 +113,21 @@ enum nss_config_opt {
     NSS_CONFIG_MAX = NSS_CCONFIG_MAX,
 };
 
+typedef struct nss_optmap_item {
+    const char *arg_name;
+    const char *arg_desc;
+    const char *name;
+    enum nss_config_opt opt;
+} nss_optmap_item_t;
+
+#ifdef USE_BOXDRAWING
+#	define OPT_MAP_SIZE 55
+#else
+#	define OPT_MAP_SIZE 54
+#endif
+
+extern nss_optmap_item_t optmap[OPT_MAP_SIZE];
+
 /* Getters for options */
 nss_color_t nss_config_color(uint32_t opt);
 int32_t nss_config_integer(uint32_t opt);

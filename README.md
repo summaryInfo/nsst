@@ -27,7 +27,7 @@ Multiple fonts could be loaded by enumerating them in parameter:
     Nsst.font: Iosevka-13:style=Thin,MaterialDesignIcons-13
 
 All options are now available though Xrmdb and command line arguments.
-No documentation yet for Xrmdb names, see `load_params()` function in `window.c`.
+No documentation yet for Xrmdb names, see `optmap[]` function in `config.c`.
 For command line arguments see `nsst --help`
 
 ## Dependencies
