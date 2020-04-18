@@ -1,6 +1,13 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
+#include "features.h"
+
 #define _POSIX_C_SOURCE 200809L
+
+#include "config.h"
+#include "features.h"
+#include "util.h"
+#include "window.h"
 
 #include <inttypes.h>
 #include <langinfo.h>
@@ -8,12 +15,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-
-#include "config.h"
-#include "features.h"
-#include "util.h"
-#include "window.h"
-
 
 static struct optmap_item {
     const char *name;

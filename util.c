@@ -1,14 +1,16 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
+#include "features.h"
+
 #define _POSIX_C_SOURCE 200809L
 
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <stddef.h>
-
-#include "util.h"
 #include "config.h"
+#include "util.h"
+
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 _Noreturn void die(const char *fmt, ...) {
     if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0) {

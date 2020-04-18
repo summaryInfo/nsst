@@ -3,10 +3,13 @@
 #ifndef TERM_H_
 #define TERM_H_ 1
 
-#include <sys/types.h>
+#include "features.h"
 
 #include "util.h"
 #include "window.h"
+
+#include <stdint.h>
+#include <sys/types.h>
 
 typedef uint16_t nss_cid_t;
 typedef uint32_t nss_color_t;

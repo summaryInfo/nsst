@@ -1,6 +1,15 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
+#include "features.h"
+
 #define _XOPEN_SOURCE 700
+
+#include "config.h"
+#include "input.h"
+#include "nrcs.h"
+#include "term.h"
+#include "window.h"
+
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -26,12 +35,6 @@
 #elif defined(__FreeBSD__) || defined(__DragonFly__)
  #include <libutil.h>
 #endif
-
-#include "config.h"
-#include "input.h"
-#include "nrcs.h"
-#include "term.h"
-#include "window.h"
 
 #define TTY_MAX_WRITE 256
 #define NSS_FD_BUF_SZ 512

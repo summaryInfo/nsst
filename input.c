@@ -1,13 +1,15 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
+#include "features.h"
+
+#include "config.h"
+#include "input.h"
+#include "nrcs.h"
+#include "term.h"
+
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 #include <string.h>
-
-#include "input.h"
-#include "config.h"
-#include "term.h"
-#include "nrcs.h"
 
 typedef struct nss_esc_reply {
     uint8_t idx;

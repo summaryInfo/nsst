@@ -1,9 +1,11 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
-#include <stdint.h>
-#include <stddef.h>
+#include "features.h"
 
 #include "nrcs.h"
+
+#include <stddef.h>
+#include <stdint.h>
 
 static const unsigned short *nrcs_trs[] = {
     /* [0x23] [0x40] [0x5B 0x5C 0x5D 0x5E 0x5F 0x60] [0x7B 0x7C 0x7D 0x7E] */

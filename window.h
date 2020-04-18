@@ -3,12 +3,13 @@
 #ifndef WINDOW_H_
 #define WINDOW_H_ 1
 
-#include <stddef.h>
-#include <stdint.h>
+#include "features.h"
 
 #include "font.h"
 #include "util.h"
 
+#include <stddef.h>
+#include <stdint.h>
 
 typedef enum nss_cursor_type {
     nss_cursor_block = 2,

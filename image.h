@@ -3,9 +3,12 @@
 #ifndef IMAGE_H_
 #define IMAGE_H_ 1
 
-#include <stdint.h>
-#include "util.h"
+#include "features.h"
+
 #include "font.h"
+#include "util.h"
+
+#include <stdint.h>
 
 typedef struct nss_image {
     int16_t width;

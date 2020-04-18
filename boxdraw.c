@@ -1,12 +1,14 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
-#include <stdlib.h>
-#include <stdint.h>
-#include <math.h>
+#include "features.h"
 
+#include "boxdraw.h"
 #include "font.h"
 #include "term.h"
-#include "boxdraw.h"
+
+#include <math.h>
+#include <stdint.h>
+#include <stdlib.h>
 
 static void draw_rect(nss_glyph_t * glyph, _Bool lcd, int16_t xs, int16_t ys, int16_t xe, int16_t ye, uint8_t val) {
     if (xs < xe && ys < ye) {

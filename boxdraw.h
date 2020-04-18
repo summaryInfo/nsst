@@ -3,9 +3,9 @@
 #ifndef BOXDRAW_H_
 #define BOXDRAW_H_ 1
 
-#include <stdint.h>
-
 #include "font.h"
+
+#include <stdint.h>
 
 nss_glyph_t *nss_make_boxdraw(uint32_t ch, int16_t w, int16_t h, int16_t d, _Bool lcd);
 

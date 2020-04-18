@@ -1,8 +1,14 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
+#include "features.h"
+
 #define _POSIX_C_SOURCE 200809L
 
-#include <assert.h>
+#include "config.h"
+#include "font.h"
+#include "util.h"
+#include "window.h"
+
 #include <errno.h>
 #include <inttypes.h>
 #include <math.h>
@@ -14,10 +20,6 @@
 #include FT_BITMAP_H
 #include FT_FREETYPE_H
 
-#include "config.h"
-#include "font.h"
-#include "util.h"
-#include "window.h"
 
 struct nss_font_state {
     size_t fonts;

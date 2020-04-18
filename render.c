@@ -5,9 +5,8 @@
 #ifdef USE_BOXDRAWING
 #   include "boxdraw.h"
 #endif
-
-#include "font.h"
 #include "config.h"
+#include "font.h"
 #include "window-private.h"
 
 #include <string.h>

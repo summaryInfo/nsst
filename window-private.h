@@ -4,6 +4,7 @@
 #define WINDOW_PRIVATE_H_ 1
 
 #include "features.h"
+
 #include "window.h"
 #include "term.h"
 #ifdef USE_X11SHM

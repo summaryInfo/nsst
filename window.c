@@ -1,12 +1,20 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
-#define _POSIX_C_SOURCE 200809L
-
 #include "features.h"
+
+#define _POSIX_C_SOURCE 200809L
 
 #ifdef USE_PPOLL
 #   define _GNU_SOURCE
 #endif
+
+#include "config.h"
+#include "font.h"
+#include "input.h"
+#include "term.h"
+#include "util.h"
+#include "window-private.h"
+#include "window.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -23,14 +31,6 @@
 #include <xcb/xcb_xrm.h>
 #include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon-x11.h>
-
-#include "config.h"
-#include "font.h"
-#include "input.h"
-#include "term.h"
-#include "util.h"
-#include "window.h"
-#include "window-private.h"
 
 #define INIT_PFD_NUM 16
 #define NUM_BORDERS 4

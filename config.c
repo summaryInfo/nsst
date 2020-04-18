@@ -1,17 +1,20 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
+#include "features.h"
+
 #define _POSIX_C_SOURCE 200809L
+
+#include "config.h"
+#include "input.h"
+#include "nrcs.h"
+#include "util.h"
+#include "window.h"
+
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "config.h"
-#include "input.h"
-#include "util.h"
-#include "window.h"
-#include "nrcs.h"
 
 #define CN_BASE 16
 #define CN_EXT (6*6*6)

@@ -3,9 +3,9 @@
 #ifndef UTIL_H_
 #define UTIL_H_ 1
 
-#define _POSIX_C_SOURCE 200809L
-
 #include "features.h"
+
+#define _POSIX_C_SOURCE 200809L
 
 #include <stdint.h>
 #include <stdlib.h>

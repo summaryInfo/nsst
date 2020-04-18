@@ -1,12 +1,15 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
-#include <stdint.h>
+#include "features.h"
 
 #include "util.h"
+#ifdef USE_X11SHM
+#	include "image.h"
+#endif
+
+#include <stdint.h>
 
 #ifdef USE_X11SHM
-
-#include "image.h"
 
 void nss_image_draw_rect(nss_image_t im, nss_rect_t rect, nss_color_t fg) {
     if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height})) {
