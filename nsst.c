@@ -26,9 +26,11 @@ static _Noreturn void usage(char *argv0, int code) {
     if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0 || code == EXIT_SUCCESS) {
         fprintf(stderr, "%s%s", argv0, " [-options] [-e] [command [args]]\n"
             "\nWhere options are:\n"
-                "\t--geometry=<value>, -g[=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>] (Window geometry)\n"
                 "\t--help, -h\t\t\t(Print this message and exit)\n"
-                "\t--version, -v\t\t\t(Print version and exit)\n");
+                "\t--version, -v\t\t\t(Print version and exit)\n"
+                "\t--color<N>=<color>, \t\t(Set palette color <N>, <N> is from 0 to 255)\n"
+                "\t--geometry=<value>, -g<value> \t(Window geometry, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>])\n"
+        );
         for (size_t i = 0; i < sizeof(optmap)/sizeof(optmap[0]); i++)
             fprintf(stderr, "\t--%s=<value>%s\n", optmap[i].arg_name, optmap[i].arg_desc);
     }
@@ -46,9 +48,9 @@ static _Noreturn void version(void) {
             "+boxdrawing"
 #endif
 #ifdef USE_X11SHM
-			"+mitshm"
+            "+mitshm"
 #endif
-			"\n"
+            "\n"
     );
     nss_free_context();
     exit(EXIT_SUCCESS);
@@ -101,12 +103,17 @@ static char **parse_options(int argc, char **argv) {
                 else arg = argv[++ind];
             }
 
+            unsigned n;
+
             nss_optmap_item_t *res = bsearch(&(nss_optmap_item_t){argv[ind] + 2},
                     optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
             if (res && arg)
                 nss_config_set_string(res->opt, arg);
             else if (!strcmp(argv[ind] + 2, "geometry"))
                 parse_geometry(arg, argv[0]);
+            else if (!strncmp(argv[ind] + 2, "color", 5) &&
+                    sscanf(argv[ind] + 2, "color%u", &n) == 1)
+                nss_config_set_string(NSS_CCONFIG_COLOR_0 + n, arg);
             else if (!strcmp(argv[ind] + 2, "help"))
                 usage(argv[0], EXIT_SUCCESS);
             else if (!strcmp(argv[ind] + 2, "version"))
@@ -143,7 +150,7 @@ static char **parse_options(int argc, char **argv) {
                 case 'V': opt = NSS_ICONFIG_VT_VERION; break;
                 case 'H': opt = NSS_ICONFIG_HISTORY_LINES; break;
                 }
-                if (opt > 0) nss_config_set_string(opt, arg);
+                if (opt) nss_config_set_string(opt, arg);
                 else if (letter == 'g') {
                     // Still need to parse geometry
                     parse_geometry(arg, argv[0]);

@@ -24,12 +24,16 @@
 nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"allow-alternate", "\t(Enable alternate screen)", "allowAlternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
     {"allow-charsets", "\t(Enable charsets support)", "allowCharsets", NSS_ICONFIG_ALLOW_CHARSETS},
-    {"allow-nrcs", "\t(Enable NRCSs support)", "allowNRCSs", NSS_ICONFIG_ALLOW_NRCS},
+    {"allow-nrcs", "\t\t(Enable NRCSs support)", "allowNRCSs", NSS_ICONFIG_ALLOW_NRCS},
+    {"alpha", "\t\t\t(Backround opacity, requires compositor to be running)", "alpha", NSS_ICONFIG_ALPHA},
     {"answerback-string", "\t(ENQ report)", "answerbackString", NSS_SCONFIG_ANSWERBACK_STRING},
     {"appcursor", "\t\t(Initial application cursor mode value)", "appcursor", NSS_ICONFIG_INPUT_APPCURSOR},
     {"appkey", "\t\t(Initial application keypad mode value)", "appkey", NSS_ICONFIG_INPUT_APPKEY},
+    {"background", "\t\t(Default backround color)", "background", NSS_CCONFIG_BG},
     {"backspace-is-delete", "\t(Backspace sends DEL instead of BS)", "backspaceIsDelete", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
     {"blink-time", "\t\t(Text blink interval)","blinkTime", NSS_ICONFIG_BLINK_TIME},
+    {"cursor-background", "\t(Default cursor backround color)", "cursorBackground", NSS_CCONFIG_CURSOR_BG},
+    {"cursor-foreground", "\t(Default cursor foreround color)", "cursorForeground", NSS_CCONFIG_CURSOR_FG},
     {"cursor-shape", "\t\t(Shape of cursor)", "cursorShape", NSS_ICONFIG_CURSOR_SHAPE},
     {"cursor-width", "\t\t(Width of lines that forms cursor)", "cursorWidth", NSS_ICONFIG_CURSOR_WIDTH},
     {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", "deleteIsDelete", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
@@ -39,11 +43,12 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)", "font", NSS_SCONFIG_FONT_NAME},
     {"font-gamma", "\t\t(Factor of sharpenning\t(king of hack))", "fontGamma",NSS_ICONFIG_GAMMA},
     {"font-size", "\t\t(Font size in points)", "fontSize", NSS_ICONFIG_FONT_SIZE},
-    {"font-size-step", "\t\t(Font size step in points)", "fontSizeStep", NSS_ICONFIG_FONT_SIZE_STEP},
+    {"font-size-step", "\t(Font size step in points)", "fontSizeStep", NSS_ICONFIG_FONT_SIZE_STEP},
     {"font-spacing", "\t\t(Additional spacing for individual symbols)", "fontSpacing", NSS_ICONFIG_FONT_SPACING},
     {"font-subpixel", "\t\t(Use subpixel rendering)", "fontSubpixel", NSS_ICONFIG_SUBPIXEL_FONTS},
     {"force-dpi", "\t\t(DPI value for fonts)", "dpi", NSS_ICONFIG_DPI},
-    {"fps", "\t\t(Window refresh rate)", "fps", NSS_ICONFIG_FPS},
+    {"foreground", "\t\t(Default foreground color)", "foreground", NSS_CCONFIG_FG},
+    {"fps", "\t\t\t(Window refresh rate)", "fps", NSS_ICONFIG_FPS},
     {"has-meta", "\t\t(Handle meta/alt)", "hasMeta", NSS_ICONFIG_INPUT_HAS_META},
     {"horizontal-border", "\t(Top and bottom botders)", "horizontalBorder", NSS_ICONFIG_TOP_BORDER},
     {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", "keyboardDialect", NSS_ICONFIG_KEYBOARD_NRCS},
@@ -251,6 +256,11 @@ void nss_config_set_integer(uint32_t opt, int32_t val) {
         case NSS_ICONFIG_INPUT_MALLOW_KEYPAD: input_mode.modkey_legacy_allow_keypad = !!val; break;
         case NSS_ICONFIG_INPUT_MALLOW_MISC: input_mode.modkey_legacy_allow_misc = !!val; break;
         case NSS_ICONFIG_INPUT_NUMLOCK: input_mode.allow_numlock = !!val; break;
+        case NSS_ICONFIG_ALPHA: {
+            nss_color_t bg = nss_config_color(NSS_CCONFIG_BG);
+            nss_config_set_color(NSS_CCONFIG_BG, (bg & 0xFFFFFF) | (MAX(0, MIN(val, 255)) << 24));
+            break;
+        }
         }
     } else {
         warn("Unknown integer option %d", opt);
@@ -278,6 +288,12 @@ void nss_config_set_string(uint32_t opt, const char *val) {
             nss_config_set_integer(opt, ival);
         else
             warn("Unknown string option %d", opt);
+    } else if (NSS_CCONFIG_MIN <= opt && opt < NSS_CCONFIG_MAX) {
+            nss_color_t col = parse_color((uint8_t*)val, (uint8_t*)val + strlen(val));
+            if (col) {
+                nss_color_t old = nss_config_color(opt);
+                nss_config_set_color(opt, (col & 0xFFFFFF) | (old & 0xFF000000));
+            } else warn("Wrong color format: '%s'", val);
     } else {
         warn("Unknown string option %d", opt);
         return;

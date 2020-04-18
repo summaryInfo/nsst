@@ -88,6 +88,9 @@ enum nss_config_opt {
     NSS_ICONFIG_INPUT_MALLOW_KEYPAD,
     NSS_ICONFIG_INPUT_MALLOW_MISC,
     NSS_ICONFIG_INPUT_NUMLOCK,
+    // Backround opacity
+    // (not input, but should also be treated specially)
+    NSS_ICONFIG_ALPHA,
     NSS_ICONFIG_MAX,
 
     NSS_SCONFIG_MIN = NSS_ICONFIG_MAX,
@@ -121,9 +124,9 @@ typedef struct nss_optmap_item {
 } nss_optmap_item_t;
 
 #ifdef USE_BOXDRAWING
-#	define OPT_MAP_SIZE 55
+#	define OPT_MAP_SIZE 60
 #else
-#	define OPT_MAP_SIZE 54
+#	define OPT_MAP_SIZE 59
 #endif
 
 extern nss_optmap_item_t optmap[OPT_MAP_SIZE];

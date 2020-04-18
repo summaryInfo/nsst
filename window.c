@@ -34,6 +34,8 @@
 
 #define INIT_PFD_NUM 16
 #define NUM_BORDERS 4
+#define NSS_CLASS "Nsst"
+#define OPT_NAME_MAX 32
 
 #define NSS_M_ALL (0xff)
 #define NSS_M_TERM (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)
@@ -214,75 +216,33 @@ cleanup_context:
     return 0;
 }
 
-#define NSS_CLASS "Nsst"
-#define OPT_NAME_MAX 256
 void load_params(void) {
-    long dpi = -1;
-    char name[OPT_NAME_MAX];
     xcb_xrm_database_t *xrmdb = xcb_xrm_database_from_default(con);
-    if (xrmdb) {
-        xcb_xrm_resource_get_long(xrmdb, NSS_CLASS".dpi", NULL, &dpi);
+    if (!xrmdb) return;
 
-        for (unsigned j = 0; j < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; j++) {
-            snprintf(name, OPT_NAME_MAX, NSS_CLASS".color%u", j);
-            char *res = NULL;
-            if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
-                nss_color_t col = parse_color((uint8_t*)res, (uint8_t*)res + strlen(res));
-                if (col) {
-                    nss_config_set_color(NSS_CCONFIG_COLOR_0 + j, col);
-                }
-                free(res);
-            }
+    char *res, name[OPT_NAME_MAX] = NSS_CLASS".color";
+    const size_t n_pos = strlen(name);
+
+	// .color0 -- .color255
+    for (unsigned j = 0; j < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; j++) {
+        snprintf(name + n_pos, OPT_NAME_MAX, "%u", j);
+        if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
+            nss_config_set_string(NSS_CCONFIG_COLOR_0 + j, res);
+            free(res);
         }
-
-        static const char *snames[4] = {"background", "foreground", "cursorBackground", "cursorForeground"};
-
-        for (size_t j = 0; j < sizeof(snames)/sizeof(snames[0]); j++) {
-            snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", snames[j]);
-            char *res = NULL;
-            if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
-                nss_color_t col = parse_color((uint8_t*)res, (uint8_t*)res + strlen(res));
-                if (!j) {
-                    //Backround color preserves alpha
-                    col &= 0xFFFFFF;
-                    col |= nss_config_color(NSS_CCONFIG_BG) & 0xFF000000;
-                }
-                if (col) {
-                    nss_config_set_color(NSS_CCONFIG_BG + j, col);
-                }
-                free(res);
-            }
-        }
-
-        long res;
-        if (!xcb_xrm_resource_get_long(xrmdb, NSS_CLASS".alpha", NULL, &res)) {
-            nss_color_t col = nss_config_color(NSS_CCONFIG_BG);
-            col &= 0xFFFFFF;
-            col |= MAX(0, MIN(res, 255)) << 24;
-
-            nss_config_set_color(NSS_CCONFIG_BG, col);
-        }
-        
-		//optmap is defined in config.c
-        for(size_t i = 0; i < OPT_MAP_SIZE; i++) {
-            snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", optmap[i].name);
-            char *res = NULL;
-            if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
-                nss_config_set_string(optmap[i].opt, res);
-            }
-            if (res) free(res);
-        }
-
-        xcb_xrm_database_free(xrmdb);
     }
-    if (dpi <= 0) {
-        warn("Can't fetch Xft.dpi, defaulting to highest dpi value");
 
-        xcb_screen_iterator_t it = xcb_setup_roots_iterator(xcb_get_setup(con));
-        for (; it.rem; xcb_screen_next(&it))
-            if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
+    //optmap is defined in config.c
+    for(size_t i = 0; i < OPT_MAP_SIZE; i++) {
+        snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", optmap[i].name);
+        char *res = NULL;
+        if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
+            nss_config_set_string(optmap[i].opt, res);
+        }
+        if (res) free(res);
     }
-    if (dpi > 0) nss_config_set_integer(NSS_ICONFIG_DPI, dpi);
+
+    xcb_xrm_database_free(xrmdb);
 }
 
 
@@ -357,6 +317,12 @@ void nss_init_context(void) {
     ctx.atom_utf8_string = intern_atom("UTF8_STRING");
     ctx.atom_net_wm_name = intern_atom("_NET_WM_NAME");
     ctx.atom_net_wm_icon_name = intern_atom("_NET_WM_ICON_NAME");
+
+    int32_t dpi = -1;
+    xcb_screen_iterator_t it = xcb_setup_roots_iterator(xcb_get_setup(con));
+    for (; it.rem; xcb_screen_next(&it))
+        if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
+    if (dpi > 0) nss_config_set_integer(NSS_ICONFIG_DPI, dpi);
 
     if (!nss_config_integer(NSS_ICONFIG_SKIP_CONFIG_FILE)) load_params();
     else nss_config_set_integer(NSS_ICONFIG_SKIP_CONFIG_FILE, 0);
