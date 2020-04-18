@@ -21,21 +21,30 @@ Input
         And also term->fd_read_lock flag
     DECUDK
 Render
-    Double width/height, Down-Line-Loadable fonts
+    [x] MIT-SHM
+        [x] Software rendering
+        [x] Wide glyphs rendering
+        [x] Font cache
+        [x] Use xcb_shm_put_image
+        [x] Implement lcd mode
+        [x] Implement uploading subranges
+        [x] Implement shm pixmaps
+	[x] XRender
+        [?] Slow scrolling of full-color images (with small font in chafa)
+        [ ] After resizing window (only jump resize) new lines are not rerendered
+        [ ] Rendering refactoring:
+            -Use multiple separate buffers for cells parts:
+                1. Background
+                2. Lines
+                3. Glyphs
+            -Merge adjacent cells with same color while pushing
+            -Then sort and draw, groupping by color
+    [x] Box drawing characters -- draw them manually to make pixel-prefect
+    [ ] Double width/height, Down-Line-Loadable fonts
         DECDLD
-    Add options to select width of ambigues characters
-    Combining characters support
-    (?) Add fallback fonts support back
-    Slow scrolling of full-color images (with small font in chafa)
-    After resizing window (only jump resize) new lines are not rerendered
-
-    Rendering refactoring:
-        -Use multiple separate buffers for cells parts:
-            1. Background
-            2. Lines
-            3. Glyphs
-        -Merge adjacent cells with same color while pushing
-        -Then sort and draw, groupping by color
+    [ ] Add options to select width of ambigues characters
+    [ ] Combining characters support
+    [ ] (?) Add fallback fonts support back
 Term
     (?) Geometry should be measured in characters
     Capability restriction

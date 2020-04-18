@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -297,6 +298,10 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     }
 
     nss_glyph_t *glyph = malloc(sizeof(*glyph) + stride * face->glyph->bitmap.rows);
+#ifdef USE_X11SHM
+    glyph->g = ch | (attr << 24);
+    glyph->p = glyph->r = glyph->l = NULL;
+#endif
     glyph->x = -face->glyph->bitmap_left;
     glyph->y = face->glyph->bitmap_top;
 
@@ -382,7 +387,152 @@ int16_t nss_font_get_size(nss_font_t *font) {
     return font->size;
 }
 
-#ifndef USE_X11SHM
+#ifdef USE_X11SHM
+
+struct nss_glyph_cache {
+    nss_font_t *font;
+    _Bool lcd;
+    int16_t char_width;
+    int16_t char_height;
+    int16_t char_depth;
+    size_t refc;
+    nss_glyph_t *root;
+};
+
+static void rotate_left(nss_glyph_t **root, nss_glyph_t *n) {
+    nss_glyph_t *r = n->r;
+    if (r) {
+        if ((n->r = r->l))
+            r->l->p = n;
+        r->p = n->p;
+    }
+    if (!n->p) *root = r;
+    else if (n == n->p->l) n->p->l = r;
+    else n->p->r = r;
+
+    if(r) r->l = n;
+    n->p = r;
+}
+
+static void rotate_right(nss_glyph_t **root, nss_glyph_t *n) {
+    nss_glyph_t *l = n->l;
+    if (l) {
+        if ((n->l = l->r))
+            l->r->p = n;
+        l->p = n->p;
+    }
+    if (!n->p) *root = l;
+    else if (n == n->p->l) n->p->l = l;
+    else n->p->r = l;
+
+    if(l) l->r = n;
+    n->p = l;
+}
+
+static void splay(nss_glyph_t **root, nss_glyph_t *n) {
+    while (n->p) {
+        if (!n->p->p) {
+            if (n->p->l == n) rotate_right(root, n->p);
+            else rotate_left(root, n->p);
+        } else if (n->p->l == n) {
+            if (n->p->p->l == n->p) {
+                rotate_right(root, n->p->p);
+                rotate_right(root, n->p);
+            } else {
+                rotate_right(root, n->p);
+                rotate_left(root, n->p);
+            }
+        } else {
+            if (n->p->p->l == n->p) {
+                rotate_left(root, n->p);
+                rotate_right(root, n->p);
+            } else {
+                rotate_left(root, n->p->p);
+                rotate_left(root, n->p);
+            }
+        }
+    }
+}
+
+nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd) {
+    nss_glyph_cache_t *cache = calloc(1, sizeof(nss_glyph_cache_t));
+    cache->refc = 1;
+    cache->font = font;
+    cache->lcd = lcd;
+
+    int16_t total = 0, maxd = 0, maxh = 0;
+    for (uint32_t i = ' '; i <= '~'; i++) {
+        nss_glyph_t *g = nss_cache_fetch(cache, i, nss_font_attrib_normal);
+
+        total += g->x_off;
+        maxd = MAX(maxd, g->height - g->y);
+        maxh = MAX(maxh, g->y);
+    }
+
+    cache->char_width = total / ('~' - ' ' + 1) + nss_config_integer(NSS_ICONFIG_FONT_SPACING);
+    cache->char_height = maxh;
+    cache->char_depth = maxd + nss_config_integer(NSS_ICONFIG_LINE_SPACING);
+
+    info("Font dim: width=%"PRId16", height=%"PRId16", depth=%"PRId16,
+            cache->char_width, cache->char_height, cache->char_depth);
+
+    return cache;
+}
+
+nss_glyph_cache_t *nss_cache_reference(nss_glyph_cache_t *ref) {
+    ref->refc++;
+    return ref;
+}
+
+void nss_cache_font_dim(nss_glyph_cache_t *cache, int16_t *w, int16_t *h, int16_t *d) {
+    if (w) *w = cache->char_width;
+    if (h) *h = cache->char_height;
+    if (d) *d = cache->char_depth;
+}
+
+static void free_dfs(nss_glyph_t *n) {
+    while(n) {
+        free_dfs(n->l);
+        nss_glyph_t *t = n->r;
+        free(n);
+        n = t;
+    }
+}
+
+void nss_free_cache(nss_glyph_cache_t *cache) {
+    free_dfs(cache->root);
+    free(cache);
+}
+
+nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_attrib_t face) {
+    uint32_t g = ch | (face << 24);
+    nss_glyph_t *n = cache->root, *p = NULL;
+    while (n) {
+        p = n;
+        if (n->g < g) n = n->r;
+        else if (n->g > g) n = n->l;
+        else return n;
+    }
+
+    nss_glyph_t *new;
+#ifdef USE_BOXDRAWING
+    if (is_boxdraw(ch) && nss_config_integer(NSS_ICONFIG_OVERRIDE_BOXDRAW))
+        new = nss_make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth, cache->lcd);
+    else
+#endif
+        new = nss_font_render_glyph(cache->font, g & 0xFFFFFF, (g >> 24) & nss_font_attrib_mask, cache->lcd);
+
+    new->p = p;
+    if (!p) cache->root = new;
+    else if (p->g < new->g) p->r = new;
+    else p->l = new;
+
+    splay(&cache->root, new);
+    return new;
+}
+
+#else
+
 void nss_font_glyph_mark_loaded(nss_font_t *font, tchar_t ch) {
     if (ch < LOADED_MAP_SIZE * 32)
         font->loaded_map[ch / 32] |= 1 << (ch % 32);
@@ -393,4 +543,4 @@ _Bool nss_font_glyph_is_loaded(nss_font_t *font, tchar_t ch) {
     else return font->loaded_map[ch / 32] & (1 << (ch % 32));
 }
 
-#endif
+#endif //USE_X11SHM

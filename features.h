@@ -10,4 +10,10 @@
 /* Ability to override box drawing characters */
 // #define USE_BOXDRAWING
 
+/* X11 Backend
+ * MIT-SHM, if defined
+ * XRender, else
+ */
+#define USE_X11SHM
+
 #endif

@@ -4,10 +4,15 @@
 #include "features.h"
 #include "window.h"
 #include "term.h"
+#ifdef USE_X11SHM
+#   include "image.h"
+#endif
 
 #include <inttypes.h>
 #include <xcb/xcb.h>
-#ifndef USE_X11SHM
+#ifdef USE_X11SHM
+#   include <xcb/shm.h>
+#else
 #   include <xcb/render.h>
 #endif
 
@@ -17,7 +22,17 @@ typedef struct nss_renderer nss_renderer_t;
 
 struct nss_renderer {
     xcb_gcontext_t gc;
-#ifndef USE_X11SHM
+#ifdef USE_X11SHM
+    xcb_shm_seg_t shm_seg;
+    xcb_pixmap_t shm_pixmap;
+
+    nss_image_t im;
+    nss_glyph_cache_t *cache;
+
+    // It's size is 2*win->ch
+    nss_rect_t *bounds;
+    size_t boundc;
+#else
     xcb_pixmap_t pid;
     xcb_render_picture_t pic;
     xcb_render_picture_t pen;

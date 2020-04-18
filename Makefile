@@ -7,9 +7,9 @@ CFLAGS += -O2 -march=native -flto
 CFLAGS += -std=c11 -Wall -Wextra -Wno-implicit-fallthrough\
 	      -Wno-missing-field-initializers -Wno-unused-parameter
 
-OBJ := window.o nsst.o util.o font.o term.o config.o input.o nrcs.o boxdraw.o render.o
+OBJ := window.o nsst.o util.o font.o term.o config.o input.o nrcs.o boxdraw.o image.o render.o
 
-DEPS := xcb xcb-xkb xcb-render xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11
+DEPS := xcb xcb-xkb xcb-render xcb-shm xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11
 LIBS != pkg-config $(DEPS) --libs
 LIBS += -lm -lutil
 INCLUES != pkg-config $(DEPS) --cflags
@@ -40,12 +40,13 @@ $(PROG): $(OBJ)
 
 font.o: util.h config.h window.h features.h
 window.o: util.h config.h term.h input.h window.h window-private.h features.h
-render.o: util.h config.h term.h window.h window-private.h boxdraw.h features.h
+render.o: util.h config.h term.h window.h window-private.h boxdraw.h image.h features.h
 input.o: config.h util.h term.h input.h nrcs.h features.h
 term.o: config.h util.h term.h input.h window.h nrcs.h features.h
 nsst.o: config.h util.h term.h window.h features.h
 util.o: util.h features.h
 config.o: config.h util.h input.h features.h
 boxdraw.o: font.h features.h
+image.o: image.h font.h util.h features.h
 
 .PHONY: all clean install install-strip uninstall force

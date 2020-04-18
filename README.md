@@ -12,6 +12,7 @@ Inspired by [Simple Terminal](https://st.suckless.org/)
     * Multiple terminal windows
         * This would be extended to full daemon mode
     * Configuration with Xrmdb and command line arguments
+    * MIT-SHM and XRender backends (compile time option)
 
 See TODO file for things that are to be implemented.
 
@@ -26,20 +27,24 @@ Multiple fonts could be loaded by enumerating them in parameter:
     Nsst.font: Iosevka-13:style=Thin,MaterialDesignIcons-13
 
 All options are now available though Xrmdb and command line arguments.
+No documentation yet for Xrmdb names, see `load_params()` function in `window.c`.
+For command line arguments see `nsst --help`
 
 ## Dependencies
 ### Build
-    * pkg-config
-    * GNU make or BSD make
-    * C11 compatible comiler
+
+* pkg-config
+* GNU make or BSD make
+* C11 compatible comiler
 
 ### Runtime
-    * xcb-util
-    * xcb-util-wm
-    * xcb-util-renderutil
-    * xcb-util-keysyms
-    * xcb-util-xrm
-    * fontconfig
-    * freetype2
-    * xkbcommon
-    * xkbcommon-x11
+* `xcb-util`
+* `xcb-util-wm`
+* `xcb-util-renderutil` (if not `USE_X11SHM`)
+* `xcb-util-shm` (if `USE_X11SHM`)
+* `xcb-util-keysyms`
+* `xcb-util-xrm`
+* `fontconfig`
+* `freetype2`
+* `xkbcommon`
+* `xkbcommon-x11`
