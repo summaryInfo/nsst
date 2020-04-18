@@ -13,7 +13,9 @@ and doen't cause lag in X server.
 
 Also, it would be easier to implement SIXEL, DECDLD and port to Wayland with software rendering.
 
-**WARNING: I do push --force here to keep commits relevant to MIT-SHM on top**
+**WARNING: I do push --force here to keep commits relevant to MIT-SHM on top.**
+
+**UPDATE: Now this branch is no longer updated, sice MIT-SHM renderer is added to master branch.**
 
 ## Features
     * Most escape sequences are already implemented
