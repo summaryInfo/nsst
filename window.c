@@ -372,7 +372,6 @@ static void set_config(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *valu
     if (tag & nss_wc_underline_width) win->underline_width = *values++;
     if (tag & nss_wc_width) warn("Tag is not settable"), values++;
     if (tag & nss_wc_height) warn("Tag is not settable"), values++;
-    if (tag & nss_wc_blink_time) win->blink_time = *values++;
     if (tag & nss_wc_mouse) win->mouse_events = *values++;
 }
 
@@ -402,7 +401,6 @@ nss_window_t *nss_create_window(void) {
     win->focused = 1;
 
     win->term_fd = -1;
-    win->blink_time = nss_config_integer(NSS_ICONFIG_BLINK_TIME);
     win->font_name = strdup(nss_config_string(NSS_SCONFIG_FONT_NAME));
     if (!win->font_name) {
         nss_free_window(win);
@@ -618,8 +616,6 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
     if (tag & nss_wc_font_size) return win->font_size;
     if (tag & nss_wc_width) return win->width;
     if (tag & nss_wc_height) return win->height;
-
-    if (tag & nss_wc_blink_time) return win->blink_time;
     if (tag & nss_wc_mouse) return win->mouse_events;
 
     warn("Invalid option");
@@ -913,7 +909,7 @@ void nss_context_run(void) {
         clock_gettime(CLOCK_MONOTONIC, &cur);
 
         for (nss_window_t *win = win_list_head; win; win = win->next) {
-            if (TIMEDIFF(win->last_blink, cur) > win->blink_time && win->active) {
+            if (TIMEDIFF(win->last_blink, cur) > nss_config_integer(NSS_ICONFIG_BLINK_TIME)*1000 && win->active) {
                 win->blink_state = !win->blink_state;
                 win->blink_commited = 0;
                 win->last_blink = cur;

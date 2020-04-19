@@ -29,7 +29,6 @@ typedef enum nss_wc_tag {
     nss_wc_underline_width = 1 << 10,
     nss_wc_width = 1 << 11,
     nss_wc_height = 1 << 12,
-    nss_wc_blink_time = 1 << 21,
     nss_wc_mouse = 1 << 23,
 } nss_wc_tag_t;
 

@@ -67,7 +67,6 @@ struct nss_window {
     int16_t left_border;
     int16_t top_border;
     int16_t font_size;
-    uint32_t blink_time;
     struct timespec last_blink;
     struct timespec last_scroll;
     struct timespec last_draw;
