@@ -8,6 +8,11 @@
 #include "font.h"
 #include "util.h"
 #include "window.h"
+#ifdef USE_X11SHM
+#	ifdef USE_BOXDRAWING
+#		include "boxdraw.h"
+#	endif
+#endif
 
 #include <errno.h>
 #include <inttypes.h>
