@@ -507,8 +507,10 @@ static void free_dfs(nss_glyph_t *n) {
 }
 
 void nss_free_cache(nss_glyph_cache_t *cache) {
-    free_dfs(cache->root);
-    free(cache);
+    if (!--cache->refc) {
+        free_dfs(cache->root);
+        free(cache);
+    }
 }
 
 nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_attrib_t face) {
