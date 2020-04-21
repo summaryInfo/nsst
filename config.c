@@ -26,6 +26,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"allow-charsets", "\t(Enable charsets support)", "allowCharsets", NSS_ICONFIG_ALLOW_CHARSETS},
     {"allow-nrcs", "\t\t(Enable NRCSs support)", "allowNRCSs", NSS_ICONFIG_ALLOW_NRCS},
     {"alpha", "\t\t\t(Backround opacity, requires compositor to be running)", "alpha", NSS_ICONFIG_ALPHA},
+    {"alternate-scroll", "\t(Scrolling sends arrow keys escapes in alternate screen)", "alternateScroll", NSS_ICONFIG_ALTERNATE_SCROLL},
     {"answerback-string", "\t(ENQ report)", "answerbackString", NSS_SCONFIG_ANSWERBACK_STRING},
     {"appcursor", "\t\t(Initial application cursor mode value)", "appcursor", NSS_ICONFIG_INPUT_APPCURSOR},
     {"appkey", "\t\t(Initial application keypad mode value)", "appkey", NSS_ICONFIG_INPUT_APPKEY},
@@ -130,6 +131,7 @@ static struct {
     [NSS_ICONFIG_FPS - NSS_ICONFIG_MIN] = {60, 60, 1, 1000},
     [NSS_ICONFIG_SCROLL_AMOUNT - NSS_ICONFIG_MIN] = {2, 2, 1, 100},
     [NSS_ICONFIG_FONT_SIZE_STEP - NSS_ICONFIG_MIN] = {1, 1, 1, 250},
+    [NSS_ICONFIG_ALTERNATE_SCROLL - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
 };
 
 static struct {

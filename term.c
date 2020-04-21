@@ -137,6 +137,7 @@ struct nss_term {
         nss_tm_mouse_motion = 1 << 22,
         nss_tm_mouse_many = 1 << 23,
         nss_tm_mouse_format_sgr = 1 << 24,
+        nss_tm_alternate_scroll = 1LL << 36,
         nss_tm_mouse_mask =
             nss_tm_mouse_x10 | nss_tm_mouse_button |
             nss_tm_mouse_motion | nss_tm_mouse_many,
@@ -470,7 +471,11 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
 
 
 void nss_term_scroll_view(nss_term_t *term, coord_t amount) {
-    if (term->mode & nss_tm_altscreen) return;
+    if (term->mode & nss_tm_altscreen) {
+        if (term->mode & nss_tm_alternate_scroll)
+            term_answerback(term, "\x9B%d%c", abs(amount), amount > 0 ? 'A' : 'D');
+        return;
+    }
     coord_t scrolled = 0;
     if (amount > 0) {
         if (!term->view && term->scrollback) {
@@ -1545,6 +1550,9 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 break;
             case 1005: /* UTF-8 mouse tracking */
                 // IGNORE
+                break;
+            case 1007: /* Alternate scroll */
+                ENABLE_IF(set, term->mode, nss_tm_alternate_scroll);
                 break;
             case 1006: /* SGR mouse tracking */
                 ENABLE_IF(set, term->mode, nss_tm_mouse_format_sgr);

@@ -91,6 +91,7 @@ enum nss_config_opt {
     // Backround opacity
     // (not input, but should also be treated specially)
     NSS_ICONFIG_ALPHA,
+    NSS_ICONFIG_ALTERNATE_SCROLL,
     NSS_ICONFIG_MAX,
 
     NSS_SCONFIG_MIN = NSS_ICONFIG_MAX,
@@ -124,9 +125,9 @@ typedef struct nss_optmap_item {
 } nss_optmap_item_t;
 
 #ifdef USE_BOXDRAWING
-#	define OPT_MAP_SIZE 60
+#	define OPT_MAP_SIZE 61
 #else
-#	define OPT_MAP_SIZE 59
+#	define OPT_MAP_SIZE 60
 #endif
 
 extern nss_optmap_item_t optmap[OPT_MAP_SIZE];
