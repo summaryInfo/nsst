@@ -795,7 +795,7 @@ void nss_context_run(void) {
                             win->char_width));
                     int16_t y = MAX(0, MIN(win->ch, (ev->event_y - win->top_border) /
                             (win->char_height + win->char_depth)));
-                    nss_mouse_state_t mask = ev->state;
+                    nss_mouse_state_t mask = ev->state & 0xFFF;
                     nss_mouse_event_t evtype = -1;
                     switch (ev->response_type & 0xF7) {
                     case XCB_BUTTON_PRESS:
