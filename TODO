@@ -1,11 +1,18 @@
+Add keybindings configuration
+        break
+        numlock
+        scrollUp
+        scrollDown
+        incFontSize
+        decFontSize
+        resetFontSize
+        toggleSubpixel
+        newWindow
+        reset
+        reloadConfig
+
 Set WM_NORMAL_HINTS
 Selections:
-    X11 selection pasting
-    Bracketed paste (Private mode 2004)
-    Visual selection (mouse and keyboard)
-    X11 selection copying
-    OSC 52
-    Privite modes 1040, 1041, 1044
 Window operations
     --allow-window-ops/allowWindowOps
     nss_window_dispatch_window_operation
@@ -13,6 +20,14 @@ Window operations
         and express other window operations in terms of CSI t
 
 ===================
+Selections
+    [ ] Mouse selection internal state
+        Use separate sets of notmalized and original coordinates
+    [ ] Rendering
+    [ ] X11 clipboard
+    [ ] Bracketed paste
+    [ ] OSC 52
+    [ ] Privite modes 1040, 1041, 1044
 Input
     What if nss_term_read would be called recursively?
         It could happen because like:
@@ -20,7 +35,9 @@ Input
         Should add term_tty_read_refill(nss_term_t*) and make terminal buffer dynamically allocatable
         And also term->fd_read_lock flag
     DECUDK
+	On SCO keyboard mode normal (and UTF-8) mouse modes should send \E[>M
 Render
+	[ ] Colored glyphs (for MIT-SHM backend)
     [x] MIT-SHM
         [x] Software rendering
         [x] Wide glyphs rendering
@@ -29,7 +46,7 @@ Render
         [x] Implement lcd mode
         [x] Implement uploading subranges
         [x] Implement shm pixmaps
-	[x] XRender
+    [x] XRender
         [?] Slow scrolling of full-color images (with small font in chafa)
         [ ] After resizing window (only jump resize) new lines are not rerendered
         [ ] Rendering refactoring:
@@ -67,16 +84,26 @@ Term
         1001 -- Hightlight mouse tracking [mouse]
         1005 -- UTF-8 mouse [mouse]
         1015 -- URXVT mouse [mouse]
-        1039 -- Alt sends escape [input]
-        1040 -- Keep selection [clipboard]
-        1041 -- Use CLIPBOARD selection [clipboard]
         1042 -- bell is window urgency [bell]
         1043 -- raise on bell [bell]
-        1044 -- reuse clipboard [clipboard]
+        1039 -- Alt sends escape [input]
         1040 -- terminfo/termcap function key mode [input]
         1070 -- Use private resgisters [SIXEL]
-        2004 -- bracketed paste [clipboard]
         8452 -- Sixel scrolling leaves cursor to the right of graphics [SIXEL]
+
+        1040 -- Keep selection [clipboard]
+        1041 -- Use CLIPBOARD selection [clipboard]
+        1044 -- reuse clipboard [clipboard]
+        2004 -- bracketed paste [clipboard]
+        srm_BUTTON1_MOVE_POINT = 2001
+        srm_BUTTON2_MOVE_POINT = 2002
+        srm_DBUTTON3_DELETE = 2003
+        srm_PASTE_QUOTE = 2005
+        srm_PASTE_LITERAL_NL = 2006
+        srm_VT200_HIGHLIGHT_MOUSE
+        srm_EXT_MODE_MOUSE
+        srm_SGR_EXT_MODE_MOUSE
+        srm_URXVT_EXT_MODE_MOUSE
     DEC Locator [mouse]
         CSI ? 53 n
         CSI ? 55 n
