@@ -1,5 +1,22 @@
-Add nss_ prefix to types that lacks it
-Add keybindings configuration
+Until version 1.2:
+    Selections
+    Add nss_ prefix to types that lacks it
+    Fix rendering cursor on screen scrolling
+    Rename composite_glyph -> compose_glyph
+    Use case-insensetive comparison for locale codeset
+    On SCO keyboard mode normal (and UTF-8) mouse modes should send \E[>M
+Until version 1.3:
+    Recursive input buffer refilling
+    After resizing window (only jump resize) new lines are not damaged
+    Set WM_NORMAL_HINTS
+    Set pseudoterminal attributes
+    Support new color syntax
+    Window operations
+        --allow-window-ops/allowWindowOps
+        nss_window_dispatch_window_operation
+            It is simpler to implement window operations on window side
+            and express other window operations in terms of CSI t
+    Add keybindings configuration
         break
         numlock
         scrollUp
@@ -11,29 +28,17 @@ Add keybindings configuration
         newWindow
         reset
         reloadConfig
-
-Fix rendering cursor on screen scrolling
-Rename composite_glyph -> compose_glyph
-Set WM_NORMAL_HINTS
-Set pseudoterminal attributes
-Support new color syntax
-Use case-insensetive comparison for locale codeset
-Selections:
-Window operations
-    --allow-window-ops/allowWindowOps
-    nss_window_dispatch_window_operation
-        It is simpler to implement window operations on window side
-        and express other window operations in terms of CSI t
+    ...
 
 ===================
 Selections
-    [ ] Mouse selection internal state
-        Use separate sets of notmalized and original coordinates
-    [ ] Rendering
+    [x] Mouse selection internal state
+    [x] Rendering
+    [ ] Reduce screen invalidation (damge only difference between selections)
     [ ] X11 clipboard
     [ ] Bracketed paste
-    [ ] OSC 52
     [ ] Privite modes 1040, 1041, 1044
+    [ ] OSC 52
 Input
     What if nss_term_read would be called recursively?
         It could happen because like:
@@ -41,7 +46,6 @@ Input
         Should add term_tty_read_refill(nss_term_t*) and make terminal buffer dynamically allocatable
         And also term->fd_read_lock flag
     DECUDK
-    On SCO keyboard mode normal (and UTF-8) mouse modes should send \E[>M
 Render
     [ ] Colored glyphs (for MIT-SHM backend)
     [x] MIT-SHM
@@ -54,7 +58,6 @@ Render
         [x] Implement shm pixmaps
     [x] XRender
         [?] Slow scrolling of full-color images (with small font in chafa)
-        [ ] After resizing window (only jump resize) new lines are not rerendered
         [ ] Rendering refactoring:
             -Use multiple separate buffers for cells parts:
                 1. Background
@@ -101,15 +104,12 @@ Term
         1041 -- Use CLIPBOARD selection [clipboard]
         1044 -- reuse clipboard [clipboard]
         2004 -- bracketed paste [clipboard]
-        srm_BUTTON1_MOVE_POINT = 2001
-        srm_BUTTON2_MOVE_POINT = 2002
-        srm_DBUTTON3_DELETE = 2003
-        srm_PASTE_QUOTE = 2005
-        srm_PASTE_LITERAL_NL = 2006
-        srm_VT200_HIGHLIGHT_MOUSE
-        srm_EXT_MODE_MOUSE
-        srm_SGR_EXT_MODE_MOUSE
-        srm_URXVT_EXT_MODE_MOUSE
+        These need further invastigation:
+            srm_BUTTON1_MOVE_POINT = 2001
+            srm_BUTTON2_MOVE_POINT = 2002
+            srm_DBUTTON3_DELETE = 2003
+            srm_PASTE_QUOTE = 2005
+            srm_PASTE_LITERAL_NL = 2006
     DEC Locator [mouse]
         CSI ? 53 n
         CSI ? 55 n
