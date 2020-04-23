@@ -59,6 +59,57 @@ typedef struct nss_line {
     nss_cell_t cell[];
 } nss_line_t;
 
+/* "iterator" to traverse viewport (scrollback list part, then screen array part) */
+
+typedef struct line_iter {
+    nss_line_t *_line;
+    nss_line_t *_last;
+    nss_line_t **_screen;
+    ssize_t _y;
+    ssize_t _y_scr;
+    ssize_t _y_max;
+} line_iter_t;
+
+inline static line_iter_t make_line_iter(nss_line_t *view, nss_line_t **screen, ssize_t y0, ssize_t y1) {
+    line_iter_t it = { view, view, screen, 0, 0, y1 };
+    while (it._line && it._y < y0) it._y++, it._line = it._line->next;
+    if (!it._line) it._y_scr = it._y;
+    it._y = y0;
+    return it;
+}
+
+inline static ssize_t line_iter_y(line_iter_t *it) {
+    return it->_y - 1;
+}
+
+inline static nss_line_t *line_iter_next(line_iter_t *it) {
+    if (it->_y >= it->_y_max ) return NULL;
+    nss_line_t *ln;
+    if (it->_line) {
+        ln = it->_line;
+        if (!it->_line->next) {
+            it->_y_scr = it->_y + 1;
+            it->_last = it->_line;
+        }
+        it->_line = it->_line->next;
+    } else
+        ln = it->_screen[it->_y - it->_y_scr];
+    it->_y++;
+    return ln;
+}
+
+inline static nss_line_t *line_iter_prev(line_iter_t *it) {
+    nss_line_t *ln;
+    if (it->_line)
+        ln = it->_line = it->_line->prev;
+    else if (it->_y == it->_y_scr)
+        ln = it->_line = it->_last;
+    else
+        ln = it->_screen[it->_y - 1 - it->_y_scr];
+    it->_y--;
+    return ln;
+}
+
 typedef struct nss_input_mode nss_input_mode_t;
 typedef struct nss_term nss_term_t;
 
@@ -76,9 +127,10 @@ ssize_t nss_term_read(nss_term_t *term);
 int nss_term_fd(nss_term_t *term);
 void nss_term_hang(nss_term_t *term);
 nss_input_mode_t *nss_term_inmode(nss_term_t *term);
-_Bool nss_term_is_altscreen(nss_term_t *term);
 _Bool nss_term_is_utf8(nss_term_t *term);
 _Bool nss_term_is_nrcs_enabled(nss_term_t *term);
 void nss_term_damage(nss_term_t *term, nss_rect_t damage);
+_Bool nss_term_is_selected(nss_term_t *term, coord_t x, coord_t y);
+uint8_t *nss_term_selection_data(nss_term_t *term);
 
 #endif

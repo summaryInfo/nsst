@@ -232,7 +232,7 @@ void nss_init_render_context() {
     }
 }
 
-static _Bool draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
+inline static _Bool draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
     nss_cell_t cell = *cel;
 
     // Calculate colors
@@ -241,8 +241,9 @@ static _Bool draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *pal
     nss_color_t fg = cell.fg < NSS_PALETTE_SIZE ? palette[cell.fg] : extra[cell.fg - NSS_PALETTE_SIZE];
     if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint)
         fg = (fg & 0xFF000000) | ((fg & 0xFEFEFE) >> 1);
-    if (cell.attr & nss_attrib_inverse) SWAP(nss_color_t, fg, bg);
-    if (cell.attr & nss_attrib_invisible || (cell.attr & nss_attrib_blink && win->blink_state)) fg = bg;
+    _Bool selected = nss_term_is_selected(win->term, x, y);
+    if ((cell.attr & nss_attrib_inverse) ^ selected) SWAP(nss_color_t, fg, bg);
+    if ((!selected && cell.attr & nss_attrib_invisible) || (cell.attr & nss_attrib_blink && win->blink_state)) fg = bg;
 
     // U+2588 FULL BLOCK
     if (cell.ch == 0x2588) bg = fg;
@@ -291,7 +292,7 @@ static void optimize_bounds(nss_rect_t *bounds, size_t *boundc, _Bool fine_grain
         while(++i < *boundc && (bounds[i].y <= bounds[j].y + bounds[j].height)) {
             nss_rect_t uni = rect_union(bounds[j], bounds[i]);
             if (fine_grained && bounds[i].y >= bounds[j].y + bounds[j].height &&
-                2*(bounds[j].height*bounds[j].width + bounds[i].height*bounds[i].width) > uni.width*uni.height) break;
+                3*(bounds[j].height*bounds[j].width + bounds[i].height*bounds[i].width)/2 < uni.width*uni.height) break;
             bounds[j] = uni;
         }
         j++;
@@ -305,24 +306,24 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
     if (cursor && win->focused && win->cursor_type == nss_cursor_block)
         array[cur_y]->cell[cur_x].attr ^= nss_attrib_inverse;
 
-    coord_t h = 0;
-    for (; h < win->ch && list; list = list->next, h++) {
+    line_iter_t it = make_line_iter(list, array, 0, win->ch);
+    for (nss_line_t *line; (line = line_iter_next(&it));) {
         _Bool damaged = 0;
-        nss_rect_t l_bound = {0, h, 0, 1};
-        for (coord_t i = 0; i < MIN(win->cw, list->width); i++)
-            if (!(list->cell[i].attr & nss_attrib_drawn) ||
-                    (!win->blink_commited && (list->cell[i].attr & nss_attrib_blink))) {
+        nss_rect_t l_bound = {0, line_iter_y(&it), 0, 1};
+        for (coord_t i = 0; i < MIN(win->cw, line->width); i++)
+            if (!(line->cell[i].attr & nss_attrib_drawn) ||
+                    (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink))) {
                 if (!damaged) l_bound.x = i;
-                i += draw_cell(win, i, h, palette, list->extra, &list->cell[i]);
+                i += draw_cell(win, i, line_iter_y(&it), palette, line->extra, &line->cell[i]);
                 l_bound.width = i;
                 damaged = 1;
             }
         if (damaged) {
-            if (win->cw > list->width) {
+            if (win->cw > line->width) {
                 nss_image_draw_rect(win->ren.im, (nss_rect_t){
-                    .x = list->width * win->char_width,
-                    .y = h * (win->char_height + win->char_depth),
-                    .width = (win->cw - list->width) * win->char_width,
+                    .x = line->width * win->char_width,
+                    .y = line_iter_y(&it) * (win->char_height + win->char_depth),
+                    .width = (win->cw - line->width) * win->char_width,
                     .height = win->char_height + win->char_depth
                 }, win->bg);
                 l_bound.width = win->cw;
@@ -330,31 +331,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
             l_bound.width -= l_bound.x - 1;
             win->ren.bounds[win->ren.boundc++] = l_bound;
         }
-    }
-    for (coord_t j = 0; j < win->ch - h; j++) {
-        _Bool damaged = 0;
-        nss_rect_t l_bound = {0, j + h, 0, 1};
-        for (coord_t i = 0; i < MIN(win->cw, array[j]->width); i++)
-            if (!(array[j]->cell[i].attr & nss_attrib_drawn) ||
-                    (!win->blink_commited && (array[j]->cell[i].attr & nss_attrib_blink))) {
-                if (!damaged) l_bound.x = i;
-                i += draw_cell(win, i, j + h, palette, array[j]->extra, &array[j]->cell[i]);
-                l_bound.width = i;
-                damaged = 1;
-            }
-        if (damaged) {
-            if (win->cw > array[j]->width) {
-                nss_image_draw_rect(win->ren.im, (nss_rect_t){
-                    .x = array[j]->width * win->char_width,
-                    .y = (j + h) * (win->char_height + win->char_depth),
-                    .width = (win->cw - array[j]->width) * win->char_width,
-                    .height = win->char_height + win->char_depth
-                }, win->bg);
-                l_bound.width = win->cw;
-            }
-            l_bound.width -= l_bound.x - 1;
-            win->ren.bounds[win->ren.boundc++] = l_bound;
-        }
+
     }
 
     if (cursor) {
@@ -394,21 +371,17 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
 
     if (win->ren.boundc) {
         optimize_bounds(win->ren.bounds, &win->ren.boundc, rctx.has_shm);
-        for (size_t k = 0; k < win->ren.boundc; k++)
-           nss_renderer_update(win, rect_scale_up(win->ren.bounds[k], win->char_width, win->char_depth + win->char_height));
+        for (size_t k = 0; k < win->ren.boundc; k++) {
+            nss_renderer_update(win, rect_scale_up(win->ren.bounds[k], win->char_width, win->char_depth + win->char_height));
+        }
         win->ren.boundc = 0;
     }
 }
+
 void nss_renderer_clear(nss_window_t *win, size_t count, nss_rect_t *rects) {
     if (count) xcb_poly_fill_rectangle(con, win->wid, win->ren.gc, count, (xcb_rectangle_t*)rects);
-    /*
-     * // Wrong way
-    if (count) {
-        xcb_render_color_t color = MAKE_COLOR(win->bg);
-        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, color, count, (xcb_rectangle_t*)rects);
-    }
-    */
 }
+
 void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
     if (rctx.has_shm_pixmaps) {
         xcb_copy_area(con, win->ren.shm_pixmap, win->wid, win->ren.gc, rect.x, rect.y,
@@ -423,16 +396,23 @@ void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
                 (const uint8_t *)(win->ren.im.data+rect.y*win->ren.im.width));
     }
 }
+
 void nss_renderer_background_changed(nss_window_t *win) {
     uint32_t values2[2];
     values2[0] = values2[1] = win->bg;
     xcb_change_window_attributes(con, win->wid, XCB_CW_BACK_PIXEL, values2);
     xcb_change_gc(con, win->ren.gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
 }
+
 void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy) {
     nss_image_copy(win->ren.im, dst, win->ren.im, sx, sy);
 
     int16_t w = win->char_width, h = win->char_depth + win->char_height;
+
+    /*
+    xcb_copy_area(con, win->wid, win->wid, win->ren.gc, sx + win->left_border,
+                  sy + win->top_border, dst.x + win->left_border, dst.y + win->top_border, dst.width, dst.height);
+    */
 
     dst.height = (dst.height + dst.y + h - 1) / h;
     dst.height -= dst.y /= h;
@@ -442,11 +422,6 @@ void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy
     if (win->ren.boundc + 1 > (size_t)win->ch)
         optimize_bounds(win->ren.bounds, &win->ren.boundc, 0);
     win->ren.bounds[win->ren.boundc++] = dst;
-
-    /*
-    xcb_copy_area(con, win->ren.pid, win->ren.pid, win->ren.gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
-    xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, 0, win->ren.pic, sx, sy, 0, 0, dst.x, dst.y, dst.width, dst.height);
-    */
 }
 
 void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
@@ -749,7 +724,7 @@ void nss_init_render_context() {
     }
 }
 
-static void push_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
+inline static void push_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
     nss_cell_t cell = *cel;
 
     if (!nss_font_glyph_is_loaded(win->font, cell.ch)) {
@@ -774,8 +749,9 @@ static void push_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *pale
     nss_color_t fg = cell.fg < NSS_PALETTE_SIZE ? palette[cell.fg] : extra[cell.fg - NSS_PALETTE_SIZE];
     if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint)
         fg = (fg & 0xFF000000) | ((fg & 0xFEFEFE) >> 1);
-    if (cell.attr & nss_attrib_inverse) SWAP(nss_color_t, fg, bg);
-    if (cell.attr & nss_attrib_invisible || (cell.attr & nss_attrib_blink && win->blink_state)) fg = bg;
+    _Bool selected = nss_term_is_selected(win->term, x, y);
+    if ((cell.attr & nss_attrib_inverse) ^ selected) SWAP(nss_color_t, fg, bg);
+    if ((!selected && cell.attr & nss_attrib_invisible) || (cell.attr & nss_attrib_blink && win->blink_state)) fg = bg;
 
     if (2*(rctx.cbufpos + 1) >= rctx.cbufsize) {
         size_t new_size = MAX(3 * rctx.cbufsize / 2, 2 * rctx.cbufpos + 1);
@@ -920,34 +896,20 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         push_cell(win, cur_x, cur_y, palette, array[cur_y]->extra, &cur_cell);
     }
 
-    coord_t h = 0;
-    for (; h < win->ch && list; list = list->next, h++) {
-        if (win->cw > list->width) {
+    line_iter_t it = make_line_iter(list, array, 0, win->ch);
+    for (nss_line_t *line; (line = line_iter_next(&it));) {
+        if (win->cw > line->width) {
             push_rect(win, &(xcb_rectangle_t){
-                .x = list->width * win->char_width,
-                .y = h * (win->char_height + win->char_depth),
-                .width = (win->cw - list->width) * win->char_width,
+                .x = line->width * win->char_width,
+                .y = line_iter_y(&it) * (win->char_height + win->char_depth),
+                .width = (win->cw - line->width) * win->char_width,
                 .height = win->char_height + win->char_depth
             });
         }
-        for (coord_t i = 0; i < MIN(win->cw, list->width); i++)
-            if (!(list->cell[i].attr & nss_attrib_drawn) ||
-                    (!win->blink_commited && (list->cell[i].attr & nss_attrib_blink)))
-                push_cell(win, i, h, palette, list->extra, &list->cell[i]);
-    }
-    for (coord_t j = 0; j < win->ch - h; j++) {
-        if (win->cw > array[j]->width) {
-            push_rect(win, &(xcb_rectangle_t){
-                .x = array[j]->width * win->char_width,
-                .y = (j + h) * (win->char_height + win->char_depth),
-                .width = (win->cw - array[j]->width) * win->char_width,
-                .height = win->char_height + win->char_depth
-            });
-        }
-        for (coord_t i = 0; i < MIN(win->cw, array[j]->width); i++)
-            if (!(array[j]->cell[i].attr & nss_attrib_drawn) ||
-                    (!win->blink_commited && (array[j]->cell[i].attr & nss_attrib_blink)))
-                push_cell(win, i, j + h, palette, array[j]->extra, &array[j]->cell[i]);
+        for (coord_t i = 0; i < MIN(win->cw, line->width); i++)
+            if (!(line->cell[i].attr & nss_attrib_drawn) ||
+                    (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink)))
+                push_cell(win, i, line_iter_y(&it), palette, line->extra, &line->cell[i]);
     }
 
     if (rctx.bufpos) {
@@ -1155,16 +1117,19 @@ void nss_renderer_clear(nss_window_t *win, size_t count, nss_rect_t *rects) {
     }
     */
 }
+
 void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
     xcb_copy_area(con, win->ren.pid, win->wid, win->ren.gc, rect.x, rect.y,
                   rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
 }
+
 void nss_renderer_background_changed(nss_window_t *win) {
     uint32_t values2[2];
     values2[0] = values2[1] = win->bg;
     xcb_change_window_attributes(con, win->wid, XCB_CW_BACK_PIXEL, values2);
     xcb_change_gc(con, win->ren.gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
 }
+
 void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy) {
     xcb_copy_area(con, win->ren.pid, win->ren.pid, win->ren.gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
     /*

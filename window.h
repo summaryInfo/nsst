@@ -33,9 +33,9 @@ typedef enum nss_wc_tag {
 } nss_wc_tag_t;
 
 typedef enum nss_mouse_event {
-    nss_me_motion,
     nss_me_press,
-    nss_me_release
+    nss_me_release,
+    nss_me_motion,
 } nss_mouse_event_t;
 
 typedef enum nss_mouse_state {
@@ -75,5 +75,7 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag);
 void nss_window_set_font(nss_window_t *win, const char *name);
 nss_font_t *nss_window_get_font(nss_window_t *win);
 char *nss_window_get_font_name(nss_window_t *win);
-
+void nss_window_set_clip(nss_window_t *win, uint8_t *data);
+void nss_window_paste_clip(nss_window_t *win);
+void nss_window_clear_clip(nss_window_t *win);
 #endif

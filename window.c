@@ -223,7 +223,7 @@ void load_params(void) {
     char *res, name[OPT_NAME_MAX] = NSS_CLASS".color";
     const size_t n_pos = strlen(name);
 
-	// .color0 -- .color255
+    // .color0 -- .color255
     for (unsigned j = 0; j < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; j++) {
         snprintf(name + n_pos, OPT_NAME_MAX, "%u", j);
         if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
@@ -499,8 +499,8 @@ void nss_free_window(nss_window_t *win) {
         xcb_flush(con);
     }
 
-    if (win->next)win->next->prev = win->prev;
-    if (win->prev)win->prev->next = win->next;
+    if (win->next) win->next->prev = win->prev;
+    if (win->prev) win->prev->next = win->next;
     else win_list_head =  win->next;
 
     if (win->term_fd > 0) {
@@ -533,6 +533,7 @@ static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right
         size_t count = 4, offset = 0;
         if (!top_left) count -= 2, offset += 2;
         if (!bottom_right) count -= 2;
+        //TODO Handle zero height
         nss_renderer_clear(win, count, borders + offset);
 }
 
@@ -621,6 +622,11 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
     warn("Invalid option");
     return 0;
 }
+
+//TODO
+void nss_window_set_clip(nss_window_t *win, uint8_t *data) {}
+void nss_window_paste_clip(nss_window_t *win) {}
+void nss_window_clear_clip(nss_window_t *win) {}
 
 static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
 
@@ -795,25 +801,60 @@ void nss_context_run(void) {
                             win->char_width));
                     int16_t y = MAX(0, MIN(win->ch, (ev->event_y - win->top_border) /
                             (win->char_height + win->char_depth)));
+                    /* XCB_BUTTON_PRESS -> nss_me_press
+                     * XCB_BUTTON_RELEASE -> nss_me_release
+                     * XCB_MOTION_NOTIFY -> nss_me_motion
+                     */
+                    nss_mouse_event_t evtype = (ev->response_type & 0xF7) - 4;
                     nss_mouse_state_t mask = ev->state & 0xFFF;
-                    nss_mouse_event_t evtype = -1;
-                    switch (ev->response_type & 0xF7) {
-                    case XCB_BUTTON_PRESS:
-                        evtype = nss_me_press;
-                        break;
-                    case XCB_BUTTON_RELEASE:
-                        evtype = nss_me_release;
-                        break;
-                    case XCB_MOTION_NOTIFY:
-                        evtype = nss_me_motion;
-                        break;
-                    }
 
-                    if (evtype == nss_me_press && !nss_term_is_altscreen(win->term) &&
-                            (button == 3 || button == 4) && !mask) {
-                        nss_term_scroll_view(win->term, (2 *(button == 3) - 1) *
-                                nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));
-                    } else nss_term_mouse(win->term, x, y, mask, evtype, button);
+                    nss_term_mouse(win->term, x, y, mask, evtype, button);
+                    break;
+                }
+                /*
+                 * Also need:
+                     * nss_window_get_selection
+                     * nss_window_set_selection
+                     * Move selection when scrolling
+                     * rectangular/normal selections
+                     * selection snapping
+                     * word separator setting
+                     * Modify rendering
+                     * add hightlight fg/bg colors
+                     * bracketed paste (DECSM/DECRM 2004)
+                     * Other clipboard DECSM/DECRM
+                     * OSC 52
+                //Use:
+                //xcb_set_selection_owner();
+                //xcb_get_selection_owner();
+                //xcb_convert_selection();
+                //xcb_change_property();
+                //xcb_delete_property();
+                //xcb_intern_atom();
+                //xcb_change_window_attributes(); for enabling/disabling XCB_PROPERTY_NOTIFY
+                */
+                case XCB_PROPERTY_NOTIFY: {
+                    xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)event;
+                    nss_window_t *win = window_for_xid(ev->window);
+                    if (!win) break;
+                    break;
+                }
+                case XCB_SELECTION_CLEAR: {
+                    xcb_selection_clear_event_t *ev = (xcb_selection_clear_event_t*)event;
+                    nss_window_t *win = window_for_xid(ev->owner);
+                    if (!win) break;
+                    break;
+                }
+                case XCB_SELECTION_NOTIFY: {
+                    xcb_selection_notify_event_t *ev = (xcb_selection_notify_event_t*)event;
+                    nss_window_t *win = window_for_xid(ev->requestor);
+                    if (!win) break;
+                    break;
+                }
+                case XCB_SELECTION_REQUEST: {
+                    xcb_selection_request_event_t *ev = (xcb_selection_request_event_t*)event;
+                    nss_window_t *win = window_for_xid(ev->owner);
+                    if (!win) break;
                     break;
                 }
                 case XCB_CLIENT_MESSAGE: {

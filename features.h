@@ -10,7 +10,7 @@
 #endif
 
 /* Ability to override box drawing characters */
-// #define USE_BOXDRAWING
+#define USE_BOXDRAWING
 
 /* X11 Backend
  * MIT-SHM, if defined

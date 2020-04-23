@@ -38,6 +38,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"cursor-shape", "\t\t(Shape of cursor)", "cursorShape", NSS_ICONFIG_CURSOR_SHAPE},
     {"cursor-width", "\t\t(Width of lines that forms cursor)", "cursorWidth", NSS_ICONFIG_CURSOR_WIDTH},
     {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", "deleteIsDelete", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
+    {"double-click-time", "\t(Time gap in milliseconds in witch two mouse presses will be considered double)", "doubleClickTime", NSS_ICONFIG_DOUBLE_CLICK_TIME},
     {"enable-autowrap", "\t(Initial autowrap setting)", "enableAutowrap", NSS_ICONFIG_INIT_WRAP},
     {"enable-reverse-video", "\t(Initial reverse video setting)", "enableReverseVideo", NSS_ICONFIG_REVERSE_VIDEO},
     {"fkey-increment", "\t(Step in numbering function keys)", "fkeyIncrement", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
@@ -80,11 +81,13 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"tab-width", "\t\t(Initial width of tab character)", "tabWidth", NSS_ICONFIG_TAB_WIDTH},
     {"term-name", ", -D<value>\t(TERM value)", "termName", NSS_SCONFIG_TERM_NAME},
     {"title", ", -T<value>, -t<value> (Initial window title)", "title", NSS_SCONFIG_TITLE},
+    {"triple-click-time", "\t(Time gap in milliseconds in witch tree mouse presses will be considered triple)", "trippleClickTime", NSS_ICONFIG_TRIPLE_CLICK_TIME},
     {"underline-width", "\t(Text underline width)", "underlineWidth", NSS_ICONFIG_UNDERLINE_WIDTH},
     {"use-utf8", "\t\t(Enable uft-8 i/o)", "useUTF8", NSS_ICONFIG_UTF8},
     {"vertical-border", "\t(Left and right borders)", "verticalBorder", NSS_ICONFIG_LEFT_BORDER},
     {"vt-version", ", -V<value>\t(Emulated VT version)", "vtVersion", NSS_ICONFIG_VT_VERION},
     {"window-class", ", -c<value> (X11 Window class)", "windowClass", NSS_SCONFIG_TERM_CLASS},
+    {"word-break", "\t(Symbols treated as word separators when snapping mouse selection)", "wordBreak", NSS_SCONFIG_WORD_SEPARATORS},
 };
 
 static struct {
@@ -132,6 +135,8 @@ static struct {
     [NSS_ICONFIG_SCROLL_AMOUNT - NSS_ICONFIG_MIN] = {2, 2, 1, 100},
     [NSS_ICONFIG_FONT_SIZE_STEP - NSS_ICONFIG_MIN] = {1, 1, 1, 250},
     [NSS_ICONFIG_ALTERNATE_SCROLL - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_DOUBLE_CLICK_TIME - NSS_ICONFIG_MIN] = {300, 300, 10, 1000000},
+    [NSS_ICONFIG_TRIPLE_CLICK_TIME - NSS_ICONFIG_MIN] = {600, 600, 10, 1000000},
 };
 
 static struct {
@@ -145,6 +150,7 @@ static struct {
         [NSS_SCONFIG_TITLE - NSS_SCONFIG_MIN] = { "Not So Simple Terminal" },
         [NSS_SCONFIG_PRINTER - NSS_SCONFIG_MIN] = { },
         [NSS_SCONFIG_TERM_CLASS - NSS_SCONFIG_MIN] = { },
+        [NSS_SCONFIG_WORD_SEPARATORS - NSS_SCONFIG_MIN] = { " ()[]{},.;'\\\"" },
 };
 
 static nss_input_mode_t input_mode = {

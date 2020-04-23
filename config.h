@@ -65,6 +65,8 @@ enum nss_config_opt {
     NSS_ICONFIG_FPS,
     NSS_ICONFIG_SCROLL_AMOUNT,
     NSS_ICONFIG_FONT_SIZE_STEP,
+    NSS_ICONFIG_DOUBLE_CLICK_TIME,
+    NSS_ICONFIG_TRIPLE_CLICK_TIME,
 
     // These can't be read with nss_config_integer
     // Use nss_config_input_mode to get the copy of the whole structure
@@ -102,6 +104,7 @@ enum nss_config_opt {
     NSS_SCONFIG_TERM_CLASS,
     NSS_SCONFIG_TITLE,
     NSS_SCONFIG_PRINTER,
+    NSS_SCONFIG_WORD_SEPARATORS,
     NSS_SCONFIG_MAX,
 
     NSS_CCONFIG_MIN = NSS_SCONFIG_MAX,
@@ -125,9 +128,9 @@ typedef struct nss_optmap_item {
 } nss_optmap_item_t;
 
 #ifdef USE_BOXDRAWING
-#	define OPT_MAP_SIZE 61
+#	define OPT_MAP_SIZE 64
 #else
-#	define OPT_MAP_SIZE 60
+#	define OPT_MAP_SIZE 63
 #endif
 
 extern nss_optmap_item_t optmap[OPT_MAP_SIZE];

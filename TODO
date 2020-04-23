@@ -1,3 +1,4 @@
+Add nss_ prefix to types that lacks it
 Add keybindings configuration
         break
         numlock
@@ -11,7 +12,12 @@ Add keybindings configuration
         reset
         reloadConfig
 
+Fix rendering cursor on screen scrolling
+Rename composite_glyph -> compose_glyph
 Set WM_NORMAL_HINTS
+Set pseudoterminal attributes
+Support new color syntax
+Use case-insensetive comparison for locale codeset
 Selections:
 Window operations
     --allow-window-ops/allowWindowOps
@@ -35,9 +41,9 @@ Input
         Should add term_tty_read_refill(nss_term_t*) and make terminal buffer dynamically allocatable
         And also term->fd_read_lock flag
     DECUDK
-	On SCO keyboard mode normal (and UTF-8) mouse modes should send \E[>M
+    On SCO keyboard mode normal (and UTF-8) mouse modes should send \E[>M
 Render
-	[ ] Colored glyphs (for MIT-SHM backend)
+    [ ] Colored glyphs (for MIT-SHM backend)
     [x] MIT-SHM
         [x] Software rendering
         [x] Wide glyphs rendering
