@@ -3112,15 +3112,6 @@ static void term_scroll_selection(nss_term_t *term, coord_t amount) {
     }
  }
 
-
-inline static coord_t line_length(nss_line_t *line) {
-    coord_t max_x = line->width;
-    if (!line->wrap_at)
-        while(max_x > 0 && !line->cell[max_x].ch) max_x--;
-    else max_x = line->wrap_at;
-    return max_x;
-}
-
 inline static _Bool is_separator(tchar_t ch) {
         if (!ch) return 1;
         uint8_t cbuf[UTF8_MAX_LEN + 1];
@@ -3147,8 +3138,6 @@ static nss_visual_selection_t selection_normalize(nss_visual_selection_t sel) {
 static void term_snap_selection(nss_term_t *term) {
     term->vsel = selection_normalize(term->vsel);
 
-    // That doesn't work correctly yet
-
     if (term->vsel.snap == nss_ssnap_line) {
         line_iter_t it = make_line_iter(term->view, term->screen,
                 term->vsel.ny0, term->scrollback_pos + term->height);
@@ -3160,42 +3149,53 @@ static void term_snap_selection(nss_term_t *term) {
         do line = line_iter_prev(&it), term->vsel.ny0--;
         while (line && line->wrap_at);
 
-        while(line && line_iter_y(&it) < term->vsel.ny1)
-            line = line_iter_next(&it);
+        it = make_line_iter(term->view, term->screen,
+                term->vsel.ny1, term->scrollback_pos + term->height);
+        line = line_iter_next(&it);
         if (!line) return;
 
         while (line && line->wrap_at)
             line = line_iter_prev(&it), term->vsel.ny1++;
+
     } else if (term->vsel.snap == nss_ssnap_word) {
+
         line_iter_t it = make_line_iter(term->view, term->screen,
-                term->vsel.ny0, term->scrollback_pos + term->height);
+                term->scrollback_pos + term->vsel.ny0, term->height + term->scrollback_pos);
         nss_line_t *line = line_iter_next(&it); line_iter_prev(&it);
 
         if (!line) return;
 
-        term->vsel.nx0 = MIN(term->vsel.nx0, line_length(line) - 1);
-        _Bool first = 0, cat = is_separator(line->cell[term->vsel.nx0].ch);
+        term->vsel.nx0 = MIN(term->vsel.nx0, line->width - 1);
+        _Bool first = 1, cat = is_separator(line->cell[term->vsel.nx0].ch);
         if (term->vsel.nx0 >= 0) do {
-            if (!first) term->vsel.nx0 = line_length(line), term->vsel.ny0--;
-            first = 0;
+            if (!first) {
+                term->vsel.nx0 = line->wrap_at;
+                term->vsel.ny0--;
+            } else first = 0;
             while(term->vsel.nx0 > 0 &&
                     cat == is_separator(line->cell[term->vsel.nx0 - 1].ch)) term->vsel.nx0--;
             if (cat != is_separator(line->cell[0].ch)) break;
         } while((line = line_iter_prev(&it)) && line->wrap_at);
 
-        while(line && line_iter_y(&it) < term->vsel.ny1) line = line_iter_next(&it);
+        it = make_line_iter(term->view, term->screen,
+                term->scrollback_pos + term->vsel.ny1, term->height + term->scrollback_pos);
+        line = line_iter_next(&it);
         if (!line) return;
 
         term->vsel.nx1 = MAX(term->vsel.nx1, 0);
         first = 1, cat = is_separator(line->cell[term->vsel.nx1].ch);
-        ssize_t line_len;
-        if (term->vsel.nx1 < (line_len = line_length(line))) do {
-            if (!first) term->vsel.nx1 = 0, term->vsel.ny1++;
-            else first = 0;
+        ssize_t line_len = line->wrap_at ? line->wrap_at : line->width;
+        if (term->vsel.nx1 < line->width) do {
+            if (!first) {
+                if (cat != is_separator(line->cell[0].ch)) break;
+                term->vsel.nx1 = 0;
+                term->vsel.ny1++;
+                line_len = line->wrap_at;
+            } else first = 0;
             while(term->vsel.nx1 < line_len - 1 &&
                     cat == is_separator(line->cell[term->vsel.nx1 + 1].ch)) term->vsel.nx1++;
             if (cat != is_separator(line->cell[line_len - 1].ch)) break;
-        } while(line->wrap_at && (line = line_iter_prev(&it)));
+        } while(line->wrap_at && (line = line_iter_next(&it)));
     }
 }
 
@@ -3223,6 +3223,14 @@ inline static _Bool sel_adjust_buf(size_t *pos, size_t *cap, uint8_t **res) {
         *res = tmp;
     }
     return 1;
+}
+
+inline static coord_t line_length(nss_line_t *line) {
+    coord_t max_x = line->width;
+    if (!line->wrap_at)
+        while(max_x > 0 && !line->cell[max_x - 1].ch) max_x--;
+    else max_x = line->wrap_at;
+    return max_x;
 }
 
 static void append_line(size_t *pos, size_t *cap, uint8_t **res, nss_line_t *line, coord_t x0, coord_t x1) {

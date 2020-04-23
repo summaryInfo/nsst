@@ -150,7 +150,7 @@ static struct {
         [NSS_SCONFIG_TITLE - NSS_SCONFIG_MIN] = { "Not So Simple Terminal" },
         [NSS_SCONFIG_PRINTER - NSS_SCONFIG_MIN] = { },
         [NSS_SCONFIG_TERM_CLASS - NSS_SCONFIG_MIN] = { },
-        [NSS_SCONFIG_WORD_SEPARATORS - NSS_SCONFIG_MIN] = { " ()[]{},.;'\\\"" },
+        [NSS_SCONFIG_WORD_SEPARATORS - NSS_SCONFIG_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`" },
 };
 
 static nss_input_mode_t input_mode = {

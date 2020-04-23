@@ -99,15 +99,13 @@ inline static nss_line_t *line_iter_next(line_iter_t *it) {
 }
 
 inline static nss_line_t *line_iter_prev(line_iter_t *it) {
-    nss_line_t *ln;
-    if (it->_line)
-        ln = it->_line = it->_line->prev;
-    else if (it->_y == it->_y_scr)
-        ln = it->_line = it->_last;
-    else
-        ln = it->_screen[it->_y - 1 - it->_y_scr];
     it->_y--;
-    return ln;
+    if (it->_line)
+        return it->_line = it->_line->prev;
+    else if (it->_y + 1 == it->_y_scr)
+        return it->_line = it->_last;
+    else
+        return it->_screen[it->_y - it->_y_scr];
 }
 
 typedef struct nss_input_mode nss_input_mode_t;
