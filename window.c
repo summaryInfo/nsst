@@ -762,7 +762,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         nss_create_window();
         return;
     case nss_sa_copy:
-        if (!win->clip_data && win->sel_data) {
+        if (win->sel_data) {
             uint8_t *dup = (uint8_t*)strdup((char *)win->sel_data);
             if (dup) nss_window_set_clip(win, dup, NSS_TIME_NOW, 1);
         }
