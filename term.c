@@ -3039,27 +3039,18 @@ void nss_term_visibility(nss_term_t *term, _Bool visible) {
 
 static void nss_term_damage_selection(nss_term_t *term) {
     if (term->vsel.state != nss_sstate_none && term->vsel.state != nss_sstate_pressed) {
+        coord_t x0 = term->vsel.nx0, x1 = term->vsel.nx1;
+        ssize_t y0 = MAX(term->vsel.ny0 + term->scrollback_pos, 0),
+                y1 = MAX(term->vsel.ny1 + term->scrollback_pos, 0);
         if (term->vsel.rectangular) {
-            nss_term_damage(term, (nss_rect_t) {
-                    term->vsel.nx0, term->vsel.ny0 + term->scrollback_pos,
-                    term->vsel.nx1 - term->vsel.nx0 + 1, term->vsel.ny1 - term->vsel.ny0 + 1});
+            nss_term_damage(term, (nss_rect_t) { x0, y0, x1 - x0 + 1, y1 - y0 + 1});
         } else {
             if (term->vsel.ny1 == term->vsel.ny0) {
-                nss_term_damage(term, (nss_rect_t) {
-                        term->vsel.nx0, term->vsel.ny0 + term->scrollback_pos,
-                        term->vsel.nx1 - term->vsel.nx0 + 1, 1});
+                nss_term_damage(term, (nss_rect_t) { x0, y0, x1 - x0 + 1, 1});
             } else {
-                nss_term_damage(term, (nss_rect_t) {
-                        term->vsel.nx0, term->vsel.ny0 + term->scrollback_pos,
-                        term->width - term->vsel.nx0, 1});
-                if (term->vsel.ny1 - term->vsel.ny0 > 1) {
-                    nss_term_damage(term, (nss_rect_t) {
-                            0, term->vsel.ny0 + term->scrollback_pos + 1,
-                            term->width, term->vsel.ny1 - term->vsel.ny0 - 1});
-                }
-                nss_term_damage(term, (nss_rect_t) {
-                        0, term->vsel.ny1 + term->scrollback_pos,
-                        term->vsel.nx1 + 1, 1});
+                nss_term_damage(term, (nss_rect_t) { x0, y0, term->width - x0, 1});
+                if (y1 - y0 > 1) nss_term_damage(term, (nss_rect_t) { 0, y0 + 1, term->width, y1 - y0 - 1});
+                nss_term_damage(term, (nss_rect_t) { 0, y1, x1 + 1, 1});
             }
         }
     }
