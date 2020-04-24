@@ -22,8 +22,7 @@ all: $(PROG)
 clean:
 	rm -rf *.o $(PROG)
 
-force:
-	$(MAKE) clean
+force: clean
 	$(MAKE) all
 
 install-strip: all
