@@ -51,7 +51,9 @@ typedef enum nss_mouse_state {
     nss_ms_button_2 = 1 << 9,
     nss_ms_button_3 = 1 << 10,
     nss_ms_button_4 = 1 << 11,
-    nss_ms_button_5 = 1 << 12
+    nss_ms_button_5 = 1 << 12,
+    nss_ms_state_mask = 0x1FFF,
+    nss_ms_modifer_mask = 0xFF,
 } nss_mouse_state_t;
 
 typedef struct nss_window nss_window_t;

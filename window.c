@@ -806,7 +806,7 @@ void nss_context_run(void) {
                      * XCB_MOTION_NOTIFY -> nss_me_motion
                      */
                     nss_mouse_event_t evtype = (ev->response_type & 0xF7) - 4;
-                    nss_mouse_state_t mask = ev->state & 0xFFF;
+                    nss_mouse_state_t mask = ev->state & nss_ms_state_mask;
 
                     nss_term_mouse(win->term, x, y, mask, evtype, button);
                     break;

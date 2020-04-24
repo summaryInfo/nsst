@@ -3283,7 +3283,7 @@ uint8_t *nss_term_selection_data(nss_term_t *term) {
 _Bool nss_term_mouse(nss_term_t *term, coord_t x, coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
     // TODO: Force selection
     /* Scroll view */
-    if (event == nss_me_press && !(term->mode & nss_tm_altscreen) && (button == 3 || button == 4) && !mask) {
+    if (event == nss_me_press && !(term->mode & nss_tm_altscreen) && (button == 3 || button == 4) && !(mask & nss_ms_modifer_mask)) {
         nss_term_scroll_view(term, (2 *(button == 3) - 1) * nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));
     /* Report mouse */
     } else if (term->mode & nss_tm_mouse_mask) {
