@@ -658,6 +658,7 @@ static void term_swap_screen(nss_term_t *term, _Bool damage) {
     SWAP(nss_cursor_t, term->back_cs, term->cs);
     SWAP(nss_line_t **, term->back_screen, term->screen);
     term_reset_view(term, damage);
+    nss_term_clear_selection(term);
 }
 
 static void term_scroll(nss_term_t *term, coord_t top, coord_t bottom, coord_t amount, _Bool save) {
@@ -3014,6 +3015,16 @@ void nss_term_resize(nss_term_t *term, coord_t width, coord_t height) {
     }
 }
 
+void nss_term_paste_begin(nss_term_t *term) {
+    if (term->mode & nss_tm_bracketed_paste)
+        term_answerback(term, "\x9B""200~");
+}
+
+void nss_term_paste_end(nss_term_t *term) {
+    if (term->mode & nss_tm_bracketed_paste)
+        term_answerback(term, "\x9B""201~");
+}
+
 void nss_term_focus(nss_term_t *term, _Bool focused) {
     ENABLE_IF(focused, term->mode, nss_tm_focused);
     if (term->mode & nss_tm_track_focus)
@@ -3054,15 +3065,15 @@ static void nss_term_damage_selection(nss_term_t *term) {
     }
 }
 
-static void term_clear_selection(nss_term_t *term) {
+void nss_term_clear_selection(nss_term_t *term) {
     nss_term_damage_selection(term);
 
     term->vsel.state = nss_sstate_none;
-    if (term->mode & nss_tm_select_to_clipboard) {
-        if (term->mode & nss_tm_keep_clipboard) return;
-    } else if (term->mode & nss_tm_keep_selection) return;
+    if ((term->mode & nss_tm_select_to_clipboard) &&
+        (term->mode & nss_tm_keep_clipboard)) return;
+    else if (term->mode & nss_tm_keep_selection) return;
 
-    nss_window_clear_clip(term->win);
+    nss_window_set_clip(term->win, NULL, NSS_TIME_NOW, term->mode & nss_tm_select_to_clipboard);
 }
 
 static void term_scroll_selection(nss_term_t *term, coord_t amount) {
@@ -3071,7 +3082,7 @@ static void term_scroll_selection(nss_term_t *term, coord_t amount) {
     // Clear sellection if it is going to be split by scroll
     if ((term->top <= term->vsel.ny0 && term->vsel.ny0 <= term->bottom) ||
             (term->top <= term->vsel.ny1 && term->vsel.ny1 <= term->bottom))
-        term_clear_selection(term);
+        nss_term_clear_selection(term);
 
     // Scroll and cut off scroll off lines
 
@@ -3104,7 +3115,7 @@ static void term_scroll_selection(nss_term_t *term, coord_t amount) {
     }
 
     if (term->vsel.y0 > term->vsel.y1)
-        term_clear_selection(term);
+        nss_term_clear_selection(term);
 
     if (swapped) {
         SWAP(ssize_t, term->vsel.y0, term->vsel.y1);
@@ -3247,8 +3258,10 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, nss_line_t *lin
             *pos += len;
         }
     }
-    if (!sel_adjust_buf(pos, cap, res)) return;
-    (*res)[(*pos)++] = '\n';
+    if (max_x != line->wrap_at) {
+        if (!sel_adjust_buf(pos, cap, res)) return;
+        (*res)[(*pos)++] = '\n';
+    }
 }
 
 uint8_t *nss_term_selection_data(nss_term_t *term) {
@@ -3258,17 +3271,17 @@ uint8_t *nss_term_selection_data(nss_term_t *term) {
         size_t pos = 0, cap = SEL_INIT_SIZE;
 
         nss_line_t *line;
-        _Bool inview = term->view;
-        line_iter_t it = make_line_iter(inview ? term->view : term->scrollback, term->screen,
-                term->vsel.ny0 + term->scrollback_pos + !inview, term->scrollback_pos + !inview + term->vsel.ny1 + 1);
+        _Bool inview = !term->view && term->scrollback;
+        line_iter_t it = make_line_iter(inview ? term->scrollback : term->view, term->screen,
+                term->vsel.ny0 + term->scrollback_pos + inview, term->scrollback_pos + term->vsel.ny1 + inview + 1);
         if (term->vsel.rectangular || term->vsel.ny0 == term->vsel.ny1) {
             while ((line = line_iter_next(&it)))
                 append_line(&pos, &cap, &res, line, term->vsel.nx0, term->vsel.nx1 + 1);
         } else {
             while ((line = line_iter_next(&it))) {
-                if (line_iter_y(&it) == term->vsel.ny0 + term->scrollback_pos + !inview)
+                if (line_iter_y(&it) == term->vsel.ny0 + term->scrollback_pos + inview)
                     append_line(&pos, &cap, &res, line, term->vsel.nx0, line->width);
-                else if(line_iter_y(&it) == term->vsel.ny1 + term->scrollback_pos + !inview && term->vsel.ny1 != term->vsel.ny0)
+                else if(line_iter_y(&it) == term->vsel.ny1 + term->scrollback_pos + inview && term->vsel.ny1 != term->vsel.ny0)
                     append_line(&pos, &cap, &res, line, 0, term->vsel.nx1 + 1);
                 else
                     append_line(&pos, &cap, &res, line, 0, line->width);
@@ -3365,10 +3378,9 @@ _Bool nss_term_mouse(nss_term_t *term, coord_t x, coord_t y, nss_mouse_state_t m
         nss_term_damage_selection(term);
 
         if (event == nss_me_release)
-            nss_window_set_clip(term->win, nss_term_selection_data(term));
-    } else if (button == 1 && event == nss_me_release) {
-        nss_window_paste_clip(term->win);
-    }
+            nss_window_set_clip(term->win, nss_term_selection_data(term), NSS_TIME_NOW, term->mode & nss_tm_select_to_clipboard);
+    } else if (button == 1 && event == nss_me_release)
+        nss_window_paste_clip(term->win, 0);
 
     term->prev_mouse_x = x;
     term->prev_mouse_y = y;

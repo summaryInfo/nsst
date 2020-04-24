@@ -75,6 +75,9 @@ struct nss_window {
     nss_color_t cursor_fg;
     nss_cursor_type_t cursor_type;
 
+    uint8_t *clip_data;
+    uint8_t *sel_data;
+
     int16_t char_width;
     int16_t char_depth;
     int16_t char_height;

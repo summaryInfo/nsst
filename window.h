@@ -77,7 +77,9 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag);
 void nss_window_set_font(nss_window_t *win, const char *name);
 nss_font_t *nss_window_get_font(nss_window_t *win);
 char *nss_window_get_font_name(nss_window_t *win);
-void nss_window_set_clip(nss_window_t *win, uint8_t *data);
-void nss_window_paste_clip(nss_window_t *win);
-void nss_window_clear_clip(nss_window_t *win);
+
+#define NSS_TIME_NOW 0
+
+void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, _Bool clip);
+void nss_window_paste_clip(nss_window_t *win, _Bool clip);
 #endif

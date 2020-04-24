@@ -134,5 +134,8 @@ _Bool nss_term_is_nrcs_enabled(nss_term_t *term);
 void nss_term_damage(nss_term_t *term, nss_rect_t damage);
 _Bool nss_term_is_selected(nss_term_t *term, coord_t x, coord_t y);
 uint8_t *nss_term_selection_data(nss_term_t *term);
+void nss_term_clear_selection(nss_term_t *term);
+void nss_term_paste_begin(nss_term_t *term);
+void nss_term_paste_end(nss_term_t *term);
 
 #endif
