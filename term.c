@@ -3180,6 +3180,7 @@ static void term_snap_selection(nss_term_t *term) {
         it = make_line_iter(term->view, term->screen,
                 term->scrollback_pos + term->vsel.ny1, term->height + term->scrollback_pos);
         line = line_iter_next(&it);
+
         if (!line) return;
 
         term->vsel.nx1 = MAX(term->vsel.nx1, 0);
@@ -3234,7 +3235,7 @@ inline static coord_t line_length(nss_line_t *line) {
 }
 
 static void append_line(size_t *pos, size_t *cap, uint8_t **res, nss_line_t *line, coord_t x0, coord_t x1) {
-    coord_t max_x = MIN(x1 + 1, line_length(line));
+    coord_t max_x = MIN(x1, line_length(line));
 
     for (coord_t j = x0; j < max_x; j++) {
         uint8_t buf[UTF8_MAX_LEN];
@@ -3242,8 +3243,8 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, nss_line_t *lin
             size_t len = utf8_encode(line->cell[j].ch, buf, buf + UTF8_MAX_LEN);
             // 2 is space for '\n' and '\0'
             if (!sel_adjust_buf(pos, cap, res)) return;
-            *pos += len;
             memcpy(*res + *pos, buf, len);
+            *pos += len;
         }
     }
     if (!sel_adjust_buf(pos, cap, res)) return;
@@ -3257,18 +3258,20 @@ uint8_t *nss_term_selection_data(nss_term_t *term) {
         size_t pos = 0, cap = SEL_INIT_SIZE;
 
         nss_line_t *line;
-        line_iter_t it = make_line_iter(term->view, term->screen, term->vsel.ny0, term->vsel.ny1 + 1);
-        if (term->vsel.rectangular) {
+        _Bool inview = term->view;
+        line_iter_t it = make_line_iter(inview ? term->view : term->scrollback, term->screen,
+                term->vsel.ny0 + term->scrollback_pos + !inview, term->scrollback_pos + !inview + term->vsel.ny1 + 1);
+        if (term->vsel.rectangular || term->vsel.ny0 == term->vsel.ny1) {
             while ((line = line_iter_next(&it)))
-                append_line(&pos, &cap, &res, line, term->vsel.nx0, term->vsel.nx1);
+                append_line(&pos, &cap, &res, line, term->vsel.nx0, term->vsel.nx1 + 1);
         } else {
             while ((line = line_iter_next(&it))) {
-                if (line_iter_y(&it) == term->vsel.ny0)
-                    append_line(&pos, &cap, &res, line, 0, line->width);
-                else if(line_iter_y(&it) == term->vsel.ny1 && term->vsel.ny1 != term->vsel.ny0)
-                    append_line(&pos, &cap, &res, line, 0, line->width);
-                else
+                if (line_iter_y(&it) == term->vsel.ny0 + term->scrollback_pos + !inview)
                     append_line(&pos, &cap, &res, line, term->vsel.nx0, line->width);
+                else if(line_iter_y(&it) == term->vsel.ny1 + term->scrollback_pos + !inview && term->vsel.ny1 != term->vsel.ny0)
+                    append_line(&pos, &cap, &res, line, 0, term->vsel.nx1 + 1);
+                else
+                    append_line(&pos, &cap, &res, line, 0, line->width);
             }
         }
         res[pos -= !!pos] = '\0';
@@ -3361,8 +3364,8 @@ _Bool nss_term_mouse(nss_term_t *term, coord_t x, coord_t y, nss_mouse_state_t m
 
         nss_term_damage_selection(term);
 
-        //if (event == nss_me_release)
-        //    nss_window_set_clip(term->win, nss_term_selection_data(term));
+        if (event == nss_me_release)
+            nss_window_set_clip(term->win, nss_term_selection_data(term));
     } else if (button == 1 && event == nss_me_release) {
         nss_window_paste_clip(term->win);
     }

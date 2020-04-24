@@ -72,9 +72,13 @@ typedef struct line_iter {
 
 inline static line_iter_t make_line_iter(nss_line_t *view, nss_line_t **screen, ssize_t y0, ssize_t y1) {
     line_iter_t it = { view, view, screen, 0, 0, y1 };
-    while (it._line && it._y < y0) it._y++, it._line = it._line->next;
-    if (!it._line) it._y_scr = it._y;
-    it._y = y0;
+    if (y0 >= 0)  {
+        while (it._line && it._y < y0) it._y++, it._line = it._line->next;
+        if (!it._line) it._y_scr = it._y;
+        it._y = y0;
+    } else if (it._line) {
+        while (it._line->prev && it._y > y0) it._y--, it._line = it._line->prev;
+    }
     return it;
 }
 
