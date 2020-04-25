@@ -65,18 +65,17 @@ inline static nss_rect_t rect_union(nss_rect_t rect, nss_rect_t other) {
 }
 
 inline static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst) {
-        nss_rect_t inters = {
-            .x = MAX(src->x, dst->x),
-            .y = MAX(src->y, dst->y),
-            .width = MIN(src->x + src->width, dst->x + dst->width),
-            .height = MIN(src->y + src->height, dst->y + dst->height),
-        };
-        if (inters.width <= inters.x || inters.height <= inters.y) {
+        nss_rect_t inters = { .x = MAX(src->x, dst->x), .y = MAX(src->y, dst->y) };
+
+        int32_t x1 = MIN(src->x + (int32_t)src->width, dst->x + (int32_t)dst->width);
+        int32_t y1 = MIN(src->y + (int32_t)src->height, dst->y + (int32_t)dst->height);
+
+        if (x1 <= inters.x || y1 <= inters.y) {
             *src = (nss_rect_t) {0, 0, 0, 0};
             return 0;
         } else {
-            inters.width -= inters.x;
-            inters.height -= inters.y;
+            inters.width = x1 - inters.x;
+            inters.height = y1 - inters.y;
             *src = inters;
             return 1;
         }
