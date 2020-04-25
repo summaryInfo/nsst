@@ -852,7 +852,6 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
     } while (left > 0);
 
     xcb_delete_property(con, win->wid, prop);
-    xcb_flush(con);
 }
 
 /* Start window logic, handling all windows in context */

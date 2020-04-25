@@ -2,10 +2,13 @@ Until version 1.2:
     Selections
     Add nss_ prefix to types that lacks it
     Fix rendering cursor on screen scrolling
+	Squize lines in history while scrolling them off
     Rename composite_glyph -> compose_glyph
     Use case-insensetive comparison for locale codeset
 	Convert from input locale to unicode while reading?
     On SCO keyboard mode normal (and UTF-8) mouse modes should send \E[>M
+	Encode pasted data as UTF-8/Latin-1
+	Make constants for term_answerback
 Until version 1.3:
     Recursive input buffer refilling
     After resizing window (only jump resize) new lines are not damaged
@@ -30,6 +33,7 @@ Until version 1.3:
         reset
         reloadConfig
 Until 2.0:
+	Implement proper daemon mode
 	Make X resources names more or less correspond to Xterm/rxvt-unicode
 	Bell
 	Core X11 fonts?
@@ -41,11 +45,12 @@ Until 2.0:
 Selections
     [x] Mouse selection internal state
     [x] Rendering
-    [ ] Reduce screen invalidation (damge only difference between selections)
+    [x] Reduce screen invalidation (damge only difference between selections)
     [x] X11 clipboard
     [x] Bracketed paste
     [x] Privite modes 1040, 1041, 1044
     [ ] OSC 52
+	[ ] Selection colors
 Input
     What if nss_term_read would be called recursively?
         It could happen because like:
@@ -84,7 +89,6 @@ Term
         Now this works like in xterm
     Printing with attributes
     Is reset not completly correct?
-    Selections (copy/paste)
     Mouse selection
     NOTE: Tectronix mode would probably be ommited
     Private modes

@@ -81,6 +81,7 @@ inline static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst) {
         }
 }
 
+
 #define UTF8_MAX_LEN 4
 #define UTF_INVAL 0xfffd
 

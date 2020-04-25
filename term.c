@@ -3037,29 +3037,98 @@ void nss_term_visibility(nss_term_t *term, _Bool visible) {
     nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
 }
 
-static void nss_term_damage_selection(nss_term_t *term) {
-    if (term->vsel.state != nss_sstate_none && term->vsel.state != nss_sstate_pressed) {
-        coord_t x0 = term->vsel.nx0, x1 = term->vsel.nx1;
-        ssize_t y0 = MAX(term->vsel.ny0 + term->scrollback_pos, 0),
-                y1 = MAX(term->vsel.ny1 + term->scrollback_pos, 0);
-        if (term->vsel.rectangular) {
-            nss_term_damage(term, (nss_rect_t) { x0, y0, x1 - x0 + 1, y1 - y0 + 1});
+inline static size_t descomose_selection(nss_rect_t dst[static 3], nss_visual_selection_t *sel, nss_rect_t bound, ssize_t pos) {
+    size_t count = 0;
+    if (sel->state != nss_sstate_none && sel->state != nss_sstate_pressed) {
+        coord_t x0 = sel->nx0, x1 = sel->nx1 + 1;
+        ssize_t y0 = sel->ny0 + pos, y1 = sel->ny1 + 1 + pos;
+        if (sel->rectangular || y1 - y0 == 1) {
+            nss_rect_t r0 = {x0, y0, x1 - x0, y1 - y0};
+            if (intersect_with(&r0, &bound))
+                dst[count++] = r0;
         } else {
-            if (term->vsel.ny1 == term->vsel.ny0) {
-                nss_term_damage(term, (nss_rect_t) { x0, y0, x1 - x0 + 1, 1});
-            } else {
-                nss_term_damage(term, (nss_rect_t) { x0, y0, term->width - x0, 1});
-                if (y1 - y0 > 1) nss_term_damage(term, (nss_rect_t) { 0, y0 + 1, term->width, y1 - y0 - 1});
-                nss_term_damage(term, (nss_rect_t) { 0, y1, x1 + 1, 1});
-            }
+            nss_rect_t r0 = {x0, y0, bound.width - x0, 1};
+            nss_rect_t r1 = {0, y0 + 1, bound.width, y1 - y0 - 1};
+            nss_rect_t r2 = {0, y1 - 1, x1, 1};
+            if (intersect_with(&r0, &bound))
+                dst[count++] = r0;
+            if (y1 - y0 > 2 && intersect_with(&r1, &bound))
+                dst[count++] = r1;
+            if (intersect_with(&r2, &bound))
+                dst[count++] = r2;
         }
     }
+    return count;
+}
+
+inline static size_t xor_bands(nss_rect_t dst[static 2], coord_t x00, coord_t x01, coord_t x10, coord_t x11, coord_t y0, coord_t y1) {
+    coord_t x0_min = MIN(x00, x10), x0_max = MAX(x00, x10);
+    coord_t x1_min = MIN(x01, x11), x1_max = MAX(x01, x11);
+    size_t count = 0;
+    if (x0_max >= x1_min - 1) {
+        dst[count++] = (nss_rect_t) {x0_min, y0, x1_min - x0_min, y1 - y0};
+        dst[count++] = (nss_rect_t) {x0_max, y0, x1_max - x0_max, y1 - y0};
+    } else {
+        if (x0_min != x0_max) dst[count++] = (nss_rect_t) {x0_min, y0, x0_max - x0_min + 1, y1 - y0};
+        if (x1_min != x1_max) dst[count++] = (nss_rect_t) {x1_min - 1, y0, x1_max - x1_min + 1, y1 - y0};
+    }
+    return count;
+}
+
+static void term_update_selection(nss_term_t *term, nss_visual_selection_t *old) {
+    // There could be at most 6 difference rectangles
+
+    nss_rect_t d_old[4] = {{0}}, d_new[4] = {{0}}, d_diff[16] = {{0}};
+    size_t sz_old = 0, sz_new = 0, count = 0;
+    nss_rect_t *res = d_diff, bound = {0, 0, term->width, term->height};
+
+    sz_old = descomose_selection(d_old, old, bound, term->scrollback_pos);
+    sz_new = descomose_selection(d_new, &term->vsel, bound, term->scrollback_pos);
+
+    if (!sz_old) res = d_new, count = sz_new;
+    else if (!sz_new) res = d_old, count = sz_old;
+    else {
+        // Insert dummy rectangles to simplify code
+        coord_t max_yo = d_old[sz_old - 1].y + d_old[sz_old - 1].height;
+        coord_t max_yn = d_new[sz_new - 1].y + d_new[sz_new - 1].height;
+        d_old[sz_old] = (nss_rect_t) {0, max_yo};
+        d_new[sz_new] = (nss_rect_t) {0, max_yn};
+
+        // Calculate y positions of bands
+        coord_t ys[8];
+        size_t yp = 0;
+        for (size_t i_old = 0, i_new = 0; i_old <= sz_old || i_new <= sz_new; ) {
+            if (i_old > sz_old) ys[yp++] = d_new[i_new++].y;
+            else if (i_new > sz_new) ys[yp++] = d_old[i_old++].y;
+            else {
+                ys[yp++] = MIN(d_new[i_new].y, d_old[i_old].y);
+                i_old += ys[yp - 1] == d_old[i_old].y;
+                i_new += ys[yp - 1] == d_new[i_new].y;
+            }
+        }
+
+        nss_rect_t *ito = d_old, *itn = d_new;
+        coord_t x00 = 0, x01 = 0, x10 = 0, x11 = 0;
+        for (size_t i = 0; i < yp - 1; i++) {
+            if (ys[i] >= max_yo) x00 = x01 = 0;
+            else if (ys[i] == ito->y) x00 = ito->x, x01 = ito->x + ito->width, ito++;
+            if (ys[i] >= max_yn) x10 = x11 = 0;
+            else if (ys[i] == itn->y) x10 = itn->x, x11 = itn->x + itn->width, itn++;
+            count += xor_bands(d_diff + count, x00, x01, x10, x11, ys[i], ys[i + 1]);
+        }
+    }
+
+    for (size_t i = 0; i < count; i++)
+        nss_term_damage(term, res[i]);
 }
 
 void nss_term_clear_selection(nss_term_t *term) {
-    nss_term_damage_selection(term);
+    nss_visual_selection_t old = term->vsel;
 
     term->vsel.state = nss_sstate_none;
+
+    term_update_selection(term, &old);
+
     if ((term->mode & nss_tm_select_to_clipboard) &&
         (term->mode & nss_tm_keep_clipboard)) return;
     else if (term->mode & nss_tm_keep_selection) return;
@@ -3327,7 +3396,7 @@ _Bool nss_term_mouse(nss_term_t *term, coord_t x, coord_t y, nss_mouse_state_t m
 
     /* Or else select */
     } else if (button == 0 && event == nss_me_press) {
-        nss_term_damage_selection(term);
+        nss_visual_selection_t old = term->vsel;
 
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
@@ -3350,14 +3419,11 @@ _Bool nss_term_mouse(nss_term_t *term, coord_t x, coord_t y, nss_mouse_state_t m
             snap == nss_ssnap_none ? nss_sstate_pressed : nss_sstate_progress,
         };
         term_snap_selection(term);
-
-        nss_term_damage_selection(term);
-
+        term_update_selection(term, &old);
     } else if ((event == nss_me_motion && mask & nss_ms_button_1 && (term->vsel.state == nss_sstate_pressed || term->vsel.state == nss_sstate_progress)) ||
                (event == nss_me_release && button == 0 && term->vsel.state == nss_sstate_progress)) {
 
-        // TODO Damage only difference
-        nss_term_damage_selection(term);
+        nss_visual_selection_t old = term->vsel;
 
         term->vsel.state = event == nss_me_release ? nss_sstate_released : nss_sstate_progress;
         term->vsel.rectangular = mask & nss_mm_mod1;
@@ -3365,8 +3431,7 @@ _Bool nss_term_mouse(nss_term_t *term, coord_t x, coord_t y, nss_mouse_state_t m
         term->vsel.y1 = y - term->scrollback_pos;
 
         term_snap_selection(term);
-
-        nss_term_damage_selection(term);
+        term_update_selection(term, &old);
 
         if (event == nss_me_release)
             nss_window_set_clip(term->win, nss_term_selection_data(term), NSS_TIME_NOW, term->mode & nss_tm_select_to_clipboard);
