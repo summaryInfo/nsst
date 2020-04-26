@@ -44,6 +44,12 @@
 #define MAX_REPORT 256
 #define SEL_INIT_SIZE 32
 
+#define CSI "\x9B"
+#define OSC "\x9D"
+#define DCS "\x90"
+#define ESC "\x1B"
+#define ST "\x9C"
+
 #define IS_C1(c) ((c) < 0xa0 && (c) >= 0x80)
 #define IS_C0(c) ((c) < 0x20)
 #define IS_DEL(c) ((c) == 0x7f)
@@ -506,7 +512,7 @@ static void term_reset_view(nss_term_t *term, _Bool damage) {
 void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
     if (term->mode & nss_tm_altscreen) {
         if (term->mode & nss_tm_alternate_scroll)
-            term_answerback(term, "\x9B%d%c", abs(amount), amount > 0 ? 'A' : 'D');
+            term_answerback(term, CSI"%d%c", abs(amount), amount > 0 ? 'A' : 'D');
         return;
     }
     nss_coord_t scrolled = 0;
@@ -989,7 +995,7 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
     switch (mode) {
     case P('='):
         CHK_VT(4);
-        term_answerback(term, "\x90!|00000000\x9C");
+        term_answerback(term, DCS"!|00000000"ST);
         break;
     case P('>'): {
         param_t ver = 0;
@@ -1007,16 +1013,16 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
         default:
             ver = term->vt_level * 100 + 20;
         }
-        term_answerback(term, "\x9B>%"PRIu32";10;0c", ver);
+        term_answerback(term, CSI">%"PRIu32";10;0c", ver);
         break;
     }
     default:
         if (term->vt_version < 200) {
             switch(term->vt_level) {
-            case 125: term_answerback(term, "\x9B?12;2;0;10c"); break;
-            case 102: term_answerback(term, "\x9B?6c"); break;
-            case 101: term_answerback(term, "\x9B?1;0c"); break;
-            default: term_answerback(term, "\x9B?1;2c");
+            case 125: term_answerback(term, CSI"?12;2;0;10c"); break;
+            case 102: term_answerback(term, CSI"?6c"); break;
+            case 101: term_answerback(term, CSI"?1;0c"); break;
+            default: term_answerback(term, CSI"?1;2c");
             }
         } else {
             /*1 - 132-columns
@@ -1035,7 +1041,7 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
              *28 - Rectangular editing
              *29 - ANSI text locator (i.e., DEC Locator mode).
              */
-            term_answerback(term, "\x9B?%u;1;2;6%s;9;22c",
+            term_answerback(term, CSI"?%u;1;2;6%s;9;22c",
                     60 + term->vt_version/100,
                     term->inmode.keyboard_mapping == nss_km_vt220 ? ";8" : "");
         }
@@ -1046,48 +1052,48 @@ static void term_dispatch_dsr(nss_term_t *term) {
     if (term->esc.selector & P_MASK) {
         switch(term->esc.param[0]) {
         case 6: /* Cursor position -- Y;X */
-            term_answerback(term, "\x9B%"PRIu16";%"PRIu16"%sR",
+            term_answerback(term, CSI"%"PRIu16";%"PRIu16"%sR",
                     (term->c.origin ? -term->top : 0) + term->c.y + 1,
                     MIN(term->c.x, term->width - 1) + 1,
                     term->vt_level >= 4 ? ";1" : "");
         case 15: /* Printer status -- Has no printer */
             CHK_VT(2);
-            term_answerback(term, "\x9B?13n"); //TODO Has printer -- 10
+            term_answerback(term, CSI"?13n"); //TODO Has printer -- 10
             break;
         case 25: /* User defined keys lock -- Locked */
             CHK_VT(2);
-            term_answerback(term, "\x9B?21n"); //TODO Unlocked - 20
+            term_answerback(term, CSI"?21n"); //TODO Unlocked - 20
             break;
         case 26: /* Keyboard language -- North American */
             CHK_VT(2);
-            term_answerback(term, "\x9B?27;1%sn",
+            term_answerback(term, CSI"?27;1%sn",
                     term->vt_level >= 4 ? ";0;0" : // ready, LK201
                     term->vt_level >= 3 ? ";0" : ""); // ready
             break;
         case 62: /* DECMSR, Macro space -- No data, no space for macros */
             CHK_VT(4);
             //TODO Why is it hex?
-            term_answerback(term, "\x9B""0000*{");
+            term_answerback(term, CSI"0000*{");
             break;
         case 63: /* DECCKSR, Memory checksum -- 0000 (hex) */
             CHK_VT(4);
-            term_answerback(term, "\x90%"PRId16"!~0000\x9C", term->esc.param[1]);
+            term_answerback(term, DCS"%"PRId16"!~0000"ST, term->esc.param[1]);
             break;
         case 75: /* Data integrity -- Ready, no errors */
             CHK_VT(4);
-            term_answerback(term, "\x9B?70n");
+            term_answerback(term, CSI"?70n");
             break;
         case 85: /* Multi-session configuration -- Not configured */
             CHK_VT(4);
-            term_answerback(term, "\x9B?83n");
+            term_answerback(term, CSI"?83n");
         }
     } else {
         switch(term->esc.param[0]) {
         case 5: /* Health report -- OK */
-            term_answerback(term, "\x9B""0n");
+            term_answerback(term, CSI"0n");
             break;
         case 6: /* Cursor position -- Y;X */
-            term_answerback(term, "\x9B%"PRIu16";%"PRIu16"R",
+            term_answerback(term, CSI"%"PRIu16";%"PRIu16"R",
                     (term->c.origin ? -term->top : 0) + term->c.y + 1,
                     MIN(term->c.x, term->width - 1) + 1);
             break;
@@ -1160,7 +1166,7 @@ static void term_dispatch_osc(nss_term_t *term) {
                 nss_color_t col = parse_color((uint8_t *)parg, (uint8_t *)pnext);
                 if (col) term->palette[idx] = col;
                 else if (parg[0] == '?' && parg[1] == '\0')
-                    term_answerback(term, "\2354;#%06X\234", term->palette[idx] & 0x00FFFFFF);
+                    term_answerback(term, OSC"4;#%06X"ST, term->palette[idx] & 0x00FFFFFF);
                 else term_esc_dump(term, 0);
             }
             pstr = pnext + 1;
@@ -2017,7 +2023,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         if (term->vt_version < 200) {
             param_t p = PARAM(0, 0);
             if (p < 2)
-                term_answerback(term, "\233%d;1;1;128;128;1;0x", p + 2);
+                term_answerback(term, CSI"%d;1;1;128;128;1;0x", p + 2);
         }
         break;
     //case C('@') | I0(' '): /* SL */
@@ -2528,7 +2534,7 @@ static void term_dispatch_vt52(nss_term_t *term, nss_char_t ch) {
         term->esc.state = esc_vt52_cup_0;
         return;
     case 'Z':
-        term_answerback(term, "\033/Z");
+        term_answerback(term, ESC"/Z");
         break;
     case ']': /* Print screen */
         term_print_screen(term, term->mode & nss_tm_print_extend);
@@ -3017,18 +3023,18 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
 
 void nss_term_paste_begin(nss_term_t *term) {
     if (term->mode & nss_tm_bracketed_paste)
-        term_answerback(term, "\x9B""200~");
+        term_answerback(term, CSI"200~");
 }
 
 void nss_term_paste_end(nss_term_t *term) {
     if (term->mode & nss_tm_bracketed_paste)
-        term_answerback(term, "\x9B""201~");
+        term_answerback(term, CSI"201~");
 }
 
 void nss_term_focus(nss_term_t *term, _Bool focused) {
     ENABLE_IF(focused, term->mode, nss_tm_focused);
     if (term->mode & nss_tm_track_focus)
-        term_answerback(term, focused ? "\x9BI" : "\x9BO");
+        term_answerback(term, focused ? CSI"I" : CSI"O");
     term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
 }
 
@@ -3387,11 +3393,11 @@ _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_s
         }
 
         if (term->mode & nss_tm_mouse_format_sgr) {
-            term_answerback(term, "\x9B<%"PRIu8";%"PRIu16";%"PRIu16"%c",
+            term_answerback(term, CSI"<%"PRIu8";%"PRIu16";%"PRIu16"%c",
                     button, x + 1, y + 1, event == nss_me_release ? 'm' : 'M');
         } else {
             if (x >= 223 || y >= 223) return 0;
-            term_answerback(term, "\x9B%s%c%c%c",
+            term_answerback(term, CSI"%s%c%c%c",
                     term->inmode.keyboard_mapping == nss_km_sco ? ">M" : "M", button + ' ', x + 1 + ' ', y + 1 + ' ');
         }
 

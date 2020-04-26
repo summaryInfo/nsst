@@ -7,7 +7,6 @@ Until version 1.2:
         Selection colors
     Squize lines in history while scrolling them off
     Convert from input locale to unicode while reading?
-    Make constants for term_answerback
 Until version 1.3:
     Recursive input buffer refilling
     After resizing window (only jump resize) new lines are not damaged
