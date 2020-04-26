@@ -22,7 +22,7 @@ void nss_image_draw_rect(nss_image_t im, nss_rect_t rect, nss_color_t fg) {
         }
     }
 }
-void nss_image_composite_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t *glyph, nss_color_t fg, nss_rect_t clip, _Bool lcd) {
+void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t *glyph, nss_color_t fg, nss_rect_t clip, _Bool lcd) {
     nss_rect_t rect = { dx - glyph->x, dy - glyph->y, glyph->width, glyph->height };
     if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height}) &&
             intersect_with(&rect, &clip)) {

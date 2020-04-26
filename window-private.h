@@ -61,7 +61,7 @@ struct nss_window {
 
     int16_t width;
     int16_t height;
-    coord_t cw, ch;
+    nss_coord_t cw, ch;
     int16_t cursor_width;
     int16_t underline_width;
     int16_t left_border;

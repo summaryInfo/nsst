@@ -542,12 +542,12 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_att
 
 #else
 
-void nss_font_glyph_mark_loaded(nss_font_t *font, tchar_t ch) {
+void nss_font_glyph_mark_loaded(nss_font_t *font, nss_char_t ch) {
     if (ch < LOADED_MAP_SIZE * 32)
         font->loaded_map[ch / 32] |= 1 << (ch % 32);
 }
 
-_Bool nss_font_glyph_is_loaded(nss_font_t *font, tchar_t ch) {
+_Bool nss_font_glyph_is_loaded(nss_font_t *font, nss_char_t ch) {
     if (ch >= 32 * LOADED_MAP_SIZE) return 0;
     else return font->loaded_map[ch / 32] & (1 << (ch % 32));
 }

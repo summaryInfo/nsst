@@ -16,9 +16,9 @@
 #define SEC 1000000000LL
 #define TIMEDIFF(t, d)  ((((d).tv_sec - (t).tv_sec) * SEC + ((d).tv_nsec - (t).tv_nsec)))
 
-typedef int16_t coord_t;
+typedef int16_t nss_coord_t;
 typedef uint32_t nss_color_t;
-typedef uint32_t tchar_t;
+typedef uint32_t nss_char_t;
 typedef struct nss_rect {
     int16_t x;
     int16_t y;
@@ -32,26 +32,26 @@ void warn(const char *fmt, ...);
 void fatal(const char *fmt, ...);
 _Noreturn void die(const char *fmt, ...);
 
-inline static nss_rect_t rect_scale_up(nss_rect_t rect, coord_t x_factor, coord_t y_factor) {
+inline static nss_rect_t rect_scale_up(nss_rect_t rect, nss_coord_t x_factor, nss_coord_t y_factor) {
     rect.x *= x_factor;
     rect.y *= y_factor;
     rect.width *= x_factor;
     rect.height *= y_factor;
     return rect;
 }
-inline static nss_rect_t rect_scale_down(nss_rect_t rect, coord_t x_factor, coord_t y_factor) {
+inline static nss_rect_t rect_scale_down(nss_rect_t rect, nss_coord_t x_factor, nss_coord_t y_factor) {
     rect.x /= x_factor;
     rect.y /= y_factor;
     rect.width /= x_factor;
     rect.height /= y_factor;
     return rect;
 }
-inline static nss_rect_t rect_shift(nss_rect_t rect, coord_t x_off, coord_t y_off) {
+inline static nss_rect_t rect_shift(nss_rect_t rect, nss_coord_t x_off, nss_coord_t y_off) {
     rect.x += x_off;
     rect.y += y_off;
     return rect;
 }
-inline static nss_rect_t rect_resize(nss_rect_t rect, coord_t x_off, coord_t y_off) {
+inline static nss_rect_t rect_resize(nss_rect_t rect, nss_coord_t x_off, nss_coord_t y_off) {
     rect.width += x_off;
     rect.height += y_off;
     return rect;
@@ -85,8 +85,8 @@ inline static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst) {
 #define UTF8_MAX_LEN 4
 #define UTF_INVAL 0xfffd
 
-size_t utf8_encode(tchar_t u, uint8_t *buf, uint8_t *end);
-_Bool utf8_decode(tchar_t *res, const uint8_t **buf, const uint8_t *end);
+size_t utf8_encode(nss_char_t u, uint8_t *buf, uint8_t *end);
+_Bool utf8_decode(nss_char_t *res, const uint8_t **buf, const uint8_t *end);
 uint8_t *hex_decode(uint8_t *hex);
 nss_color_t parse_color(const uint8_t *str, const uint8_t *end);
 

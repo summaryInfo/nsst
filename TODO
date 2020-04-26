@@ -5,10 +5,7 @@ Until version 1.2:
         Clear selection in altscreen and on input
         OSC 52 for c/p/s (no cut buffers)
         Selection colors
-    Add nss_ prefix to types that lacks it
-    Fix rendering cursor on screen scrolling
     Squize lines in history while scrolling them off
-    Rename composite_glyph -> compose_glyph
     Use case-insensetive comparison for locale codeset
     Convert from input locale to unicode while reading?
     On SCO keyboard mode normal (and UTF-8) mouse modes should send \E[>M

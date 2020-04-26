@@ -13,8 +13,8 @@
 
 typedef uint16_t nss_cid_t;
 typedef uint32_t nss_color_t;
-typedef uint32_t tchar_t;
-typedef int16_t coord_t;
+typedef uint32_t nss_char_t;
+typedef int16_t nss_coord_t;
 typedef uint32_t param_t;
 
 #define NSS_SPECIAL_COLORS 4
@@ -68,10 +68,10 @@ typedef struct line_iter {
     ssize_t _y;
     ssize_t _y_scr;
     ssize_t _y_max;
-} line_iter_t;
+} nss_line_iter_t;
 
-inline static line_iter_t make_line_iter(nss_line_t *view, nss_line_t **screen, ssize_t y0, ssize_t y1) {
-    line_iter_t it = { view, view, screen, 0, 0, y1 };
+inline static nss_line_iter_t make_line_iter(nss_line_t *view, nss_line_t **screen, ssize_t y0, ssize_t y1) {
+    nss_line_iter_t it = { view, view, screen, 0, 0, y1 };
     if (y0 >= 0)  {
         while (it._line && it._y < y0) it._y++, it._line = it._line->next;
         if (!it._line) it._y_scr = it._y;
@@ -82,11 +82,11 @@ inline static line_iter_t make_line_iter(nss_line_t *view, nss_line_t **screen, 
     return it;
 }
 
-inline static ssize_t line_iter_y(line_iter_t *it) {
+inline static ssize_t line_iter_y(nss_line_iter_t *it) {
     return it->_y - 1;
 }
 
-inline static nss_line_t *line_iter_next(line_iter_t *it) {
+inline static nss_line_t *line_iter_next(nss_line_iter_t *it) {
     if (it->_y >= it->_y_max ) return NULL;
     nss_line_t *ln;
     if (it->_line) {
@@ -102,7 +102,7 @@ inline static nss_line_t *line_iter_next(line_iter_t *it) {
     return ln;
 }
 
-inline static nss_line_t *line_iter_prev(line_iter_t *it) {
+inline static nss_line_t *line_iter_prev(nss_line_iter_t *it) {
     it->_y--;
     if (it->_line)
         return it->_line = it->_line->prev;
@@ -115,16 +115,16 @@ inline static nss_line_t *line_iter_prev(line_iter_t *it) {
 typedef struct nss_input_mode nss_input_mode_t;
 typedef struct nss_term nss_term_t;
 
-nss_term_t *nss_create_term(nss_window_t *win, coord_t width, coord_t height);
+nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t height);
 void nss_free_term(nss_term_t *term);
 void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor);
-void nss_term_resize(nss_term_t *term, coord_t width, coord_t height);
+void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height);
 void nss_term_visibility(nss_term_t *term, _Bool visible);
 void nss_term_focus(nss_term_t *term, _Bool focused);
-_Bool nss_term_mouse(nss_term_t *term, coord_t x, coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button);
+_Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button);
 void nss_term_sendkey(nss_term_t *term, const uint8_t *data, size_t size);
 void nss_term_sendbreak(nss_term_t *term);
-void nss_term_scroll_view(nss_term_t *term, coord_t amount);
+void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount);
 ssize_t nss_term_read(nss_term_t *term);
 int nss_term_fd(nss_term_t *term);
 void nss_term_hang(nss_term_t *term);
@@ -132,7 +132,7 @@ nss_input_mode_t *nss_term_inmode(nss_term_t *term);
 _Bool nss_term_is_utf8(nss_term_t *term);
 _Bool nss_term_is_nrcs_enabled(nss_term_t *term);
 void nss_term_damage(nss_term_t *term, nss_rect_t damage);
-_Bool nss_term_is_selected(nss_term_t *term, coord_t x, coord_t y);
+_Bool nss_term_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y);
 uint8_t *nss_term_selection_data(nss_term_t *term);
 void nss_term_clear_selection(nss_term_t *term);
 void nss_term_paste_begin(nss_term_t *term);

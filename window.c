@@ -549,7 +549,7 @@ static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right
         nss_renderer_clear(win, count, borders + offset);
 }
 
-void nss_window_shift(nss_window_t *win, coord_t ys, coord_t yd, coord_t height, _Bool delay) {
+void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coord_t height, _Bool delay) {
     struct timespec cur;
     clock_gettime(CLOCK_MONOTONIC, &cur);
 
@@ -568,7 +568,7 @@ void nss_window_shift(nss_window_t *win, coord_t ys, coord_t yd, coord_t height,
 
     ys *= win->char_height + win->char_depth;
     yd *= win->char_height + win->char_depth;
-    coord_t width = win->cw * win->char_width;
+    nss_coord_t width = win->cw * win->char_width;
     height *= win->char_depth + win->char_height;
 
     nss_renderer_copy(win, (nss_rect_t){0, yd, width, height}, 0, ys);
@@ -666,10 +666,10 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
     win->width = width;
     win->height = height;
 
-    coord_t new_cw = MAX(1, (win->width - 2*win->left_border)/win->char_width);
-    coord_t new_ch = MAX(1, (win->height - 2*win->top_border)/(win->char_height+win->char_depth));
-    coord_t delta_x = new_cw - win->cw;
-    coord_t delta_y = new_ch - win->ch;
+    nss_coord_t new_cw = MAX(1, (win->width - 2*win->left_border)/win->char_width);
+    nss_coord_t new_ch = MAX(1, (win->height - 2*win->top_border)/(win->char_height+win->char_depth));
+    nss_coord_t delta_x = new_cw - win->cw;
+    nss_coord_t delta_y = new_ch - win->ch;
 
     _Bool do_redraw_borders = delta_x < 0 || delta_y < 0;
 

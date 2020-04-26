@@ -150,7 +150,7 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
         win->ren.cache = nss_create_cache(win->font, win->subpixel_fonts);
     nss_cache_font_dim(win->ren.cache, &win->char_width, &win->char_height, &win->char_depth);
 
-    coord_t old_ch = win->ch;
+    nss_coord_t old_ch = win->ch;
 
     win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
     win->ch = MAX(1, (win->height - 2*win->top_border) / (win->char_height + win->char_depth));
@@ -232,7 +232,7 @@ void nss_init_render_context() {
     }
 }
 
-inline static _Bool draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
+inline static _Bool draw_cell(nss_window_t *win, nss_coord_t x, nss_coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
     nss_cell_t cell = *cel;
 
     // Calculate colors
@@ -265,7 +265,7 @@ inline static _Bool draw_cell(nss_window_t *win, coord_t x, coord_t y, nss_color
     if (cell.ch && fg != bg) {
         nss_glyph_t *glyph = nss_cache_fetch(win->ren.cache, cell.ch, cell.attr & nss_font_attrib_mask);
         nss_rect_t clip = {x, y, width, height};
-        nss_image_composite_glyph(win->ren.im, x, y + win->char_height, glyph, fg, clip, win->subpixel_fonts);
+        nss_image_compose_glyph(win->ren.im, x, y + win->char_height, glyph, fg, clip, win->subpixel_fonts);
     }
 
     // Underline
@@ -300,17 +300,17 @@ static void optimize_bounds(nss_rect_t *bounds, size_t *boundc, _Bool fine_grain
     *boundc = j;
 }
 
-void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, coord_t cur_x, coord_t cur_y, _Bool cursor) {
+void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor) {
     _Bool marg = win->cw == cur_x;
     cur_x -= marg;
     if (cursor && win->focused && win->cursor_type == nss_cursor_block)
         array[cur_y]->cell[cur_x].attr ^= nss_attrib_inverse;
 
-    line_iter_t it = make_line_iter(list, array, 0, win->ch);
+    nss_line_iter_t it = make_line_iter(list, array, 0, win->ch);
     for (nss_line_t *line; (line = line_iter_next(&it));) {
         _Bool damaged = 0;
         nss_rect_t l_bound = {0, line_iter_y(&it), 0, 1};
-        for (coord_t i = 0; i < MIN(win->cw, line->width); i++)
+        for (nss_coord_t i = 0; i < MIN(win->cw, line->width); i++)
             if (!(line->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink))) {
                 if (!damaged) l_bound.x = i;
@@ -562,7 +562,7 @@ static void register_glyph(nss_window_t *win, uint32_t ch, nss_glyph_t * glyph) 
         //Preload ASCII
         nss_glyph_t *glyphs['~' - ' ' + 1][nss_font_attrib_max] = {{ NULL }};
         int16_t total = 0, maxd = 0, maxh = 0;
-        for (tchar_t i = ' '; i <= '~'; i++) {
+        for (nss_char_t i = ' '; i <= '~'; i++) {
             for (size_t j = 0; j < nss_font_attrib_max; j++)
                 glyphs[i - ' '][j] = nss_font_render_glyph(win->font, i, j, win->subpixel_fonts);
 
@@ -575,7 +575,7 @@ static void register_glyph(nss_window_t *win, uint32_t ch, nss_glyph_t * glyph) 
         win->char_height = maxh;
         win->char_depth = maxd + nss_config_integer(NSS_ICONFIG_LINE_SPACING);
 
-        for (tchar_t i = ' '; i <= '~'; i++) {
+        for (nss_char_t i = ' '; i <= '~'; i++) {
             for (size_t j = 0; j < nss_font_attrib_max; j++) {
                 glyphs[i - ' '][j]->x_off = win->char_width;
                 register_glyph(win, i | (j << 24), glyphs[i - ' '][j]);
@@ -724,7 +724,7 @@ void nss_init_render_context() {
     }
 }
 
-inline static void push_cell(nss_window_t *win, coord_t x, coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
+inline static void push_cell(nss_window_t *win, nss_coord_t x, nss_coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
     nss_cell_t cell = *cel;
 
     if (!nss_font_glyph_is_loaded(win->font, cell.ch)) {
@@ -882,7 +882,7 @@ static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
 }
 
 /* new method of rendering: whole screen in a time */
-void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, coord_t cur_x, coord_t cur_y, _Bool cursor) {
+void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **array, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor) {
     rctx.cbufpos = 0;
     rctx.bufpos = 0;
 
@@ -896,7 +896,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         push_cell(win, cur_x, cur_y, palette, array[cur_y]->extra, &cur_cell);
     }
 
-    line_iter_t it = make_line_iter(list, array, 0, win->ch);
+    nss_line_iter_t it = make_line_iter(list, array, 0, win->ch);
     for (nss_line_t *line; (line = line_iter_next(&it));) {
         if (win->cw > line->width) {
             push_rect(win, &(xcb_rectangle_t){
@@ -906,7 +906,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
                 .height = win->char_height + win->char_depth
             });
         }
-        for (coord_t i = 0; i < MIN(win->cw, line->width); i++)
+        for (nss_coord_t i = 0; i < MIN(win->cw, line->width); i++)
             if (!(line->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink)))
                 push_cell(win, i, line_iter_y(&it), palette, line->extra, &line->cell[i]);
@@ -1015,7 +1015,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
             while (i < rctx.cbufpos && !rctx.cbuffer[i].glyph) i++;
         }
         if (rctx.bufpos)
-            xcb_render_composite_glyphs_32(con, XCB_RENDER_PICT_OP_OVER,
+            xcb_render_compose_glyphs_32(con, XCB_RENDER_PICT_OP_OVER,
                                            win->ren.pen, win->ren.pic, win->ren.pfglyph, win->ren.gsid,
                                            0, 0, rctx.bufpos, rctx.buffer);
     }

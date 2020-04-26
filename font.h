@@ -32,7 +32,7 @@ typedef struct nss_glyph {
     uint8_t data[];
 } nss_glyph_t;
 
-typedef uint32_t tchar_t;
+typedef uint32_t nss_char_t;
 typedef struct nss_font nss_font_t;
 
 nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi);
@@ -50,8 +50,8 @@ void nss_free_cache(nss_glyph_cache_t *cache);
 void nss_cache_font_dim(nss_glyph_cache_t *cache, int16_t *w, int16_t *h, int16_t *d);
 nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_attrib_t face);
 #else
-_Bool nss_font_glyph_is_loaded(nss_font_t *font, tchar_t ch);
-void nss_font_glyph_mark_loaded(nss_font_t *font, tchar_t ch);
+_Bool nss_font_glyph_is_loaded(nss_font_t *font, nss_char_t ch);
+void nss_font_glyph_mark_loaded(nss_font_t *font, nss_char_t ch);
 #endif
 
 #endif
