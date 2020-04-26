@@ -3391,7 +3391,8 @@ _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_s
                     button, x + 1, y + 1, event == nss_me_release ? 'm' : 'M');
         } else {
             if (x >= 223 || y >= 223) return 0;
-            term_answerback(term, "\x9BM%c%c%c", button + ' ', x + 1 + ' ', y + 1 + ' ');
+            term_answerback(term, "\x9B%s%c%c%c",
+                    term->inmode.keyboard_mapping == nss_km_sco ? ">M" : "M", button + ' ', x + 1 + ' ', y + 1 + ' ');
         }
 
     /* Or else select */
