@@ -176,7 +176,9 @@ int main(int argc, char **argv) {
     // Load locale
     setlocale(LC_ALL, "");
     char *charset = nl_langinfo(CODESET);
-    _Bool bset = charset && !strcmp(charset, "UTF-8");
+    _Bool bset = charset && (charset[0] & ~0x20) == 'U' &&
+            (charset[1] & ~0x20) == 'T' && (charset[2] & ~0x20) == 'F' &&
+            (charset[3] == '8' || charset[4] == '8');
     // Enable UTF-8 support if it is UTF-8
     nss_config_set_integer(NSS_ICONFIG_UTF8, bset);
 

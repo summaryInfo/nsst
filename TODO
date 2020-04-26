@@ -6,7 +6,6 @@ Until version 1.2:
         OSC 52 for c/p/s (no cut buffers)
         Selection colors
     Squize lines in history while scrolling them off
-    Use case-insensetive comparison for locale codeset
     Convert from input locale to unicode while reading?
     Encode pasted data as UTF-8/Latin-1
     Make constants for term_answerback
