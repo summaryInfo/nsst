@@ -842,6 +842,24 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
 
         if (size) {
             if (!offset) nss_term_paste_begin(win->term);
+
+            uint8_t buf[BUFSIZ];
+            if ((rep->type == ctx.atom_utf8_string) ^ nss_term_is_utf8(win->term)) {
+                pos = data;
+                size = 0;
+                if (rep->type == ctx.atom_utf8_string) {
+                    while(pos < end) {
+                        nss_char_t ch;
+                        if (utf8_decode(&ch, (const uint8_t **)&pos, end))
+                            buf[size++] = ch;
+                    }
+                    data = buf;
+                } else {
+                    while(pos < end)
+                        size += utf8_encode(*pos++, buf + size, buf + BUFSIZ);
+                }
+                data = buf;
+            }
             nss_term_sendkey(win->term, data, size);
             if (!left) nss_term_paste_end(win->term);
         }
