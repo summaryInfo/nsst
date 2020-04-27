@@ -853,7 +853,6 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
                         if (utf8_decode(&ch, (const uint8_t **)&pos, end))
                             buf[size++] = ch;
                     }
-                    data = buf;
                 } else {
                     while(pos < end)
                         size += utf8_encode(*pos++, buf + size, buf + BUFSIZ);

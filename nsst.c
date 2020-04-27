@@ -103,15 +103,17 @@ static char **parse_options(int argc, char **argv) {
                 else arg = argv[++ind];
             }
 
+            if (!argv[ind]) break;
+
             unsigned n;
 
             nss_optmap_item_t *res = bsearch(&(nss_optmap_item_t){argv[ind] + 2},
                     optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
             if (res && arg)
                 nss_config_set_string(res->opt, arg);
-            else if (!strcmp(argv[ind] + 2, "geometry"))
+            else if (arg && !strcmp(argv[ind] + 2, "geometry"))
                 parse_geometry(arg, argv[0]);
-            else if (!strncmp(argv[ind] + 2, "color", 5) &&
+            else if (arg && !strncmp(argv[ind] + 2, "color", 5) &&
                     sscanf(argv[ind] + 2, "color%u", &n) == 1)
                 nss_config_set_string(NSS_CCONFIG_COLOR_0 + n, arg);
             else if (!strcmp(argv[ind] + 2, "help"))
