@@ -43,19 +43,23 @@ typedef enum nss_attrs {
 #define MKCELL(f, b, l, c) ((nss_cell_t) { .bg = (b), .fg = (f), .ch = (c), .attr = (l) & ~nss_attrib_drawn})
 
 typedef struct nss_cell {
-        uint32_t ch : 21;
-        uint32_t attr : 11;
-        nss_cid_t fg;
-        nss_cid_t bg;
+    uint32_t ch : 21;
+    uint32_t attr : 11;
+    nss_cid_t fg;
+    nss_cid_t bg;
 } nss_cell_t;
+
+typedef struct nss_line_palette {
+    uint16_t size;
+    uint16_t caps;
+    nss_color_t data[];
+} nss_line_palette_t;
 
 typedef struct nss_line {
     struct nss_line *next, *prev;
+    nss_line_palette_t *pal;
     int16_t width;
     int16_t wrap_at;
-    uint16_t extra_size;
-    uint16_t extra_caps;
-    nss_color_t *extra;
     nss_cell_t cell[];
 } nss_line_t;
 

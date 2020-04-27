@@ -314,7 +314,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
             if (!(line->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink))) {
                 if (!damaged) l_bound.x = i;
-                i += draw_cell(win, i, line_iter_y(&it), palette, line->extra, &line->cell[i]);
+                i += draw_cell(win, i, line_iter_y(&it), palette, line->pal->data, &line->cell[i]);
                 l_bound.width = i;
                 damaged = 1;
             }
@@ -909,7 +909,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         for (nss_coord_t i = 0; i < MIN(win->cw, line->width); i++)
             if (!(line->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink)))
-                push_cell(win, i, line_iter_y(&it), palette, line->extra, &line->cell[i]);
+                push_cell(win, i, line_iter_y(&it), palette, line->pal->data, &line->cell[i]);
     }
 
     if (rctx.bufpos) {
