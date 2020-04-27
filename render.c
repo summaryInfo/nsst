@@ -137,7 +137,10 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
         return 0;
     }
 
-    if (need_free) nss_free_font(win->font);
+    if (need_free) {
+        nss_free_cache(win->ren.cache);
+        nss_free_font(win->font);
+    }
 
     win->font = new;
     win->font_size = nss_font_get_size(new);
@@ -197,8 +200,7 @@ void nss_renderer_free(nss_window_t *win) {
         nss_free_image_shm(win, &win->ren.im);
     if (win->ren.cache)
         nss_free_cache(win->ren.cache);
-    if (win->ren.bounds)
-        free(win->ren.bounds);
+    free(win->ren.bounds);
 }
 
 void nss_free_render_context() {

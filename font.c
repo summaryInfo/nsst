@@ -525,9 +525,10 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_att
 
     nss_glyph_t *new;
 #ifdef USE_BOXDRAWING
-    if (is_boxdraw(ch) && nss_config_integer(NSS_ICONFIG_OVERRIDE_BOXDRAW))
+    if (is_boxdraw(ch) && nss_config_integer(NSS_ICONFIG_OVERRIDE_BOXDRAW)) {
         new = nss_make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth, cache->lcd);
-    else
+        new->g = g;
+    } else
 #endif
         new = nss_font_render_glyph(cache->font, g & 0xFFFFFF, (g >> 24) & nss_font_attrib_mask, cache->lcd);
 
