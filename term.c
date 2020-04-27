@@ -338,47 +338,61 @@ int tty_open(nss_term_t *term, const char *cmd, const char **args) {
     return master;
 }
 
-static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
+static _Bool optimize_line_palette(nss_line_t *line) {
     // Buffer here causes a leak in theory
     static nss_cid_t *buf = NULL, buf_len = 0, *new;
 
+    if (!line) {
+        free(buf);
+        buf = NULL;
+        buf_len = 0;
+        return 0;
+    }
+
+    if (line->extra) {
+        if (buf_len < line->extra_size) {
+            new = realloc(buf, line->extra_size * sizeof(nss_cid_t));
+            if (!new) return 0;
+            buf = new, buf_len = line->extra_size;
+        }
+        memset(buf, 0, buf_len * sizeof(nss_cid_t));
+        for (nss_coord_t i = 0; i < line->width; i++) {
+            if (line->cell[i].fg >= NSS_PALETTE_SIZE)
+                buf[line->cell[i].fg - NSS_PALETTE_SIZE] = 0xFFFF;
+            if (line->cell[i].bg >= NSS_PALETTE_SIZE)
+                buf[line->cell[i].bg - NSS_PALETTE_SIZE] = 0xFFFF;
+        }
+        nss_coord_t k = 0;
+        for (nss_cid_t i = 0; i < line->extra_size; i++) {
+            if (buf[i] == 0xFFFF) {
+                line->extra[k] = line->extra[i];
+                for (nss_cid_t j = i + 1; j < line->extra_size; j++)
+                    if (line->extra[i] == line->extra[j]) buf[j] = k;
+                buf[i] = k++;
+            }
+        }
+        line->extra_size = k;
+
+        for (nss_coord_t i = 0; i < line->width; i++) {
+            if (line->cell[i].fg >= NSS_PALETTE_SIZE && buf[line->cell[i].fg - NSS_PALETTE_SIZE] != 0xFFFF)
+                    line->cell[i].fg = buf[line->cell[i].fg - NSS_PALETTE_SIZE] + NSS_PALETTE_SIZE;
+            if (line->cell[i].bg >= NSS_PALETTE_SIZE && buf[line->cell[i].bg - NSS_PALETTE_SIZE] != 0xFFFF)
+                    line->cell[i].bg = buf[line->cell[i].bg - NSS_PALETTE_SIZE] + NSS_PALETTE_SIZE;
+        }
+    }
+
+    return 1;
+}
+
+static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
     if (line->extra_size > 0 && line->extra[line->extra_size - 1] == col)
         return NSS_PALETTE_SIZE + line->extra_size - 1;
     if (line->extra_size > 1 && line->extra[line->extra_size - 2] == col)
         return NSS_PALETTE_SIZE + line->extra_size - 2;
 
     if (line->extra_size + 1 >= line->extra_caps) {
-        if (line->extra) {
-            if (buf_len < line->extra_size) {
-                new = realloc(buf, line->extra_size * sizeof(nss_cid_t));
-                if (!new) return NSS_SPECIAL_BG;
-                buf = new, buf_len = line->extra_size;
-            }
-            memset(buf, 0, buf_len * sizeof(nss_cid_t));
-            for (nss_coord_t i = 0; i < line->width; i++) {
-                if (line->cell[i].fg >= NSS_PALETTE_SIZE)
-                    buf[line->cell[i].fg - NSS_PALETTE_SIZE] = 0xFFFF;
-                if (line->cell[i].bg >= NSS_PALETTE_SIZE)
-                    buf[line->cell[i].bg - NSS_PALETTE_SIZE] = 0xFFFF;
-            }
-            nss_coord_t k = 0;
-            for (nss_cid_t i = 0; i < line->extra_size; i++) {
-                if (buf[i] == 0xFFFF) {
-                    line->extra[k] = line->extra[i];
-                    for (nss_cid_t j = i + 1; j < line->extra_size; j++)
-                        if (line->extra[i] == line->extra[j]) buf[j] = k;
-                    buf[i] = k++;
-                }
-            }
-            line->extra_size = k;
-
-            for (nss_coord_t i = 0; i < line->width; i++) {
-                if (line->cell[i].fg >= NSS_PALETTE_SIZE && buf[line->cell[i].fg - NSS_PALETTE_SIZE] != 0xFFFF)
-                        line->cell[i].fg = buf[line->cell[i].fg - NSS_PALETTE_SIZE] + NSS_PALETTE_SIZE;
-                if (line->cell[i].bg >= NSS_PALETTE_SIZE && buf[line->cell[i].bg - NSS_PALETTE_SIZE] != 0xFFFF)
-                        line->cell[i].bg = buf[line->cell[i].bg - NSS_PALETTE_SIZE] + NSS_PALETTE_SIZE;
-            }
-        }
+        if (!optimize_line_palette(line))
+            return NSS_SPECIAL_BG;
         if (line->extra_size + 1 >= line->extra_caps) {
             if (line->extra_caps == MAX_EXTRA_PALETTE) return NSS_SPECIAL_BG;
             nss_color_t *new = realloc(line->extra, CAPS_INC_STEP(line->extra_caps) * sizeof(nss_color_t));
@@ -387,6 +401,7 @@ static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
             line->extra_caps = CAPS_INC_STEP(line->extra_caps);
         }
     }
+
     line->extra[line->extra_size++] = col;
     return NSS_PALETTE_SIZE + line->extra_size - 1;
 }
@@ -545,10 +560,27 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
     }
 }
 
+inline static nss_coord_t line_length(nss_line_t *line) {
+    nss_coord_t max_x = line->width;
+    if (!line->wrap_at)
+        while(max_x > 0 && !line->cell[max_x - 1].ch) max_x--;
+    else max_x = line->wrap_at;
+    return max_x;
+}
+
+
 static void term_append_history(nss_term_t *term, nss_line_t *line) {
     if (term->scrollback_limit == 0) {
         term_free_line(term,line);
     } else {
+        line = term_realloc_line(term, line, line_length(line));
+        optimize_line_palette(line);
+        nss_color_t *pal = realloc(line->extra, sizeof(nss_color_t)*(line->extra_size + 1));
+        if (pal) {
+            line->extra_caps = line->extra_size;
+            line->extra = pal;
+        }
+
         if (term->scrollback) term->scrollback->next = line;
         else term->scrollback_top = line;
         line->prev = term->scrollback;
@@ -664,7 +696,7 @@ static void term_swap_screen(nss_term_t *term, _Bool damage) {
     SWAP(nss_cursor_t, term->back_cs, term->cs);
     SWAP(nss_line_t **, term->back_screen, term->screen);
     term_reset_view(term, damage);
-    nss_term_clear_selection(term);
+    if (damage) nss_term_clear_selection(term);
 }
 
 static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t bottom, nss_coord_t amount, _Bool save) {
@@ -3301,14 +3333,6 @@ inline static _Bool sel_adjust_buf(size_t *pos, size_t *cap, uint8_t **res) {
         *res = tmp;
     }
     return 1;
-}
-
-inline static nss_coord_t line_length(nss_line_t *line) {
-    nss_coord_t max_x = line->width;
-    if (!line->wrap_at)
-        while(max_x > 0 && !line->cell[max_x - 1].ch) max_x--;
-    else max_x = line->wrap_at;
-    return max_x;
 }
 
 static void append_line(size_t *pos, size_t *cap, uint8_t **res, nss_line_t *line, nss_coord_t x0, nss_coord_t x1) {
