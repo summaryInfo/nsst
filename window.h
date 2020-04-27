@@ -3,7 +3,7 @@
 #ifndef WINDOW_H_
 #define WINDOW_H_ 1
 
-#include "features.h"
+#include "feature.h"
 
 #include "font.h"
 #include "util.h"

@@ -3,7 +3,7 @@
 #ifndef TERM_H_
 #define TERM_H_ 1
 
-#include "features.h"
+#include "feature.h"
 
 #include "util.h"
 #include "window.h"

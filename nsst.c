@@ -1,11 +1,11 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
-#include "features.h"
+#include "feature.h"
 
 #define _POSIX_C_SOURCE 200809L
 
 #include "config.h"
-#include "features.h"
+#include "feature.h"
 #include "util.h"
 #include "window.h"
 

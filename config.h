@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 
-#include "features.h"
+#include "feature.h"
 #include "input.h"
 #include "term.h"
 

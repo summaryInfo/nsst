@@ -3,7 +3,7 @@
 #ifndef IMAGE_H_
 #define IMAGE_H_ 1
 
-#include "features.h"
+#include "feature.h"
 
 #include "font.h"
 #include "util.h"

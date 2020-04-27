@@ -3,7 +3,7 @@
 #ifndef NRCS_H_
 #define NRCS_H_ 1
 
-#include "features.h"
+#include "feature.h"
 
 #include <stdint.h>
 

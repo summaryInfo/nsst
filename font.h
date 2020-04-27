@@ -3,7 +3,7 @@
 #ifndef FONT_H_
 #define FONT_H_ 1
 
-#include "features.h"
+#include "feature.h"
 
 #include <stddef.h>
 #include <stdint.h>

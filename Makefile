@@ -37,15 +37,15 @@ $(PROG): $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
 
 
-font.o: util.h config.h window.h features.h
-window.o: util.h config.h term.h input.h window.h window-private.h features.h
-render.o: util.h config.h term.h window.h window-private.h boxdraw.h image.h features.h
-input.o: config.h util.h term.h input.h nrcs.h features.h
-term.o: config.h util.h term.h input.h window.h nrcs.h features.h
-nsst.o: config.h util.h term.h window.h features.h
-util.o: util.h features.h
-config.o: config.h util.h input.h features.h
-boxdraw.o: font.h features.h
-image.o: image.h font.h util.h features.h
+font.o: util.h config.h window.h feature.h
+window.o: util.h config.h term.h input.h window.h window-private.h feature.h
+render.o: util.h config.h term.h window.h window-private.h boxdraw.h image.h feature.h
+input.o: config.h util.h term.h input.h nrcs.h feature.h
+term.o: config.h util.h term.h input.h window.h nrcs.h feature.h
+nsst.o: config.h util.h term.h window.h feature.h
+util.o: util.h feature.h
+config.o: config.h util.h input.h feature.h
+boxdraw.o: font.h feature.h
+image.o: image.h font.h util.h feature.h
 
 .PHONY: all clean install install-strip uninstall force

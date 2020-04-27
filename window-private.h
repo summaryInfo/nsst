@@ -3,7 +3,7 @@
 #ifndef WINDOW_PRIVATE_H_
 #define WINDOW_PRIVATE_H_ 1
 
-#include "features.h"
+#include "feature.h"
 
 #include "window.h"
 #include "term.h"
