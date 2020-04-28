@@ -865,7 +865,7 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
 
         free(rep);
 
-        offset += size;
+        offset += size / 4;
     } while (left > 0);
 
     xcb_delete_property(con, win->wid, prop);
