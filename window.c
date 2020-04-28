@@ -685,8 +685,8 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
 
     if (delta_x || delta_y) {
         clock_gettime(CLOCK_MONOTONIC, &win->last_scroll);
-        nss_renderer_resize(win, new_cw, new_ch);
         nss_term_resize(win->term, new_cw, new_ch);
+        nss_renderer_resize(win, new_cw, new_ch);
     }
 
     if (do_redraw_borders) {
