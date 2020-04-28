@@ -141,7 +141,8 @@ struct nss_term {
 
     nss_coord_t prev_c_x;
     nss_coord_t prev_c_y;
-    _Bool   prev_c_hidden;
+    _Bool prev_c_hidden;
+    _Bool prev_c_view_changed;
 
     nss_coord_t width;
     nss_coord_t height;
@@ -457,6 +458,11 @@ static void term_line_dirt(nss_line_t *line) {
 }
 
 static void term_set_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_char_t ch) {
+
+    // Clear selection when selected cell is overwritten
+    if (nss_term_is_selected(term, x, y))
+        nss_term_clear_selection(term);
+
     // In theory this should be disabled while in UTF-8 mode, but
     // in practive applications use these symbols, so keep translating
 
@@ -502,16 +508,18 @@ void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
 void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
     if (!(term->mode & nss_tm_visible)) return;
 
-    if (MIN(term->c.x, term->width - 1) != term->prev_c_x || term->c.y != term->prev_c_y) {
+    if (MIN(term->c.x, term->width - 1) != term->prev_c_x || term->c.y != term->prev_c_y || term->prev_c_view_changed) {
         if (!(term->mode & nss_tm_hide_cursor) && !term->view)
             term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
-        if (!term->prev_c_hidden && term->prev_c_y < term->height && term->prev_c_x < term->width)
+        if ((term->prev_c_view_changed || !term->prev_c_hidden) && term->prev_c_y < term->height && term->prev_c_x < term->width)
             term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
     }
 
     term->prev_c_x = MIN(term->c.x, term->width - 1);
     term->prev_c_y = term->c.y;
     term->prev_c_hidden = (term->mode & nss_tm_hide_cursor) || term->view;
+    term->prev_c_view_changed = 0;
+
     cursor &= !term->prev_c_hidden;
     cursor &= !(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr & nss_attrib_drawn);
 
@@ -519,9 +527,10 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
 }
 
 static void term_reset_view(nss_term_t *term, _Bool damage) {
-     term->view = NULL;
-     term->scrollback_pos = 0;
-     if (damage)
+    term->prev_c_view_changed |= !!term->view;
+    term->view = NULL;
+    term->scrollback_pos = 0;
+    if (damage)
          nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
 }
 
@@ -531,7 +540,11 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
             term_answerback(term, CSI"%d%c", abs(amount), amount > 0 ? 'A' : 'D');
         return;
     }
+
+    _Bool ini_view = term->view;
+
     nss_coord_t scrolled = 0;
+
     if (amount > 0) {
         if (!term->view && term->scrollback)
             term->view = term->scrollback, scrolled++;
@@ -559,6 +572,8 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
         term->scrollback_pos -= scrolled;
         nss_window_shift(term->win, scrolled, 0, term->height - scrolled, 0);
     }
+
+    term->prev_c_view_changed |= ini_view != !!term->view;
 }
 
 inline static nss_coord_t line_length(nss_line_t *line) {
@@ -606,6 +621,27 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
     }
 }
 
+inline static void term_clear_selection_on_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
+    if (term->vsel.state == nss_sstate_none) return;
+
+    if (term->vsel.rectangular || term->vsel.ny0 == term->vsel.ny1) {
+        if (MAX(xs, term->vsel.nx0) <= MIN(xe - 1, term->vsel.nx1) &&
+            MAX(xs, term->vsel.ny0) <= MIN(ye - 1, term->vsel.ny1))
+                nss_term_clear_selection(term);
+    } else {
+        if (MAX(xs, term->vsel.nx0) <= MIN(xe - 1, term->width - 1) &&
+            MAX(xs, term->vsel.ny0) <= MIN(ye - 1, term->vsel.ny0))
+                nss_term_clear_selection(term);
+        if (term->vsel.ny1 - term->vsel.ny0 > 1) {
+            if (MAX(xs, term->vsel.ny0 + 1) <= MIN(ye - 1, term->vsel.ny1 - 1))
+                nss_term_clear_selection(term);
+        }
+        if (MAX(xs, 0) <= MIN(xe - 1, term->vsel.nx1 - 1) &&
+            MAX(xs, term->vsel.ny1) <= MIN(ye - 1, term->vsel.ny1))
+                nss_term_clear_selection(term);
+    }
+}
+
 static void term_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
     if (ye < ys) SWAP(nss_coord_t, ye, ys);
     if (xe < xs) SWAP(nss_coord_t, xe, xs);
@@ -614,6 +650,8 @@ static void term_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coo
     xe = MAX(0, MIN(xe, term->width));
     ys = MAX(0, MIN(ys, term->height));
     ye = MAX(0, MIN(ye, term->height));
+
+    term_clear_selection_on_erase(term, xs, xe, ys, ye);
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
@@ -633,6 +671,8 @@ static void term_protective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t 
     ys = MAX(0, MIN(ys, term->height));
     ye = MAX(0, MIN(ye, term->height));
 
+    term_clear_selection_on_erase(term, xs, xe, ys, ye);
+
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
         nss_cell_t cell = fixup_color(line, &term->c);
@@ -651,6 +691,8 @@ static void term_selective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t y
     xe = MAX(0, MIN(xe, term->width));
     ys = MAX(0, MIN(ys, term->height));
     ye = MAX(0, MIN(ye, term->height));
+
+    term_clear_selection_on_erase(term, xs, xe, ys, ye);
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
@@ -3387,8 +3429,8 @@ uint8_t *nss_term_selection_data(nss_term_t *term) {
 
 
 _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
-    x = MIN(x, term->width - 1);
-    y = MIN(y, term->height - 1);
+    x = MIN(MAX(0, x), term->width - 1);
+    y = MIN(MAX(0, y), term->height - 1);
 
     // TODO: Force selection
 

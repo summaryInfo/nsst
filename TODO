@@ -2,7 +2,6 @@ Until version 1.2:
     Selections
         I'm not sure if 1044 mode semantics is correct
         Remember which selection we have copied to
-        Clear selection in altscreen and on input
         OSC 52 for c/p/s (no cut buffers)
         Selection colors
     Convert from input locale to unicode while reading?
