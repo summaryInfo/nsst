@@ -378,6 +378,9 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         }
         win->ren.boundc = 0;
     }
+
+    win->damaged_y0 = win->ch - 1;
+    win->damaged_y1 = 0;
 }
 
 void nss_renderer_clear(nss_window_t *win, size_t count, nss_rect_t *rects) {

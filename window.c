@@ -457,6 +457,7 @@ nss_window_t *nss_create_window(void) {
         nss_free_window(win);
         return NULL;
     }
+    win->damaged_y1 = win->ch - 1;
 
     win->next = win_list_head;
     win->prev = NULL;
@@ -558,7 +559,17 @@ void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coo
     height = MIN(height, MIN(win->ch - ys, win->ch - yd));
 
     if (delay && TIMEDIFF(win->last_scroll, cur) <  SEC/2/nss_config_integer(NSS_ICONFIG_FPS)) {
-        nss_term_damage(win->term, (nss_rect_t){ .x = 0, .y = yd, .width = win->cw, .height = height });
+        if (win->damaged_y0 > yd) {
+            nss_term_damage(win->term, (nss_rect_t){ .x = 0, .y = yd, .width = win->cw, .height = yd - win->damaged_y0 + 1 });
+            win->damaged_y0 = yd;
+        }
+        if (win->damaged_y1 < yd + height) {
+            if (win->damaged_y1 < yd)
+                nss_term_damage(win->term, (nss_rect_t){ .x = 0, .y = yd, .width = win->cw, .height = height });
+            else
+                nss_term_damage(win->term, (nss_rect_t){ .x = 0, .y = win->damaged_y1, .width = win->cw, .height = height + yd - win->damaged_y1 });
+            win->damaged_y1 = yd + height;
+        }
         win->last_scroll = cur;
         return;
     }

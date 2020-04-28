@@ -70,6 +70,8 @@ struct nss_window {
     struct timespec last_blink;
     struct timespec last_scroll;
     struct timespec last_draw;
+    nss_coord_t damaged_y0;
+    nss_coord_t damaged_y1;
 
     nss_color_t bg;
     nss_color_t cursor_fg;
