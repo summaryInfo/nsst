@@ -457,7 +457,6 @@ nss_window_t *nss_create_window(void) {
         nss_free_window(win);
         return NULL;
     }
-    win->damaged_y1 = win->ch - 1;
 
     win->next = win_list_head;
     win->prev = NULL;

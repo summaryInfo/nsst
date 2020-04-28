@@ -379,8 +379,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         win->ren.boundc = 0;
     }
 
-    win->damaged_y0 = win->ch - 1;
-    win->damaged_y1 = 0;
+    win->damaged_y0 = win->damaged_y1 = 0;
 }
 
 void nss_renderer_clear(nss_window_t *win, size_t count, nss_rect_t *rects) {
@@ -1110,6 +1109,8 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
     if (rctx.cbufpos)
         nss_renderer_update(win, rect_scale_up((nss_rect_t){0, 0, win->cw, win->ch},
                 win->char_width, win->char_height + win->char_depth));
+
+    win->damaged_y0 = win->damaged_y1 = 0;
 }
 
 void nss_renderer_clear(nss_window_t *win, size_t count, nss_rect_t *rects) {
