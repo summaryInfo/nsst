@@ -386,7 +386,7 @@ static _Bool optimize_line_palette(nss_line_t *line) {
 }
 
 static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
-    if (line->pal) { 
+    if (line->pal) {
         if (line->pal->size > 0 && line->pal->data[line->pal->size - 1] == col)
             return NSS_PALETTE_SIZE + line->pal->size - 1;
         if (line->pal->size > 1 && line->pal->data[line->pal->size - 2] == col)
@@ -621,25 +621,27 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
     }
 }
 
+
 inline static void term_clear_selection_on_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
     if (term->vsel.state == nss_sstate_none) return;
 
+#define RECT_INTRS(x10, x11, y10, y11) \
+    ((MAX(xs, x10) <= MIN(xe - 1, x11)) && (MAX(ys, y10) <= MIN(ye - 1, y11)))
+
     if (term->vsel.rectangular || term->vsel.ny0 == term->vsel.ny1) {
-        if (MAX(xs, term->vsel.nx0) <= MIN(xe - 1, term->vsel.nx1) &&
-            MAX(xs, term->vsel.ny0) <= MIN(ye - 1, term->vsel.ny1))
-                nss_term_clear_selection(term);
+        if (RECT_INTRS(term->vsel.nx0, term->vsel.nx1, term->vsel.ny0, term->vsel.ny1))
+            nss_term_clear_selection(term);
     } else {
-        if (MAX(xs, term->vsel.nx0) <= MIN(xe - 1, term->width - 1) &&
-            MAX(xs, term->vsel.ny0) <= MIN(ye - 1, term->vsel.ny0))
+        if (RECT_INTRS(term->vsel.nx0, term->width - 1, term->vsel.ny0, term->vsel.ny0))
+            nss_term_clear_selection(term);
+        if (term->vsel.ny1 - term->vsel.ny0 > 1)
+            if (RECT_INTRS(0, term->width - 1, term->vsel.ny0 + 1, term->vsel.ny1 - 1))
                 nss_term_clear_selection(term);
-        if (term->vsel.ny1 - term->vsel.ny0 > 1) {
-            if (MAX(xs, term->vsel.ny0 + 1) <= MIN(ye - 1, term->vsel.ny1 - 1))
-                nss_term_clear_selection(term);
-        }
-        if (MAX(xs, 0) <= MIN(xe - 1, term->vsel.nx1 - 1) &&
-            MAX(xs, term->vsel.ny1) <= MIN(ye - 1, term->vsel.ny1))
-                nss_term_clear_selection(term);
+        if (RECT_INTRS(0, term->vsel.nx1, term->vsel.ny1, term->vsel.ny1))
+            nss_term_clear_selection(term);
     }
+
+#undef RECT_INTRS
 }
 
 static void term_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
