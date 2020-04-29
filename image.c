@@ -4,7 +4,7 @@
 
 #include "util.h"
 #ifdef USE_X11SHM
-#	include "image.h"
+#    include "image.h"
 #endif
 
 #include <stdint.h>

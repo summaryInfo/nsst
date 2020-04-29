@@ -128,9 +128,9 @@ typedef struct nss_optmap_item {
 } nss_optmap_item_t;
 
 #ifdef USE_BOXDRAWING
-#	define OPT_MAP_SIZE 64
+#    define OPT_MAP_SIZE 64
 #else
-#	define OPT_MAP_SIZE 63
+#    define OPT_MAP_SIZE 63
 #endif
 
 extern nss_optmap_item_t optmap[OPT_MAP_SIZE];
