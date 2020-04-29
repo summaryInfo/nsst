@@ -90,4 +90,4 @@ _Bool utf8_decode(nss_char_t *res, const uint8_t **buf, const uint8_t *end);
 uint8_t *hex_decode(uint8_t *hex);
 nss_color_t parse_color(const uint8_t *str, const uint8_t *end);
 
-#endif 
+#endif
