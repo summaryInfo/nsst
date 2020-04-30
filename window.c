@@ -528,9 +528,8 @@ void nss_free_window(nss_window_t *win) {
     if (win->font)
         nss_free_font(win->font);
 
-    free(win->clip_data);
-    free(win->sel_data);
-    free(win->font_name);
+    for (size_t i = 0; i < nss_ct_MAX; i++)
+        free(win->clipped[i]);
     free(win);
 };
 
@@ -651,10 +650,18 @@ uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
     return 0;
 }
 
-void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, _Bool clip) {
+inline xcb_atom_t target_to_atom(nss_clipboard_target_t target) {
+    switch (target) {
+    case nss_ct_secondary: return XCB_ATOM_SECONDARY;
+    case nss_ct_primary: return XCB_ATOM_PRIMARY;
+    default: return ctx.atom_clipboard;
+    }
+}
+
+void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, nss_clipboard_target_t target) {
     if (data) {
-        xcb_set_selection_owner(con, win->wid, clip ? ctx.atom_clipboard : XCB_ATOM_PRIMARY, time);
-        xcb_get_selection_owner_cookie_t so = xcb_get_selection_owner_unchecked(con, clip ? ctx.atom_clipboard : XCB_ATOM_PRIMARY);
+        xcb_set_selection_owner(con, win->wid, target_to_atom(target), time);
+        xcb_get_selection_owner_cookie_t so = xcb_get_selection_owner_unchecked(con, target_to_atom(target));
         xcb_get_selection_owner_reply_t *rep = xcb_get_selection_owner_reply(con, so, NULL);
         if (rep) {
             if (rep->owner != win->wid) {
@@ -664,15 +671,13 @@ void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, _Bool 
             free(rep);
         }
     }
-    free(clip ? win->clip_data : win->sel_data);
-    if (clip) win->clip_data = data;
-    else win->sel_data = data;
+    free(win->clipped[target]);
+    win->clipped[target] = data;
 }
 
-void nss_window_paste_clip(nss_window_t *win, _Bool clip) {
-    xcb_convert_selection(con, win->wid, clip ? ctx.atom_clipboard : XCB_ATOM_PRIMARY,
-          nss_term_is_utf8(win->term) ? ctx.atom_utf8_string : XCB_ATOM_STRING,
-          clip ? ctx.atom_clipboard : XCB_ATOM_PRIMARY, XCB_CURRENT_TIME);
+void nss_window_paste_clip(nss_window_t *win, nss_clipboard_target_t target) {
+    xcb_convert_selection(con, win->wid, target_to_atom(target),
+          nss_term_is_utf8(win->term) ? ctx.atom_utf8_string : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
 }
 
 static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
@@ -778,13 +783,13 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         nss_create_window();
         return;
     case nss_sa_copy:
-        if (win->sel_data) {
-            uint8_t *dup = (uint8_t*)strdup((char *)win->sel_data);
-            if (dup) nss_window_set_clip(win, dup, NSS_TIME_NOW, 1);
+        if (win->clipped[nss_ct_primary]) {
+            uint8_t *dup = (uint8_t*)strdup((char *)win->clipped[nss_ct_primary]);
+            if (dup) nss_window_set_clip(win, dup, NSS_TIME_NOW, nss_ct_clipboard);
         }
         return;
     case nss_sa_paste:
-        nss_window_paste_clip(win, 1);
+        nss_window_paste_clip(win, nss_ct_clipboard);
         return;
     case nss_sa_none: break;
     }
@@ -809,8 +814,9 @@ static void send_selection_data(nss_window_t *win, xcb_window_t req, xcb_atom_t 
     } else if (target == ctx.atom_utf8_string || target == XCB_ATOM_STRING) {
         uint8_t *data = NULL;
 
-        if (sel == XCB_ATOM_PRIMARY) data = win->sel_data;
-        else if (sel == ctx.atom_clipboard) data = win->clip_data;
+        if (sel == XCB_ATOM_PRIMARY) data = win->clipped[nss_ct_primary];
+        else if (sel == XCB_ATOM_SECONDARY) data = win->clipped[nss_ct_secondary];
+        else if (sel == ctx.atom_clipboard) data = win->clipped[nss_ct_clipboard];
 
         if (data) {
             xcb_change_property(con, XCB_PROP_MODE_REPLACE, req, prop, target, 8, strlen((char *)data), data);

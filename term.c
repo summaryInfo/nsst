@@ -3237,7 +3237,7 @@ void nss_term_clear_selection(nss_term_t *term) {
         (term->mode & nss_tm_keep_clipboard)) return;
     else if (term->mode & nss_tm_keep_selection) return;
 
-    nss_window_set_clip(term->win, NULL, NSS_TIME_NOW, term->mode & nss_tm_select_to_clipboard);
+    nss_window_set_clip(term->win, NULL, NSS_TIME_NOW, term->mode & nss_tm_select_to_clipboard ? nss_ct_clipboard : nss_ct_primary);
 }
 
 static void term_scroll_selection(nss_term_t *term, nss_coord_t amount) {
@@ -3544,12 +3544,12 @@ _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_s
 
         if (event == nss_me_release) {
             nss_window_set_clip(term->win, nss_term_selection_data(term),
-                    NSS_TIME_NOW, term->mode & nss_tm_select_to_clipboard);
+                    NSS_TIME_NOW, term->mode & nss_tm_select_to_clipboard ? nss_ct_clipboard : nss_ct_primary);
         }
 
         return 1;
     } else if (button == 1 && event == nss_me_release) {
-        nss_window_paste_clip(term->win, 0);
+        nss_window_paste_clip(term->win, nss_ct_primary);
         return 1;
     }
 

@@ -56,6 +56,13 @@ typedef enum nss_mouse_state {
     nss_ms_modifer_mask = 0xFF,
 } nss_mouse_state_t;
 
+typedef enum nss_clipboard_target {
+	nss_ct_primary,
+	nss_ct_clipboard,
+	nss_ct_secondary,
+	nss_ct_MAX,
+} nss_clipboard_target_t;
+
 typedef struct nss_window nss_window_t;
 typedef struct nss_line nss_line_t;
 typedef uint32_t nss_color_t;
@@ -80,6 +87,6 @@ char *nss_window_get_font_name(nss_window_t *win);
 
 #define NSS_TIME_NOW 0
 
-void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, _Bool clip);
-void nss_window_paste_clip(nss_window_t *win, _Bool clip);
+void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, nss_clipboard_target_t target);
+void nss_window_paste_clip(nss_window_t *win, nss_clipboard_target_t target);
 #endif
