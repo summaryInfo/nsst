@@ -3,7 +3,8 @@ PERFIX ?= @PREFIX@
 BINDIR ?= @BINDIR@
 MANDIR ?= @MANDIR@
 
-CFLAGS += -O3 -march=native -flto
+@VARS@
+
 CFLAGS += -std=c11 -Wall -Wextra -Wno-implicit-fallthrough
 
 OBJ := window.o nsst.o util.o font.o term.o config.o input.o nrcs.o boxdraw.o image.o render.o
@@ -13,6 +14,7 @@ INCLUES != pkg-config @DEPS@ --cflags
 
 LDFLAGS += -lm -lutil $(LIBS)
 CFLAGS += $(INCLUES)
+
 
 all: $(NAME)
 

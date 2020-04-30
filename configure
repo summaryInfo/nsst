@@ -5,6 +5,7 @@ use_x11shm=1
 use_boxdrawing=1
 prefix=/usr/local
 name=nsst
+vars='CFLAGS = -O2 -flto'
 
 case "$(uname)" in
     Linux) use_ppoll=1;;
@@ -28,22 +29,36 @@ END
 }
 
 IFS=''
+nl='\
+'
 
 for i; do
     case "$i" in
-    --enable-ppoll) use_ppoll=1 ;;
-    --disable-ppoll) use_ppoll=0 ;;
-    --enable-x11shm) use_x11shm=1 ;;
-    --disable-x11shm) use_x11shm=0 ;;
-    --enable-boxdrawing) use_boxdrawing=1 ;;
-    --disable-boxdrawing) use_boxdrawing=0 ;;
-    --name=*) name="${name#--name=}" ;;
-    --bindir=*) bindir="${bindir#--bindir=}" ;;
-    --mandir=*) mandir="${mandir#--mandir=}" ;;
-    --prefix=*) prefix="${prefix#--prefix=}" ;;
+    --enable-ppoll)
+        use_ppoll=1 ;;
+    --disable-ppoll)
+        use_ppoll=0 ;;
+    --enable-x11shm)
+        use_x11shm=1 ;;
+    --disable-x11shm)
+        use_x11shm=0 ;;
+    --enable-boxdrawing)
+        use_boxdrawing=1 ;;
+    --disable-boxdrawing)
+        use_boxdrawing=0 ;;
+    --name=*)
+        name="${name#--name=}" ;;
+    --bindir=*)
+        bindir="${bindir#--bindir=}" ;;
+    --mandir=*)
+        mandir="${mandir#--mandir=}" ;;
+    --prefix=*)
+        prefix="${prefix#--prefix=}" ;;
+    [A-Za-z_]*=*)
+        vars="$vars$nl$i" ;;
     *)
         help
-        exit 1;;
+        exit 1 ;;
     esac
 done
 
@@ -68,7 +83,8 @@ sed < "./Makefile.in" > "./Makefile" \
     -e "s:@PREFIX@:$prefix:" \
     -e "s:@BINDIR@:$bindir:" \
     -e "s:@MANDIR@:$mandir:" \
-    -e "s:@DEPS@:$deps:"
+    -e "s:@DEPS@:$deps:" \
+    -e "s:@VARS@:$vars:"
 
 cat <<END
     name..................... $name
