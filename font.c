@@ -530,7 +530,7 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_att
         new->g = g;
     } else
 #endif
-        new = nss_font_render_glyph(cache->font, g & 0xFFFFFF, (g >> 24) & nss_font_attrib_mask, cache->lcd);
+        new = nss_font_render_glyph(cache->font, ch, face, cache->lcd);
 
     new->p = p;
     if (!p) cache->root = new;

@@ -74,6 +74,7 @@
 
 static void term_answerback(nss_term_t *term, const char *str, ...);
 static void term_scroll_selection(nss_term_t *term, nss_coord_t amount);
+static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss_color_t y, _Bool rectangular);
 
 typedef struct nss_cursor {
     nss_coord_t x;
@@ -107,9 +108,9 @@ typedef struct nss_visual_selection {
     } snap;
     enum {
         nss_sstate_none,
-        nss_sstate_pressed,
-        nss_sstate_progress,
-        nss_sstate_released,
+        nss_sstate_pressed = nss_me_press + 1,
+        nss_sstate_released = nss_me_release + 1,
+        nss_sstate_progress = nss_me_motion + 1,
     } state;
 } nss_visual_selection_t;
 
@@ -137,7 +138,6 @@ struct nss_term {
     nss_visual_selection_t vsel;
     struct timespec vsel_click0;
     struct timespec vsel_click1;
-    _Bool vsel_begin_alt;
 
     nss_coord_t prev_c_x;
     nss_coord_t prev_c_y;
@@ -759,8 +759,6 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t bottom, n
 
         if (save && !(term->mode & nss_tm_altscreen) && term->top == top) {
             for (nss_coord_t i = 0; i < amount; i++) {
-                // TODO Adjust line to their real length (maximum of wrap_at value
-                // and position of last non-blank charecter plus one)
                 term_append_history(term, term->screen[top + i]);
                 term->screen[top + i] = term_create_line(term, term->width);
             }
@@ -3294,7 +3292,10 @@ static nss_visual_selection_t selection_normalize(nss_visual_selection_t sel) {
 static void term_snap_selection(nss_term_t *term) {
     term->vsel = selection_normalize(term->vsel);
 
+
     if (term->vsel.snap == nss_ssnap_line) {
+        term->vsel.state = nss_sstate_progress;
+
         nss_line_iter_t it = make_line_iter(term->view, term->screen,
                 term->vsel.ny0, term->scrollback_pos + term->height);
         term->vsel.nx0 = 0;
@@ -3314,6 +3315,7 @@ static void term_snap_selection(nss_term_t *term) {
             line = line_iter_prev(&it), term->vsel.ny1++;
 
     } else if (term->vsel.snap == nss_ssnap_word) {
+        term->vsel.state = nss_sstate_progress;
 
         nss_line_iter_t it = make_line_iter(term->view, term->screen,
                 term->scrollback_pos + term->vsel.ny0, term->height + term->scrollback_pos);
@@ -3429,6 +3431,35 @@ uint8_t *nss_term_selection_data(nss_term_t *term) {
     } else return NULL;
 }
 
+static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss_color_t y, _Bool rectangular) {
+    nss_visual_selection_t old = term->vsel;
+
+    if (state == nss_sstate_pressed) {
+        term->vsel.x0 = x;
+        term->vsel.y0 = y - term->scrollback_pos;
+
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+
+        if (TIMEDIFF(term->vsel_click1, now) < nss_config_integer(NSS_ICONFIG_TRIPLE_CLICK_TIME)*(SEC/1000))
+            term->vsel.snap = nss_ssnap_line;
+        else if (TIMEDIFF(term->vsel_click0, now) < nss_config_integer(NSS_ICONFIG_DOUBLE_CLICK_TIME)*(SEC/1000))
+            term->vsel.snap = nss_ssnap_word;
+        else
+            term->vsel.snap = nss_ssnap_none;
+
+        term->vsel_click1 = term->vsel_click0;
+        term->vsel_click0 = now;
+    }
+
+    term->vsel.state = state;
+    term->vsel.rectangular = rectangular;
+    term->vsel.x1 = x;
+    term->vsel.y1 = y - term->scrollback_pos;
+
+    term_snap_selection(term);
+    term_update_selection(term, &old);
+}
 
 _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
     x = MIN(MAX(0, x), term->width - 1);
@@ -3476,53 +3507,32 @@ _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_s
                     term->inmode.keyboard_mapping == nss_km_sco ? ">M" : "M", button + ' ', x + 1 + ' ', y + 1 + ' ');
         }
 
+        term->prev_mouse_x = x;
+        term->prev_mouse_y = y;
+        return 1;
     /* Or else select */
-    } else if (button == 0 && event == nss_me_press) {
-        nss_visual_selection_t old = term->vsel;
+    } else if ((event == nss_me_press && button == 0) ||
+               (event == nss_me_motion && mask & nss_ms_button_1) ||
+               (event == nss_me_release && button == 0)) {
 
-        struct timespec now;
-        clock_gettime(CLOCK_MONOTONIC, &now);
+        if (event == nss_me_motion && term->vsel.state != nss_sstate_progress &&
+                term->vsel.state != nss_sstate_pressed) return 0;
+        if (event == nss_me_release && term->vsel.state != nss_sstate_progress) return 0;
 
-        uint32_t snap = nss_ssnap_none;
-        if (TIMEDIFF(term->vsel_click1, now) < nss_config_integer(NSS_ICONFIG_TRIPLE_CLICK_TIME)*(SEC/1000))
-            snap = nss_ssnap_line;
-        else if (TIMEDIFF(term->vsel_click0, now) < nss_config_integer(NSS_ICONFIG_DOUBLE_CLICK_TIME)*(SEC/1000))
-            snap = nss_ssnap_word;
+        term_change_selection(term, event + 1, x, y, mask & nss_mm_mod1);
 
-        term->vsel_click1 = term->vsel_click0;
-        term->vsel_click0 = now;
+        if (event == nss_me_release) {
+            nss_window_set_clip(term->win, nss_term_selection_data(term),
+                    NSS_TIME_NOW, term->mode & nss_tm_select_to_clipboard);
+        }
 
-        term->vsel = (nss_visual_selection_t) {
-            x, y - term->scrollback_pos,
-            x, y - term->scrollback_pos,
-            0, 0, 0, 0,
-            mask & nss_mm_mod1,
-            snap,
-            snap == nss_ssnap_none ? nss_sstate_pressed : nss_sstate_progress,
-        };
-        term_snap_selection(term);
-        term_update_selection(term, &old);
-    } else if ((event == nss_me_motion && mask & nss_ms_button_1 && (term->vsel.state == nss_sstate_pressed || term->vsel.state == nss_sstate_progress)) ||
-               (event == nss_me_release && button == 0 && term->vsel.state == nss_sstate_progress)) {
-
-        nss_visual_selection_t old = term->vsel;
-
-        term->vsel.state = event == nss_me_release ? nss_sstate_released : nss_sstate_progress;
-        term->vsel.rectangular = mask & nss_mm_mod1;
-        term->vsel.x1 = x;
-        term->vsel.y1 = y - term->scrollback_pos;
-
-        term_snap_selection(term);
-        term_update_selection(term, &old);
-
-        if (event == nss_me_release)
-            nss_window_set_clip(term->win, nss_term_selection_data(term), NSS_TIME_NOW, term->mode & nss_tm_select_to_clipboard);
-    } else if (button == 1 && event == nss_me_release)
+        return 1;
+    } else if (button == 1 && event == nss_me_release) {
         nss_window_paste_clip(term->win, 0);
+        return 1;
+    }
 
-    term->prev_mouse_x = x;
-    term->prev_mouse_y = y;
-    return 1;
+    return 0;
 }
 
 void nss_term_hang(nss_term_t *term) {
