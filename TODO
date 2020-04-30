@@ -1,12 +1,24 @@
 Until version 1.2:
     After resizing window (only jump resize) new lines are not damaged
+    Something wrong with palette relocation
     Selections
-        I'm not sure if 1044 mode semantics is correct
-        Remember which selection we have copied to
-        OSC 52 for c/p/s (no cut buffers)
-        Selection colors
+        term.c
+            I'm not sure if 1044 mode semantics is correct
+            OSC 52 for c/p/q/s (no cut buffers)
+				c - CLIPBOARD
+				p - PRIMARY
+				q - SECONDARY
+				s - current active
+				0-7 - cut buffers (ignored)
+				Enabled only if window operations is allowed
+            Remember which selection we have copied to
+        render.c
+            Selection colors
 Until version 1.3:
     Convert from input locale to unicode while reading?
+    Unify font cache
+        use nss_font_cache_t for XRender
+        but for XRender nss_cache_fetch returns void
     Recursive input buffer refilling
     Set WM_NORMAL_HINTS
     Set pseudoterminal attributes
@@ -33,7 +45,9 @@ Until 2.0:
     Make X resources names more or less correspond to Xterm/rxvt-unicode
     Bell
     Core X11 fonts?
+    Wayland?
     Reports
+    SIXEL
     Rectangular operations
     Left/right margins
 
@@ -207,8 +221,9 @@ Term
         CSI ? s -- Save DEC private modes
         CSI Ps q -- DECLL
         DCS + Q Pt ST -- XTGETXRES -> DCS Ps + R Pt ST
-        DSC + p Pt ST -- XTSETTCAP
-        DSC + q Pt ST -- XTGETTCAP
+        DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
+        DCS + p Pt ST -- XTSETTCAP
+        DCS + q Pt ST -- XTGETTCAP
         DCS Ps ; Ps | Pt ST -- DECUDK
         OSC 3 ; Pt ST -- Set X property
         OSC 5 ; Pt ST -- Set special color
