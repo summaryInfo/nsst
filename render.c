@@ -781,7 +781,7 @@ inline static void push_cell(nss_window_t *win, nss_coord_t x, nss_coord_t y, ns
     cel->attr |= nss_attrib_drawn;
 }
 
-static void push_rect(nss_window_t *win, xcb_rectangle_t *rect) {
+static void push_rect(xcb_rectangle_t *rect) {
     if (rctx.bufpos + sizeof(xcb_rectangle_t) >= rctx.bufsize) {
         size_t new_size = MAX(3 * rctx.bufsize / 2, 16 * sizeof(xcb_rectangle_t));
         uint8_t *new = realloc(rctx.buffer, new_size);
@@ -897,13 +897,13 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         if (win->cursor_type == nss_cursor_block)
             cur_cell.attr ^= nss_attrib_inverse;
         array[cur_y]->cell[cur_x].attr |= nss_attrib_drawn;
-        push_cell(win, cur_x, cur_y, palette, array[cur_y]->extra, &cur_cell);
+        push_cell(win, cur_x, cur_y, palette, array[cur_y]->pal->data, &cur_cell);
     }
 
     nss_line_iter_t it = make_line_iter(list, array, 0, win->ch);
     for (nss_line_t *line; (line = line_iter_next(&it));) {
         if (win->cw > line->width) {
-            push_rect(win, &(xcb_rectangle_t){
+            push_rect(&(xcb_rectangle_t){
                 .x = line->width * win->char_width,
                 .y = line_iter_y(&it) * (win->char_height + win->char_depth),
                 .width = (win->cw - line->width) * win->char_width,
@@ -936,7 +936,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
             while (i < rctx.cbufpos && rctx.cbuffer[k].y == rctx.cbuffer[i].y &&
                     rctx.cbuffer[i - 1].x + win->char_width == rctx.cbuffer[i].x &&
                     rctx.cbuffer[k].bg == rctx.cbuffer[i].bg);
-            push_rect(win, &(xcb_rectangle_t) {
+            push_rect(&(xcb_rectangle_t) {
                 .x = rctx.cbuffer[k].x,
                 .y = rctx.cbuffer[k].y,
                 .width = rctx.cbuffer[i - 1].x - rctx.cbuffer[k].x + win->char_width,
@@ -960,7 +960,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
         do i++;
         while (i < rctx.cbufpos && rctx.cbuffer[k].y == rctx.cbuffer[i].y &&
                 rctx.cbuffer[i - 1].x + win->char_width == rctx.cbuffer[i].x && rctx.cbuffer[i].glyph);
-        push_rect(win, &(xcb_rectangle_t) {
+        push_rect(&(xcb_rectangle_t) {
             .x = rctx.cbuffer[k].x,
             .y = rctx.cbuffer[k].y,
             .width = rctx.cbuffer[i - 1].x - rctx.cbuffer[k].x + win->char_width*(1 + rctx.cbuffer[k].wide),
@@ -1019,7 +1019,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
             while (i < rctx.cbufpos && !rctx.cbuffer[i].glyph) i++;
         }
         if (rctx.bufpos)
-            xcb_render_compose_glyphs_32(con, XCB_RENDER_PICT_OP_OVER,
+            xcb_render_composite_glyphs_32(con, XCB_RENDER_PICT_OP_OVER,
                                            win->ren.pen, win->ren.pic, win->ren.pfglyph, win->ren.gsid,
                                            0, 0, rctx.bufpos, rctx.buffer);
     }
@@ -1042,7 +1042,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
             while (i < rctx.cbufpos && rctx.cbuffer[k].y == rctx.cbuffer[i].y &&
                     rctx.cbuffer[i - 1].x + win->char_width == rctx.cbuffer[i].x &&
                     rctx.cbuffer[k].fg == rctx.cbuffer[i].fg && rctx.cbuffer[i].underlined);
-            push_rect(win, &(xcb_rectangle_t) {
+            push_rect(&(xcb_rectangle_t) {
                 .x = rctx.cbuffer[k].x,
                 .y = rctx.cbuffer[k].y + win->char_height + 1,
                 .width = rctx.cbuffer[i - 1].x + win->char_width - rctx.cbuffer[k].x,
@@ -1058,7 +1058,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
             while (i < rctx.cbufpos && rctx.cbuffer[k].y == rctx.cbuffer[i].y &&
                     rctx.cbuffer[i - 1].x + win->char_width == rctx.cbuffer[i].x &&
                     rctx.cbuffer[k].fg == rctx.cbuffer[i].fg && rctx.cbuffer[i].strikethrough);
-            push_rect(win, &(xcb_rectangle_t) {
+            push_rect(&(xcb_rectangle_t) {
                 .x = rctx.cbuffer[k].x,
                 .y = rctx.cbuffer[k].y + 2*win->char_height/3 - win->underline_width/2,
                 .width = rctx.cbuffer[i - 1].x + win->char_width - rctx.cbuffer[k].x,

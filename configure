@@ -67,7 +67,7 @@ done
 
 deps="xcb xcb-xkb xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11"
 
-if [ x"$use_ppoll" = x1 ]; then
+if [ x"$use_x11shm" = x1 ]; then
     deps="$deps xcb-shm"
 else
     deps="$deps xcb-render"
