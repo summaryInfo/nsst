@@ -29,11 +29,11 @@
 
 //For openpty() funcion
 #if   defined(__linux)
-#	include <pty.h>
+#   include <pty.h>
 #elif defined(__OpenBSD__) || defined(__NetBSD__) || defined(__APPLE__)
-#	include <util.h>
+#   include <util.h>
 #elif defined(__FreeBSD__) || defined(__DragonFly__)
-#	include <libutil.h>
+#   include <libutil.h>
 #endif
 
 #define TTY_MAX_WRITE 256
@@ -467,18 +467,10 @@ static void term_set_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_ch
 
     // In theory this should be disabled while in UTF-8 mode, but
     // in practive applications use these symbols, so keep translating
-
-    if (!(term->mode & nss_tm_utf8) || nss_config_integer(NSS_ICONFIG_ALLOW_CHARSETS)) {
+    if (!(term->mode & nss_tm_utf8) || nss_config_integer(NSS_ICONFIG_ALLOW_CHARSETS))
         ch = nrcs_decode(term->c.gn[term->c.gl_ss], term->c.gn[term->c.gr], ch, term->mode & nss_tm_enable_nrcs);
-    }
 
-    nss_cell_t cel = fixup_color(term->screen[y], &term->c);
-    cel.ch = ch;
-
-    term->screen[y]->cell[x] = cel;
-
-    term->c.gl_ss = term->c.gl; // Reset single shift
-    term->prev_ch = ch; // For REP CSI Ps b
+    term->screen[y]->cell[x] = MKCELLWITH(fixup_color(term->screen[y], &term->c), ch);
 }
 
 
@@ -2804,12 +2796,16 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
         else if (ch == 0x7F && (!(term->mode & nss_tm_enable_nrcs) && (glv == nss_96cs_latin_1 || glv == nss_94cs_british)))
             /* ignore */;
         else {
+            // 'print' state
+
             nss_coord_t width = wcwidth(ch);
             if (width < 0) /*ch = UTF_INVAL,*/ width = 1;
+            // Ignore zero-width characters
             else if (width == 0) return;
 
             info("%c (%u)", ch, ch);
 
+            // Wrap line if needed
             if (term->mode & nss_tm_wrap) {
                 if (term->c.x + width > term->width) {
                     term->screen[term->c.y]->wrap_at = term->c.x;
@@ -2819,23 +2815,29 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
                 }
             } else term->c.x = MIN(term->c.x, term->width - width);
 
+            // Shift characters to the left if insert mode is enabled
             nss_cell_t *cell = &term->screen[term->c.y]->cell[term->c.x];
-
             if (term->mode & nss_tm_insert && term->c.x + width < term->width) {
                 for (nss_cell_t *c = cell + width; c - term->screen[term->c.y]->cell < term->width; c++)
                     c->attr &= ~nss_attrib_drawn;
                 memmove(cell + width, cell, term->screen[term->c.y]->width - term->c.x - width);
             }
 
+            // Erase overwritten parts of wide characters
             term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
             term_adjust_wide_before(term, term->c.x + width - 1, term->c.y, 0, 1);
 
+            // Put character itself
             term_set_cell(term, term->c.x, term->c.y, ch);
 
+            // Put dummy character to the left of wide
             if (width > 1) {
                 cell[1] = fixup_color(term->screen[term->c.y], &term->c);
                 cell[0].attr |= nss_attrib_wide;
             }
+
+            term->c.gl_ss = term->c.gl; // Reset single shift
+            term->prev_ch = ch; // For REP CSI Ps b
 
             term->c.x += width;
         }
