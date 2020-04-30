@@ -459,20 +459,9 @@ static void term_line_dirt(nss_line_t *line) {
         line->cell[i].attr &= ~nss_attrib_drawn;
 }
 
-static void term_set_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_char_t ch) {
-
-    // Clear selection when selected cell is overwritten
-    if (nss_term_is_selected(term, x, y))
-        nss_term_clear_selection(term);
-
-    // In theory this should be disabled while in UTF-8 mode, but
-    // in practive applications use these symbols, so keep translating
-    if (!(term->mode & nss_tm_utf8) || nss_config_integer(NSS_ICONFIG_ALLOW_CHARSETS))
-        ch = nrcs_decode(term->c.gn[term->c.gl_ss], term->c.gn[term->c.gr], ch, term->mode & nss_tm_enable_nrcs);
-
+inline static void term_put_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_char_t ch) {
     term->screen[y]->cell[x] = MKCELLWITH(fixup_color(term->screen[y], &term->c), ch);
 }
-
 
 _Bool nss_term_is_utf8(nss_term_t *term) {
     return term->mode & nss_tm_utf8;
@@ -643,7 +632,8 @@ inline static void term_clear_selection_on_erase(nss_term_t *term, nss_coord_t x
 #undef RECT_INTRS
 }
 
-static void term_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
+static void term_fill(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, nss_char_t ch) {
+
     if (ye < ys) SWAP(nss_coord_t, ye, ys);
     if (xe < xs) SWAP(nss_coord_t, xe, xs);
 
@@ -657,10 +647,15 @@ static void term_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coo
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
         nss_cell_t cell = fixup_color(line, &term->c);
+        cell.ch = ch;
         cell.attr = 0;
         for(nss_coord_t i = xs; i < xe; i++)
             line->cell[i] = cell;
     }
+}
+
+static void term_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
+    term_fill(term, xs, ys, xe, ye, 0);
 }
 
 static void term_protective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
@@ -2182,14 +2177,16 @@ static void term_dispatch_csi(nss_term_t *term) {
     //    break;
     //case C('w') | I0('$'): /* DECRQPSR */
     //    break;
-    //case C('x') | I0('$'): /* DECFRA */
-    //    break;
+    case C('x') | I0('$'): /* DECFRA */
+        term_fill(term, PARAM(1,1) - 1, PARAM(2,1) - 1, PARAM(3,1), PARAM(4,1), PARAM(0, 0));
+        term_move_to(term, term->c.x, term->c.y);
+        break;
     case C('z') | I0('$'): /* DECERA */
-        term_erase(term, PARAM(0,1) - 1, PARAM(1,1) - 1, PARAM(2,1) - 1, PARAM(3,1) - 1);
+        term_erase(term, PARAM(0,1) - 1, PARAM(1,1) - 1, PARAM(2,1), PARAM(3,1));
         term_move_to(term, term->c.x, term->c.y);
         break;
     case C('{') | I0('$'): /* DECSERA */
-        term_selective_erase(term, PARAM(0,1) - 1, PARAM(1,1) - 1, PARAM(2,1) - 1, PARAM(3,1) - 1);
+        term_selective_erase(term, PARAM(0,1) - 1, PARAM(1,1) - 1, PARAM(2,1), PARAM(3,1));
         term_move_to(term, term->c.x, term->c.y);
         break;
     //case C('w') | I0('\''): /* DECEFR */
@@ -2423,13 +2420,14 @@ static void term_dispatch_esc(nss_term_t *term) {
     //    break;
     case E('8') | I0('#'): /* DECALN*/
         term_reset_margins(term);
+        nss_term_clear_selection(term);
         term->c.x = term->c.y = 0;
         term->c.cel.attr = 0;
         term->c.cel.fg = NSS_SPECIAL_FG;
         term->c.cel.bg = NSS_SPECIAL_BG;
         for (nss_coord_t i = 0; i < term->height; i++)
             for(nss_coord_t j = 0; j < term->width; j++)
-                term_set_cell(term, j, i, 'E');
+                term_put_cell(term, j, i, 'E');
         break;
     case E('@') | I0('%'): /* Disable UTF-8 */
         term->mode &= ~nss_tm_utf8;
@@ -2524,7 +2522,10 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
         break;
     case 0x1a: /* SUB */
         term_move_to(term, term->c.x, term->c.y);
-        term_set_cell(term, term->c.x, term->c.y, '?');
+        // Clear selection when selected cell is overwritten
+        if (nss_term_is_selected(term, term->c.x, term->c.y))
+            nss_term_clear_selection(term);
+        term_put_cell(term, term->c.x, term->c.y, '?');
     case 0x18: /* CAN */
         term->esc.state = esc_ground;
         break;
@@ -2827,8 +2828,19 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
             term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
             term_adjust_wide_before(term, term->c.x + width - 1, term->c.y, 0, 1);
 
+            // Decode nrcs
+
+            // In theory this should be disabled while in UTF-8 mode, but
+            // in practive applications use these symbols, so keep translating
+            if (!(term->mode & nss_tm_utf8) || nss_config_integer(NSS_ICONFIG_ALLOW_CHARSETS))
+                ch = nrcs_decode(term->c.gn[term->c.gl_ss], term->c.gn[term->c.gr], ch, term->mode & nss_tm_enable_nrcs);
+
+            // Clear selection when selected cell is overwritten
+            if (nss_term_is_selected(term, term->c.x, term->c.y))
+                nss_term_clear_selection(term);
+
             // Put character itself
-            term_set_cell(term, term->c.x, term->c.y, ch);
+            term_put_cell(term, term->c.x, term->c.y, ch);
 
             // Put dummy character to the left of wide
             if (width > 1) {
