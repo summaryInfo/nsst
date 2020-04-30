@@ -1,0 +1,83 @@
+#!/bin/sh
+
+use_ppoll=0
+use_x11shm=1
+use_boxdrawing=1
+prefix=/usr/local
+name=nsst
+
+case "$(uname)" in
+    Linux) use_ppoll=1;;
+    OpenBSD) use_ppoll=1;;
+esac
+
+help() {
+cat <<END
+Usage: configure [options]
+    --name=NAME             binary name (default is $name)
+    --prefix=DIR            installation prefix (default is $prefix)
+    --mandir=DIR            man install directory (default is $prefix/share/man)
+    --bindir=DIR            binary install directory (default is $prefix/bin)
+    --enable-ppoll          enable ppoll in main loop for better timing (default if available)
+    --disable-ppoll         disable ppoll in main loop, use poll instead
+    --enable-x11shm         enable MIT-SHM backend  (default)
+    --disable-x11shm        disable MIT-SHM, use XRender for drawing
+    --enable-boxdrawing     enable built-in box drawing characters (default)
+    --disable-boxdrawing    disable built-in box drawing characters
+END
+}
+
+IFS=''
+
+for i; do
+    case "$i" in
+    --enable-ppoll) use_ppoll=1 ;;
+    --disable-ppoll) use_ppoll=0 ;;
+    --enable-x11shm) use_x11shm=1 ;;
+    --disable-x11shm) use_x11shm=0 ;;
+    --enable-boxdrawing) use_boxdrawing=1 ;;
+    --disable-boxdrawing) use_boxdrawing=0 ;;
+    --name=*) name="${name#--name=}" ;;
+    --bindir=*) bindir="${bindir#--bindir=}" ;;
+    --mandir=*) mandir="${mandir#--mandir=}" ;;
+    --prefix=*) prefix="${prefix#--prefix=}" ;;
+    *)
+        help
+        exit 1;;
+    esac
+done
+
+[ x = x"$bindir" ] && bindir=${prefix}/bin
+[ x = x"$mandir" ] && mandir=${prefix}/share/man
+
+deps="xcb xcb-xkb xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11"
+
+if [ x"$use_ppoll" = x1 ]; then
+    deps="$deps xcb-shm"
+else
+    deps="$deps xcb-render"
+fi
+
+sed < "./feature.h.in" > "./feature.h" \
+    -e "s:@USE_PPOLL@:$use_ppoll:g" \
+    -e "s:@USE_BOXDRAWING@:$use_boxdrawing:g" \
+    -e "s:@USE_X11SHM@:$use_x11shm:g"
+
+sed < "./Makefile.in" > "./Makefile" \
+    -e "s:@NAME@:$name:" \
+    -e "s:@PREFIX@:$prefix:" \
+    -e "s:@BINDIR@:$bindir:" \
+    -e "s:@MANDIR@:$mandir:" \
+    -e "s:@DEPS@:$deps:"
+
+cat <<END
+    name..................... $name
+    prefix................... $prefix
+    bindir................... $bindir
+    mandir................... $mandir
+    boxdrawing............... $use_boxdrawing
+    x11shm................... $use_x11shm
+    ppoll.................... $use_ppoll
+
+    Do "make && make install" to compile and install nsst
+END

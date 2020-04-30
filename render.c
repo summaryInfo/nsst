@@ -2,7 +2,7 @@
 
 #include "feature.h"
 
-#ifdef USE_BOXDRAWING
+#if USE_BOXDRAWING
 #   include "boxdraw.h"
 #endif
 #include "config.h"
@@ -12,7 +12,7 @@
 #include <string.h>
 #include <xcb/xcb.h>
 
-#ifdef USE_X11SHM
+#if USE_X11SHM
 #   include <sys/shm.h>
 #   include <sys/ipc.h>
 #   include <xcb/shm.h>
@@ -22,7 +22,7 @@
 
 typedef struct nss_render_context nss_render_context_t;
 
-#ifdef USE_X11SHM
+#if USE_X11SHM
 
 struct nss_render_context {
     _Bool has_shm;
@@ -102,7 +102,7 @@ static nss_image_t nss_create_image_shm(nss_window_t *win, int16_t width, int16_
     }
 }
 
-static void nss_free_image_shm(nss_window_t *win, nss_image_t *im) {
+static void nss_free_image_shm(nss_image_t *im) {
     if (rctx.has_shm) {
         if (im->data) shmdt(im->data);
         if (im->shmid != -1U) shmctl(im->shmid, IPC_RMID, NULL);
@@ -163,7 +163,7 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
 
     if (need_free) {
         xcb_free_gc(con, win->ren.gc);
-        nss_free_image_shm(win, &win->ren.im);
+        nss_free_image_shm(&win->ren.im);
     } else {
         win->ren.gc = xcb_generate_id(con);
     }
@@ -197,7 +197,7 @@ void nss_renderer_free(nss_window_t *win) {
     if (rctx.has_shm_pixmaps)
         xcb_free_pixmap(con, win->ren.shm_pixmap);
     if (win->ren.im.data)
-        nss_free_image_shm(win, &win->ren.im);
+        nss_free_image_shm(&win->ren.im);
     if (win->ren.cache)
         nss_free_cache(win->ren.cache);
     free(win->ren.bounds);
@@ -444,7 +444,7 @@ void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
     nss_image_t new = nss_create_image_shm(win, width, height);
     nss_image_copy(new, (nss_rect_t){0, 0, common_w, common_h}, win->ren.im, 0, 0);
     SWAP(nss_image_t, win->ren.im, new);
-    nss_free_image_shm(win, &new);
+    nss_free_image_shm(&new);
 
     resize_bounds(win, delta_y);
 
@@ -734,7 +734,7 @@ inline static void push_cell(nss_window_t *win, nss_coord_t x, nss_coord_t y, ns
     if (!nss_font_glyph_is_loaded(win->font, cell.ch)) {
         for (size_t j = 0; j < nss_font_attrib_max; j++) {
             nss_glyph_t *glyph;
-#ifdef USE_BOXDRAWING
+#if USE_BOXDRAWING
             if (is_boxdraw(cell.ch) && nss_config_integer(NSS_ICONFIG_OVERRIDE_BOXDRAW)) {
                 glyph = nss_make_boxdraw(cell.ch, win->char_width, win->char_height, win->char_depth, win->subpixel_fonts);
                 nss_font_glyph_mark_loaded(win->font, cell.ch | (j << 24));

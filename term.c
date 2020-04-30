@@ -29,11 +29,11 @@
 
 //For openpty() funcion
 #if   defined(__linux)
- #include <pty.h>
+#	include <pty.h>
 #elif defined(__OpenBSD__) || defined(__NetBSD__) || defined(__APPLE__)
- #include <util.h>
+#	include <util.h>
 #elif defined(__FreeBSD__) || defined(__DragonFly__)
- #include <libutil.h>
+#	include <libutil.h>
 #endif
 
 #define TTY_MAX_WRITE 256
@@ -228,7 +228,7 @@ struct nss_term {
     uint8_t fd_buf[NSS_FD_BUF_SZ];
 };
 
-static void sigchld_fn(int arg) {
+static void handle_chld(int arg) {
     int status;
     pid_t pid = waitpid(-1, &status, WNOHANG);
     if (pid < 0) {
@@ -243,6 +243,8 @@ static void sigchld_fn(int arg) {
         info("Child exited with status: %d", WEXITSTATUS(status));
     else if (WIFSIGNALED(status))
         info("Child terminated due to the signal: %d", WTERMSIG(status));
+
+    (void)arg;
 }
 
 static void exec_shell(const char *cmd, const char **args) {
@@ -331,7 +333,7 @@ int tty_open(nss_term_t *term, const char *cmd, const char **args) {
         int fl = fcntl(master, F_GETFD);
         if (fl >= 0)
             fcntl(master, F_SETFD, fl | FD_CLOEXEC);
-        signal(SIGCHLD, sigchld_fn);
+        signal(SIGCHLD, handle_chld);
     }
     term->child = pid;
     term->fd = master;
@@ -447,7 +449,7 @@ static nss_line_t *term_realloc_line(nss_term_t *term, nss_line_t *line, nss_coo
     return new;
 }
 
-static void term_free_line(nss_term_t *term, nss_line_t *line) {
+static void term_free_line(nss_line_t *line) {
     free(line->pal);
     free(line);
 }
@@ -592,7 +594,7 @@ inline static nss_coord_t line_length(nss_line_t *line) {
 
 static void term_append_history(nss_term_t *term, nss_line_t *line) {
     if (term->scrollback_limit == 0) {
-        term_free_line(term,line);
+        term_free_line(line);
     } else {
         line = term_realloc_line(term, line, line_length(line) + 1);
         if (line->pal) {
@@ -614,7 +616,7 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
             if (term->scrollback_top == term->view)
                 nss_term_scroll_view(term, -1);
             nss_line_t *next = term->scrollback_top->next;
-            term_free_line(term, term->scrollback_top);
+            term_free_line(term->scrollback_top);
 
             if (next) next->prev = NULL;
             else term->scrollback = NULL;
@@ -1009,7 +1011,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
         }
         for (nss_line_t *tmp, *line = term->scrollback; line; line = tmp) {
             tmp = line->prev;
-            term_free_line(term, line);
+            term_free_line(line);
         }
 
         term->vt_level = term->vt_version / 100;
@@ -3018,8 +3020,8 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
             if (i < height + delta)
                 term_append_history(term, term->screen[i - height]);
             else
-                term_free_line(term, term->screen[i]);
-            term_free_line(term, term->back_screen[i]);
+                term_free_line(term->screen[i]);
+            term_free_line(term->back_screen[i]);
         }
 
         memmove(term->screen, term->screen + delta, (term->height - delta)* sizeof(term->screen[0]));
@@ -3179,8 +3181,8 @@ static void term_update_selection(nss_term_t *term, nss_visual_selection_t *old)
         // Insert dummy rectangles to simplify code
         nss_coord_t max_yo = d_old[sz_old - 1].y + d_old[sz_old - 1].height;
         nss_coord_t max_yn = d_new[sz_new - 1].y + d_new[sz_new - 1].height;
-        d_old[sz_old] = (nss_rect_t) {0, max_yo};
-        d_new[sz_new] = (nss_rect_t) {0, max_yn};
+        d_old[sz_old] = (nss_rect_t) {0, max_yo, 0, 0};
+        d_new[sz_new] = (nss_rect_t) {0, max_yn, 0, 0};
 
         // Calculate y positions of bands
         nss_coord_t ys[8];
@@ -3553,8 +3555,8 @@ void nss_term_hang(nss_term_t *term) {
 void nss_free_term(nss_term_t *term) {
     nss_term_hang(term);
     for (nss_coord_t i = 0; i < term->height; i++) {
-        term_free_line(term, term->screen[i]);
-        term_free_line(term, term->back_screen[i]);
+        term_free_line(term->screen[i]);
+        term_free_line(term->back_screen[i]);
     }
     free(term->screen);
     free(term->back_screen);
@@ -3562,7 +3564,7 @@ void nss_free_term(nss_term_t *term) {
     nss_line_t *next, *line = term->scrollback;
     while (line) {
         next = line->prev;
-        term_free_line(term, line);
+        term_free_line(line);
         line = next;
     }
 

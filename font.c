@@ -8,10 +8,8 @@
 #include "font.h"
 #include "util.h"
 #include "window.h"
-#ifdef USE_X11SHM
-#    ifdef USE_BOXDRAWING
-#        include "boxdraw.h"
-#    endif
+#if USE_X11SHM && USE_BOXDRAWING
+#   include "boxdraw.h"
 #endif
 
 #include <errno.h>
@@ -45,7 +43,7 @@ struct nss_font {
     uint16_t dpi;
     double pixel_size;
     double size;
-#ifndef USE_X11SHM
+#if !USE_X11SHM
     uint32_t *loaded_map;
 #endif
     nss_face_list_t face_types[nss_font_attrib_max];
@@ -68,7 +66,7 @@ void nss_free_font(nss_font_t *font) {
             FcFini();
             FT_Done_FreeType(global.library);
         }
-#ifndef USE_X11SHM
+#if !USE_X11SHM
         free(font->loaded_map);
 #endif
         free(font);
@@ -254,7 +252,7 @@ nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi) {
         warn("Can't allocate font");
         return NULL;
     }
-#ifndef USE_X11SHM
+#if !USE_X11SHM
     font->loaded_map = calloc(LOADED_MAP_SIZE, sizeof(font->loaded_map[0]));
     if (!font->loaded_map) {
         warn("Can't allocate font glyph map");
@@ -305,7 +303,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     }
 
     nss_glyph_t *glyph = malloc(sizeof(*glyph) + stride * face->glyph->bitmap.rows);
-#ifdef USE_X11SHM
+#if USE_X11SHM
     glyph->g = ch | (attr << 24);
     glyph->p = glyph->r = glyph->l = NULL;
 #endif
@@ -383,7 +381,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
         }
     }
 
-#ifndef USE_X11SHM
+#if !USE_X11SHM
     nss_font_glyph_mark_loaded(font, ch);
 #endif
 
@@ -394,7 +392,7 @@ int16_t nss_font_get_size(nss_font_t *font) {
     return font->size;
 }
 
-#ifdef USE_X11SHM
+#if USE_X11SHM
 
 struct nss_glyph_cache {
     nss_font_t *font;
@@ -524,7 +522,7 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_att
     }
 
     nss_glyph_t *new;
-#ifdef USE_BOXDRAWING
+#if USE_BOXDRAWING
     if (is_boxdraw(ch) && nss_config_integer(NSS_ICONFIG_OVERRIDE_BOXDRAW)) {
         new = nss_make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth, cache->lcd);
         new->g = g;

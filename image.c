@@ -3,13 +3,13 @@
 #include "feature.h"
 
 #include "util.h"
-#ifdef USE_X11SHM
+#if USE_X11SHM
 #    include "image.h"
 #endif
 
 #include <stdint.h>
 
-#ifdef USE_X11SHM
+#if USE_X11SHM
 
 void nss_image_draw_rect(nss_image_t im, nss_rect_t rect, nss_color_t fg) {
     if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height})) {

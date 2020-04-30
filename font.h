@@ -19,7 +19,7 @@ typedef enum nss_font_attrib {
 } nss_font_attrib_t;
 
 typedef struct nss_glyph {
-#ifdef USE_X11SHM
+#if USE_X11SHM
     // Tree elements
     struct nss_glyph *l,*r,*p;
     uint32_t g;
@@ -41,7 +41,7 @@ nss_font_t *nss_font_reference(nss_font_t *font);
 nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t face, _Bool lcd);
 int16_t nss_font_get_size(nss_font_t *font);
 
-#ifdef USE_X11SHM
+#if USE_X11SHM
 typedef struct nss_glyph_cache nss_glyph_cache_t;
 
 nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd);

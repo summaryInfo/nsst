@@ -1,41 +1,39 @@
-PROG = nsst
-PERFIX ?= /usr/local
+NAME ?= @NAME@
+PERFIX ?= @PREFIX@
+BINDIR ?= @BINDIR@
+MANDIR ?= @MANDIR@
 
-CFLAGS += -O2 -march=native -flto
-#CFLAGS += -g -Og
-
-CFLAGS += -std=c11 -Wall -Wextra -Wno-implicit-fallthrough\
-	      -Wno-missing-field-initializers -Wno-unused-parameter
+CFLAGS += -O3 -march=native -flto
+CFLAGS += -std=c11 -Wall -Wextra -Wno-implicit-fallthrough
 
 OBJ := window.o nsst.o util.o font.o term.o config.o input.o nrcs.o boxdraw.o image.o render.o
 
-DEPS := xcb xcb-xkb xcb-render xcb-shm xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11
-LIBS != pkg-config $(DEPS) --libs
-LIBS += -lm -lutil
-INCLUES != pkg-config $(DEPS) --cflags
+LIBS != pkg-config @DEPS@ --libs
+INCLUES != pkg-config @DEPS@ --cflags
 
-LDFLAGS += $(LIBS)
+LDFLAGS += -lm -lutil $(LIBS)
 CFLAGS += $(INCLUES)
 
-all: $(PROG)
+all: $(NAME)
 
 clean:
-	rm -rf *.o $(PROG)
+	rm -rf *.o $(NAME)
 
 force: clean
 	$(MAKE) all
 
 install-strip: all
-	strip $(PROG)
-	install $(PROG) $(PERFIX)/bin/$(PROG)
+	strip $(NAME)
+	install $(NAME) $(BINDIR)/$(NAME)
+
 install: all
-	install $(PROG) $(PERFIX)/bin/$(PROG)
+	install $(NAME) $(BINDIR)/$(NAME)
+
 uninstall:
-	rm -f $(PERFIX)/bin/$(PROG)
+	rm -f $(BINDIR)/$(NAME)
 
-$(PROG): $(OBJ)
+$(NAME): $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
-
 
 font.o: util.h config.h window.h feature.h
 window.o: util.h config.h term.h input.h window.h window-private.h feature.h

@@ -7,13 +7,13 @@
 
 #include "window.h"
 #include "term.h"
-#ifdef USE_X11SHM
+#if USE_X11SHM
 #   include "image.h"
 #endif
 
 #include <inttypes.h>
 #include <xcb/xcb.h>
-#ifdef USE_X11SHM
+#if USE_X11SHM
 #   include <xcb/shm.h>
 #else
 #   include <xcb/render.h>
@@ -25,7 +25,7 @@ typedef struct nss_renderer nss_renderer_t;
 
 struct nss_renderer {
     xcb_gcontext_t gc;
-#ifdef USE_X11SHM
+#if USE_X11SHM
     xcb_shm_seg_t shm_seg;
     xcb_pixmap_t shm_pixmap;
 

@@ -41,13 +41,13 @@ static _Noreturn void usage(char *argv0, int code) {
 static _Noreturn void version(void) {
     fprintf(stderr, "Not So Simple Terminal v1.0.0\n"
             "Features: nsst"
-#ifdef USE_PPOLL
+#if USE_PPOLL
             "+ppoll"
 #endif
-#ifdef USE_BOXDRAWING
+#if USE_BOXDRAWING
             "+boxdrawing"
 #endif
-#ifdef USE_X11SHM
+#if USE_X11SHM
             "+mitshm"
 #endif
             "\n"
@@ -84,7 +84,7 @@ static void parse_geometry(char *arg, char *argv0) {
     nss_config_set_integer(NSS_ICONFIG_WINDOW_NEGATIVE_Y, ysgn == '-');
 }
 
-static char **parse_options(int argc, char **argv) {
+static char **parse_options(char **argv) {
     size_t ind = 1;
 
     char *arg;
@@ -107,7 +107,7 @@ static char **parse_options(int argc, char **argv) {
 
             unsigned n;
 
-            nss_optmap_item_t *res = bsearch(&(nss_optmap_item_t){argv[ind] + 2},
+            nss_optmap_item_t *res = bsearch(&(nss_optmap_item_t){argv[ind] + 2, NULL, NULL, 0},
                     optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
             if (res && arg)
                 nss_config_set_string(res->opt, arg);
@@ -190,11 +190,14 @@ int main(int argc, char **argv) {
             nss_config_set_integer(NSS_ICONFIG_SKIP_CONFIG_FILE, 1);
     nss_init_context();
 
-    const char **res = (const char **)parse_options(argc, argv);
+    (void)argc;
+
+    const char **res = (const char **)parse_options(argv);
     if (res) nss_config_set_argv(res);
 
     nss_create_window();
     nss_context_run();
     nss_free_context();
+
     return EXIT_SUCCESS;
 }

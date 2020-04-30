@@ -4,7 +4,7 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#ifdef USE_PPOLL
+#if USE_PPOLL
 #   define _GNU_SOURCE
 #endif
 
@@ -257,6 +257,7 @@ volatile sig_atomic_t reload_config;
 
 void handle_sigusr1(int sig) {
     reload_config = 1;
+    (void)sig;
 }
 
 /* Initialize global state object */
@@ -885,7 +886,7 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
 void nss_context_run(void) {
     int64_t next_timeout = SEC/nss_config_integer(NSS_ICONFIG_FPS);
     for (;;) {
-#ifdef USE_PPOLL
+#if USE_PPOLL
         struct timespec ppoll_timeout = { .tv_sec = 0, .tv_nsec = next_timeout};
         if (ppoll(ctx.pfds, ctx.pfdcap, &ppoll_timeout, NULL) < 0 && errno != EINTR)
 #else

@@ -4,18 +4,12 @@
 #define FEATURES_H_ 1
 
 /* This allows better frames timing */
-
-#if defined(__linux__) || defined(__OpenBSD__)
-#   define USE_PPOLL
-#endif
+#define USE_PPOLL @USE_PPOLL@
 
 /* Ability to override box drawing characters */
-#define USE_BOXDRAWING
+#define USE_BOXDRAWING @USE_BOXDRAWING@
 
-/* X11 Backend
- * MIT-SHM, if defined
- * XRender, else
- */
-#define USE_X11SHM
+/* X11 Backend (MIT-SHM/XRender) */
+#define USE_X11SHM @USE_X11SHM@
 
 #endif

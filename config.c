@@ -69,7 +69,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"modkey-allow-keypad", "\t(Allow modifing keypad keys)", "modkeyAllowKeypad", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
     {"modkey-allow-misc", "\t(Allow modifing miscelleneous keys)", "modkeyAllowMisc", NSS_ICONFIG_INPUT_MALLOW_MISC},
     {"numlock", "\t\t(Initial numlock state)", "numlock", NSS_ICONFIG_INPUT_NUMLOCK},
-#ifdef USE_BOXDRAWING
+#if USE_BOXDRAWING
     {"override-boxdrawing", "\t(Use built-in box drawing characters)", "overrideBoxdrawing", NSS_ICONFIG_OVERRIDE_BOXDRAW},
 #endif
     {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", "printer", NSS_SCONFIG_PRINTER},
@@ -128,7 +128,7 @@ static struct {
     [NSS_ICONFIG_KEYBOARD_NRCS - NSS_ICONFIG_MIN] = {nss_94cs_ascii, nss_94cs_ascii, 0, nss_nrcs_MAX},
     [NSS_ICONFIG_SKIP_CONFIG_FILE - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
     [NSS_ICONFIG_ALLOW_NRCS - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-#ifdef USE_BOXDRAWING
+#if USE_BOXDRAWING
     [NSS_ICONFIG_OVERRIDE_BOXDRAW - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
 #endif
     [NSS_ICONFIG_FPS - NSS_ICONFIG_MIN] = {60, 60, 1, 1000},
@@ -143,14 +143,14 @@ static struct {
     const char *dflt;
     char *val;
 } soptions[] = {
-        [NSS_SCONFIG_FONT_NAME - NSS_SCONFIG_MIN] = { "mono" },
-        [NSS_SCONFIG_ANSWERBACK_STRING - NSS_SCONFIG_MIN] = { "" },
-        [NSS_SCONFIG_SHELL - NSS_SCONFIG_MIN] = { "/bin/sh" },
-        [NSS_SCONFIG_TERM_NAME - NSS_SCONFIG_MIN] = { "xterm" },
-        [NSS_SCONFIG_TITLE - NSS_SCONFIG_MIN] = { "Not So Simple Terminal" },
-        [NSS_SCONFIG_PRINTER - NSS_SCONFIG_MIN] = { },
-        [NSS_SCONFIG_TERM_CLASS - NSS_SCONFIG_MIN] = { },
-        [NSS_SCONFIG_WORD_SEPARATORS - NSS_SCONFIG_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`" },
+        [NSS_SCONFIG_FONT_NAME - NSS_SCONFIG_MIN] = { "mono", NULL },
+        [NSS_SCONFIG_ANSWERBACK_STRING - NSS_SCONFIG_MIN] = { "", NULL },
+        [NSS_SCONFIG_SHELL - NSS_SCONFIG_MIN] = { "/bin/sh", NULL },
+        [NSS_SCONFIG_TERM_NAME - NSS_SCONFIG_MIN] = { "xterm", NULL },
+        [NSS_SCONFIG_TITLE - NSS_SCONFIG_MIN] = { "Not So Simple Terminal", NULL },
+        [NSS_SCONFIG_PRINTER - NSS_SCONFIG_MIN] = { NULL, NULL },
+        [NSS_SCONFIG_TERM_CLASS - NSS_SCONFIG_MIN] = { NULL, NULL },
+        [NSS_SCONFIG_WORD_SEPARATORS - NSS_SCONFIG_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`", NULL },
 };
 
 static nss_input_mode_t input_mode = {
