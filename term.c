@@ -528,10 +528,12 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
 
 static void term_reset_view(nss_term_t *term, _Bool damage) {
     term->prev_c_view_changed |= !!term->view;
+    ssize_t old_spos = term->scrollback_pos;
     term->view = NULL;
     term->scrollback_pos = 0;
-    if (damage)
-         nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
+    if (term->vsel.state == nss_sstate_pressed || term->vsel.state == nss_sstate_progress)
+        term_change_selection(term, nss_sstate_progress, term->vsel.x1, term->vsel.y1 + old_spos, term->vsel.rectangular);
+    if (damage) nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
 }
 
 void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
@@ -542,6 +544,7 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
     }
 
     _Bool ini_view = term->view;
+    ssize_t old_spos = term->scrollback_pos;
 
     nss_coord_t scrolled = 0;
 
@@ -573,6 +576,8 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
         nss_window_shift(term->win, scrolled, 0, term->height - scrolled, 0);
     }
 
+    if (term->vsel.state == nss_sstate_pressed || term->vsel.state == nss_sstate_progress)
+        term_change_selection(term, nss_sstate_progress, term->vsel.x1, term->vsel.y1 + old_spos, term->vsel.rectangular);
     term->prev_c_view_changed |= ini_view != !!term->view;
 }
 
