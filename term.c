@@ -972,6 +972,9 @@ static void term_load_config(nss_term_t *term) {
     if (!nss_config_integer(NSS_ICONFIG_SCROLL_ON_INPUT)) term->mode |= nss_tm_dont_scroll_on_input;
     if (nss_config_integer(NSS_ICONFIG_SCROLL_ON_OUTPUT)) term->mode |= nss_tm_scroll_on_output;
     if (nss_config_integer(NSS_ICONFIG_ALLOW_NRCS)) term->mode |= nss_tm_enable_nrcs;
+    if (nss_config_integer(NSS_ICONFIG_KEEP_CLIPBOARD)) term->mode |= nss_tm_keep_clipboard;
+    if (nss_config_integer(NSS_ICONFIG_KEEP_SELECTION)) term->mode |= nss_tm_keep_selection;
+    if (nss_config_integer(NSS_ICONFIG_SELECT_TO_CLIPBOARD)) term->mode |= nss_tm_select_to_clipboard;
 }
 
 static void term_reset_margins(nss_term_t *term) {
@@ -3212,6 +3215,10 @@ void nss_term_paste_end(nss_term_t *term) {
         term_answerback(term, CSI"201~");
 }
 
+_Bool nss_term_keep_clipboard(nss_term_t *term) {
+	return term->mode & nss_tm_keep_clipboard;
+}
+
 void nss_term_focus(nss_term_t *term, _Bool focused) {
     ENABLE_IF(focused, term->mode, nss_tm_focused);
     if (term->mode & nss_tm_track_focus)
@@ -3317,9 +3324,7 @@ void nss_term_clear_selection(nss_term_t *term) {
     term_update_selection(term, &old);
 
 	if (term->vsel_targ > 0) {
-        if (term->vsel_targ == nss_ct_clipboard &&
-            (term->mode & nss_tm_keep_clipboard)) return;
-        else if (term->mode & nss_tm_keep_selection) return;
+        if (term->mode & nss_tm_keep_selection) return;
 
         nss_window_set_clip(term->win, NULL, NSS_TIME_NOW, term->vsel_targ);
         term->vsel_targ = -1;

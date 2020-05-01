@@ -143,5 +143,6 @@ void nss_term_clear_selection(nss_term_t *term);
 _Bool nss_term_paste_need_encode(nss_term_t *term);
 void nss_term_paste_begin(nss_term_t *term);
 void nss_term_paste_end(nss_term_t *term);
+_Bool nss_term_keep_clipboard(nss_term_t *term);
 
 #endif

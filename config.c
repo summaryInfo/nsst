@@ -54,6 +54,8 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"fps", "\t\t\t(Window refresh rate)", "fps", NSS_ICONFIG_FPS},
     {"has-meta", "\t\t(Handle meta/alt)", "hasMeta", NSS_ICONFIG_INPUT_HAS_META},
     {"horizontal-border", "\t(Top and bottom botders)", "horizontalBorder", NSS_ICONFIG_TOP_BORDER},
+    {"keep-clipboard", "\t(Reuse copied clipboard content instead of current selection data)", "keepClipboard", NSS_ICONFIG_KEEP_CLIPBOARD},
+    {"keep-selection", "\t(Don't clear X11 selection when unhighlighted)", "keepSelection", NSS_ICONFIG_KEEP_SELECTION},
     {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", "keyboardDialect", NSS_ICONFIG_KEYBOARD_NRCS},
     {"keyboard-mapping", "\t(Initial keyboad mapping)", "keyboardMapping", NSS_ICONFIG_INPUT_MAPPING},
     {"line-spacing", "\t\t(Additional lines vertical spacing)", "lineSpacing", NSS_ICONFIG_LINE_SPACING},
@@ -78,6 +80,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"scroll-on-input", "\t(Scroll view to bottom on key press)", "scrollOnInput", NSS_ICONFIG_SCROLL_ON_INPUT},
     {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", "scrollOnOutput", NSS_ICONFIG_SCROLL_ON_OUTPUT},
     {"scrollback-size", ", -H<value> (Number of saved lines)", "scrollbackSize", NSS_ICONFIG_HISTORY_LINES},
+    {"select-to-clipboard", "\t(Use CLIPBOARD selection to store hightlighted data)", "selectToClipboard", NSS_ICONFIG_SELECT_TO_CLIPBOARD},
     {"shell", ", -s<value>\t(Shell to start in new instance)", "shell", NSS_SCONFIG_SHELL},
     {"tab-width", "\t\t(Initial width of tab character)", "tabWidth", NSS_ICONFIG_TAB_WIDTH},
     {"term-name", ", -D<value>\t(TERM value)", "termName", NSS_SCONFIG_TERM_NAME},
@@ -139,6 +142,9 @@ static struct {
     [NSS_ICONFIG_ALTERNATE_SCROLL - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
     [NSS_ICONFIG_DOUBLE_CLICK_TIME - NSS_ICONFIG_MIN] = {300, 300, 10, 1000000},
     [NSS_ICONFIG_TRIPLE_CLICK_TIME - NSS_ICONFIG_MIN] = {600, 600, 10, 1000000},
+    [NSS_ICONFIG_KEEP_CLIPBOARD - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_KEEP_SELECTION - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_SELECT_TO_CLIPBOARD - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
 };
 
 static struct {

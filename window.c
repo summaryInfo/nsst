@@ -660,6 +660,20 @@ inline xcb_atom_t target_to_atom(nss_clipboard_target_t target) {
     }
 }
 
+static void window_clip_copy(nss_window_t *win) {
+    if (win->clipped[nss_ct_primary]) {
+        uint8_t *dup = (uint8_t*)strdup((char *)win->clipped[nss_ct_primary]);
+        if (dup) {
+            if (nss_term_keep_clipboard(win->term)) {
+                uint8_t *dup2 = (uint8_t*)strdup((char *)win->clipped[nss_ct_primary]);
+                free(win->clipboard);
+                win->clipboard = dup2;
+            }
+            nss_window_set_clip(win, dup, NSS_TIME_NOW, nss_ct_clipboard);
+        }
+    }
+}
+
 void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, nss_clipboard_target_t target) {
     if (data) {
         xcb_set_selection_owner(con, win->wid, target_to_atom(target), time);
@@ -785,10 +799,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         nss_create_window();
         return;
     case nss_sa_copy:
-        if (win->clipped[nss_ct_primary]) {
-            uint8_t *dup = (uint8_t*)strdup((char *)win->clipped[nss_ct_primary]);
-            if (dup) nss_window_set_clip(win, dup, NSS_TIME_NOW, nss_ct_clipboard);
-        }
+        window_clip_copy(win);
         return;
     case nss_sa_paste:
         nss_window_paste_clip(win, nss_ct_clipboard);
@@ -818,7 +829,12 @@ static void send_selection_data(nss_window_t *win, xcb_window_t req, xcb_atom_t 
 
         if (sel == XCB_ATOM_PRIMARY) data = win->clipped[nss_ct_primary];
         else if (sel == XCB_ATOM_SECONDARY) data = win->clipped[nss_ct_secondary];
-        else if (sel == ctx.atom_clipboard) data = win->clipped[nss_ct_clipboard];
+        else if (sel == ctx.atom_clipboard) {
+            if (nss_term_keep_clipboard(win->term))
+                data = win->clipboard;
+            else
+                data = win->clipped[nss_ct_clipboard];
+        }
 
         if (data) {
             xcb_change_property(con, XCB_PROP_MODE_REPLACE, req, prop, target, 8, strlen((char *)data), data);
