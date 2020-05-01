@@ -532,6 +532,8 @@ void nss_free_window(nss_window_t *win) {
 
     for (size_t i = 0; i < nss_ct_MAX; i++)
         free(win->clipped[i]);
+
+    free(win->font_name);
     free(win);
 };
 
