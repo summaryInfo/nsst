@@ -141,6 +141,7 @@ struct nss_term {
     nss_visual_selection_t vsel;
     struct timespec vsel_click0;
     struct timespec vsel_click1;
+    nss_clipboard_target_t vsel_targ;
 
     /* Previous cursor state
      * Used for effective cursor invalidation */
@@ -1334,8 +1335,12 @@ static void term_dispatch_osc(nss_term_t *term) {
                 nss_window_paste_clip(term->win, decode_target(letter, toclip));
             } else {
                 if (base64_decode(parg, parg, end) != end) parg = NULL;
-                for (size_t i = 0; i < nss_ct_MAX; i++)
-                    if (ts[i]) nss_window_set_clip(term->win, parg, NSS_TIME_NOW, i);
+                for (size_t i = 0; i < nss_ct_MAX; i++) {
+                    if (ts[i]) {
+                        if (i == term->vsel_targ) term->vsel_targ = -1;
+                        nss_window_set_clip(term->win, parg, NSS_TIME_NOW, i);
+                    }
+                }
             }
         } else term_esc_dump(term, 0);
         break;
@@ -3311,11 +3316,14 @@ void nss_term_clear_selection(nss_term_t *term) {
 
     term_update_selection(term, &old);
 
-    if ((term->mode & nss_tm_select_to_clipboard) &&
-        (term->mode & nss_tm_keep_clipboard)) return;
-    else if (term->mode & nss_tm_keep_selection) return;
+	if (term->vsel_targ > 0) {
+        if (term->vsel_targ == nss_ct_clipboard &&
+            (term->mode & nss_tm_keep_clipboard)) return;
+        else if (term->mode & nss_tm_keep_selection) return;
 
-    nss_window_set_clip(term->win, NULL, NSS_TIME_NOW, term->mode & nss_tm_select_to_clipboard ? nss_ct_clipboard : nss_ct_primary);
+        nss_window_set_clip(term->win, NULL, NSS_TIME_NOW, term->vsel_targ);
+        term->vsel_targ = -1;
+	}
 }
 
 static void term_scroll_selection(nss_term_t *term, nss_coord_t amount) {
@@ -3621,8 +3629,8 @@ _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_s
         term_change_selection(term, event + 1, x, y, mask & nss_mm_mod1);
 
         if (event == nss_me_release) {
-            nss_window_set_clip(term->win, term_selection_data(term),
-                    NSS_TIME_NOW, term->mode & nss_tm_select_to_clipboard ? nss_ct_clipboard : nss_ct_primary);
+            term->vsel_targ = term->mode & nss_tm_select_to_clipboard ? nss_ct_clipboard : nss_ct_primary;
+            nss_window_set_clip(term->win, term_selection_data(term), NSS_TIME_NOW, term->vsel_targ);
         }
 
         return 1;
