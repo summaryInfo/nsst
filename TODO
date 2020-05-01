@@ -1,24 +1,15 @@
-Until version 1.2:
-    After resizing window (only jump resize) new lines are not damaged
-    Something wrong with palette relocation
+Until version 1.3:
     Selections
-        term.c
-            I'm not sure if 1044 mode semantics is correct
-            OSC 52 for c/p/q/s (no cut buffers)
-				c - CLIPBOARD
-				p - PRIMARY
-				q - SECONDARY
-				s - current active
-				0-7 - cut buffers (ignored)
-				Enabled only if window operations is allowed
-            Remember which selection we have copied to
         render.c
             Selection colors
-Until version 1.3:
+    After resizing window (only jump resize) new lines are not damaged
     Convert from input locale to unicode while reading?
     Unify font cache
         use nss_font_cache_t for XRender
         but for XRender nss_cache_fetch returns void
+    Factor out more common rendering code
+        colors calculation
+        font searching
     Recursive input buffer refilling
     Set WM_NORMAL_HINTS
     Set pseudoterminal attributes
@@ -98,6 +89,7 @@ Term
     Capability restriction
         Now this works like in xterm
     Printing with attributes
+    I'm not sure if 1044 mode semantics is correct
     Is reset not completly correct?
     Mouse selection
     NOTE: Tectronix mode would probably be ommited
@@ -186,7 +178,6 @@ Term
         CSI Pt ; Pl ; Pb ; Pr ; Ps $ t -- DECRARA
         CSI Pt ; Pl ; Pb ; Pr ; Pp ; Pt; Pl; Pp $ v -- DECCRA
         CSI Ps * x -- DECSACE
-        CSI Pc ; Pt ; Pl ; Pb ; Pr $ x -- DECFRA
         CSI Pt ; Pl ; Pb ; Pr # | -- XTREPORTSGR
         CSI Ps # y -- XTCHECKSUM
         CSI Pi ; Pg ; Pt ; Pl ; Pb ; Pr * y -- DECRQCRA
