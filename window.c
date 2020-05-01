@@ -36,6 +36,8 @@
 #define NUM_BORDERS 4
 #define NSS_CLASS "Nsst"
 #define OPT_NAME_MAX 32
+/* Need to be multiple of 4 */
+#define PASTE_BLOCK_SIZE 1024
 
 #define NSS_M_ALL (0xff)
 #define NSS_M_TERM (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)
@@ -831,9 +833,10 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
     if (prop == XCB_NONE) return;
 
     size_t left, offset = 0;
+    uint8_t leftover[3], leftover_len = 0;
 
     do {
-        xcb_get_property_cookie_t pc = xcb_get_property(con, 0, win->wid, prop, XCB_GET_PROPERTY_TYPE_ANY, offset, BUFSIZ/4);
+        xcb_get_property_cookie_t pc = xcb_get_property(con, 0, win->wid, prop, XCB_GET_PROPERTY_TYPE_ANY, offset, PASTE_BLOCK_SIZE/4);
         xcb_generic_error_t *err = NULL;
         xcb_get_property_reply_t *rep = xcb_get_property_reply(con, pc, &err);
         if (err) {
@@ -856,7 +859,7 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
            continue;
         }
 
-        size_t size = rep->format * rep->value_len / 8;
+        ssize_t size = rep->format * rep->value_len / 8;
         uint8_t *data = xcb_get_property_value(rep);
         uint8_t *pos = data, *end = data + size;
 
@@ -865,8 +868,9 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
         if (size) {
             if (!offset) nss_term_paste_begin(win->term);
 
-            uint8_t buf[BUFSIZ];
             if ((rep->type == ctx.atom_utf8_string) ^ nss_term_is_utf8(win->term)) {
+                static uint8_t buf[2*PASTE_BLOCK_SIZE];
+
                 pos = data;
                 size = 0;
                 if (rep->type == ctx.atom_utf8_string) {
@@ -879,9 +883,30 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
                     while(pos < end)
                         size += utf8_encode(*pos++, buf + size, buf + BUFSIZ);
                 }
+
                 data = buf;
             }
+
+            if (nss_term_paste_need_encode(win->term)) {
+                static uint8_t base64[4*(2*PASTE_BLOCK_SIZE)/3 + 4];
+
+                while (leftover_len < 3 && size) leftover[leftover_len++] = *data++, size--;
+                size_t pre = base64_encode(base64, leftover, leftover + leftover_len) - base64;
+
+                if (size) {
+                    if (left) {
+                        leftover_len = size % 3;
+                        if (leftover_len > 0) leftover[0] = data[size - leftover_len], size--;
+                        if (leftover_len > 1) leftover[1] = data[size - 1], size--;
+                    }
+
+                    size = base64_encode(base64 + pre, data, data + size) - base64;
+                }
+                data = base64;
+            }
+
             nss_term_sendkey(win->term, data, size);
+
             if (!left) nss_term_paste_end(win->term);
         }
 

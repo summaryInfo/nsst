@@ -129,6 +129,9 @@ struct nss_term {
     nss_cursor_t cs;
     nss_cursor_t back_cs;
     nss_cursor_t vt52c;
+
+    /* Last written character
+     * Used for REP */
     nss_char_t prev_ch;
 
     nss_coord_t prev_mouse_x;
@@ -139,10 +142,16 @@ struct nss_term {
     struct timespec vsel_click0;
     struct timespec vsel_click1;
 
+    /* Previous cursor state
+     * Used for effective cursor invalidation */
     nss_coord_t prev_c_x;
     nss_coord_t prev_c_y;
     _Bool prev_c_hidden;
     _Bool prev_c_view_changed;
+
+    /* OSC 52 character description
+     * of selection being pasted from */
+    uint8_t paste_from;
 
     nss_coord_t width;
     nss_coord_t height;
@@ -1179,6 +1188,16 @@ static void term_dispatch_dcs(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
+static nss_clipboard_target_t decode_target(uint8_t targ, _Bool mode) {
+    switch(targ) {
+    case 'p': return nss_ct_primary;
+    case 'q': return nss_ct_secondary;
+    case 'c': return nss_ct_clipboard;
+    case 's': return mode ? nss_ct_clipboard : nss_ct_primary;
+    default: return -1;
+    }
+}
+
 static void term_dispatch_osc(nss_term_t *term) {
     term_esc_dump(term, 1);
     switch (term->esc.selector) {
@@ -1187,11 +1206,11 @@ static void term_dispatch_osc(nss_term_t *term) {
     case 1: /* Change window icon name */
     case 2: /* Change window title */
         if (term->mode & nss_tm_title_set_hex) {
-            uint8_t *end = hex_decode(term->esc.str);
-            if (*(end + (end - term->esc.str))) {
+            uint8_t *end = hex_decode(term->esc.str, term->esc.str, term->esc.str + term->esc.si);
+            if (*end) {
                 term_esc_dump(term, 0);
                 break;
-            } else *end = '\0';
+            } else *(end = term->esc.str + (end - term->esc.str)/2) = '\0';
         }
         if (!(term->mode & nss_tm_title_set_utf8) && (term->mode & nss_tm_utf8)) {
             uint8_t *dst = term->esc.str;
@@ -1294,9 +1313,33 @@ static void term_dispatch_osc(nss_term_t *term) {
     case 17: /* Set Highlight background color */
     case 19: /* Set Highlight foreground color */
     case 50: /* Set Font */
-    case 52: /* Manipulate selecion data */
         term_esc_dump(term, 0);
         break;
+    case 52: /* Manipulate selecion data */ {
+        if (!nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS)) break;
+
+        nss_clipboard_target_t ts[nss_ct_MAX] = {0};
+        _Bool toclip = term->mode & nss_tm_select_to_clipboard;
+        uint8_t *parg = term->esc.str, *end = term->esc.str + term->esc.si, letter = 0;
+        for(; parg < end && *parg !=  ';'; parg++) {
+            if (strchr("pqsc", *parg)) {
+                ts[decode_target(*parg, toclip)] = 1;
+                if (!letter) letter = *parg;
+            }
+        }
+        if (parg++ < end) {
+            if (!letter) ts[decode_target((letter = 'c'), toclip)] = 1;
+            if (!strcmp("?", (char*)parg)) {
+                term->paste_from = letter;
+                nss_window_paste_clip(term->win, decode_target(letter, toclip));
+            } else {
+                if (base64_decode(parg, parg, end) != end) parg = NULL;
+                for (size_t i = 0; i < nss_ct_MAX; i++)
+                    if (ts[i]) nss_window_set_clip(term->win, parg, NSS_TIME_NOW, i);
+            }
+        } else term_esc_dump(term, 0);
+        break;
+    }
     case 104: /* Reset color */ {
         if (term->esc.si) {
             char *pstr = (char *)term->esc.str, *pnext, *s_end;
@@ -1827,8 +1870,8 @@ static void term_dispatch_mc(nss_term_t *term) {
 }
 
 static void term_dispatch_tmode(nss_term_t *term, _Bool set) {
-    if (!term->esc.i) return;
-    size_t pnum = term->esc.i - (term->esc.param[term->esc.i] < 0);
+    size_t pnum = term->esc.i + (term->esc.param[term->esc.i] >= 0);
+    if (!pnum) return;
     for (size_t i = 0; i < pnum; i++) {
         switch(term->esc.param[i]) {
         case 0:
@@ -2767,6 +2810,15 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
             size_t char_len = utf8_encode(ch, buf, buf + UTF8_MAX_LEN);
             buf[char_len] = '\0';
 
+            /* TODO Don't ignore long strings but process them to free buffer
+             * (need some complicated code to process incomplete OSC/DCS strings)
+             * This is only relevant to OSC 52, SIXEL, DECUDK and DECDLD
+             * The latter three is not implemented yet
+             * so nss_window_append_clip
+             *      -- it appends to selection data if only we still own selection
+             *         and just ignores data otherwise
+             *      -- also, it shouldn't own passed buffer to decode base64 in-place */
+
             if (term->esc.si + char_len + 1 > ESC_MAX_STR) return;
             memcpy(term->esc.str + term->esc.si, buf, char_len + 1);
             term->esc.si += char_len;
@@ -3119,13 +3171,39 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
     }
 }
 
+_Bool nss_term_paste_need_encode(nss_term_t *term) {
+    return term->paste_from;
+}
+
 void nss_term_paste_begin(nss_term_t *term) {
-    if (term->mode & nss_tm_bracketed_paste)
+    /* If paste_from is not 0 application have requested
+     * OSC 52 selection contents reply */
+    if (term->paste_from)
+        term_answerback(term, OSC"52;%c;", term->paste_from);
+    /* Otherwize it's just paste (bracketed or not) */
+    else if (term->mode & nss_tm_bracketed_paste)
         term_answerback(term, CSI"200~");
 }
 
 void nss_term_paste_end(nss_term_t *term) {
-    if (term->mode & nss_tm_bracketed_paste)
+    /* If paste_from is not 0 application have requested
+     * OSC 52 selection contents reply
+     *
+     * Actually there's a race condition
+     * if user have requested paste and
+     * before data have arrived an application
+     * uses OSC 52. But it's really hard to deal with
+     *
+     * Probably creating the queue of paste
+     * would be a valid solution
+     *
+     * But this race isn't that destructive
+     * rare to deal with
+     */
+    if (term->paste_from) {
+        term_answerback(term, ST);
+        term->paste_from = 0;
+    } else if (term->mode & nss_tm_bracketed_paste)
         term_answerback(term, CSI"201~");
 }
 
@@ -3424,7 +3502,7 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, nss_line_t *lin
     }
 }
 
-uint8_t *nss_term_selection_data(nss_term_t *term) {
+uint8_t *term_selection_data(nss_term_t *term) {
     if (term->vsel.state == nss_sstate_released) {
         uint8_t *res = malloc(SEL_INIT_SIZE * sizeof(*res));
         if (!res) return NULL;
@@ -3543,7 +3621,7 @@ _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_s
         term_change_selection(term, event + 1, x, y, mask & nss_mm_mod1);
 
         if (event == nss_me_release) {
-            nss_window_set_clip(term->win, nss_term_selection_data(term),
+            nss_window_set_clip(term->win, term_selection_data(term),
                     NSS_TIME_NOW, term->mode & nss_tm_select_to_clipboard ? nss_ct_clipboard : nss_ct_primary);
         }
 

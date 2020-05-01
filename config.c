@@ -25,6 +25,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"allow-alternate", "\t(Enable alternate screen)", "allowAlternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
     {"allow-charsets", "\t(Enable charsets support)", "allowCharsets", NSS_ICONFIG_ALLOW_CHARSETS},
     {"allow-nrcs", "\t\t(Enable NRCSs support)", "allowNRCSs", NSS_ICONFIG_ALLOW_NRCS},
+    {"allow-window-ops", "\t(Allow window manipulation with escape sequences)", "allowWindowOps", NSS_ICONFIG_ALLOW_WINDOW_OPS},
     {"alpha", "\t\t\t(Backround opacity, requires compositor to be running)", "alpha", NSS_ICONFIG_ALPHA},
     {"alternate-scroll", "\t(Scrolling sends arrow keys escapes in alternate screen)", "alternateScroll", NSS_ICONFIG_ALTERNATE_SCROLL},
     {"answerback-string", "\t(ENQ report)", "answerbackString", NSS_SCONFIG_ANSWERBACK_STRING},
@@ -128,6 +129,7 @@ static struct {
     [NSS_ICONFIG_KEYBOARD_NRCS - NSS_ICONFIG_MIN] = {nss_94cs_ascii, nss_94cs_ascii, 0, nss_nrcs_MAX},
     [NSS_ICONFIG_SKIP_CONFIG_FILE - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
     [NSS_ICONFIG_ALLOW_NRCS - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
+    [NSS_ICONFIG_ALLOW_WINDOW_OPS - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
 #if USE_BOXDRAWING
     [NSS_ICONFIG_OVERRIDE_BOXDRAW - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
 #endif

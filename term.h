@@ -136,9 +136,11 @@ nss_input_mode_t *nss_term_inmode(nss_term_t *term);
 _Bool nss_term_is_utf8(nss_term_t *term);
 _Bool nss_term_is_nrcs_enabled(nss_term_t *term);
 void nss_term_damage(nss_term_t *term, nss_rect_t damage);
+
+/* Selection related functions */
 _Bool nss_term_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y);
-uint8_t *nss_term_selection_data(nss_term_t *term);
 void nss_term_clear_selection(nss_term_t *term);
+_Bool nss_term_paste_need_encode(nss_term_t *term);
 void nss_term_paste_begin(nss_term_t *term);
 void nss_term_paste_end(nss_term_t *term);
 

@@ -59,6 +59,7 @@ enum nss_config_opt {
     NSS_ICONFIG_SKIP_CONFIG_FILE,
     NSS_ICONFIG_KEYBOARD_NRCS,
     NSS_ICONFIG_ALLOW_NRCS,
+    NSS_ICONFIG_ALLOW_WINDOW_OPS,
 #if USE_BOXDRAWING
     NSS_ICONFIG_OVERRIDE_BOXDRAW,
 #endif
@@ -128,9 +129,9 @@ typedef struct nss_optmap_item {
 } nss_optmap_item_t;
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 64
+#    define OPT_MAP_SIZE 65
 #else
-#    define OPT_MAP_SIZE 63
+#    define OPT_MAP_SIZE 64
 #endif
 
 extern nss_optmap_item_t optmap[OPT_MAP_SIZE];

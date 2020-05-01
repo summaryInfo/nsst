@@ -32,6 +32,7 @@ typedef enum nss_wc_tag {
     nss_wc_mouse = 1 << 23,
 } nss_wc_tag_t;
 
+/* WARNING: Order is important here */
 typedef enum nss_mouse_event {
     nss_me_press,
     nss_me_release,
@@ -57,10 +58,10 @@ typedef enum nss_mouse_state {
 } nss_mouse_state_t;
 
 typedef enum nss_clipboard_target {
-	nss_ct_primary,
-	nss_ct_clipboard,
-	nss_ct_secondary,
-	nss_ct_MAX,
+    nss_ct_primary,
+    nss_ct_clipboard,
+    nss_ct_secondary,
+    nss_ct_MAX,
 } nss_clipboard_target_t;
 
 typedef struct nss_window nss_window_t;

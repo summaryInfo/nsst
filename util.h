@@ -87,7 +87,13 @@ inline static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst) {
 
 size_t utf8_encode(nss_char_t u, uint8_t *buf, uint8_t *end);
 _Bool utf8_decode(nss_char_t *res, const uint8_t **buf, const uint8_t *end);
-uint8_t *hex_decode(uint8_t *hex);
+
+/* *_decode returns source buffer end */
+/* *_encode returns destination buffer end */
+uint8_t *hex_decode(uint8_t *dst, uint8_t *hex, uint8_t *end);
+uint8_t *base64_decode(uint8_t *dst, uint8_t *buf, uint8_t *end);
+uint8_t *base64_encode(uint8_t *dst, uint8_t *buf, uint8_t *end);
+
 nss_color_t parse_color(const uint8_t *str, const uint8_t *end);
 
 #endif
