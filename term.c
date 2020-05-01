@@ -449,11 +449,13 @@ static nss_line_t *term_realloc_line(nss_term_t *term, nss_line_t *line, nss_coo
     nss_line_t *new = realloc(line, sizeof(*new) + (size_t)width * sizeof(new->cell[0]));
     if (!new) die("Can't create lines");
 
-    nss_cell_t cell = fixup_color(new, &term->c);
-    cell.attr = 0;
+	if (width > new->width) {
+        nss_cell_t cell = fixup_color(new, &term->c);
+        cell.attr = 0;
 
-    for(nss_coord_t i = new->width; i < width; i++)
-        new->cell[i] = cell;
+        for(nss_coord_t i = new->width; i < width; i++)
+            new->cell[i] = cell;
+    }
 
     new->width = width;
     return new;
