@@ -112,11 +112,6 @@ Term
         1040 -- terminfo/termcap function key mode [input]
         1070 -- Use private resgisters [SIXEL]
         8452 -- Sixel scrolling leaves cursor to the right of graphics [SIXEL]
-
-        1040 -- Keep selection [clipboard]
-        1041 -- Use CLIPBOARD selection [clipboard]
-        1044 -- reuse clipboard [clipboard]
-        2004 -- bracketed paste [clipboard]
         These need further invastigation:
             srm_BUTTON1_MOVE_POINT = 2001
             srm_BUTTON2_MOVE_POINT = 2002
@@ -220,7 +215,6 @@ Term
         OSC 5 ; Pt ST -- Set special color
         OSC 6 ; Pc ; Pt ST -- Enable/disable special color
         OSC 50 ; Pt ST -- Set font
-        OSC 52 ; Pt ST -- Manipulate selection
         OSC 105 ; Pt ST -- Reset special color
         OSC 106 ; Pc ; Pf ST -- Enable/disable special color
         OSC 13 Pt ST -- Set mouse foreground color
