@@ -1,12 +1,17 @@
 Until version 1.3:
+    refactor selection in term.c
+        move all state to single structure
+        separate hightlight regions state
+        clean up scrollback offset calculation code
+    Use half-open regions everywhere in code
+        nss_region_t instead of nss_rect_t
+			is an array of 2 points
+		nss_point_t
     Selections
         render.c
             Selection colors
     After resizing window (only jump resize) new lines are not damaged
     Convert from input locale to unicode while reading?
-    Unify font cache
-        use nss_font_cache_t for XRender
-        but for XRender nss_cache_fetch returns void
     Factor out more common rendering code
         colors calculation
         font searching
@@ -49,8 +54,8 @@ Selections
     [x] Reduce screen invalidation (damge only difference between selections)
     [x] X11 clipboard
     [x] Bracketed paste
-    [x?] Privite modes 1040, 1041, 1044
-    [ ] OSC 52
+    [x] Privite modes 1040, 1041, 1044
+    [x] OSC 52
     [ ] Selection colors
 Input
     What if nss_term_read would be called recursively?
