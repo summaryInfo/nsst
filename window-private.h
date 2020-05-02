@@ -30,7 +30,6 @@ struct nss_renderer {
     xcb_pixmap_t shm_pixmap;
 
     nss_image_t im;
-    nss_glyph_cache_t *cache;
 
     // It's size is 2*win->ch
     nss_rect_t *bounds;
@@ -85,6 +84,7 @@ struct nss_window {
     int16_t char_height;
     char *font_name;
     nss_font_t *font;
+    nss_glyph_cache_t *font_cache;
 
     nss_term_t *term;
     int term_fd;

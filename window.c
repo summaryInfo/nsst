@@ -527,6 +527,8 @@ void nss_free_window(nss_window_t *win) {
 
     if (win->term)
         nss_free_term(win->term);
+    if (win->font_cache)
+        nss_free_cache(win->font_cache);
     if (win->font)
         nss_free_font(win->font);
 

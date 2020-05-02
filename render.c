@@ -1,10 +1,6 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
 #include "feature.h"
-
-#if USE_BOXDRAWING
-#   include "boxdraw.h"
-#endif
 #include "config.h"
 #include "font.h"
 #include "window-private.h"
@@ -138,7 +134,7 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     }
 
     if (need_free) {
-        nss_free_cache(win->ren.cache);
+        nss_free_cache(win->font_cache);
         nss_free_font(win->font);
     }
 
@@ -148,10 +144,10 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     xcb_void_cookie_t c;
 
     if (found_cache)
-        win->ren.cache = nss_cache_reference(found->ren.cache);
+        win->font_cache = nss_cache_reference(found->font_cache);
     else
-        win->ren.cache = nss_create_cache(win->font, win->subpixel_fonts);
-    nss_cache_font_dim(win->ren.cache, &win->char_width, &win->char_height, &win->char_depth);
+        win->font_cache = nss_create_cache(win->font, win->subpixel_fonts);
+    nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
 
     nss_coord_t old_ch = win->ch;
 
@@ -198,8 +194,6 @@ void nss_renderer_free(nss_window_t *win) {
         xcb_free_pixmap(con, win->ren.shm_pixmap);
     if (win->ren.im.data)
         nss_free_image_shm(&win->ren.im);
-    if (win->ren.cache)
-        nss_free_cache(win->ren.cache);
     free(win->ren.bounds);
 }
 
@@ -265,7 +259,7 @@ inline static _Bool draw_cell(nss_window_t *win, nss_coord_t x, nss_coord_t y, n
 
     // Glyph
     if (cell.ch && fg != bg) {
-        nss_glyph_t *glyph = nss_cache_fetch(win->ren.cache, cell.ch, cell.attr & nss_font_attrib_mask);
+        nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, cell.ch, cell.attr & nss_font_attrib_mask);
         nss_rect_t clip = {x, y, width, height};
         nss_image_compose_glyph(win->ren.im, x, y + win->char_height, glyph, fg, clip, win->subpixel_fonts);
     }
@@ -512,9 +506,9 @@ static void register_glyph(nss_window_t *win, uint32_t ch, nss_glyph_t * glyph) 
 }
 
 /* Reload font using win->font_size and win->font_name */
- _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
+_Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     //Try find already existing font
-    _Bool found_font = 0, found_gset = 0;
+    _Bool found_font = 0, found_cache = 0;
     nss_window_t *found = 0;
     for (nss_window_t *src = win_list_head; src; src = src->next) {
         if ((src->font_size == win->font_size || win->font_size == 0) &&
@@ -522,23 +516,27 @@ static void register_glyph(nss_window_t *win, uint32_t ch, nss_glyph_t * glyph) 
             found_font = 1;
             found = src;
             if (src->subpixel_fonts == win->subpixel_fonts) {
-                found_gset = 1;
+                found_cache = 1;
                 break;
             }
         }
     }
 
     nss_font_t *new = found_font ? nss_font_reference(found->font) :
-        nss_create_font(win->font_name, win->font_size, nss_config_integer(NSS_ICONFIG_DPI));
+            nss_create_font(win->font_name, win->font_size, nss_config_integer(NSS_ICONFIG_DPI));
     if (!new) {
         warn("Can't create new font: %s", win->font_name);
         return 0;
     }
 
-    if (need_free) nss_free_font(win->font);
+    if (need_free) {
+        nss_free_cache(win->font_cache);
+        nss_free_font(win->font);
+    }
 
     win->font = new;
     win->font_size = nss_font_get_size(new);
+
     win->ren.pfglyph = win->subpixel_fonts ? rctx.pfargb : rctx.pfalpha;
 
     xcb_void_cookie_t c;
@@ -550,34 +548,26 @@ static void register_glyph(nss_window_t *win, uint32_t ch, nss_glyph_t * glyph) 
     }
     else win->ren.gsid = xcb_generate_id(con);
 
-    if (found_gset) {
+    if (found_cache) {
+        win->font_cache = nss_cache_reference(found->font_cache);
         c = xcb_render_reference_glyph_set_checked(con, win->ren.gsid, found->ren.gsid);
         if (check_void_cookie(c))
             warn("Can't reference glyph set");
 
-        win->char_height = found->char_height;
-        win->char_depth = found->char_depth;
-        win->char_width = found->char_width;
+        nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
     } else {
+        win->font_cache = nss_create_cache(win->font, win->subpixel_fonts);
         c = xcb_render_create_glyph_set_checked(con, win->ren.gsid, win->ren.pfglyph);
         if (check_void_cookie(c))
             warn("Can't create glyph set");
 
         //Preload ASCII
         nss_glyph_t *glyphs['~' - ' ' + 1][nss_font_attrib_max] = {{ NULL }};
-        int16_t total = 0, maxd = 0, maxh = 0;
-        for (nss_char_t i = ' '; i <= '~'; i++) {
+        for (nss_char_t i = ' '; i <= '~'; i++)
             for (size_t j = 0; j < nss_font_attrib_max; j++)
-                glyphs[i - ' '][j] = nss_font_render_glyph(win->font, i, j, win->subpixel_fonts);
+                glyphs[i - ' '][j] = nss_cache_fetch(win->font_cache, i, j);
 
-            total += glyphs[i - ' '][0]->x_off;
-            maxd = MAX(maxd, glyphs[i - ' '][0]->height - glyphs[i - ' '][0]->y);
-            maxh = MAX(maxh, glyphs[i - ' '][0]->y);
-        }
-
-        win->char_width = total / ('~' - ' ' + 1) + nss_config_integer(NSS_ICONFIG_FONT_SPACING);
-        win->char_height = maxh;
-        win->char_depth = maxd + nss_config_integer(NSS_ICONFIG_LINE_SPACING);
+        nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
 
         for (nss_char_t i = ' '; i <= '~'; i++) {
             for (size_t j = 0; j < nss_font_attrib_max; j++) {
@@ -586,7 +576,6 @@ static void register_glyph(nss_window_t *win, uint32_t ch, nss_glyph_t * glyph) 
                 free(glyphs[i - ' '][j]);
             }
         }
-
     }
 
     win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
@@ -731,16 +720,9 @@ void nss_init_render_context() {
 inline static void push_cell(nss_window_t *win, nss_coord_t x, nss_coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
     nss_cell_t cell = *cel;
 
-    if (!nss_font_glyph_is_loaded(win->font, cell.ch)) {
+    if (!nss_cache_is_fetched(win->font_cache, cell.ch)) {
         for (size_t j = 0; j < nss_font_attrib_max; j++) {
-            nss_glyph_t *glyph;
-#if USE_BOXDRAWING
-            if (is_boxdraw(cell.ch) && nss_config_integer(NSS_ICONFIG_OVERRIDE_BOXDRAW)) {
-                glyph = nss_make_boxdraw(cell.ch, win->char_width, win->char_height, win->char_depth, win->subpixel_fonts);
-                nss_font_glyph_mark_loaded(win->font, cell.ch | (j << 24));
-            } else
-#endif
-                glyph = nss_font_render_glyph(win->font, cell.ch, j, win->subpixel_fonts);
+            nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, cell.ch, j);
             //In case of non-monospace fonts
             glyph->x_off = win->char_width;
             register_glyph(win, cell.ch | (j << 24) , glyph);
