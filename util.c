@@ -185,7 +185,6 @@ static int32_t decode_base64_byte(uint8_t b) {
     if ('0' <= b && b <= '9') return b - '0' + 52;
     if (b == '+') return 62;
     if (b == '/') return 63;
-    warn("b %c", b);
     return -1;
 }
 
