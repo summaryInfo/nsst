@@ -797,42 +797,6 @@ static inline _Bool cmp_fg(const struct cell_desc *ad, const struct cell_desc *b
     return 0;
 }
 
-/*
-static inline void shell_sort_bg(struct cell_desc *array, size_t size) {
-    size_t hmax = size/9;
-    size_t h;
-    for(h = 1; h <= hmax; h = 3*h+1);
-    for(; h > 0; h /= 3) {
-        for(size_t i = h; i < size; ++i) {
-            const struct cell_desc v = array[i];
-            size_t j = i;
-            while(j >= h && cmp_bg(&v, &array[j-h])) {
-                array[j] = array[j-h];
-                j -= h;
-            }
-            array[j] = v;
-        }
-    }
-}
-
-static inline void shell_sort_fg(struct cell_desc *array, size_t size) {
-    size_t hmax = size/9;
-    size_t h;
-    for(h = 1; h <= hmax; h = 3*h+1);
-    for(; h > 0; h /= 3) {
-        for(size_t i = h; i < size; ++i) {
-            const struct cell_desc v = array[i];
-            size_t j = i;
-            while(j >= h && cmp_fg(&v, &array[j-h])) {
-                array[j] = array[j-h];
-                j -= h;
-            }
-            array[j] = v;
-        }
-    }
-}
-*/
-
 static inline void merge_sort_fg(struct cell_desc *src, size_t size) {
     struct cell_desc *dst = src + size;
     for (size_t k = 2; k < size; k += k) {
