@@ -105,6 +105,7 @@ struct nss_context {
 struct nss_context ctx;
 xcb_connection_t *con = NULL;
 nss_window_t *win_list_head = NULL;
+volatile sig_atomic_t reload_config;
 
 static nss_window_t *window_for_xid(xcb_window_t xid) {
     for (nss_window_t *win = win_list_head; win; win = win->next)
@@ -117,6 +118,40 @@ static nss_window_t *window_for_term_fd(int fd) {
         if (win->term_fd == fd) return win;
     warn("Window for fd not found");
     return NULL;
+}
+
+static void load_params(void) {
+    xcb_xrm_database_t *xrmdb = xcb_xrm_database_from_default(con);
+    if (!xrmdb) return;
+
+    char *res, name[OPT_NAME_MAX] = NSS_CLASS".color";
+    const size_t n_pos = strlen(name);
+
+    // .color0 -- .color255
+    for (unsigned j = 0; j < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; j++) {
+        snprintf(name + n_pos, OPT_NAME_MAX, "%u", j);
+        if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
+            nss_config_set_string(NSS_CCONFIG_COLOR_0 + j, res);
+            free(res);
+        }
+    }
+
+    //optmap is defined in config.c
+    for(size_t i = 0; i < OPT_MAP_SIZE; i++) {
+        snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", optmap[i].name);
+        char *res = NULL;
+        if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
+            nss_config_set_string(optmap[i].opt, res);
+        }
+        if (res) free(res);
+    }
+
+    xcb_xrm_database_free(xrmdb);
+}
+
+static void handle_sigusr1(int sig) {
+    reload_config = 1;
+    (void)sig;
 }
 
 static xcb_atom_t intern_atom(const char *atom) {
@@ -224,43 +259,6 @@ cleanup_context:
     return 0;
 }
 
-static void load_params(void) {
-    xcb_xrm_database_t *xrmdb = xcb_xrm_database_from_default(con);
-    if (!xrmdb) return;
-
-    char *res, name[OPT_NAME_MAX] = NSS_CLASS".color";
-    const size_t n_pos = strlen(name);
-
-    // .color0 -- .color255
-    for (unsigned j = 0; j < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; j++) {
-        snprintf(name + n_pos, OPT_NAME_MAX, "%u", j);
-        if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
-            nss_config_set_string(NSS_CCONFIG_COLOR_0 + j, res);
-            free(res);
-        }
-    }
-
-    //optmap is defined in config.c
-    for(size_t i = 0; i < OPT_MAP_SIZE; i++) {
-        snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", optmap[i].name);
-        char *res = NULL;
-        if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
-            nss_config_set_string(optmap[i].opt, res);
-        }
-        if (res) free(res);
-    }
-
-    xcb_xrm_database_free(xrmdb);
-}
-
-
-volatile sig_atomic_t reload_config;
-
-static void handle_sigusr1(int sig) {
-    reload_config = 1;
-    (void)sig;
-}
-
 /* Initialize global state object */
 void nss_init_context(void) {
     ctx.daemon_mode = 0;
@@ -342,21 +340,6 @@ void nss_init_context(void) {
     sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART}, NULL);
 }
 
-void nss_window_set_title(nss_window_t *win, const char *title, _Bool utf8) {
-    if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid,
-            utf8 ? ctx.atom_net_wm_name : XCB_ATOM_WM_NAME,
-            utf8 ? ctx.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
-}
-
-void nss_window_set_icon_name(nss_window_t *win, const char *title, _Bool utf8) {
-    if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid,
-            utf8 ? ctx.atom_net_wm_icon_name : XCB_ATOM_WM_ICON_NAME,
-            utf8 ? ctx.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
-}
-
-
 /* Free all resources */
 void nss_free_context(void) {
     while (win_list_head)
@@ -370,6 +353,64 @@ void nss_free_context(void) {
 
     xcb_disconnect(con);
     memset(&con, 0, sizeof(con));
+}
+
+void nss_window_get_dim(nss_window_t *win, int16_t *width, int16_t *height) {
+    if (width) *width = win->width;
+    if (height) *height = win->height;
+}
+
+void nss_window_set_cursor(nss_window_t *win, nss_cursor_type_t type) {
+    win->cursor_type = type;
+}
+
+void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor_fg) {
+    nss_color_t obg = win->bg;
+    if (bg) win->bg = bg;
+    if (cursor_fg) win->cursor_fg = cursor_fg;
+
+    if (bg && bg != obg) nss_renderer_background_changed(win);
+    if ((bg && bg != obg) || cursor_fg) {
+        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
+        win->force_redraw = 1;
+    }
+}
+
+void nss_window_set_mouse(nss_window_t *win, _Bool enabled) {
+   if (enabled)
+        win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
+   else
+       win->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
+   xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
+}
+
+/* This would probably be useful later when implemeting OSC for setting fonts
+void nss_window_set_font(nss_window_t *win, const char * name) {
+    if (!name) {
+        warn("Empty font name");
+        return;
+    }
+    free(win->font_name);
+    win->font_name = strdup(name);
+    nss_renderer_reload_font(win, 1);
+    nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
+    win->force_redraw = 1;
+    xcb_flush(con);
+}
+*/
+
+void nss_window_set_title(nss_window_t *win, const char *title, _Bool utf8) {
+    if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid,
+            utf8 ? ctx.atom_net_wm_name : XCB_ATOM_WM_NAME,
+            utf8 ? ctx.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
+}
+
+void nss_window_set_icon_name(nss_window_t *win, const char *title, _Bool utf8) {
+    if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid,
+            utf8 ? ctx.atom_net_wm_icon_name : XCB_ATOM_WM_ICON_NAME,
+            utf8 ? ctx.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
 static void set_wm_props(nss_window_t *win) {
@@ -524,22 +565,6 @@ void nss_free_window(nss_window_t *win) {
     free(win);
 };
 
-static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right) {
-        int16_t width = win->cw * win->char_width + win->left_border;
-        int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
-        nss_rect_t borders[NUM_BORDERS] = {
-            {0, 0, win->left_border, height},
-            {win->left_border, 0, width, win->top_border},
-            {width, 0, win->width - width, win->height},
-            {0, height, width, win->height - height},
-        };
-        size_t count = 4, offset = 0;
-        if (!top_left) count -= 2, offset += 2;
-        if (!bottom_right) count -= 2;
-        //TODO Handle zero height
-        nss_renderer_clear(win, count, borders + offset);
-}
-
 void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coord_t height, _Bool delay) {
     struct timespec cur;
     clock_gettime(CLOCK_MONOTONIC, &cur);
@@ -579,50 +604,6 @@ void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coo
 
     nss_renderer_copy(win, (nss_rect_t){0, yd, width, height}, 0, ys);
 }
-
-void nss_window_get_dim(nss_window_t *win, int16_t *width, int16_t *height) {
-    if (width) *width = win->width;
-    if (height) *height = win->height;
-}
-
-void nss_window_set_cursor(nss_window_t *win, nss_cursor_type_t type) {
-    win->cursor_type = type;
-}
-
-void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor_fg) {
-    nss_color_t obg = win->bg;
-    if (bg) win->bg = bg;
-    if (cursor_fg) win->cursor_fg = cursor_fg;
-
-    if (bg && bg != obg) nss_renderer_background_changed(win);
-    if ((bg && bg != obg) || cursor_fg) {
-        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
-        win->force_redraw = 1;
-    }
-}
-
-void nss_window_set_mouse(nss_window_t *win, _Bool enabled) {
-   if (enabled)
-        win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
-   else
-       win->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
-   xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
-}
-
-/* This would probably be useful later when implemeting OSC for setting fonts
-void nss_window_set_font(nss_window_t *win, const char * name) {
-    if (!name) {
-        warn("Empty font name");
-        return;
-    }
-    free(win->font_name);
-    win->font_name = strdup(name);
-    nss_renderer_reload_font(win, 1);
-    nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
-    win->force_redraw = 1;
-    xcb_flush(con);
-}
-*/
 
 inline static xcb_atom_t target_to_atom(nss_clipboard_target_t target) {
     switch (target) {
@@ -666,6 +647,22 @@ void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, nss_cl
 void nss_window_paste_clip(nss_window_t *win, nss_clipboard_target_t target) {
     xcb_convert_selection(con, win->wid, target_to_atom(target),
           nss_term_is_utf8(win->term) ? ctx.atom_utf8_string : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
+}
+
+static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right) {
+        int16_t width = win->cw * win->char_width + win->left_border;
+        int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
+        nss_rect_t borders[NUM_BORDERS] = {
+            {0, 0, win->left_border, height},
+            {win->left_border, 0, width, win->top_border},
+            {width, 0, win->width - width, win->height},
+            {0, height, width, win->height - height},
+        };
+        size_t count = 4, offset = 0;
+        if (!top_left) count -= 2, offset += 2;
+        if (!bottom_right) count -= 2;
+        //TODO Handle zero height
+        nss_renderer_clear(win, count, borders + offset);
 }
 
 static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
@@ -719,7 +716,6 @@ static void handle_focus(nss_window_t *win, _Bool focused) {
     win->focused = focused;
     nss_term_focus(win->term, focused);
 }
-
 
 static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     nss_key_t key = nss_describe_key(ctx.xkb_state, keycode);
