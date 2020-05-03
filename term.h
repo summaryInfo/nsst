@@ -132,6 +132,7 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount);
 ssize_t nss_term_read(nss_term_t *term);
 int nss_term_fd(nss_term_t *term);
 void nss_term_hang(nss_term_t *term);
+void nss_term_toggle_numlock(nss_term_t *term);
 nss_input_mode_t *nss_term_inmode(nss_term_t *term);
 _Bool nss_term_is_utf8(nss_term_t *term);
 _Bool nss_term_is_nrcs_enabled(nss_term_t *term);

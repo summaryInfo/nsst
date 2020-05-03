@@ -10,7 +10,6 @@
 
 #include "config.h"
 #include "font.h"
-#include "input.h"
 #include "term.h"
 #include "util.h"
 #include "window-private.h"
@@ -739,9 +738,8 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     case nss_sa_break:
         nss_term_sendbreak(win->term);
         return;
-    case nss_sa_numlock:;
-        nss_input_mode_t *inm = nss_term_inmode(win->term);
-        inm->allow_numlock = !inm->allow_numlock;
+    case nss_sa_numlock:
+        nss_term_toggle_numlock(win->term);
         return;
     case nss_sa_scroll_up:
         nss_term_scroll_view(win->term, -nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));

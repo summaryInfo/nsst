@@ -38,7 +38,7 @@ $(NAME): $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
 
 font.o: util.h config.h window.h boxdraw.h feature.h
-window.o: util.h config.h term.h window.h window-private.h input.h feature.h
+window.o: util.h config.h term.h window.h window-private.h feature.h
 render.o: util.h config.h term.h window.h window-private.h image.h feature.h
 input.o: config.h util.h term.h input.h nrcs.h feature.h
 term.o: config.h util.h term.h input.h window.h nrcs.h feature.h

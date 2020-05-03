@@ -449,7 +449,7 @@ static nss_line_t *term_realloc_line(nss_term_t *term, nss_line_t *line, nss_coo
     nss_line_t *new = realloc(line, sizeof(*new) + (size_t)width * sizeof(new->cell[0]));
     if (!new) die("Can't create lines");
 
-	if (width > new->width) {
+    if (width > new->width) {
         nss_cell_t cell = fixup_color(new, &term->c);
         cell.attr = 0;
 
@@ -994,9 +994,9 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term_load_config(term);
     term_reset_margins(term);
 
-	nss_window_set_mouse(term->win, 0);
-	nss_window_set_cursor(term->win, nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE));
-	nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
+    nss_window_set_mouse(term->win, 0);
+    nss_window_set_cursor(term->win, nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE));
+    nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
 
     if (hard) {
         memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
@@ -3050,11 +3050,15 @@ void nss_term_sendbreak(nss_term_t *term) {
         warn("Can't send break");
 }
 
+void nss_term_toggle_numlock(nss_term_t *term) {
+    term->inmode.allow_numlock = !term->inmode.allow_numlock;
+}
+
 void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
     // Notify application
 
-	int16_t wwidth, wheight;
-	nss_window_get_dim(term->win, &wwidth, &wheight);
+    int16_t wwidth, wheight;
+    nss_window_get_dim(term->win, &wwidth, &wheight);
 
     struct winsize wsz = {
         .ws_col = width,
@@ -3204,7 +3208,7 @@ void nss_term_paste_end(nss_term_t *term) {
 }
 
 _Bool nss_term_keep_clipboard(nss_term_t *term) {
-	return term->mode & nss_tm_keep_clipboard;
+    return term->mode & nss_tm_keep_clipboard;
 }
 
 void nss_term_focus(nss_term_t *term, _Bool focused) {
@@ -3311,12 +3315,12 @@ void nss_term_clear_selection(nss_term_t *term) {
 
     term_update_selection(term, &old);
 
-	if (term->vsel_targ > 0) {
+    if (term->vsel_targ > 0) {
         if (term->mode & nss_tm_keep_selection) return;
 
         nss_window_set_clip(term->win, NULL, NSS_TIME_NOW, term->vsel_targ);
         term->vsel_targ = -1;
-	}
+    }
 }
 
 static void term_scroll_selection(nss_term_t *term, nss_coord_t amount) {
@@ -3373,25 +3377,23 @@ inline static _Bool is_separator(nss_char_t ch) {
         return strstr(nss_config_string(NSS_SCONFIG_WORD_SEPARATORS), (char *)cbuf);
 }
 
-static nss_visual_selection_t selection_normalize(nss_visual_selection_t sel) {
-    sel.nx0 = sel.x0, sel.ny0 = sel.y0;
-    sel.nx1 = sel.x1, sel.ny1 = sel.y1;
-    if (sel.ny1 <= sel.ny0) {
-        if (sel.ny1 < sel.ny0) {
-            SWAP(nss_coord_t, sel.ny0, sel.ny1);
-            SWAP(nss_coord_t, sel.nx0, sel.nx1);
-        } else if (sel.nx1 < sel.nx0) {
-            SWAP(nss_coord_t, sel.nx0, sel.nx1);
+static void selection_normalize(nss_visual_selection_t *sel) {
+    sel->nx0 = sel->x0, sel->ny0 = sel->y0;
+    sel->nx1 = sel->x1, sel->ny1 = sel->y1;
+    if (sel->ny1 <= sel->ny0) {
+        if (sel->ny1 < sel->ny0) {
+            SWAP(nss_coord_t, sel->ny0, sel->ny1);
+            SWAP(nss_coord_t, sel->nx0, sel->nx1);
+        } else if (sel->nx1 < sel->nx0) {
+            SWAP(nss_coord_t, sel->nx0, sel->nx1);
         }
     }
-    if (sel.rectangular && sel.nx1 < sel.nx0)
-            SWAP(nss_coord_t, sel.nx0, sel.nx1);
-    return sel;
+    if (sel->rectangular && sel->nx1 < sel->nx0)
+            SWAP(nss_coord_t, sel->nx0, sel->nx1);
 }
 
 static void term_snap_selection(nss_term_t *term) {
-    term->vsel = selection_normalize(term->vsel);
-
+    selection_normalize(&term->vsel);
 
     if (term->vsel.snap == nss_ssnap_line) {
         term->vsel.state = nss_sstate_progress;
@@ -3503,7 +3505,7 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, nss_line_t *lin
     }
 }
 
-uint8_t *term_selection_data(nss_term_t *term) {
+static uint8_t *term_selection_data(nss_term_t *term) {
     if (term->vsel.state == nss_sstate_released) {
         uint8_t *res = malloc(SEL_INIT_SIZE * sizeof(*res));
         if (!res) return NULL;
