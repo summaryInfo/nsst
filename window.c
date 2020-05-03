@@ -225,7 +225,7 @@ cleanup_context:
     return 0;
 }
 
-void load_params(void) {
+static void load_params(void) {
     xcb_xrm_database_t *xrmdb = xcb_xrm_database_from_default(con);
     if (!xrmdb) return;
 
@@ -257,7 +257,7 @@ void load_params(void) {
 
 volatile sig_atomic_t reload_config;
 
-void handle_sigusr1(int sig) {
+static void handle_sigusr1(int sig) {
     reload_config = 1;
     (void)sig;
 }
@@ -582,8 +582,8 @@ void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coo
 }
 
 void nss_window_get_dim(nss_window_t *win, int16_t *width, int16_t *height) {
-	if (width) *width = win->width;
-	if (height) *height = win->height;
+    if (width) *width = win->width;
+    if (height) *height = win->height;
 }
 
 void nss_window_set_cursor(nss_window_t *win, nss_cursor_type_t type) {
@@ -595,11 +595,11 @@ void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor
     if (bg) win->bg = bg;
     if (cursor_fg) win->cursor_fg = cursor_fg;
 
-	if (bg && bg != obg) nss_renderer_background_changed(win);
-	if ((bg && bg != obg) || cursor_fg) {
+    if (bg && bg != obg) nss_renderer_background_changed(win);
+    if ((bg && bg != obg) || cursor_fg) {
         nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
         win->force_redraw = 1;
-	}
+    }
 }
 
 void nss_window_set_mouse(nss_window_t *win, _Bool enabled) {
@@ -625,7 +625,7 @@ void nss_window_set_font(nss_window_t *win, const char * name) {
 }
 */
 
-inline xcb_atom_t target_to_atom(nss_clipboard_target_t target) {
+inline static xcb_atom_t target_to_atom(nss_clipboard_target_t target) {
     switch (target) {
     case nss_ct_secondary: return XCB_ATOM_SECONDARY;
     case nss_ct_primary: return XCB_ATOM_PRIMARY;
