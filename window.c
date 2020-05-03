@@ -10,6 +10,7 @@
 
 #include "config.h"
 #include "font.h"
+#include "input.h"
 #include "term.h"
 #include "util.h"
 #include "window-private.h"

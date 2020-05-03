@@ -2413,23 +2413,18 @@ static void term_dispatch_esc(nss_term_t *term) {
         term_set_tb_margins(term, 0, term->bottom);
         break;
     case E('n'): /* LS2 */
-        term_esc_dump(term, 0);
         term->c.gl = term->c.gl_ss = 2;
         break;
     case E('o'): /* LS3 */
-        term_esc_dump(term, 0);
         term->c.gl = term->c.gl_ss = 3;
         break;
     case E('|'): /* LS3R */
-        term_esc_dump(term, 0);
         term->c.gr = 3;
         break;
     case E('}'): /* LS2R */
-        term_esc_dump(term, 0);
         term->c.gr = 2;
         break;
     case E('~'): /* LS1R */
-        term_esc_dump(term, 0);
         term->c.gr = 1;
         break;
     case E('F') | I0(' '): /* S7C1T */
