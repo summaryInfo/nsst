@@ -994,11 +994,9 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term_load_config(term);
     term_reset_margins(term);
 
-    uint32_t args[] = {
-        term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG],
-        nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE), 0
-    };
-    nss_window_set(term->win, nss_wc_background | nss_wc_cursor_foreground | nss_wc_cursor_type | nss_wc_mouse, args);
+	nss_window_set_mouse(term->win, 0);
+	nss_window_set_cursor(term->win, nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE));
+	nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
 
     if (hard) {
         memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
@@ -1207,7 +1205,6 @@ static nss_clipboard_target_t decode_target(uint8_t targ, _Bool mode) {
 static void term_dispatch_osc(nss_term_t *term) {
     term_esc_dump(term, 1);
     switch (term->esc.selector) {
-        uint32_t args[2];
     case 0: /* Change window icon name and title */
     case 1: /* Change window icon name */
     case 2: /* Change window title */
@@ -1283,7 +1280,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         if (col) {
             if (term->mode & nss_tm_reverse_video) {
                 term->palette[NSS_SPECIAL_BG] = col;
-                nss_window_set(term->win, nss_wc_background, &col);
+                nss_window_set_colors(term->win, col, 0);
             } else term->palette[NSS_SPECIAL_FG] = col;
         } else term_esc_dump(term, 0);
         break;
@@ -1291,15 +1288,14 @@ static void term_dispatch_osc(nss_term_t *term) {
     case 11: /* Set VT100 background color */ {
         nss_color_t col = parse_color(term->esc.str, term->esc.str + term->esc.si);
         if (col) {
-            args[0] = args[1] = col;
             nss_color_t def = term->palette[NSS_SPECIAL_BG];
             col = (col & 0x00FFFFFF) | (0xFF000000 & def); // Keep alpha
             if (!(term->mode & nss_tm_reverse_video)) {
                 term->palette[NSS_SPECIAL_CURSOR_BG] = term->palette[NSS_SPECIAL_BG] = col;
-                nss_window_set(term->win, nss_wc_background, &col);
+                nss_window_set_colors(term->win, col, 0);
             } else  {
                 term->palette[NSS_SPECIAL_CURSOR_FG] = term->palette[NSS_SPECIAL_FG] = col;
-                nss_window_set(term->win, nss_wc_cursor_foreground, &col);
+                nss_window_set_colors(term->win, 0, col);
             }
         } else term_esc_dump(term, 0);
         break;
@@ -1309,7 +1305,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         if (col) {
             if (!(term->mode & nss_tm_reverse_video)) {
                 term->palette[NSS_SPECIAL_CURSOR_FG] = col;
-                nss_window_set(term->win, nss_wc_cursor_foreground, &col);
+                nss_window_set_colors(term->win, 0, col);
             } else term->palette[NSS_SPECIAL_CURSOR_BG] = col;
         } else term_esc_dump(term, 0);
         break;
@@ -1374,25 +1370,21 @@ static void term_dispatch_osc(nss_term_t *term) {
         break;
     case 110: /*Reset  VT100 foreground color */
         if (!(term->mode & nss_tm_reverse_video)) {
-            args[0] = term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(NSS_CCONFIG_FG);
-            nss_window_set(term->win, nss_wc_cursor_foreground, args);
+            nss_window_set_colors(term->win, 0, term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(NSS_CCONFIG_FG));
         } else term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(NSS_CCONFIG_FG);
         break;
     case 111: /*Reset  VT100 background color */
         if (!(term->mode & nss_tm_reverse_video)) {
-            args[0] = term->palette[NSS_SPECIAL_BG] = nss_config_color(NSS_CCONFIG_BG);
             term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(NSS_CCONFIG_CURSOR_BG);
-            nss_window_set(term->win, nss_wc_background, args);
+            nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG] = nss_config_color(NSS_CCONFIG_BG), 0);
         } else {
-            term->palette[NSS_SPECIAL_FG] = nss_config_color(NSS_CCONFIG_FG);
-            args[0] = term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(NSS_CCONFIG_CURSOR_FG);
-            nss_window_set(term->win, nss_wc_cursor_foreground, args);
+            term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(NSS_CCONFIG_CURSOR_FG);
+            nss_window_set_colors(term->win, 0, term->palette[NSS_SPECIAL_FG] = nss_config_color(NSS_CCONFIG_FG));
         }
         break;
     case 112: /*Reset  Cursor color */
         if (!(term->mode & nss_tm_reverse_video)) {
-            args[0] = term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(NSS_CCONFIG_CURSOR_FG);
-            nss_window_set(term->win, nss_wc_cursor_foreground, args);
+            nss_window_set_colors(term->win, 0, term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(NSS_CCONFIG_CURSOR_FG));
         } else term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(NSS_CCONFIG_CURSOR_FG);
         break;
     case 113: /*Reset  Mouse foreground color */
@@ -1411,7 +1403,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         }
         term->palette[NSS_SPECIAL_BG] &= 0x00FFFFFF;
         term->palette[NSS_SPECIAL_BG] |= res << 24;
-        nss_window_set(term->win, nss_wc_background, &term->palette[NSS_SPECIAL_BG]);
+        nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], 0);
         break;
     }
     default:
@@ -1569,7 +1561,6 @@ static void term_dispatch_sgr(nss_term_t *term) {
 static void term_dispatch_srm(nss_term_t *term, _Bool set) {
     if (term->esc.selector & P_MASK) {
         for(size_t i = 0; i <= term->esc.i; i++) {
-            uint32_t arg = set;
             switch(PARAM(i, 0)) {
             case 0: /* Default - nothing */
                 break;
@@ -1606,8 +1597,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 if (set ^ !!(term->mode & nss_tm_reverse_video)) {
                     SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
                     SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
-                    uint32_t args[2] = {term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]};
-                    nss_window_set(term->win, nss_wc_background | nss_wc_cursor_foreground, args);
+                    nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
                 }
                 ENABLE_IF(set, term->mode, nss_tm_reverse_video);
                 break;
@@ -1622,8 +1612,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 // IGNORE
                 break;
             case 9: /* X10 Mouse tracking */
-                arg = 0;
-                nss_window_set(term->win, nss_wc_mouse, &arg);
+                nss_window_set_mouse(term->win, 0);
                 term->mode &= ~nss_tm_mouse_mask;
                 ENABLE_IF(set, term->mode, nss_tm_mouse_x10);
                 break;
@@ -1681,8 +1670,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 ENABLE_IF(set, term->mode, nss_tm_132_preserve_display);
                 break;
             case 1000: /* X11 Mouse tracking */
-                arg = 0;
-                nss_window_set(term->win, nss_wc_mouse, &arg);
+                nss_window_set_mouse(term->win, 0);
                 term->mode &= ~nss_tm_mouse_mask;
                 ENABLE_IF(set, term->mode, nss_tm_mouse_button);
                 break;
@@ -1690,13 +1678,12 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 // IGNORE
                 break;
             case 1002: /* Cell motion mouse tracking on keydown */
-                arg = 0;
-                nss_window_set(term->win, nss_wc_mouse, &arg);
+                nss_window_set_mouse(term->win, 0);
                 term->mode &= ~nss_tm_mouse_mask;
                 ENABLE_IF(set, term->mode, nss_tm_mouse_motion);
                 break;
             case 1003: /* All motion mouse tracking */
-                nss_window_set(term->win, nss_wc_mouse, &arg);
+                nss_window_set_mouse(term->win, set);
                 term->mode &= ~nss_tm_mouse_mask;
                 ENABLE_IF(set, term->mode, nss_tm_mouse_many);
                 break;
@@ -2157,22 +2144,18 @@ static void term_dispatch_csi(nss_term_t *term) {
     //case C('t') | I0(' '): /* DECSWBV */
     //    break;
     case C('q') | I0(' '): /* DECSCUSR */ {
-        uint32_t arg;
         switch(PARAM(0, 1)) {
         case 1: /* Blinking block */
         case 2: /* Steady block */
-            arg = nss_cursor_block;
-            nss_window_set(term->win, nss_wc_cursor_type, &arg);
+            nss_window_set_cursor(term->win, nss_cursor_block);
             break;
         case 3: /* Blinking underline */
         case 4: /* Steady underline */
-            arg = nss_cursor_underline;
-            nss_window_set(term->win, nss_wc_cursor_type, &arg);
+            nss_window_set_cursor(term->win, nss_cursor_underline);
             break;
         case 5: /* Blinking bar */
         case 6: /* Steady bar */
-            arg = nss_cursor_bar;
-            nss_window_set(term->win, nss_wc_cursor_type, &arg);
+            nss_window_set_cursor(term->win, nss_cursor_bar);
         }
         break;
     }
@@ -3070,11 +3053,14 @@ void nss_term_sendbreak(nss_term_t *term) {
 void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
     // Notify application
 
+	int16_t wwidth, wheight;
+	nss_window_get_dim(term->win, &wwidth, &wheight);
+
     struct winsize wsz = {
         .ws_col = width,
         .ws_row = height,
-        .ws_xpixel = nss_window_get(term->win, nss_wc_width),
-        .ws_ypixel = nss_window_get(term->win, nss_wc_height)
+        .ws_xpixel = wwidth,
+        .ws_ypixel = wheight
     };
 
     if (ioctl(term->fd, TIOCSWINSZ, &wsz) < 0) {

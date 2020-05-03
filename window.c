@@ -373,21 +373,6 @@ void nss_free_context(void) {
     memset(&con, 0, sizeof(con));
 }
 
-static void set_config(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values) {
-    if (tag & nss_wc_cusror_width) win->cursor_width = *values++;
-    if (tag & nss_wc_left_border) win->left_border = *values++;
-    if (tag & nss_wc_top_border) win->top_border = *values++;
-    if (tag & nss_wc_background) win->bg = *values++;
-    if (tag & nss_wc_cursor_foreground) win->cursor_fg = *values++;
-    if (tag & nss_wc_cursor_type) win->cursor_type = *values++;
-    if (tag & nss_wc_subpixel_fonts) win->subpixel_fonts = *values++;
-    if (tag & nss_wc_font_size) win->font_size = *values++;
-    if (tag & nss_wc_underline_width) win->underline_width = *values++;
-    if (tag & nss_wc_width) warn("Tag is not settable"), values++;
-    if (tag & nss_wc_height) warn("Tag is not settable"), values++;
-    if (tag & nss_wc_mouse) win->mouse_events = *values++;
-}
-
 static void set_wm_props(nss_window_t *win) {
     uint32_t pid = getpid();
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom_net_wm_pid, XCB_ATOM_CARDINAL, 32, 1, &pid);
@@ -410,26 +395,26 @@ nss_window_t *nss_create_window(void) {
     win->cursor_type = nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE);
     win->subpixel_fonts = nss_config_integer(NSS_ICONFIG_SUBPIXEL_FONTS);
     win->font_size = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
+    win->width = nss_config_integer(NSS_ICONFIG_WINDOW_WIDTH);
+    win->height = nss_config_integer(NSS_ICONFIG_WINDOW_HEIGHT);
+
     win->active = 1;
     win->focused = 1;
-
     win->term_fd = -1;
+
     win->font_name = strdup(nss_config_string(NSS_SCONFIG_FONT_NAME));
     if (!win->font_name) {
         nss_free_window(win);
         return NULL;
     }
-    win->width = nss_config_integer(NSS_ICONFIG_WINDOW_WIDTH);
-    win->height = nss_config_integer(NSS_ICONFIG_WINDOW_HEIGHT);
 
     xcb_void_cookie_t c;
 
-    uint32_t mask1 =  XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
-        XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
     win->ev_mask = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_VISIBILITY_CHANGE |
         XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_FOCUS_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY |
         XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_PROPERTY_CHANGE;
-    if (win->mouse_events) win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
+    uint32_t mask1 =  XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
+        XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
     uint32_t values1[5] = { win->bg, win->bg, XCB_GRAVITY_NORTH_WEST, win->ev_mask, ctx.mid };
     int16_t x = nss_config_integer(NSS_ICONFIG_WINDOW_X);
     int16_t y = nss_config_integer(NSS_ICONFIG_WINDOW_Y);
@@ -461,12 +446,18 @@ nss_window_t *nss_create_window(void) {
         return NULL;
     }
 
+    win->term = nss_create_term(win, win->cw, win->ch);
+    if (!win->term) {
+        warn("Can't create term");
+        nss_free_window(win);
+        return NULL;
+    }
+
     win->next = win_list_head;
     win->prev = NULL;
     if (win_list_head) win_list_head->prev = win;
     win_list_head = win;
 
-    xcb_map_window(con, win->wid);
 
     if (ctx.pfdn + 1 > ctx.pfdcap) {
         struct pollfd *new = realloc(ctx.pfds, ctx.pfdcap + INIT_PFD_NUM);
@@ -484,12 +475,6 @@ nss_window_t *nss_create_window(void) {
             return NULL;
         }
     }
-    win->term = nss_create_term(win, win->cw, win->ch);
-    if (!win->term) {
-        warn("Can't create term");
-        nss_free_window(win);
-        return NULL;
-    }
 
     ctx.pfdn++;
     size_t i = 1;
@@ -499,6 +484,7 @@ nss_window_t *nss_create_window(void) {
     ctx.pfds[i].events = POLLIN | POLLHUP;
     ctx.pfds[i].fd = win->term_fd;
 
+    xcb_map_window(con, win->wid);
     xcb_flush(con);
     return win;
 }
@@ -595,29 +581,36 @@ void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coo
     nss_renderer_copy(win, (nss_rect_t){0, yd, width, height}, 0, ys);
 }
 
-void nss_window_set(nss_window_t *win, nss_wc_tag_t tag, const uint32_t *values) {
-    set_config(win, tag, values);
-    _Bool inval_screen = 0;
-
-    if (tag & (nss_wc_font_size | nss_wc_subpixel_fonts))
-        nss_renderer_reload_font(win, 1), inval_screen = 1;
-    if (!inval_screen && (tag & nss_wc_background)) {
-        nss_renderer_background_changed(win);
-        inval_screen = 1;
-    }
-   if (inval_screen) {
-        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
-        win->force_redraw = 1;
-   }
-   if (tag & nss_wc_mouse) {
-       if (win->mouse_events)
-            win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
-       else
-           win->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
-       xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
-   }
+void nss_window_get_dim(nss_window_t *win, int16_t *width, int16_t *height) {
+	if (width) *width = win->width;
+	if (height) *height = win->height;
 }
 
+void nss_window_set_cursor(nss_window_t *win, nss_cursor_type_t type) {
+    win->cursor_type = type;
+}
+
+void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor_fg) {
+    nss_color_t obg = win->bg;
+    if (bg) win->bg = bg;
+    if (cursor_fg) win->cursor_fg = cursor_fg;
+
+	if (bg && bg != obg) nss_renderer_background_changed(win);
+	if ((bg && bg != obg) || cursor_fg) {
+        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
+        win->force_redraw = 1;
+	}
+}
+
+void nss_window_set_mouse(nss_window_t *win, _Bool enabled) {
+   if (enabled)
+        win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
+   else
+       win->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
+   xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
+}
+
+/* This would probably be useful later when implemeting OSC for setting fonts
 void nss_window_set_font(nss_window_t *win, const char * name) {
     if (!name) {
         warn("Empty font name");
@@ -630,31 +623,7 @@ void nss_window_set_font(nss_window_t *win, const char * name) {
     win->force_redraw = 1;
     xcb_flush(con);
 }
-
-nss_font_t *nss_window_get_font(nss_window_t *win) {
-    return win->font;
-}
-
-char *nss_window_get_font_name(nss_window_t *win) {
-    return win->font_name;
-}
-
-uint32_t nss_window_get(nss_window_t *win, nss_wc_tag_t tag) {
-    if (tag & nss_wc_cusror_width) return win->cursor_width;
-    if (tag & nss_wc_left_border) return win->left_border;
-    if (tag & nss_wc_top_border) return win->top_border;
-    if (tag & nss_wc_background) return win->bg;
-    if (tag & nss_wc_cursor_foreground) return win->cursor_fg;
-    if (tag & nss_wc_cursor_type) return win->cursor_type;
-    if (tag & nss_wc_subpixel_fonts) return win->subpixel_fonts;
-    if (tag & nss_wc_font_size) return win->font_size;
-    if (tag & nss_wc_width) return win->width;
-    if (tag & nss_wc_height) return win->height;
-    if (tag & nss_wc_mouse) return win->mouse_events;
-
-    warn("Invalid option");
-    return 0;
-}
+*/
 
 inline xcb_atom_t target_to_atom(nss_clipboard_target_t target) {
     switch (target) {
@@ -767,13 +736,11 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     }
 
     switch (action) {
-        uint32_t arg;
-        nss_input_mode_t *inm;
     case nss_sa_break:
         nss_term_sendbreak(win->term);
         return;
-    case nss_sa_numlock:
-        inm = nss_term_inmode(win->term);
+    case nss_sa_numlock:;
+        nss_input_mode_t *inm = nss_term_inmode(win->term);
         inm->allow_numlock = !inm->allow_numlock;
         return;
     case nss_sa_scroll_up:
@@ -783,23 +750,21 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         nss_term_scroll_view(win->term, nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));
         return;
     case nss_sa_font_up:
-        arg = win->font_size + nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
-        nss_window_set(win, nss_wc_font_size, &arg);
-        return;
     case nss_sa_font_down:
-        arg = win->font_size - nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
-        nss_window_set(win, nss_wc_font_size, &arg);
-        return;
     case nss_sa_font_default:
-        arg = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
-        nss_window_set(win, nss_wc_font_size, &arg);
-        return;
     case nss_sa_font_subpixel:
-        arg = !win->subpixel_fonts;
-        nss_window_set(win, nss_wc_subpixel_fonts, &arg);
+        if (action == nss_sa_font_up)
+            win->font_size += nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
+        else if (action == nss_sa_font_down)
+            win->font_size -= nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
+        else if (action == nss_sa_font_default)
+            win->font_size = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
+        else win->subpixel_fonts = !win->subpixel_fonts;
+        nss_renderer_reload_font(win, 1);
+        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
+        win->force_redraw = 1;
         return;
     case nss_sa_new_window:
-        arg = 0;
         nss_create_window();
         return;
     case nss_sa_copy:
