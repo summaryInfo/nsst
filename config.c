@@ -24,7 +24,7 @@
 nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"allow-alternate", "\t(Enable alternate screen)", "allowAlternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
     {"allow-charsets", "\t(Enable charsets support)", "allowCharsets", NSS_ICONFIG_ALLOW_CHARSETS},
-    {"allow-nrcs", "\t\t(Enable NRCSs support)", "allowNRCSs", NSS_ICONFIG_ALLOW_NRCS},
+    {"allow-nrcs", "\t\t(Enable NRCSs support)", "allowNrcs", NSS_ICONFIG_ALLOW_NRCS},
     {"allow-window-ops", "\t(Allow window manipulation with escape sequences)", "allowWindowOps", NSS_ICONFIG_ALLOW_WINDOW_OPS},
     {"alpha", "\t\t\t(Backround opacity, requires compositor to be running)", "alpha", NSS_ICONFIG_ALPHA},
     {"alternate-scroll", "\t(Scrolling sends arrow keys escapes in alternate screen)", "alternateScroll", NSS_ICONFIG_ALTERNATE_SCROLL},
