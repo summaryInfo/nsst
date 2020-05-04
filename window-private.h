@@ -68,6 +68,7 @@ struct nss_window {
     int16_t font_size;
     struct timespec last_blink;
     struct timespec last_scroll;
+    struct timespec last_resize;
     struct timespec last_draw;
     nss_coord_t damaged_y0;
     nss_coord_t damaged_y1;

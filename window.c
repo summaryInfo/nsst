@@ -570,11 +570,15 @@ void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coo
     struct timespec cur;
     clock_gettime(CLOCK_MONOTONIC, &cur);
 
+    _Bool scrolled_recently = TIMEDIFF(win->last_scroll, cur) <  SEC/2/nss_config_integer(NSS_ICONFIG_FPS);
+
+    win->last_scroll = cur;
+
     ys = MAX(0, MIN(ys, win->ch));
     yd = MAX(0, MIN(yd, win->ch));
     height = MIN(height, MIN(win->ch - ys, win->ch - yd));
 
-    if (delay && TIMEDIFF(win->last_scroll, cur) <  SEC/2/nss_config_integer(NSS_ICONFIG_FPS)) {
+    if (delay && scrolled_recently) {
         if (!win->damaged_y1) {
             win->damaged_y0 = yd, win->damaged_y1 = yd + height;
             nss_term_damage(win->term, (nss_rect_t){ .x = 0, .y = yd,
@@ -591,10 +595,8 @@ void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coo
                 win->damaged_y1 = yd + height;
             }
         }
-        win->last_scroll = cur;
         return;
     }
-    win->last_scroll = cur;
 
     if (!height) return;
 
@@ -681,9 +683,10 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
     _Bool do_redraw_borders = delta_x < 0 || delta_y < 0;
 
     if (delta_x || delta_y) {
-        clock_gettime(CLOCK_MONOTONIC, &win->last_scroll);
         nss_term_resize(win->term, new_cw, new_ch);
         nss_renderer_resize(win, new_cw, new_ch);
+        clock_gettime(CLOCK_MONOTONIC, &win->last_scroll);
+        win->last_resize = win->last_scroll;
     }
 
     if (do_redraw_borders) {
@@ -1104,7 +1107,8 @@ void nss_context_run(void) {
             }
 
             int64_t frame_time = SEC/nss_config_integer(NSS_ICONFIG_FPS);
-            if (TIMEDIFF(win->last_scroll, cur) < frame_time/2) frame_time += frame_time/2;
+            if (TIMEDIFF(win->last_resize, cur) < frame_time/2) frame_time *= 3;
+            else if (TIMEDIFF(win->last_scroll, cur) < frame_time/2) frame_time *= 2;
             int64_t remains = (frame_time - TIMEDIFF(win->last_draw, cur));
 
             if (remains/1000000 <= 0 || win->force_redraw) {
