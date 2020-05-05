@@ -71,7 +71,6 @@ struct nss_window {
     struct timespec last_blink;
     struct timespec last_scroll;
     struct timespec last_resize;
-    struct timespec last_draw;
     struct timespec next_draw;
     nss_coord_t damaged_y0;
     nss_coord_t damaged_y1;
