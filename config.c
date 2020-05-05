@@ -33,7 +33,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"appkey", "\t\t(Initial application keypad mode value)", "appkey", NSS_ICONFIG_INPUT_APPKEY},
     {"background", "\t\t(Default backround color)", "background", NSS_CCONFIG_BG},
     {"backspace-is-delete", "\t(Backspace sends DEL instead of BS)", "backspaceIsDelete", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
-    {"blink-time", "\t\t(Text blink interval)","blinkTime", NSS_ICONFIG_BLINK_TIME},
+    {"blink-time", "\t\t(Text blink interval in microseconds)","blinkTime", NSS_ICONFIG_BLINK_TIME},
     {"cursor-background", "\t(Default cursor backround color)", "cursorBackground", NSS_CCONFIG_CURSOR_BG},
     {"cursor-foreground", "\t(Default cursor foreround color)", "cursorForeground", NSS_CCONFIG_CURSOR_FG},
     {"cursor-shape", "\t\t(Shape of cursor)", "cursorShape", NSS_ICONFIG_CURSOR_SHAPE},
@@ -76,6 +76,8 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"override-boxdrawing", "\t(Use built-in box drawing characters)", "overrideBoxdrawing", NSS_ICONFIG_OVERRIDE_BOXDRAW},
 #endif
     {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", "printer", NSS_SCONFIG_PRINTER},
+    {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", NSS_ICONFIG_RESIZE_DELAY},
+    {"scroll-delay", "\t\t(Additional delay after scroll in microseconds)", "scrollDelay", NSS_ICONFIG_SCROLL_DELAY},
     {"scroll-amount", "\t\t(Number of lines scrolled in a time)", "scrollAmout", NSS_ICONFIG_SCROLL_AMOUNT},
     {"scroll-on-input", "\t(Scroll view to bottom on key press)", "scrollOnInput", NSS_ICONFIG_SCROLL_ON_INPUT},
     {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", "scrollOnOutput", NSS_ICONFIG_SCROLL_ON_OUTPUT},
@@ -137,6 +139,8 @@ static struct {
     [NSS_ICONFIG_OVERRIDE_BOXDRAW - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
 #endif
     [NSS_ICONFIG_FPS - NSS_ICONFIG_MIN] = {60, 60, 1, 1000},
+    [NSS_ICONFIG_SCROLL_DELAY - NSS_ICONFIG_MIN] = {SEC/180000, SEC/180000, 0, 10*SEC/1000},
+    [NSS_ICONFIG_RESIZE_DELAY - NSS_ICONFIG_MIN] = {SEC/60000, SEC/60000, 0, 10*SEC/1000},
     [NSS_ICONFIG_SCROLL_AMOUNT - NSS_ICONFIG_MIN] = {2, 2, 1, 100},
     [NSS_ICONFIG_FONT_SIZE_STEP - NSS_ICONFIG_MIN] = {1, 1, 1, 250},
     [NSS_ICONFIG_ALTERNATE_SCROLL - NSS_ICONFIG_MIN] = {0, 0, 0, 1},

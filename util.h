@@ -15,6 +15,7 @@
 #define SWAP(T, a, b) {T tmp_ = (a); (a) = (b); (b) = tmp_; }
 #define SEC 1000000000LL
 #define TIMEDIFF(t, d)  ((((d).tv_sec - (t).tv_sec) * SEC + ((d).tv_nsec - (t).tv_nsec)))
+#define TIMEINC(t, in) ((t).tv_sec += (in)/SEC), ((t).tv_nsec += (in)%SEC)
 
 typedef int16_t nss_coord_t;
 typedef uint32_t nss_color_t;

@@ -1084,6 +1084,7 @@ void nss_context_run(void) {
                 free(event);
             }
         }
+
         for (size_t i = 1; i < ctx.pfdcap; i++) {
             if (ctx.pfds[i].fd > 0) {
                 nss_window_t *win = window_for_term_fd(ctx.pfds[i].fd);
@@ -1100,26 +1101,38 @@ void nss_context_run(void) {
         clock_gettime(CLOCK_MONOTONIC, &cur);
 
         for (nss_window_t *win = win_list_head; win; win = win->next) {
-            if (TIMEDIFF(win->last_blink, cur) > nss_config_integer(NSS_ICONFIG_BLINK_TIME)*1000 && win->active) {
+            if (TIMEDIFF(win->last_blink, cur) > nss_config_integer(NSS_ICONFIG_BLINK_TIME)*1000LL && win->active) {
                 win->blink_state = !win->blink_state;
                 win->blink_commited = 0;
                 win->last_blink = cur;
             }
 
-            int64_t frame_time = SEC/nss_config_integer(NSS_ICONFIG_FPS);
-            if (TIMEDIFF(win->last_resize, cur) < frame_time/2) frame_time *= 3;
-            else if (TIMEDIFF(win->last_scroll, cur) < frame_time/2) frame_time *= 2;
-            int64_t remains = (frame_time - TIMEDIFF(win->last_draw, cur));
+            int64_t scroll_delay = 1000LL * nss_config_integer(NSS_ICONFIG_SCROLL_DELAY);
+            int64_t resize_delay = 1000LL * nss_config_integer(NSS_ICONFIG_RESIZE_DELAY);
+            int64_t frame_time = SEC / nss_config_integer(NSS_ICONFIG_FPS);
 
-            if (remains/1000000 <= 0 || win->force_redraw) {
+            if (!win->resize_delayed && TIMEDIFF(win->last_resize, cur) < frame_time)
+                TIMEINC(win->next_draw, resize_delay), win->resize_delayed = 1;
+
+            if (!win->scroll_delayed && TIMEDIFF(win->last_scroll, cur) < frame_time)
+                TIMEINC(win->next_draw, scroll_delay), win->scroll_delayed = 1;
+
+            int64_t remains = TIMEDIFF(cur, win->next_draw);
+
+            if (remains <= 1000LL || win->force_redraw) {
                 if (win->force_redraw)
                     redraw_borders(win, 1, 1);
                 nss_term_redraw_dirty(win->term, 1);
-                win->last_draw = cur;
                 win->force_redraw = 0;
+                win->resize_delayed = 0;
+                win->scroll_delayed = 0;
                 win->blink_commited = 1;
-                remains = SEC/nss_config_integer(NSS_ICONFIG_FPS);
+
+                win->next_draw = cur;
+                remains = frame_time;
+                TIMEINC(win->next_draw, remains);
              }
+
             next_timeout = MIN(next_timeout,  remains);
         }
         xcb_flush(con);

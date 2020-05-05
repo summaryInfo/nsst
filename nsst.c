@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdio.h>
 
 static int optmap_cmp(const void *a, const void *b) {
     const char *a_arg_name = ((const struct nss_optmap_item *)a)->arg_name;

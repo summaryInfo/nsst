@@ -57,6 +57,8 @@ struct nss_window {
     unsigned mouse_events : 1;
     unsigned force_redraw : 1;
     unsigned blink_commited : 1;
+    unsigned scroll_delayed : 1;
+    unsigned resize_delayed : 1;
 
     int16_t width;
     int16_t height;
@@ -70,6 +72,7 @@ struct nss_window {
     struct timespec last_scroll;
     struct timespec last_resize;
     struct timespec last_draw;
+    struct timespec next_draw;
     nss_coord_t damaged_y0;
     nss_coord_t damaged_y1;
 
