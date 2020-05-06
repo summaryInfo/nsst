@@ -18,6 +18,45 @@
 
 typedef struct nss_render_context nss_render_context_t;
 
+struct nss_cellspec {
+    nss_color_t fg;
+    nss_color_t bg;
+    nss_char_t ch;
+    uint8_t face;
+    _Bool underlined;
+    _Bool stroke;
+    _Bool wide;
+};
+
+inline static struct nss_cellspec describe_cell(nss_cell_t cell, nss_color_t *palette, nss_color_t *extra, _Bool blink, _Bool selected) {
+    struct nss_cellspec res;
+
+    // Calculate colors
+
+    if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && cell.fg < 8) cell.fg += 8;
+    res.bg = cell.bg < NSS_PALETTE_SIZE ? palette[cell.bg] : extra[cell.bg - NSS_PALETTE_SIZE];
+    res.fg = cell.fg < NSS_PALETTE_SIZE ? palette[cell.fg] : extra[cell.fg - NSS_PALETTE_SIZE];
+    if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint)
+        res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
+    if ((cell.attr & nss_attrib_inverse) ^ selected) SWAP(nss_color_t, res.fg, res.bg);
+    if ((!selected && cell.attr & nss_attrib_invisible) || (cell.attr & nss_attrib_blink && blink)) res.fg = res.bg;
+
+    // Optimize rendering of U+2588 FULL BLOCK
+
+    if (cell.ch == 0x2588) res.bg = res.fg;
+    if (cell.ch == ' ' || res.fg == res.bg) cell.ch = 0;
+
+    // Calculate attributes
+
+    res.ch = cell.ch;
+    res.face = cell.ch ? (cell.attr & nss_font_attrib_mask) : 0;
+    res.wide = !!(cell.attr & nss_attrib_wide);
+    res.underlined = !!(cell.attr & nss_attrib_underlined) && (res.fg != res.bg);
+    res.stroke = !!(cell.attr & nss_attrib_strikethrough) && (res.fg != res.bg);
+
+    return res;
+}
+
 #if USE_X11SHM
 
 struct nss_render_context {
@@ -228,54 +267,6 @@ void nss_init_render_context() {
     }
 }
 
-inline static _Bool draw_cell(nss_window_t *win, nss_coord_t x, nss_coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
-    nss_cell_t cell = *cel;
-
-    // Calculate colors
-    if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && cell.fg < 8) cell.fg += 8;
-    nss_color_t bg = cell.bg < NSS_PALETTE_SIZE ? palette[cell.bg] : extra[cell.bg - NSS_PALETTE_SIZE];
-    nss_color_t fg = cell.fg < NSS_PALETTE_SIZE ? palette[cell.fg] : extra[cell.fg - NSS_PALETTE_SIZE];
-    if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint)
-        fg = (fg & 0xFF000000) | ((fg & 0xFEFEFE) >> 1);
-    _Bool selected = nss_term_is_selected(win->term, x, y);
-    if ((cell.attr & nss_attrib_inverse) ^ selected) SWAP(nss_color_t, fg, bg);
-    if ((!selected && cell.attr & nss_attrib_invisible) || (cell.attr & nss_attrib_blink && win->blink_state)) fg = bg;
-
-    // U+2588 FULL BLOCK
-    if (cell.ch == 0x2588) bg = fg;
-    if (cell.ch == ' ' || fg == bg) cell.ch = 0;
-
-    int16_t width = win->char_width*(1 + !!(cell.attr & nss_attrib_wide));
-    int16_t height = win->char_depth + win->char_height;
-
-    // Scale position
-    x *= win->char_width;
-    y *= win->char_height + win->char_depth;
-
-    // And draw...
-
-    // Backround
-    nss_image_draw_rect(win->ren.im, (nss_rect_t) { x, y, width, height }, bg);
-
-    // Glyph
-    if (cell.ch && fg != bg) {
-        nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, cell.ch, cell.attr & nss_font_attrib_mask);
-        nss_rect_t clip = {x, y, width, height};
-        nss_image_compose_glyph(win->ren.im, x, y + win->char_height, glyph, fg, clip, win->subpixel_fonts);
-    }
-
-    // Underline
-    if ((cell.attr & nss_attrib_underlined) && fg != bg)
-            nss_image_draw_rect(win->ren.im, (nss_rect_t){ x, y + win->char_height + 1, win->char_width, win->underline_width }, fg);
-    // Strikethough
-    if ((cell.attr & nss_attrib_strikethrough) && fg != bg)
-        nss_image_draw_rect(win->ren.im, (nss_rect_t){ x, y + 2*win->char_height/3 - win->underline_width/2, win->char_width, win->underline_width }, fg);
-
-    cel->attr |= nss_attrib_drawn;
-
-    return !!(cell.attr & nss_attrib_wide);
-}
-
 static int rect_cmp(const void *a, const void *b) {
     return ((nss_rect_t*)a)->y - ((nss_rect_t*)b)->y;
 }
@@ -306,14 +297,43 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
     for (nss_line_t *line; (line = line_iter_next(&it));) {
         _Bool damaged = 0;
         nss_rect_t l_bound = {0, line_iter_y(&it), 0, 1};
-        for (nss_coord_t i = 0; i < MIN(win->cw, line->width); i++)
-            if (!(line->cell[i].attr & nss_attrib_drawn) ||
-                    (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink))) {
+        for (nss_coord_t i = 0; i < MIN(win->cw, line->width); i++) {
+            if (!(line->cell[i].attr & nss_attrib_drawn) || (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink))) {
+                struct nss_cellspec spec = describe_cell(line->cell[i], palette,
+                        line->pal->data, win->blink_state, nss_term_is_selected(win->term, i, line_iter_y(&it)));
+
+                int16_t cw = win->char_width, ch = win->char_height;
+                int16_t cd = win->char_depth, ul = win->underline_width;
+                int16_t x = i * cw, y = line_iter_y(&it) * (ch + cd);
+
+                nss_rect_t r_cell = { x, y, cw * (1 + spec.wide), ch + cd};
+                nss_rect_t r_under = { x, y + ch + 1, cw, ul };
+                nss_rect_t r_strike = { x, y + 2*ch/3 - ul/2, cw, ul };
+
+                // Backround
+                nss_image_draw_rect(win->ren.im, r_cell, spec.bg);
+
+                // Glyph
+                if (spec.ch) {
+                    nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
+                    nss_image_compose_glyph(win->ren.im, x, y + ch, glyph, spec.fg, r_cell, win->subpixel_fonts);
+                }
+
+                // Underline
+                if (spec.underlined) nss_image_draw_rect(win->ren.im, r_under, spec.fg);
+
+                // Strikethough
+                if (spec.stroke) nss_image_draw_rect(win->ren.im, r_strike, spec.fg);
+
+                line->cell[i].attr |= nss_attrib_drawn;
+
                 if (!damaged) l_bound.x = i;
-                i += draw_cell(win, i, line_iter_y(&it), palette, line->pal->data, &line->cell[i]);
+
+                i += spec.wide;
                 l_bound.width = i;
                 damaged = 1;
             }
+        }
         if (damaged) {
             if (win->cw > line->width) {
                 nss_image_draw_rect(win->ren.im, (nss_rect_t){
@@ -376,10 +396,6 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
     win->damaged_y0 = win->damaged_y1 = 0;
 }
 
-void nss_renderer_clear(nss_window_t *win, size_t count, nss_rect_t *rects) {
-    if (count) xcb_poly_fill_rectangle(con, win->wid, win->ren.gc, count, (xcb_rectangle_t*)rects);
-}
-
 void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
     if (rctx.has_shm_pixmaps) {
         xcb_copy_area(con, win->ren.shm_pixmap, win->wid, win->ren.gc, rect.x, rect.y,
@@ -393,13 +409,6 @@ void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
                 win->top_border + rect.y, 0, 32, rect.height * win->ren.im.width * sizeof(nss_color_t),
                 (const uint8_t *)(win->ren.im.data+rect.y*win->ren.im.width));
     }
-}
-
-void nss_renderer_background_changed(nss_window_t *win) {
-    uint32_t values2[2];
-    values2[0] = values2[1] = win->bg;
-    xcb_change_window_attributes(con, win->wid, XCB_CW_BACK_PIXEL, values2);
-    xcb_change_gc(con, win->ren.gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
 }
 
 void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy) {
@@ -717,52 +726,6 @@ void nss_init_render_context() {
     }
 }
 
-inline static void push_cell(nss_window_t *win, nss_coord_t x, nss_coord_t y, nss_color_t *palette, nss_color_t *extra, nss_cell_t *cel) {
-    nss_cell_t cell = *cel;
-
-    if (!nss_cache_is_fetched(win->font_cache, cell.ch)) {
-        for (size_t j = 0; j < nss_font_attrib_max; j++) {
-            nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, cell.ch, j);
-            //In case of non-monospace fonts
-            glyph->x_off = win->char_width;
-            register_glyph(win, cell.ch | (j << 24) , glyph);
-            free(glyph);
-        }
-    }
-
-    if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && cell.fg < 8) cell.fg += 8;
-    nss_color_t bg = cell.bg < NSS_PALETTE_SIZE ? palette[cell.bg] : extra[cell.bg - NSS_PALETTE_SIZE];
-    nss_color_t fg = cell.fg < NSS_PALETTE_SIZE ? palette[cell.fg] : extra[cell.fg - NSS_PALETTE_SIZE];
-    if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint)
-        fg = (fg & 0xFF000000) | ((fg & 0xFEFEFE) >> 1);
-    _Bool selected = nss_term_is_selected(win->term, x, y);
-    if ((cell.attr & nss_attrib_inverse) ^ selected) SWAP(nss_color_t, fg, bg);
-    if ((!selected && cell.attr & nss_attrib_invisible) || (cell.attr & nss_attrib_blink && win->blink_state)) fg = bg;
-
-    if (2*(rctx.cbufpos + 1) >= rctx.cbufsize) {
-        size_t new_size = MAX(3 * rctx.cbufsize / 2, 2 * rctx.cbufpos + 1);
-        struct cell_desc *new = realloc(rctx.cbuffer, new_size * sizeof(*rctx.cbuffer));
-        if (!new) return;
-        rctx.cbuffer = new;
-        rctx.cbufsize = new_size;
-    }
-
-    // U+2588 FULL BLOCK
-    if (cell.ch == 0x2588) bg = fg;
-    if (cell.ch == ' ' || fg == bg) cell.ch = 0;
-    rctx.cbuffer[rctx.cbufpos++] = (struct cell_desc) {
-        .x = x * win->char_width,
-        .y = y * (win->char_height + win->char_depth),
-        .fg = fg, .bg = bg,
-        .glyph = cell.ch ? cell.ch | ((cell.attr & nss_font_attrib_mask) << 24) : 0,
-        .wide = !!(cell.attr & nss_attrib_wide),
-        .underlined = !!(cell.attr & nss_attrib_underlined) && (fg != bg),
-        .strikethrough = !!(cell.attr & nss_attrib_strikethrough) && (fg != bg),
-    };
-
-    cel->attr |= nss_attrib_drawn;
-}
-
 static void push_rect(xcb_rectangle_t *rect) {
     if (rctx.bufpos + sizeof(xcb_rectangle_t) >= rctx.bufsize) {
         size_t new_size = MAX(3 * rctx.bufsize / 2, 16 * sizeof(xcb_rectangle_t));
@@ -838,13 +801,9 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
 
     _Bool marg = win->cw == cur_x;
     cur_x -= marg;
-    if (cursor && win->focused) {
-        nss_cell_t cur_cell = array[cur_y]->cell[cur_x - marg];
-        if (win->cursor_type == nss_cursor_block)
-            cur_cell.attr ^= nss_attrib_inverse;
-        array[cur_y]->cell[cur_x].attr |= nss_attrib_drawn;
-        push_cell(win, cur_x, cur_y, palette, array[cur_y]->pal->data, &cur_cell);
-    }
+
+    if (cursor && win->focused && win->cursor_type == nss_cursor_block)
+        array[cur_y]->cell[cur_x - marg].attr ^= nss_attrib_inverse;
 
     nss_line_iter_t it = make_line_iter(list, array, 0, win->ch);
     for (nss_line_t *line; (line = line_iter_next(&it));) {
@@ -856,11 +815,46 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
                 .height = win->char_height + win->char_depth
             });
         }
-        for (nss_coord_t i = 0; i < MIN(win->cw, line->width); i++)
-            if (!(line->cell[i].attr & nss_attrib_drawn) ||
-                    (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink)))
-                push_cell(win, i, line_iter_y(&it), palette, line->pal->data, &line->cell[i]);
+        for (nss_coord_t i = 0; i < MIN(win->cw, line->width); i++) {
+            if (!(line->cell[i].attr & nss_attrib_drawn) || (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink))) {
+                struct nss_cellspec spec = describe_cell(line->cell[i], palette,
+                        line->pal->data, win->blink_state, nss_term_is_selected(win->term, i, line_iter_y(&it)));
+
+                if (!nss_cache_is_fetched(win->font_cache, spec.ch)) {
+                    for (size_t j = 0; j < nss_font_attrib_max; j++) {
+                        nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, spec.ch, j);
+                        //In case of non-monospace fonts
+                        glyph->x_off = win->char_width;
+                        register_glyph(win, spec.ch | (j << 24) , glyph);
+                        free(glyph);
+                    }
+                }
+
+                if (2*(rctx.cbufpos + 1) >= rctx.cbufsize) {
+                    size_t new_size = MAX(3 * rctx.cbufsize / 2, 2 * rctx.cbufpos + 1);
+                    struct cell_desc *new = realloc(rctx.cbuffer, new_size * sizeof(*rctx.cbuffer));
+                    if (!new) return;
+                    rctx.cbuffer = new;
+                    rctx.cbufsize = new_size;
+                }
+
+                rctx.cbuffer[rctx.cbufpos++] = (struct cell_desc) {
+                    .x = i * win->char_width,
+                    .y = line_iter_y(&it) * (win->char_height + win->char_depth),
+                    .fg = spec.fg, .bg = spec.bg,
+                    .glyph = spec.ch | (spec.face << 24),
+                    .wide = spec.wide,
+                    .underlined = spec.underlined,
+                    .strikethrough = spec.stroke
+                };
+
+                line->cell[i].attr |= nss_attrib_drawn;
+            }
+        }
     }
+
+    if (cursor && win->focused && win->cursor_type == nss_cursor_block)
+        array[cur_y]->cell[cur_x - marg].attr ^= nss_attrib_inverse;
 
     if (rctx.bufpos) {
         xcb_render_color_t col = MAKE_COLOR(win->bg);
@@ -1059,27 +1053,9 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_t *list, nss_line_t **
     win->damaged_y0 = win->damaged_y1 = 0;
 }
 
-void nss_renderer_clear(nss_window_t *win, size_t count, nss_rect_t *rects) {
-    if (count) xcb_poly_fill_rectangle(con, win->wid, win->ren.gc, count, (xcb_rectangle_t*)rects);
-    /*
-     * // Wrong way
-    if (count) {
-        xcb_render_color_t color = MAKE_COLOR(win->bg);
-        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, color, count, (xcb_rectangle_t*)rects);
-    }
-    */
-}
-
 void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
     xcb_copy_area(con, win->ren.pid, win->wid, win->ren.gc, rect.x, rect.y,
                   rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
-}
-
-void nss_renderer_background_changed(nss_window_t *win) {
-    uint32_t values2[2];
-    values2[0] = values2[1] = win->bg;
-    xcb_change_window_attributes(con, win->wid, XCB_CW_BACK_PIXEL, values2);
-    xcb_change_gc(con, win->ren.gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
 }
 
 void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy) {
@@ -1132,3 +1108,14 @@ void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
 }
 
 #endif
+
+void nss_renderer_clear(nss_window_t *win, size_t count, nss_rect_t *rects) {
+    if (count) xcb_poly_fill_rectangle(con, win->wid, win->ren.gc, count, (xcb_rectangle_t*)rects);
+}
+
+void nss_renderer_background_changed(nss_window_t *win) {
+    uint32_t values2[2];
+    values2[0] = values2[1] = win->bg;
+    xcb_change_window_attributes(con, win->wid, XCB_CW_BACK_PIXEL, values2);
+    xcb_change_gc(con, win->ren.gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
+}
