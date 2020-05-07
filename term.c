@@ -591,7 +591,7 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
     if (term->scrollback_limit == 0) {
         term_free_line(line);
     } else {
-        line = term_realloc_line(term, line, line_length(line) + 1);
+        line = term_realloc_line(term, line, line_length(line));
         if (line->pal) {
             optimize_line_palette(line);
             nss_line_palette_t *pal = realloc(line->pal, sizeof(nss_line_palette_t) + sizeof(nss_color_t)*(line->pal->size));
