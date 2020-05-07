@@ -343,9 +343,9 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
                     .width = (win->cw - line->width) * win->char_width,
                     .height = win->char_height + win->char_depth
                 }, win->bg);
-                l_bound.width = win->cw;
+                l_bound.width = win->cw - 1;
             }
-            l_bound.width -= l_bound.x - 1;
+            l_bound.width = MIN(l_bound.width - l_bound.x + 1, win->cw);
             win->ren.bounds[win->ren.boundc++] = l_bound;
         }
 
