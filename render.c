@@ -573,14 +573,16 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     xcb_rectangle_t bound = { 0, 0, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height) };
 
     if (need_free) {
-        xcb_free_pixmap(con, win->ren.pid);
-        xcb_render_free_picture(con, win->ren.pic);
+        xcb_free_pixmap(con, win->ren.pid1);
+        xcb_render_free_picture(con, win->ren.pic1);
     } else {
-        win->ren.pid = xcb_generate_id(con);
-        win->ren.pic = xcb_generate_id(con);
+        win->ren.pid1 = xcb_generate_id(con);
+        win->ren.pid2 = xcb_generate_id(con);
+        win->ren.pic1 = xcb_generate_id(con);
+        win->ren.pic2 = xcb_generate_id(con);
     }
 
-    c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, win->ren.pid, win->wid, bound.width, bound.height );
+    c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, win->ren.pid1, win->wid, bound.width, bound.height );
     if (check_void_cookie(c)) {
         warn("Can't create pixmap");
         return 0;
@@ -588,14 +590,14 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
 
     uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
     uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
-    c = xcb_render_create_picture_checked(con, win->ren.pic, win->ren.pid, rctx.pfargb, mask3, values3);
+    c = xcb_render_create_picture_checked(con, win->ren.pic1, win->ren.pid1, rctx.pfargb, mask3, values3);
     if (check_void_cookie(c)) {
         warn("Can't create XRender picture");
         return 0;
     }
 
     xcb_render_color_t color = MAKE_COLOR(win->bg);
-    xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, color, 1, &bound);
+    xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, color, 1, &bound);
 
     if (need_free)
         nss_term_resize(win->term, win->cw, win->ch);
@@ -625,8 +627,8 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
 
 void nss_renderer_free(nss_window_t *win) {
     xcb_render_free_picture(con, win->ren.pen);
-    xcb_render_free_picture(con, win->ren.pic);
-    xcb_free_pixmap(con, win->ren.pid);
+    xcb_render_free_picture(con, win->ren.pic1);
+    xcb_free_pixmap(con, win->ren.pid1);
     xcb_render_free_glyph_set(con, win->ren.gsid);
 }
 
@@ -825,7 +827,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
 
     if (rctx.bufpos) {
         xcb_render_color_t col = MAKE_COLOR(win->bg);
-        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, col,
+        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
             rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
     }
 
@@ -853,7 +855,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
         }
         if (rctx.bufpos) {
             xcb_render_color_t col = MAKE_COLOR(rctx.cbuffer[j].bg);
-            xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, col,
+            xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
                 rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
         }
     }
@@ -875,7 +877,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
         });
     }
     if (rctx.bufpos)
-        xcb_render_set_picture_clip_rectangles(con, win->ren.pic, 0, 0,
+        xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0,
             rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
 
     //qsort(rctx.cbuffer, rctx.cbufpos, sizeof(rctx.cbuffer[0]), cmp_by_fg);
@@ -927,12 +929,12 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
         }
         if (rctx.bufpos)
             xcb_render_composite_glyphs_32(con, XCB_RENDER_PICT_OP_OVER,
-                                           win->ren.pen, win->ren.pic, win->ren.pfglyph, win->ren.gsid,
+                                           win->ren.pen, win->ren.pic1, win->ren.pfglyph, win->ren.gsid,
                                            0, 0, rctx.bufpos, rctx.buffer);
     }
 
     if (rctx.cbufpos)
-        xcb_render_set_picture_clip_rectangles(con, win->ren.pic, 0, 0, 1, &(xcb_rectangle_t){
+        xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0, 1, &(xcb_rectangle_t){
                 0, 0, win->cw * win->char_width, win->ch * (win->char_height + win->char_depth)});
 
     // Draw underline and strikethrough lines
@@ -974,7 +976,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
         }
         if (rctx.bufpos) {
             xcb_render_color_t col = MAKE_COLOR(rctx.cbuffer[j].fg);
-            xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, col,
+            xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
                 rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
         }
     }
@@ -1009,7 +1011,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
         }
         if (count) {
             xcb_render_color_t c = MAKE_COLOR(win->cursor_fg);
-            xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_OVER, win->ren.pic, c, count, rects + off);
+            xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_OVER, win->ren.pic1, c, count, rects + off);
         }
     }
 
@@ -1021,12 +1023,12 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
 }
 
 void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
-    xcb_copy_area(con, win->ren.pid, win->wid, win->gc, rect.x, rect.y,
-                  rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
+    xcb_copy_area(con, win->ren.pid1, win->wid, win->gc, rect.x, rect.y,
+            rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
 }
 
 void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy) {
-    xcb_copy_area(con, win->ren.pid, win->ren.pid, win->gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
+    xcb_copy_area(con, win->ren.pid1, win->ren.pid1, win->gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
     /*
     xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, 0, win->ren.pic, sx, sy, 0, 0, dst.x, dst.y, dst.width, dst.height);
     */
@@ -1044,20 +1046,18 @@ void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
 
     int16_t common_w = MIN(width, width  - delta_x * win->char_width);
     int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth)) ;
-
-    xcb_pixmap_t pid = xcb_generate_id(con);
-    xcb_create_pixmap(con, TRUE_COLOR_ALPHA_DEPTH, pid, win->wid, width, height);
-    xcb_render_picture_t pic = xcb_generate_id(con);
+    xcb_create_pixmap(con, TRUE_COLOR_ALPHA_DEPTH, win->ren.pid2, win->wid, width, height);
     uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
     uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
-    xcb_render_create_picture(con, pic, pid, rctx.pfargb, mask3, values3);
+    xcb_render_create_picture(con, win->ren.pic2, win->ren.pid2, rctx.pfargb, mask3, values3);
 
-    xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, 0, pic, 0, 0, 0, 0, 0, 0, common_w, common_h);
+    xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, 0, win->ren.pic2, 0, 0, 0, 0, 0, 0, common_w, common_h);
 
-    SWAP(xcb_pixmap_t, win->ren.pid, pid);
-    SWAP(xcb_render_picture_t, win->ren.pic, pic);
-    xcb_free_pixmap(con, pid);
-    xcb_render_free_picture(con, pic);
+    SWAP(xcb_pixmap_t, win->ren.pid1, win->ren.pid2);
+    SWAP(xcb_render_picture_t, win->ren.pic1, win->ren.pic2);
+
+    xcb_render_free_picture(con, win->ren.pic2);
+    xcb_free_pixmap(con, win->ren.pid2);
 
     nss_rect_t rectv[2];
     size_t rectc= 0;
@@ -1071,7 +1071,7 @@ void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
         rectv[i] = rect_scale_up(rectv[i], win->char_width, win->char_height + win->char_depth);
 
     xcb_render_color_t color = MAKE_COLOR(win->bg);
-    xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, color, rectc, (xcb_rectangle_t*)rectv);
+    xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, color, rectc, (xcb_rectangle_t*)rectv);
 }
 
 #endif
