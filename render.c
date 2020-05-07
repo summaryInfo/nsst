@@ -12,8 +12,6 @@
 #   include <sys/shm.h>
 #   include <sys/ipc.h>
 #   include <xcb/shm.h>
-#else
-#   include <xcb/xcb_renderutil.h>
 #endif
 
 typedef struct nss_render_context nss_render_context_t;

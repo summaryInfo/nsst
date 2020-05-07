@@ -38,11 +38,7 @@ For command line arguments see `nsst --help`
 * C11 compatible comiler
 
 ### Runtime
-* `xcb-util`
-* `xcb-util-wm`
-* `xcb-util-renderutil` (if not `USE_X11SHM`)
-* `xcb-util-shm` (if `USE_X11SHM`)
-* `xcb-util-keysyms`
+* `libxcb`
 * `xcb-util-xrm`
 * `fontconfig`
 * `freetype2`

@@ -27,7 +27,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <xcb/xcb.h>
-#include <xcb/xcb_ewmh.h>
 #include <xcb/xcb_xrm.h>
 #include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon-x11.h>
