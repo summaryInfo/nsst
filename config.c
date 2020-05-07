@@ -77,8 +77,8 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
 #endif
     {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", "printer", NSS_SCONFIG_PRINTER},
     {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", NSS_ICONFIG_RESIZE_DELAY},
-    {"scroll-delay", "\t\t(Additional delay after scroll in microseconds)", "scrollDelay", NSS_ICONFIG_SCROLL_DELAY},
     {"scroll-amount", "\t\t(Number of lines scrolled in a time)", "scrollAmout", NSS_ICONFIG_SCROLL_AMOUNT},
+    {"scroll-delay", "\t\t(Additional delay after scroll in microseconds)", "scrollDelay", NSS_ICONFIG_SCROLL_DELAY},
     {"scroll-on-input", "\t(Scroll view to bottom on key press)", "scrollOnInput", NSS_ICONFIG_SCROLL_ON_INPUT},
     {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", "scrollOnOutput", NSS_ICONFIG_SCROLL_ON_OUTPUT},
     {"scrollback-size", ", -H<value> (Number of saved lines)", "scrollbackSize", NSS_ICONFIG_HISTORY_LINES},
