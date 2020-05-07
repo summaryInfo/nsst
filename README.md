@@ -35,7 +35,7 @@ For command line arguments see `nsst --help`
 
 * pkg-config
 * GNU make or BSD make
-* C11 compatible comiler
+* C11 compatible compiler
 
 ### Runtime
 * `libxcb`
