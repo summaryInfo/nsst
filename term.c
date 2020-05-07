@@ -3164,7 +3164,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
 
     if (!(term->mode & nss_tm_altscreen)) {
         if (dy > 0) nss_term_damage(term, (nss_rect_t) { 0, minh, minw, dy });
-        if (dx > 0) nss_term_damage(term, (nss_rect_t) { height, 0, dx, minh });
+        if (dx > 0) nss_term_damage(term, (nss_rect_t) { minw, 0, dx, height });
     }
 }
 
