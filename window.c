@@ -685,8 +685,7 @@ static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right
         if (count) xcb_poly_fill_rectangle(con, win->wid, win->gc, count, borders + offset);
 }
 
-static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
-
+void nss_window_handle_resize(nss_window_t *win, int16_t width, int16_t height) {
     //Handle resize
 
     win->width = width;
@@ -697,8 +696,6 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
     nss_coord_t delta_x = new_cw - win->cw;
     nss_coord_t delta_y = new_ch - win->ch;
 
-    _Bool do_redraw_borders = delta_x < 0 || delta_y < 0;
-
     if (delta_x || delta_y) {
         nss_term_resize(win->term, new_cw, new_ch);
         nss_renderer_resize(win, new_cw, new_ch);
@@ -706,10 +703,8 @@ static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
         win->last_resize = win->last_scroll;
     }
 
-    if (do_redraw_borders) {
+    if (delta_x < 0 || delta_y < 0)
         redraw_borders(win, 0, 1);
-        //TIP: May be redraw all borders here
-    }
 }
 
 static void handle_expose(nss_window_t *win, nss_rect_t damage) {
@@ -946,7 +941,7 @@ void nss_context_run(void) {
                     if (!win) break;
 
                     if (ev->width != win->width || ev->height != win->height)
-                        handle_resize(win, ev->width, ev->height);
+                        nss_window_handle_resize(win, ev->width, ev->height);
                     if (!win->got_configure) {
                         nss_term_resize(win->term, win->cw, win->ch);
                         nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});

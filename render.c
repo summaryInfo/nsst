@@ -184,25 +184,21 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
         win->font_cache = nss_create_cache(win->font, win->subpixel_fonts);
     nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
 
-    nss_coord_t old_ch = win->ch;
+    if (need_free) nss_window_handle_resize(win, win->width, win->height);
+    else {
+        win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
+        win->ch = MAX(1, (win->height - 2*win->top_border) / (win->char_height + win->char_depth));
 
-    win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
-    win->ch = MAX(1, (win->height - 2*win->top_border) / (win->char_height + win->char_depth));
-
-    if (!need_free || old_ch != win->ch)
         resize_bounds(win, 1);
 
-    if (need_free) nss_free_image_shm(&win->ren.im);
+        win->ren.im = nss_create_image_shm(win, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height));
+        if (!win->ren.im.data) {
+            warn("Can't allocate image");
+            return 0;
+        }
 
-    win->ren.im = nss_create_image_shm(win, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height));
-    if (!win->ren.im.data) {
-        warn("Can't allocate image");
-        return 0;
+        nss_image_draw_rect(win->ren.im, (nss_rect_t){0, 0, win->ren.im.width, win->ren.im.height}, win->bg);
     }
-
-    nss_image_draw_rect(win->ren.im, (nss_rect_t){0, 0, win->ren.im.width, win->ren.im.height}, win->bg);
-
-    if (need_free) nss_term_resize(win->term, win->cw, win->ch);
 
     return 1;
 }
@@ -567,42 +563,38 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
         }
     }
 
-    win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
-    win->ch = MAX(1, (win->height - 2*win->top_border) / (win->char_height + win->char_depth));
-
-    xcb_rectangle_t bound = { 0, 0, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height) };
-
     if (need_free) {
-        xcb_free_pixmap(con, win->ren.pid1);
-        xcb_render_free_picture(con, win->ren.pic1);
+        nss_window_handle_resize(win, win->width, win->height);
     } else {
+        win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
+        win->ch = MAX(1, (win->height - 2*win->top_border) / (win->char_height + win->char_depth));
+
+        xcb_rectangle_t bound = { 0, 0, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height) };
+
         win->ren.pid1 = xcb_generate_id(con);
         win->ren.pid2 = xcb_generate_id(con);
+
+        c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, win->ren.pid1, win->wid, bound.width, bound.height );
+        if (check_void_cookie(c)) {
+            warn("Can't create pixmap");
+            return 0;
+        }
+
+        uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
+        uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
+
         win->ren.pic1 = xcb_generate_id(con);
         win->ren.pic2 = xcb_generate_id(con);
-    }
 
-    c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, win->ren.pid1, win->wid, bound.width, bound.height );
-    if (check_void_cookie(c)) {
-        warn("Can't create pixmap");
-        return 0;
-    }
+        c = xcb_render_create_picture_checked(con, win->ren.pic1, win->ren.pid1, rctx.pfargb, mask3, values3);
+        if (check_void_cookie(c)) {
+            warn("Can't create XRender picture");
+            return 0;
+        }
 
-    uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
-    uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
-    c = xcb_render_create_picture_checked(con, win->ren.pic1, win->ren.pid1, rctx.pfargb, mask3, values3);
-    if (check_void_cookie(c)) {
-        warn("Can't create XRender picture");
-        return 0;
-    }
+        xcb_render_color_t color = MAKE_COLOR(win->bg);
+        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, color, 1, &bound);
 
-    xcb_render_color_t color = MAKE_COLOR(win->bg);
-    xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, color, 1, &bound);
-
-    if (need_free)
-        nss_term_resize(win->term, win->cw, win->ch);
-
-    if (!need_free) {
         xcb_pixmap_t pid = xcb_generate_id(con);
         c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, pid, win->wid, 1, 1);
         if (check_void_cookie(c)) {
