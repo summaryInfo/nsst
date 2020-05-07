@@ -25,7 +25,7 @@ static int optmap_cmp(const void *a, const void *b) {
 
 static _Noreturn void usage(char *argv0, int code) {
     if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0 || code == EXIT_SUCCESS) {
-        fprintf(stderr, "%s%s", argv0, " [-options] [-e] [command [args]]\n"
+        printf("%s%s", argv0, " [-options] [-e] [command [args]]\n"
             "\nWhere options are:\n"
                 "\t--help, -h\t\t\t(Print this message and exit)\n"
                 "\t--version, -v\t\t\t(Print version and exit)\n"
@@ -33,7 +33,7 @@ static _Noreturn void usage(char *argv0, int code) {
                 "\t--geometry=<value>, -g<value> \t(Window geometry, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>])\n"
         );
         for (size_t i = 0; i < sizeof(optmap)/sizeof(optmap[0]); i++)
-            fprintf(stderr, "\t--%s=<value>%s\n", optmap[i].arg_name, optmap[i].arg_desc);
+            printf("\t--%s=<value>%s\n", optmap[i].arg_name, optmap[i].arg_desc);
     }
     nss_free_context();
     exit(code);
