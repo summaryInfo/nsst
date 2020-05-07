@@ -24,11 +24,9 @@
 typedef struct nss_renderer nss_renderer_t;
 
 struct nss_renderer {
-    xcb_gcontext_t gc;
 #if USE_X11SHM
     xcb_shm_seg_t shm_seg;
     xcb_pixmap_t shm_pixmap;
-
     nss_image_t im;
 
     // It's size is 2*win->ch
@@ -47,6 +45,7 @@ struct nss_window {
     struct nss_window *prev, *next;
 
     xcb_window_t wid;
+    xcb_gcontext_t gc;
     xcb_event_mask_t ev_mask;
 
     unsigned focused : 1;
@@ -112,8 +111,6 @@ void nss_init_render_context(void);
 void nss_free_render_context(void);
 void nss_renderer_free(nss_window_t *win);
 void nss_renderer_update(nss_window_t *win, nss_rect_t rect);
-void nss_renderer_clear(nss_window_t *win, size_t count, nss_rect_t *rects);
-void nss_renderer_background_changed(nss_window_t *win);
  _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free);
 void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch);
 void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy);

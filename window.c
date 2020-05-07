@@ -369,7 +369,13 @@ void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor
     if (bg) win->bg = bg;
     if (cursor_fg) win->cursor_fg = cursor_fg;
 
-    if (bg && bg != obg) nss_renderer_background_changed(win);
+    if (bg && bg != obg) {
+        uint32_t values2[2];
+        values2[0] = values2[1] = win->bg;
+        xcb_change_window_attributes(con, win->wid, XCB_CW_BACK_PIXEL, values2);
+        xcb_change_gc(con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
+    }
+
     if ((bg && bg != obg) || cursor_fg) {
         nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
         win->force_redraw = 1;
@@ -476,6 +482,17 @@ nss_window_t *nss_create_window(void) {
         return NULL;
     }
 
+    win->gc = xcb_generate_id(con);
+    uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
+    uint32_t values2[3] = { win->bg, win->bg, 0 };
+
+    c = xcb_create_gc_checked(con, win->gc, win->wid, mask2, values2);
+    if (check_void_cookie(c)) {
+        warn("Can't create GC");
+        nss_free_window(win);
+        return NULL;
+    }
+
     set_wm_props(win);
     nss_window_set_title(win, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
     nss_window_set_icon_name(win, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
@@ -534,6 +551,7 @@ void nss_free_window(nss_window_t *win) {
     if (win->wid) {
         xcb_unmap_window(con, win->wid);
         nss_renderer_free(win);
+        xcb_free_gc(con, win->gc);
         xcb_destroy_window(con, win->wid);
         xcb_flush(con);
     }
@@ -654,7 +672,7 @@ void nss_window_paste_clip(nss_window_t *win, nss_clipboard_target_t target) {
 static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right) {
         int16_t width = win->cw * win->char_width + win->left_border;
         int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
-        nss_rect_t borders[NUM_BORDERS] = {
+        xcb_rectangle_t borders[NUM_BORDERS] = {
             {0, 0, win->left_border, height},
             {win->left_border, 0, width, win->top_border},
             {width, 0, win->width - width, win->height},
@@ -664,7 +682,7 @@ static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right
         if (!top_left) count -= 2, offset += 2;
         if (!bottom_right) count -= 2;
         //TODO Handle zero height
-        nss_renderer_clear(win, count, borders + offset);
+        if (count) xcb_poly_fill_rectangle(con, win->wid, win->gc, count, borders + offset);
 }
 
 static void handle_resize(nss_window_t *win, int16_t width, int16_t height) {
@@ -708,7 +726,7 @@ static void handle_expose(nss_window_t *win, nss_rect_t damage) {
     for (size_t i = 0; i < NUM_BORDERS; i++)
         if (intersect_with(&borders[i], &damage))
                 damaged[num_damaged++] = borders[i];
-    if (num_damaged) nss_renderer_clear(win, num_damaged, damaged);
+    if (num_damaged) xcb_poly_fill_rectangle(con, win->wid, win->gc, num_damaged, (xcb_rectangle_t *)damaged);
 
     nss_rect_t inters = { 0, 0, width - win->left_border, height - win->top_border};
     damage = rect_shift(damage, -win->left_border, -win->top_border);
