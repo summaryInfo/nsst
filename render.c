@@ -197,7 +197,6 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
         resize_bounds(win, 1);
 
     if (need_free) {
-        xcb_free_gc(con, win->ren.gc);
         nss_free_image_shm(&win->ren.im);
     } else {
         win->ren.gc = xcb_generate_id(con);
