@@ -518,7 +518,9 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
     cursor &= !term->prev_c_hidden;
     cursor &= !(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr & nss_attrib_drawn);
 
-    nss_window_submit_screen(term->win, term->view, term->screen, term->palette, term->c.x, term->c.y, cursor);
+    nss_line_iter_t it = make_line_iter(term->view, term->screen, 0, term->height);
+
+    nss_window_submit_screen(term->win, &it, term->palette, term->c.x, term->c.y, cursor);
 }
 
 static void term_reset_view(nss_term_t *term, _Bool damage) {

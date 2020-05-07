@@ -65,7 +65,7 @@ typedef struct nss_line {
 
 /* "iterator" to traverse viewport (scrollback list part, then screen array part) */
 
-typedef struct line_iter {
+typedef struct nss_line_iter {
     nss_line_t *_line;
     nss_line_t *_last;
     nss_line_t **_screen;
