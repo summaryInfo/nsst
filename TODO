@@ -1,22 +1,8 @@
 Until version 1.3:
-    refactor selection in term.c
-        move all state to single structure
-        separate hightlight regions state
-        clean up scrollback offset calculation code
-    Use half-open regions everywhere in code
-        nss_region_t instead of nss_rect_t
-			is an array of 2 points
-		nss_point_t
     Selections
-        render.c
-            Selection colors
-    After resizing window (only jump resize) new lines are not damaged
+        Selection colors
     Convert from input locale to unicode while reading?
-    Factor out more common rendering code
-        colors calculation
-        font searching
     Recursive input buffer refilling
-    Set WM_NORMAL_HINTS
     Set pseudoterminal attributes
     Support new color syntax
     Window operations
