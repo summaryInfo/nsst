@@ -189,8 +189,10 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
 
     nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
 
-    if (need_free) nss_window_handle_resize(win, win->width, win->height);
-    else {
+    if (need_free) {
+        nss_window_handle_resize(win, win->width, win->height);
+        nss_window_set_default_props(win);
+    } else {
         win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
         win->ch = MAX(1, (win->height - 2*win->top_border) / (win->char_height + win->char_depth));
 
@@ -538,6 +540,7 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
 
     if (need_free) {
         nss_window_handle_resize(win, win->width, win->height);
+        nss_window_set_default_props(win);
     } else {
         win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
         win->ch = MAX(1, (win->height - 2*win->top_border) / (win->char_height + win->char_depth));

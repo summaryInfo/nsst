@@ -84,6 +84,8 @@ struct nss_context {
     xcb_atom_t atom_net_wm_icon_name;
     xcb_atom_t atom_wm_delete_window;
     xcb_atom_t atom_wm_protocols;
+    xcb_atom_t atom_wm_normal_hints;
+    xcb_atom_t atom_wm_size_hints;
     xcb_atom_t atom_utf8_string;
     xcb_atom_t atom_clipboard;
     xcb_atom_t atom_incr;
@@ -321,6 +323,8 @@ void nss_init_context(void) {
     ctx.atom_net_wm_pid = intern_atom("_NET_WM_PID");
     ctx.atom_wm_delete_window = intern_atom("WM_DELETE_WINDOW");
     ctx.atom_wm_protocols = intern_atom("WM_PROTOCOLS");
+    ctx.atom_wm_normal_hints = intern_atom("WM_NORMAL_HINTS");
+    ctx.atom_wm_size_hints = intern_atom("WM_SIZE_HINTS");
     ctx.atom_utf8_string = intern_atom("UTF8_STRING");
     ctx.atom_net_wm_name = intern_atom("_NET_WM_NAME");
     ctx.atom_net_wm_icon_name = intern_atom("_NET_WM_ICON_NAME");
@@ -419,7 +423,18 @@ void nss_window_set_icon_name(nss_window_t *win, const char *title, _Bool utf8) 
             utf8 ? ctx.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
-static void set_wm_props(nss_window_t *win) {
+uint32_t get_win_gravity_from_config() {
+    _Bool nx = nss_config_integer(NSS_ICONFIG_WINDOW_NEGATIVE_X);
+    _Bool ny = nss_config_integer(NSS_ICONFIG_WINDOW_NEGATIVE_Y);
+    switch (nx + 2 * ny) {
+    case 0: return XCB_GRAVITY_NORTH_WEST;
+    case 1: return XCB_GRAVITY_NORTH_EAST;
+    case 2: return XCB_GRAVITY_SOUTH_WEST;
+    default: return XCB_GRAVITY_NORTH_EAST;
+    }
+};
+
+void nss_window_set_default_props(nss_window_t *win) {
     uint32_t pid = getpid();
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom_net_wm_pid, XCB_ATOM_CARDINAL, 32, 1, &pid);
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom_wm_protocols, XCB_ATOM_ATOM, 32, 1, &ctx.atom_wm_delete_window);
@@ -427,6 +442,28 @@ static void set_wm_props(nss_window_t *win) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(class), class);
     if ((extra = nss_config_string(NSS_SCONFIG_TERM_CLASS)))
         xcb_change_property(con, XCB_PROP_MODE_APPEND, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, strlen(extra), extra);
+    uint32_t nhints[] = {
+        64 | 256, //PResizeInc, PBaseSize
+        nss_config_integer(NSS_ICONFIG_WINDOW_X), nss_config_integer(NSS_ICONFIG_WINDOW_Y), // Position
+        win->width, win->height, // Size
+        win->left_border * 2 + win->char_width, win->left_border * 2 + win->char_depth + win->char_height, // Min size
+        0, 0, //Max size
+        win->char_width, win->char_depth + win->char_height, // Size inc
+        0, 0, 0, 0, // Min/max aspect
+        win->left_border * 2 + win->char_width, win->left_border * 2 + win->char_depth + win->char_height, // Base size
+        get_win_gravity_from_config(), // Gravity
+    };
+    if (nss_config_integer(NSS_ICONFIG_HAS_GEOMETRY))
+        nhints[0] |= 1 | 2 | 512; // USPosition, USSize, PWinGravity
+    else
+        nhints[0] |= 4 | 8; // PPosition, PSize
+    if (nss_config_integer(NSS_ICONFIG_FIXED_SIZE)) {
+        nhints[7] = nhints[5] = nhints[3];
+        nhints[8] = nhints[6] = nhints[4];
+        nhints[0] |= 16 | 32; // PMinSize, PMaxSize
+    }
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom_wm_normal_hints,
+            ctx.atom_wm_size_hints, 8*sizeof(*nhints), sizeof(nhints)/sizeof(*nhints), nhints);
 }
 
 /* Create new window */
@@ -493,10 +530,6 @@ nss_window_t *nss_create_window(void) {
         return NULL;
     }
 
-    set_wm_props(win);
-    nss_window_set_title(win, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
-    nss_window_set_icon_name(win, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
-
     if (!nss_renderer_reload_font(win, 0)) {
         warn("Can't create window");
         nss_free_window(win);
@@ -509,6 +542,10 @@ nss_window_t *nss_create_window(void) {
         nss_free_window(win);
         return NULL;
     }
+
+    nss_window_set_default_props(win);
+    nss_window_set_title(win, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
+    nss_window_set_icon_name(win, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
 
     win->next = win_list_head;
     win->prev = NULL;
@@ -1155,6 +1192,8 @@ void nss_context_run(void) {
         if (reload_config) {
             reload_config = 0;
             load_params();
+            for (nss_window_t *win = win_list_head; win; win = win->next)
+                nss_renderer_reload_font(win, 1);
         }
     }
 }

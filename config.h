@@ -34,6 +34,8 @@ enum nss_config_opt {
     NSS_ICONFIG_WINDOW_NEGATIVE_Y,
     NSS_ICONFIG_WINDOW_WIDTH,
     NSS_ICONFIG_WINDOW_HEIGHT,
+    NSS_ICONFIG_FIXED_SIZE,
+    NSS_ICONFIG_HAS_GEOMETRY,
     NSS_ICONFIG_HISTORY_LINES,
     NSS_ICONFIG_UTF8,
     NSS_ICONFIG_VT_VERION,
@@ -134,9 +136,9 @@ typedef struct nss_optmap_item {
 } nss_optmap_item_t;
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 70
-#else
 #    define OPT_MAP_SIZE 71
+#else
+#    define OPT_MAP_SIZE 72
 #endif
 
 extern nss_optmap_item_t optmap[OPT_MAP_SIZE];

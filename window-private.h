@@ -120,6 +120,7 @@ void nss_renderer_update(nss_window_t *win, nss_rect_t rect);
 void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch);
 void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy);
 
+void nss_window_set_default_props(nss_window_t *win);
 void nss_window_handle_resize(nss_window_t *win, int16_t width, int16_t height);
 
 #endif
