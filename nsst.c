@@ -79,6 +79,7 @@ static void parse_geometry(char *arg, char *argv0) {
         nss_config_set_integer(NSS_ICONFIG_WINDOW_WIDTH, w);
         nss_config_set_integer(NSS_ICONFIG_WINDOW_HEIGHT, h);
     }
+    nss_config_set_integer(NSS_ICONFIG_HAS_GEOMETRY, 1);
     nss_config_set_integer(NSS_ICONFIG_WINDOW_X, x);
     nss_config_set_integer(NSS_ICONFIG_WINDOW_Y, y);
     nss_config_set_integer(NSS_ICONFIG_WINDOW_NEGATIVE_X, xsgn == '-');
