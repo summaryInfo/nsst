@@ -475,6 +475,8 @@ nss_window_t *nss_create_window(void) {
     win->top_border = nss_config_integer(NSS_ICONFIG_TOP_BORDER);
     win->bg = nss_config_color(NSS_CCONFIG_BG);
     win->cursor_fg = nss_config_color(NSS_CCONFIG_CURSOR_FG);
+    if (nss_config_integer(NSS_ICONFIG_REVERSE_VIDEO))
+        SWAP(nss_color_t, win->bg, win->cursor_fg);
     win->cursor_type = nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE);
     win->subpixel_fonts = nss_config_integer(NSS_ICONFIG_SUBPIXEL_FONTS);
     win->font_size = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
