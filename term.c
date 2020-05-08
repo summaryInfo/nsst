@@ -91,16 +91,18 @@ typedef struct nss_cursor {
     _Bool origin;
 } nss_cursor_t;
 
-typedef struct nss_visual_selection {
+typedef struct nss_selected {
     nss_coord_t x0;
     ssize_t y0;
     nss_coord_t x1;
     ssize_t y1;
-    nss_coord_t nx0;
-    ssize_t ny0;
-    nss_coord_t nx1;
-    ssize_t ny1;
-    _Bool rectangular;
+    _Bool rect;
+} nss_selected_t;
+
+typedef struct nss_visual_selection {
+    nss_selected_t r;
+    nss_selected_t n;
+
     enum {
         nss_ssnap_none,
         nss_ssnap_word,
@@ -112,6 +114,10 @@ typedef struct nss_visual_selection {
         nss_sstate_released = nss_me_release + 1,
         nss_sstate_progress = nss_me_motion + 1,
     } state;
+
+    struct timespec click0;
+    struct timespec click1;
+    nss_clipboard_target_t targ;
 } nss_visual_selection_t;
 
 
@@ -139,9 +145,6 @@ struct nss_term {
     uint8_t prev_mouse_button;
 
     nss_visual_selection_t vsel;
-    struct timespec vsel_click0;
-    struct timespec vsel_click1;
-    nss_clipboard_target_t vsel_targ;
 
     /* Previous cursor state
      * Used for effective cursor invalidation */
@@ -529,7 +532,7 @@ static void term_reset_view(nss_term_t *term, _Bool damage) {
     term->view = NULL;
     term->scrollback_pos = 0;
     if (term->vsel.state == nss_sstate_progress)
-        term_change_selection(term, nss_sstate_progress, term->vsel.x1, term->vsel.y1 + old_spos, term->vsel.rectangular);
+        term_change_selection(term, nss_sstate_progress, term->vsel.r.x1, term->vsel.r.y1 + old_spos, term->vsel.r.rect);
     if (damage) nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
 }
 
@@ -574,7 +577,7 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
     }
 
     if (term->vsel.state == nss_sstate_progress)
-        term_change_selection(term, nss_sstate_progress, term->vsel.x1, term->vsel.y1 + old_spos, term->vsel.rectangular);
+        term_change_selection(term, nss_sstate_progress, term->vsel.r.x1, term->vsel.r.y1 + old_spos, term->vsel.r.rect);
     term->prev_c_view_changed |= ini_view != !!term->view;
 }
 
@@ -630,16 +633,16 @@ inline static void term_clear_selection_on_erase(nss_term_t *term, nss_coord_t x
 #define RECT_INTRS(x10, x11, y10, y11) \
     ((MAX(xs, x10) <= MIN(xe - 1, x11)) && (MAX(ys, y10) <= MIN(ye - 1, y11)))
 
-    if (term->vsel.rectangular || term->vsel.ny0 == term->vsel.ny1) {
-        if (RECT_INTRS(term->vsel.nx0, term->vsel.nx1, term->vsel.ny0, term->vsel.ny1))
+    if (term->vsel.r.rect || term->vsel.n.y0 == term->vsel.n.y1) {
+        if (RECT_INTRS(term->vsel.n.x0, term->vsel.n.x1, term->vsel.n.y0, term->vsel.n.y1))
             nss_term_clear_selection(term);
     } else {
-        if (RECT_INTRS(term->vsel.nx0, term->width - 1, term->vsel.ny0, term->vsel.ny0))
+        if (RECT_INTRS(term->vsel.n.x0, term->width - 1, term->vsel.n.y0, term->vsel.n.y0))
             nss_term_clear_selection(term);
-        if (term->vsel.ny1 - term->vsel.ny0 > 1)
-            if (RECT_INTRS(0, term->width - 1, term->vsel.ny0 + 1, term->vsel.ny1 - 1))
+        if (term->vsel.n.y1 - term->vsel.n.y0 > 1)
+            if (RECT_INTRS(0, term->width - 1, term->vsel.n.y0 + 1, term->vsel.n.y1 - 1))
                 nss_term_clear_selection(term);
-        if (RECT_INTRS(0, term->vsel.nx1, term->vsel.ny1, term->vsel.ny1))
+        if (RECT_INTRS(0, term->vsel.n.x1, term->vsel.n.y1, term->vsel.n.y1))
             nss_term_clear_selection(term);
     }
 
@@ -1340,7 +1343,7 @@ static void term_dispatch_osc(nss_term_t *term) {
                 if (base64_decode(parg, parg, end) != end) parg = NULL;
                 for (size_t i = 0; i < nss_ct_MAX; i++) {
                     if (ts[i]) {
-                        if (i == term->vsel_targ) term->vsel_targ = -1;
+                        if (i == term->vsel.targ) term->vsel.targ = -1;
                         nss_window_set_clip(term->win, parg, NSS_TIME_NOW, i);
                     }
                 }
@@ -3223,9 +3226,9 @@ void nss_term_visibility(nss_term_t *term, _Bool visible) {
 inline static size_t descomose_selection(nss_rect_t dst[static 3], nss_visual_selection_t *sel, nss_rect_t bound, ssize_t pos) {
     size_t count = 0;
     if (sel->state != nss_sstate_none && sel->state != nss_sstate_pressed) {
-        nss_coord_t x0 = sel->nx0, x1 = sel->nx1 + 1;
-        ssize_t y0 = sel->ny0 + pos, y1 = sel->ny1 + 1 + pos;
-        if (sel->rectangular || y1 - y0 == 1) {
+        nss_coord_t x0 = sel->n.x0, x1 = sel->n.x1 + 1;
+        ssize_t y0 = sel->n.y0 + pos, y1 = sel->n.y1 + 1 + pos;
+        if (sel->n.rect || y1 - y0 == 1) {
             nss_rect_t r0 = {x0, y0, x1 - x0, y1 - y0};
             if (intersect_with(&r0, &bound))
                 dst[count++] = r0;
@@ -3312,11 +3315,11 @@ void nss_term_clear_selection(nss_term_t *term) {
 
     term_update_selection(term, &old);
 
-    if (term->vsel_targ > 0) {
+    if (term->vsel.targ > 0) {
         if (term->mode & nss_tm_keep_selection) return;
 
-        nss_window_set_clip(term->win, NULL, NSS_TIME_NOW, term->vsel_targ);
-        term->vsel_targ = -1;
+        nss_window_set_clip(term->win, NULL, NSS_TIME_NOW, term->vsel.targ);
+        term->vsel.targ = -1;
     }
 }
 
@@ -3324,46 +3327,48 @@ static void term_scroll_selection(nss_term_t *term, nss_coord_t amount) {
     if (term->vsel.state == nss_sstate_none) return;
 
     // Clear sellection if it is going to be split by scroll
-    if ((term->top <= term->vsel.ny0 && term->vsel.ny0 <= term->bottom) ||
-            (term->top <= term->vsel.ny1 && term->vsel.ny1 <= term->bottom))
+    if ((term->top <= term->vsel.n.y0 && term->vsel.n.y0 <= term->bottom) ||
+            (term->top <= term->vsel.n.y1 && term->vsel.n.y1 <= term->bottom))
         nss_term_clear_selection(term);
 
     // Scroll and cut off scroll off lines
 
-    term->vsel.y0 -= amount;
-    term->vsel.y1 -= amount;
+    term->vsel.r.y0 -= amount;
+    term->vsel.r.y0 -= amount;
+    term->vsel.n.y1 -= amount;
+    term->vsel.n.y1 -= amount;
 
-    _Bool swapped = term->vsel.y0 > term->vsel.y1;
+    _Bool swapped = term->vsel.r.y0 > term->vsel.r.y1;
 
     if (swapped) {
-        SWAP(ssize_t, term->vsel.y0, term->vsel.y1);
-        SWAP(ssize_t, term->vsel.x0, term->vsel.x1);
+        SWAP(ssize_t, term->vsel.r.y0, term->vsel.r.y1);
+        SWAP(ssize_t, term->vsel.r.x0, term->vsel.r.x1);
     }
 
-    if (term->vsel.y0 < term->top) {
-        term->vsel.y0 = term->top;
-        term->vsel.ny0 = term->top;
-        if (!term->vsel.rectangular) {
-            term->vsel.x0 = 0;
-            term->vsel.nx0 = 0;
+    if (term->vsel.r.y0 < term->top) {
+        term->vsel.r.y0 = term->top;
+        term->vsel.n.y0 = term->top;
+        if (!term->vsel.r.rect) {
+            term->vsel.r.x0 = 0;
+            term->vsel.n.x0 = 0;
         }
     }
 
-    if (term->vsel.y1 > term->bottom) {
-        term->vsel.y1 = term->bottom;
-        term->vsel.ny1 = term->bottom;
-        if (!term->vsel.rectangular) {
-            term->vsel.x1 = term->screen[term->bottom]->width - 1;
-            term->vsel.nx1 = term->screen[term->bottom]->width - 1;
+    if (term->vsel.r.y1 > term->bottom) {
+        term->vsel.r.y1 = term->bottom;
+        term->vsel.n.y1 = term->bottom;
+        if (!term->vsel.r.rect) {
+            term->vsel.r.x1 = term->screen[term->bottom]->width - 1;
+            term->vsel.n.x1 = term->screen[term->bottom]->width - 1;
         }
     }
 
-    if (term->vsel.y0 > term->vsel.y1)
+    if (term->vsel.r.y0 > term->vsel.r.y1)
         nss_term_clear_selection(term);
 
     if (swapped) {
-        SWAP(ssize_t, term->vsel.y0, term->vsel.y1);
-        SWAP(ssize_t, term->vsel.x0, term->vsel.x1);
+        SWAP(ssize_t, term->vsel.r.y0, term->vsel.r.y1);
+        SWAP(ssize_t, term->vsel.r.x0, term->vsel.r.x1);
     }
  }
 
@@ -3375,18 +3380,19 @@ inline static _Bool is_separator(nss_char_t ch) {
 }
 
 static void selection_normalize(nss_visual_selection_t *sel) {
-    sel->nx0 = sel->x0, sel->ny0 = sel->y0;
-    sel->nx1 = sel->x1, sel->ny1 = sel->y1;
-    if (sel->ny1 <= sel->ny0) {
-        if (sel->ny1 < sel->ny0) {
-            SWAP(nss_coord_t, sel->ny0, sel->ny1);
-            SWAP(nss_coord_t, sel->nx0, sel->nx1);
-        } else if (sel->nx1 < sel->nx0) {
-            SWAP(nss_coord_t, sel->nx0, sel->nx1);
+    sel->n.x0 = sel->r.x0, sel->n.y0 = sel->r.y0;
+    sel->n.x1 = sel->r.x1, sel->n.y1 = sel->r.y1;
+    sel->r.rect = sel->n.rect;
+    if (sel->n.y1 <= sel->n.y0) {
+        if (sel->n.y1 < sel->n.y0) {
+            SWAP(nss_coord_t, sel->n.y0, sel->n.y1);
+            SWAP(nss_coord_t, sel->n.x0, sel->n.x1);
+        } else if (sel->n.x1 < sel->n.x0) {
+            SWAP(nss_coord_t, sel->n.x0, sel->n.x1);
         }
     }
-    if (sel->rectangular && sel->nx1 < sel->nx0)
-            SWAP(nss_coord_t, sel->nx0, sel->nx1);
+    if (sel->n.rect && sel->n.x1 < sel->n.x0)
+            SWAP(nss_coord_t, sel->n.x0, sel->n.x1);
 }
 
 static void term_snap_selection(nss_term_t *term) {
@@ -3396,62 +3402,62 @@ static void term_snap_selection(nss_term_t *term) {
         term->vsel.state = nss_sstate_progress;
 
         nss_line_iter_t it = make_line_iter(term->view, term->screen,
-                term->vsel.ny0, term->scrollback_pos + term->height);
-        term->vsel.nx0 = 0;
-        term->vsel.nx1 = term->width - 1;
+                term->vsel.n.y0, term->scrollback_pos + term->height);
+        term->vsel.n.x0 = 0;
+        term->vsel.n.x1 = term->width - 1;
 
         nss_line_t *line;
-        term->vsel.ny0++;
-        do line = line_iter_prev(&it), term->vsel.ny0--;
+        term->vsel.n.y0++;
+        do line = line_iter_prev(&it), term->vsel.n.y0--;
         while (line && line->wrap_at);
 
         it = make_line_iter(term->view, term->screen,
-                term->vsel.ny1, term->scrollback_pos + term->height);
+                term->vsel.n.y1, term->scrollback_pos + term->height);
         line = line_iter_next(&it);
         if (!line) return;
 
         while (line && line->wrap_at)
-            line = line_iter_prev(&it), term->vsel.ny1++;
+            line = line_iter_prev(&it), term->vsel.n.y1++;
 
     } else if (term->vsel.snap == nss_ssnap_word) {
         term->vsel.state = nss_sstate_progress;
 
         nss_line_iter_t it = make_line_iter(term->view, term->screen,
-                term->scrollback_pos + term->vsel.ny0, term->height + term->scrollback_pos);
+                term->scrollback_pos + term->vsel.n.y0, term->height + term->scrollback_pos);
         nss_line_t *line = line_iter_next(&it); line_iter_prev(&it);
 
         if (!line) return;
 
-        term->vsel.nx0 = MIN(term->vsel.nx0, line->width - 1);
-        _Bool first = 1, cat = is_separator(line->cell[term->vsel.nx0].ch);
-        if (term->vsel.nx0 >= 0) do {
+        term->vsel.n.x0 = MIN(term->vsel.n.x0, line->width - 1);
+        _Bool first = 1, cat = is_separator(line->cell[term->vsel.n.x0].ch);
+        if (term->vsel.n.x0 >= 0) do {
             if (!first) {
-                term->vsel.nx0 = line->wrap_at;
-                term->vsel.ny0--;
+                term->vsel.n.x0 = line->wrap_at;
+                term->vsel.n.y0--;
             } else first = 0;
-            while(term->vsel.nx0 > 0 &&
-                    cat == is_separator(line->cell[term->vsel.nx0 - 1].ch)) term->vsel.nx0--;
+            while(term->vsel.n.x0 > 0 &&
+                    cat == is_separator(line->cell[term->vsel.n.x0 - 1].ch)) term->vsel.n.x0--;
             if (cat != is_separator(line->cell[0].ch)) break;
         } while((line = line_iter_prev(&it)) && line->wrap_at);
 
         it = make_line_iter(term->view, term->screen,
-                term->scrollback_pos + term->vsel.ny1, term->height + term->scrollback_pos);
+                term->scrollback_pos + term->vsel.n.y1, term->height + term->scrollback_pos);
         line = line_iter_next(&it);
 
         if (!line) return;
 
-        term->vsel.nx1 = MAX(term->vsel.nx1, 0);
-        first = 1, cat = is_separator(line->cell[term->vsel.nx1].ch);
+        term->vsel.n.x1 = MAX(term->vsel.n.x1, 0);
+        first = 1, cat = is_separator(line->cell[term->vsel.n.x1].ch);
         ssize_t line_len = line->wrap_at ? line->wrap_at : line->width;
-        if (term->vsel.nx1 < line->width) do {
+        if (term->vsel.n.x1 < line->width) do {
             if (!first) {
                 if (cat != is_separator(line->cell[0].ch)) break;
-                term->vsel.nx1 = 0;
-                term->vsel.ny1++;
+                term->vsel.n.x1 = 0;
+                term->vsel.n.y1++;
                 line_len = line->wrap_at;
             } else first = 0;
-            while(term->vsel.nx1 < line_len - 1 &&
-                    cat == is_separator(line->cell[term->vsel.nx1 + 1].ch)) term->vsel.nx1++;
+            while(term->vsel.n.x1 < line_len - 1 &&
+                    cat == is_separator(line->cell[term->vsel.n.x1 + 1].ch)) term->vsel.n.x1++;
             if (cat != is_separator(line->cell[line_len - 1].ch)) break;
         } while(line->wrap_at && (line = line_iter_next(&it)));
     }
@@ -3462,13 +3468,13 @@ _Bool nss_term_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
 
     y -= term->scrollback_pos;
 
-    if (term->vsel.rectangular) {
-        return (term->vsel.nx0 <= x && x <= term->vsel.nx1) &&
-                (term->vsel.ny0 <= y && y <= term->vsel.ny1);
+    if (term->vsel.n.rect) {
+        return (term->vsel.n.x0 <= x && x <= term->vsel.n.x1) &&
+                (term->vsel.n.y0 <= y && y <= term->vsel.n.y1);
     } else {
-        return (term->vsel.ny0 <= y && y <= term->vsel.ny1) &&
-                !(term->vsel.ny0 == y && x < term->vsel.nx0) &&
-                !(term->vsel.ny1 == y && x > term->vsel.nx1);
+        return (term->vsel.n.y0 <= y && y <= term->vsel.n.y1) &&
+                !(term->vsel.n.y0 == y && x < term->vsel.n.x0) &&
+                !(term->vsel.n.y1 == y && x > term->vsel.n.x1);
     }
 }
 
@@ -3511,16 +3517,16 @@ static uint8_t *term_selection_data(nss_term_t *term) {
         nss_line_t *line;
         _Bool inview = !term->view && term->scrollback;
         nss_line_iter_t it = make_line_iter(inview ? term->scrollback : term->view, term->screen,
-                term->vsel.ny0 + term->scrollback_pos + inview, term->scrollback_pos + term->vsel.ny1 + inview + 1);
-        if (term->vsel.rectangular || term->vsel.ny0 == term->vsel.ny1) {
+                term->vsel.n.y0 + term->scrollback_pos + inview, term->scrollback_pos + term->vsel.n.y1 + inview + 1);
+        if (term->vsel.n.rect || term->vsel.n.y0 == term->vsel.n.y1) {
             while ((line = line_iter_next(&it)))
-                append_line(&pos, &cap, &res, line, term->vsel.nx0, term->vsel.nx1 + 1);
+                append_line(&pos, &cap, &res, line, term->vsel.n.x0, term->vsel.n.x1 + 1);
         } else {
             while ((line = line_iter_next(&it))) {
-                if (line_iter_y(&it) == term->vsel.ny0 + term->scrollback_pos + inview)
-                    append_line(&pos, &cap, &res, line, term->vsel.nx0, line->width);
-                else if(line_iter_y(&it) == term->vsel.ny1 + term->scrollback_pos + inview && term->vsel.ny1 != term->vsel.ny0)
-                    append_line(&pos, &cap, &res, line, 0, term->vsel.nx1 + 1);
+                if (line_iter_y(&it) == term->vsel.n.y0 + term->scrollback_pos + inview)
+                    append_line(&pos, &cap, &res, line, term->vsel.n.x0, line->width);
+                else if(line_iter_y(&it) == term->vsel.n.y1 + term->scrollback_pos + inview && term->vsel.n.y1 != term->vsel.n.y0)
+                    append_line(&pos, &cap, &res, line, 0, term->vsel.n.x1 + 1);
                 else
                     append_line(&pos, &cap, &res, line, 0, line->width);
             }
@@ -3534,27 +3540,27 @@ static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x
     nss_visual_selection_t old = term->vsel;
 
     if (state == nss_sstate_pressed) {
-        term->vsel.x0 = x;
-        term->vsel.y0 = y - term->scrollback_pos;
+        term->vsel.r.x0 = x;
+        term->vsel.r.y0 = y - term->scrollback_pos;
 
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
 
-        if (TIMEDIFF(term->vsel_click1, now) < nss_config_integer(NSS_ICONFIG_TRIPLE_CLICK_TIME)*(SEC/1000))
+        if (TIMEDIFF(term->vsel.click1, now) < nss_config_integer(NSS_ICONFIG_TRIPLE_CLICK_TIME)*(SEC/1000))
             term->vsel.snap = nss_ssnap_line;
-        else if (TIMEDIFF(term->vsel_click0, now) < nss_config_integer(NSS_ICONFIG_DOUBLE_CLICK_TIME)*(SEC/1000))
+        else if (TIMEDIFF(term->vsel.click0, now) < nss_config_integer(NSS_ICONFIG_DOUBLE_CLICK_TIME)*(SEC/1000))
             term->vsel.snap = nss_ssnap_word;
         else
             term->vsel.snap = nss_ssnap_none;
 
-        term->vsel_click1 = term->vsel_click0;
-        term->vsel_click0 = now;
+        term->vsel.click1 = term->vsel.click0;
+        term->vsel.click0 = now;
     }
 
     term->vsel.state = state;
-    term->vsel.rectangular = rectangular;
-    term->vsel.x1 = x;
-    term->vsel.y1 = y - term->scrollback_pos;
+    term->vsel.r.rect = rectangular;
+    term->vsel.r.x1 = x;
+    term->vsel.r.y1 = y - term->scrollback_pos;
 
     term_snap_selection(term);
     term_update_selection(term, &old);
@@ -3621,8 +3627,8 @@ _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_s
         term_change_selection(term, event + 1, x, y, mask & nss_mm_mod1);
 
         if (event == nss_me_release) {
-            term->vsel_targ = term->mode & nss_tm_select_to_clipboard ? nss_ct_clipboard : nss_ct_primary;
-            nss_window_set_clip(term->win, term_selection_data(term), NSS_TIME_NOW, term->vsel_targ);
+            term->vsel.targ = term->mode & nss_tm_select_to_clipboard ? nss_ct_clipboard : nss_ct_primary;
+            nss_window_set_clip(term->win, term_selection_data(term), NSS_TIME_NOW, term->vsel.targ);
         }
 
         return 1;
