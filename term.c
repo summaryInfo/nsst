@@ -3223,26 +3223,24 @@ void nss_term_visibility(nss_term_t *term, _Bool visible) {
     nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
 }
 
-inline static size_t descomose_selection(nss_rect_t dst[static 3], nss_visual_selection_t *sel, nss_rect_t bound, ssize_t pos) {
+inline static size_t descomose_selection(nss_rect_t dst[static 3], nss_selected_t seld, nss_rect_t bound, ssize_t pos) {
     size_t count = 0;
-    if (sel->state != nss_sstate_none && sel->state != nss_sstate_pressed) {
-        nss_coord_t x0 = sel->n.x0, x1 = sel->n.x1 + 1;
-        ssize_t y0 = sel->n.y0 + pos, y1 = sel->n.y1 + 1 + pos;
-        if (sel->n.rect || y1 - y0 == 1) {
-            nss_rect_t r0 = {x0, y0, x1 - x0, y1 - y0};
-            if (intersect_with(&r0, &bound))
-                dst[count++] = r0;
-        } else {
-            nss_rect_t r0 = {x0, y0, bound.width - x0, 1};
-            nss_rect_t r1 = {0, y0 + 1, bound.width, y1 - y0 - 1};
-            nss_rect_t r2 = {0, y1 - 1, x1, 1};
-            if (intersect_with(&r0, &bound))
-                dst[count++] = r0;
-            if (y1 - y0 > 2 && intersect_with(&r1, &bound))
-                dst[count++] = r1;
-            if (intersect_with(&r2, &bound))
-                dst[count++] = r2;
-        }
+    nss_coord_t x0 = seld.x0, x1 = seld.x1 + 1;
+    ssize_t y0 = seld.y0 + pos, y1 = seld.y1 + 1 + pos;
+    if (seld.rect || y1 - y0 == 1) {
+        nss_rect_t r0 = {x0, y0, x1 - x0, y1 - y0};
+        if (intersect_with(&r0, &bound))
+            dst[count++] = r0;
+    } else {
+        nss_rect_t r0 = {x0, y0, bound.width - x0, 1};
+        nss_rect_t r1 = {0, y0 + 1, bound.width, y1 - y0 - 1};
+        nss_rect_t r2 = {0, y1 - 1, x1, 1};
+        if (intersect_with(&r0, &bound))
+            dst[count++] = r0;
+        if (y1 - y0 > 2 && intersect_with(&r1, &bound))
+            dst[count++] = r1;
+        if (intersect_with(&r2, &bound))
+            dst[count++] = r2;
     }
     return count;
 }
@@ -3261,15 +3259,17 @@ inline static size_t xor_bands(nss_rect_t dst[static 2], nss_coord_t x00, nss_co
     return count;
 }
 
-static void term_update_selection(nss_term_t *term, nss_visual_selection_t *old) {
+static void term_update_selection(nss_term_t *term, uint8_t oldstate, nss_selected_t old) {
     // There could be at most 6 difference rectangles
 
     nss_rect_t d_old[4] = {{0}}, d_new[4] = {{0}}, d_diff[16] = {{0}};
     size_t sz_old = 0, sz_new = 0, count = 0;
     nss_rect_t *res = d_diff, bound = {0, 0, term->width, term->height};
 
-    sz_old = descomose_selection(d_old, old, bound, term->scrollback_pos);
-    sz_new = descomose_selection(d_new, &term->vsel, bound, term->scrollback_pos);
+	if (oldstate != nss_sstate_none && oldstate != nss_sstate_pressed)
+        sz_old = descomose_selection(d_old, old, bound, term->scrollback_pos);
+	if (term->vsel.state != nss_sstate_none && term->vsel.state != nss_sstate_pressed)
+        sz_new = descomose_selection(d_new, term->vsel.n, bound, term->scrollback_pos);
 
     if (!sz_old) res = d_new, count = sz_new;
     else if (!sz_new) res = d_old, count = sz_old;
@@ -3309,11 +3309,12 @@ static void term_update_selection(nss_term_t *term, nss_visual_selection_t *old)
 }
 
 void nss_term_clear_selection(nss_term_t *term) {
-    nss_visual_selection_t old = term->vsel;
+    nss_selected_t old = term->vsel.n;
+    uint8_t oldstate = term->vsel.state;
 
     term->vsel.state = nss_sstate_none;
 
-    term_update_selection(term, &old);
+    term_update_selection(term, oldstate, old);
 
     if (term->vsel.targ > 0) {
         if (term->mode & nss_tm_keep_selection) return;
@@ -3537,7 +3538,8 @@ static uint8_t *term_selection_data(nss_term_t *term) {
 }
 
 static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss_color_t y, _Bool rectangular) {
-    nss_visual_selection_t old = term->vsel;
+    nss_selected_t old = term->vsel.n;
+    uint8_t oldstate = term->vsel.state;
 
     if (state == nss_sstate_pressed) {
         term->vsel.r.x0 = x;
@@ -3563,7 +3565,7 @@ static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x
     term->vsel.r.y1 = y - term->scrollback_pos;
 
     term_snap_selection(term);
-    term_update_selection(term, &old);
+    term_update_selection(term, oldstate, old);
 }
 
 _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
