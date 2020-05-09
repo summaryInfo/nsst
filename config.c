@@ -158,14 +158,14 @@ static struct {
     const char *dflt;
     char *val;
 } soptions[] = {
-        [NSS_SCONFIG_FONT_NAME - NSS_SCONFIG_MIN] = { "mono", NULL },
-        [NSS_SCONFIG_ANSWERBACK_STRING - NSS_SCONFIG_MIN] = { "", NULL },
-        [NSS_SCONFIG_SHELL - NSS_SCONFIG_MIN] = { "/bin/sh", NULL },
-        [NSS_SCONFIG_TERM_NAME - NSS_SCONFIG_MIN] = { "xterm", NULL },
-        [NSS_SCONFIG_TITLE - NSS_SCONFIG_MIN] = { "Not So Simple Terminal", NULL },
-        [NSS_SCONFIG_PRINTER - NSS_SCONFIG_MIN] = { NULL, NULL },
-        [NSS_SCONFIG_TERM_CLASS - NSS_SCONFIG_MIN] = { NULL, NULL },
-        [NSS_SCONFIG_WORD_SEPARATORS - NSS_SCONFIG_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`", NULL },
+    [NSS_SCONFIG_FONT_NAME - NSS_SCONFIG_MIN] = { "mono", NULL },
+    [NSS_SCONFIG_ANSWERBACK_STRING - NSS_SCONFIG_MIN] = { "", NULL },
+    [NSS_SCONFIG_SHELL - NSS_SCONFIG_MIN] = { "/bin/sh", NULL },
+    [NSS_SCONFIG_TERM_NAME - NSS_SCONFIG_MIN] = { "xterm", NULL },
+    [NSS_SCONFIG_TITLE - NSS_SCONFIG_MIN] = { "Not So Simple Terminal", NULL },
+    [NSS_SCONFIG_PRINTER - NSS_SCONFIG_MIN] = { NULL, NULL },
+    [NSS_SCONFIG_TERM_CLASS - NSS_SCONFIG_MIN] = { NULL, NULL },
+    [NSS_SCONFIG_WORD_SEPARATORS - NSS_SCONFIG_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`", NULL },
 };
 
 static nss_input_mode_t input_mode = {
