@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #define CN_BASE 16
 #define CN_EXT (6*6*6)
@@ -23,25 +24,26 @@
 
 nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"allow-alternate", "\t(Enable alternate screen)", "allowAlternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
-    {"allow-charsets", "\t(Enable charsets support)", "allowCharsets", NSS_ICONFIG_ALLOW_CHARSETS},
-    {"allow-nrcs", "\t\t(Enable NRCSs support)", "allowNrcs", NSS_ICONFIG_ALLOW_NRCS},
-    {"allow-window-ops", "\t(Allow window manipulation with escape sequences)", "allowWindowOps", NSS_ICONFIG_ALLOW_WINDOW_OPS},
+    {"allow-modify-edit-keypad", " (Allow modifing edit keypad keys)", "modkeyAllowEditKeypad", NSS_ICONFIG_INPUT_MALLOW_EDIT},
+    {"allow-modify-function", "\t(Allow modifing function keys)", "modkeyAllowFunction", NSS_ICONFIG_INPUT_MALLOW_FUNCTION},
+    {"allow-modify-keypad", "\t(Allow modifing keypad keys)", "modkeyAllowKeypad", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
+    {"allow-modify-misc", "\t(Allow modifing miscelleneous keys)", "modkeyAllowMisc", NSS_ICONFIG_INPUT_MALLOW_MISC},
     {"alpha", "\t\t\t(Backround opacity, requires compositor to be running)", "alpha", NSS_ICONFIG_ALPHA},
     {"alternate-scroll", "\t(Scrolling sends arrow keys escapes in alternate screen)", "alternateScroll", NSS_ICONFIG_ALTERNATE_SCROLL},
     {"answerback-string", "\t(ENQ report)", "answerbackString", NSS_SCONFIG_ANSWERBACK_STRING},
     {"appcursor", "\t\t(Initial application cursor mode value)", "appcursor", NSS_ICONFIG_INPUT_APPCURSOR},
     {"appkey", "\t\t(Initial application keypad mode value)", "appkey", NSS_ICONFIG_INPUT_APPKEY},
+    {"autowrap", "\t(Initial autowrap setting)", "enableAutowrap", NSS_ICONFIG_INIT_WRAP},
     {"background", "\t\t(Default backround color)", "background", NSS_CCONFIG_BG},
-    {"backspace-is-delete", "\t(Backspace sends DEL instead of BS)", "backspaceIsDelete", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
+    {"backspace-is-del", "\t(Backspace sends DEL instead of BS)", "backspaceIsDelete", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
     {"blink-time", "\t\t(Text blink interval in microseconds)","blinkTime", NSS_ICONFIG_BLINK_TIME},
+    {"charsets", "\t(Enable charsets support)", "allowCharsets", NSS_ICONFIG_ALLOW_CHARSETS},
     {"cursor-background", "\t(Default cursor backround color)", "cursorBackground", NSS_CCONFIG_CURSOR_BG},
     {"cursor-foreground", "\t(Default cursor foreround color)", "cursorForeground", NSS_CCONFIG_CURSOR_FG},
     {"cursor-shape", "\t\t(Shape of cursor)", "cursorShape", NSS_ICONFIG_CURSOR_SHAPE},
     {"cursor-width", "\t\t(Width of lines that forms cursor)", "cursorWidth", NSS_ICONFIG_CURSOR_WIDTH},
     {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", "deleteIsDelete", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
     {"double-click-time", "\t(Time gap in milliseconds in witch two mouse presses will be considered double)", "doubleClickTime", NSS_ICONFIG_DOUBLE_CLICK_TIME},
-    {"enable-autowrap", "\t(Initial autowrap setting)", "enableAutowrap", NSS_ICONFIG_INIT_WRAP},
-    {"enable-reverse-video", "\t(Initial reverse video setting)", "enableReverseVideo", NSS_ICONFIG_REVERSE_VIDEO},
     {"fixed", "\t\t\t(Don't allow to change window size, if supported)", "fixed", NSS_ICONFIG_FIXED_SIZE},
     {"fkey-increment", "\t(Step in numbering function keys)", "fkeyIncrement", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
     {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)", "font", NSS_SCONFIG_FONT_NAME},
@@ -68,16 +70,14 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"modify-keypad", "\t\t(Enable encoding modifiers keypad keys)", "modifyKeypad", NSS_ICONFIG_INPUT_MODIFY_KEYPAD},
     {"modify-other", "\t\t(Enable encoding modifiers for other keys)", "modifyOther", NSS_ICONFIG_INPUT_MODIFY_OTHER},
     {"modify-other-fmt", "\t(Format of encoding modifers)", "modifyOtherFmt", NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT},
-    {"modkey-allow-edit-keypad", " (Allow modifing edit keypad keys)", "modkeyAllowEditKeypad", NSS_ICONFIG_INPUT_MALLOW_EDIT},
-    {"modkey-allow-function", "\t(Allow modifing function keys)", "modkeyAllowFunction", NSS_ICONFIG_INPUT_MALLOW_FUNCTION},
-    {"modkey-allow-keypad", "\t(Allow modifing keypad keys)", "modkeyAllowKeypad", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
-    {"modkey-allow-misc", "\t(Allow modifing miscelleneous keys)", "modkeyAllowMisc", NSS_ICONFIG_INPUT_MALLOW_MISC},
+    {"nrcs", "\t\t(Enable NRCSs support)", "allowNrcs", NSS_ICONFIG_ALLOW_NRCS},
     {"numlock", "\t\t(Initial numlock state)", "numlock", NSS_ICONFIG_INPUT_NUMLOCK},
 #if USE_BOXDRAWING
     {"override-boxdrawing", "\t(Use built-in box drawing characters)", "overrideBoxdrawing", NSS_ICONFIG_OVERRIDE_BOXDRAW},
 #endif
     {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", "printer", NSS_SCONFIG_PRINTER},
     {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", NSS_ICONFIG_RESIZE_DELAY},
+    {"reverse-video", "\t(Initial reverse video setting)", "enableReverseVideo", NSS_ICONFIG_REVERSE_VIDEO},
     {"scroll-amount", "\t\t(Number of lines scrolled in a time)", "scrollAmout", NSS_ICONFIG_SCROLL_AMOUNT},
     {"scroll-delay", "\t\t(Additional delay after scroll in microseconds)", "scrollDelay", NSS_ICONFIG_SCROLL_DELAY},
     {"scroll-on-input", "\t(Scroll view to bottom on key press)", "scrollOnInput", NSS_ICONFIG_SCROLL_ON_INPUT},
@@ -94,6 +94,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"vertical-border", "\t(Left and right borders)", "verticalBorder", NSS_ICONFIG_LEFT_BORDER},
     {"vt-version", ", -V<value>\t(Emulated VT version)", "vtVersion", NSS_ICONFIG_VT_VERION},
     {"window-class", ", -c<value> (X11 Window class)", "windowClass", NSS_SCONFIG_TERM_CLASS},
+    {"window-ops", "\t(Allow window manipulation with escape sequences)", "allowWindowOps", NSS_ICONFIG_ALLOW_WINDOW_OPS},
     {"word-break", "\t(Symbols treated as word separators when snapping mouse selection)", "wordBreak", NSS_SCONFIG_WORD_SEPARATORS},
 };
 
@@ -306,11 +307,16 @@ void nss_config_set_string(uint32_t opt, const char *val) {
             free(soptions[opt].val);
         soptions[opt].val = strdup(val);
     } else if (opt < NSS_ICONFIG_MAX) {
-        int32_t ival = 0;
+        int32_t ival = -1;
         if (sscanf(val, "%"SCNd32, &ival) == 1)
             nss_config_set_integer(opt, ival);
-        else
-            warn("Unknown string option %d", opt);
+        // Boolean option
+        else if (ioptions[opt].min == 0 && ioptions[opt].max == 1) {
+            if (strcasecmp(val, "yes") || strcasecmp(val, "y") || strcasecmp(val, "true")) ival = 1;
+            else if (strcasecmp(val, "no") || strcasecmp(val, "n") || strcasecmp(val, "false")) ival = 0;
+            if (ival >= 0) nss_config_set_integer(opt, ival);
+            else warn("Unknown string option %d", opt);
+        } else warn("Unknown string option %d", opt);
     } else if (NSS_CCONFIG_MIN <= opt && opt < NSS_CCONFIG_MAX) {
             nss_color_t col = parse_color((uint8_t*)val, (uint8_t*)val + strlen(val));
             if (col) {
@@ -323,6 +329,31 @@ void nss_config_set_string(uint32_t opt, const char *val) {
     }
 }
 
+_Bool nss_config_bool(uint32_t opt, _Bool val) {
+    if (opt < NSS_ICONFIG_INPUT_MIN && ioptions[opt].min == 0 && ioptions[opt].max == 1) {
+        ioptions[opt].val = val;
+        return 1;
+    } else if (opt < NSS_ICONFIG_MAX) {
+        switch(opt) {
+        case NSS_ICONFIG_INPUT_APPCURSOR: input_mode.appcursor = val; break;
+        case NSS_ICONFIG_INPUT_APPKEY: input_mode.appkey = val; break;
+        case NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE: input_mode.backspace_is_del = val; break;
+        case NSS_ICONFIG_INPUT_DELETE_IS_DELETE: input_mode.delete_is_del = val; break;
+        case NSS_ICONFIG_INPUT_HAS_META: input_mode.has_meta = val; break;
+        case NSS_ICONFIG_INPUT_LOCK: input_mode.keylock = val; break;
+        case NSS_ICONFIG_INPUT_META_IS_ESC: input_mode.meta_escape = val; break;
+        case NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT: input_mode.modkey_other_fmt = val; break;
+        case NSS_ICONFIG_INPUT_MALLOW_EDIT: input_mode.modkey_legacy_allow_edit_keypad = val; break;
+        case NSS_ICONFIG_INPUT_MALLOW_FUNCTION: input_mode.modkey_legacy_allow_function = val; break;
+        case NSS_ICONFIG_INPUT_MALLOW_KEYPAD: input_mode.modkey_legacy_allow_keypad = val; break;
+        case NSS_ICONFIG_INPUT_MALLOW_MISC: input_mode.modkey_legacy_allow_misc = val; break;
+        case NSS_ICONFIG_INPUT_NUMLOCK: input_mode.allow_numlock = val; break;
+        default: return 0;
+        }
+        return 1;
+    }
+    return 0;
+}
 
 void nss_config_set_color(uint32_t opt, nss_color_t val) {
     if (!color_init) {

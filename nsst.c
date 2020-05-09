@@ -89,41 +89,53 @@ static void parse_geometry(char *arg, char *argv0) {
 static char **parse_options(char **argv) {
     size_t ind = 1;
 
-    char *arg;
+    char *arg, *opt;
     while (argv[ind] && argv[ind][0] == '-') {
-        size_t cind = 0;
+        size_t cind = 0, n;
         if (!argv[ind][1]) usage(argv[0], EXIT_FAILURE);
         if (argv[ind][1] == '-') {
             if (!argv[ind][2]) {
                 ind++;
                 break;
             }
+
             //Long options
 
+            opt = argv[ind] + 2;
+
             if ((arg = strchr(argv[ind], '='))) {
-                if (arg[1]) *arg++ = '\0';
-                else arg = argv[++ind];
+                *arg++ = '\0';
+                if (!*arg) arg = argv[++ind];
+
+                nss_optmap_item_t *res = bsearch(&(nss_optmap_item_t){opt, NULL, NULL, 0},
+                        optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
+                if (res && arg)
+                    nss_config_set_string(res->opt, arg);
+                else if (arg && !strcmp(opt, "geometry"))
+                    parse_geometry(arg, argv[0]);
+                else if (arg && !strncmp(opt, "color", 5) &&
+                        sscanf(opt, "color%zu", &n) == 1)
+                    nss_config_set_string(NSS_CCONFIG_COLOR_0 + n, arg);
+                else  usage(argv[0], EXIT_FAILURE);
+            } else {
+                if (!strcmp(opt, "help"))
+                    usage(argv[0], EXIT_SUCCESS);
+                else if (!strcmp(opt, "version"))
+                    version();
+                else if (!strcmp(opt, "no-config-file")) /* NOTHING */;
+                else {
+                    _Bool val = 1;
+                    if (!strncmp(opt, "no-", 3)) opt += 3, val = 0;
+                    else if (!strncmp(opt, "enable-", 7)) opt += 7, val = 1;
+                    else if (!strncmp(opt, "disable-", 8)) opt += 8, val = 0;
+                    else if (!strncmp(opt, "with-", 5)) opt += 5, val = 1;
+                    else if (!strncmp(opt, "without-", 8)) opt += 8, val = 0;
+                    nss_optmap_item_t *res = bsearch(&(nss_optmap_item_t){opt, NULL, NULL, 0},
+                            optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
+                    if (!res || !nss_config_bool(res->opt, val))
+                        usage(argv[0], EXIT_FAILURE);
+                }
             }
-
-            if (!argv[ind]) break;
-
-            unsigned n;
-
-            nss_optmap_item_t *res = bsearch(&(nss_optmap_item_t){argv[ind] + 2, NULL, NULL, 0},
-                    optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
-            if (res && arg)
-                nss_config_set_string(res->opt, arg);
-            else if (arg && !strcmp(argv[ind] + 2, "geometry"))
-                parse_geometry(arg, argv[0]);
-            else if (arg && !strncmp(argv[ind] + 2, "color", 5) &&
-                    sscanf(argv[ind] + 2, "color%u", &n) == 1)
-                nss_config_set_string(NSS_CCONFIG_COLOR_0 + n, arg);
-            else if (!strcmp(argv[ind] + 2, "help"))
-                usage(argv[0], EXIT_SUCCESS);
-            else if (!strcmp(argv[ind] + 2, "version"))
-                version();
-            else if (strcmp(argv[ind] + 2, "no-config-file"))
-                usage(argv[0], EXIT_FAILURE);
         } else while (argv[ind] && argv[ind][++cind]) {
             char letter = argv[ind][cind];
             // One letter options
