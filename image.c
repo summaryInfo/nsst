@@ -26,12 +26,13 @@ void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t
     nss_rect_t rect = { dx - glyph->x, dy - glyph->y, glyph->width, glyph->height };
     if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height}) &&
             intersect_with(&rect, &clip)) {
+        int16_t i0 = rect.x - dx + glyph->x, j0 = rect.y - dy + glyph->y;
         if (!lcd) {
 #pragma GCC ivdep
             for (size_t j = 0; j < (size_t)rect.height; j++) {
 #pragma GCC ivdep
                 for (size_t i = 0; i < (size_t)rect.width; i++) {
-                    uint8_t alpha = glyph->data[j * glyph->stride + i];
+                    uint8_t alpha = glyph->data[(j0 + j) * glyph->stride + i0 + i];
                     nss_color_t *bg = &im.data[(rect.y + j) * im.width + (rect.x + i)];
                     *bg =
                         (((*bg >>  0) & 0xFF) * (255 - alpha) + ((fg >>  0) & 0xFF) * alpha) / 255 << 0 |
@@ -45,7 +46,7 @@ void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t
             for (size_t j = 0; j < (size_t)rect.height; j++) {
 #pragma GCC ivdep
                 for (size_t i = 0; i < (size_t)rect.width; i++) {
-                    uint8_t *alpha = &glyph->data[j * glyph->stride + 4 * i];
+                    uint8_t *alpha = &glyph->data[(j0 + j) * glyph->stride + 4 * (i0 + i)];
                     nss_color_t *bg = &im.data[(rect.y + j) * im.width + (rect.x + i)];
                     *bg =
                         (((*bg >>  0) & 0xFF) * (255 - alpha[0]) + ((fg >>  0) & 0xFF) * alpha[0]) / 255 << 0 |
