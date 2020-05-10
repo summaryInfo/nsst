@@ -22,7 +22,7 @@ Until version 1.3:
             and express other window operations in terms of CSI t
     Recursive input buffer refilling
 Until 2.0:
-	Implement Xterm special colors
+    Implement Xterm special colors
     Support new color syntax
     Implement proper daemon mode
     Make X resources names more or less correspond to Xterm/rxvt-unicode
