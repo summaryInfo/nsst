@@ -3,13 +3,9 @@
 #include "feature.h"
 
 #include "util.h"
-#if USE_X11SHM
-#    include "image.h"
-#endif
+#include "image.h"
 
 #include <stdint.h>
-
-#if USE_X11SHM
 
 void nss_image_draw_rect(nss_image_t im, nss_rect_t rect, nss_color_t fg) {
     if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height})) {
@@ -84,5 +80,3 @@ void nss_image_copy(nss_image_t im, nss_rect_t rect, nss_image_t src, int16_t sx
         }
     }
 }
-
-#endif

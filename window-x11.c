@@ -13,8 +13,7 @@
 #include "input.h"
 #include "term.h"
 #include "util.h"
-#include "window-private.h"
-#include "window.h"
+#include "window-x11.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -433,6 +432,72 @@ uint32_t get_win_gravity_from_config() {
     default: return XCB_GRAVITY_NORTH_EAST;
     }
 };
+
+struct nss_cellspec nss_describe_cell(nss_cell_t cell, nss_color_t *palette, nss_color_t *extra, _Bool blink, _Bool selected) {
+    struct nss_cellspec res;
+
+    // Calculate colors
+
+    if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && cell.fg < 8) cell.fg += 8;
+    res.bg = cell.bg < NSS_PALETTE_SIZE ? palette[cell.bg] : extra[cell.bg - NSS_PALETTE_SIZE];
+    res.fg = cell.fg < NSS_PALETTE_SIZE ? palette[cell.fg] : extra[cell.fg - NSS_PALETTE_SIZE];
+    if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint)
+        res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
+    if ((cell.attr & nss_attrib_inverse) ^ selected) SWAP(nss_color_t, res.fg, res.bg);
+    if ((!selected && cell.attr & nss_attrib_invisible) || (cell.attr & nss_attrib_blink && blink)) res.fg = res.bg;
+
+    // Optimize rendering of U+2588 FULL BLOCK
+
+    if (cell.ch == 0x2588) res.bg = res.fg;
+    if (cell.ch == ' ' || res.fg == res.bg) cell.ch = 0;
+
+    // Calculate attributes
+
+    res.ch = cell.ch;
+    res.face = cell.ch ? (cell.attr & nss_font_attrib_mask) : 0;
+    res.wide = !!(cell.attr & nss_attrib_wide);
+    res.underlined = !!(cell.attr & nss_attrib_underlined) && (res.fg != res.bg);
+    res.stroke = !!(cell.attr & nss_attrib_strikethrough) && (res.fg != res.bg);
+
+    return res;
+}
+
+nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free) {
+    _Bool found_font = 0, found_cache = 0;
+    nss_window_t *found = 0;
+    for (nss_window_t *src = win_list_head; src; src = src->next) {
+        if ((src->font_size == win->font_size || win->font_size == 0) &&
+           !strcmp(win->font_name, src->font_name) && src != win) {
+            found_font = 1;
+            found = src;
+            if (src->subpixel_fonts == win->subpixel_fonts) {
+                found_cache = 1;
+                break;
+            }
+        }
+    }
+
+    nss_font_t *newf = found_font ? nss_font_reference(found->font) :
+            nss_create_font(win->font_name, win->font_size, nss_config_integer(NSS_ICONFIG_DPI));
+    if (!newf) {
+        warn("Can't create new font: %s", win->font_name);
+        return NULL;
+    }
+
+    nss_glyph_cache_t *newc = found_cache ? nss_cache_reference(found->font_cache) :
+            nss_create_cache(newf, win->subpixel_fonts);
+
+    if (need_free) {
+        nss_free_cache(win->font_cache);
+        nss_free_font(win->font);
+    }
+
+    win->font = newf;
+    win->font_cache = newc;
+    win->font_size = nss_font_get_size(newf);
+
+    return found;
+}
 
 void nss_window_set_default_props(nss_window_t *win) {
     uint32_t pid = getpid();

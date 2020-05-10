@@ -7,7 +7,7 @@ MANDIR ?= @MANDIR@
 
 CFLAGS += -std=c11 -Wall -Wextra -Wno-implicit-fallthrough
 
-OBJ := window.o nsst.o util.o font.o term.o config.o input.o nrcs.o boxdraw.o image.o render.o
+OBJ := @OBJECTS@
 
 LIBS != pkg-config @DEPS@ --libs
 INCLUES != pkg-config @DEPS@ --cflags
@@ -38,8 +38,9 @@ $(NAME): $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
 
 font.o: util.h config.h window.h boxdraw.h feature.h
-window.o: util.h config.h term.h window.h window-private.h input.h feature.h
-render.o: util.h config.h term.h window.h window-private.h image.h feature.h
+x11win.o: util.h config.h term.h window.h x11win.h input.h feature.h
+x11shm.o: util.h config.h term.h window.h x11win.h image.h feature.h
+x11xrender.o: util.h config.h term.h window.h x11win.h feature.h
 input.o: util.h config.h term.h input.h nrcs.h feature.h
 term.o: util.h config.h term.h input.h window.h nrcs.h feature.h
 nsst.o: util.h config.h term.h window.h feature.h

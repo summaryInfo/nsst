@@ -1,7 +1,7 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
-#ifndef WINDOW_PRIVATE_H_
-#define WINDOW_PRIVATE_H_ 1
+#ifndef WINDOW_X11_H_
+#define WINDOW_X11_H_ 1
 
 #include "feature.h"
 
@@ -44,6 +44,16 @@ struct nss_renderer {
     xcb_render_glyphset_t gsid;
     xcb_render_pictformat_t pfglyph;
 #endif
+};
+
+struct nss_cellspec {
+    nss_color_t fg;
+    nss_color_t bg;
+    nss_char_t ch;
+    uint8_t face;
+    _Bool underlined;
+    _Bool stroke;
+    _Bool wide;
 };
 
 struct nss_window {
@@ -122,6 +132,8 @@ void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy
 
 void nss_window_set_default_props(nss_window_t *win);
 void nss_window_handle_resize(nss_window_t *win, int16_t width, int16_t height);
+nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free);
+struct nss_cellspec nss_describe_cell(nss_cell_t cell, nss_color_t *palette, nss_color_t *extra, _Bool blink, _Bool selected);
 
 #endif
 

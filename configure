@@ -5,6 +5,7 @@ use_x11shm=1
 use_boxdrawing=1
 prefix=/usr/local
 name=nsst
+backend=x11shm
 vars='CFLAGS = -O2 -flto'
 
 case "$(uname)" in
@@ -21,10 +22,9 @@ Usage: configure [options]
     --bindir=DIR            binary install directory (default is $prefix/bin)
     --enable-ppoll          enable ppoll in main loop for better timing (default if available)
     --disable-ppoll         disable ppoll in main loop, use poll instead
-    --enable-x11shm         enable MIT-SHM backend  (default)
-    --disable-x11shm        disable MIT-SHM, use XRender for drawing
     --enable-boxdrawing     enable built-in box drawing characters (default)
     --disable-boxdrawing    disable built-in box drawing characters
+    --backend=<targ>		Rendering backend [x11shm]/x11xrender
 END
 }
 
@@ -38,14 +38,12 @@ for i; do
         use_ppoll=1 ;;
     --disable-ppoll)
         use_ppoll=0 ;;
-    --enable-x11shm)
-        use_x11shm=1 ;;
-    --disable-x11shm)
-        use_x11shm=0 ;;
     --enable-boxdrawing)
         use_boxdrawing=1 ;;
     --disable-boxdrawing)
         use_boxdrawing=0 ;;
+    --backend=*)
+        backend="${backend#--backend=}" ;;
     --name=*)
         name="${name#--name=}" ;;
     --bindir=*)
@@ -65,12 +63,29 @@ done
 [ x = x"$bindir" ] && bindir=${prefix}/bin
 [ x = x"$mandir" ] && mandir=${prefix}/share/man
 
-deps="xcb xcb-xkb xcb-xrm fontconfig freetype2 xkbcommon xkbcommon-x11"
+deps="fontconfig freetype2 xkbcommon"
+objs="nsst.o util.o font.o term.o config.o input.o nrcs.o"
 
-if [ x"$use_x11shm" = x1 ]; then
-    deps="$deps xcb-shm"
-else
-    deps="$deps xcb-render"
+case "$backend" in
+x11shm)
+    objs="$objs window-x11.o render-x11shm.o image.o"
+    deps="$deps xcb xcb-xkb xcb-xrm xcb-shm xkbcommon-x11"
+    use_x11shm=1
+    ;;
+x11xrender)
+    objs="$objs window-x11.o render-x11xrender.o"
+    deps="$deps xcb xcb-xkb xcb-xrm xcb-render xkbcommon-x11"
+    use_x11shm=0
+    ;;
+*)
+    echo "\tUnknown backend: '$backend'"
+    help
+	exit 1
+	;;
+esac
+
+if [ x"$use_boxdrawing" = x1 ]; then
+    objs="$objs boxdraw.o"
 fi
 
 sed < "./feature.h.in" > "./feature.h" \
@@ -84,6 +99,7 @@ sed < "./Makefile.in" > "./Makefile" \
     -e "s:@BINDIR@:$bindir:" \
     -e "s:@MANDIR@:$mandir:" \
     -e "s:@DEPS@:$deps:" \
+    -e "s:@OBJECTS@:$objs:" \
     -e "s:@VARS@:$vars:"
 
 cat <<END
@@ -91,8 +107,8 @@ cat <<END
     prefix................... $prefix
     bindir................... $bindir
     mandir................... $mandir
+    backend.................. $backend
     boxdrawing............... $use_boxdrawing
-    x11shm................... $use_x11shm
     ppoll.................... $use_ppoll
 
     Do "make && make install" to compile and install nsst
