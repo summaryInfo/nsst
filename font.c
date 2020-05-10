@@ -366,8 +366,6 @@ int16_t nss_font_get_size(nss_font_t *font) {
     return font->size;
 }
 
-#if USE_X11SHM
-
 struct nss_glyph_cache {
     nss_font_t *font;
     _Bool lcd;
@@ -529,89 +527,3 @@ _Bool nss_cache_is_fetched(nss_glyph_cache_t *cache, nss_char_t ch) {
     }
     return 0;
 }
-
-#else
-
-/* Cache first two unicode planes */
-#define LOADED_MAP_SIZE (2 * 65536 / 32)
-
-struct nss_glyph_cache {
-    nss_font_t *font;
-    _Bool lcd;
-    int16_t char_width;
-    int16_t char_height;
-    int16_t char_depth;
-    _Bool char_dim_init;
-    size_t refc;
-
-    uint32_t marks[LOADED_MAP_SIZE];
-};
-
-nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd) {
-    nss_glyph_cache_t *cache = calloc(1, sizeof(nss_glyph_cache_t));
-    if (!cache) {
-        warn("Can't allocate glyph cache");
-        return NULL;
-    }
-
-    cache->refc = 1;
-    cache->font = font;
-    cache->lcd = lcd;
-
-    return cache;
-}
-
-nss_glyph_cache_t *nss_cache_reference(nss_glyph_cache_t *ref) {
-    ref->refc++;
-    return ref;
-}
-
-void nss_free_cache(nss_glyph_cache_t *cache) {
-    if (!--cache->refc) {
-        free(cache);
-    }
-}
-
-nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, nss_char_t ch, nss_font_attrib_t face) {
-    nss_glyph_t *new;
-#if USE_BOXDRAWING
-    if (is_boxdraw(ch) && nss_config_integer(NSS_ICONFIG_OVERRIDE_BOXDRAW))
-        new = nss_make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth, cache->lcd);
-    else
-#endif
-        new = nss_font_render_glyph(cache->font, ch, face, cache->lcd);
-
-    if ((' ' <= ch && ch <= '~') &&
-            !(cache->marks[ch / 32] >> (ch % 32)) & 1) {
-        cache->char_width += new->x_off;
-        cache->char_depth = MAX(cache->char_depth, new->height - new->y);
-        cache->char_height = MAX(cache->char_height, new->y);
-    }
-
-    if (ch < LOADED_MAP_SIZE * 32)
-        cache->marks[ch / 32] |= 1 << (ch % 32);
-
-    return new;
-}
-
-void nss_cache_font_dim(nss_glyph_cache_t *cache, int16_t *w, int16_t *h, int16_t *d) {
-    if (!cache->char_dim_init) {
-        int32_t cnt = __builtin_popcount(cache->marks[1]) +
-                __builtin_popcount(cache->marks[2]) + (__builtin_popcount(cache->marks[3]) & 0x7FFFFFFF);
-        cache->char_width /= cnt;
-        cache->char_width += nss_config_integer(NSS_ICONFIG_FONT_SPACING);
-        cache->char_depth += nss_config_integer(NSS_ICONFIG_LINE_SPACING);
-        cache->char_dim_init = 1;
-    }
-
-    if (w) *w = cache->char_width;
-    if (h) *h = cache->char_height;
-    if (d) *d = cache->char_depth;
-}
-
-_Bool nss_cache_is_fetched(nss_glyph_cache_t *cache, nss_char_t ch) {
-    return ch < LOADED_MAP_SIZE * 32 &&
-            (cache->marks[ch / 32] >> (ch % 32)) & 1;
-}
-
-#endif //USE_X11SHM

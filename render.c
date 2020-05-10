@@ -510,31 +510,19 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     }
     else win->ren.gsid = xcb_generate_id(con);
 
+    nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
+
     if (found && win->subpixel_fonts == found->subpixel_fonts) {
         c = xcb_render_reference_glyph_set_checked(con, win->ren.gsid, found->ren.gsid);
-        if (check_void_cookie(c))
-            warn("Can't reference glyph set");
-
-        nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
+        if (check_void_cookie(c)) warn("Can't reference glyph set");
     } else {
         c = xcb_render_create_glyph_set_checked(con, win->ren.gsid, win->ren.pfglyph);
-        if (check_void_cookie(c))
-            warn("Can't create glyph set");
-
-        //Preload ASCII
-        nss_glyph_t *glyphs['~' - ' ' + 1][nss_font_attrib_max] = {{ NULL }};
-        for (nss_char_t i = ' '; i <= '~'; i++)
-            for (size_t j = 0; j < nss_font_attrib_max; j++)
-                glyphs[i - ' '][j] = nss_cache_fetch(win->font_cache, i, j);
-
-        nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
+        if (check_void_cookie(c)) warn("Can't create glyph set");
 
         for (nss_char_t i = ' '; i <= '~'; i++) {
-            for (size_t j = 0; j < nss_font_attrib_max; j++) {
-                glyphs[i - ' '][j]->x_off = win->char_width;
-                register_glyph(win, i | (j << 24), glyphs[i - ' '][j]);
-                free(glyphs[i - ' '][j]);
-            }
+            nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, i, nss_font_attrib_normal);
+            glyph->x_off = win->char_width;
+            register_glyph(win, i, glyph);
         }
     }
 
@@ -760,14 +748,12 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
                 struct nss_cellspec spec = describe_cell(cel, palette,
                         line->pal->data, win->blink_state, nss_term_is_selected(win->term, i, line_iter_y(it)));
 
-                if (!nss_cache_is_fetched(win->font_cache, spec.ch)) {
-                    for (size_t j = 0; j < nss_font_attrib_max; j++) {
-                        nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, spec.ch, j);
-                        //In case of non-monospace fonts
-                        glyph->x_off = win->char_width;
-                        register_glyph(win, spec.ch | (j << 24) , glyph);
-                        free(glyph);
-                    }
+                nss_char_t g = spec.ch | (spec.face << 24);
+
+                if (!nss_cache_is_fetched(win->font_cache, g)) {
+                    nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
+                    glyph->x_off = win->char_width;
+                    register_glyph(win, g, glyph);
                 }
 
                 if (2*(rctx.cbufpos + 1) >= rctx.cbufsize) {
@@ -782,7 +768,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
                     .x = i * win->char_width,
                     .y = line_iter_y(it) * (win->char_height + win->char_depth),
                     .fg = spec.fg, .bg = spec.bg,
-                    .glyph = spec.ch | (spec.face << 24),
+                    .glyph = g,
                     .wide = spec.wide,
                     .underlined = spec.underlined,
                     .strikethrough = spec.stroke

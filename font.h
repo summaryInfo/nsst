@@ -19,11 +19,9 @@ typedef enum nss_font_attrib {
 } nss_font_attrib_t;
 
 typedef struct nss_glyph {
-#if USE_X11SHM
     // Tree elements
     struct nss_glyph *l,*r,*p;
     uint32_t g;
-#endif
 
     uint16_t width, height;
     int16_t x, y;
