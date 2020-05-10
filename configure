@@ -16,15 +16,15 @@ esac
 help() {
 cat <<END
 Usage: configure [options]
-    --name=NAME             binary name (default is $name)
-    --prefix=DIR            installation prefix (default is $prefix)
-    --mandir=DIR            man install directory (default is $prefix/share/man)
-    --bindir=DIR            binary install directory (default is $prefix/bin)
-    --enable-ppoll          enable ppoll in main loop for better timing (default if available)
+    --name=NAME             binary name [$name]
+    --prefix=DIR            installation prefix [$prefix]
+    --mandir=DIR            man install directory [$prefix/share/man]
+    --bindir=DIR            binary install directory [$prefix/bin]
+    --enable-ppoll          enable ppoll in main loop for better timing [set if available]
     --disable-ppoll         disable ppoll in main loop, use poll instead
-    --enable-boxdrawing     enable built-in box drawing characters (default)
+    --enable-boxdrawing     enable built-in box drawing characters [set]
     --disable-boxdrawing    disable built-in box drawing characters
-    --backend=<targ>		Rendering backend [x11shm]/x11xrender
+    --backend=<targ>        Rendering backend [x11shm]/x11xrender
 END
 }
 
@@ -80,8 +80,8 @@ x11xrender)
 *)
     echo "\tUnknown backend: '$backend'"
     help
-	exit 1
-	;;
+    exit 1
+    ;;
 esac
 
 if [ x"$use_boxdrawing" = x1 ]; then
