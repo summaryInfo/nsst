@@ -1,15 +1,8 @@
 Until version 1.3:
     Selections
         Selection colors
-    Convert from input locale to unicode while reading?
-    Recursive input buffer refilling
     Set pseudoterminal attributes
-    Support new color syntax
-    Window operations
-        --allow-window-ops/allowWindowOps
-        nss_window_dispatch_window_operation
-            It is simpler to implement window operations on window side
-            and express other window operations in terms of CSI t
+    Convert from input locale to unicode while reading?
     Add keybindings configuration
         break
         numlock
@@ -22,12 +15,20 @@ Until version 1.3:
         newWindow
         reset
         reloadConfig
+    Window operations
+        --allow-window-ops/allowWindowOps
+        nss_window_dispatch_window_operation
+            It is simpler to implement window operations on window side
+            and express other window operations in terms of CSI t
+    Recursive input buffer refilling
 Until 2.0:
+	Implement Xterm special colors
+    Support new color syntax
     Implement proper daemon mode
     Make X resources names more or less correspond to Xterm/rxvt-unicode
     Bell
+    Wayland
     Core X11 fonts?
-    Wayland?
     Reports
     SIXEL
     Rectangular operations
