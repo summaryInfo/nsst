@@ -1219,27 +1219,13 @@ static void term_dispatch_osc(nss_term_t *term) {
                 term_esc_dump(term, 0);
                 break;
             } else *(end = term->esc.str + (end - term->esc.str)/2) = '\0';
-        }
-        if (!(term->mode & nss_tm_title_set_utf8) && (term->mode & nss_tm_utf8)) {
+        } else if (!(term->mode & nss_tm_title_set_utf8) && (term->mode & nss_tm_utf8)) {
             uint8_t *dst = term->esc.str;
             const uint8_t *ptr = dst;
             nss_char_t val = 0;
             while (*ptr && utf8_decode(&val, &ptr, term->esc.str + term->esc.si))
                 *dst++ = val;
             *dst = '\0';
-        } else if (term->mode & nss_tm_title_set_utf8 && !(term->mode & nss_tm_utf8)) {
-            uint8_t *ds = malloc((term->esc.si + 1)*sizeof(uint8_t));
-            if (!ds) break;
-
-            memcpy(ds, term->esc.str, term->esc.si + 1);
-            uint8_t *dst = term->esc.str, *src = ds;
-            term->esc.si = 0;
-            while (*src) {
-                nss_char_t val = *src++;
-                dst += utf8_encode(val, dst, term->esc.str + ESC_MAX_STR);
-            }
-            *dst = '\0';
-            free(ds);
         }
         // If it's not UTF-8, assume Latin-1
         if (term->esc.selector < 2)
@@ -1802,8 +1788,10 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
 }
 
 static void term_print_char(nss_term_t *term, nss_char_t ch) {
-    uint8_t buf[5];
-    if (write(term->printerfd, buf, utf8_encode(ch, buf, buf + 5)) < 0) {
+    uint8_t buf[5] = {ch};
+    size_t sz = 1;
+    if (term->mode & nss_tm_utf8) sz = utf8_encode(ch, buf, buf + 5);
+    if (write(term->printerfd, buf, sz) < 0) {
         warn("Printer error");
         if (term->printerfd != STDOUT_FILENO)
             close(term->printerfd);
