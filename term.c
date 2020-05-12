@@ -346,7 +346,8 @@ int tty_open(nss_term_t *term, const char *cmd, const char **args) {
         int fl = fcntl(master, F_GETFD);
         if (fl >= 0)
             fcntl(master, F_SETFD, fl | FD_CLOEXEC);
-        signal(SIGCHLD, handle_chld);
+        sigaction(SIGCHLD, &(struct sigaction){
+                .sa_handler = handle_chld, .sa_flags = SA_RESTART}, NULL);
     }
     term->child = pid;
     term->fd = master;
