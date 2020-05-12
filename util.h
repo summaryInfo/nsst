@@ -97,4 +97,6 @@ uint8_t *base64_encode(uint8_t *dst, uint8_t *buf, uint8_t *end);
 
 nss_color_t parse_color(const uint8_t *str, const uint8_t *end);
 
+/* Unicode precomposition */
+nss_char_t try_precompose(nss_char_t ch, nss_char_t comb);
 #endif

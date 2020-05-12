@@ -12,4 +12,7 @@
 /* X11 Backend (MIT-SHM/XRender) */
 #define USE_X11SHM @USE_X11SHM@
 
+/* Unicode combining characters precomposition */
+#define USE_PRECOMPOSE @USE_PRECOMPOSE@
+
 #endif

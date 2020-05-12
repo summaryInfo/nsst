@@ -2835,10 +2835,16 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
 
             nss_coord_t width = wcwidth(ch);
             if (width < 0) /*ch = UTF_INVAL,*/ width = 1;
-            // Ignore zero-width characters
-            else if (width == 0) return;
+            else if (!width) {
+                nss_cell_t *cel = &term->screen[term->c.y]->cell[term->c.x];
+                if (term->c.x) cel--;
+                if (!cel->ch && term->c.x > 1 && cel[-1].attr & nss_attrib_wide) cel--;
+                ch = try_precompose(cel->ch, ch);
+                if (cel->ch != ch) *cel = MKCELLWITH(*cel, ch);
+                return;
+            }
 
-            info("%c (%u)", ch, ch);
+            info("%Lc (%u)", ch, ch);
 
             // Wrap line if needed
             if (term->mode & nss_tm_wrap) {

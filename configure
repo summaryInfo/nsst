@@ -3,6 +3,7 @@
 use_ppoll=0
 use_x11shm=1
 use_boxdrawing=1
+use_precompose=1
 prefix=/usr/local
 name=nsst
 backend=x11shm
@@ -24,6 +25,8 @@ Usage: configure [options]
     --disable-ppoll         disable ppoll in main loop, use poll instead
     --enable-boxdrawing     enable built-in box drawing characters [set]
     --disable-boxdrawing    disable built-in box drawing characters
+    --enable-precompose     enable enable unicode combining characters precomposition [set]
+    --disable-precompose    disable enable unicode combining characters precomposition
     --backend=<targ>        Rendering backend [x11shm]/x11xrender
 END
 }
@@ -42,6 +45,10 @@ for i; do
         use_boxdrawing=1 ;;
     --disable-boxdrawing)
         use_boxdrawing=0 ;;
+    --enable-precompose)
+        use_precompose=1 ;;
+    --disable-precompose)
+        use_precompose=0 ;;
     --backend=*)
         backend="${backend#--backend=}" ;;
     --name=*)
@@ -91,7 +98,8 @@ fi
 sed < "./feature.h.in" > "./feature.h" \
     -e "s:@USE_PPOLL@:$use_ppoll:g" \
     -e "s:@USE_BOXDRAWING@:$use_boxdrawing:g" \
-    -e "s:@USE_X11SHM@:$use_x11shm:g"
+    -e "s:@USE_X11SHM@:$use_x11shm:g" \
+    -e "s:@USE_PRECOMPOSE@:$use_precompose:g"
 
 sed < "./Makefile.in" > "./Makefile" \
     -e "s:@NAME@:$name:" \
@@ -109,6 +117,7 @@ cat <<END
     mandir................... $mandir
     backend.................. $backend
     boxdrawing............... $use_boxdrawing
+    precompose............... $use_precompose
     ppoll.................... $use_ppoll
 
     Do "make && make install" to compile and install nsst

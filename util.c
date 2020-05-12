@@ -221,3 +221,36 @@ uint8_t *base64_encode(uint8_t *dst, uint8_t *buf, uint8_t *end) {
     return dst;
 }
 
+#if USE_PRECOMPOSE
+
+#include "precompose-table.h"
+
+int pre1_cmpfn(const void * a, const void *b) {
+    const struct pre1_item *ai = a, *bi = b;
+    if (ai->src != bi->src) return ai->src - bi->src;
+    return ai->mod - bi->mod;
+}
+int pre2_cmpfn(const void * a, const void *b) {
+    const struct pre2_item *ai = a, *bi = b;
+    if (ai->src != bi->src) return ai->src - bi->src;
+    return ai->mod - bi->mod;
+}
+
+nss_char_t try_precompose(nss_char_t ch, nss_char_t comb) {
+    struct pre1_item *r1 = bsearch(&(struct pre1_item){ch, comb, 0},
+            pre1_tab, sizeof(pre1_tab)/sizeof(*pre1_tab), sizeof(*pre1_tab), pre1_cmpfn);
+    if (r1) return r1->dst;
+
+    struct pre2_item *r2 = bsearch(&(struct pre2_item){ch, comb, 0},
+            pre2_tab, sizeof(pre2_tab)/sizeof(*pre2_tab), sizeof(*pre2_tab), pre2_cmpfn);
+    if (r2) return r2->dst;
+
+    return ch;
+}
+
+#else
+
+nss_char_t try_precompose(nss_char_t ch, nss_char_t comb) { return ch; }
+
+#endif
+
