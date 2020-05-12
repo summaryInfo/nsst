@@ -56,6 +56,10 @@ For command line arguments see `nsst --help`.
 For boolean options `--no-X`, `--without-X`, `--disable-X` are interpreted as `--X=0` and
 `--X`, `--with-X`, `--enable-X` are interpreted as `--X=1`
 
+By default only DEC Special Graphics charset is allowed with UTF-8 mode enabled.
+Spec is even stricter, disallowing any charset translations in UTF-8 mode, but DEC Special Graphics is used by applications frequently so it is allowed anyways.
+To force full NRCS translation in UTF-8 mode set `--force-nrsc`/`forceNrcs`
+
 ## Dependencies
 ### Build
 

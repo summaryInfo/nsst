@@ -54,6 +54,7 @@ typedef uint32_t nss_char_t;
 
 _Bool nrcs_encode(nss_char_t set, enum nss_char_set *ch, _Bool nrcs);
 nss_char_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, nss_char_t ch, _Bool nrcs);
+nss_char_t nrcs_decode_fast(enum nss_char_set gl, nss_char_t ch);
 
 #endif
 

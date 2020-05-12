@@ -147,6 +147,14 @@ _Bool nrcs_encode(enum nss_char_set set, nss_char_t *ch, _Bool nrcs) {
     return done;
 }
 
+nss_char_t nrcs_decode_fast(enum nss_char_set gl, nss_char_t ch) {
+    if (gl == nss_94cs_dec_graph) {
+        if (0x5F <= ch && ch <= 0x7E)
+            ch = graph_tr[ch - 0x5F];
+    }
+    return ch;
+}
+
 nss_char_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, nss_char_t ch, _Bool nrcs) {
     if (ch > 0xFF) return ch;
     if (ch == 0x7F) return U' ';

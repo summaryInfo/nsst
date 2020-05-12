@@ -2871,8 +2871,10 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
             // Decode nrcs
 
             // In theory this should be disabled while in UTF-8 mode, but
-            // in practive applications use these symbols, so keep translating
-            if (!(term->mode & nss_tm_utf8) || nss_config_integer(NSS_ICONFIG_ALLOW_CHARSETS))
+            // in practive applications use these symbols, so keep translating (but restrict charsets to only DEC Graph in GL)
+            if ((term->mode & nss_tm_utf8) && !nss_config_integer(NSS_ICONFIG_FORCE_UTF8_NRCS))
+                ch = nrcs_decode_fast(term->c.gn[term->c.gl_ss], ch);
+            else
                 ch = nrcs_decode(term->c.gn[term->c.gl_ss], term->c.gn[term->c.gr], ch, term->mode & nss_tm_enable_nrcs);
 
             // Clear selection when selected cell is overwritten
