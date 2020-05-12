@@ -2,7 +2,6 @@ Until version 1.3:
     Selections
         Selection colors
     Set pseudoterminal attributes
-    Convert from input locale to unicode while reading?
     Add keybindings configuration
         break
         numlock
@@ -21,19 +20,21 @@ Until version 1.3:
             It is simpler to implement window operations on window side
             and express other window operations in terms of CSI t
     Recursive input buffer refilling
-Until 2.0:
+More:
     Implement Xterm special colors
+    Rectangular operations
     Support new color syntax
+    Proper combining characters support
+    Non-clipped rendering
+    Colored glyphs
+    Bell
+    Left/right margins
+    Wayland
     Implement proper daemon mode
     Make X resources names more or less correspond to Xterm/rxvt-unicode
-    Bell
-    Wayland
     Core X11 fonts?
-    Reports
     SIXEL
-    Rectangular operations
-    Left/right margins
-
+    Reports
 ===================
 Selections
     [x] Mouse selection internal state
