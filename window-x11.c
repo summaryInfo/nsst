@@ -465,9 +465,11 @@ struct nss_cellspec nss_describe_cell(nss_cell_t cell, nss_color_t *palette, nss
 nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free) {
     _Bool found_font = 0, found_cache = 0;
     nss_window_t *found = 0;
+
     for (nss_window_t *src = win_list_head; src; src = src->next) {
-        if ((src->font_size == win->font_size || win->font_size == 0) &&
-           !strcmp(win->font_name, src->font_name) && src != win) {
+        if ((src->font_size == win->font_size || (!win->font_size &&
+                src->font_size == nss_config_integer(NSS_ICONFIG_FONT_SIZE))) &&
+                !strcmp(win->font_name, src->font_name) && src != win) {
             found_font = 1;
             found = src;
             if (src->subpixel_fonts == win->subpixel_fonts) {
@@ -495,6 +497,10 @@ nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free) {
     win->font = newf;
     win->font_cache = newc;
     win->font_size = nss_font_get_size(newf);
+
+    //Initialize default font size
+    if (!nss_config_integer(NSS_ICONFIG_FONT_SIZE))
+        nss_config_set_integer(NSS_ICONFIG_FONT_SIZE, win->font_size);
 
     return found;
 }
