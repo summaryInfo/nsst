@@ -86,7 +86,7 @@ static void parse_geometry(char *arg, char *argv0) {
     nss_config_set_integer(NSS_ICONFIG_WINDOW_NEGATIVE_Y, ysgn == '-');
 }
 
-static char **parse_options(char **argv) {
+static void nss_parse_options(char **argv) {
     size_t ind = 1;
 
     char *arg, *opt;
@@ -142,7 +142,7 @@ static char **parse_options(char **argv) {
             switch (letter) {
             case 'e':
                 if (!argv[++ind]) usage(argv[0], EXIT_FAILURE);
-                return &argv[ind];
+                nss_config_set_argv((const char**)&argv[ind]);
             case 'h':
                 usage(argv[0], EXIT_FAILURE);
                 break;
@@ -184,7 +184,8 @@ static char **parse_options(char **argv) {
     next:
         if(argv[ind]) ind++;
     }
-    return argv[ind] ? &argv[ind] : NULL;
+
+    if (argv[ind]) nss_config_set_argv((const char**)&argv[ind]);
 }
 
 int main(int argc, char **argv) {
@@ -195,19 +196,23 @@ int main(int argc, char **argv) {
     _Bool bset = charset && (charset[0] & ~0x20) == 'U' &&
             (charset[1] & ~0x20) == 'T' && (charset[2] & ~0x20) == 'F' &&
             (charset[3] == '8' || charset[4] == '8');
-    // Enable UTF-8 support if it is UTF-8
+
+    // And enable UTF-8 support if locale encoding is UTF-8
     nss_config_set_integer(NSS_ICONFIG_UTF8, bset);
 
-    //Initialize graphical context
+    // This option should be process before everything else
+    // since config loading happens during context initialization
+    // which is performed before argv parsing
     for (char **opt = argv; *opt; opt++)
         if (!strcmp("--no-config-file", *opt))
             nss_config_set_integer(NSS_ICONFIG_SKIP_CONFIG_FILE, 1);
+
+    // Initialize graphical context
     nss_init_context();
 
     (void)argc;
 
-    const char **res = (const char **)parse_options(argv);
-    if (res) nss_config_set_argv(res);
+    nss_parse_options(argv);
 
     nss_create_window();
     nss_context_run();
