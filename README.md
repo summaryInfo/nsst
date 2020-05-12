@@ -37,7 +37,7 @@ See TODO file for things that are to be implemented.
 * `util.c` -- General utilities (encoding/decoding and logging)
 * `window-x11.c` -- X11 specific window code
 
-## Tips
+## Notes
 
 Use TERM=xterm. The only unimplemented thing I encountered so far is unimplemented title stack.
 There are other missing escape sequences, but they are not generally used (and still would be eventually implemented).
@@ -59,6 +59,10 @@ For boolean options `--no-X`, `--without-X`, `--disable-X` are interpreted as `-
 By default only DEC Special Graphics charset is allowed with UTF-8 mode enabled.
 Spec is even stricter, disallowing any charset translations in UTF-8 mode, but DEC Special Graphics is used by applications frequently so it is allowed anyways.
 To force full NRCS translation in UTF-8 mode set `--force-nrsc`/`forceNrcs`
+
+Now nsst supports combining characters only via precomposition, but almost everything is ready to implement proper rendering of combining character (and variant glyphs support).
+The only tricky part is to extract positioning tables and implemnt basic text shaping. It would be implemented using glyphs with codes `0x200000` - `0xFFFFFF`,
+giving sufficient number of possible custom glyphs. DECDLD is also easy to implement this way.
 
 ## Dependencies
 ### Build
