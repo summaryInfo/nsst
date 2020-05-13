@@ -3369,7 +3369,7 @@ static void term_scroll_selection(nss_term_t *term, nss_coord_t amount) {
     if (term->vsel.state == nss_sstate_none) return;
 
     // Clear sellection if it is going to be split by scroll
-    if ((term->top <= term->vsel.n.y0 && term->vsel.n.y0 <= term->bottom) ||
+    if ((term->top <= term->vsel.n.y0 && term->vsel.n.y0 <= term->bottom) ^
             (term->top <= term->vsel.n.y1 && term->vsel.n.y1 <= term->bottom))
         nss_term_clear_selection(term);
 
