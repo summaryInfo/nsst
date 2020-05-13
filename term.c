@@ -73,7 +73,7 @@
 #define I1_MASK (0x1F << 14)
 
 static void term_answerback(nss_term_t *term, const char *str, ...);
-static void term_scroll_selection(nss_term_t *term, nss_coord_t amount);
+static void term_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save);
 static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss_color_t y, _Bool rectangular);
 
 typedef struct nss_cursor {
@@ -799,7 +799,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t bottom, n
                 .width = term->width, .height = bottom + 1 - top - abs(amount) });
     }
 
-    term_scroll_selection(term, amount);
+    term_scroll_selection(term, amount, save);
 }
 
 static void term_set_tb_margins(nss_term_t *term, nss_coord_t top, nss_coord_t bottom) {
@@ -3365,52 +3365,55 @@ void nss_term_clear_selection(nss_term_t *term) {
     }
 }
 
-static void term_scroll_selection(nss_term_t *term, nss_coord_t amount) {
+static void term_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save) {
     if (term->vsel.state == nss_sstate_none) return;
 
+	_Bool cond0 = (term->top <= term->vsel.n.y0 && term->vsel.n.y0 <= term->bottom);
+	_Bool cond1 = (term->top <= term->vsel.n.y1 && term->vsel.n.y1 <= term->bottom);
+
     // Clear sellection if it is going to be split by scroll
-    if ((term->top <= term->vsel.n.y0 && term->vsel.n.y0 <= term->bottom) ^
-            (term->top <= term->vsel.n.y1 && term->vsel.n.y1 <= term->bottom))
-        nss_term_clear_selection(term);
+    if ((cond0 ^ cond1) && !(save && term->vsel.n.y1 <= term->bottom)) nss_term_clear_selection(term);
+    else if (term->vsel.n.y1 <= term->bottom) {
+        // Scroll and cut off scroll off lines
 
-    // Scroll and cut off scroll off lines
+        term->vsel.r.y0 -= amount;
+        term->vsel.n.y0 -= amount;
+        term->vsel.r.y1 -= amount;
+        term->vsel.n.y1 -= amount;
 
-    term->vsel.r.y0 -= amount;
-    term->vsel.r.y0 -= amount;
-    term->vsel.n.y1 -= amount;
-    term->vsel.n.y1 -= amount;
+        _Bool swapped = term->vsel.r.y0 > term->vsel.r.y1;
 
-    _Bool swapped = term->vsel.r.y0 > term->vsel.r.y1;
-
-    if (swapped) {
-        SWAP(ssize_t, term->vsel.r.y0, term->vsel.r.y1);
-        SWAP(ssize_t, term->vsel.r.x0, term->vsel.r.x1);
-    }
-
-    if (term->vsel.r.y0 < term->top) {
-        term->vsel.r.y0 = term->top;
-        term->vsel.n.y0 = term->top;
-        if (!term->vsel.r.rect) {
-            term->vsel.r.x0 = 0;
-            term->vsel.n.x0 = 0;
+        if (swapped) {
+            SWAP(ssize_t, term->vsel.r.y0, term->vsel.r.y1);
+            SWAP(ssize_t, term->vsel.r.x0, term->vsel.r.x1);
         }
-    }
 
-    if (term->vsel.r.y1 > term->bottom) {
-        term->vsel.r.y1 = term->bottom;
-        term->vsel.n.y1 = term->bottom;
-        if (!term->vsel.r.rect) {
-            term->vsel.r.x1 = term->screen[term->bottom]->width - 1;
-            term->vsel.n.x1 = term->screen[term->bottom]->width - 1;
+		ssize_t top = save ? -term->scrollback_size : term->top;
+        if (term->vsel.r.y0 < top) {
+            term->vsel.r.y0 = top;
+            term->vsel.n.y0 = top;
+            if (!term->vsel.r.rect) {
+                term->vsel.r.x0 = 0;
+                term->vsel.n.x0 = 0;
+            }
         }
-    }
 
-    if (term->vsel.r.y0 > term->vsel.r.y1)
-        nss_term_clear_selection(term);
+        if (term->vsel.r.y1 > term->bottom) {
+            term->vsel.r.y1 = term->bottom;
+            term->vsel.n.y1 = term->bottom;
+            if (!term->vsel.r.rect) {
+                term->vsel.r.x1 = term->screen[term->bottom]->width - 1;
+                term->vsel.n.x1 = term->screen[term->bottom]->width - 1;
+            }
+        }
 
-    if (swapped) {
-        SWAP(ssize_t, term->vsel.r.y0, term->vsel.r.y1);
-        SWAP(ssize_t, term->vsel.r.x0, term->vsel.r.x1);
+        if (term->vsel.r.y0 > term->vsel.r.y1)
+            nss_term_clear_selection(term);
+
+        if (swapped) {
+            SWAP(ssize_t, term->vsel.r.y0, term->vsel.r.y1);
+            SWAP(ssize_t, term->vsel.r.x0, term->vsel.r.x1);
+        }
     }
  }
 
