@@ -2318,6 +2318,50 @@ static enum nss_char_set parse_nrcs(param_t selector, _Bool is96, uint16_t vt_le
 #undef NRC
 }
 
+#if 0
+static const char *unparse_nrcs(enum nss_char_set cs) {
+    return (const char *[nss_nrcs_MAX + 1]){
+        [nss_94cs_ascii]              = "B",
+        [nss_94cs_british]            = "A",
+        [nss_94cs_dec_altchars]       = "1",
+        [nss_94cs_dec_altgraph]       = "2",
+        [nss_94cs_dec_graph]          = "0",
+        [nss_94cs_dec_greek]          = "\"?",
+        [nss_94cs_dec_hebrew]         = "\"4",
+        [nss_94cs_dec_sup]            = "<",
+        [nss_94cs_dec_sup_graph]      = "%5",
+        [nss_94cs_dec_tech]           = ">",
+        [nss_94cs_dec_turkish]        = "%0",
+        [nss_96cs_greek]              = "F",
+        [nss_96cs_hebrew]             = "H",
+        [nss_96cs_latin_1]            = "A",
+        [nss_96cs_latin_5]            = "M",
+        [nss_96cs_latin_cyrillic]     = "L",
+        [nss_nrcs_cyrillic]           = "&4",
+        [nss_nrcs_dutch]              = "4",
+        [nss_nrcs_finnish2]           = "5",
+        [nss_nrcs_finnish]            = "C",
+        [nss_nrcs_french2]            = "f",
+        [nss_nrcs_french]             = "R",
+        [nss_nrcs_french_canadian2]   = "9",
+        [nss_nrcs_french_canadian]    = "Q",
+        [nss_nrcs_german]             = "K",
+        [nss_nrcs_greek]              = "\">",
+        [nss_nrcs_hebrew]             = "%=",
+        [nss_nrcs_itallian]           = "Y",
+        [nss_nrcs_norwegian_dannish2] = "6",
+        [nss_nrcs_norwegian_dannish3] = "`",
+        [nss_nrcs_norwegian_dannish]  = "E",
+        [nss_nrcs_portuguese]         = "%6",
+        [nss_nrcs_spannish]           = "Z",
+        [nss_nrcs_swedish2]           = "7",
+        [nss_nrcs_swedish]            = "H",
+        [nss_nrcs_swiss]              = "=",
+        [nss_nrcs_turkish]            = "%2",
+    }[cs];
+}
+#endif
+
 static void term_dispatch_esc(nss_term_t *term) {
     if (term->esc.selector != E('['))
         term_esc_dump(term, 1);
@@ -3263,9 +3307,9 @@ static void term_update_selection(nss_term_t *term, uint8_t oldstate, nss_select
     size_t sz_old = 0, sz_new = 0, count = 0;
     nss_rect_t *res = d_diff, bound = {0, 0, term->width, term->height};
 
-	if (oldstate != nss_sstate_none && oldstate != nss_sstate_pressed)
+    if (oldstate != nss_sstate_none && oldstate != nss_sstate_pressed)
         sz_old = descomose_selection(d_old, old, bound, term->scrollback_pos);
-	if (term->vsel.state != nss_sstate_none && term->vsel.state != nss_sstate_pressed)
+    if (term->vsel.state != nss_sstate_none && term->vsel.state != nss_sstate_pressed)
         sz_new = descomose_selection(d_new, term->vsel.n, bound, term->scrollback_pos);
 
     if (!sz_old) res = d_new, count = sz_new;
