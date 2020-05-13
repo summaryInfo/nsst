@@ -3421,24 +3421,20 @@ inline static _Bool is_separator(nss_char_t ch) {
         return strstr(nss_config_string(NSS_SCONFIG_WORD_SEPARATORS), (char *)cbuf);
 }
 
-static void selection_normalize(nss_visual_selection_t *sel) {
-    sel->n.x0 = sel->r.x0, sel->n.y0 = sel->r.y0;
-    sel->n.x1 = sel->r.x1, sel->n.y1 = sel->r.y1;
-    sel->r.rect = sel->n.rect;
-    if (sel->n.y1 <= sel->n.y0) {
-        if (sel->n.y1 < sel->n.y0) {
-            SWAP(nss_coord_t, sel->n.y0, sel->n.y1);
-            SWAP(nss_coord_t, sel->n.x0, sel->n.x1);
-        } else if (sel->n.x1 < sel->n.x0) {
-            SWAP(nss_coord_t, sel->n.x0, sel->n.x1);
+static void term_snap_selection(nss_term_t *term) {
+    term->vsel.n.x0 = term->vsel.r.x0, term->vsel.n.y0 = term->vsel.r.y0;
+    term->vsel.n.x1 = term->vsel.r.x1, term->vsel.n.y1 = term->vsel.r.y1;
+    term->vsel.r.rect = term->vsel.n.rect;
+    if (term->vsel.n.y1 <= term->vsel.n.y0) {
+        if (term->vsel.n.y1 < term->vsel.n.y0) {
+            SWAP(nss_coord_t, term->vsel.n.y0, term->vsel.n.y1);
+            SWAP(nss_coord_t, term->vsel.n.x0, term->vsel.n.x1);
+        } else if (term->vsel.n.x1 < term->vsel.n.x0) {
+            SWAP(nss_coord_t, term->vsel.n.x0, term->vsel.n.x1);
         }
     }
-    if (sel->n.rect && sel->n.x1 < sel->n.x0)
-            SWAP(nss_coord_t, sel->n.x0, sel->n.x1);
-}
-
-static void term_snap_selection(nss_term_t *term) {
-    selection_normalize(&term->vsel);
+    if (term->vsel.n.rect && term->vsel.n.x1 < term->vsel.n.x0)
+            SWAP(nss_coord_t, term->vsel.n.x0, term->vsel.n.x1);
 
     if (term->vsel.snap == nss_ssnap_line) {
         term->vsel.state = nss_sstate_progress;
