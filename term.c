@@ -3495,7 +3495,7 @@ static void term_snap_selection(nss_term_t *term) {
                 if (cat != is_separator(line->cell[0].ch)) break;
                 term->vsel.n.x1 = 0;
                 term->vsel.n.y1++;
-                line_len = line->wrap_at;
+                line_len = line->wrap_at ? line->wrap_at : line->width;
             } else first = 0;
             while(term->vsel.n.x1 < line_len - 1 &&
                     cat == is_separator(line->cell[term->vsel.n.x1 + 1].ch)) term->vsel.n.x1++;
