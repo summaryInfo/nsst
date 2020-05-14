@@ -10,8 +10,8 @@ Inspired by [Simple Terminal](https://st.suckless.org/)
 * Quiet fast rendering
 * Small size and almost no dependencies
 * Uses xcb as X11 library
-	* So it is faster and more lightweight
-	* `size` including all loaded shared libs is only 75% of `st` on my system 
+    * So it is faster and more lightweight
+    * `size` including all loaded shared libs is only 75% of `st` on my system 
 * Multiple terminal windows
     * This would be extended to full daemon mode
     * `Shift-Ctrl-N` is default keybinding
@@ -83,8 +83,8 @@ giving sufficient number of possible custom glyphs. DECDLD is also easy to imple
 
 ### To build:
 
-	./configure
-	make
+    ./configure
+    make
 
 Default config is generally sane.
 Use `./configure CFLAGS='-flto -O3 -march=native'` to make it faster (but also bigger).
@@ -93,6 +93,6 @@ See `./configure --help` for more.
 
 ### To install:
 
-	make install
+    make install
 
 Default location is `/usr/local/bin/$name`
