@@ -56,64 +56,32 @@ typedef struct nss_line_palette {
 } nss_line_palette_t;
 
 typedef struct nss_line {
-    struct nss_line *next, *prev;
     nss_line_palette_t *pal;
     int16_t width;
     int16_t wrap_at;
     nss_cell_t cell[];
 } nss_line_t;
 
-/* "iterator" to traverse viewport (scrollback list part, then screen array part) */
+/* iterator for iterating both scrollback and screen */
 
 typedef struct nss_line_iter {
-    nss_line_t *_line;
-    nss_line_t *_last;
     nss_line_t **_screen;
-    ssize_t _y;
-    ssize_t _y_scr;
+    nss_line_t **_scrollback;
+    ssize_t _sb_0;
+    ssize_t _sb_limit;
+    ssize_t _y_min;
     ssize_t _y_max;
+    ssize_t _y;
 } nss_line_iter_t;
 
-inline static nss_line_iter_t make_line_iter(nss_line_t *view, nss_line_t **screen, ssize_t y0, ssize_t y1) {
-    nss_line_iter_t it = { view, view, screen, 0, 0, y1 };
-    if (y0 >= 0)  {
-        while (it._line && it._y < y0) it._y++, it._line = it._line->next;
-        if (!it._line) it._y_scr = it._y;
-        it._y = y0;
-    } else if (it._line) {
-        while (it._line->prev && it._y > y0) it._y--, it._line = it._line->prev;
-    }
-    return it;
-}
-
 inline static ssize_t line_iter_y(nss_line_iter_t *it) {
-    return it->_y - 1;
+    return it->_y - 1 - it->_y_min;
 }
 
 inline static nss_line_t *line_iter_next(nss_line_iter_t *it) {
-    if (it->_y >= it->_y_max ) return NULL;
-    nss_line_t *ln;
-    if (it->_line) {
-        ln = it->_line;
-        if (!it->_line->next) {
-            it->_y_scr = it->_y + 1;
-            it->_last = it->_line;
-        }
-        it->_line = it->_line->next;
-    } else
-        ln = it->_screen[it->_y - it->_y_scr];
-    it->_y++;
-    return ln;
-}
-
-inline static nss_line_t *line_iter_prev(nss_line_iter_t *it) {
-    it->_y--;
-    if (it->_line)
-        return it->_line = it->_line->prev;
-    else if (it->_y + 1 == it->_y_scr)
-        return it->_line = it->_last;
-    else
-        return it->_screen[it->_y - it->_y_scr];
+    if (it->_y >= it->_y_max || it->_y < it->_y_min) return NULL;
+    return (it->_y >= 0) ? it->_screen[it->_y++] :
+        it->_scrollback[(it->_sb_0 + ++it->_y + it->_sb_limit) % it->_sb_limit];
 }
 
 typedef struct nss_input_mode nss_input_mode_t;

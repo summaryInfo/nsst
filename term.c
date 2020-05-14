@@ -124,22 +124,38 @@ typedef struct nss_visual_selection {
 struct nss_term {
     nss_line_t **screen;
     nss_line_t **back_screen;
-    nss_line_t *view;
-    nss_line_t *scrollback;
-    nss_line_t *scrollback_top;
-    ssize_t scrollback_limit;
-    ssize_t scrollback_size;
-    ssize_t scrollback_pos;
+
+    /* Cyclic buffer for
+     * saved lines */
+    nss_line_t **scrollback;
+    ssize_t view;
+    ssize_t sb_top;
+    ssize_t sb_limit;
+    ssize_t sb_caps;
+    ssize_t sb_max_caps;
 
     nss_cursor_t c;
     nss_cursor_t cs;
     nss_cursor_t back_cs;
     nss_cursor_t vt52c;
 
+    nss_coord_t width;
+    nss_coord_t height;
+    nss_coord_t top;
+    nss_coord_t bottom;
+    _Bool *tabs;
+
     /* Last written character
      * Used for REP */
     nss_char_t prev_ch;
 
+    /* OSC 52 character description
+     * of selection being pasted from */
+    uint8_t paste_from;
+
+    /* Previous mouse state
+     * used reduce duplicated
+     * mouse events */
     nss_coord_t prev_mouse_x;
     nss_coord_t prev_mouse_y;
     uint8_t prev_mouse_button;
@@ -152,16 +168,6 @@ struct nss_term {
     nss_coord_t prev_c_y;
     _Bool prev_c_hidden;
     _Bool prev_c_view_changed;
-
-    /* OSC 52 character description
-     * of selection being pasted from */
-    uint8_t paste_from;
-
-    nss_coord_t width;
-    nss_coord_t height;
-    nss_coord_t top;
-    nss_coord_t bottom;
-    _Bool *tabs;
 
     enum nss_term_mode {
         nss_tm_echo = 1 << 0,
@@ -233,6 +239,7 @@ struct nss_term {
     nss_window_t *win;
     nss_input_mode_t inmode;
     nss_color_t *palette;
+
     pid_t child;
     int fd;
     int printerfd;
@@ -240,6 +247,34 @@ struct nss_term {
     size_t fd_pos;
     uint8_t fd_buf[NSS_FD_BUF_SZ];
 };
+
+inline static nss_line_iter_t make_screen_iter(nss_term_t *term, ssize_t ymin, ssize_t ymax) {
+    if (ymin > ymax) SWAP(ssize_t, ymin, ymax);
+    return (nss_line_iter_t) {
+        term->screen,
+        term->scrollback,
+        term->sb_top,
+        term->sb_limit,
+        MAX(-term->sb_limit, ymin),
+        MIN(term->height, ymax),
+        MAX(-term->sb_limit, ymin),
+    };
+}
+
+inline static void line_iter_inc(nss_line_iter_t *it, ssize_t delta) {
+    it->_y += delta;
+}
+
+inline static nss_line_t *line_iter_ref(nss_line_iter_t *it) {
+    if (it->_y >= it->_y_max || it->_y < it->_y_min) return NULL;
+    return (it->_y >= 0) ? it->_screen[it->_y] :
+        it->_scrollback[(it->_sb_0 + it->_y + 1 + it->_sb_limit) % it->_sb_limit];
+}
+
+inline static nss_line_t *line_iter_prev(nss_line_iter_t *it) {
+    line_iter_inc(it, -1);
+    return line_iter_ref(it);
+}
 
 static void handle_chld(int arg) {
     int status;
@@ -441,7 +476,6 @@ static nss_line_t *term_create_line(nss_term_t *term, nss_coord_t width) {
         line->width = width;
         line->wrap_at = 0;
         line->pal = NULL;
-        line->next = line->prev = NULL;
         nss_cell_t cel = fixup_color(line, &term->c);
         for (nss_coord_t i = 0; i < width; i++)
             line->cell[i] = cel;
@@ -470,11 +504,6 @@ static void term_free_line(nss_line_t *line) {
     free(line);
 }
 
-static void term_line_dirt(nss_line_t *line) {
-    for (nss_coord_t i = 0; i < line->width; i++)
-        line->cell[i].attr &= ~nss_attrib_drawn;
-}
-
 inline static void term_put_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_char_t ch) {
     term->screen[y]->cell[x] = MKCELLWITH(fixup_color(term->screen[y], &term->c), ch);
 }
@@ -497,7 +526,7 @@ int nss_term_fd(nss_term_t *term) {
 
 void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
     if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
-        nss_line_iter_t it = make_line_iter(term->view, term->screen, damage.y, damage.y + damage.height);
+        nss_line_iter_t it = make_screen_iter(term, damage.y - term->view, damage.y + damage.height - term->view);
         for (nss_line_t *line; (line = line_iter_next(&it));)
             for (nss_coord_t j = damage.x; j <  MIN(damage.x + damage.width, line->width); j++)
                 line->cell[j].attr &= ~nss_attrib_drawn;
@@ -522,18 +551,17 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
     cursor &= !term->prev_c_hidden;
     cursor &= !(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr & nss_attrib_drawn);
 
-    nss_line_iter_t it = make_line_iter(term->view, term->screen, 0, term->height);
+    nss_line_iter_t it = make_screen_iter(term, -term->view, term->height - term->view);
 
     nss_window_submit_screen(term->win, &it, term->palette, term->c.x, term->c.y, cursor);
 }
 
 static void term_reset_view(nss_term_t *term, _Bool damage) {
     term->prev_c_view_changed |= !!term->view;
-    ssize_t old_spos = term->scrollback_pos;
-    term->view = NULL;
-    term->scrollback_pos = 0;
+    ssize_t old_view = term->view;
+    term->view = 0;
     if (term->vsel.state == nss_sstate_progress)
-        term_change_selection(term, nss_sstate_progress, term->vsel.r.x1, term->vsel.r.y1 + old_spos, term->vsel.r.rect);
+        term_change_selection(term, nss_sstate_progress, term->vsel.r.x1, term->vsel.r.y1 + old_view, term->vsel.r.rect);
     if (damage) nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
 }
 
@@ -544,42 +572,23 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
         return;
     }
 
-    _Bool ini_view = term->view;
-    ssize_t old_spos = term->scrollback_pos;
+    ssize_t old_view = term->view;
 
-    nss_coord_t scrolled = 0;
+    term->view = MAX(MIN(term->view + amount, term->sb_limit), 0);
 
-    if (amount > 0) {
-        if (!term->view && term->scrollback)
-            term->view = term->scrollback, scrolled++;
-
-        if (term->view) {
-            while (scrolled < amount && term->view->prev)
-                term->view = term->view->prev, scrolled++;
-        }
-
-        nss_line_iter_t it = make_line_iter(term->view, term->screen, 0, scrolled);
-        for (nss_line_t *line; (line = line_iter_next(&it));)
-                term_line_dirt(line);
-
-        term->scrollback_pos += scrolled;
-        nss_window_shift(term->win, 0, scrolled, term->height - scrolled, 0);
-    } else if (amount < 0) {
-
-        while (term->view && scrolled < -amount)
-            term->view = term->view->next, scrolled++;
-
-        nss_line_iter_t it = make_line_iter(term->view, term->screen, term->height - scrolled, term->height);
-        for (nss_line_t *line; (line = line_iter_next(&it));)
-                term_line_dirt(line);
-
-        term->scrollback_pos -= scrolled;
-        nss_window_shift(term->win, scrolled, 0, term->height - scrolled, 0);
+    ssize_t delta = term->view - old_view;
+    if (delta > 0) { //Up
+        nss_term_damage(term, (nss_rect_t){0, 0, term->width, delta});
+        nss_window_shift(term->win, 0, delta, term->height - delta, 0);
+    } else if (delta < 0) { // Down
+        nss_term_damage(term, (nss_rect_t){0, term->height + delta, term->width, -delta});
+        nss_window_shift(term->win, -delta, 0, term->height + delta, 0);
     }
 
     if (term->vsel.state == nss_sstate_progress)
-        term_change_selection(term, nss_sstate_progress, term->vsel.r.x1, term->vsel.r.y1 + old_spos, term->vsel.r.rect);
-    term->prev_c_view_changed |= ini_view != !!term->view;
+        term_change_selection(term, nss_sstate_progress,
+                term->vsel.r.x1, term->vsel.r.y1 + old_view, term->vsel.r.rect);
+    term->prev_c_view_changed |= !old_view ^ !term->view;
 }
 
 inline static nss_coord_t line_length(nss_line_t *line) {
@@ -590,11 +599,11 @@ inline static nss_coord_t line_length(nss_line_t *line) {
     return max_x;
 }
 
+#define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
 
 static void term_append_history(nss_term_t *term, nss_line_t *line) {
-    if (term->scrollback_limit == 0) {
-        term_free_line(line);
-    } else {
+    if (term->sb_max_caps > 0) {
+        /* Minimize line size to save memory */
         line = term_realloc_line(term, line, line_length(line));
         if (line->pal) {
             optimize_line_palette(line);
@@ -605,26 +614,35 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
             }
         }
 
-        if (term->scrollback) term->scrollback->next = line;
-        else term->scrollback_top = line;
-        line->prev = term->scrollback;
-        line->next = NULL;
-        term->scrollback = line;
+        if (term->sb_limit == term->sb_max_caps) {
+            /* If view points to the line that is to be freed, scroll it down */
+            if (term->view == term->sb_limit) nss_term_scroll_view(term, -1);
 
-        if (term->scrollback_limit >= 0 && ++term->scrollback_size > term->scrollback_limit) {
-            if (term->scrollback_top == term->view)
-                nss_term_scroll_view(term, -1);
-            nss_line_t *next = term->scrollback_top->next;
-            term_free_line(term->scrollback_top);
+            /* We reached maximal number of saved lines,
+             * now term->scrollback functions as true cyclic buffer */
+            term->sb_top = (term->sb_limit + term->sb_top + 1) % term->sb_limit;
+            SWAP(nss_line_t *, line, term->scrollback[term->sb_top]);
+            term_free_line(line);
+        } else {
+            /* More lines can be saved, term->scrollback is not cyclic yet */
 
-            if (next) next->prev = NULL;
-            else term->scrollback = NULL;
-            term->scrollback_top = next;
-            term->scrollback_size = term->scrollback_limit;
-        } else if (term->view)
-            term->scrollback_pos++;
+            /* Adjust capacity as needed */
+            if (term->sb_limit + 1 >= term->sb_caps) {
+                ssize_t new_cap = CBUF_STEP(term->sb_caps, term->sb_max_caps);
+                nss_line_t **new = realloc(term->scrollback, new_cap * sizeof(*new));
+                if (!new) {
+                    term_free_line(line);
+                    return;
+                }
+                term->sb_caps = new_cap;
+                term->scrollback = new;
+            }
 
-    }
+            /* And just save line */
+            term->sb_top = term->sb_limit++;
+            term->scrollback[term->sb_top] = line;
+        }
+    } else term_free_line(line);
 }
 
 
@@ -990,6 +1008,20 @@ static void term_reset_margins(nss_term_t *term) {
     term->bottom = term->height - 1;
 }
 
+static void term_free_scrollback(nss_term_t *term) {
+    if (!term->scrollback) return;
+
+    term_reset_view(term, 0);
+    for (ssize_t i = 0; i < term->sb_limit; i++)
+        term_free_line(term->scrollback[i]);
+    free(term->scrollback);
+
+    term->scrollback = NULL;
+    term->sb_caps = 0;
+    term->sb_limit = 0;
+    term->sb_top = 0;
+}
+
 static void term_reset(nss_term_t *term, _Bool hard) {
 
     term->mode &= nss_tm_focused | nss_tm_visible;
@@ -1015,17 +1047,10 @@ static void term_reset(nss_term_t *term, _Bool hard) {
             term_erase(term, 0, 0, term->width, term->height);
             term_swap_screen(term, 0);
         }
-        for (nss_line_t *tmp, *line = term->scrollback; line; line = tmp) {
-            tmp = line->prev;
-            term_free_line(line);
-        }
+
+        term_free_scrollback(term);
 
         term->vt_level = term->vt_version / 100;
-
-        term->scrollback_top = NULL;
-        term->scrollback = NULL;
-        term->scrollback_size = 0;
-        term_reset_view(term, 0);
 
         nss_window_set_title(term->win, NULL, term->mode & nss_tm_title_set_utf8);
         nss_window_set_icon_name(term->win, NULL, term->mode & nss_tm_title_set_utf8);
@@ -1049,7 +1074,7 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t he
     term->inmode = nss_config_input_mode();
     term->mode = nss_tm_visible;
     term->printerfd = -1;
-    term->scrollback_limit = nss_config_integer(NSS_ICONFIG_HISTORY_LINES);
+    term->sb_max_caps = nss_config_integer(NSS_ICONFIG_HISTORY_LINES);
     term->vt_version = nss_config_integer(NSS_ICONFIG_VT_VERION);
     term->vt_level = term->vt_version / 100;
 
@@ -1834,8 +1859,8 @@ static void term_dispatch_mc(nss_term_t *term) {
             break;
         case 11: /* Print scrollback and screen */
             if (term->printerfd < 0) break;
-            for (nss_line_t *line = term->scrollback_top; line; line = line->next)
-                term_print_line(term, line);
+            for (ssize_t i = 1; i <= term->sb_limit; i++)
+                term_print_line(term, term->scrollback[(term->sb_top + i) % term->sb_limit]);
         case 10: /* Print screen */
             term_print_screen(term, 1);
             break;
@@ -3183,8 +3208,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
 
     // Clear new regions
 
-    nss_line_t *view = term->view;
-    ssize_t scrollback_pos = term->scrollback_pos;
+    ssize_t view = term->view;
     for (size_t j = 0; j < 2; j++) {
         // Reallocate line if it is not wide enough
         for (nss_coord_t i = 0; i < minh; i++)
@@ -3193,7 +3217,6 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
         term_swap_screen(term, 0);
     }
     term->view = view;
-    term->scrollback_pos = scrollback_pos;
 
     // Reset scroll region
 
@@ -3308,9 +3331,9 @@ static void term_update_selection(nss_term_t *term, uint8_t oldstate, nss_select
     nss_rect_t *res = d_diff, bound = {0, 0, term->width, term->height};
 
     if (oldstate != nss_sstate_none && oldstate != nss_sstate_pressed)
-        sz_old = descomose_selection(d_old, old, bound, term->scrollback_pos);
+        sz_old = descomose_selection(d_old, old, bound, term->view);
     if (term->vsel.state != nss_sstate_none && term->vsel.state != nss_sstate_pressed)
-        sz_new = descomose_selection(d_new, term->vsel.n, bound, term->scrollback_pos);
+        sz_new = descomose_selection(d_new, term->vsel.n, bound, term->view);
 
     if (!sz_old) res = d_new, count = sz_new;
     else if (!sz_new) res = d_old, count = sz_old;
@@ -3368,8 +3391,8 @@ void nss_term_clear_selection(nss_term_t *term) {
 static void term_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save) {
     if (term->vsel.state == nss_sstate_none) return;
 
-	_Bool cond0 = (term->top <= term->vsel.n.y0 && term->vsel.n.y0 <= term->bottom);
-	_Bool cond1 = (term->top <= term->vsel.n.y1 && term->vsel.n.y1 <= term->bottom);
+    _Bool cond0 = (term->top <= term->vsel.n.y0 && term->vsel.n.y0 <= term->bottom);
+    _Bool cond1 = (term->top <= term->vsel.n.y1 && term->vsel.n.y1 <= term->bottom);
 
     // Clear sellection if it is going to be split by scroll
     if ((cond0 ^ cond1) && !(save && term->vsel.n.y1 <= term->bottom)) nss_term_clear_selection(term);
@@ -3388,7 +3411,7 @@ static void term_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool sa
             SWAP(ssize_t, term->vsel.r.x0, term->vsel.r.x1);
         }
 
-		ssize_t top = save ? -term->scrollback_size : term->top;
+        ssize_t top = save ? -term->sb_limit : term->top;
         if (term->vsel.r.y0 < top) {
             term->vsel.r.y0 = top;
             term->vsel.n.y0 = top;
@@ -3442,8 +3465,8 @@ static void term_snap_selection(nss_term_t *term) {
     if (term->vsel.snap == nss_ssnap_line) {
         term->vsel.state = nss_sstate_progress;
 
-        nss_line_iter_t it = make_line_iter(term->view, term->screen,
-                term->vsel.n.y0, term->scrollback_pos + term->height);
+        nss_line_iter_t it = make_screen_iter(term, -term->sb_limit, term->vsel.n.y0 + 1);
+        line_iter_inc(&it, term->vsel.n.y0 + term->sb_limit);
         term->vsel.n.x0 = 0;
         term->vsel.n.x1 = term->width - 1;
 
@@ -3452,20 +3475,19 @@ static void term_snap_selection(nss_term_t *term) {
         do line = line_iter_prev(&it), term->vsel.n.y0--;
         while (line && line->wrap_at);
 
-        it = make_line_iter(term->view, term->screen,
-                term->vsel.n.y1, term->scrollback_pos + term->height);
+        it = make_screen_iter(term, term->vsel.n.y1, term->height);
         line = line_iter_next(&it);
         if (!line) return;
 
         while (line && line->wrap_at)
-            line = line_iter_prev(&it), term->vsel.n.y1++;
+            line = line_iter_next(&it), term->vsel.n.y1++;
 
     } else if (term->vsel.snap == nss_ssnap_word) {
         term->vsel.state = nss_sstate_progress;
 
-        nss_line_iter_t it = make_line_iter(term->view, term->screen,
-                term->scrollback_pos + term->vsel.n.y0, term->height + term->scrollback_pos);
-        nss_line_t *line = line_iter_next(&it); line_iter_prev(&it);
+        nss_line_iter_t it = make_screen_iter(term, -term->sb_limit, term->vsel.n.y0 + 1);
+        line_iter_inc(&it, term->vsel.n.y0 + term->sb_limit);
+        nss_line_t *line = line_iter_ref(&it);
 
         if (!line) return;
 
@@ -3481,8 +3503,7 @@ static void term_snap_selection(nss_term_t *term) {
             if (cat != is_separator(line->cell[0].ch)) break;
         } while((line = line_iter_prev(&it)) && line->wrap_at);
 
-        it = make_line_iter(term->view, term->screen,
-                term->scrollback_pos + term->vsel.n.y1, term->height + term->scrollback_pos);
+        it = make_screen_iter(term, term->vsel.n.y1, term->height);
         line = line_iter_next(&it);
 
         if (!line) return;
@@ -3507,7 +3528,7 @@ static void term_snap_selection(nss_term_t *term) {
 _Bool nss_term_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
     if (term->vsel.state == nss_sstate_none || term->vsel.state == nss_sstate_pressed) return 0;
 
-    y -= term->scrollback_pos;
+    y -= term->view;
 
     if (term->vsel.n.rect) {
         return (term->vsel.n.x0 <= x && x <= term->vsel.n.x1) &&
@@ -3556,17 +3577,15 @@ static uint8_t *term_selection_data(nss_term_t *term) {
         size_t pos = 0, cap = SEL_INIT_SIZE;
 
         nss_line_t *line;
-        _Bool inview = !term->view && term->scrollback;
-        nss_line_iter_t it = make_line_iter(inview ? term->scrollback : term->view, term->screen,
-                term->vsel.n.y0 + term->scrollback_pos + inview, term->scrollback_pos + term->vsel.n.y1 + inview + 1);
+        nss_line_iter_t it = make_screen_iter(term, term->vsel.n.y0, term->vsel.n.y1 + 1);
         if (term->vsel.n.rect || term->vsel.n.y0 == term->vsel.n.y1) {
             while ((line = line_iter_next(&it)))
                 append_line(&pos, &cap, &res, line, term->vsel.n.x0, term->vsel.n.x1 + 1);
         } else {
             while ((line = line_iter_next(&it))) {
-                if (line_iter_y(&it) == term->vsel.n.y0 + term->scrollback_pos + inview)
+                if (line_iter_y(&it) == term->vsel.n.y0)
                     append_line(&pos, &cap, &res, line, term->vsel.n.x0, line->width);
-                else if(line_iter_y(&it) == term->vsel.n.y1 + term->scrollback_pos + inview && term->vsel.n.y1 != term->vsel.n.y0)
+                else if(line_iter_y(&it) == term->vsel.n.y1 && term->vsel.n.y1 != term->vsel.n.y0)
                     append_line(&pos, &cap, &res, line, 0, term->vsel.n.x1 + 1);
                 else
                     append_line(&pos, &cap, &res, line, 0, line->width);
@@ -3583,7 +3602,7 @@ static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x
 
     if (state == nss_sstate_pressed) {
         term->vsel.r.x0 = x;
-        term->vsel.r.y0 = y - term->scrollback_pos;
+        term->vsel.r.y0 = y - term->view;
 
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
@@ -3602,7 +3621,7 @@ static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x
     term->vsel.state = state;
     term->vsel.r.rect = rectangular;
     term->vsel.r.x1 = x;
-    term->vsel.r.y1 = y - term->scrollback_pos;
+    term->vsel.r.y1 = y - term->view;
 
     term_snap_selection(term);
     term_update_selection(term, oldstate, old);
@@ -3694,6 +3713,9 @@ void nss_term_hang(nss_term_t *term) {
 
 void nss_free_term(nss_term_t *term) {
     nss_term_hang(term);
+
+    term_free_scrollback(term);
+
     for (nss_coord_t i = 0; i < term->height; i++) {
         term_free_line(term->screen[i]);
         term_free_line(term->back_screen[i]);
@@ -3701,12 +3723,6 @@ void nss_free_term(nss_term_t *term) {
     free(term->screen);
     free(term->back_screen);
 
-    nss_line_t *next, *line = term->scrollback;
-    while (line) {
-        next = line->prev;
-        term_free_line(line);
-        line = next;
-    }
 
     free(term->tabs);
     free(term->palette);
