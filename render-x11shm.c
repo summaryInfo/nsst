@@ -193,6 +193,8 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
     _Bool marg = win->cw == cur_x;
     cur_x -= marg;
 
+    _Bool scrolled = win->ren.boundc;
+
     for (nss_line_t *line; (line = line_iter_next(it));) {
         _Bool damaged = 0;
         nss_rect_t l_bound = {0, line_iter_y(it), 0, 1};
@@ -238,7 +240,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
                 damaged = 1;
             }
         }
-        if (damaged) {
+        if (damaged || (scrolled && win->cw > line->width)) {
             if (win->cw > line->width) {
                 nss_image_draw_rect(win->ren.im, (nss_rect_t){
                     .x = line->width * win->char_width,
