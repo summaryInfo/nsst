@@ -236,6 +236,8 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
                 if (!damaged) l_bound.x = i;
 
                 i += spec.wide;
+                line->cell[i].attr |= nss_attrib_drawn;
+
                 l_bound.width = i;
                 damaged = 1;
             }
