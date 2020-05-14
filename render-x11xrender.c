@@ -77,8 +77,6 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     }
     else win->ren.gsid = xcb_generate_id(con);
 
-    nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
-
     if (found && win->subpixel_fonts == found->subpixel_fonts) {
         c = xcb_render_reference_glyph_set_checked(con, win->ren.gsid, found->ren.gsid);
         if (check_void_cookie(c)) warn("Can't reference glyph set");

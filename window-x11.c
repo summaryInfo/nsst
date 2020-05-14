@@ -502,6 +502,8 @@ nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free) {
     if (!nss_config_integer(NSS_ICONFIG_FONT_SIZE))
         nss_config_set_integer(NSS_ICONFIG_FONT_SIZE, win->font_size);
 
+    nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
+
     return found;
 }
 

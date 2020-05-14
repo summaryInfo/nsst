@@ -105,8 +105,6 @@ static void nss_free_image_shm(nss_image_t *im) {
 _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     nss_find_shared_font(win, need_free);
 
-    nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
-
     if (need_free) {
         nss_window_handle_resize(win, win->width, win->height);
         nss_window_set_default_props(win);
