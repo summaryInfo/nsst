@@ -646,11 +646,19 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
 }
 
 
-inline static void term_clear_selection_on_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
+inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t *ys, nss_coord_t *xe, nss_coord_t *ye) {
+    if (*ye < *ys) SWAP(nss_coord_t, *ye, *ys);
+    if (*xe < *xs) SWAP(nss_coord_t, *xe, *xs);
+
+    *xs = MAX(0, MIN(*xs, term->width));
+    *xe = MAX(0, MIN(*xe, term->width));
+    *ys = MAX(0, MIN(*ys, term->height));
+    *ye = MAX(0, MIN(*ye, term->height));
+
     if (term->vsel.state == nss_sstate_none) return;
 
 #define RECT_INTRS(x10, x11, y10, y11) \
-    ((MAX(xs, x10) <= MIN(xe - 1, x11)) && (MAX(ys, y10) <= MIN(ye - 1, y11)))
+    ((MAX(*xs, x10) <= MIN(*xe - 1, x11)) && (MAX(*ys, y10) <= MIN(*ye - 1, y11)))
 
     if (term->vsel.r.rect || term->vsel.n.y0 == term->vsel.n.y1) {
         if (RECT_INTRS(term->vsel.n.x0, term->vsel.n.x1, term->vsel.n.y0, term->vsel.n.y1))
@@ -669,16 +677,7 @@ inline static void term_clear_selection_on_erase(nss_term_t *term, nss_coord_t x
 }
 
 static void term_fill(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, nss_char_t ch) {
-
-    if (ye < ys) SWAP(nss_coord_t, ye, ys);
-    if (xe < xs) SWAP(nss_coord_t, xe, xs);
-
-    xs = MAX(0, MIN(xs, term->width));
-    xe = MAX(0, MIN(xe, term->width));
-    ys = MAX(0, MIN(ys, term->height));
-    ye = MAX(0, MIN(ye, term->height));
-
-    term_clear_selection_on_erase(term, xs, xe, ys, ye);
+    term_erase_pre(term, &xs, &ys, &xe, &ye);
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
@@ -695,15 +694,7 @@ static void term_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coo
 }
 
 static void term_protective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
-    if (ye < ys) SWAP(nss_coord_t, ye, ys);
-    if (xe < xs) SWAP(nss_coord_t, xe, xs);
-
-    xs = MAX(0, MIN(xs, term->width));
-    xe = MAX(0, MIN(xe, term->width));
-    ys = MAX(0, MIN(ys, term->height));
-    ye = MAX(0, MIN(ye, term->height));
-
-    term_clear_selection_on_erase(term, xs, xe, ys, ye);
+    term_erase_pre(term, &xs, &ys, &xe, &ye);
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
@@ -716,15 +707,7 @@ static void term_protective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t 
 }
 
 static void term_selective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
-    if (ye < ys) SWAP(nss_coord_t, ye, ys);
-    if (xe < xs) SWAP(nss_coord_t, xe, xs);
-
-    xs = MAX(0, MIN(xs, term->width));
-    xe = MAX(0, MIN(xe, term->width));
-    ys = MAX(0, MIN(ys, term->height));
-    ye = MAX(0, MIN(ye, term->height));
-
-    term_clear_selection_on_erase(term, xs, xe, ys, ye);
+    term_erase_pre(term, &xs, &ys, &xe, &ye);
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
