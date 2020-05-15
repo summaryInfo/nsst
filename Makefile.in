@@ -19,7 +19,7 @@ CFLAGS += $(INCLUES)
 all: $(NAME)
 
 clean:
-	rm -rf *.o $(NAME)
+	rm -rf *.o *.gcda $(NAME)
 
 force: clean
 	$(MAKE) all
