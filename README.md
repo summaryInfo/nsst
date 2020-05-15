@@ -4,14 +4,16 @@ This is an implementation of VT220-compatible X11 terminal emulator.
 Inspired by [Simple Terminal](https://st.suckless.org/)
 
 ## Features
-* Most escape sequences are already implemented
-* Ful keyboard mode from XTerm
-* OSC 13001 "Set background opacity"
 * Quiet fast rendering
+    * Almost same latency as `XTerm`, which is a lot faster than other modern terminals
+    * Scrolling performance is higher than other terminals measured on my system
 * Small size and almost no dependencies
 * Uses xcb as X11 library
     * So it is faster and more lightweight
     * `size` including all loaded shared libs is only 75% of `st` on my system 
+* Most escape sequences are already implemented
+* Ful keyboard mode from XTerm
+* OSC 13001 "Set background opacity"
 * Multiple terminal windows
     * This would be extended to full daemon mode
     * `Shift-Ctrl-N` is default keybinding
