@@ -533,8 +533,8 @@ void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
     }
 }
 
-void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
-    if (!(term->mode & nss_tm_visible)) return;
+_Bool nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
+    if (!(term->mode & nss_tm_visible)) return 0;
 
     if (MIN(term->c.x, term->width - 1) != term->prev_c_x || term->c.y != term->prev_c_y || term->prev_c_view_changed) {
         if (!(term->mode & nss_tm_hide_cursor) && !term->view)
@@ -553,7 +553,7 @@ void nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
 
     nss_line_iter_t it = make_screen_iter(term, -term->view, term->height - term->view);
 
-    nss_window_submit_screen(term->win, &it, term->palette, term->c.x, term->c.y, cursor);
+    return nss_window_submit_screen(term->win, &it, term->palette, term->c.x, term->c.y, cursor);
 }
 
 static void term_reset_view(nss_term_t *term, _Bool damage) {

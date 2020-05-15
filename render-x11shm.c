@@ -187,7 +187,7 @@ static void optimize_bounds(nss_rect_t *bounds, size_t *boundc, _Bool fine_grain
     *boundc = j;
 }
 
-void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor) {
+_Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor) {
     _Bool marg = win->cw == cur_x;
     cur_x -= marg;
 
@@ -288,6 +288,7 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
             nss_image_draw_rect(win->ren.im, rects[i + off], win->cursor_fg);
     }
 
+	_Bool drawn_any = win->ren.boundc;
 
     if (win->ren.boundc) {
         optimize_bounds(win->ren.bounds, &win->ren.boundc, rctx.has_shm);
@@ -298,6 +299,8 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
     }
 
     win->damaged_y0 = win->damaged_y1 = 0;
+
+    return drawn_any;
 }
 
 void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {

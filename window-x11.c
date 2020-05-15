@@ -1246,18 +1246,23 @@ void nss_context_run(void) {
             if (remains <= 1000LL || win->force_redraw) {
                 if (win->force_redraw)
                     redraw_borders(win, 1, 1);
-                nss_term_redraw_dirty(win->term, 1);
+
+                remains = frame_time;
+                _Bool old_drawn = win->drawn_somthing;
+                win->drawn_somthing = nss_term_redraw_dirty(win->term, 1);
+
+                if (win->drawn_somthing || old_drawn) {
+                    win->next_draw = cur;
+                    TIMEINC(win->next_draw, remains);
+                }
+
                 win->force_redraw = 0;
                 win->resize_delayed = 0;
                 win->scroll_delayed = 0;
                 win->blink_commited = 1;
-
-                win->next_draw = cur;
-                remains = frame_time;
-                TIMEINC(win->next_draw, remains);
              }
 
-            next_timeout = MIN(next_timeout,  remains);
+             next_timeout = MIN(next_timeout,  remains);
         }
         xcb_flush(con);
 

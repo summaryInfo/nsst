@@ -285,8 +285,7 @@ static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
         dst[i] = src[i];
 }
 
-/* new method of rendering: whole screen in a time */
-void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor) {
+_Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor) {
     rctx.cbufpos = 0;
     rctx.bufpos = 0;
 
@@ -539,6 +538,8 @@ void nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_
                 win->char_width, win->char_height + win->char_depth));
 
     win->damaged_y0 = win->damaged_y1 = 0;
+
+    return rctx.cbufpos;
 }
 
 void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {

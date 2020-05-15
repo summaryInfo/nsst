@@ -73,6 +73,7 @@ struct nss_window {
     unsigned blink_commited : 1;
     unsigned scroll_delayed : 1;
     unsigned resize_delayed : 1;
+    unsigned drawn_somthing : 1;
 
     int16_t width;
     int16_t height;
