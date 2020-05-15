@@ -91,6 +91,15 @@ giving sufficient number of possible custom glyphs. DECDLD is also easy to imple
 Default config is generally sane.
 Use `./configure CFLAGS='-flto -O3 -march=native'` to make it faster (but also bigger).
 It's more relevant for MIT-SHM backend.
+
+I'd suggest PGO to optimize even better:
+
+    ./configure CFLAGS='-flto -fprofile-generate -O3 -march=native'
+    make -j
+    nsst # Run it and emulate your typical usage
+    ./configure CFLAGS='-flto -fprofile-use -O3 -march=native'
+    make -j
+
 See `./configure --help` for more.
 
 ### To install:
