@@ -143,6 +143,7 @@ static void nss_parse_options(char **argv) {
             case 'e':
                 if (!argv[++ind]) usage(argv[0], EXIT_FAILURE);
                 nss_config_set_argv((const char**)&argv[ind]);
+                return;
             case 'h':
                 usage(argv[0], EXIT_FAILURE);
                 break;
