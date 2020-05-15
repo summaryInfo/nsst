@@ -3467,9 +3467,10 @@ static void term_snap_selection(nss_term_t *term) {
     if (term->vsel.n.rect && term->vsel.n.x1 < term->vsel.n.x0)
             SWAP(nss_coord_t, term->vsel.n.x0, term->vsel.n.x1);
 
-    if (term->vsel.snap == nss_ssnap_line) {
+    if (term->vsel.snap != nss_ssnap_none && term->vsel.state == nss_sstate_pressed)
         term->vsel.state = nss_sstate_progress;
 
+    if (term->vsel.snap == nss_ssnap_line) {
         nss_line_iter_t it = make_screen_iter(term, -term->sb_limit, term->vsel.n.y0 + 1);
         line_iter_inc(&it, term->vsel.n.y0 + term->sb_limit);
         term->vsel.n.x0 = 0;
@@ -3488,8 +3489,6 @@ static void term_snap_selection(nss_term_t *term) {
             line = line_iter_next(&it), term->vsel.n.y1++;
 
     } else if (term->vsel.snap == nss_ssnap_word) {
-        term->vsel.state = nss_sstate_progress;
-
         nss_line_iter_t it = make_screen_iter(term, -term->sb_limit, term->vsel.n.y0 + 1);
         line_iter_inc(&it, term->vsel.n.y0 + term->sb_limit);
         nss_line_t *line = line_iter_ref(&it);
