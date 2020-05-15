@@ -33,7 +33,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"answerback-string", "\t(ENQ report)", "answerbackString", NSS_SCONFIG_ANSWERBACK_STRING},
     {"appcursor", "\t\t(Initial application cursor mode value)", "appcursor", NSS_ICONFIG_INPUT_APPCURSOR},
     {"appkey", "\t\t(Initial application keypad mode value)", "appkey", NSS_ICONFIG_INPUT_APPKEY},
-    {"autowrap", "\t(Initial autowrap setting)", "enableAutowrap", NSS_ICONFIG_INIT_WRAP},
+    {"autowrap", "\t\t(Initial autowrap setting)", "enableAutowrap", NSS_ICONFIG_INIT_WRAP},
     {"background", "\t\t(Default backround color)", "background", NSS_CCONFIG_BG},
     {"backspace-is-del", "\t(Backspace sends DEL instead of BS)", "backspaceIsDelete", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
     {"blink-time", "\t\t(Text blink interval in microseconds)","blinkTime", NSS_ICONFIG_BLINK_TIME},
@@ -52,7 +52,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"font-spacing", "\t\t(Additional spacing for individual symbols)", "fontSpacing", NSS_ICONFIG_FONT_SPACING},
     {"font-subpixel", "\t\t(Use subpixel rendering)", "fontSubpixel", NSS_ICONFIG_SUBPIXEL_FONTS},
     {"force-dpi", "\t\t(DPI value for fonts)", "dpi", NSS_ICONFIG_DPI},
-    {"force-nrcs", "\t(Enable NRCS translation when UTF-8 mode is enabled)", "forceNrcs", NSS_ICONFIG_FORCE_UTF8_NRCS},
+    {"force-nrcs", "\t\t(Enable NRCS translation when UTF-8 mode is enabled)", "forceNrcs", NSS_ICONFIG_FORCE_UTF8_NRCS},
     {"foreground", "\t\t(Default foreground color)", "foreground", NSS_CCONFIG_FG},
     {"fps", "\t\t\t(Window refresh rate)", "fps", NSS_ICONFIG_FPS},
     {"has-meta", "\t\t(Handle meta/alt)", "hasMeta", NSS_ICONFIG_INPUT_HAS_META},
@@ -70,14 +70,14 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"modify-keypad", "\t\t(Enable encoding modifiers keypad keys)", "modifyKeypad", NSS_ICONFIG_INPUT_MODIFY_KEYPAD},
     {"modify-other", "\t\t(Enable encoding modifiers for other keys)", "modifyOther", NSS_ICONFIG_INPUT_MODIFY_OTHER},
     {"modify-other-fmt", "\t(Format of encoding modifers)", "modifyOtherFmt", NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT},
-    {"nrcs", "\t\t(Enable NRCSs support)", "allowNrcs", NSS_ICONFIG_ALLOW_NRCS},
+    {"nrcs", "\t\t\t(Enable NRCSs support)", "allowNrcs", NSS_ICONFIG_ALLOW_NRCS},
     {"numlock", "\t\t(Initial numlock state)", "numlock", NSS_ICONFIG_INPUT_NUMLOCK},
 #if USE_BOXDRAWING
     {"override-boxdrawing", "\t(Use built-in box drawing characters)", "overrideBoxdrawing", NSS_ICONFIG_OVERRIDE_BOXDRAW},
 #endif
     {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", "printer", NSS_SCONFIG_PRINTER},
     {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", NSS_ICONFIG_RESIZE_DELAY},
-    {"reverse-video", "\t(Initial reverse video setting)", "enableReverseVideo", NSS_ICONFIG_REVERSE_VIDEO},
+    {"reverse-video", "\t\t(Initial reverse video setting)", "enableReverseVideo", NSS_ICONFIG_REVERSE_VIDEO},
     {"scroll-amount", "\t\t(Number of lines scrolled in a time)", "scrollAmout", NSS_ICONFIG_SCROLL_AMOUNT},
     {"scroll-delay", "\t\t(Additional delay after scroll in microseconds)", "scrollDelay", NSS_ICONFIG_SCROLL_DELAY},
     {"scroll-on-input", "\t(Scroll view to bottom on key press)", "scrollOnInput", NSS_ICONFIG_SCROLL_ON_INPUT},
@@ -95,8 +95,8 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"vertical-border", "\t(Left and right borders)", "verticalBorder", NSS_ICONFIG_LEFT_BORDER},
     {"vt-version", ", -V<value>\t(Emulated VT version)", "vtVersion", NSS_ICONFIG_VT_VERION},
     {"window-class", ", -c<value> (X11 Window class)", "windowClass", NSS_SCONFIG_TERM_CLASS},
-    {"window-ops", "\t(Allow window manipulation with escape sequences)", "allowWindowOps", NSS_ICONFIG_ALLOW_WINDOW_OPS},
-    {"word-break", "\t(Symbols treated as word separators when snapping mouse selection)", "wordBreak", NSS_SCONFIG_WORD_SEPARATORS},
+    {"window-ops", "\t\t(Allow window manipulation with escape sequences)", "allowWindowOps", NSS_ICONFIG_ALLOW_WINDOW_OPS},
+    {"word-break", "\t\t(Symbols treated as word separators when snapping mouse selection)", "wordBreak", NSS_SCONFIG_WORD_SEPARATORS},
 };
 
 static struct {
