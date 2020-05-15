@@ -2918,7 +2918,7 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
                 return;
             }
 
-            info("%lc (%u)", ch, ch);
+            //info("%lc (%u)", ch, ch);
 
             // Wrap line if needed
             if (term->mode & nss_tm_wrap) {
