@@ -393,6 +393,11 @@ void nss_window_set_mouse(nss_window_t *win, _Bool enabled) {
    xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
 }
 
+void nss_window_set_sync(nss_window_t *win, _Bool state) {
+    if (state) clock_gettime(CLOCK_MONOTONIC, &win->last_sync);
+    win->sync_active = state;
+}
+
 /* This would probably be useful later when implemeting OSC for setting fonts
 void nss_window_set_font(nss_window_t *win, const char * name) {
     if (!name) {
@@ -1225,11 +1230,15 @@ void nss_context_run(void) {
         clock_gettime(CLOCK_MONOTONIC, &cur);
 
         for (nss_window_t *win = win_list_head; win; win = win->next) {
+            if (TIMEDIFF(win->last_sync, cur) > nss_config_integer(NSS_ICONFIG_SYNC_TIME)*1000LL && win->sync_active)
+                win->sync_active = 0;
             if (TIMEDIFF(win->last_blink, cur) > nss_config_integer(NSS_ICONFIG_BLINK_TIME)*1000LL && win->active) {
                 win->blink_state = !win->blink_state;
                 win->blink_commited = 0;
                 win->last_blink = cur;
             }
+
+            if (win->sync_active) continue;
 
             int64_t scroll_delay = 1000LL * nss_config_integer(NSS_ICONFIG_SCROLL_DELAY);
             int64_t resize_delay = 1000LL * nss_config_integer(NSS_ICONFIG_RESIZE_DELAY);

@@ -74,6 +74,7 @@ struct nss_window {
     unsigned scroll_delayed : 1;
     unsigned resize_delayed : 1;
     unsigned drawn_somthing : 1;
+    unsigned sync_active : 1;
 
     int16_t width;
     int16_t height;
@@ -86,6 +87,7 @@ struct nss_window {
     struct timespec last_blink;
     struct timespec last_scroll;
     struct timespec last_resize;
+    struct timespec last_sync;
     struct timespec next_draw;
     nss_coord_t damaged_y0;
     nss_coord_t damaged_y1;

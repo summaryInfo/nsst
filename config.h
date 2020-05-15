@@ -68,6 +68,7 @@ enum nss_config_opt {
     NSS_ICONFIG_FPS,
     NSS_ICONFIG_SCROLL_DELAY,
     NSS_ICONFIG_RESIZE_DELAY,
+    NSS_ICONFIG_SYNC_TIME,
     NSS_ICONFIG_SCROLL_AMOUNT,
     NSS_ICONFIG_FONT_SIZE_STEP,
     NSS_ICONFIG_DOUBLE_CLICK_TIME,
@@ -136,9 +137,9 @@ typedef struct nss_optmap_item {
 } nss_optmap_item_t;
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 71
-#else
 #    define OPT_MAP_SIZE 72
+#else
+#    define OPT_MAP_SIZE 73
 #endif
 
 extern nss_optmap_item_t optmap[OPT_MAP_SIZE];

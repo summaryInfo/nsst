@@ -74,6 +74,7 @@ void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor
 void nss_window_set_cursor(nss_window_t *win, nss_cursor_type_t type);
 void nss_window_get_dim(nss_window_t *win, int16_t *width, int16_t *height);
 void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, nss_clipboard_target_t target);
+void nss_window_set_sync(nss_window_t *win, _Bool state);
 
 #define NSS_TIME_NOW 0
 

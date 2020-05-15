@@ -883,8 +883,6 @@ static void term_tabs(nss_term_t *term, nss_coord_t n) {
 }
 
 static inline void term_esc_start(nss_term_t *term) {
-    term->esc.old_selector = term->esc.selector;
-    term->esc.old_state = term->esc.state;
     term->esc.selector = 0;
 }
 
@@ -894,17 +892,11 @@ static inline void term_esc_start_seq(nss_term_t *term) {
     term->esc.i = 0;
     term->esc.subpar_mask = 0;
     term->esc.selector = 0;
-    term->esc.old_selector = 0;
-    term->esc.old_state = 0;
-
 }
 static inline void term_esc_start_string(nss_term_t *term) {
     term->esc.si = 0;
     term->esc.str[0] = 0;
-
     term->esc.selector = 0;
-    term->esc.old_selector = 0;
-    term->esc.old_state = 0;
 }
 
 static void term_esc_dump(nss_term_t *term, _Bool use_info) {
@@ -1200,9 +1192,27 @@ static void term_dispatch_dsr(nss_term_t *term) {
 }
 
 static void term_dispatch_dcs(nss_term_t *term) {
-    /* yet nothing here */
-    term_esc_dump(term, 0);
+    if (term->esc.state != esc_dcs_string)
+        term->esc.selector = term->esc.old_selector;
 
+    switch(term->esc.selector) {
+    case C('s') | P('='): /* iTerm2 syncronous updates */
+        switch(PARAM(0,0)) {
+        case 1: /* Begin syncronous update */
+            nss_window_set_sync(term->win, 1);
+            break;
+        case 2: /* End syncronous update */
+            nss_window_set_sync(term->win, 0);
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        break;
+    default:
+        term_esc_dump(term, 0);
+    }
+
+    term->esc.old_state = 0;
     term->esc.state = esc_ground;
 }
 
@@ -1217,7 +1227,10 @@ static nss_clipboard_target_t decode_target(uint8_t targ, _Bool mode) {
 }
 
 static void term_dispatch_osc(nss_term_t *term) {
+    if (term->esc.state != esc_osc_string)
+        term->esc.selector = term->esc.old_selector;
     term_esc_dump(term, 1);
+
     switch (term->esc.selector) {
     case 0: /* Change window icon name and title */
     case 1: /* Change window icon name */
@@ -1410,6 +1423,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         term_esc_dump(term, 0);
     }
 
+    term->esc.old_state = 0;
     term->esc.state = esc_ground;
 }
 
@@ -2398,6 +2412,7 @@ static void term_dispatch_esc(nss_term_t *term) {
         break;
     case E('P'): /* DCS */
         term->esc.state = esc_dcs_entry;
+        term->esc.old_state = 0;
         return;
     case E('V'): /* SPA */
         term->c.cel.attr |= nss_attrib_protected;
@@ -2412,6 +2427,7 @@ static void term_dispatch_esc(nss_term_t *term) {
         break;
     case E('['): /* CSI */
         term->esc.state = esc_csi_entry;
+        term->esc.old_state = 0;
         return;
     case E('\\'): /* ST */
         if (term->esc.old_state == esc_dcs_string)
@@ -2420,11 +2436,13 @@ static void term_dispatch_esc(nss_term_t *term) {
             term_dispatch_osc(term);
         break;
     case E(']'): /* OSC */
+        term->esc.old_state = 0;
         term->esc.state = esc_osc_entry;
         return;
     case E('X'): /* SOS */
     case E('^'): /* PM */
     case E('_'): /* APC */
+        term->esc.old_state = 0;
         term->esc.state = esc_ign_entry;
         return;
     //case E('6'): /* DECBI */
@@ -2451,6 +2469,7 @@ static void term_dispatch_esc(nss_term_t *term) {
     case E('k'): /* Old style title */
         term->esc.state = esc_osc_string;
         term->esc.selector = 2;
+        term->esc.old_state = 0;
         return;
     case E('l'): /* HP Memory lock */
         term_set_tb_margins(term, term->c.y, term->bottom);
@@ -2539,6 +2558,7 @@ static void term_dispatch_esc(nss_term_t *term) {
     }
     }
 
+    term->esc.old_state = 0;
     term->esc.state = esc_ground;
 }
 
@@ -2609,6 +2629,8 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
     case 0x19: /* EM (IGNORE) */
         break;
     case 0x1b: /* ESC */
+        term->esc.old_selector = term->esc.selector;
+        term->esc.old_state = term->esc.state;
         term->esc.state = term->vt_level ? esc_esc_entry : esc_vt52_entry;
         break;
     case 0x1c: /* FS (IGNORE) */
@@ -2712,14 +2734,14 @@ static void term_dispatch_vt52_cup(nss_term_t *term) {
 }
 
 static void term_putchar(nss_term_t *term, nss_char_t ch) {
-    //info("UTF %"PRIx32" '%s'", ch, buf);
-
     // TODO More sophisticated filtering
     if (term->mode & nss_tm_print_enabled)
         term_print_char(term, ch);
 
     if (IS_C1(ch) && (term->vt_level > 1)) {
-        term_esc_start(term);
+        term->esc.old_selector = term->esc.selector;
+        term->esc.old_state = term->esc.state;
+        term->esc.state = esc_esc_entry;
         term->esc.selector = E(ch ^ 0xC0);
         term_dispatch_esc(term);
         return;
@@ -2896,7 +2918,7 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
                 return;
             }
 
-            info("%Lc (%u)", ch, ch);
+            info("%lc (%u)", ch, ch);
 
             // Wrap line if needed
             if (term->mode & nss_tm_wrap) {
