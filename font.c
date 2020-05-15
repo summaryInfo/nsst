@@ -22,6 +22,7 @@
 #include <ft2build.h>
 #include FT_BITMAP_H
 #include FT_FREETYPE_H
+#include FT_LCD_FILTER_H
 
 #define CAPS_STEP 2
 
@@ -235,6 +236,7 @@ nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi) {
         if (FT_Init_FreeType(&global.library) != FT_Err_Ok) {
             die("Can't initialize freetype2, error: %s", strerror(errno));
         }
+        FT_Library_SetLcdFilter(global.library, FT_LCD_FILTER_DEFAULT);
     }
 
     nss_font_t *font = calloc(1, sizeof(*font));
