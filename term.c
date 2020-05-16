@@ -1198,8 +1198,13 @@ static void term_dispatch_dsr(nss_term_t *term) {
 }
 
 static void term_dispatch_dcs(nss_term_t *term) {
+    term_esc_dump(term, 1);
+
     if (term->esc.state != esc_dcs_string)
         term->esc.selector = term->esc.old_selector;
+
+    // Only SGR is allowed to have subparams
+    if (term->esc.subpar_mask) return;
 
     switch(term->esc.selector) {
     case C('s') | P('='): /* iTerm2 syncronous updates */
