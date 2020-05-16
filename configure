@@ -50,15 +50,15 @@ for i; do
     --disable-precompose)
         use_precompose=0 ;;
     --backend=*)
-        backend="${backend#--backend=}" ;;
+        backend="${i#--backend=}" ;;
     --name=*)
-        name="${name#--name=}" ;;
+        name="${i#--name=}" ;;
     --bindir=*)
-        bindir="${bindir#--bindir=}" ;;
+        bindir="${i#--bindir=}" ;;
     --mandir=*)
-        mandir="${mandir#--mandir=}" ;;
+        mandir="${i#--mandir=}" ;;
     --prefix=*)
-        prefix="${prefix#--prefix=}" ;;
+        prefix="${i#--prefix=}" ;;
     [A-Za-z_]*=*)
         vars="$vars$nl$i" ;;
     *)
