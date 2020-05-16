@@ -266,6 +266,11 @@ inline static void line_iter_inc(nss_line_iter_t *it, ssize_t delta) {
     it->_y += delta;
 }
 
+inline static nss_line_t *term_line_at(nss_term_t *term, ssize_t y) {
+    return y >= 0 ? term->screen[y] :
+        term->scrollback[(term->sb_top + term->sb_limit + y + 1) % term->sb_limit];
+}
+
 inline static nss_line_t *line_iter_ref(nss_line_iter_t *it) {
     if (it->_y >= it->_y_max || it->_y < it->_y_min) return NULL;
     return (it->_y >= 0) ? it->_screen[it->_y] :
@@ -3543,6 +3548,11 @@ static void term_snap_selection(nss_term_t *term) {
             if (cat != is_separator(line->cell[line_len - 1].ch)) break;
         } while(line->wrap_at && (line = line_iter_next(&it)));
     }
+
+    // Snap selection on wide characters
+    term->vsel.n.x1 += !!(term_line_at(term, term->vsel.n.y1)->cell[term->vsel.n.x1].attr & nss_attrib_wide);
+    if (term->vsel.n.x0 > 0)
+        term->vsel.n.x0 -= !!(term_line_at(term, term->vsel.n.y0)->cell[term->vsel.n.x0 - 1].attr & nss_attrib_wide);
 }
 
 _Bool nss_term_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
