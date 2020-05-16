@@ -1,4 +1,4 @@
-Until version 1.3:
+Until version 1.4:
     Recursive input buffer refilling
         Buffer position should be stored in nss_term_t
         tty_write_raw should just read a portion of data to buffer,
@@ -7,7 +7,6 @@ Until version 1.3:
         Selection colors && Xterm special colors
     Set pseudoterminal attributes
     Make key modifiers T,A,M configurable
-Until version 1.4:
     Window operations
         --allow-window-ops/allowWindowOps
         nss_window_dispatch_window_operation
