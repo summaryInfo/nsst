@@ -211,6 +211,7 @@ struct nss_term {
         nss_tm_keep_selection = 1LL << 34,
         nss_tm_keep_clipboard = 1LL << 35,
         nss_tm_select_to_clipboard = 1LL << 36,
+        nss_tm_reverse_wrap = 1LL << 37,
     } mode, vt52mode;
 
     struct nss_escape {
@@ -1659,8 +1660,9 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 CHK_VT(3);
                 ENABLE_IF(set, term->mode, nss_tm_enable_nrcs);
                 break;
-            //case 45: /* Reverse wrap */
-            //    break;
+            case 45: /* Reverse wrap */
+                ENABLE_IF(set, term->mode, nss_tm_reverse_wrap);
+                break;
             case 47: /* Enable altscreen */
                 if (term->mode & nss_tm_disable_altscreen) break;
                 if (set ^ !!(term->mode & nss_tm_altscreen)) {
@@ -1905,6 +1907,20 @@ static void term_dispatch_tmode(nss_term_t *term, _Bool set) {
     }
 }
 
+static void term_move_left(nss_term_t *term, nss_coord_t amount) {
+    nss_coord_t x = term->c.x, y = term->c.y;
+    if (amount > x && term->mode & nss_tm_wrap &&
+            term->mode & nss_tm_reverse_wrap) {
+        amount -= x;
+        x = term->width - 1;
+        y -= 1 + amount/term->width;
+        amount %= term->width;
+        if ((y %= term->height) < 0)
+            y += term->height;
+    }
+    term_move_to(term, x - amount, y);
+}
+
 static void term_dispatch_csi(nss_term_t *term) {
     term_esc_dump(term, 1);
 
@@ -1927,7 +1943,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_move_to(term, MIN(term->c.x, term->width - 1) + PARAM(0, 1), term->c.y);
         break;
     case C('D'): /* CUB */
-        term_move_to(term, MIN(term->c.x, term->width - 1) - PARAM(0, 1), term->c.y);
+        term_move_left(term, PARAM(0, 1));
         break;
     case C('E'): /* CNL */
         term_move_to(term, 0, term->c.y + PARAM(0, 1));
@@ -2585,7 +2601,7 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
         else {}/* term_bell() -- TODO */;
         break;
     case 0x08: /* BS */
-        term_move_to(term, MIN(term->c.x, term->width - 1) - 1, term->c.y);
+        term_move_left(term, 1);
         break;
     case 0x09: /* HT */
         term_tabs(term, 1);
