@@ -323,7 +323,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                 if (2*(rctx.cbufpos + 1) >= rctx.cbufsize) {
                     size_t new_size = MAX(3 * rctx.cbufsize / 2, 2 * rctx.cbufpos + 1);
                     struct cell_desc *new = realloc(rctx.cbuffer, new_size * sizeof(*rctx.cbuffer));
-                    if (!new) return;
+                    if (!new) return 0;
                     rctx.cbuffer = new;
                     rctx.cbufsize = new_size;
                 }
@@ -593,5 +593,3 @@ void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
     xcb_render_color_t color = MAKE_COLOR(win->bg);
     xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, color, rectc, (xcb_rectangle_t*)rectv);
 }
-
-#endif
