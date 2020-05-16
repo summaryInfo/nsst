@@ -19,6 +19,24 @@ typedef struct nss_esc_reply {
     nss_char_t param[3];
 } nss_reply_t;
 
+struct nss_shortcut {
+    uint32_t ksym;
+    uint32_t mask;
+} cshorts[nss_sa_MAX] = {
+    [nss_sa_scroll_down] = {XKB_KEY_Up, nss_mm_shift | nss_mm_control},
+    [nss_sa_scroll_up] = {XKB_KEY_Down, nss_mm_shift | nss_mm_control},
+    [nss_sa_font_up] = {XKB_KEY_Page_Up, nss_mm_shift | nss_mm_control},
+    [nss_sa_font_down] = {XKB_KEY_Page_Down, nss_mm_shift | nss_mm_control},
+    [nss_sa_font_default] = {XKB_KEY_Home, nss_mm_shift | nss_mm_control},
+    [nss_sa_font_subpixel] = {XKB_KEY_End, nss_mm_shift | nss_mm_control},
+    [nss_sa_new_window] = {XKB_KEY_N, nss_mm_shift | nss_mm_control},
+    [nss_sa_numlock] = {XKB_KEY_Num_Lock, nss_mm_shift | nss_mm_control},
+    [nss_sa_copy] = {XKB_KEY_C, nss_mm_shift | nss_mm_control},
+    [nss_sa_paste] = {XKB_KEY_V, nss_mm_shift | nss_mm_control},
+    [nss_sa_break] = {XKB_KEY_Break, 0},
+    [nss_sa_reset] = {XKB_KEY_R, nss_mm_shift | nss_mm_control},
+    [nss_sa_reload_config] = {XKB_KEY_C, nss_mm_shift | nss_mm_control},
+};
 
 static inline _Bool is_edit_keypad(nss_char_t ks, _Bool deldel) {
     switch (ks) {
@@ -415,7 +433,7 @@ static void dump_reply(nss_term_t *term, nss_reply_t *reply) {
     uint8_t str[128] = { 0 };
     size_t strp = 0;
     if (!reply->init || !reply->final) {
-        warn("Tried to dump empty escape");
+        warn("Attempted to dump empty escape");
         return;
     }
     str[strp++] = reply->init;
@@ -451,7 +469,6 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
     case nss_km_sco: fnkey_sco(k.sym, k.is_fkey, &reply); break;
     default: break;
     }
-
 
     if (reply.final) { // Applied in one of fnkey_* functions
         modify_cursor(param, (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode.delete_is_del)) ?
@@ -597,5 +614,58 @@ nss_key_t nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode) {
     }
 
     return k;
+}
+
+void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *c) {
+    uint32_t sym, mask = 0;
+    char *dash;
+
+    /* TODO: Make T, M and A meannings configurable,
+     * and query them by names by default */
+
+    if ((dash = strchr(c, '-'))) {
+        while(c < dash) switch(*c++) {
+        case 'T':
+            mask |= nss_mm_control;
+        case 'S':
+            mask |= nss_mm_shift;
+            break;
+        case 'C':
+            mask |= nss_mm_control;
+            break;
+        case 'L':
+            mask |= nss_mm_lock;
+            break;
+        case 'M':
+        case 'A':
+        case '1':
+            mask |= nss_mm_mod1;
+            break;
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+            mask |= nss_mm_mod1 + c[-1] - '1';
+            break;
+        }
+    }
+    if (dash) c++;
+
+    if ((sym = xkb_keysym_from_name(c, 0)) == XKB_KEY_NoSymbol)
+        sym = xkb_keysym_from_name(c, XKB_KEYSYM_CASE_INSENSITIVE);
+    if (sym == XKB_KEY_NoSymbol) warn("Wrong key name: '%s'", dash);
+
+    cshorts[sa] = (struct nss_shortcut) { sym, mask };
+}
+
+enum nss_shortcut_action nss_input_lookup_hotkey(nss_key_t k) {
+    enum nss_shortcut_action action = nss_sa_none + 1;
+    for (; action < nss_sa_MAX; action++)
+        if (cshorts[action].ksym == k.sym && (k.mask & 0xFF) == cshorts[action].mask)
+            break;
+
+    if (action == nss_sa_MAX) return nss_sa_none;
+
+    return action;
 }
 

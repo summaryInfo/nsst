@@ -37,41 +37,6 @@
 /* Need to be multiple of 4 */
 #define PASTE_BLOCK_SIZE 1024
 
-#define NSS_M_ALL (0xff)
-#define NSS_M_TERM (XCB_MOD_MASK_CONTROL | XCB_MOD_MASK_SHIFT)
-
-struct nss_shortcut {
-    uint32_t ksym;
-    uint32_t mmask;
-    uint32_t mstate;
-    enum nss_shortcut_action {
-        nss_sa_none,
-        nss_sa_break,
-        nss_sa_numlock,
-        nss_sa_scroll_up,
-        nss_sa_scroll_down,
-        nss_sa_font_up,
-        nss_sa_font_down,
-        nss_sa_font_default,
-        nss_sa_font_subpixel,
-        nss_sa_new_window,
-        nss_sa_copy,
-        nss_sa_paste,
-    } action;
-} cshorts[] = {
-    {XKB_KEY_Up, NSS_M_ALL, NSS_M_TERM, nss_sa_scroll_down},
-    {XKB_KEY_Down, NSS_M_ALL, NSS_M_TERM, nss_sa_scroll_up},
-    {XKB_KEY_Page_Up, NSS_M_ALL, NSS_M_TERM, nss_sa_font_up},
-    {XKB_KEY_Page_Down, NSS_M_ALL, NSS_M_TERM, nss_sa_font_down},
-    {XKB_KEY_Home, NSS_M_ALL, NSS_M_TERM, nss_sa_font_default},
-    {XKB_KEY_End, NSS_M_ALL, NSS_M_TERM, nss_sa_font_subpixel},
-    {XKB_KEY_N, NSS_M_ALL, NSS_M_TERM, nss_sa_new_window},
-    {XKB_KEY_Num_Lock, NSS_M_ALL, NSS_M_TERM, nss_sa_numlock},
-    {XKB_KEY_C, NSS_M_ALL, NSS_M_TERM, nss_sa_copy},
-    {XKB_KEY_V, NSS_M_ALL, NSS_M_TERM, nss_sa_paste},
-    {XKB_KEY_Break, 0, 0, nss_sa_break},
-};
-
 struct nss_context {
     _Bool daemon_mode;
     xcb_screen_t *screen;
@@ -121,7 +86,7 @@ static nss_window_t *window_for_term_fd(int fd) {
     return NULL;
 }
 
-static void load_params(void) {
+static void load_config(void) {
     xcb_xrm_database_t *xrmdb = xcb_xrm_database_from_default(con);
     if (!xrmdb) return;
 
@@ -337,7 +302,7 @@ void nss_init_context(void) {
         if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
     if (dpi > 0) nss_config_set_integer(NSS_ICONFIG_DPI, dpi);
 
-    if (!nss_config_integer(NSS_ICONFIG_SKIP_CONFIG_FILE)) load_params();
+    if (!nss_config_integer(NSS_ICONFIG_SKIP_CONFIG_FILE)) load_config();
     else nss_config_set_integer(NSS_ICONFIG_SKIP_CONFIG_FILE, 0);
 
     sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART}, NULL);
@@ -398,20 +363,32 @@ void nss_window_set_sync(nss_window_t *win, _Bool state) {
     win->sync_active = state;
 }
 
-/* This would probably be useful later when implemeting OSC for setting fonts
-void nss_window_set_font(nss_window_t *win, const char * name) {
-    if (!name) {
-        warn("Empty font name");
-        return;
-    }
-    free(win->font_name);
-    win->font_name = strdup(name);
-    nss_renderer_reload_font(win, 1);
-    nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
-    win->force_redraw = 1;
-    xcb_flush(con);
+static void nss_window_get_font_size(nss_window_t *win, int32_t *size, int32_t *lcd) {
+    if (size) *size = win->font_size;
+    if (lcd) *lcd = win->subpixel_fonts;
 }
-*/
+
+static void nss_window_set_font(nss_window_t *win, const char * name, int32_t size, int8_t lcd) {
+    _Bool reload = name || size != win->font_size;
+    if (name) {
+        free(win->font_name);
+        win->font_name = strdup(name);
+    }
+
+    if (size >= 0) win->font_size = size;
+
+    if (lcd >= 0) {
+        reload |= !!lcd != win->subpixel_fonts;
+        win->subpixel_fonts = lcd;
+    }
+
+    if (reload) {
+        nss_renderer_reload_font(win, 1);
+        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
+        win->force_redraw = 1;
+        xcb_flush(con);
+    }
+}
 
 void nss_window_set_title(nss_window_t *win, const char *title, _Bool utf8) {
     if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
@@ -750,7 +727,7 @@ inline static xcb_atom_t target_to_atom(nss_clipboard_target_t target) {
     }
 }
 
-static void window_clip_copy(nss_window_t *win) {
+void nss_window_clip_copy(nss_window_t *win) {
     if (win->clipped[nss_ct_primary]) {
         uint8_t *dup = (uint8_t*)strdup((char *)win->clipped[nss_ct_primary]);
         if (dup) {
@@ -855,15 +832,10 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
 
     if (key.sym == XKB_KEY_NoSymbol) return;
 
-    enum nss_shortcut_action action = nss_sa_none;
-    for (size_t i = 0; i < sizeof(cshorts)/sizeof(*cshorts); i++) {
-        if (cshorts[i].ksym == key.sym && (key.mask & cshorts[i].mmask) == cshorts[i].mstate) {
-            action = cshorts[i].action;
-            break;
-        }
-    }
+    enum nss_shortcut_action action = nss_input_lookup_hotkey(key);
 
     switch (action) {
+        int32_t size, lcd;
     case nss_sa_break:
         nss_term_sendbreak(win->term);
         return;
@@ -880,27 +852,34 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     case nss_sa_font_down:
     case nss_sa_font_default:
     case nss_sa_font_subpixel:
+        nss_window_get_font_size(win, &size, &lcd);
         if (action == nss_sa_font_up)
-            win->font_size += nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
+            size += nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
         else if (action == nss_sa_font_down)
-            win->font_size -= nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
+            size -= nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
         else if (action == nss_sa_font_default)
-            win->font_size = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
-        else win->subpixel_fonts = !win->subpixel_fonts;
-        nss_renderer_reload_font(win, 1);
-        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
-        win->force_redraw = 1;
+            size = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
+        else
+            lcd = !lcd;
+        nss_window_set_font(win, NULL, size, lcd);
         return;
     case nss_sa_new_window:
         nss_create_window();
         return;
     case nss_sa_copy:
-        window_clip_copy(win);
+        nss_window_clip_copy(win);
         return;
     case nss_sa_paste:
         nss_window_paste_clip(win, nss_ct_clipboard);
         return;
-    case nss_sa_none: break;
+    case nss_sa_reload_config:
+        reload_config = 1;
+        return;
+    case nss_sa_reset:
+        nss_term_reset(win->term);
+        return;
+    case nss_sa_MAX:
+    case nss_sa_none:;
     }
 
     nss_handle_input(key, win->term);
@@ -1280,7 +1259,7 @@ void nss_context_run(void) {
 
         if (reload_config) {
             reload_config = 0;
-            load_params();
+            load_config();
             for (nss_window_t *win = win_list_head; win; win = win->next)
                 nss_renderer_reload_font(win, 1);
         }

@@ -105,6 +105,7 @@ nss_input_mode_t *nss_term_inmode(nss_term_t *term);
 _Bool nss_term_is_utf8(nss_term_t *term);
 _Bool nss_term_is_nrcs_enabled(nss_term_t *term);
 void nss_term_damage(nss_term_t *term, nss_rect_t damage);
+void nss_term_reset(nss_term_t *term);
 
 /* Selection related functions */
 _Bool nss_term_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y);

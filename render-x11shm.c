@@ -288,7 +288,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
             nss_image_draw_rect(win->ren.im, rects[i + off], win->cursor_fg);
     }
 
-	_Bool drawn_any = win->ren.boundc;
+    _Bool drawn_any = win->ren.boundc;
 
     if (win->ren.boundc) {
         optimize_bounds(win->ren.bounds, &win->ren.boundc, rctx.has_shm);

@@ -1046,6 +1046,10 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term->esc.state = esc_ground;
 }
 
+void nss_term_reset(nss_term_t *term) {
+    term_reset(term, 1);
+}
+
 nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t height) {
     nss_term_t *term = calloc(1, sizeof(nss_term_t));
 

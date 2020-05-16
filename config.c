@@ -59,6 +59,17 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"horizontal-border", "\t(Top and bottom botders)", "horizontalBorder", NSS_ICONFIG_TOP_BORDER},
     {"keep-clipboard", "\t(Reuse copied clipboard content instead of current selection data)", "keepClipboard", NSS_ICONFIG_KEEP_CLIPBOARD},
     {"keep-selection", "\t(Don't clear X11 selection when unhighlighted)", "keepSelection", NSS_ICONFIG_KEEP_SELECTION},
+    {"key-break", "\t\t(Send break hotkey", "key.break)", NSS_KCONFIG_BREAK},
+    {"key-dec-font", "\t\t(Decrement font size hotkey)", "key.decFontSize", NSS_KCONFIG_FONT_DEC},
+    {"key-inc-font", "\t\t(Increment font size hotkey)", "key.incFontSize", NSS_KCONFIG_FONT_INC},
+    {"key-new-window", "\t(Create new window hotkey)", "key.newWindow", NSS_KCONFIG_NEW_WINDOW},
+    {"key-numlock", "\t\t('appkey' mode allow toggle hotkey)", "key.numlock", NSS_KCONFIG_NUMLOCK},
+    {"key-reload-config", "\t(Reload config hotkey)", "key.reloadConfig", NSS_KCONFIG_RELOAD_CONFIG},
+    {"key-reset", "\t\t(Terminal reset hotkey)", "key.reset", NSS_KCONFIG_RESET},
+    {"key-reset-font", "\t(Reset font size hotkey)", "key.resetFontSize", NSS_KCONFIG_FONT_RESET},
+    {"key-scroll-down", "\t(Scroll down hotkey)", "key.scrollDown", NSS_KCONFIG_SCROLL_DOWN},
+    {"key-scroll-up", "\t(Scroll up hotkey)", "key.scrollUp", NSS_KCONFIG_SCROLL_UP},
+    {"key-toggle-lcd", "\t(Toggle subpixel font rendering)", "key.toggleSubpixel", NSS_KCONFIG_TOGGLE_SUBPIXEL},
     {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", "keyboardDialect", NSS_ICONFIG_KEYBOARD_NRCS},
     {"keyboard-mapping", "\t(Initial keyboad mapping)", "keyboardMapping", NSS_ICONFIG_INPUT_MAPPING},
     {"line-spacing", "\t\t(Additional lines vertical spacing)", "lineSpacing", NSS_ICONFIG_LINE_SPACING},
@@ -319,6 +330,9 @@ void nss_config_set_string(uint32_t opt, const char *val) {
             if (ival >= 0) nss_config_set_integer(opt, ival);
             else warn("Unknown string option %d", opt);
         } else warn("Unknown string option %d", opt);
+    } else if (NSS_KCONFIG_MIN <= opt && opt < NSS_KCONFIG_MAX) {
+        enum nss_shortcut_action sa = opt - NSS_KCONFIG_MIN + 1;
+        nss_input_set_hotkey(sa, val);
     } else if (NSS_CCONFIG_MIN <= opt && opt < NSS_CCONFIG_MAX) {
             nss_color_t col = parse_color((uint8_t*)val, (uint8_t*)val + strlen(val));
             if (col) {

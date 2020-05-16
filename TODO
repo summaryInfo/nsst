@@ -6,41 +6,22 @@ Until version 1.3:
     Selections
         Selection colors && Xterm special colors
     Set pseudoterminal attributes
-    Add keybindings configuration
-        Nsst.termMod: CS
-        Nsst.metaMod: 1
-        Nsst.altMod: 1
-        Nsst.break: Break
-        Nsst.numlock: T-Numlock
-        Nsst.scrollUp: T-Up
-        Nsst.scrollDown: T-Down
-        Nsst.incFontSize: T-PageUp
-        Nsst.decFontSize: T-PageDown
-        Nsst.resetFontSize: T-Home
-        Nsst.toggleSubpixel: T-End
-        Nsst.newWindow: T-N
-        Nsst.reset: T-C
-        Nsst.reloadConfig: T-R
-        [CSMTLA12345]
-            M = A = 1
-            T- == CS-
-            termModifier: CS
-            parse_mask
-            parse_key
+    Make key modifiers T,A,M configurable
+Until version 1.4:
     Window operations
         --allow-window-ops/allowWindowOps
         nss_window_dispatch_window_operation
             It is simpler to implement window operations on window side
             and express other window operations in terms of CSI t
-    User-prefered charset
-More:
+	User-prefered charset
     Rectangular operations
+    Left/right margins
+    Colored glyphs?
+More:
     Support new color syntax
+    Bell
     Proper combining characters support
     Non-clipped rendering
-    Colored glyphs
-    Bell
-    Left/right margins
     Wayland
     Implement proper daemon mode
     Make X resources names more or less correspond to Xterm/rxvt-unicode

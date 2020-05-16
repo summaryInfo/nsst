@@ -250,7 +250,7 @@ nss_char_t try_precompose(nss_char_t ch, nss_char_t comb) {
 
 #else
 
-nss_char_t try_precompose(nss_char_t ch, nss_char_t comb) { return ch; }
+nss_char_t try_precompose(nss_char_t ch, nss_char_t comb) { (void)comb; return ch; }
 
 #endif
 

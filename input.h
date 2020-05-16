@@ -21,6 +21,24 @@ enum mode_mask {
     nss_mm_mod5 = 1 << 7,
 };
 
+enum nss_shortcut_action {
+    nss_sa_none,
+    nss_sa_break,
+    nss_sa_numlock,
+    nss_sa_scroll_up,
+    nss_sa_scroll_down,
+    nss_sa_font_up,
+    nss_sa_font_down,
+    nss_sa_font_default,
+    nss_sa_font_subpixel,
+    nss_sa_new_window,
+    nss_sa_reset,
+    nss_sa_reload_config,
+    nss_sa_copy,
+    nss_sa_paste,
+    nss_sa_MAX = nss_sa_paste + 1
+};
+
 typedef struct nss_input_mode {
     uint32_t modkey_fn : 3;
     uint32_t modkey_cursor : 3;
@@ -82,7 +100,10 @@ typedef struct nss_key {
 } nss_key_t;
 
 typedef struct nss_term nss_term_t;
+typedef struct nss_window nss_window_t;
 void nss_handle_input(nss_key_t k, nss_term_t *term);
 nss_key_t nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode);
+void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *val);
+enum nss_shortcut_action nss_input_lookup_hotkey(nss_key_t k);
 
 #endif

@@ -6,11 +6,11 @@ Inspired by [Simple Terminal](https://st.suckless.org/)
 ## Features
 * Quiet fast rendering
     * Almost same latency as `XTerm`, which is a lot faster than other modern terminals
-    * Scrolling performance is higher than other terminals measured on my system
+    * Scrolling performance is higher than most other terminals measured on my system
 * Small size and almost no dependencies
 * Uses xcb as X11 library
     * So it is faster and more lightweight
-    * `size` including all loaded shared libs is only 75% of `st` on my system 
+    * `size` including all loaded shared libs is only 75% of `st` on my system
 * Most escape sequences are already implemented
 * Ful keyboard mode from XTerm
 * OSC 13001 "Set background opacity"
@@ -33,7 +33,7 @@ See TODO file for things that are to be implemented.
 * `input.c` -- Input handling code (more or less compatible with Xterm)
 * `nrcs.c` -- National replacement character sets logic
 * `nsst.c` -- `main` function and arguments parsing
-* `render-x11shm.c` -- X11 MIT-SHM backend 
+* `render-x11shm.c` -- X11 MIT-SHM backend
 * `render-x11xrender.c` -- X11 XRender backend
 * `term.c` -- Terminal logic
 * `util.c` -- General utilities (encoding/decoding and logging)
@@ -48,7 +48,7 @@ Works well with [Iosevka](https://github.com/be5invis/Iosevka) font. (Set font s
 Multiple fonts could be loaded by enumerating them in parameter:
 
     Nsst.font: Iosevka-13:style=Thin,MaterialDesignIcons-13
-    
+
 Wide glyphs are now just clipped (but `wide` cell property is respecteed), later I will add option to avoid that.
 
 All options are now available though Xrmdb and command line arguments.
@@ -65,6 +65,37 @@ To force full NRCS translation in UTF-8 mode set `--force-nrsc`/`forceNrcs`
 Now nsst supports combining characters only via precomposition, but almost everything is ready to implement proper rendering of combining character (and variant glyphs support).
 The only tricky part is to extract positioning tables and implemnt basic text shaping. It would be implemented using glyphs with codes `0x200000` - `0xFFFFFF`,
 giving sufficient number of possible custom glyphs. DECDLD is also easy to implement this way.
+
+Hotkeys are now configurable. With syntax `[<Mods>-]<Name>`, where `<Mods>` is XKB key name and mods is a set of one or more of folowing:
+
+* `S` -- Shift
+* `C` -- Control
+* `L` -- Lock
+* `T` -- Shift+Control
+* `1`/`A`/`M` -- Mod1/Alt/Meta
+* `2` -- Mod2/Numlock
+* `3` -- Mod3
+* `4` -- Mod4/Super
+* `5` -- Mod5
+
+Default keybindings:
+
+    Nsst.break: Break
+    Nsst.numlock: T-Num_Lock
+    Nsst.scrollUp: T-Up
+    Nsst.scrollDown: T-Down
+    Nsst.incFontSize: T-Page_Up
+    Nsst.decFontSize: T-Page_Down
+    Nsst.resetFontSize: T-Home
+    Nsst.toggleSubpixel: T-End
+    Nsst.newWindow: T-N
+    Nsst.reset: T-C
+    Nsst.reloadConfig: T-R
+
+Example:
+
+    # Default, CS-N will be the same
+    Nsst.key.newWindow: T-N
 
 ## Dependencies
 ### Build
