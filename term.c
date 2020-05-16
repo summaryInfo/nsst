@@ -3289,7 +3289,7 @@ void nss_term_paste_end(nss_term_t *term) {
      * before data have arrived an application
      * uses OSC 52. But it's really hard to deal with
      *
-     * Probably creating the queue of paste
+     * Probably creating the queue of paste requests
      * would be a valid solution
      *
      * But this race isn't that destructive
