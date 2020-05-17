@@ -37,7 +37,7 @@
 #endif
 
 #define TTY_MAX_WRITE 256
-#define NSS_FD_BUF_SZ 512
+#define NSS_FD_BUF_SZ 4096
 #define ESC_MAX_PARAM 32
 #define ESC_MAX_STR 512
 #define ESC_DUMP_MAX 1024
