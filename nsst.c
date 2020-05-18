@@ -26,7 +26,7 @@ static int optmap_cmp(const void *a, const void *b) {
 static _Noreturn void usage(char *argv0, int code) {
     if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0 || code == EXIT_SUCCESS) {
         printf("%s%s", argv0, " [-options] [-e] [command [args]]\n"
-            "\nWhere options are:\n"
+            "Where options are:\n"
                 "\t--help, -h\t\t\t(Print this message and exit)\n"
                 "\t--version, -v\t\t\t(Print version and exit)\n"
                 "\t--color<N>=<color>, \t\t(Set palette color <N>, <N> is from 0 to 255)\n"
@@ -34,13 +34,23 @@ static _Noreturn void usage(char *argv0, int code) {
         );
         for (size_t i = 0; i < sizeof(optmap)/sizeof(optmap[0]); i++)
             printf("\t--%s=<value>%s\n", optmap[i].arg_name, optmap[i].arg_desc);
+        printf("%s",
+            "For every boolean option --<X>=<Y>\n"
+                "\t--<X>, --enable-<X>, --with-<X>,\n"
+                "\t--<X>=yes, --<X>=y,  --<X>=true\n"
+            "are equivalent to --<X>=1, and\n"
+                "\t--no-<X>, --disable-<X>, --without-<X>\n"
+                "\t--<X>=no, --<X>=n, --<X>=false\n"
+            "are equivalent to --<X>=0,\n"
+            "where 'yes', 'y', 'true', 'no', 'n' and 'false' are case independet\n"
+        );
     }
     nss_free_context();
     exit(code);
 }
 
 static _Noreturn void version(void) {
-    fprintf(stderr, "Not So Simple Terminal v1.0.0\n"
+    fprintf(stderr, "Not So Simple Terminal v1.3\n"
             "Features: nsst"
 #if USE_PPOLL
             "+ppoll"
