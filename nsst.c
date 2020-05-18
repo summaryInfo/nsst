@@ -61,6 +61,9 @@ static _Noreturn void version(void) {
 #if USE_X11SHM
             "+mitshm"
 #endif
+#if USE_PRECOMPOSE
+            "+precompose"
+#endif
             "\n"
     );
     nss_free_context();
