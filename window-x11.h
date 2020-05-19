@@ -66,7 +66,6 @@ struct nss_window {
     unsigned focused : 1;
     unsigned active : 1;
     unsigned subpixel_fonts : 1;
-    unsigned got_configure : 1;
     unsigned blink_state : 1;
     unsigned mouse_events : 1;
     unsigned force_redraw : 1;
@@ -107,7 +106,7 @@ struct nss_window {
     nss_glyph_cache_t *font_cache;
 
     nss_term_t *term;
-    int term_fd;
+    size_t poll_index;
 
     nss_renderer_t ren;
 };

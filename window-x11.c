@@ -79,12 +79,6 @@ static nss_window_t *window_for_xid(xcb_window_t xid) {
     info("Window for xid not found");
     return NULL;
 }
-static nss_window_t *window_for_term_fd(int fd) {
-    for (nss_window_t *win = win_list_head; win; win = win->next)
-        if (win->term_fd == fd) return win;
-    warn("Window for fd not found");
-    return NULL;
-}
 
 static void load_config(void) {
     xcb_xrm_database_t *xrmdb = xcb_xrm_database_from_default(con);
@@ -113,6 +107,8 @@ static void load_config(void) {
     }
 
     xcb_xrm_database_free(xrmdb);
+
+    reload_config = 0;
 }
 
 static void handle_sigusr1(int sig) {
@@ -539,7 +535,6 @@ nss_window_t *nss_create_window(void) {
 
     win->active = 1;
     win->focused = 1;
-    win->term_fd = -1;
 
     win->font_name = strdup(nss_config_string(NSS_SCONFIG_FONT_NAME));
     if (!win->font_name) {
@@ -569,35 +564,19 @@ nss_window_t *nss_create_window(void) {
                                   x, y, win->width, win->height, 0,
                                   XCB_WINDOW_CLASS_INPUT_OUTPUT,
                                   ctx.vis->visual_id, mask1, values1);
-    if (check_void_cookie(c)) {
-        warn("Can't create window");
-        nss_free_window(win);
-        return NULL;
-    }
+    if (check_void_cookie(c)) goto error;
 
     win->gc = xcb_generate_id(con);
     uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
     uint32_t values2[3] = { win->bg, win->bg, 0 };
 
     c = xcb_create_gc_checked(con, win->gc, win->wid, mask2, values2);
-    if (check_void_cookie(c)) {
-        warn("Can't create GC");
-        nss_free_window(win);
-        return NULL;
-    }
+    if (check_void_cookie(c)) goto error;
 
-    if (!nss_renderer_reload_font(win, 0)) {
-        warn("Can't create window");
-        nss_free_window(win);
-        return NULL;
-    }
+    if (!nss_renderer_reload_font(win, 0)) goto error;
 
     win->term = nss_create_term(win, win->cw, win->ch);
-    if (!win->term) {
-        warn("Can't create term");
-        nss_free_window(win);
-        return NULL;
-    }
+    if (!win->term) goto error;
 
     nss_window_set_default_props(win);
     nss_window_set_title(win, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
@@ -608,10 +587,8 @@ nss_window_t *nss_create_window(void) {
     if (win_list_head) win_list_head->prev = win;
     win_list_head = win;
 
-
     if (ctx.pfdn + 1 > ctx.pfdcap) {
         struct pollfd *new = realloc(ctx.pfds, ctx.pfdcap + INIT_PFD_NUM);
-
         if (new) {
             for (size_t i = 0; i < INIT_PFD_NUM; i++) {
                 new[i + ctx.pfdn].fd = -1;
@@ -619,24 +596,24 @@ nss_window_t *nss_create_window(void) {
             }
             ctx.pfdcap += INIT_PFD_NUM;
             ctx.pfds = new;
-        } else {
-            warn("Can't reallocate ctx.pfds");
-            nss_free_window(win);
-            return NULL;
-        }
+        } else goto error;
     }
 
     ctx.pfdn++;
     size_t i = 1;
     while (ctx.pfds[i].fd >= 0) i++;
-    // Because it might become -1 suddenly
-    win->term_fd = nss_term_fd(win->term);
     ctx.pfds[i].events = POLLIN | POLLHUP;
-    ctx.pfds[i].fd = win->term_fd;
+    ctx.pfds[i].fd = nss_term_fd(win->term);
+    win->poll_index = i;
 
     xcb_map_window(con, win->wid);
     xcb_flush(con);
     return win;
+
+error:
+    warn("Can't create window");
+    nss_free_window(win);
+    return NULL;
 }
 
 /* Free previously created windows */
@@ -653,12 +630,8 @@ void nss_free_window(nss_window_t *win) {
     if (win->prev) win->prev->next = win->next;
     else win_list_head =  win->next;
 
-    if (win->term_fd > 0) {
-        size_t i = 0;
-        while (ctx.pfds[i].fd != win->term_fd && i < ctx.pfdcap) i++;
-        if (i < ctx.pfdcap)
-            ctx.pfds[i].fd = -1;
-        else warn("Window fd not found");
+    if (win->poll_index > 0) {
+        ctx.pfds[win->poll_index].fd = -1;
         ctx.pfdn--;
     }
 
@@ -903,12 +876,8 @@ static void send_selection_data(nss_window_t *win, xcb_window_t req, xcb_atom_t 
 
         if (sel == XCB_ATOM_PRIMARY) data = win->clipped[nss_ct_primary];
         else if (sel == XCB_ATOM_SECONDARY) data = win->clipped[nss_ct_secondary];
-        else if (sel == ctx.atom_clipboard) {
-            if (nss_term_keep_clipboard(win->term))
-                data = win->clipboard;
-            else
-                data = win->clipped[nss_ct_clipboard];
-        }
+        else if (sel == ctx.atom_clipboard) data = nss_term_keep_clipboard(win->term) ?
+                win->clipboard : win->clipped[nss_ct_clipboard];
 
         if (data) {
             xcb_change_property(con, XCB_PROP_MODE_REPLACE, req, prop, target, 8, strlen((char *)data), data);
@@ -1012,7 +981,7 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
 void nss_context_run(void) {
     for (int64_t next_timeout = SEC/nss_config_integer(NSS_ICONFIG_FPS);;) {
 #if USE_PPOLL
-        if (ppoll(ctx.pfds, ctx.pfdcap, &(struct timespec){0, next_timeout}, NULL) < 0 && errno != EINTR)
+        if (ppoll(ctx.pfds, ctx.pfdcap, &(struct timespec){next_timeout / SEC, next_timeout % SEC}, NULL) < 0 && errno != EINTR)
 #else
         if (poll(ctx.pfds, ctx.pfdcap, next_timeout/(SEC/1000)) < 0 && errno != EINTR)
 #endif
@@ -1030,18 +999,10 @@ void nss_context_run(void) {
                 case XCB_CONFIGURE_NOTIFY:{
                     xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
-
                     if (ev->width != win->width || ev->height != win->height)
                         nss_window_handle_resize(win, ev->width, ev->height);
-                    if (!win->got_configure) {
-                        nss_term_resize(win->term, win->cw, win->ch);
-                        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
-                        win->force_redraw = 1;
-                        win->got_configure = 1;
-                    }
                     break;
                 }
-                case XCB_KEY_RELEASE: /* ignore */ break;
                 case XCB_KEY_PRESS:{
                     xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
                     if (!(win = window_for_xid(ev->event))) break;
@@ -1120,15 +1081,11 @@ void nss_context_run(void) {
                         nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
                     break;
                 }
+                case XCB_KEY_RELEASE:
                 case XCB_MAP_NOTIFY:
-                case XCB_UNMAP_NOTIFY: {
-                    xcb_map_notify_event_t *ev = (xcb_map_notify_event_t *)event;
-                    if (!(win = window_for_xid(ev->window))) break;
-                    if ((win->active = ev->response_type == XCB_MAP_NOTIFY))
-                        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
-                    break;
-                }
+                case XCB_UNMAP_NOTIFY:
                 case XCB_DESTROY_NOTIFY:
+                   /* ignore */
                    break;
                 case 0: {
                     xcb_generic_error_t *err = (xcb_generic_error_t*)event;
@@ -1166,22 +1123,18 @@ void nss_context_run(void) {
                             }
                         }
                     } else warn("Unknown xcb event type: %02"PRIu8, event->response_type);
-                    break;
                 }
             }
         }
 
-        for (size_t i = 1; i < ctx.pfdcap; i++) {
-            if (ctx.pfds[i].fd > 0) {
-                nss_window_t *win = window_for_term_fd(ctx.pfds[i].fd);
-                if (ctx.pfds[i].revents & POLLIN & win->got_configure)
-                    nss_term_read(win->term);
-                else if (ctx.pfds[i].revents & (POLLERR | POLLNVAL | POLLHUP))
-                    nss_free_window(win);
-            }
+        for (nss_window_t *win = win_list_head; win; win = win->next) {
+            if (ctx.pfds[win->poll_index].revents & POLLIN)
+                nss_term_read(win->term);
+            else if (ctx.pfds[win->poll_index].revents & (POLLERR | POLLNVAL | POLLHUP))
+                nss_free_window(win);
         }
 
-        next_timeout = SEC/nss_config_integer(NSS_ICONFIG_FPS);
+        next_timeout = 15*SEC;
         struct timespec cur;
         clock_gettime(NSS_CLOCK, &cur);
 
@@ -1236,7 +1189,6 @@ void nss_context_run(void) {
         if ((!ctx.daemon_mode && !win_list_head) || xcb_connection_has_error(con)) break;
 
         if (reload_config) {
-            reload_config = 0;
             load_config();
             for (nss_window_t *win = win_list_head; win; win = win->next)
                 nss_renderer_reload_font(win, 1);
