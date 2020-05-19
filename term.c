@@ -3292,8 +3292,8 @@ void nss_term_paste_end(nss_term_t *term) {
      * Probably creating the queue of paste requests
      * would be a valid solution
      *
-     * But this race isn't that destructive
-     * rare to deal with
+     * But this race isn't that destructive and
+     * rather rare to deal with
      */
     if (term->paste_from) {
         term_answerback(term, ST);
