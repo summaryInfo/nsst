@@ -359,7 +359,7 @@ void nss_window_set_mouse(nss_window_t *win, _Bool enabled) {
 }
 
 void nss_window_set_sync(nss_window_t *win, _Bool state) {
-    if (state) clock_gettime(CLOCK_MONOTONIC, &win->last_sync);
+    if (state) clock_gettime(NSS_CLOCK, &win->last_sync);
     win->sync_active = state;
 }
 
@@ -679,7 +679,7 @@ void nss_free_window(nss_window_t *win) {
 
 void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coord_t height, _Bool delay) {
     struct timespec cur;
-    clock_gettime(CLOCK_MONOTONIC, &cur);
+    clock_gettime(NSS_CLOCK, &cur);
 
     _Bool scrolled_recently = TIMEDIFF(win->last_scroll, cur) <  SEC/2/nss_config_integer(NSS_ICONFIG_FPS);
 
@@ -793,7 +793,7 @@ void nss_window_handle_resize(nss_window_t *win, int16_t width, int16_t height) 
     if (delta_x || delta_y) {
         nss_term_resize(win->term, new_cw, new_ch);
         nss_renderer_resize(win, new_cw, new_ch);
-        clock_gettime(CLOCK_MONOTONIC, &win->last_scroll);
+        clock_gettime(NSS_CLOCK, &win->last_scroll);
         win->last_resize = win->last_scroll;
     }
 
@@ -1194,7 +1194,7 @@ void nss_context_run(void) {
 
         next_timeout = SEC/nss_config_integer(NSS_ICONFIG_FPS);
         struct timespec cur;
-        clock_gettime(CLOCK_MONOTONIC, &cur);
+        clock_gettime(NSS_CLOCK, &cur);
 
         for (nss_window_t *win = win_list_head; win; win = win->next) {
             if (TIMEDIFF(win->last_sync, cur) > nss_config_integer(NSS_ICONFIG_SYNC_TIME)*1000LL && win->sync_active)

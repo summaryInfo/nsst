@@ -3635,7 +3635,7 @@ static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x
         term->vsel.r.y0 = y - term->view;
 
         struct timespec now;
-        clock_gettime(CLOCK_MONOTONIC, &now);
+        clock_gettime(NSS_CLOCK, &now);
 
         if (TIMEDIFF(term->vsel.click1, now) < nss_config_integer(NSS_ICONFIG_TRIPLE_CLICK_TIME)*(SEC/1000))
             term->vsel.snap = nss_ssnap_line;

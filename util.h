@@ -17,6 +17,12 @@
 #define TIMEDIFF(t, d)  ((((d).tv_sec - (t).tv_sec) * SEC + ((d).tv_nsec - (t).tv_nsec)))
 #define TIMEINC(t, in) ((t).tv_sec += (in)/SEC), ((t).tv_nsec += (in)%SEC)
 
+#ifdef CLOCK_MONOTONIC_RAW
+#	define NSS_CLOCK CLOCK_MONOTONIC_RAW
+#else
+#	define NSS_CLOCK CLOCK_MONOTONIC
+#endif
+
 typedef int16_t nss_coord_t;
 typedef uint32_t nss_color_t;
 typedef uint32_t nss_char_t;
