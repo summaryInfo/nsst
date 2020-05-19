@@ -174,7 +174,6 @@ struct nss_term {
         nss_tm_crlf = 1 << 1,
         nss_tm_132cols = 1 << 2,
         nss_tm_wrap = 1 << 3,
-        nss_tm_visible = 1 << 4,
         nss_tm_focused = 1 << 5,
         nss_tm_altscreen = 1 << 6,
         nss_tm_utf8 = 1 << 7,
@@ -540,8 +539,6 @@ void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
 }
 
 _Bool nss_term_redraw_dirty(nss_term_t *term, _Bool cursor) {
-    if (!(term->mode & nss_tm_visible)) return 0;
-
     if (MIN(term->c.x, term->width - 1) != term->prev_c_x || term->c.y != term->prev_c_y || term->prev_c_view_changed) {
         if (!(term->mode & nss_tm_hide_cursor) && !term->view)
             term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
@@ -1005,7 +1002,7 @@ static void term_free_scrollback(nss_term_t *term) {
 
 static void term_reset(nss_term_t *term, _Bool hard) {
 
-    term->mode &= nss_tm_focused | nss_tm_visible;
+    term->mode &= nss_tm_focused;
     term->inmode = nss_config_input_mode();
 
     nss_coord_t cx = term->c.x, cy = term->c.y;
@@ -1057,7 +1054,6 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t he
     term->win = win;
 
     term->inmode = nss_config_input_mode();
-    term->mode = nss_tm_visible;
     term->printerfd = -1;
     term->sb_max_caps = nss_config_integer(NSS_ICONFIG_HISTORY_LINES);
     term->vt_version = nss_config_integer(NSS_ICONFIG_VT_VERION);
@@ -1606,7 +1602,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                     term->c.gr = 2,
                     term->c.gn[0] = term->c.gn[2] = term->c.gn[3] = nss_94cs_ascii;
                     term->c.gn[1] = nss_94cs_dec_graph;
-                    term->mode &= nss_tm_visible | nss_tm_focused | nss_tm_reverse_video;
+                    term->mode &= nss_tm_focused | nss_tm_reverse_video;
                     term_esc_start_seq(term);
                 }
                 break;
@@ -3315,11 +3311,6 @@ void nss_term_focus(nss_term_t *term, _Bool focused) {
     if (term->mode & nss_tm_track_focus)
         term_answerback(term, focused ? CSI"I" : CSI"O");
     term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
-}
-
-void nss_term_visibility(nss_term_t *term, _Bool visible) {
-    ENABLE_IF(visible, term->mode, nss_tm_visible);
-    nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
 }
 
 inline static size_t descomose_selection(nss_rect_t dst[static 3], nss_selected_t seld, nss_rect_t bound, ssize_t pos) {

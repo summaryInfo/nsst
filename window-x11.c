@@ -1024,17 +1024,16 @@ void nss_context_run(void) {
             xcb_generic_event_t *event;
             while ((event = xcb_poll_for_event(con))) {
                 switch (event->response_type &= 0x7f) {
+                    nss_window_t *win;
                 case XCB_EXPOSE:{
                     xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
-                    nss_window_t *win = window_for_xid(ev->window);
-                    if (!win) break;
+                    if (!(win = window_for_xid(ev->window))) break;
                     handle_expose(win, (nss_rect_t){ev->x, ev->y, ev->width, ev->height});
                     break;
                 }
                 case XCB_CONFIGURE_NOTIFY:{
                     xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
-                    nss_window_t *win = window_for_xid(ev->window);
-                    if (!win) break;
+                    if (!(win = window_for_xid(ev->window))) break;
 
                     if (ev->width != win->width || ev->height != win->height)
                         nss_window_handle_resize(win, ev->width, ev->height);
@@ -1049,16 +1048,14 @@ void nss_context_run(void) {
                 case XCB_KEY_RELEASE: /* ignore */ break;
                 case XCB_KEY_PRESS:{
                     xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
-                    nss_window_t *win = window_for_xid(ev->event);
-                    if (!win) break;
+                    if (!(win = window_for_xid(ev->event))) break;
                     handle_keydown(win, ev->detail);
                     break;
                 }
                 case XCB_FOCUS_IN:
                 case XCB_FOCUS_OUT:{
                     xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
-                    nss_window_t *win = window_for_xid(ev->event);
-                    if (!win) break;
+                    if (!(win = window_for_xid(ev->event))) break;
                     handle_focus(win, event->response_type == XCB_FOCUS_IN);
                     break;
                 }
@@ -1066,8 +1063,7 @@ void nss_context_run(void) {
                 case XCB_BUTTON_PRESS:
                 case XCB_MOTION_NOTIFY: {
                     xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t*)event;
-                    nss_window_t *win = window_for_xid(ev->event);
-                    if (!win) break;
+                    if (!(win = window_for_xid(ev->event))) break;
 
                     uint8_t button = ev->detail - XCB_BUTTON_INDEX_1;
                     int16_t x = MAX(0, MIN(win->cw, (ev->event_x - win->left_border)/
@@ -1086,16 +1082,14 @@ void nss_context_run(void) {
                 }
                 case XCB_SELECTION_CLEAR: {
                     xcb_selection_clear_event_t *ev = (xcb_selection_clear_event_t*)event;
-                    nss_window_t *win = window_for_xid(ev->owner);
-                    if (!win) break;
+                    if (!(win = window_for_xid(ev->owner))) break;
                     // Clear even if set keep?
                     nss_term_clear_selection(win->term);
                     break;
                 }
                 case XCB_PROPERTY_NOTIFY: {
                     xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)event;
-                    nss_window_t *win = window_for_xid(ev->window);
-                    if (!win) break;
+                    if (!(win = window_for_xid(ev->window))) break;
                     if ((ev->atom == XCB_ATOM_PRIMARY || ev->atom == XCB_ATOM_PRIMARY) &&
                             ev->state == XCB_PROPERTY_NEW_VALUE)
                         receive_selection_data(win, ev->atom, 1);
@@ -1103,22 +1097,19 @@ void nss_context_run(void) {
                 }
                 case XCB_SELECTION_NOTIFY: {
                     xcb_selection_notify_event_t *ev = (xcb_selection_notify_event_t*)event;
-                    nss_window_t *win = window_for_xid(ev->requestor);
-                    if (!win) break;
+                    if (!(win = window_for_xid(ev->requestor))) break;
                     receive_selection_data(win, ev->property, 0);
                     break;
                 }
                 case XCB_SELECTION_REQUEST: {
                     xcb_selection_request_event_t *ev = (xcb_selection_request_event_t*)event;
-                    nss_window_t *win = window_for_xid(ev->owner);
-                    if (!win) break;
+                    if (!(win = window_for_xid(ev->owner))) break;
                     send_selection_data(win, ev->requestor, ev->selection, ev->target, ev->property, ev->time);
                     break;
                 }
                 case XCB_CLIENT_MESSAGE: {
                     xcb_client_message_event_t *ev = (xcb_client_message_event_t*)event;
-                    nss_window_t *win = window_for_xid(ev->window);
-                    if (!win) break;
+                    if (!(win = window_for_xid(ev->window))) break;
                     if (ev->format == 32 && ev->data.data32[0] == ctx.atom_wm_delete_window) {
                         nss_free_window(win);
                         if (!win_list_head && !ctx.daemon_mode) {
@@ -1130,24 +1121,21 @@ void nss_context_run(void) {
                 }
                 case XCB_VISIBILITY_NOTIFY: {
                     xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
-                    nss_window_t *win = window_for_xid(ev->window);
-                    if (!win) break;
-                    win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
-                    nss_term_visibility(win->term, win->active);
+                    if (!(win = window_for_xid(ev->window))) break;
+                    if ((win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED))
+                        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
                     break;
                 }
                 case XCB_MAP_NOTIFY:
                 case XCB_UNMAP_NOTIFY: {
                     xcb_map_notify_event_t *ev = (xcb_map_notify_event_t *)event;
-                    nss_window_t *win = window_for_xid(ev->window);
-                    if (!win) break;
-                    win->active = ev->response_type == XCB_MAP_NOTIFY;
-                    nss_term_visibility(win->term, win->active);
+                    if (!(win = window_for_xid(ev->window))) break;
+                    if ((win->active = ev->response_type == XCB_MAP_NOTIFY))
+                        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
                     break;
                 }
-                case XCB_DESTROY_NOTIFY: {
+                case XCB_DESTROY_NOTIFY:
                    break;
-                }
                 case 0: {
                     xcb_generic_error_t *err = (xcb_generic_error_t*)event;
                     warn("[X11 Error] major=%"PRIu8", minor=%"PRIu16", error=%"PRIu8, err->major_code, err->minor_code, err->error_code);
@@ -1218,6 +1206,7 @@ void nss_context_run(void) {
             }
 
             if (win->sync_active) continue;
+            if (!win->active) continue;
 
             int64_t scroll_delay = 1000LL * nss_config_integer(NSS_ICONFIG_SCROLL_DELAY);
             int64_t resize_delay = 1000LL * nss_config_integer(NSS_ICONFIG_RESIZE_DELAY);
