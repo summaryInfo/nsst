@@ -192,6 +192,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
     cur_x -= marg;
 
     _Bool scrolled = win->ren.boundc;
+    _Bool drawc = 0;
 
     for (nss_line_t *line; (line = line_iter_next(it));) {
         _Bool damaged = 0;
@@ -200,8 +201,10 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
             if (!(line->cell[i].attr & nss_attrib_drawn) || (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink))) {
                 nss_cell_t cel = line->cell[i];
 
-                if (line_iter_y(it) == cur_y && i == cur_x && cursor &&
-                    win->focused && win->cursor_type == nss_cursor_block) cel.attr ^= nss_attrib_inverse;
+                if (line_iter_y(it) == cur_y && i == cur_x && cursor) {
+                    if (win->focused && win->cursor_type == nss_cursor_block) cel.attr ^= nss_attrib_inverse;
+                    drawc = 1;
+                }
 
                 struct nss_cellspec spec = nss_describe_cell(cel, palette,
                         line->pal->data, win->blink_state, nss_term_is_selected(win->term, i, line_iter_y(it)));
@@ -256,7 +259,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
 
     }
 
-    if (cursor) {
+    if (cursor && drawc) {
         cur_x *= win->char_width;
         cur_y *= win->char_depth + win->char_height;
         nss_rect_t rects[4] = {
