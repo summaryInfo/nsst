@@ -1127,7 +1127,8 @@ void nss_context_run(void) {
             }
         }
 
-        for (nss_window_t *win = win_list_head; win; win = win->next) {
+        for (nss_window_t *win = win_list_head, *next; win; win = next) {
+            next = win->next;
             if (ctx.pfds[win->poll_index].revents & POLLIN)
                 nss_term_read(win->term);
             else if (ctx.pfds[win->poll_index].revents & (POLLERR | POLLNVAL | POLLHUP))
