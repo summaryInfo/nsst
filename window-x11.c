@@ -386,7 +386,6 @@ static void nss_window_set_font(nss_window_t *win, const char * name, int32_t si
         nss_renderer_reload_font(win, 1);
         nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
         win->force_redraw = 1;
-        xcb_flush(con);
     }
 }
 
@@ -1011,18 +1010,15 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
 
 /* Start window logic, handling all windows in context */
 void nss_context_run(void) {
-    int64_t next_timeout = SEC/nss_config_integer(NSS_ICONFIG_FPS);
-    for (;;) {
+    for (int64_t next_timeout = SEC/nss_config_integer(NSS_ICONFIG_FPS);;) {
 #if USE_PPOLL
-        struct timespec ppoll_timeout = { .tv_sec = 0, .tv_nsec = next_timeout};
-        if (ppoll(ctx.pfds, ctx.pfdcap, &ppoll_timeout, NULL) < 0 && errno != EINTR)
+        if (ppoll(ctx.pfds, ctx.pfdcap, &(struct timespec){0, next_timeout}, NULL) < 0 && errno != EINTR)
 #else
         if (poll(ctx.pfds, ctx.pfdcap, next_timeout/(SEC/1000)) < 0 && errno != EINTR)
 #endif
             warn("Poll error: %s", strerror(errno));
         if (ctx.pfds[0].revents & POLLIN) {
-            xcb_generic_event_t *event;
-            while ((event = xcb_poll_for_event(con))) {
+            for (xcb_generic_event_t *event; (event = xcb_poll_for_event(con)); free(event)) {
                 switch (event->response_type &= 0x7f) {
                     nss_window_t *win;
                 case XCB_EXPOSE:{
@@ -1090,8 +1086,8 @@ void nss_context_run(void) {
                 case XCB_PROPERTY_NOTIFY: {
                     xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
-                    if ((ev->atom == XCB_ATOM_PRIMARY || ev->atom == XCB_ATOM_PRIMARY) &&
-                            ev->state == XCB_PROPERTY_NEW_VALUE)
+                    if ((ev->atom == XCB_ATOM_PRIMARY || ev->atom == XCB_ATOM_SECONDARY ||
+                            ev->atom == ctx.atom_clipboard) && ev->state == XCB_PROPERTY_NEW_VALUE)
                         receive_selection_data(win, ev->atom, 1);
                     break;
                 }
@@ -1112,10 +1108,8 @@ void nss_context_run(void) {
                     if (!(win = window_for_xid(ev->window))) break;
                     if (ev->format == 32 && ev->data.data32[0] == ctx.atom_wm_delete_window) {
                         nss_free_window(win);
-                        if (!win_list_head && !ctx.daemon_mode) {
-                            free(event);
-                            return;
-                        }
+                        if (!win_list_head && !ctx.daemon_mode)
+                            return free(event);
                     }
                     break;
                 }
@@ -1145,23 +1139,20 @@ void nss_context_run(void) {
                     if (event->response_type == ctx.xkb_base_event) {
                         struct _xkb_any_event {
                             uint8_t response_type;
-                            uint8_t xkbType;
+                            uint8_t xkb_type;
                             uint16_t sequence;
                             xcb_timestamp_t time;
-                            uint8_t deviceID;
+                            uint8_t device_id;
                         } *xkb_ev;
 
                         xkb_ev = (struct _xkb_any_event*)event;
-                        if (xkb_ev->deviceID == ctx.xkb_core_kbd) {
-                            switch (xkb_ev->xkbType) {
-                            case XCB_XKB_NEW_KEYBOARD_NOTIFY : {
+                        if (xkb_ev->device_id == ctx.xkb_core_kbd) {
+                            switch (xkb_ev->xkb_type) {
+                            case XCB_XKB_NEW_KEYBOARD_NOTIFY: {
                                 xcb_xkb_new_keyboard_notify_event_t *ev = (xcb_xkb_new_keyboard_notify_event_t*)event;
                                 if (ev->changed & XCB_XKB_NKN_DETAIL_KEYCODES)
+                            case XCB_XKB_MAP_NOTIFY:
                                     update_keymap();
-                                break;
-                            }
-                            case XCB_XKB_MAP_NOTIFY: {
-                                update_keymap();
                                 break;
                             }
                             case XCB_XKB_STATE_NOTIFY: {
@@ -1171,24 +1162,22 @@ void nss_context_run(void) {
                                 break;
                             }
                             default:
-                                warn("Unknown xcb-xkb event type: %02"PRIu8, xkb_ev->xkbType);
+                                warn("Unknown xcb-xkb event type: %02"PRIu8, xkb_ev->xkb_type);
                             }
                         }
                     } else warn("Unknown xcb event type: %02"PRIu8, event->response_type);
                     break;
                 }
-                free(event);
             }
         }
 
         for (size_t i = 1; i < ctx.pfdcap; i++) {
             if (ctx.pfds[i].fd > 0) {
                 nss_window_t *win = window_for_term_fd(ctx.pfds[i].fd);
-                if (ctx.pfds[i].revents & POLLIN & win->got_configure) {
+                if (ctx.pfds[i].revents & POLLIN & win->got_configure)
                     nss_term_read(win->term);
-                } else if (ctx.pfds[i].revents & (POLLERR | POLLNVAL | POLLHUP)) {
+                else if (ctx.pfds[i].revents & (POLLERR | POLLNVAL | POLLHUP))
                     nss_free_window(win);
-                }
             }
         }
 
