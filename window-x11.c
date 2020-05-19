@@ -1154,11 +1154,15 @@ void nss_context_run(void) {
             int64_t resize_delay = 1000LL * nss_config_integer(NSS_ICONFIG_RESIZE_DELAY);
             int64_t frame_time = SEC / nss_config_integer(NSS_ICONFIG_FPS);
 
-            if (!win->resize_delayed && TIMEDIFF(win->last_resize, cur) < frame_time)
+            if (!win->resize_delayed && TIMEDIFF(win->last_resize, cur) < frame_time) {
+                if (win->slow_mode) win->next_draw = cur, win->slow_mode = 0;
                 TIMEINC(win->next_draw, resize_delay), win->resize_delayed = 1;
+            }
 
-            if (!win->scroll_delayed && TIMEDIFF(win->last_scroll, cur) < frame_time)
+            if (!win->scroll_delayed && TIMEDIFF(win->last_scroll, cur) < frame_time) {
+                if (win->slow_mode) win->next_draw = cur, win->slow_mode = 0;
                 TIMEINC(win->next_draw, scroll_delay), win->scroll_delayed = 1;
+            }
 
             int64_t remains = TIMEDIFF(cur, win->next_draw);
 
@@ -1173,7 +1177,8 @@ void nss_context_run(void) {
                 if (win->drawn_somthing || old_drawn) {
                     win->next_draw = cur;
                     TIMEINC(win->next_draw, remains);
-                }
+                    win->slow_mode = 0;
+                } else win->slow_mode = 1;
 
                 win->force_redraw = 0;
                 win->resize_delayed = 0;

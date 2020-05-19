@@ -74,6 +74,7 @@ struct nss_window {
     unsigned resize_delayed : 1;
     unsigned drawn_somthing : 1;
     unsigned sync_active : 1;
+    unsigned slow_mode : 1;
 
     int16_t width;
     int16_t height;
