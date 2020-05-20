@@ -192,17 +192,16 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
     cur_x -= marg;
 
     _Bool scrolled = win->ren.boundc;
+    _Bool cond_cblink = !win->blink_commited && (win->cursor_type & 1) && nss_term_is_cursor_enabled(win->term);
 
-    if (!win->blink_commited && (win->cursor_type & 1) &&
-            nss_term_is_cursor_enabled(win->term)) cursor |= win->blink_state;
+    if (cond_cblink) cursor |= win->blink_state;
 
     for (nss_line_t *line; (line = line_iter_next(it));) {
         _Bool damaged = 0;
         nss_rect_t l_bound = {0, line_iter_y(it), 0, 1};
         for (nss_coord_t i = 0; i < MIN(win->cw, line->width); i++) {
-            if (!(line->cell[i].attr & nss_attrib_drawn) ||
-                    (!win->blink_commited && ((line->cell[i].attr & nss_attrib_blink) ||
-                    ((win->cursor_type & 1) && line_iter_y(it) == cur_y && i == cur_x)))) {
+            if (!(line->cell[i].attr & nss_attrib_drawn) || (!win->blink_commited &&
+                    ((line->cell[i].attr & nss_attrib_blink) || cond_cblink))) {
                 nss_cell_t cel = line->cell[i];
 
                 if (line_iter_y(it) == cur_y && i == cur_x && cursor &&
