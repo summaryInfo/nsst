@@ -513,6 +513,10 @@ inline static void term_put_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y,
     term->screen[y]->cell[x] = MKCELLWITH(fixup_color(term->screen[y], &term->c), ch);
 }
 
+_Bool nss_term_is_cursor_enabled(nss_term_t *term) {
+	return !(term->mode & nss_tm_hide_cursor) && !term->view;
+}
+
 _Bool nss_term_is_utf8(nss_term_t *term) {
     return term->mode & nss_tm_utf8;
 }
@@ -1646,6 +1650,8 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 break;
             case 12: /* Start blinking cursor */
             case 13:
+                nss_window_set_cursor(term->win, ((nss_window_get_cursor(term->win) + 1) & ~1) - set);
+                break;
             case 14: /* Enable XOR of controll sequence and menu for blinking */
                 // IGNORE
                 break;
@@ -2186,19 +2192,8 @@ static void term_dispatch_csi(nss_term_t *term) {
     //case C('t') | I0(' '): /* DECSWBV */
     //    break;
     case C('q') | I0(' '): /* DECSCUSR */ {
-        switch(PARAM(0, 1)) {
-        case 1: /* Blinking block */
-        case 2: /* Steady block */
-            nss_window_set_cursor(term->win, nss_cursor_block);
-            break;
-        case 3: /* Blinking underline */
-        case 4: /* Steady underline */
-            nss_window_set_cursor(term->win, nss_cursor_underline);
-            break;
-        case 5: /* Blinking bar */
-        case 6: /* Steady bar */
-            nss_window_set_cursor(term->win, nss_cursor_bar);
-        }
+        nss_cursor_type_t csr = PARAM(0, 1);
+        if (csr < 7) nss_window_set_cursor(term->win, csr);
         break;
     }
     case C('p') | I0('!'): /* DECSTR */

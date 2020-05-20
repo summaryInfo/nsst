@@ -327,6 +327,9 @@ void nss_window_get_dim(nss_window_t *win, int16_t *width, int16_t *height) {
 void nss_window_set_cursor(nss_window_t *win, nss_cursor_type_t type) {
     win->cursor_type = type;
 }
+nss_cursor_type_t nss_window_get_cursor(nss_window_t *win) {
+    return win->cursor_type;
+}
 
 void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor_fg) {
     nss_color_t obg = win->bg;
@@ -1135,7 +1138,7 @@ void nss_context_run(void) {
                 nss_free_window(win);
         }
 
-        next_timeout = 15*SEC;
+        next_timeout = nss_config_integer(NSS_ICONFIG_BLINK_TIME)*1000LL;
         struct timespec cur;
         clock_gettime(NSS_CLOCK, &cur);
 

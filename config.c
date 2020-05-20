@@ -269,8 +269,6 @@ void nss_config_set_integer(uint32_t opt, int32_t val) {
     if (opt < NSS_ICONFIG_INPUT_MIN) {
         if (val > ioptions[opt].max) val = ioptions[opt].max;
         else if (val < ioptions[opt].min) val = ioptions[opt].min;
-        if(opt == NSS_ICONFIG_CURSOR_SHAPE)
-            val = (val + 1) & ~1;
         ioptions[opt].val = val;
     } else if (opt < NSS_ICONFIG_MAX) {
         switch(opt) {

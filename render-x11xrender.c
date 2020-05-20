@@ -292,6 +292,8 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
     _Bool marg = win->cw == cur_x;
     cur_x -= marg;
 
+    if (!win->blink_commited && (win->cursor_type & 1) &&
+            nss_term_is_cursor_enabled(win->term)) cursor |= win->blink_state;
 
     for (nss_line_t *line; (line = line_iter_next(it));) {
         if (win->cw > line->width) {
@@ -303,11 +305,14 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
             });
         }
         for (nss_coord_t i = 0; i < MIN(win->cw, line->width); i++) {
-            if (!(line->cell[i].attr & nss_attrib_drawn) || (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink))) {
+            if (!(line->cell[i].attr & nss_attrib_drawn) ||
+                    (!win->blink_commited && ((line->cell[i].attr & nss_attrib_blink) ||
+                    ((win->cursor_type & 1) && line_iter_y(it) == cur_y && i == cur_x)))) {
                 nss_cell_t cel = line->cell[i];
 
                 if (line_iter_y(it) == cur_y && i == cur_x && cursor &&
-                    win->focused && win->cursor_type == nss_cursor_block) cel.attr ^= nss_attrib_inverse;
+                        win->focused && ((win->cursor_type + 1) & ~1) == nss_cursor_block)
+                    cel.attr ^= nss_attrib_inverse;
 
                 struct nss_cellspec spec = nss_describe_cell(cel, palette,
                         line->pal->data, win->blink_state, nss_term_is_selected(win->term, i, line_iter_y(it)));
@@ -510,7 +515,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
         };
         size_t off = 0, count = 4;
         if (win->focused) {
-            if (win->cursor_type == nss_cursor_bar) {
+            if (((win->cursor_type + 1) & ~1) == nss_cursor_bar) {
                 if(marg) {
                     off = 2;
                     rects[2].width = win->cursor_width;
@@ -518,11 +523,11 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                 } else
                     rects[0].width = win->cursor_width;
                 count = 1;
-            } else if (win->cursor_type == nss_cursor_underline) {
+            } else if (((win->cursor_type + 1) & ~1) == nss_cursor_underline) {
                 count = 1;
                 off = 3;
                 rects[3].height = win->cursor_width;
-                rects[3].x -= win->cursor_width - 1;
+                rects[3].y -= win->cursor_width - 1;
             } else {
                 count = 0;
             }
