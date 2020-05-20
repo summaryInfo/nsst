@@ -201,7 +201,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
         nss_rect_t l_bound = {0, line_iter_y(it), 0, 1};
         for (nss_coord_t i = 0; i < MIN(win->cw, line->width); i++) {
             if (!(line->cell[i].attr & nss_attrib_drawn) || (!win->blink_commited &&
-                    ((line->cell[i].attr & nss_attrib_blink) || cond_cblink))) {
+                    ((line->cell[i].attr & nss_attrib_blink) || (cond_cblink && line_iter_y(it) == cur_y && i == cur_x)))) {
                 nss_cell_t cel = line->cell[i];
 
                 if (line_iter_y(it) == cur_y && i == cur_x && cursor &&
