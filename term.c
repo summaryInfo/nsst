@@ -514,7 +514,7 @@ inline static void term_put_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y,
 }
 
 _Bool nss_term_is_cursor_enabled(nss_term_t *term) {
-	return !(term->mode & nss_tm_hide_cursor) && !term->view;
+    return !(term->mode & nss_tm_hide_cursor) && !term->view;
 }
 
 _Bool nss_term_is_utf8(nss_term_t *term) {
@@ -1118,7 +1118,7 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
     }
     default:
         if (term->vt_version < 200) {
-            switch(term->vt_level) {
+            switch(term->vt_version) {
             case 125: term_answerback(term, CSI"?12;2;0;10c"); break;
             case 102: term_answerback(term, CSI"?6c"); break;
             case 101: term_answerback(term, CSI"?1;0c"); break;
@@ -1156,9 +1156,10 @@ static void term_dispatch_dsr(nss_term_t *term) {
                     (term->c.origin ? -term->top : 0) + term->c.y + 1,
                     MIN(term->c.x, term->width - 1) + 1,
                     term->vt_level >= 4 ? ";1" : "");
-        case 15: /* Printer status -- Has no printer */
+        case 15: /* Printer status -- Has printer*/
             CHK_VT(2);
-            term_answerback(term, CSI"?13n"); //TODO Has printer -- 10
+            term_answerback(term, CSI"?10n");
+            //term_answerback(term, CSI"?13n");  // Has no printer
             break;
         case 25: /* User defined keys lock -- Locked */
             CHK_VT(2);
