@@ -12,7 +12,7 @@ OBJ := @OBJECTS@
 LIBS != pkg-config @DEPS@ --libs
 INCLUES != pkg-config @DEPS@ --cflags
 
-LDFLAGS += -lm -lutil $(LIBS)
+LDFLAGS += -lrt -lm -lutil $(LIBS)
 CFLAGS += $(INCLUES)
 
 
