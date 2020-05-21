@@ -19,8 +19,8 @@ typedef enum nss_font_attrib {
 } nss_font_attrib_t;
 
 typedef struct nss_glyph {
-    // Tree elements
-    struct nss_glyph *l,*r,*p;
+    // Hash table data
+    struct nss_glyph *next;
     uint32_t g;
 
     uint16_t width, height;

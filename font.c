@@ -375,71 +375,21 @@ struct nss_glyph_cache {
     int16_t char_height;
     int16_t char_depth;
     size_t refc;
-    nss_glyph_t *root;
+    nss_glyph_t **tab;
+    size_t size;
+    size_t caps;
 };
 
-static void rotate_left(nss_glyph_t **root, nss_glyph_t *n) {
-    nss_glyph_t *r = n->r;
-    if (r) {
-        if ((n->r = r->l))
-            r->l->p = n;
-        r->p = n->p;
-    }
-    if (!n->p) *root = r;
-    else if (n == n->p->l) n->p->l = r;
-    else n->p->r = r;
-
-    if(r) r->l = n;
-    n->p = r;
+static inline uint64_t ror64(uint64_t v, int r) {
+    return (v >> r) | (v << (64 - r));
 }
 
-static void rotate_right(nss_glyph_t **root, nss_glyph_t *n) {
-    nss_glyph_t *l = n->l;
-    if (l) {
-        if ((n->l = l->r))
-            l->r->p = n;
-        l->p = n->p;
-    }
-    if (!n->p) *root = l;
-    else if (n == n->p->l) n->p->l = l;
-    else n->p->r = l;
-
-    if(l) l->r = n;
-    n->p = l;
-}
-
-static void splay(nss_glyph_t **root, nss_glyph_t *n) {
-    while (n->p) {
-        if (!n->p->p) {
-            if (n->p->l == n) rotate_right(root, n->p);
-            else rotate_left(root, n->p);
-        } else if (n->p->l == n) {
-            if (n->p->p->l == n->p) {
-                rotate_right(root, n->p->p);
-                rotate_right(root, n->p);
-            } else {
-                rotate_right(root, n->p);
-                rotate_left(root, n->p);
-            }
-        } else {
-            if (n->p->p->l == n->p) {
-                rotate_left(root, n->p);
-                rotate_right(root, n->p);
-            } else {
-                rotate_left(root, n->p->p);
-                rotate_left(root, n->p);
-            }
-        }
-    }
-}
-
-static void free_dfs(nss_glyph_t *n) {
-    while(n) {
-        free_dfs(n->l);
-        nss_glyph_t *t = n->r;
-        free(n);
-        n = t;
-    }
+uint64_t hash(uint64_t v) {
+    v ^= ror64(v, 25) ^ ror64(v, 50);
+    v *= 0xA24BAED4963EE407ULL;
+    v ^= ror64(v, 24) ^ ror64(v, 49);
+    v *= 0x9FB21C651E98DF25ULL;
+    return v ^ v >> 28;
 }
 
 nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd) {
@@ -485,19 +435,23 @@ void nss_cache_font_dim(nss_glyph_cache_t *cache, int16_t *w, int16_t *h, int16_
 
 void nss_free_cache(nss_glyph_cache_t *cache) {
     if (!--cache->refc) {
-        free_dfs(cache->root);
+        for (size_t i = 0; i < cache->caps; i++)
+            for (nss_glyph_t *next = NULL, *it = cache->tab[i]; it; it = next)
+                next = it->next, free(it);
+        free(cache->tab);
         free(cache);
     }
 }
 
+#define HASH_CAP_INC(x) ((x)?(8*(x)/5):64)
 nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, nss_char_t ch, nss_font_attrib_t face) {
     uint32_t g = ch | (face << 24);
-    nss_glyph_t *n = cache->root, *p = NULL;
-    while (n) {
-        p = n;
-        if (n->g < g) n = n->r;
-        else if (n->g > g) n = n->l;
-        else return n;
+    size_t h = hash(g);
+
+    if (cache->tab) {
+        nss_glyph_t *res = cache->tab[h % cache->caps];
+        for(; res; res = res->next)
+            if (g == res->g) return res;
     }
 
     nss_glyph_t *new;
@@ -508,24 +462,37 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, nss_char_t ch, nss_font_a
 #endif
         new = nss_font_render_glyph(cache->font, ch, face, cache->lcd);
 
+    if (!new) return new;
+
+    if (3*(cache->size + 1)/2 > cache->caps) {
+        size_t newc = HASH_CAP_INC(cache->caps);
+        nss_glyph_t **newt = calloc(newc, sizeof(*newt));
+        if (!newt) return NULL;
+        for (size_t i = 0; i < cache->caps; i++) {
+            for (nss_glyph_t *next = NULL, *it = cache->tab[i]; it; it = next) {
+                next = it->next;
+                size_t ha = hash(it->g);
+                it->next = newt[ha % newc];
+                newt[ha % newc] = it;
+            }
+        }
+        free(cache->tab);
+        cache->tab = newt;
+        cache->caps = newc;
+    }
+
     new->g = g;
-    new->r = new->l = NULL;
+    new->next = cache->tab[h % cache->caps];
+    cache->tab[h % cache->caps] = new;
+    cache->size++;
 
-    new->p = p;
-    if (!p) cache->root = new;
-    else if (p->g < new->g) p->r = new;
-    else p->l = new;
-
-    splay(&cache->root, new);
     return new;
 }
 
 _Bool nss_cache_is_fetched(nss_glyph_cache_t *cache, nss_char_t ch) {
-    nss_glyph_t *n = cache->root;
-    while (n) {
-        if (n->g < ch) n = n->r;
-        else if (n->g > ch) n = n->l;
-        else return 1;
-    }
+    size_t h = hash(ch);
+    nss_glyph_t *res = cache->tab[h % cache->caps];
+    for(; res; res = res->next)
+        if (ch == res->g) return 1;
     return 0;
 }
