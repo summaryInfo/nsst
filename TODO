@@ -1,4 +1,6 @@
 Until version 1.4:
+    Make pixel components order configurable
+        --subpixel-order=rgb, bgr, vrgb
     Recursive input buffer refilling
         Buffer position should be stored in nss_term_t
         tty_write_raw should just read a portion of data to buffer,
@@ -11,12 +13,14 @@ Until version 1.4:
         --allow-window-ops/allowWindowOps
         nss_window_dispatch_window_operation
             It is simpler to implement window operations on window side
+
             and express other window operations in terms of CSI t
-	User-prefered charset
+    User-prefered charset
     Rectangular operations
     Left/right margins
     Colored glyphs?
 More:
+    Option to disable blinking
     Support new color syntax
     Bell
     Proper combining characters support
@@ -71,7 +75,7 @@ Term
     Private modes
         4 -- DECSCLM
         8 -- DECARM (When ported to wayland)
-        12,13,14 -- Cursor blinking
+        14 -- Cursor blinking XORing
         35 -- font shifting functions
         44 -- margin bell [bell]
         69 -- DECLRMM [left/right margins]
