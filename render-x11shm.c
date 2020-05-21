@@ -5,9 +5,17 @@
 #include "font.h"
 #include "window-x11.h"
 
+#if USE_POSIX_SHM
+#   include <errno.h>
+#   include <fcntl.h>
+#   include <sys/mman.h>
+#   include <sys/stat.h>
+#   include <unistd.h>
+#else
+#   include <sys/ipc.h>
+#   include <sys/shm.h>
+#endif
 #include <string.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
 #include <xcb/shm.h>
 #include <xcb/xcb.h>
 
@@ -47,14 +55,37 @@ static nss_image_t nss_create_image_shm(nss_window_t *win, int16_t width, int16_
         .height = height,
         .shmid = -1,
     };
-    size_t size = width * height * sizeof(nss_color_t) + sizeof(nss_image_t);
+    size_t size = width * height * sizeof(nss_color_t);
 
     if (rctx.has_shm) {
+#if USE_POSIX_SHM
+        char temp[] = "/nsst-XXXXXX";
+        int32_t attempts = 16;
+
+        do {
+            struct timespec cur;
+            clock_gettime(CLOCK_REALTIME, &cur);
+            uint64_t r = cur.tv_nsec;
+            for (int i = 0; i < 6; ++i, r >>= 5)
+                temp[6+i] = 'A' + (r & 15) + (r & 16) * 2;
+            im.shmid = shm_open(temp, O_RDWR | O_CREAT | O_EXCL, 0600);
+        } while (im.shmid < 0 && errno == EEXIST && attempts-- > 0);
+
+        shm_unlink(temp);
+
+        if (im.shmid < 0) return im;
+
+        if (ftruncate(im.shmid, size) < 0) goto error;
+
+        im.data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, im.shmid, 0);
+        if (im.data == MAP_FAILED) goto error;
+#else
         im.shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0600);
-        if (im.shmid == -1U) return im;
+        if (im.shmid == -1) return im;
 
         im.data = shmat(im.shmid, 0, 0);
         if ((void *)im.data == (void *) -1) goto error;
+#endif
 
         xcb_void_cookie_t c;
         if(!win->ren.shm_seg) {
@@ -66,7 +97,11 @@ static nss_image_t nss_create_image_shm(nss_window_t *win, int16_t width, int16_
             check_void_cookie(c);
         }
 
+#if USE_POSIX_SHM
+        c = xcb_shm_attach_fd_checked(con, win->ren.shm_seg, dup(im.shmid), 0);
+#else
         c = xcb_shm_attach_checked(con, win->ren.shm_seg, im.shmid, 0);
+#endif
         if (check_void_cookie(c)) goto error;
 
         if (rctx.has_shm_pixmaps) {
@@ -79,9 +114,13 @@ static nss_image_t nss_create_image_shm(nss_window_t *win, int16_t width, int16_
         return im;
     error:
         warn("Can't create image");
+#if USE_POSIX_SHM
+        if (im.data != MAP_FAILED) munmap(im.data, size);
+        if (im.shmid >= 0) close(im.shmid);
+#else
         if ((void *)im.data != (void *) -1) shmdt(im.data);
-        if (im.shmid != -1U) shmctl(im.shmid, IPC_RMID, NULL);
-
+        if (im.shmid != -1) shmctl(im.shmid, IPC_RMID, NULL);
+#endif
         im.shmid = -1;
         im.data = NULL;
         return im;
@@ -93,8 +132,13 @@ static nss_image_t nss_create_image_shm(nss_window_t *win, int16_t width, int16_
 
 static void nss_free_image_shm(nss_image_t *im) {
     if (rctx.has_shm) {
+#if USE_POSIX_SHM
+        if (im->data) munmap(im->data, im->width * im->height * sizeof(nss_color_t));
+        if (im->shmid >= 0) close(im->shmid);
+#else
         if (im->data) shmdt(im->data);
-        if (im->shmid != -1U) shmctl(im->shmid, IPC_RMID, NULL);
+        if (im->shmid != -1) shmctl(im->shmid, IPC_RMID, NULL);
+#endif
     } else {
         if (im->data) free(im->data);
     }
