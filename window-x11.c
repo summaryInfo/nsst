@@ -591,11 +591,11 @@ nss_window_t *nss_create_window(void) {
     win_list_head = win;
 
     if (ctx.pfdn + 1 > ctx.pfdcap) {
-        struct pollfd *new = realloc(ctx.pfds, ctx.pfdcap + INIT_PFD_NUM);
+        struct pollfd *new = realloc(ctx.pfds, (ctx.pfdcap + INIT_PFD_NUM)*sizeof(*ctx.pfds));
         if (new) {
             for (size_t i = 0; i < INIT_PFD_NUM; i++) {
-                new[i + ctx.pfdn].fd = -1;
-                new[i + ctx.pfdn].events = 0;
+                new[i + ctx.pfdcap].fd = -1;
+                new[i + ctx.pfdcap].events = 0;
             }
             ctx.pfdcap += INIT_PFD_NUM;
             ctx.pfds = new;
