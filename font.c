@@ -25,6 +25,8 @@
 #include FT_LCD_FILTER_H
 
 #define CAPS_STEP 2
+#define HASH_INIT_CAP 167
+#define HASH_CAP_INC(x) (8*(x)/5)
 
 struct nss_font_state {
     size_t fonts;
@@ -398,10 +400,17 @@ nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd) {
         warn("Can't allocate glyph cache");
         return NULL;
     }
-
+    cache->tab = calloc(HASH_INIT_CAP, sizeof(cache->tab));
+    cache->caps = HASH_INIT_CAP;
     cache->refc = 1;
     cache->font = font;
     cache->lcd = lcd;
+
+    if (!cache->tab) {
+        free(cache);
+        warn("Can't allocate glyph cache");
+        return NULL;
+    }
 
     int16_t total = 0, maxd = 0, maxh = 0;
     for (uint32_t i = ' '; i <= '~'; i++) {
@@ -443,16 +452,13 @@ void nss_free_cache(nss_glyph_cache_t *cache) {
     }
 }
 
-#define HASH_CAP_INC(x) ((x)?(8*(x)/5):64)
 nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, nss_char_t ch, nss_font_attrib_t face) {
     uint32_t g = ch | (face << 24);
     size_t h = hash(g);
 
-    if (cache->tab) {
-        nss_glyph_t *res = cache->tab[h % cache->caps];
-        for(; res; res = res->next)
-            if (g == res->g) return res;
-    }
+    nss_glyph_t *res = cache->tab[h % cache->caps];
+    for(; res; res = res->next)
+        if (g == res->g) return res;
 
     nss_glyph_t *new;
 #if USE_BOXDRAWING
@@ -462,7 +468,7 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, nss_char_t ch, nss_font_a
 #endif
         new = nss_font_render_glyph(cache->font, ch, face, cache->lcd);
 
-    if (!new) return new;
+    if (!new) return NULL;
 
     if (3*(cache->size + 1)/2 > cache->caps) {
         size_t newc = HASH_CAP_INC(cache->caps);
