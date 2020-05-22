@@ -1188,9 +1188,9 @@ void nss_context_run(void) {
                 win->resize_delayed = 0;
                 win->scroll_delayed = 0;
                 win->blink_commited = 1;
-             }
+            }
 
-             next_timeout = MIN(next_timeout,  remains);
+            if (!win->slow_mode) next_timeout = MIN(next_timeout,  remains);
         }
         xcb_flush(con);
 
