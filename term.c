@@ -1653,23 +1653,14 @@ static void term_reverse_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, n
     nss_cell_t mask = {0}, val = {0};
     term_decode_sgr_mask(term, 4, &mask, &val, &fg, &bg);
 
-    if (term->mode & nss_tm_attr_ext_rectangle) {
-        for (; ys < ye; ys++) {
-            nss_line_t *line = term->screen[ys];
-            for(nss_coord_t i = xs; i < xe; i++) {
-                line->cell[i].attr ^= mask.attr;
-                line->cell[i].attr &= ~nss_attrib_drawn;
-            }
+    _Bool rect = term->mode & nss_tm_attr_ext_rectangle;
+    for (; ys < ye; ys++) {
+        nss_line_t *line = term->screen[ys];
+        for(nss_coord_t i = xs; i < (rect || ys == ye - 1 ? xe : term->width); i++) {
+            line->cell[i].attr ^= mask.attr;
+            line->cell[i].attr &= ~nss_attrib_drawn;
         }
-    } else {
-        for (; ys < ye; ys++) {
-            nss_line_t *line = term->screen[ys];
-            for(nss_coord_t i = xs; i < (ys == ye - 1 ? xe : term->width); i++) {
-                line->cell[i].attr ^= mask.attr;
-                line->cell[i].attr &= ~nss_attrib_drawn;
-            }
-            xs = 0;
-        }
+        if(!rect) xs = 0;
     }
 }
 
@@ -1681,31 +1672,18 @@ static void term_apply_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss
 
     mask.attr |= nss_attrib_drawn;
     val.attr &= ~nss_attrib_drawn;
-    if (term->mode & nss_tm_attr_ext_rectangle) {
-        for (; ys < ye; ys++) {
-            nss_line_t *line = term->screen[ys];
-            if (val.fg >= NSS_PALETTE_SIZE) val.fg = alloc_color(line, fg);
-            if (val.bg >= NSS_PALETTE_SIZE) val.bg = alloc_color(line, bg);
-            for(nss_coord_t i = xs; i < xe; i++) {
-                nss_cell_t *cel = &line->cell[i];
-                cel->attr = (cel->attr & ~mask.attr) | (val.attr & mask.attr);
-                if (mask.fg) cel->fg = val.fg;
-                if (mask.bg) cel->bg = val.bg;
-            }
+    _Bool rect = term->mode & nss_tm_attr_ext_rectangle;
+    for (; ys < ye; ys++) {
+        nss_line_t *line = term->screen[ys];
+        if (val.fg >= NSS_PALETTE_SIZE) val.fg = alloc_color(line, fg);
+        if (val.bg >= NSS_PALETTE_SIZE) val.bg = alloc_color(line, bg);
+        for(nss_coord_t i = xs; i < (rect || ys == ye - 1 ? xe : term->width); i++) {
+            nss_cell_t *cel = &line->cell[i];
+            cel->attr = (cel->attr & ~mask.attr) | (val.attr & mask.attr);
+            if (mask.fg) cel->fg = val.fg;
+            if (mask.bg) cel->bg = val.bg;
         }
-    } else {
-        for (; ys < ye; ys++) {
-            nss_line_t *line = term->screen[ys];
-            if (val.fg >= NSS_PALETTE_SIZE) val.fg = alloc_color(line, fg);
-            if (val.bg >= NSS_PALETTE_SIZE) val.bg = alloc_color(line, bg);
-            for(nss_coord_t i = xs; i < (ys == ye - 1 ? xe : term->width); i++) {
-                nss_cell_t *cel = &line->cell[i];
-                cel->attr = (cel->attr & ~mask.attr) | (val.attr & mask.attr);
-                if (mask.fg) cel->fg = val.fg;
-                if (mask.bg) cel->bg = val.bg;
-            }
-            xs = 0;
-        }
+        if (!rect) xs = 0;
     }
 }
 
