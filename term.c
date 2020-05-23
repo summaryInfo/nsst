@@ -990,15 +990,12 @@ static void term_esc_dump(nss_term_t *term, _Bool use_info) {
             }
             break;
         case esc_osc_string:
-            warn("^[]%u;%s^[\\", term->esc.selector, term->esc.str);
+            (use_info ? info : warn)("^[]%u;%s^[\\", term->esc.selector, term->esc.str);
         default:
             return;
     }
     buf[pos] = 0;
-    if (use_info)
-        info("%s", buf);
-    else
-        warn("%s", buf);
+    (use_info ? info : warn)("%s", buf);
 }
 
 static void term_load_config(nss_term_t *term) {
