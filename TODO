@@ -1,5 +1,4 @@
 Until version 1.4:
-	Not all BCE tests are identical to XTerm?
     Make pixel components order configurable
         --subpixel-order=rgb, bgr, vrgb
     Recursive input buffer refilling

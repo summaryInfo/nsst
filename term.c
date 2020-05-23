@@ -2765,9 +2765,6 @@ static void term_dispatch_esc(nss_term_t *term) {
         term_reset_margins(term);
         nss_term_clear_selection(term);
         term->c.x = term->c.y = 0;
-        term->c.cel.attr = 0;
-        term->c.cel.fg = NSS_SPECIAL_FG;
-        term->c.cel.bg = NSS_SPECIAL_BG;
         for (nss_coord_t i = 0; i < term->height; i++)
             for(nss_coord_t j = 0; j < term->width; j++)
                 term_put_cell(term, j, i, 'E');
