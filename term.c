@@ -170,47 +170,50 @@ struct nss_term {
     _Bool prev_c_view_changed;
 
     enum nss_term_mode {
-        nss_tm_echo = 1 << 0,
-        nss_tm_crlf = 1 << 1,
-        nss_tm_132cols = 1 << 2,
-        nss_tm_wrap = 1 << 3,
-        nss_tm_focused = 1 << 5,
-        nss_tm_altscreen = 1 << 6,
-        nss_tm_utf8 = 1 << 7,
-        nss_tm_reverse_video = 1 << 8,
-        nss_tm_insert = 1 << 9,
-        nss_tm_sixel = 1 << 10,
-        nss_tm_8bit = 1 << 11,
-        nss_tm_protected = 1 << 12,
-        nss_tm_disable_altscreen = 1 << 13,
-        nss_tm_track_focus = 1 << 14,
-        nss_tm_hide_cursor = 1<< 15,
-        nss_tm_enable_nrcs = 1 << 16,
-        nss_tm_132_preserve_display = 1 << 17,
-        nss_tm_scroll_on_output = 1 << 18,
-        nss_tm_dont_scroll_on_input = 1 << 19,
-        nss_tm_mouse_x10 = 1 << 20,
-        nss_tm_mouse_button = 1 << 21,
-        nss_tm_mouse_motion = 1 << 22,
-        nss_tm_mouse_many = 1 << 23,
-        nss_tm_mouse_format_sgr = 1 << 24,
-        nss_tm_alternate_scroll = 1LL << 36,
+        nss_tm_echo                 = 1LL << 0,
+        nss_tm_crlf                 = 1LL << 1,
+        nss_tm_132cols              = 1LL << 2,
+        nss_tm_wrap                 = 1LL << 3,
+        nss_tm_focused              = 1LL << 4,
+        nss_tm_altscreen            = 1LL << 5,
+        nss_tm_utf8                 = 1LL << 6,
+        nss_tm_reverse_video        = 1LL << 7,
+        nss_tm_insert               = 1LL << 8,
+        nss_tm_sixel                = 1LL << 9,
+        nss_tm_8bit                 = 1LL << 10,
+        nss_tm_protected            = 1LL << 11,
+        nss_tm_disable_altscreen    = 1LL << 12,
+        nss_tm_track_focus          = 1LL << 13,
+        nss_tm_hide_cursor          = 1LL << 14,
+        nss_tm_enable_nrcs          = 1LL << 15,
+        nss_tm_132_preserve_display = 1LL << 16,
+        nss_tm_scroll_on_output     = 1LL << 17,
+        nss_tm_dont_scroll_on_input = 1LL << 18,
+        nss_tm_mouse_x10            = 1LL << 19,
+        nss_tm_mouse_button         = 1LL << 20,
+        nss_tm_mouse_motion         = 1LL << 21,
+        nss_tm_mouse_many           = 1LL << 22,
+        nss_tm_mouse_format_sgr     = 1LL << 23,
+        nss_tm_print_extend         = 1LL << 24,
+        nss_tm_print_form_feed      = 1LL << 25,
+        nss_tm_print_enabled        = 1LL << 26,
+        nss_tm_print_auto           = 1LL << 27,
+        nss_tm_title_set_utf8       = 1LL << 28,
+        nss_tm_title_query_utf8     = 1LL << 29,
+        nss_tm_title_set_hex        = 1LL << 30,
+        nss_tm_title_query_hex      = 1LL << 31,
+        nss_tm_bracketed_paste      = 1LL << 32,
+        nss_tm_keep_selection       = 1LL << 33,
+        nss_tm_keep_clipboard       = 1LL << 34,
+        nss_tm_select_to_clipboard  = 1LL << 35,
+        nss_tm_reverse_wrap         = 1LL << 36,
+        nss_tm_led_num_lock         = 1LL << 37,
+        nss_tm_led_caps_lock        = 1LL << 38,
+        nss_tm_led_scroll_lock      = 1LL << 39,
+        nss_tm_alternate_scroll     = 1LL << 40,
         nss_tm_mouse_mask =
             nss_tm_mouse_x10 | nss_tm_mouse_button |
             nss_tm_mouse_motion | nss_tm_mouse_many,
-        nss_tm_print_extend = 1 << 25,
-        nss_tm_print_form_feed = 1 << 26,
-        nss_tm_print_enabled = 1 << 27,
-        nss_tm_print_auto = 1 << 28,
-        nss_tm_title_set_utf8 = 1 << 29,
-        nss_tm_title_query_utf8 = 1 << 30,
-        nss_tm_title_set_hex = 1 << 31,
-        nss_tm_title_query_hex = 1LL << 32,
-        nss_tm_bracketed_paste = 1LL << 33,
-        nss_tm_keep_selection = 1LL << 34,
-        nss_tm_keep_clipboard = 1LL << 35,
-        nss_tm_select_to_clipboard = 1LL << 36,
-        nss_tm_reverse_wrap = 1LL << 37,
     } mode, vt52mode;
 
     struct nss_escape {
@@ -2230,8 +2233,22 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     //case C('p') | P('>'): /* Set pointer mode, xterm */
     //    break;
-    //case C('q'): /* DECLL */
-    //    break;
+    case C('q'): /* DECLL */
+        for (param_t p, argc = term->esc.i + (term->esc.param[term->esc.i] > 0), i = 0; i < argc; i++) {
+            switch((p = PARAM(i, 0))) {
+                break;
+            case 1: term->mode |= nss_tm_led_num_lock; break;
+            case 2: term->mode |= nss_tm_led_caps_lock; break;
+            case 3: term->mode |= nss_tm_led_scroll_lock; break;
+            case 0: term->mode &= ~(nss_tm_led_caps_lock | nss_tm_led_scroll_lock); //fallthrough
+            case 21: term->mode &= ~nss_tm_led_num_lock; break;
+            case 22: term->mode &= ~nss_tm_led_caps_lock; break;
+            case 23: term->mode &= ~nss_tm_led_scroll_lock; break;
+            default:
+                term_esc_dump(term, 0);
+            }
+        }
+        break;
     case C('r'): /* DECSTBM */
         term_set_tb_margins(term, PARAM(0, 1) - 1, PARAM(1, (size_t)term->height) - 1);
         term_move_to(term, 0, 0);
