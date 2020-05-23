@@ -50,7 +50,7 @@
 #define ESC "\x1B"
 #define ST "\x9C"
 
-#define IS_C1(c) ((c) < 0xa0 && (c) >= 0x80)
+#define IS_C1(c) ((uint32_t)(c) - 0x80U < 0x20U)
 #define IS_C0(c) ((c) < 0x20)
 #define IS_DEL(c) ((c) == 0x7f)
 #define IS_STREND(c) (IS_C1(c) || (c) == 0x1b || (c) == 0x1a || (c) == 0x18 || (c) == 0x07)
@@ -1938,6 +1938,76 @@ static void term_move_left(nss_term_t *term, nss_coord_t amount) {
     term_move_to(term, x - amount, y);
 }
 
+static void term_putchar(nss_term_t *term, nss_char_t ch) {
+    // 'print' state
+
+    term->prev_ch = ch; // For REP CSI Ps b
+
+    uint8_t glv = term->c.gn[term->c.gl_ss];
+
+    nss_coord_t width = wcwidth(ch);
+    if (width < 0) /*ch = UTF_INVAL,*/ width = 1;
+    else if (!width) {
+        nss_cell_t *cel = &term->screen[term->c.y]->cell[term->c.x];
+        if (term->c.x) cel--;
+        if (!cel->ch && term->c.x > 1 && cel[-1].attr & nss_attrib_wide) cel--;
+        ch = try_precompose(cel->ch, ch);
+        if (cel->ch != ch) *cel = MKCELLWITH(*cel, ch);
+        return;
+    }
+
+    //info("%lc (%u)", ch, ch);
+
+    // Wrap line if needed
+    if (term->mode & nss_tm_wrap) {
+        if (term->c.x + width > term->width) {
+            term->screen[term->c.y]->wrap_at = term->c.x;
+            if ((term->mode & (nss_tm_print_enabled | nss_tm_print_auto)) == nss_tm_print_auto)
+                term_print_line(term, term->screen[term->c.y]);
+            term_index(term, 1);
+        }
+    } else term->c.x = MIN(term->c.x, term->width - width);
+
+    // Shift characters to the left if insert mode is enabled
+    nss_cell_t *cell = &term->screen[term->c.y]->cell[term->c.x];
+    if (term->mode & nss_tm_insert && term->c.x + width < term->width) {
+        for (nss_cell_t *c = cell + width; c - term->screen[term->c.y]->cell < term->width; c++)
+            c->attr &= ~nss_attrib_drawn;
+        memmove(cell + width, cell, term->screen[term->c.y]->width - term->c.x - width);
+    }
+
+    // Erase overwritten parts of wide characters
+    term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
+    term_adjust_wide_before(term, term->c.x + width - 1, term->c.y, 0, 1);
+
+    // Decode nrcs
+
+    // In theory this should be disabled while in UTF-8 mode, but
+    // in practive applications use these symbols, so keep translating (but restrict charsets to only DEC Graph in GL)
+    if ((term->mode & nss_tm_utf8) && !nss_config_integer(NSS_ICONFIG_FORCE_UTF8_NRCS))
+        ch = nrcs_decode_fast(glv, ch);
+    else
+        ch = nrcs_decode(glv, term->c.gn[term->c.gr], ch, term->mode & nss_tm_enable_nrcs);
+
+    // Clear selection when selected cell is overwritten
+    if (nss_term_is_selected(term, term->c.x, term->c.y))
+        nss_term_clear_selection(term);
+
+    // Put character itself
+    term_put_cell(term, term->c.x, term->c.y, ch);
+
+    // Put dummy character to the left of wide
+    if (width > 1) {
+        cell[1] = fixup_color(term->screen[term->c.y], &term->c);
+        cell[0].attr |= nss_attrib_wide;
+    }
+
+    term->c.gl_ss = term->c.gl; // Reset single shift
+
+    term->c.x += width;
+}
+
+
 static void term_dispatch_csi(nss_term_t *term) {
     term_esc_dump(term, 1);
 
@@ -2065,8 +2135,10 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('a'): /* HPR */
         term_move_to(term, MIN(term->c.x, term->width - 1) + PARAM(0, 1), term->c.y + PARAM(1, 0));
         break;
-    //case C('b'): /* REP */
-    //    break;
+    case C('b'): /* REP */
+        for (param_t i = PARAM(0, 1); i > 0; i--)
+            term_putchar(term, term->prev_ch);
+        break;
     case C('c'): /* Primary DA */
     case C('c') | P('>'): /* Secondary DA */
     case C('c') | P('='): /* Tertinary DA */
@@ -2755,7 +2827,7 @@ static void term_dispatch_vt52_cup(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static void term_putchar(nss_term_t *term, nss_char_t ch) {
+static void term_dispatch(nss_term_t *term, nss_char_t ch) {
     // TODO More sophisticated filtering
     if (term->mode & nss_tm_print_enabled)
         term_print_char(term, ch);
@@ -2926,72 +2998,7 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
             term_dispatch_c0(term, ch);
         else if (ch == 0x7F && (!(term->mode & nss_tm_enable_nrcs) && (glv == nss_96cs_latin_1 || glv == nss_94cs_british)))
             /* ignore */;
-        else {
-            // 'print' state
-
-            nss_coord_t width = wcwidth(ch);
-            if (width < 0) /*ch = UTF_INVAL,*/ width = 1;
-            else if (!width) {
-                nss_cell_t *cel = &term->screen[term->c.y]->cell[term->c.x];
-                if (term->c.x) cel--;
-                if (!cel->ch && term->c.x > 1 && cel[-1].attr & nss_attrib_wide) cel--;
-                ch = try_precompose(cel->ch, ch);
-                if (cel->ch != ch) *cel = MKCELLWITH(*cel, ch);
-                return;
-            }
-
-            //info("%lc (%u)", ch, ch);
-
-            // Wrap line if needed
-            if (term->mode & nss_tm_wrap) {
-                if (term->c.x + width > term->width) {
-                    term->screen[term->c.y]->wrap_at = term->c.x;
-                    if ((term->mode & (nss_tm_print_enabled | nss_tm_print_auto)) == nss_tm_print_auto)
-                        term_print_line(term, term->screen[term->c.y]);
-                    term_index(term, 1);
-                }
-            } else term->c.x = MIN(term->c.x, term->width - width);
-
-            // Shift characters to the left if insert mode is enabled
-            nss_cell_t *cell = &term->screen[term->c.y]->cell[term->c.x];
-            if (term->mode & nss_tm_insert && term->c.x + width < term->width) {
-                for (nss_cell_t *c = cell + width; c - term->screen[term->c.y]->cell < term->width; c++)
-                    c->attr &= ~nss_attrib_drawn;
-                memmove(cell + width, cell, term->screen[term->c.y]->width - term->c.x - width);
-            }
-
-            // Erase overwritten parts of wide characters
-            term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
-            term_adjust_wide_before(term, term->c.x + width - 1, term->c.y, 0, 1);
-
-            // Decode nrcs
-
-            // In theory this should be disabled while in UTF-8 mode, but
-            // in practive applications use these symbols, so keep translating (but restrict charsets to only DEC Graph in GL)
-            if ((term->mode & nss_tm_utf8) && !nss_config_integer(NSS_ICONFIG_FORCE_UTF8_NRCS))
-                ch = nrcs_decode_fast(term->c.gn[term->c.gl_ss], ch);
-            else
-                ch = nrcs_decode(term->c.gn[term->c.gl_ss], term->c.gn[term->c.gr], ch, term->mode & nss_tm_enable_nrcs);
-
-            // Clear selection when selected cell is overwritten
-            if (nss_term_is_selected(term, term->c.x, term->c.y))
-                nss_term_clear_selection(term);
-
-            // Put character itself
-            term_put_cell(term, term->c.x, term->c.y, ch);
-
-            // Put dummy character to the left of wide
-            if (width > 1) {
-                cell[1] = fixup_color(term->screen[term->c.y], &term->c);
-                cell[0].attr |= nss_attrib_wide;
-            }
-
-            term->c.gl_ss = term->c.gl; // Reset single shift
-            term->prev_ch = ch; // For REP CSI Ps b
-
-            term->c.x += width;
-        }
-        break;
+        else term_putchar(term, ch);
     }
 }
 
@@ -3006,15 +3013,15 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
 
         if (show_ctl) {
             if (IS_C1(ch)) {
-                term_putchar(term, '^');
-                term_putchar(term, '[');
+                term_dispatch(term, '^');
+                term_dispatch(term, '[');
                 ch ^= 0xc0;
             } else if ((IS_C0(ch) || IS_DEL(ch)) && ch != '\n' && ch != '\t' && ch != '\r') {
-                term_putchar(term, '^');
+                term_dispatch(term, '^');
                 ch ^= 0x40;
             }
         }
-        term_putchar(term, ch);
+        term_dispatch(term, ch);
     }
 
     return start - buf;
