@@ -58,7 +58,7 @@
 
 #define MAX_EXTRA_PALETTE (0x10000 - NSS_PALETTE_SIZE)
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
-#define PARAM(i, d) (term->esc.param[i] > 0 ? (param_t)term->esc.param[i] : (d))
+#define PARAM(i, d) (term->esc.param[i] > 0 ? (param_t)term->esc.param[i] : (param_t)(d))
 #define CHK_VT(v) { if (term->vt_level < (v)) break; }
 
 #define C(c) ((c) & 0x3F)
@@ -211,6 +211,7 @@ struct nss_term {
         nss_tm_led_caps_lock        = 1LL << 38,
         nss_tm_led_scroll_lock      = 1LL << 39,
         nss_tm_alternate_scroll     = 1LL << 40,
+        nss_tm_attr_ext_rectangle   = 1LL << 41,
         nss_tm_mouse_mask =
             nss_tm_mouse_x10 | nss_tm_mouse_button |
             nss_tm_mouse_motion | nss_tm_mouse_many,
@@ -660,9 +661,9 @@ inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t
     if (*ye < *ys) SWAP(nss_coord_t, *ye, *ys);
     if (*xe < *xs) SWAP(nss_coord_t, *xe, *xs);
 
-    *xs = MAX(0, MIN(*xs, term->width));
+    *xs = MAX(0, MIN(*xs, term->width - 1));
     *xe = MAX(0, MIN(*xe, term->width));
-    *ys = MAX(0, MIN(*ys, term->height));
+    *ys = MAX(0, MIN(*ys, term->height - 1));
     *ye = MAX(0, MIN(*ye, term->height));
 
     if (term->vsel.state == nss_sstate_none) return;
@@ -684,6 +685,46 @@ inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t
     }
 
 #undef RECT_INTRS
+}
+
+static void term_copy(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, nss_coord_t xd, nss_coord_t yd) {
+    if (ye < ys) SWAP(nss_coord_t, ye, ys);
+    if (xe < xs) SWAP(nss_coord_t, xe, xs);
+
+    xs = MAX(0, MIN(xs, term->width - 1));
+    ys = MAX(0, MIN(ys, term->height - 1));
+    xd = MAX(0, MIN(xd, term->width - 1));
+    yd = MAX(0, MIN(yd, term->height - 1));
+    xe = MAX(0, MIN(MIN(xe - xs + xd, term->width) - xd + xs, term->width));
+    ye = MAX(0, MIN(MIN(ye - ys + yd, term->height) - yd + ys, term->height));
+
+    if (yd < ys || (yd == ys && xd < xs)) {
+        for (; ys < ye; ys++, yd++) {
+            nss_line_t *sl = term->screen[ys], *dl = term->screen[yd];
+            for (nss_coord_t x1 = xs, x2 = xd; x1 < xe; x1++, x2++) {
+                nss_cell_t cel = sl->cell[x1];
+                cel.attr &= ~nss_attrib_drawn;
+                if (cel.fg >= NSS_PALETTE_SIZE)
+                    cel.fg = alloc_color(dl, sl->pal->data[cel.fg - NSS_PALETTE_SIZE]);
+                if (cel.bg >= NSS_PALETTE_SIZE)
+                    cel.bg = alloc_color(dl, sl->pal->data[cel.bg - NSS_PALETTE_SIZE]);
+                dl->cell[x2] = cel;
+            }
+        }
+    } else {
+        for (yd += ye - ys, xd += xe - xs; ys < ye; ye--, yd--) {
+            nss_line_t *sl = term->screen[ye - 1], *dl = term->screen[yd - 1];
+            for (nss_coord_t x1 = xe, x2 = xd; x1 > xs; x1--, x2--) {
+                nss_cell_t cel = sl->cell[x1 - 1];
+                cel.attr &= ~nss_attrib_drawn;
+                if (cel.fg >= NSS_PALETTE_SIZE)
+                    cel.fg = alloc_color(dl, sl->pal->data[cel.fg - NSS_PALETTE_SIZE]);
+                if (cel.bg >= NSS_PALETTE_SIZE)
+                    cel.bg = alloc_color(dl, sl->pal->data[cel.bg - NSS_PALETTE_SIZE]);
+                dl->cell[x2 - 1] = cel;
+            }
+        }
+    }
 }
 
 static void term_fill(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, nss_char_t ch) {
@@ -1446,7 +1487,8 @@ static void term_dispatch_osc(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) {
+static size_t term_define_color(nss_term_t *term, size_t arg, nss_color_t *rcol, nss_cid_t *rcid, nss_cid_t *valid) {
+    *valid = 0;
     size_t argc = arg + 1 < ESC_MAX_PARAM;
     _Bool subpars = arg && (term->esc.subpar_mask >> (arg + 1)) & 1;
     if (subpars)
@@ -1465,20 +1507,14 @@ static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) 
                 col = (col << 8) + MIN(MAX(0, term->esc.param[arg + i]), 0xFF);
             }
             if (wrong) term_esc_dump(term, 0);
-            if (foreground) {
-                term->c.cel.fg = 0xFFFF;
-                term->c.fg = col;
-            } else {
-                term->c.cel.bg = 0xFFFF;
-                term->c.bg = col;
-            }
+            *rcol = col;
+            *rcid = 0xFFFF;
             if (!subpars) argc = MIN(argc, 4);
+            *valid = 1;
         } else if (term->esc.param[arg] == 5 && argc > 1) {
             if (term->esc.param[arg + 1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS && term->esc.param[arg + 1] >= 0) {
-                if (foreground)
-                    term->c.cel.fg = term->esc.param[arg + 1];
-                else
-                    term->c.cel.bg = term->esc.param[arg + 1];
+                *rcid = term->esc.param[arg + 1];
+                *valid = 1;
             } else term_esc_dump(term, 0);
             if (!subpars) argc = MIN(argc, 2);
         } else {
@@ -1489,104 +1525,189 @@ static size_t term_define_color(nss_term_t *term, size_t arg, _Bool foreground) 
     return argc;
 }
 
-static void term_dispatch_sgr(nss_term_t *term) {
-    size_t argc = term->esc.i + (term->esc.param[term->esc.i] > 0);
-    if (!argc) argc++;
-    for(size_t i = 0; i < argc; i++) {
+static void term_decode_sgr_mask(nss_term_t *term, size_t i, nss_cell_t *mask, nss_cell_t *val, nss_color_t *fg, nss_color_t *bg) {
+    for(size_t argc = MAX(i + 1, term->esc.i + (term->esc.param[term->esc.i] >= 0)); i < argc; i++) {
         param_t p = MAX(0, term->esc.param[i]);
         if ((term->esc.subpar_mask >> i) & 1) return;
         switch(p) {
         case 0:
-            term->c.cel.attr &= ~(nss_attrib_blink | nss_attrib_bold |
-                    nss_attrib_faint | nss_attrib_inverse | nss_attrib_invisible |
-                    nss_attrib_italic | nss_attrib_underlined | nss_attrib_strikethrough);
-            term->c.cel.bg = NSS_SPECIAL_BG;
-            term->c.cel.fg = NSS_SPECIAL_FG;
+            mask->attr = 0xFF;
+            mask->fg = 1;
+            mask->bg = 1;
+            val->attr = 0;
+            val->fg = NSS_SPECIAL_FG;
+            val->bg = NSS_SPECIAL_BG;
             break;
         case 1:
-            term->c.cel.attr |= nss_attrib_bold;
+            mask->attr |= nss_attrib_bold;
+            val->attr |= nss_attrib_bold;
             break;
         case 2:
-            term->c.cel.attr |= nss_attrib_faint;
+            mask->attr |= nss_attrib_faint;
+            val->attr |= nss_attrib_faint;
             break;
         case 3:
-            term->c.cel.attr |= nss_attrib_italic;
+            mask->attr |= nss_attrib_italic;
+            val->attr |= nss_attrib_italic;
             break;
+        case 21: /*  <- should be double underlind */
         case 4:
-            if (i < term->esc.i && (term->esc.subpar_mask >> (i + 1)) & 1) {
-                if (term->esc.param[i + 1] <= 0)
-                    term->c.cel.attr &= ~nss_attrib_underlined;
-                else term->c.cel.attr |= nss_attrib_underlined;
-                i++;
-            } else term->c.cel.attr |= nss_attrib_underlined;
+            mask->attr |= nss_attrib_underlined;
+            val->attr |= nss_attrib_underlined;
             break;
-        case 5: case 6:
-            term->c.cel.attr |= nss_attrib_blink;
+        case 5:
+        case 6:
+            mask->attr |= nss_attrib_blink;
+            val->attr |= nss_attrib_blink;
             break;
         case 7:
-            term->c.cel.attr |= nss_attrib_inverse;
+            mask->attr |= nss_attrib_inverse;
+            val->attr |= nss_attrib_inverse;
             break;
         case 8:
-            term->c.cel.attr |= nss_attrib_invisible;
+            mask->attr |= nss_attrib_invisible;
+            val->attr |= nss_attrib_invisible;
             break;
         case 9:
-            term->c.cel.attr |= nss_attrib_strikethrough;
-            break;
-        case 21:
-            /* actually double underlind */
-            term->c.cel.attr |= nss_attrib_underlined;
+            mask->attr |= nss_attrib_strikethrough;
+            val->attr |= nss_attrib_strikethrough;
             break;
         case 22:
-            term->c.cel.attr &= ~(nss_attrib_bold | nss_attrib_faint);
+            mask->attr |= nss_attrib_faint | nss_attrib_bold;
+            val->attr &= ~(nss_attrib_faint | nss_attrib_bold);
             break;
         case 23:
-            term->c.cel.attr &= ~nss_attrib_italic;
+            mask->attr |= nss_attrib_italic;
+            val->attr &= ~nss_attrib_italic;
             break;
         case 24:
-            term->c.cel.attr &= ~nss_attrib_underlined;
+            mask->attr |= nss_attrib_underlined;
+            val->attr &= ~nss_attrib_underlined;
             break;
-        case 25: case 26:
-            term->c.cel.attr &= ~nss_attrib_blink;
+        case 25:
+        case 26:
+            mask->attr |= nss_attrib_blink;
+            val->attr &= ~nss_attrib_blink;
             break;
         case 27:
-            term->c.cel.attr &= ~nss_attrib_inverse;
+            mask->attr |= nss_attrib_inverse;
+            val->attr &= ~nss_attrib_inverse;
             break;
         case 28:
-            term->c.cel.attr &= ~nss_attrib_invisible;
+            mask->attr |= nss_attrib_invisible;
+            val->attr &= ~nss_attrib_invisible;
             break;
         case 29:
-            term->c.cel.attr &= ~nss_attrib_strikethrough;
+            mask->attr |= nss_attrib_strikethrough;
+            val->attr &= ~nss_attrib_strikethrough;
             break;
         case 30: case 31: case 32: case 33:
         case 34: case 35: case 36: case 37:
-            term->c.cel.fg = p - 30;
+            mask->fg = 1;
+            val->fg = p - 30;
             break;
-        case 38:
-            i += term_define_color(term, i + 1, 1);
+        case 38: {
+            i += term_define_color(term, i + 1, fg, &val->fg, &mask->fg);
             break;
+        }
         case 39:
-            term->c.cel.fg = NSS_SPECIAL_FG;
+            mask->fg = 1;
+            val->fg = NSS_SPECIAL_FG;
             break;
         case 40: case 41: case 42: case 43:
         case 44: case 45: case 46: case 47:
-            term->c.cel.bg = p - 40;
+            mask->bg = 1;
+            val->bg = p - 40;
             break;
         case 48:
-            i += term_define_color(term, i + 1, 0);
+            i += term_define_color(term, i + 1, bg, &val->bg, &mask->bg);
             break;
         case 49:
-            term->c.cel.bg = NSS_SPECIAL_BG;
+            mask->bg = 1;
+            val->bg = NSS_SPECIAL_BG;
             break;
         case 90: case 91: case 92: case 93:
         case 94: case 95: case 96: case 97:
-            term->c.cel.fg = p - 90;
+            mask->fg = 1;
+            val->fg = p - 90;
             break;
         case 100: case 101: case 102: case 103:
         case 104: case 105: case 106: case 107:
-            term->c.cel.bg = p - 100;
+            mask->bg = 1;
+            val->bg = p - 100;
             break;
         default:
             term_esc_dump(term, 0);
+        }
+    }
+}
+
+static void term_dispatch_sgr(nss_term_t *term) {
+    nss_cell_t val = {0}, mask = {0};
+    term_decode_sgr_mask(term, 0, &mask, &val, &term->c.fg, &term->c.bg);
+    term->c.cel.attr = (term->c.cel.attr & ~mask.attr) | (val.attr & mask.attr);
+    if (mask.fg) term->c.cel.fg = val.fg;
+    if (mask.bg) term->c.cel.bg = val.bg;
+}
+
+static void term_reverse_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
+    term_erase_pre(term, &xs, &ys, &xe, &ye);
+    nss_color_t fg = 0, bg = 0;
+    nss_cell_t mask = {0}, val = {0};
+    term_decode_sgr_mask(term, 4, &mask, &val, &fg, &bg);
+
+    if (term->mode & nss_tm_attr_ext_rectangle) {
+        for (; ys < ye; ys++) {
+            nss_line_t *line = term->screen[ys];
+            for(nss_coord_t i = xs; i < xe; i++) {
+                line->cell[i].attr ^= mask.attr;
+                line->cell[i].attr &= ~nss_attrib_drawn;
+            }
+        }
+    } else {
+        for (; ys < ye; ys++) {
+            nss_line_t *line = term->screen[ys];
+            for(nss_coord_t i = xs; i < (ys == ye - 1 ? xe : term->width); i++) {
+                line->cell[i].attr ^= mask.attr;
+                line->cell[i].attr &= ~nss_attrib_drawn;
+            }
+            xs = 0;
+        }
+    }
+}
+
+static void term_apply_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
+    term_erase_pre(term, &xs, &ys, &xe, &ye);
+    nss_color_t fg = 0, bg = 0;
+    nss_cell_t mask = {0}, val = {0};
+    term_decode_sgr_mask(term, 4, &mask, &val, &fg, &bg);
+
+    mask.attr |= nss_attrib_drawn;
+    val.attr &= ~nss_attrib_drawn;
+    if (term->mode & nss_tm_attr_ext_rectangle) {
+        for (; ys < ye; ys++) {
+            nss_line_t *line = term->screen[ys];
+            if (val.fg >= NSS_PALETTE_SIZE) val.fg = alloc_color(line, fg);
+            if (val.bg >= NSS_PALETTE_SIZE) val.bg = alloc_color(line, bg);
+            for(nss_coord_t i = xs; i < xe; i++) {
+                nss_cell_t *cel = &line->cell[i];
+                cel->attr = (cel->attr & ~mask.attr) | (val.attr & mask.attr);
+                if (mask.fg) cel->fg = val.fg;
+                if (mask.bg) cel->bg = val.bg;
+            }
+        }
+    } else {
+        for (; ys < ye; ys++) {
+            nss_line_t *line = term->screen[ys];
+            if (val.fg >= NSS_PALETTE_SIZE) val.fg = alloc_color(line, fg);
+            if (val.bg >= NSS_PALETTE_SIZE) val.bg = alloc_color(line, bg);
+            for(nss_coord_t i = xs; i < (ys == ye - 1 ? xe : term->width); i++) {
+                nss_cell_t *cel = &line->cell[i];
+                cel->attr = (cel->attr & ~mask.attr) | (val.attr & mask.attr);
+                if (mask.fg) cel->fg = val.fg;
+                if (mask.bg) cel->bg = val.bg;
+            }
+            xs = 0;
         }
     }
 }
@@ -2332,24 +2453,29 @@ static void term_dispatch_csi(nss_term_t *term) {
     //    break;
     //case C('p') | P('?') | I('$'): /* DECRQM */
     //    break;
-    //case C('r') | I0('$'): /* DECCARA */
-    //    break;
-    //case C('t') | I0('$'): /* DECRARA */
-    //    break;
-    //case C('v') | I0('$'): /* DECCRA */
-    //    break;
+    case C('r') | I0('$'): /* DECCARA */
+        term_apply_sgr(term, PARAM(1,1) - 1, PARAM(0,1) - 1, PARAM(3,term->width), PARAM(2,term->height));
+        term_esc_dump(term, 0);
+        break;
+    case C('t') | I0('$'): /* DECRARA */
+        term_reverse_sgr(term, PARAM(1,1) - 1, PARAM(0,1) - 1, PARAM(3,term->width), PARAM(2,term->height));
+        term_esc_dump(term, 0);
+        break;
+    case C('v') | I0('$'): /* DECCRA */
+        term_copy(term, PARAM(1, 1) - 1, PARAM(0, 1) - 1, PARAM(3, term->width), PARAM(2, term->height), PARAM(6, 1) - 1, PARAM(5, 1) - 1);
+        break;
     //case C('w') | I0('$'): /* DECRQPSR */
     //    break;
     case C('x') | I0('$'): /* DECFRA */
-        term_fill(term, PARAM(1,1) - 1, PARAM(2,1) - 1, PARAM(3,1), PARAM(4,1), PARAM(0, 0));
+        term_fill(term, PARAM(2,1) - 1, PARAM(1,1) - 1, PARAM(4,term->width), PARAM(3,term->height), PARAM(0, 0));
         term_move_to(term, term->c.x, term->c.y);
         break;
     case C('z') | I0('$'): /* DECERA */
-        term_erase(term, PARAM(0,1) - 1, PARAM(1,1) - 1, PARAM(2,1), PARAM(3,1));
+        term_erase(term, PARAM(1,1) - 1, PARAM(0,1) - 1, PARAM(3,term->width), PARAM(2,term->height));
         term_move_to(term, term->c.x, term->c.y);
         break;
     case C('{') | I0('$'): /* DECSERA */
-        term_selective_erase(term, PARAM(0,1) - 1, PARAM(1,1) - 1, PARAM(2,1), PARAM(3,1));
+        term_selective_erase(term, PARAM(1,1) - 1, PARAM(0,1) - 1, PARAM(3,term->width), PARAM(2,term->height));
         term_move_to(term, term->c.x, term->c.y);
         break;
     //case C('w') | I0('\''): /* DECEFR */
@@ -2364,8 +2490,18 @@ static void term_dispatch_csi(nss_term_t *term) {
     //    break;
     //case C('~') | I0('\''): /* DECDC */
     //    break;
-    //case C('x') | I0('*'): /* DECSACE */
-    //    break;
+    case C('x') | I0('*'): /* DECSACE */
+        switch(PARAM(0, 1)) {
+        case 1:
+            term->mode &= ~nss_tm_attr_ext_rectangle;
+            break;
+        case 2:
+            term->mode |= nss_tm_attr_ext_rectangle;
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        break;
     //case C('y') | I0('*'): /* DECRQCRA */
     //    break;
     //case C('|') | I0('*'): /* DECSNLS */

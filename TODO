@@ -1,4 +1,5 @@
 Until version 1.4:
+	Not all BCE tests are identical to XTerm?
     Make pixel components order configurable
         --subpixel-order=rgb, bgr, vrgb
     Recursive input buffer refilling
@@ -17,6 +18,9 @@ Until version 1.4:
             and express other window operations in terms of CSI t
     User-prefered charset
     Rectangular operations
+        XTREPORTSGR
+        XTCHECKSUM
+        DECRQCRA
     Left/right margins
     Colored glyphs?
 More:
@@ -146,10 +150,6 @@ Term
         CSI Ps ' } -- DECIC
         CSI Ps ' ~ -- DECDC
     Rectangular ops
-        CSI Pt ; Pl ; Pb ; Pr ; Ps $ r -- DECCARA
-        CSI Pt ; Pl ; Pb ; Pr ; Ps $ t -- DECRARA
-        CSI Pt ; Pl ; Pb ; Pr ; Pp ; Pt; Pl; Pp $ v -- DECCRA
-        CSI Ps * x -- DECSACE
         CSI Pt ; Pl ; Pb ; Pr # | -- XTREPORTSGR
         CSI Ps # y -- XTCHECKSUM
         CSI Pi ; Pg ; Pt ; Pl ; Pb ; Pr * y -- DECRQCRA
@@ -176,13 +176,11 @@ Term
     Hightlight tracking
         CSI Ps ; Ps ; Ps ; Ps ; Ps T
     Other sequences
-        CSI Ps b -- REP
         CSI > Ps p -- Pointer mode
         CSI Pm # p, CSI Pm # { -- XPUSHSGR
         CSI # q, CSI # } -- XPOPSGR
         CSI ? Pm r -- Restore DEC private modes
         CSI ? s -- Save DEC private modes
-        CSI Ps q -- DECLL
         DCS + Q Pt ST -- XTGETXRES -> DCS Ps + R Pt ST
         DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
         DCS + p Pt ST -- XTSETTCAP
