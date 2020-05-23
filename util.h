@@ -18,9 +18,9 @@
 #define TIMEINC(t, in) ((t).tv_sec += (in)/SEC), ((t).tv_nsec += (in)%SEC)
 
 #ifdef CLOCK_MONOTONIC_RAW
-#	define NSS_CLOCK CLOCK_MONOTONIC_RAW
+#   define NSS_CLOCK CLOCK_MONOTONIC_RAW
 #else
-#	define NSS_CLOCK CLOCK_MONOTONIC
+#   define NSS_CLOCK CLOCK_MONOTONIC
 #endif
 
 typedef int16_t nss_coord_t;
