@@ -1522,136 +1522,76 @@ static size_t term_define_color(nss_term_t *term, size_t arg, nss_color_t *rcol,
     return argc;
 }
 
-static void term_decode_sgr_mask(nss_term_t *term, size_t i, nss_cell_t *mask, nss_cell_t *val, nss_color_t *fg, nss_color_t *bg) {
-    for(size_t argc = MAX(i + 1, term->esc.i + (term->esc.param[term->esc.i] >= 0)); i < argc; i++) {
-        param_t p = MAX(0, term->esc.param[i]);
+static void term_decode_sgr(nss_term_t *term, size_t i, nss_cell_t *mask, nss_cell_t *val, nss_color_t *fg, nss_color_t *bg) {
+#define SET(f) (mask->attr |= (f), val->attr |= (f))
+#define RESET(f) (mask->attr |= (f), val->attr &= ~(f))
+#define SETFG(f) (mask->fg = 1, val->fg = (f))
+#define SETBG(f) (mask->bg = 1, val->bg = (f))
+    for(param_t par, argc = MAX(i + 1, term->esc.i + (term->esc.param[term->esc.i] >= 0)); i < argc; i++) {
         if ((term->esc.subpar_mask >> i) & 1) return;
-        switch(p) {
+        switch((par = MAX(0, term->esc.param[i]))) {
         case 0:
-            mask->attr = 0xFF;
-            mask->fg = 1;
-            mask->bg = 1;
-            val->attr = 0;
-            val->fg = NSS_SPECIAL_FG;
-            val->bg = NSS_SPECIAL_BG;
+            RESET(0xFF);
+            SETFG(NSS_SPECIAL_FG);
+            SETBG(NSS_SPECIAL_BG);
             break;
-        case 1:
-            mask->attr |= nss_attrib_bold;
-            val->attr |= nss_attrib_bold;
-            break;
-        case 2:
-            mask->attr |= nss_attrib_faint;
-            val->attr |= nss_attrib_faint;
-            break;
-        case 3:
-            mask->attr |= nss_attrib_italic;
-            val->attr |= nss_attrib_italic;
-            break;
-        case 21: /*  <- should be double underlind */
-        case 4:
-            mask->attr |= nss_attrib_underlined;
-            val->attr |= nss_attrib_underlined;
-            break;
-        case 5:
-        case 6:
-            mask->attr |= nss_attrib_blink;
-            val->attr |= nss_attrib_blink;
-            break;
-        case 7:
-            mask->attr |= nss_attrib_inverse;
-            val->attr |= nss_attrib_inverse;
-            break;
-        case 8:
-            mask->attr |= nss_attrib_invisible;
-            val->attr |= nss_attrib_invisible;
-            break;
-        case 9:
-            mask->attr |= nss_attrib_strikethrough;
-            val->attr |= nss_attrib_strikethrough;
-            break;
-        case 22:
-            mask->attr |= nss_attrib_faint | nss_attrib_bold;
-            val->attr &= ~(nss_attrib_faint | nss_attrib_bold);
-            break;
-        case 23:
-            mask->attr |= nss_attrib_italic;
-            val->attr &= ~nss_attrib_italic;
-            break;
-        case 24:
-            mask->attr |= nss_attrib_underlined;
-            val->attr &= ~nss_attrib_underlined;
-            break;
-        case 25:
-        case 26:
-            mask->attr |= nss_attrib_blink;
-            val->attr &= ~nss_attrib_blink;
-            break;
-        case 27:
-            mask->attr |= nss_attrib_inverse;
-            val->attr &= ~nss_attrib_inverse;
-            break;
-        case 28:
-            mask->attr |= nss_attrib_invisible;
-            val->attr &= ~nss_attrib_invisible;
-            break;
-        case 29:
-            mask->attr |= nss_attrib_strikethrough;
-            val->attr &= ~nss_attrib_strikethrough;
-            break;
+        case 1:  SET(nss_attrib_bold); break;
+        case 2:  SET(nss_attrib_faint); break;
+        case 3:  SET(nss_attrib_italic); break;
+        case 21: /* <- should be double underlind */
+        case 4:  SET(nss_attrib_underlined); break;
+        case 5:  /* <- should be slow blink */
+        case 6:  SET(nss_attrib_blink); break;
+        case 7:  SET(nss_attrib_inverse); break;
+        case 8:  SET(nss_attrib_invisible); break;
+        case 9:  SET(nss_attrib_strikethrough); break;
+        case 22: RESET(nss_attrib_faint | nss_attrib_bold); break;
+        case 23: RESET(nss_attrib_italic); break;
+        case 24: RESET(nss_attrib_underlined); break;
+        case 25: /* <- should be slow blink reset */
+        case 26: RESET(nss_attrib_blink); break;
+        case 27: RESET(nss_attrib_inverse); break;
+        case 28: RESET(nss_attrib_invisible); break;
+        case 29: RESET(nss_attrib_strikethrough); break;
         case 30: case 31: case 32: case 33:
         case 34: case 35: case 36: case 37:
-            mask->fg = 1;
-            val->fg = p - 30;
-            break;
-        case 38: {
+            SETFG(par - 30); break;
+        case 38:
             i += term_define_color(term, i + 1, fg, &val->fg, &mask->fg);
             break;
-        }
-        case 39:
-            mask->fg = 1;
-            val->fg = NSS_SPECIAL_FG;
-            break;
+        case 39: SETFG(NSS_SPECIAL_FG); break;
         case 40: case 41: case 42: case 43:
         case 44: case 45: case 46: case 47:
-            mask->bg = 1;
-            val->bg = p - 40;
-            break;
+            SETBG(par - 40); break;
         case 48:
             i += term_define_color(term, i + 1, bg, &val->bg, &mask->bg);
             break;
-        case 49:
-            mask->bg = 1;
-            val->bg = NSS_SPECIAL_BG;
-            break;
+        case 49: SETBG(NSS_SPECIAL_BG); break;
         case 90: case 91: case 92: case 93:
         case 94: case 95: case 96: case 97:
-            mask->fg = 1;
-            val->fg = p - 90;
-            break;
+            SETFG(par - 90); break;
         case 100: case 101: case 102: case 103:
         case 104: case 105: case 106: case 107:
-            mask->bg = 1;
-            val->bg = p - 100;
-            break;
+            SETBG(par - 100); break;
         default:
             term_esc_dump(term, 0);
         }
     }
+#undef SET
+#undef RESET
+#undef SETFG
+#undef SETBG
 }
 
 static void term_dispatch_sgr(nss_term_t *term) {
-    nss_cell_t val = {0}, mask = {0};
-    term_decode_sgr_mask(term, 0, &mask, &val, &term->c.fg, &term->c.bg);
-    term->c.cel.attr = (term->c.cel.attr & ~mask.attr) | (val.attr & mask.attr);
-    if (mask.fg) term->c.cel.fg = val.fg;
-    if (mask.bg) term->c.cel.bg = val.bg;
+    term_decode_sgr(term, 0, &(nss_cell_t){0}, &term->c.cel, &term->c.fg, &term->c.bg);
 }
 
 static void term_reverse_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
     term_erase_pre(term, &xs, &ys, &xe, &ye);
     nss_color_t fg = 0, bg = 0;
     nss_cell_t mask = {0}, val = {0};
-    term_decode_sgr_mask(term, 4, &mask, &val, &fg, &bg);
+    term_decode_sgr(term, 4, &mask, &val, &fg, &bg);
 
     _Bool rect = term->mode & nss_tm_attr_ext_rectangle;
     for (; ys < ye; ys++) {
@@ -1668,7 +1608,7 @@ static void term_apply_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss
     term_erase_pre(term, &xs, &ys, &xe, &ye);
     nss_color_t fg = 0, bg = 0;
     nss_cell_t mask = {0}, val = {0};
-    term_decode_sgr_mask(term, 4, &mask, &val, &fg, &bg);
+    term_decode_sgr(term, 4, &mask, &val, &fg, &bg);
 
     mask.attr |= nss_attrib_drawn;
     val.attr &= ~nss_attrib_drawn;
