@@ -971,10 +971,9 @@ static void term_esc_dump(nss_term_t *term, _Bool use_info) {
             buf[pos++] = term->esc.state == esc_dcs_string ? 'P' :'[';
             if (term->esc.selector & P_MASK)
                 buf[pos++] = '<' + ((term->esc.selector & P_MASK) >> 6) - 1;
-            for (size_t i = 0; i <= term->esc.i; i++) {
-                if (term->esc.param[i] >= 0)
-                    pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRId32, term->esc.param[i]);
-                if (i < term->esc.i) buf[pos++] = term->esc.subpar_mask & (1 << (i + 1)) ? ':' : ';' ;
+            for (size_t i = 0; i < term->esc.i; i++) {
+                pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRId32, term->esc.param[i]);
+                if (i < term->esc.i - 1) buf[pos++] = term->esc.subpar_mask & (1 << (i + 1)) ? ':' : ';' ;
             }
             if (term->esc.selector & I0_MASK)
                 buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
@@ -1244,10 +1243,13 @@ static void term_dispatch_dsr(nss_term_t *term) {
 }
 
 static void term_dispatch_dcs(nss_term_t *term) {
-    term_esc_dump(term, 1);
+    // Fixup parameter count
+    term->esc.i += term->esc.param[term->esc.i] >= 0;
 
     if (term->esc.state != esc_dcs_string)
         term->esc.selector = term->esc.old_selector;
+
+    term_esc_dump(term, 1);
 
     // Only SGR is allowed to have subparams
     if (term->esc.subpar_mask) return;
@@ -1488,22 +1490,17 @@ static size_t term_define_color(nss_term_t *term, size_t arg, nss_color_t *rcol,
     *valid = 0;
     size_t argc = arg + 1 < ESC_MAX_PARAM;
     _Bool subpars = arg && (term->esc.subpar_mask >> (arg + 1)) & 1;
-    if (subpars)
-        for (size_t i = arg + 1; i < ESC_MAX_PARAM &&
-                (term->esc.subpar_mask >> i) & 1; i++) argc++;
-    else
-        for (size_t i = arg + 1; i < ESC_MAX_PARAM &&
-                !((term->esc.subpar_mask >> i) & 1); i++) argc++;
+    for (size_t i = arg + 1; i < ESC_MAX_PARAM &&
+        !subpars ^ ((term->esc.subpar_mask >> i) & 1); i++) argc++;
     if (argc > 0) {
         if (term->esc.param[arg] == 2 && argc > 3) {
             nss_color_t col = 0xFF;
-            _Bool space = subpars && argc > 4;
-            _Bool wrong = 0;
+            _Bool wrong = 0, space = subpars && argc > 4;
             for (size_t i = 1 + space; i < 4U + space; i++) {
                 wrong |= term->esc.param[arg + i] > 255;
                 col = (col << 8) + MIN(MAX(0, term->esc.param[arg + i]), 0xFF);
             }
-            if (wrong) term_esc_dump(term, 0);
+            if (wrong) term_esc_dump(term, 1);
             *rcol = col;
             *rcid = 0xFFFF;
             if (!subpars) argc = MIN(argc, 4);
@@ -1527,9 +1524,10 @@ static void term_decode_sgr(nss_term_t *term, size_t i, nss_cell_t *mask, nss_ce
 #define RESET(f) (mask->attr |= (f), val->attr &= ~(f))
 #define SETFG(f) (mask->fg = 1, val->fg = (f))
 #define SETBG(f) (mask->bg = 1, val->bg = (f))
-    for(param_t par, argc = MAX(i + 1, term->esc.i + (term->esc.param[term->esc.i] >= 0)); i < argc; i++) {
-        if ((term->esc.subpar_mask >> i) & 1) return;
-        switch((par = MAX(0, term->esc.param[i]))) {
+    do {
+        param_t par = PARAM(i, 0);
+		if ((term->esc.subpar_mask >> i) & 1) return;
+        switch (par) {
         case 0:
             RESET(0xFF);
             SETFG(NSS_SPECIAL_FG);
@@ -1576,15 +1574,11 @@ static void term_decode_sgr(nss_term_t *term, size_t i, nss_cell_t *mask, nss_ce
         default:
             term_esc_dump(term, 0);
         }
-    }
+    } while (++i < term->esc.i);
 #undef SET
 #undef RESET
 #undef SETFG
 #undef SETBG
-}
-
-static void term_dispatch_sgr(nss_term_t *term) {
-    term_decode_sgr(term, 0, &(nss_cell_t){0}, &term->c.cel, &term->c.fg, &term->c.bg);
 }
 
 static void term_reverse_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
@@ -1596,11 +1590,11 @@ static void term_reverse_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, n
     _Bool rect = term->mode & nss_tm_attr_ext_rectangle;
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
-        for(nss_coord_t i = xs; i < (rect || ys == ye - 1 ? xe : term->width); i++) {
+        for (nss_coord_t i = xs; i < (rect || ys == ye - 1 ? xe : term->width); i++) {
             line->cell[i].attr ^= mask.attr;
             line->cell[i].attr &= ~nss_attrib_drawn;
         }
-        if(!rect) xs = 0;
+        if (!rect) xs = 0;
     }
 }
 
@@ -1617,7 +1611,7 @@ static void term_apply_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss
         nss_line_t *line = term->screen[ys];
         if (val.fg >= NSS_PALETTE_SIZE) val.fg = alloc_color(line, fg);
         if (val.bg >= NSS_PALETTE_SIZE) val.bg = alloc_color(line, bg);
-        for(nss_coord_t i = xs; i < (rect || ys == ye - 1 ? xe : term->width); i++) {
+        for (nss_coord_t i = xs; i < (rect || ys == ye - 1 ? xe : term->width); i++) {
             nss_cell_t *cel = &line->cell[i];
             cel->attr = (cel->attr & ~mask.attr) | (val.attr & mask.attr);
             if (mask.fg) cel->fg = val.fg;
@@ -1629,7 +1623,7 @@ static void term_apply_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss
 
 static void term_dispatch_srm(nss_term_t *term, _Bool set) {
     if (term->esc.selector & P_MASK) {
-        for(size_t i = 0; i <= term->esc.i; i++) {
+        for(size_t i = 0; i < term->esc.i; i++) {
             switch(PARAM(i, 0)) {
             case 0: /* Default - nothing */
                 break;
@@ -1845,7 +1839,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             }
         }
     } else {
-        for(size_t i = 0; i <= term->esc.i; i++) {
+        for(size_t i = 0; i < term->esc.i; i++) {
             switch(PARAM(i, 0)) {
             case 0: /* Default - nothing */
                 break;
@@ -1941,9 +1935,7 @@ static void term_dispatch_mc(nss_term_t *term) {
 }
 
 static void term_dispatch_tmode(nss_term_t *term, _Bool set) {
-    size_t pnum = term->esc.i + (term->esc.param[term->esc.i] >= 0);
-    if (!pnum) return;
-    for (size_t i = 0; i < pnum; i++) {
+    for (size_t i = 0; i < term->esc.i; i++) {
         switch(term->esc.param[i]) {
         case 0:
             ENABLE_IF(set, term->mode, nss_tm_title_set_hex);
@@ -2048,6 +2040,9 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
 
 
 static void term_dispatch_csi(nss_term_t *term) {
+    // Fixup parameter count
+    term->esc.i += term->esc.param[term->esc.i] >= 0;
+
     term_esc_dump(term, 1);
 
     // Only SGR is allowed to have subparams
@@ -2247,7 +2242,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     }
     case C('m'): /* SGR */
-        term_dispatch_sgr(term);
+        term_decode_sgr(term, 0, &(nss_cell_t){0}, &term->c.cel, &term->c.fg, &term->c.bg);
         break;
     case C('n') | P('>'): /* Disable key modifires, xterm */ {
             param_t p = term->esc.param[0];
@@ -2270,9 +2265,8 @@ static void term_dispatch_csi(nss_term_t *term) {
     //case C('p') | P('>'): /* Set pointer mode, xterm */
     //    break;
     case C('q'): /* DECLL */
-        for (param_t p, argc = term->esc.i + (term->esc.param[term->esc.i] > 0), i = 0; i < argc; i++) {
-            switch((p = PARAM(i, 0))) {
-                break;
+        for (param_t i = 0; i < term->esc.i; i++) {
+            switch(PARAM(i, 0)) {
             case 1: term->mode |= nss_tm_led_num_lock; break;
             case 2: term->mode |= nss_tm_led_caps_lock; break;
             case 3: term->mode |= nss_tm_led_scroll_lock; break;
@@ -2307,8 +2301,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('x'): /* DECREQTPARAM */
         if (term->vt_version < 200) {
             param_t p = PARAM(0, 0);
-            if (p < 2)
-                term_answerback(term, CSI"%d;1;1;128;128;1;0x", p + 2);
+            if (p < 2) term_answerback(term, CSI"%d;1;1;128;128;1;0x", p + 2);
         }
         break;
     //case C('@') | I0(' '): /* SL */
