@@ -768,16 +768,20 @@ static void term_selective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t y
     }
 }
 
-static void term_adjust_wide_before(nss_term_t *term, nss_coord_t x, nss_coord_t y, _Bool left, _Bool right) {
+static void term_adjust_wide_left(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
     if (x < 0 || x > term->screen[y]->width - 1) return;
     nss_cell_t *cell = &term->screen[y]->cell[x];
-    if (left && x > 0 && cell[-1].attr & nss_attrib_wide) {
+    if (x > 0 && cell[-1].attr & nss_attrib_wide) {
         cell[-1] = MKCELLWITH(cell[-1], 0);
         cell[-1].attr &= ~nss_attrib_wide;
     }
-    if (right && x < term->screen[y]->width && cell[0].attr & nss_attrib_wide) {
+}
+
+static void term_adjust_wide_right(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
+    if (x < 0 || x > term->screen[y]->width - 1) return;
+    nss_cell_t *cell = &term->screen[y]->cell[x];
+    if (x < term->screen[y]->width && cell[0].attr & nss_attrib_wide)
         cell[1] = MKCELLWITH(cell[1], 0);
-    }
 }
 
 static void term_move_to(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
@@ -868,7 +872,8 @@ static void term_insert_cells(nss_term_t *term, nss_coord_t n) {
     nss_coord_t cx = MIN(term->c.x, term->width - 1);
     n = MAX(0, MIN(n, term->width - cx));
     nss_line_t *line = term->screen[term->c.y];
-    term_adjust_wide_before(term, cx, term->c.y, 1, 1);
+    term_adjust_wide_left(term, cx, term->c.y);
+    term_adjust_wide_right(term, cx, term->c.y);
     memmove(line->cell + cx + n, line->cell + cx, (line->width - cx - n) * sizeof(nss_cell_t));
     for (nss_coord_t i = cx + n; i < term->width; i++)
         line->cell[i].attr &= ~nss_attrib_drawn;
@@ -880,8 +885,8 @@ static void term_delete_cells(nss_term_t *term, nss_coord_t n) {
     nss_coord_t cx = MIN(term->c.x, term->width - 1);
     n = MAX(0, MIN(n, term->width - cx));
     nss_line_t *line = term->screen[term->c.y];
-    term_adjust_wide_before(term, cx, term->c.y, 1, 0);
-    term_adjust_wide_before(term, cx + n - 1, term->c.y, 0, 1);
+    term_adjust_wide_left(term, cx, term->c.y);
+    term_adjust_wide_right(term, cx + n - 1, term->c.y);
     memmove(line->cell + cx, line->cell + cx + n, (term->width - cx - n) * sizeof(nss_cell_t));
     for (nss_coord_t i = cx; i < term->width - n; i++)
         line->cell[i].attr &= ~nss_attrib_drawn;
@@ -980,13 +985,10 @@ static void term_esc_dump(nss_term_t *term, _Bool use_info) {
             if (term->esc.selector & I1_MASK)
                 buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
             buf[pos++] = (C_MASK & term->esc.selector) + 0x40;
-            if (term->esc.state == esc_dcs_string) {
-                strncat(buf + pos, (char *)term->esc.str, ESC_DUMP_MAX - pos);
-                pos += term->esc.si - 1;
-                buf[pos++] = '^';
-                buf[pos++] = '[';
-                buf[pos++] = '\\';
-            }
+            if (term->esc.state != esc_dcs_string) break;
+            strncat(buf + pos, (char *)term->esc.str, ESC_DUMP_MAX - pos);
+            pos += term->esc.si + 3;
+            strncat(buf + pos - 3, "^[\\", ESC_DUMP_MAX - pos);
             break;
         case esc_osc_string:
             (use_info ? info : warn)("^[]%u;%s^[\\", term->esc.selector, term->esc.str);
@@ -1526,7 +1528,7 @@ static void term_decode_sgr(nss_term_t *term, size_t i, nss_cell_t *mask, nss_ce
 #define SETBG(f) (mask->bg = 1, val->bg = (f))
     do {
         param_t par = PARAM(i, 0);
-		if ((term->esc.subpar_mask >> i) & 1) return;
+        if ((term->esc.subpar_mask >> i) & 1) return;
         switch (par) {
         case 0:
             RESET(0xFF);
@@ -2008,8 +2010,8 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
     }
 
     // Erase overwritten parts of wide characters
-    term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
-    term_adjust_wide_before(term, term->c.x + width - 1, term->c.y, 0, 1);
+    term_adjust_wide_left(term, term->c.x, term->c.y);
+    term_adjust_wide_right(term, term->c.x + width - 1, term->c.y);
 
     // Decode nrcs
 
@@ -2092,12 +2094,12 @@ static void term_dispatch_csi(nss_term_t *term) {
             erase = term_protective_erase;
         switch(PARAM(0, 0)) {
         case 0: /* Below */
-            term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
+            term_adjust_wide_left(term, term->c.x, term->c.y);
             erase(term, term->c.x, term->c.y, term->width, term->c.y + 1);
             erase(term, 0, term->c.y + 1, term->width, term->height);
             break;
         case 1: /* Above */
-            term_adjust_wide_before(term, term->c.x, term->c.y, 0, 1);
+            term_adjust_wide_right(term, term->c.x, term->c.y);
             erase(term, 0, term->c.y, term->c.x + 1, term->c.y + 1);
             erase(term, 0, 0, term->width, term->c.y);
             break;
@@ -2121,11 +2123,11 @@ static void term_dispatch_csi(nss_term_t *term) {
             erase = term_protective_erase;
         switch(PARAM(0, 0)) {
         case 0: /* To the right */
-            term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
+            term_adjust_wide_left(term, term->c.x, term->c.y);
             erase(term, term->c.x, term->c.y, term->width, term->c.y + 1);
             break;
         case 1: /* To the left */
-            term_adjust_wide_before(term, term->c.x, term->c.y, 0, 1);
+            term_adjust_wide_right(term, term->c.x, term->c.y);
             erase(term, 0, term->c.y, term->c.x + 1, term->c.y + 1);
             break;
         case 2: /* Whole */
@@ -2840,12 +2842,12 @@ static void term_dispatch_vt52(nss_term_t *term, nss_char_t ch) {
         term_rindex(term, 0);
         break;
     case 'J':
-        term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
+        term_adjust_wide_left(term, term->c.x, term->c.y);
         term_erase(term, term->c.x, term->c.y, term->width, term->c.y + 1);
         term_erase(term, 0, term->c.y + 1, term->width, term->height);
         break;
     case 'K':
-        term_adjust_wide_before(term, term->c.x, term->c.y, 1, 0);
+        term_adjust_wide_left(term, term->c.x, term->c.y);
         term_erase(term, term->c.x, term->c.y, term->width, term->c.y + 1);
         break;
     case 'V': /* Print cursor line */
