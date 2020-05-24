@@ -412,33 +412,31 @@ static _Bool optimize_line_palette(nss_line_t *line) {
 
     if (line->pal) {
         if (buf_len < line->pal->size) {
-            new = realloc(buf, line->pal->size * sizeof(nss_cid_t));
-            if (!new) return 0;
-            buf = new, buf_len = line->pal->size;
+            if (!(new = realloc(buf, line->pal->size * sizeof(nss_cid_t)))) return 0;
+            memset(new + buf_len, 0xFF, (line->pal->size - buf_len) * sizeof(nss_cid_t));
+            buf_len = line->pal->size, buf = new;
         }
-        memset(buf, 0, buf_len * sizeof(nss_cid_t));
+        nss_cid_t k = NSS_PALETTE_SIZE, *pbuf = buf - NSS_PALETTE_SIZE;
         for (nss_coord_t i = 0; i < line->width; i++) {
-            if (line->cell[i].fg >= NSS_PALETTE_SIZE)
-                buf[line->cell[i].fg - NSS_PALETTE_SIZE] = 0xFFFF;
-            if (line->cell[i].bg >= NSS_PALETTE_SIZE)
-                buf[line->cell[i].bg - NSS_PALETTE_SIZE] = 0xFFFF;
+            nss_cell_t *cel = &line->cell[i];
+            if (cel->fg >= NSS_PALETTE_SIZE) pbuf[cel->fg] = 0;
+            if (cel->bg >= NSS_PALETTE_SIZE) pbuf[cel->bg] = 0;
         }
-        nss_coord_t k = 0;
-        for (nss_cid_t i = 0; i < line->pal->size; i++) {
-            if (buf[i] == 0xFFFF) {
-                line->pal->data[k] = line->pal->data[i];
-                for (nss_cid_t j = i + 1; j < line->pal->size; j++)
-                    if (line->pal->data[i] == line->pal->data[j]) buf[j] = k;
-                buf[i] = k++;
+        nss_color_t *pal = line->pal->data - NSS_PALETTE_SIZE;
+        for (nss_cid_t i = NSS_PALETTE_SIZE; i < line->pal->size + NSS_PALETTE_SIZE; i++) {
+            if (!pbuf[i]) {
+                pal[k] = pal[i];
+                for (nss_cid_t j = i + 1; j < line->pal->size + NSS_PALETTE_SIZE; j++)
+                    if (pal[k] == pal[j]) pbuf[j] = k;
+                pbuf[i] = k++;
             }
         }
-        line->pal->size = k;
+        line->pal->size = k - NSS_PALETTE_SIZE;
 
         for (nss_coord_t i = 0; i < line->width; i++) {
-            if (line->cell[i].fg >= NSS_PALETTE_SIZE && buf[line->cell[i].fg - NSS_PALETTE_SIZE] != 0xFFFF)
-                    line->cell[i].fg = buf[line->cell[i].fg - NSS_PALETTE_SIZE] + NSS_PALETTE_SIZE;
-            if (line->cell[i].bg >= NSS_PALETTE_SIZE && buf[line->cell[i].bg - NSS_PALETTE_SIZE] != 0xFFFF)
-                    line->cell[i].bg = buf[line->cell[i].bg - NSS_PALETTE_SIZE] + NSS_PALETTE_SIZE;
+            nss_cell_t *cel = &line->cell[i];
+            if (cel->fg >= NSS_PALETTE_SIZE) cel->fg = pbuf[cel->fg];
+            if (cel->bg >= NSS_PALETTE_SIZE) cel->bg = pbuf[cel->bg];
         }
     }
 
@@ -453,15 +451,15 @@ static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
             return NSS_PALETTE_SIZE + line->pal->size - 2;
     }
 
-    if (!line->pal || line->pal->size + 1 >= line->pal->caps) {
-        if (!optimize_line_palette(line))
-            return NSS_SPECIAL_BG;
+    if (!line->pal || line->pal->size + 1 > line->pal->caps) {
+        if (!optimize_line_palette(line)) return NSS_SPECIAL_BG;
         if (!line->pal || line->pal->size + 1 >= line->pal->caps) {
             if (line->pal && line->pal->caps == MAX_EXTRA_PALETTE) return NSS_SPECIAL_BG;
-            nss_line_palette_t *new = realloc(line->pal, sizeof(nss_line_palette_t) + CAPS_INC_STEP(line->pal ? line->pal->caps : 0) * sizeof(nss_color_t));
+            size_t newc = CAPS_INC_STEP(line->pal ? line->pal->caps : 0);
+            nss_line_palette_t *new = realloc(line->pal, sizeof(nss_line_palette_t) + newc * sizeof(nss_color_t));
             if (!new) return NSS_SPECIAL_BG;
             if (!line->pal) new->size = 0;
-            new->caps = CAPS_INC_STEP(line->pal ? new->caps : 0);
+            new->caps = newc;
             line->pal = new;
         }
     }
@@ -472,10 +470,10 @@ static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
 
 static nss_cell_t fixup_color(nss_line_t *line, nss_cursor_t *cur) {
     nss_cell_t cel = cur->cel;
-    if (cel.fg >= NSS_PALETTE_SIZE)
-        cel.fg = alloc_color(line, cur->fg);
     if (cel.bg >= NSS_PALETTE_SIZE)
         cel.bg = alloc_color(line, cur->bg);
+    if (cel.fg >= NSS_PALETTE_SIZE)
+        cel.fg = alloc_color(line, cur->fg);
     return cel;
 }
 
@@ -1505,8 +1503,8 @@ static size_t term_define_color(nss_term_t *term, size_t arg, nss_color_t *rcol,
             if (wrong) term_esc_dump(term, 1);
             *rcol = col;
             *rcid = 0xFFFF;
-            if (!subpars) argc = MIN(argc, 4);
             *valid = 1;
+            if (!subpars) argc = MIN(argc, 4);
         } else if (term->esc.param[arg] == 5 && argc > 1) {
             if (term->esc.param[arg + 1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS && term->esc.param[arg + 1] >= 0) {
                 *rcid = term->esc.param[arg + 1];
