@@ -2542,8 +2542,11 @@ static const char *unparse_nrcs(enum nss_char_set cs) {
 #endif
 
 static void term_dispatch_esc(nss_term_t *term) {
-    if (term->esc.selector != E('['))
-        term_esc_dump(term, 1);
+    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 2) {
+        if (term->esc.selector != E('[') && term->esc.selector != E('P') &&
+                term->esc.selector != E(']'))
+            term_esc_dump(term, 1);
+    }
 
     switch(term->esc.selector) {
     case E('D'): /* IND */
