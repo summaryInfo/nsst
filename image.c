@@ -9,9 +9,7 @@
 
 void nss_image_draw_rect(nss_image_t im, nss_rect_t rect, nss_color_t fg) {
     if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height})) {
-#pragma GCC ivdep
         for (size_t j = 0; j < (size_t)rect.height; j++) {
-#pragma GCC ivdep
             for (size_t i = 0; i < (size_t)rect.width; i++) {
                 im.data[(rect.y + j) * im.width + (rect.x + i)] = fg;
             }
@@ -24,9 +22,7 @@ void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t
             intersect_with(&rect, &clip)) {
         int16_t i0 = rect.x - dx + glyph->x, j0 = rect.y - dy + glyph->y;
         if (!lcd) {
-#pragma GCC ivdep
             for (size_t j = 0; j < (size_t)rect.height; j++) {
-#pragma GCC ivdep
                 for (size_t i = 0; i < (size_t)rect.width; i++) {
                     uint8_t alpha = glyph->data[(j0 + j) * glyph->stride + i0 + i];
                     nss_color_t *bg = &im.data[(rect.y + j) * im.width + (rect.x + i)];
@@ -38,9 +34,7 @@ void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t
                 }
             }
         } else {
-#pragma GCC ivdep
             for (size_t j = 0; j < (size_t)rect.height; j++) {
-#pragma GCC ivdep
                 for (size_t i = 0; i < (size_t)rect.width; i++) {
                     uint8_t *alpha = &glyph->data[(j0 + j) * glyph->stride + 4 * (i0 + i)];
                     nss_color_t *bg = &im.data[(rect.y + j) * im.width + (rect.x + i)];
@@ -62,17 +56,13 @@ void nss_image_copy(nss_image_t im, nss_rect_t rect, nss_image_t src, int16_t sx
 
     if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height})) {
         if (rect.y < sy || (rect.y == sy && rect.x <= sx)) {
-#pragma GCC ivdep
             for (size_t j = 0; j < (size_t)rect.height; j++) {
-#pragma GCC ivdep
                 for (size_t i = 0; i < (size_t)rect.width; i++) {
                     im.data[(rect.y + j) * im.width + (rect.x + i)] = src.data[src.width * (sy + j) + (sx + i)];
                 }
             }
         } else {
-#pragma GCC ivdep
             for (size_t j = rect.height; j > 0; j--) {
-#pragma GCC ivdep
                 for (size_t i = rect.width; i > 0; i--) {
                     im.data[(rect.y + j - 1) * im.width + (rect.x + i - 1)] = src.data[src.width * (sy + j - 1) + (sx + i - 1)];
                 }
