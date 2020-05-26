@@ -89,8 +89,8 @@ Default keybindings:
     Nsst.resetFontSize: T-Home
     Nsst.toggleSubpixel: T-End
     Nsst.newWindow: T-N
-    Nsst.reset: T-C
-    Nsst.reloadConfig: T-R
+    Nsst.reset: T-R
+    Nsst.reloadConfig: T-X
 
 Example:
 

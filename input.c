@@ -35,7 +35,7 @@ struct nss_shortcut {
     [nss_sa_paste] = {XKB_KEY_V, nss_mm_shift | nss_mm_control},
     [nss_sa_break] = {XKB_KEY_Break, 0},
     [nss_sa_reset] = {XKB_KEY_R, nss_mm_shift | nss_mm_control},
-    [nss_sa_reload_config] = {XKB_KEY_C, nss_mm_shift | nss_mm_control},
+    [nss_sa_reload_config] = {XKB_KEY_X, nss_mm_shift | nss_mm_control},
 };
 
 static inline _Bool is_edit_keypad(nss_char_t ks, _Bool deldel) {
