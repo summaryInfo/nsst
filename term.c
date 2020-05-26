@@ -767,19 +767,21 @@ static void term_selective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t y
 }
 
 static void term_adjust_wide_left(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
-    if (x < 0 || x > term->screen[y]->width - 1) return;
-    nss_cell_t *cell = &term->screen[y]->cell[x];
-    if (x > 0 && cell[-1].attr & nss_attrib_wide) {
-        cell[-1] = MKCELLWITH(cell[-1], 0);
-        cell[-1].attr &= ~nss_attrib_wide;
+    if (x < 1) return;
+    nss_cell_t *cell = &term->screen[y]->cell[x - 1];
+    if (cell->attr & nss_attrib_wide) {
+        cell->attr &= ~(nss_attrib_wide|nss_attrib_drawn);
+        cell->ch = 0;
     }
 }
 
 static void term_adjust_wide_right(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
-    if (x < 0 || x > term->screen[y]->width - 1) return;
-    nss_cell_t *cell = &term->screen[y]->cell[x];
-    if (x < term->screen[y]->width && cell[0].attr & nss_attrib_wide)
-        cell[1] = MKCELLWITH(cell[1], 0);
+    if (x >= term->screen[y]->width - 1) return;
+    nss_cell_t *cell = &term->screen[y]->cell[x + 1];
+    if (cell[-1].attr & nss_attrib_wide) {
+        cell->attr &= ~nss_attrib_drawn;
+        cell->ch = 0;
+    }
 }
 
 static void term_move_to(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
