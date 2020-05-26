@@ -1539,7 +1539,11 @@ static void term_decode_sgr(nss_term_t *term, size_t i, nss_cell_t *mask, nss_ce
         case 2:  SET(nss_attrib_faint); break;
         case 3:  SET(nss_attrib_italic); break;
         case 21: /* <- should be double underlind */
-        case 4:  SET(nss_attrib_underlined); break;
+        case 4:
+            if (i < term->esc.i && (term->esc.subpar_mask >> (i + 1)) & 1 &&
+                term->esc.param[++i] <= 0) RESET(nss_attrib_underlined);
+            else SET(nss_attrib_underlined);
+            break;
         case 5:  /* <- should be slow blink */
         case 6:  SET(nss_attrib_blink); break;
         case 7:  SET(nss_attrib_inverse); break;
