@@ -1079,8 +1079,7 @@ void nss_context_run(void) {
                 case XCB_VISIBILITY_NOTIFY: {
                     xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
-                    if ((win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED))
-                        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
+                    if ((win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED)) win->force_redraw = 1;
                     break;
                 }
                 case XCB_KEY_RELEASE:
@@ -1150,9 +1149,6 @@ void nss_context_run(void) {
                 win->last_blink = cur;
             }
 
-            if (win->sync_active) continue;
-            if (!win->active) continue;
-
             int64_t scroll_delay = 1000LL * nss_config_integer(NSS_ICONFIG_SCROLL_DELAY);
             int64_t resize_delay = 1000LL * nss_config_integer(NSS_ICONFIG_RESIZE_DELAY);
             int64_t frame_time = SEC / nss_config_integer(NSS_ICONFIG_FPS);
@@ -1166,6 +1162,9 @@ void nss_context_run(void) {
                 if (win->slow_mode) win->next_draw = cur, win->slow_mode = 0;
                 TIMEINC(win->next_draw, scroll_delay), win->scroll_delayed = 1;
             }
+
+            if (win->sync_active) continue;
+            if (!win->active) continue;
 
             int64_t remains = TIMEDIFF(cur, win->next_draw);
 
