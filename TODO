@@ -1,6 +1,5 @@
 Until version 1.4:
-    Make pixel components order configurable
-        --subpixel-order=rgb, bgr, vrgb
+    Implement named values for options instead of numeric
     Recursive input buffer refilling
         Buffer position should be stored in nss_term_t
         tty_write_raw should just read a portion of data to buffer,
@@ -20,6 +19,7 @@ Until version 1.4:
         XTREPORTSGR
         XTCHECKSUM
         DECRQCRA
+            DCS"%"PRId32"!~%04X"ST
     Left/right margins
     Colored glyphs?
 More:

@@ -16,12 +16,12 @@ void nss_image_draw_rect(nss_image_t im, nss_rect_t rect, nss_color_t fg) {
         }
     }
 }
-void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t *glyph, nss_color_t fg, nss_rect_t clip, _Bool lcd) {
+void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t *glyph, nss_color_t fg, nss_rect_t clip) {
     nss_rect_t rect = { dx - glyph->x, dy - glyph->y, glyph->width, glyph->height };
     if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height}) &&
             intersect_with(&rect, &clip)) {
         int16_t i0 = rect.x - dx + glyph->x, j0 = rect.y - dy + glyph->y;
-        if (!lcd) {
+        if (glyph->pixmode == nss_pm_mono) {
             for (size_t j = 0; j < (size_t)rect.height; j++) {
                 for (size_t i = 0; i < (size_t)rect.width; i++) {
                     uint8_t alpha = glyph->data[(j0 + j) * glyph->stride + i0 + i];

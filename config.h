@@ -47,7 +47,7 @@ enum nss_config_opt {
     NSS_ICONFIG_CURSOR_SHAPE,
     NSS_ICONFIG_UNDERLINE_WIDTH,
     NSS_ICONFIG_CURSOR_WIDTH,
-    NSS_ICONFIG_SUBPIXEL_FONTS,
+    NSS_ICONFIG_PIXEL_MODE,
     NSS_ICONFIG_REVERSE_VIDEO,
     NSS_ICONFIG_ALLOW_ALTSCREEN,
     NSS_ICONFIG_LEFT_BORDER,
@@ -113,7 +113,6 @@ enum nss_config_opt {
     NSS_KCONFIG_FONT_INC,
     NSS_KCONFIG_FONT_DEC,
     NSS_KCONFIG_FONT_RESET,
-    NSS_KCONFIG_TOGGLE_SUBPIXEL,
     NSS_KCONFIG_NEW_WINDOW,
     NSS_KCONFIG_RESET,
     NSS_KCONFIG_RELOAD_CONFIG,
@@ -153,9 +152,9 @@ typedef struct nss_optmap_item {
 } nss_optmap_item_t;
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 83
+#    define OPT_MAP_SIZE 82
 #else
-#    define OPT_MAP_SIZE 84
+#    define OPT_MAP_SIZE 83
 #endif
 
 extern nss_optmap_item_t optmap[OPT_MAP_SIZE];

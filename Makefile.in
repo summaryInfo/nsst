@@ -47,7 +47,7 @@ nsst.o: util.h config.h term.h window.h feature.h
 util.o: util.h config.h feature.h precompose-table.h
 nrcs.o : nrcs.h feature.h
 config.o: config.h util.h term.h input.h feature.h
-boxdraw.o: boxdraw.h font.h feature.h
+boxdraw.o: boxdraw.h config.h font.h feature.h
 image.o: util.h image.h font.h feature.h
 
 .PHONY: all clean install install-strip uninstall force

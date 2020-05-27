@@ -67,7 +67,7 @@ static void register_glyph(nss_window_t *win, uint32_t ch, nss_glyph_t * glyph) 
 _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     nss_window_t *found = nss_find_shared_font(win, need_free);
 
-    win->ren.pfglyph = win->subpixel_fonts ? rctx.pfargb : rctx.pfalpha;
+    win->ren.pfglyph = nss_config_integer(NSS_ICONFIG_PIXEL_MODE) ? rctx.pfargb : rctx.pfalpha;
 
     xcb_void_cookie_t c;
 
@@ -77,7 +77,7 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     }
     else win->ren.gsid = xcb_generate_id(con);
 
-    if (found && win->subpixel_fonts == found->subpixel_fonts) {
+    if (found && win->font_pixmode == found->font_pixmode) {
         c = xcb_render_reference_glyph_set_checked(con, win->ren.gsid, found->ren.gsid);
         if (check_void_cookie(c)) warn("Can't reference glyph set");
     } else {

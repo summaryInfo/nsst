@@ -18,6 +18,14 @@ typedef enum nss_font_attrib {
     nss_font_attrib_max = 4,
 } nss_font_attrib_t;
 
+typedef enum nss_pixel_mode {
+    nss_pm_mono,
+    nss_pm_bgr,
+    nss_pm_rgb,
+    nss_pm_bgrv,
+    nss_pm_rgbv,
+} nss_pixel_mode_t;
+
 typedef struct nss_glyph {
     // Hash table data
     struct nss_glyph *next;
@@ -27,21 +35,23 @@ typedef struct nss_glyph {
     int16_t x, y;
     int16_t x_off, y_off;
     int16_t stride;
+
+    int16_t pixmode;
     uint8_t data[];
 } nss_glyph_t;
 
 typedef uint32_t nss_char_t;
 typedef struct nss_font nss_font_t;
 
-nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi);
+nss_font_t *nss_create_font(const char* descr, double size);
 void nss_free_font(nss_font_t *font);
 nss_font_t *nss_font_reference(nss_font_t *font);
-nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t face, _Bool lcd);
+nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t face);
 int16_t nss_font_get_size(nss_font_t *font);
 
 typedef struct nss_glyph_cache nss_glyph_cache_t;
 
-nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd);
+nss_glyph_cache_t *nss_create_cache(nss_font_t *font);
 nss_glyph_cache_t *nss_cache_reference(nss_glyph_cache_t *ref);
 void nss_free_cache(nss_glyph_cache_t *cache);
 nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_attrib_t face);

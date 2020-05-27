@@ -28,7 +28,6 @@ struct nss_shortcut {
     [nss_sa_font_up] = {XKB_KEY_Page_Up, nss_mm_shift | nss_mm_control},
     [nss_sa_font_down] = {XKB_KEY_Page_Down, nss_mm_shift | nss_mm_control},
     [nss_sa_font_default] = {XKB_KEY_Home, nss_mm_shift | nss_mm_control},
-    [nss_sa_font_subpixel] = {XKB_KEY_End, nss_mm_shift | nss_mm_control},
     [nss_sa_new_window] = {XKB_KEY_N, nss_mm_shift | nss_mm_control},
     [nss_sa_numlock] = {XKB_KEY_Num_Lock, nss_mm_shift | nss_mm_control},
     [nss_sa_copy] = {XKB_KEY_C, nss_mm_shift | nss_mm_control},

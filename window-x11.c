@@ -362,12 +362,19 @@ void nss_window_set_sync(nss_window_t *win, _Bool state) {
     win->sync_active = state;
 }
 
-static void nss_window_get_font_size(nss_window_t *win, int32_t *size, int32_t *lcd) {
-    if (size) *size = win->font_size;
-    if (lcd) *lcd = win->subpixel_fonts;
+static int32_t nss_window_get_font_size(nss_window_t *win) {
+    return win->font_size;
 }
 
-static void nss_window_set_font(nss_window_t *win, const char * name, int32_t size, int8_t lcd) {
+static void reload_all_fonts(void) {
+    for (nss_window_t *win = win_list_head; win; win = win->next) {
+        nss_renderer_reload_font(win, 1);
+        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
+        win->force_redraw = 1;
+    }
+}
+
+static void nss_window_set_font(nss_window_t *win, const char * name, int32_t size) {
     _Bool reload = name || size != win->font_size;
     if (name) {
         free(win->font_name);
@@ -375,11 +382,6 @@ static void nss_window_set_font(nss_window_t *win, const char * name, int32_t si
     }
 
     if (size >= 0) win->font_size = size;
-
-    if (lcd >= 0) {
-        reload |= !!lcd != win->subpixel_fonts;
-        win->subpixel_fonts = lcd;
-    }
 
     if (reload) {
         nss_renderer_reload_font(win, 1);
@@ -446,13 +448,15 @@ nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free) {
     _Bool found_font = 0, found_cache = 0;
     nss_window_t *found = 0;
 
+    win->font_pixmode = nss_config_integer(NSS_ICONFIG_PIXEL_MODE);
+
     for (nss_window_t *src = win_list_head; src; src = src->next) {
         if ((src->font_size == win->font_size || (!win->font_size &&
                 src->font_size == nss_config_integer(NSS_ICONFIG_FONT_SIZE))) &&
                 !strcmp(win->font_name, src->font_name) && src != win) {
             found_font = 1;
             found = src;
-            if (src->subpixel_fonts == win->subpixel_fonts) {
+            if (win->font_pixmode == src->font_pixmode) {
                 found_cache = 1;
                 break;
             }
@@ -460,14 +464,14 @@ nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free) {
     }
 
     nss_font_t *newf = found_font ? nss_font_reference(found->font) :
-            nss_create_font(win->font_name, win->font_size, nss_config_integer(NSS_ICONFIG_DPI));
+            nss_create_font(win->font_name, win->font_size);
     if (!newf) {
         warn("Can't create new font: %s", win->font_name);
         return NULL;
     }
 
     nss_glyph_cache_t *newc = found_cache ? nss_cache_reference(found->font_cache) :
-            nss_create_cache(newf, win->subpixel_fonts);
+            nss_create_cache(newf);
 
     if (need_free) {
         nss_free_cache(win->font_cache);
@@ -531,7 +535,6 @@ nss_window_t *nss_create_window(void) {
     if (nss_config_integer(NSS_ICONFIG_REVERSE_VIDEO))
         SWAP(nss_color_t, win->bg, win->cursor_fg);
     win->cursor_type = nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE);
-    win->subpixel_fonts = nss_config_integer(NSS_ICONFIG_SUBPIXEL_FONTS);
     win->font_size = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
     win->width = nss_config_integer(NSS_ICONFIG_WINDOW_WIDTH);
     win->height = nss_config_integer(NSS_ICONFIG_WINDOW_HEIGHT);
@@ -810,7 +813,6 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     enum nss_shortcut_action action = nss_input_lookup_hotkey(key);
 
     switch (action) {
-        int32_t size, lcd;
     case nss_sa_break:
         nss_term_sendbreak(win->term);
         return;
@@ -825,18 +827,15 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         return;
     case nss_sa_font_up:
     case nss_sa_font_down:
-    case nss_sa_font_default:
-    case nss_sa_font_subpixel:
-        nss_window_get_font_size(win, &size, &lcd);
+    case nss_sa_font_default:;
+        int32_t size = nss_window_get_font_size(win);
         if (action == nss_sa_font_up)
             size += nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
         else if (action == nss_sa_font_down)
             size -= nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
         else if (action == nss_sa_font_default)
             size = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
-        else
-            lcd = !lcd;
-        nss_window_set_font(win, NULL, size, lcd);
+        nss_window_set_font(win, NULL, size);
         return;
     case nss_sa_new_window:
         nss_create_window();
@@ -1199,8 +1198,7 @@ void nss_context_run(void) {
 
         if (reload_config) {
             load_config();
-            for (nss_window_t *win = win_list_head; win; win = win->next)
-                nss_renderer_reload_font(win, 1);
+            reload_all_fonts();
         }
     }
 }

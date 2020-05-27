@@ -30,7 +30,6 @@ enum nss_shortcut_action {
     nss_sa_font_up,
     nss_sa_font_down,
     nss_sa_font_default,
-    nss_sa_font_subpixel,
     nss_sa_new_window,
     nss_sa_reset,
     nss_sa_reload_config,

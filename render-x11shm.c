@@ -271,7 +271,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                 // Glyph
                 if (spec.ch) {
                     nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
-                    nss_image_compose_glyph(win->ren.im, x, y + ch, glyph, spec.fg, r_cell, win->subpixel_fonts);
+                    nss_image_compose_glyph(win->ren.im, x, y + ch, glyph, spec.fg, r_cell);
                 }
 
                 // Underline

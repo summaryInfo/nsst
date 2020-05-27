@@ -231,7 +231,7 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
     free(tmp);
 }
 
-nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi) {
+nss_font_t *nss_create_font(const char* descr, double size) {
     if (global.fonts++ == 0) {
         if (FcInit() == FcFalse)
             die("Can't initialize fontconfig");
@@ -249,7 +249,7 @@ nss_font_t *nss_create_font(const char* descr, double size, uint16_t dpi) {
 
     font->refs = 1;
     font->pixel_size = 0;
-    font->dpi = dpi;
+    font->dpi = nss_config_integer(NSS_ICONFIG_DPI);
     font->size = size;
 
 
@@ -268,7 +268,7 @@ nss_font_t *nss_font_reference(nss_font_t *font) {
     return font;
 }
 
-nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t attr, _Bool lcd) {
+nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t attr) {
     nss_face_list_t *faces = &font->face_types[attr];
     int glyph_index = 0;
     FT_Face face = faces->faces[0];
@@ -279,10 +279,18 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
 
     FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT);
 
+    nss_pixel_mode_t ord = nss_config_integer(NSS_ICONFIG_PIXEL_MODE);
+    _Bool ordv = ord == nss_pm_bgrv || ord == nss_pm_rgbv;
+    _Bool ordrev = ord == nss_pm_bgr || ord == nss_pm_bgrv;
+    _Bool lcd = ord != nss_pm_mono;
+
     size_t stride;
-    if (lcd) {
+    if (lcd && !ordv) {
         FT_Render_Glyph(face->glyph, FT_RENDER_MODE_LCD);
         stride = 4*face->glyph->bitmap.width/3;
+    } else if (lcd && ordv) {
+        FT_Render_Glyph(face->glyph, FT_RENDER_MODE_LCD_V);
+        stride = 4*face->glyph->bitmap.width;
     } else {
         FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
         stride = (face->glyph->bitmap.width + 3) & ~3;
@@ -293,12 +301,11 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     glyph->y = face->glyph->bitmap_top;
 
     glyph->width = face->glyph->bitmap.width;
-    if (lcd) glyph->width /= 3;
     glyph->height = face->glyph->bitmap.rows;
     glyph->x_off = face->glyph->advance.x/64.;
     glyph->y_off = face->glyph->advance.y/64.;
     glyph->stride = stride;
-
+    glyph->pixmode = nss_pm_mono;
 
     int pitch = face->glyph->bitmap.pitch;
     uint8_t *src = face->glyph->bitmap.buffer;
@@ -330,14 +337,28 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
             for (size_t j = 0; j < glyph->width; j++)
                 glyph->data[stride*i + j] = 0x11 * ((src[pitch*i + j/2] >> (1 - j%2)) & 0xF);
         break;
-    case FT_PIXEL_MODE_LCD:
     case FT_PIXEL_MODE_LCD_V:
+        glyph->height /= 3;
+        glyph->pixmode = ord;
         for (size_t i = 0; i < glyph->height; i++) {
             for (size_t j = 0; j < glyph->width; j++) {
                 int16_t acc = 0;
-                acc += glyph->data[4*j + stride*i + 0] = 0xFF * pow(src[pitch*i + 3*j + 2] / 255., gamma);
+                acc += glyph->data[4*j + stride*i + 0] = 0xFF * pow(src[pitch*(3*i+2*ordrev) + j] / 255., gamma);
+                acc += glyph->data[4*j + stride*i + 1] = 0xFF * pow(src[pitch*(3*i+1) + j] / 255., gamma);
+                acc += glyph->data[4*j + stride*i + 2] = 0xFF * pow(src[pitch*(3*i+2*(1-ordrev)) + j] / 255., gamma);
+                glyph->data[4*j + stride*i + 3] = acc/3;
+            }
+        }
+        break;
+    case FT_PIXEL_MODE_LCD:
+        glyph->width /= 3;
+        glyph->pixmode = ord;
+        for (size_t i = 0; i < glyph->height; i++) {
+            for (size_t j = 0; j < glyph->width; j++) {
+                int16_t acc = 0;
+                acc += glyph->data[4*j + stride*i + 0] = 0xFF * pow(src[pitch*i + 3*j + 2*ordrev] / 255., gamma);
                 acc += glyph->data[4*j + stride*i + 1] = 0xFF * pow(src[pitch*i + 3*j + 1] / 255., gamma);
-                acc += glyph->data[4*j + stride*i + 2] = 0xFF * pow(src[pitch*i + 3*j + 0] / 255., gamma);
+                acc += glyph->data[4*j + stride*i + 2] = 0xFF * pow(src[pitch*i + 3*j + 2*(1-ordrev)] / 255., gamma);
                 glyph->data[4*j + stride*i + 3] = acc/3;
             }
         }
@@ -345,11 +366,10 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     case FT_PIXEL_MODE_BGRA:
         warn("Colored glyph encountered");
         free(glyph);
-        return nss_font_render_glyph(font, 0, attr, lcd);
+        return nss_font_render_glyph(font, 0, attr);
     }
 
-    if(nss_config_integer(NSS_ICONFIG_LOG_LEVEL) == 4) {
-
+    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) == 4) {
         debug("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
         debug("Num grays: %d", face->glyph->bitmap.num_grays);
         debug("Glyph: %d %d", glyph->width, glyph->height);
@@ -372,7 +392,6 @@ int16_t nss_font_get_size(nss_font_t *font) {
 
 struct nss_glyph_cache {
     nss_font_t *font;
-    _Bool lcd;
     int16_t char_width;
     int16_t char_height;
     int16_t char_depth;
@@ -394,7 +413,7 @@ uint64_t hash(uint64_t v) {
     return v ^ v >> 28;
 }
 
-nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd) {
+nss_glyph_cache_t *nss_create_cache(nss_font_t *font) {
     nss_glyph_cache_t *cache = calloc(1, sizeof(nss_glyph_cache_t));
     if (!cache) {
         warn("Can't allocate glyph cache");
@@ -404,7 +423,6 @@ nss_glyph_cache_t *nss_create_cache(nss_font_t *font, _Bool lcd) {
     cache->caps = HASH_INIT_CAP;
     cache->refc = 1;
     cache->font = font;
-    cache->lcd = lcd;
 
     if (!cache->tab) {
         free(cache);
@@ -463,10 +481,10 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, nss_char_t ch, nss_font_a
     nss_glyph_t *new;
 #if USE_BOXDRAWING
     if (is_boxdraw(ch) && nss_config_integer(NSS_ICONFIG_OVERRIDE_BOXDRAW))
-        new = nss_make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth, cache->lcd);
+        new = nss_make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth);
     else
 #endif
-        new = nss_font_render_glyph(cache->font, ch, face, cache->lcd);
+        new = nss_font_render_glyph(cache->font, ch, face);
 
     if (!new) return NULL;
 

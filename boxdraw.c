@@ -2,6 +2,7 @@
 
 #include "feature.h"
 
+#include "config.h"
 #include "boxdraw.h"
 #include "font.h"
 #include "term.h"
@@ -38,9 +39,11 @@ static void put(nss_glyph_t *glyph, _Bool lcd, int16_t x, int16_t y, uint8_t val
     }
 }
 
-nss_glyph_t *nss_make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t depth, _Bool lcd) {
+nss_glyph_t *nss_make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t depth) {
     if (!is_boxdraw(c)) return NULL;
 
+    nss_pixel_mode_t pixmode = nss_config_integer(NSS_ICONFIG_PIXEL_MODE);
+    _Bool lcd = pixmode != nss_pm_mono;
     size_t stride = lcd ? 4*width : (width + 3) & ~3;
     nss_glyph_t *glyph = calloc(1, sizeof(nss_glyph_t) + stride * (height + depth) * sizeof(uint8_t));
     if (!glyph) return NULL;
@@ -50,6 +53,7 @@ nss_glyph_t *nss_make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t
     glyph->height = height + depth;
     glyph->x_off = glyph->width = width;
     glyph->stride = stride;
+    glyph->pixmode = pixmode;
 
     enum {
         NOC = 1 << 1, // No center
