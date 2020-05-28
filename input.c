@@ -592,11 +592,12 @@ nss_key_t nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode) {
 
     k.sym = *syms;
 
-    if (k.mask && k.sym >= 0x80)
+    if (k.mask && k.sym >= 0x80) {
         for (xkb_layout_index_t i = 0; !k.ascii && i < num_layouts; i++)
             if ((level = xkb_state_key_get_level(state, keycode, i)) != XKB_LEVEL_INVALID)
                 if (1 == (nsyms = xkb_keymap_key_get_syms_by_level(keymap, keycode, i, level, &syms)) && syms[0] < 0x80)
                     k.ascii = syms[0];
+    } else k.ascii = k.sym;
 
     if (k.mask & ~consumed & nss_mm_lock) k.sym = xkb_keysym_to_upper(k.sym);
 
