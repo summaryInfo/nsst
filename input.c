@@ -606,7 +606,7 @@ nss_key_t nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode) {
     if (k.mask & ~consumed & nss_mm_lock) k.sym = xkb_keysym_to_upper(k.sym);
 
     if ((k.utf32 = xkb_keysym_to_utf32(k.sym))) {
-        if ((k.mask & ~consumed & nss_mm_control) && k.sym < 0x80)
+        if ((k.mask & ~consumed & nss_mm_control) && k.ascii < 0x80)
             k.utf32 = to_control(k.ascii);
         k.utf8len = utf8_encode(k.utf32, k.utf8data, k.utf8data + sizeof(k.utf8data));
         k.utf8data[k.utf8len] = '\0';
