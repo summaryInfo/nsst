@@ -297,6 +297,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
     if (cond_cblink) cursor |= win->blink_state;
 
     for (nss_line_t *line; (line = line_iter_next(it));) {
+        _Bool next_dirty = 0;
         if (win->cw > line->width) {
             push_rect(&(xcb_rectangle_t){
                 .x = line->width * win->char_width,
@@ -304,27 +305,42 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                 .width = (win->cw - line->width) * win->char_width,
                 .height = win->char_height + win->char_depth
             });
+            next_dirty = 1;
         }
-        for (nss_coord_t i = 0; i < MIN(win->cw, line->width); i++) {
-            if (!(line->cell[i].attr & nss_attrib_drawn) || (!win->blink_commited &&
-                    ((line->cell[i].attr & nss_attrib_blink) || (cond_cblink && line_iter_y(it) == cur_y && i == cur_x)))) {
-                nss_cell_t cel = line->cell[i];
+        for (nss_coord_t i = MIN(win->cw, line->width) - 1; i >= 0; i--) {
+            _Bool dirty = !(line->cell[i].attr & nss_attrib_drawn) ||
+                    (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink)) ||
+                    (cond_cblink && line_iter_y(it) == cur_y && i == cur_x);
+
+            struct nss_cellspec spec;
+            nss_cell_t cel;
+            nss_glyph_t *glyph = NULL;
+            _Bool g_wide = 0;
+            nss_char_t g = 0;
+            if (dirty || next_dirty) {
+                cel = line->cell[i];
 
                 if (line_iter_y(it) == cur_y && i == cur_x && cursor &&
                         win->focused && ((win->cursor_type + 1) & ~1) == nss_cursor_block)
                     cel.attr ^= nss_attrib_inverse;
 
-                struct nss_cellspec spec = nss_describe_cell(cel, palette,
-                        line->pal->data, win->blink_state, nss_term_is_selected(win->term, i, line_iter_y(it)));
+                spec = nss_describe_cell(cel, palette, line->pal->data,
+                        win->blink_state, nss_term_is_selected(win->term, i, line_iter_y(it)));
+                g =  spec.ch | (spec.face << 24);
 
-                nss_char_t g = spec.ch | (spec.face << 24);
+                _Bool fetched = nss_cache_is_fetched(win->font_cache, g);
+                if (spec.ch) glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
 
-                if (!nss_cache_is_fetched(win->font_cache, g)) {
-                    nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
+                if (!fetched && glyph) {
+                    int16_t oldw = glyph->x_off;
                     glyph->x_off = win->char_width;
                     register_glyph(win, g, glyph);
+                    glyph->x_off = oldw;
                 }
 
+                g_wide = glyph && glyph->x_off > win->char_width - nss_config_integer(NSS_ICONFIG_FONT_SPACING);
+            }
+            if (dirty || (g_wide && next_dirty)) {
                 if (2*(rctx.cbufpos + 1) >= rctx.cbufsize) {
                     size_t new_size = MAX(3 * rctx.cbufsize / 2, 2 * rctx.cbufpos + 1);
                     struct cell_desc *new = realloc(rctx.cbuffer, new_size * sizeof(*rctx.cbuffer));
@@ -338,13 +354,14 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                     .y = line_iter_y(it) * (win->char_height + win->char_depth),
                     .fg = spec.fg, .bg = spec.bg,
                     .glyph = g,
-                    .wide = spec.wide,
+                    .wide = spec.wide || g_wide,
                     .underlined = spec.underlined,
                     .strikethrough = spec.stroke
                 };
 
                 line->cell[i].attr |= nss_attrib_drawn;
             }
+            next_dirty = dirty;
         }
     }
 
