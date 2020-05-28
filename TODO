@@ -27,7 +27,6 @@ More:
     Support new color syntax
     Bell
     Proper combining characters support
-    Non-clipped rendering
     Wayland
     Implement proper daemon mode
     Make X resources names more or less correspond to Xterm/rxvt-unicode
@@ -48,11 +47,15 @@ Input
     What if nss_term_read would be called recursively?
         It could happen because like:
             nss_term_read -> term_write -> ... -> term_answerback -> term_tty_wirte -> term_tty_wirte_raw -> nss_term_read
-        Should add term_tty_read_refill(nss_term_t*) and make terminal buffer dynamically allocatable
-        And also term->fd_read_lock flag
-    DECUDK
+		Should store buffer data start and end in nss_term_t
+			and that data should be refilled preseving previous data until there's some space left
+			and discard read data otherwise
 Render
-    [ ] Colored glyphs (for MIT-SHM backend)
+    [ ] Colored glyphs
+    [ ] Double width/height, Down-Line-Loadable fonts
+    [ ] Add options to select width of ambigues characters
+    [ ] Combining characters support
+    [ ] Add fallback fonts support back (optionally enabled)
     [x] XRender
         [?] Slow scrolling of full-color images (with small font in chafa)
         [ ] Rendering refactoring:
@@ -62,19 +65,13 @@ Render
                 3. Glyphs
             -Merge adjacent cells with same color while pushing
             -Then sort and draw, groupping by color
-    [ ] Double width/height, Down-Line-Loadable fonts
-        DECDLD
-    [ ] Add options to select width of ambigues characters
-    [ ] Combining characters support
-    [ ] (?) Add fallback fonts support back
 Term
     (?) Geometry should be measured in characters
     Capability restriction
         Now this works like in xterm
-    Printing with attributes
-    I'm not sure if 1044 mode semantics is correct
-    Is reset not completly correct?
-    Mouse selection
+    Printing with attributes and also support specifing print command
+    Is private mode 1044 semantics correct?
+    Is reset correctly implemented?
     Private modes
         4 -- DECSCLM
         8 -- DECARM (When ported to wayland)
