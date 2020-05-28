@@ -517,8 +517,9 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
         dump_reply(term, &reply);
     } else if (k.utf8len > 0) {
         if (is_modify_others_allowed(&k, mode)) {
-            // This is done in order to override XKB control transformation
-            // TODO Check if k.ascii can be used here
+            /* Is it OK to use k.ascii here?
+             * It allows to identify key in layout independent fasion
+             * nss_char_t val = k.ascii ? k.ascii : k.sym; */
             nss_char_t val = k.sym < 0x100 ? k.sym : k.utf32;
             modify_others(val, mask_to_param(k.mask), mode.modkey_other_fmt, &reply);
             dump_reply(term, &reply);
@@ -589,25 +590,18 @@ nss_key_t nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode) {
     int nsyms = xkb_keymap_key_get_syms_by_level(keymap, keycode, layout, level, &syms);
     if (nsyms != 1) return k;
 
-    k.ascii = k.sym = *syms;
+    k.sym = *syms;
 
-    if (k.mask && k.sym >= 0x80) {
-        for (xkb_layout_index_t i = 0; i < num_layouts; i++) {
-            if ((level = xkb_state_key_get_level(state, keycode, i)) != XKB_LEVEL_INVALID) {
-                nsyms = xkb_keymap_key_get_syms_by_level(keymap, keycode, i, level, &syms);
-                if (nsyms == 1 && syms[0] < 0x80) {
+    if (k.mask && k.sym >= 0x80)
+        for (xkb_layout_index_t i = 0; !k.ascii && i < num_layouts; i++)
+            if ((level = xkb_state_key_get_level(state, keycode, i)) != XKB_LEVEL_INVALID)
+                if (1 == (nsyms = xkb_keymap_key_get_syms_by_level(keymap, keycode, i, level, &syms)) && syms[0] < 0x80)
                     k.ascii = syms[0];
-                    break;
-                }
-            }
-        }
-    }
 
     if (k.mask & ~consumed & nss_mm_lock) k.sym = xkb_keysym_to_upper(k.sym);
 
     if ((k.utf32 = xkb_keysym_to_utf32(k.sym))) {
-        if ((k.mask & ~consumed & nss_mm_control) && k.ascii < 0x80)
-            k.utf32 = to_control(k.ascii);
+        if ((k.mask & ~consumed & nss_mm_control) && k.ascii) k.utf32 = to_control(k.ascii);
         k.utf8len = utf8_encode(k.utf32, k.utf8data, k.utf8data + sizeof(k.utf8data));
         k.utf8data[k.utf8len] = '\0';
     }
