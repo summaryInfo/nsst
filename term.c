@@ -2029,8 +2029,6 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
 
     term->prev_ch = ch; // For REP CSI Ps b
 
-    uint8_t glv = term->c.gn[term->c.gl_ss];
-
     nss_coord_t width = wcwidth(ch);
     if (width < 0) /*ch = UTF_INVAL,*/ width = 1;
     else if (!width) {
@@ -2065,15 +2063,6 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
     // Erase overwritten parts of wide characters
     term_adjust_wide_left(term, term->c.x, term->c.y);
     term_adjust_wide_right(term, term->c.x + width - 1, term->c.y);
-
-    // Decode nrcs
-
-    // In theory this should be disabled while in UTF-8 mode, but
-    // in practive applications use these symbols, so keep translating (but restrict charsets to only DEC Graph in GL)
-    if ((term->mode & nss_tm_utf8) && !nss_config_integer(NSS_ICONFIG_FORCE_UTF8_NRCS))
-        ch = nrcs_decode_fast(glv, ch);
-    else
-        ch = nrcs_decode(glv, term->c.gn[term->c.gr], ch, term->mode & nss_tm_enable_nrcs);
 
     // Clear selection when selected cell is overwritten
     if (nss_term_is_selected(term, term->c.x, term->c.y))
@@ -3137,7 +3126,18 @@ static void term_dispatch(nss_term_t *term, nss_char_t ch) {
             term_dispatch_c0(term, ch);
         else if (ch == 0x7F && (!(term->mode & nss_tm_enable_nrcs) && (glv == nss_96cs_latin_1 || glv == nss_94cs_british)))
             /* ignore */;
-        else term_putchar(term, ch);
+        else  {
+            // Decode nrcs
+
+            // In theory this should be disabled while in UTF-8 mode, but
+            // in practive applications use these symbols, so keep translating (but restrict charsets to only DEC Graph in GL)
+            if ((term->mode & nss_tm_utf8) && !nss_config_integer(NSS_ICONFIG_FORCE_UTF8_NRCS))
+                ch = nrcs_decode_fast(glv, ch);
+            else
+                ch = nrcs_decode(glv, term->c.gn[term->c.gr], ch, term->mode & nss_tm_enable_nrcs);
+
+            term_putchar(term, ch);
+        }
     }
 }
 
