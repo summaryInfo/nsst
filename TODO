@@ -1,5 +1,5 @@
 Until version 1.4:
-	Something wrong with REP
+    Something wrong with REP
     Left/right margins
     Recursive input buffer refilling
         Buffer position should be stored in nss_term_t
@@ -9,7 +9,7 @@ Until version 1.4:
         Selection colors && Xterm special colors
     Set pseudoterminal attributes
     Window operations
-		only title stack for now
+        only title stack for now
     Colored glyphs?
 More:
     Window operations
@@ -40,9 +40,9 @@ Input
     What if nss_term_read would be called recursively?
         It could happen because like:
             nss_term_read -> term_write -> ... -> term_answerback -> term_tty_wirte -> term_tty_wirte_raw -> nss_term_read
-		Should store buffer data start and end in nss_term_t
-			and that data should be refilled preseving previous data until there's some space left
-			and discard read data otherwise
+        Should store buffer data start and end in nss_term_t
+            and that data should be refilled preseving previous data until there's some space left
+            and discard read data otherwise
 Render
     [ ] Colored glyphs
     [ ] Double width/height, Down-Line-Loadable fonts
