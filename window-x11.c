@@ -1079,7 +1079,7 @@ void nss_context_run(void) {
                 case XCB_VISIBILITY_NOTIFY: {
                     xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
-                    if ((win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED)) win->force_redraw = 1;
+                    win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
                     break;
                 }
                 case XCB_KEY_RELEASE:
