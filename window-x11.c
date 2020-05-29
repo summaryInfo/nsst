@@ -1086,6 +1086,7 @@ void nss_context_run(void) {
                 case XCB_MAP_NOTIFY:
                 case XCB_UNMAP_NOTIFY:
                 case XCB_DESTROY_NOTIFY:
+                case XCB_REPARENT_NOTIFY:
                    /* ignore */
                    break;
                 case 0: {
@@ -1101,9 +1102,8 @@ void nss_context_run(void) {
                             uint16_t sequence;
                             xcb_timestamp_t time;
                             uint8_t device_id;
-                        } *xkb_ev;
+                        } *xkb_ev = (struct _xkb_any_event*)event;
 
-                        xkb_ev = (struct _xkb_any_event*)event;
                         if (xkb_ev->device_id == ctx.xkb_core_kbd) {
                             switch (xkb_ev->xkb_type) {
                             case XCB_XKB_NEW_KEYBOARD_NOTIFY: {
@@ -1164,11 +1164,11 @@ void nss_context_run(void) {
             }
 
             if (win->sync_active) continue;
-            if (!win->active) continue;
+            if (!win->active && !win->force_redraw) continue;
 
             int64_t remains = TIMEDIFF(cur, win->next_draw);
 
-            if (remains <= 1000LL || win->force_redraw) {
+            if (remains <= 10000LL || win->force_redraw) {
                 if (win->force_redraw)
                     redraw_borders(win, 1, 1);
 
