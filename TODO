@@ -1,5 +1,6 @@
 Until version 1.4:
-    Implement named values for options instead of numeric
+	Something wrong with REP
+    Left/right margins
     Recursive input buffer refilling
         Buffer position should be stored in nss_term_t
         tty_write_raw should just read a portion of data to buffer,
@@ -7,22 +8,14 @@ Until version 1.4:
     Selections
         Selection colors && Xterm special colors
     Set pseudoterminal attributes
-    Make key modifiers T,A,M configurable
     Window operations
-        --allow-window-ops/allowWindowOps
-        nss_window_dispatch_window_operation
-            It is simpler to implement window operations on window side
-
-            and express other window operations in terms of CSI t
-    User-prefered charset
-    Rectangular operations
-        XTREPORTSGR
-        XTCHECKSUM
-        DECRQCRA
-            DCS"%"PRId32"!~%04X"ST
-    Left/right margins
+		only title stack for now
     Colored glyphs?
 More:
+    Window operations
+    Implement named values for options instead of numeric
+    Make key modifiers T,A,M configurable
+    User-prefered charset
     Option to disable blinking
     Support new color syntax
     Bell
@@ -140,16 +133,11 @@ Term
         CSI Ps $ | -- DECSCPP
         CSI Ps * | -- DECSNLS
     Left/Right margins
-        CSI Ps SP @ -- Shift left
-        CSI Ps SP A -- Shift right
         CSI Pl ; Pr s -- DECSLRM
-        CSI Ps ' } -- DECIC
-        CSI Ps ' ~ -- DECDC
-    Rectangular ops
+    Reports
         CSI Pt ; Pl ; Pb ; Pr # | -- XTREPORTSGR
         CSI Ps # y -- XTCHECKSUM
-        CSI Pi ; Pg ; Pt ; Pl ; Pb ; Pr * y -- DECRQCRA
-    Reports
+        CSI Pi ; Pg ; Pt ; Pl ; Pb ; Pr * y -- DECRQCRA -> DCS"%"PRId32"!~%04X"ST
         DCS $ q m ST -- DECRQSS -> SGR
         DCS $ q " p ST -- DECRQSS -> DECSCL
         DCS $ q SP q ST -- DECRQSS -> DECSCUSR
