@@ -1232,9 +1232,10 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
              *28 - Rectangular editing
              *29 - ANSI text locator (i.e., DEC Locator mode).
              */
-            term_answerback(term, CSI"?%u;1;2;6%s;9;22c",
+            term_answerback(term, CSI"?%u;1;2;6%s;9;22%sc",
                     60 + term->vt_version/100,
-                    term->inmode.keyboard_mapping == nss_km_vt220 ? ";8" : "");
+                    term->inmode.keyboard_mapping == nss_km_vt220 ? ";8" : "",
+                    term->vt_level >= 4 ? ";28" : "");
         }
     }
 }
@@ -1294,11 +1295,14 @@ static void term_dispatch_dsr(nss_term_t *term) {
 }
 
 static void term_dispatch_dcs(nss_term_t *term) {
+    warn("DCS");
     // Fixup parameter count
     term->esc.i += term->esc.param[term->esc.i] >= 0;
 
-    if (term->esc.state != esc_dcs_string)
+    if (term->esc.state != esc_dcs_string) {
         term->esc.selector = term->esc.old_selector;
+        term->esc.state = term->esc.old_state;
+    }
 
     term_esc_dump(term, 1);
 
@@ -1337,8 +1341,10 @@ static nss_clipboard_target_t decode_target(uint8_t targ, _Bool mode) {
 }
 
 static void term_dispatch_osc(nss_term_t *term) {
-    if (term->esc.state != esc_osc_string)
+    if (term->esc.state != esc_osc_string) {
+        term->esc.state = term->esc.old_state;
         term->esc.selector = term->esc.old_selector;
+    }
     term_esc_dump(term, 1);
 
     switch (term->esc.selector) {
