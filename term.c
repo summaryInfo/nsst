@@ -814,6 +814,35 @@ static void term_swap_screen(nss_term_t *term, _Bool damage) {
     if (damage) nss_term_clear_selection(term);
 }
 
+static void term_scroll_horizontal(nss_term_t *term, nss_coord_t left, nss_coord_t right, nss_coord_t amount) {
+    nss_coord_t top = term->top, bottom = term->bottom;
+
+    if (term->prev_c_y >= 0 && top <= term->prev_c_y && term->prev_c_y <= bottom &&
+        left <= term->prev_c_y && term->prev_c_x <= right) {
+        term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
+        if (amount >= 0) term->prev_c_x = MAX(0, term->prev_c_x - MIN(amount, (right - left + 1)));
+        else term->prev_c_x = MIN(term->width - 1, term->prev_c_x + MIN(-amount, (right - left + 1)));
+    }
+
+    for (nss_coord_t i = top; i <= bottom; i++) {
+        term_adjust_wide_left(term, left, i);
+        term_adjust_wide_right(term, right, i);
+    }
+
+    if (amount > 0) { /* left */
+        amount = MIN(amount, right - left + 1);
+        term_copy(term, left + amount, top, right - amount + 1, bottom + 1, left, top);
+        term_erase(term, right - amount + 1, 0, right + 1, bottom + 1);
+    } else { /* right */
+        amount = MIN(-amount, right - left + 1);
+        term_copy(term, left, top, right - amount + 1, bottom + 1, left + amount, top);
+        term_erase(term, left, top, left + amount, bottom + 1);
+    }
+
+    //TODO Optimize: shift window contents
+    //TODO Scroll selecion
+}
+
 static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t bottom, nss_coord_t amount, _Bool save) {
     if (term->prev_c_y >= 0 && top <= term->prev_c_y && term->prev_c_y <= bottom) {
         term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
@@ -904,6 +933,26 @@ static void term_delete_lines(nss_term_t *term, nss_coord_t n) {
     if (term->top <= term->c.y && term->c.y <= term->bottom)
         term_scroll(term, term->c.y, term->bottom, n, 0);
     term_move_to(term, 0, term->c.y);
+}
+
+static void term_index_horizonal(nss_term_t *term) {
+    //TODO LR margins
+    if (term->c.x == 0) {
+        term_scroll_horizontal(term, 0, term->width - 1, 1);
+        term_move_to(term, term->c.x, term->c.y);
+    } else {
+        term_move_to(term, term->c.x + 1, term->c.y);
+    }
+}
+
+static void term_rindex_horizonal(nss_term_t *term) {
+    //TODO LR margins
+    if (term->c.x == term->width - 1) {
+        term_scroll_horizontal(term, 0, term->width - 1, -1);
+        term_move_to(term, term->c.x, term->c.y);
+    } else {
+        term_move_to(term, term->c.x - 1, term->c.y);
+    }
 }
 
 static void term_index(nss_term_t *term, _Bool cr) {
@@ -2059,8 +2108,14 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_insert_cells(term, PARAM(0, 1));
         term_move_to(term, term->c.x, term->c.y);
         break;
+    case C('@') | I0(' '): /* SL */
+        term_scroll_horizontal(term, 0, term->width - 1, PARAM(0, 1));
+        break;
     case C('A'): /* CUU */
         term_move_to(term, term->c.x, term->c.y - PARAM(0, 1));
+        break;
+    case C('A') | I0(' '): /* SR */
+        term_scroll_horizontal(term, 0, term->width - 1, -PARAM(0, 1));
         break;
     case C('B'): /* CUD */
     case C('e'): /* VPR */
@@ -2368,27 +2423,33 @@ static void term_dispatch_csi(nss_term_t *term) {
     //case C('p') | P('?') | I('$'): /* DECRQM */
     //    break;
     case C('r') | I0('$'): /* DECCARA */
+        CHK_VT(4);
         term_apply_sgr(term, PARAM(1,1) - 1, PARAM(0,1) - 1, PARAM(3,term->width), PARAM(2,term->height));
         term_esc_dump(term, 0);
         break;
     case C('t') | I0('$'): /* DECRARA */
+        CHK_VT(4);
         term_reverse_sgr(term, PARAM(1,1) - 1, PARAM(0,1) - 1, PARAM(3,term->width), PARAM(2,term->height));
         term_esc_dump(term, 0);
         break;
     case C('v') | I0('$'): /* DECCRA */
+        CHK_VT(4);
         term_copy(term, PARAM(1, 1) - 1, PARAM(0, 1) - 1, PARAM(3, term->width), PARAM(2, term->height), PARAM(6, 1) - 1, PARAM(5, 1) - 1);
         break;
     //case C('w') | I0('$'): /* DECRQPSR */
     //    break;
     case C('x') | I0('$'): /* DECFRA */
+        CHK_VT(4);
         term_fill(term, PARAM(2,1) - 1, PARAM(1,1) - 1, PARAM(4,term->width), PARAM(3,term->height), PARAM(0, 0));
         term_move_to(term, term->c.x, term->c.y);
         break;
     case C('z') | I0('$'): /* DECERA */
+        CHK_VT(4);
         term_erase(term, PARAM(1,1) - 1, PARAM(0,1) - 1, PARAM(3,term->width), PARAM(2,term->height));
         term_move_to(term, term->c.x, term->c.y);
         break;
     case C('{') | I0('$'): /* DECSERA */
+        CHK_VT(4);
         term_selective_erase(term, PARAM(1,1) - 1, PARAM(0,1) - 1, PARAM(3,term->width), PARAM(2,term->height));
         term_move_to(term, term->c.x, term->c.y);
         break;
@@ -2400,11 +2461,20 @@ static void term_dispatch_csi(nss_term_t *term) {
     //    break;
     //case C('|') | I0('\''): /* DECRQLP */
     //    break;
-    //case C('}') | I0('\''): /* DECIC */
-    //    break;
-    //case C('~') | I0('\''): /* DECDC */
-    //    break;
+    case C('}') | I0('\''): /* DECIC */
+        CHK_VT(4);
+        //TODO Check if cursor inside LR margins
+        term_move_to(term, term->c.x, term->c.y);
+        term_scroll_horizontal(term, term->c.x, term->width - 1, -PARAM(0, 1));
+        break;
+    case C('~') | I0('\''): /* DECDC */
+        CHK_VT(4);
+        //TODO Check if cursor inside LR margins
+        term_move_to(term, term->c.x, term->c.y);
+        term_scroll_horizontal(term, term->c.x, term->width - 1, PARAM(0, 1));
+        break;
     case C('x') | I0('*'): /* DECSACE */
+        CHK_VT(4);
         switch(PARAM(0, 1)) {
         case 1:
             term->mode &= ~nss_tm_attr_ext_rectangle;
@@ -2609,18 +2679,20 @@ static void term_dispatch_esc(nss_term_t *term) {
         term->esc.old_state = 0;
         term->esc.state = esc_ign_entry;
         return;
-    //case E('6'): /* DECBI */
-    //    CHK_VT(4);
-    //    break;
+    case E('6'): /* DECBI */
+        CHK_VT(4);
+        term_rindex_horizonal(term);
+        break;
     case E('7'): /* DECSC */
         term_cursor_mode(term, 1);
         break;
     case E('8'): /* DECRC */
         term_cursor_mode(term, 0);
         break;
-    //case E('9'): /* DECFI */
-    //    CHK_VT(4);
-    //    break;
+    case E('9'): /* DECFI */
+        CHK_VT(4);
+        term_index_horizonal(term);
+        break;
     case E('='): /* DECKPAM */
         term->inmode.appkey = 1;
         break;
