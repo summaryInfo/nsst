@@ -894,7 +894,6 @@ static void term_scroll_horizontal(nss_term_t *term, nss_coord_t left, nss_coord
     }
 
     //TODO Optimize: shift window contents
-    //TODO Scroll selecion
 }
 
 static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _Bool save) {
@@ -2166,7 +2165,10 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
         return;
     }
 
-    debug("%lc (%u)", ch, ch);
+    // This call has mesurable perforemance impact
+    // so it should be commented out unless used for debugging
+
+    //debug("%lc (%u)", ch, ch);
 
     // Wrap line if needed
     if (term->mode & nss_tm_wrap) {
