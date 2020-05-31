@@ -656,6 +656,20 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
     } else term_free_line(line);
 }
 
+/* Get min/max column/row */
+inline static nss_coord_t term_max_y(nss_term_t *term) {
+    return term->bottom + 1;
+}
+inline static nss_coord_t term_min_y(nss_term_t *term) {
+    return term->top;
+}
+inline static nss_coord_t term_max_x(nss_term_t *term) {
+    return term->mode & nss_tm_lr_margins ? term->right + 1 : term->width;
+}
+inline static nss_coord_t term_min_x(nss_term_t *term) {
+    return term->mode & nss_tm_lr_margins ? term->left : 0;
+}
+
 /* Get min/max column/row WRT origin */
 inline static nss_coord_t term_max_ox(nss_term_t *term) {
     return (term->mode & nss_tm_lr_margins && term->c.origin) ? term->right + 1: term->width;
@@ -670,17 +684,163 @@ inline static nss_coord_t term_min_oy(nss_term_t *term) {
     return term->c.origin ? term->top : 0;
 }
 
-inline static nss_coord_t term_max_y(nss_term_t *term) {
-    return term->bottom + 1;
+inline static void term_esc_start(nss_term_t *term) {
+    term->esc.selector = 0;
 }
-inline static nss_coord_t term_min_y(nss_term_t *term) {
-    return term->top;
+inline static void term_esc_start_seq(nss_term_t *term) {
+    for (size_t i = 0; i <= term->esc.i; i++)
+        term->esc.param[i] = -1;
+    term->esc.i = 0;
+    term->esc.subpar_mask = 0;
+    term->esc.selector = 0;
 }
-inline static nss_coord_t term_max_x(nss_term_t *term) {
-    return term->mode & nss_tm_lr_margins ? term->right + 1 : term->width;
+inline static void term_esc_start_string(nss_term_t *term) {
+    term->esc.si = 0;
+    term->esc.str[0] = 0;
+    term->esc.selector = 0;
 }
-inline static nss_coord_t term_min_x(nss_term_t *term) {
-    return term->mode & nss_tm_lr_margins ? term->left : 0;
+
+static void term_esc_dump(nss_term_t *term, _Bool use_info) {
+    if (use_info && nss_config_integer(NSS_ICONFIG_LOG_LEVEL) < 3) return;
+
+    char buf[ESC_DUMP_MAX] = "^[";
+    size_t pos = 2;
+    switch(term->esc.state) {
+        case esc_esc_entry:
+        case esc_esc_1:
+            buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
+        case esc_esc_2:
+            buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
+            buf[pos++] = E_MASK & term->esc.selector;
+            break;
+        case esc_csi_entry:
+        case esc_csi_0:
+        case esc_csi_1:
+        case esc_csi_2:
+        case esc_dcs_string:
+            buf[pos++] = term->esc.state == esc_dcs_string ? 'P' :'[';
+            if (term->esc.selector & P_MASK)
+                buf[pos++] = '<' + ((term->esc.selector & P_MASK) >> 6) - 1;
+            for (size_t i = 0; i < term->esc.i; i++) {
+                pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRId32, term->esc.param[i]);
+                if (i < term->esc.i - 1) buf[pos++] = term->esc.subpar_mask & (1 << (i + 1)) ? ':' : ';' ;
+            }
+            if (term->esc.selector & I0_MASK)
+                buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
+            if (term->esc.selector & I1_MASK)
+                buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
+            buf[pos++] = (C_MASK & term->esc.selector) + 0x40;
+            if (term->esc.state != esc_dcs_string) break;
+            strncat(buf + pos, (char *)term->esc.str, ESC_DUMP_MAX - pos);
+            pos += term->esc.si + 3;
+            strncat(buf + pos - 3, "^[\\", ESC_DUMP_MAX - pos);
+            break;
+        case esc_osc_string:
+            (use_info ? info : warn)("^[]%u;%s^[\\", term->esc.selector, term->esc.str);
+        default:
+            return;
+    }
+    buf[pos] = 0;
+    (use_info ? info : warn)("%s", buf);
+}
+
+static size_t term_decode_color(nss_term_t *term, size_t arg, nss_color_t *rcol, nss_cid_t *rcid, nss_cid_t *valid) {
+    *valid = 0;
+    size_t argc = arg + 1 < ESC_MAX_PARAM;
+    _Bool subpars = arg && (term->esc.subpar_mask >> (arg + 1)) & 1;
+    for (size_t i = arg + 1; i < ESC_MAX_PARAM &&
+        !subpars ^ ((term->esc.subpar_mask >> i) & 1); i++) argc++;
+    if (argc > 0) {
+        if (term->esc.param[arg] == 2 && argc > 3) {
+            nss_color_t col = 0xFF;
+            _Bool wrong = 0, space = subpars && argc > 4;
+            for (size_t i = 1 + space; i < 4U + space; i++) {
+                wrong |= term->esc.param[arg + i] > 255;
+                col = (col << 8) + MIN(MAX(0, term->esc.param[arg + i]), 0xFF);
+            }
+            if (wrong) term_esc_dump(term, 1);
+            *rcol = col;
+            *rcid = 0xFFFF;
+            *valid = 1;
+            if (!subpars) argc = MIN(argc, 4);
+        } else if (term->esc.param[arg] == 5 && argc > 1) {
+            if (term->esc.param[arg + 1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS && term->esc.param[arg + 1] >= 0) {
+                *rcid = term->esc.param[arg + 1];
+                *valid = 1;
+            } else term_esc_dump(term, 0);
+            if (!subpars) argc = MIN(argc, 2);
+        } else {
+            if (!subpars) argc = MIN(argc, 1);
+             term_esc_dump(term, 0);
+         }
+    } else term_esc_dump(term, 0);
+    return argc;
+}
+
+static void term_decode_sgr(nss_term_t *term, size_t i, nss_cell_t *mask, nss_cell_t *val, nss_color_t *fg, nss_color_t *bg) {
+#define SET(f) (mask->attr |= (f), val->attr |= (f))
+#define RESET(f) (mask->attr |= (f), val->attr &= ~(f))
+#define SETFG(f) (mask->fg = 1, val->fg = (f))
+#define SETBG(f) (mask->bg = 1, val->bg = (f))
+    do {
+        param_t par = PARAM(i, 0);
+        if ((term->esc.subpar_mask >> i) & 1) return;
+        switch (par) {
+        case 0:
+            RESET(0xFF);
+            SETFG(NSS_SPECIAL_FG);
+            SETBG(NSS_SPECIAL_BG);
+            break;
+        case 1:  SET(nss_attrib_bold); break;
+        case 2:  SET(nss_attrib_faint); break;
+        case 3:  SET(nss_attrib_italic); break;
+        case 21: /* <- should be double underlind */
+        case 4:
+            if (i < term->esc.i && (term->esc.subpar_mask >> (i + 1)) & 1 &&
+                term->esc.param[++i] <= 0) RESET(nss_attrib_underlined);
+            else SET(nss_attrib_underlined);
+            break;
+        case 5:  /* <- should be slow blink */
+        case 6:  SET(nss_attrib_blink); break;
+        case 7:  SET(nss_attrib_inverse); break;
+        case 8:  SET(nss_attrib_invisible); break;
+        case 9:  SET(nss_attrib_strikethrough); break;
+        case 22: RESET(nss_attrib_faint | nss_attrib_bold); break;
+        case 23: RESET(nss_attrib_italic); break;
+        case 24: RESET(nss_attrib_underlined); break;
+        case 25: /* <- should be slow blink reset */
+        case 26: RESET(nss_attrib_blink); break;
+        case 27: RESET(nss_attrib_inverse); break;
+        case 28: RESET(nss_attrib_invisible); break;
+        case 29: RESET(nss_attrib_strikethrough); break;
+        case 30: case 31: case 32: case 33:
+        case 34: case 35: case 36: case 37:
+            SETFG(par - 30); break;
+        case 38:
+            i += term_decode_color(term, i + 1, fg, &val->fg, &mask->fg);
+            break;
+        case 39: SETFG(NSS_SPECIAL_FG); break;
+        case 40: case 41: case 42: case 43:
+        case 44: case 45: case 46: case 47:
+            SETBG(par - 40); break;
+        case 48:
+            i += term_decode_color(term, i + 1, bg, &val->bg, &mask->bg);
+            break;
+        case 49: SETBG(NSS_SPECIAL_BG); break;
+        case 90: case 91: case 92: case 93:
+        case 94: case 95: case 96: case 97:
+            SETFG(par - 90); break;
+        case 100: case 101: case 102: case 103:
+        case 104: case 105: case 106: case 107:
+            SETBG(par - 100); break;
+        default:
+            term_esc_dump(term, 0);
+        }
+    } while (++i < term->esc.i);
+#undef SET
+#undef RESET
+#undef SETFG
+#undef SETBG
 }
 
 inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t *ys, nss_coord_t *xe, nss_coord_t *ye, _Bool origin) {
@@ -716,6 +876,48 @@ inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t
 
 #undef RECT_INTRS
 }
+
+
+static void term_reverse_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
+    term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
+    nss_color_t fg = 0, bg = 0;
+    nss_cell_t mask = {0}, val = {0};
+    term_decode_sgr(term, 4, &mask, &val, &fg, &bg);
+
+    _Bool rect = term->mode & nss_tm_attr_ext_rectangle;
+    for (; ys < ye; ys++) {
+        nss_line_t *line = term->screen[ys];
+        for (nss_coord_t i = xs; i < (rect || ys == ye - 1 ? xe : term_max_ox(term)); i++) {
+            line->cell[i].attr ^= mask.attr;
+            line->cell[i].attr &= ~nss_attrib_drawn;
+        }
+        if (!rect) xs = term_min_ox(term);
+    }
+}
+
+static void term_apply_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
+    term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
+    nss_color_t fg = 0, bg = 0;
+    nss_cell_t mask = {0}, val = {0};
+    term_decode_sgr(term, 4, &mask, &val, &fg, &bg);
+
+    mask.attr |= nss_attrib_drawn;
+    val.attr &= ~nss_attrib_drawn;
+    _Bool rect = term->mode & nss_tm_attr_ext_rectangle;
+    for (; ys < ye; ys++) {
+        nss_line_t *line = term->screen[ys];
+        if (val.fg >= NSS_PALETTE_SIZE) val.fg = alloc_color(line, fg);
+        if (val.bg >= NSS_PALETTE_SIZE) val.bg = alloc_color(line, bg);
+        for (nss_coord_t i = xs; i < (rect || ys == ye - 1 ? xe : term_max_ox(term)); i++) {
+            nss_cell_t *cel = &line->cell[i];
+            cel->attr = (cel->attr & ~mask.attr) | (val.attr & mask.attr);
+            if (mask.fg) cel->fg = val.fg;
+            if (mask.bg) cel->bg = val.bg;
+        }
+        if (!rect) xs = term_min_ox(term);
+    }
+}
+
 
 static void term_copy(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, nss_coord_t xd, nss_coord_t yd, _Bool origin) {
     if (ye < ys) SWAP(nss_coord_t, ye, ys);
@@ -1125,67 +1327,6 @@ static void term_tabs(nss_term_t *term, nss_coord_t n) {
             while(term->c.x > term_min_ox(term) && !term->tabs[term->c.x]);
         }
     }
-}
-
-static inline void term_esc_start(nss_term_t *term) {
-    term->esc.selector = 0;
-}
-
-static inline void term_esc_start_seq(nss_term_t *term) {
-    for (size_t i = 0; i <= term->esc.i; i++)
-        term->esc.param[i] = -1;
-    term->esc.i = 0;
-    term->esc.subpar_mask = 0;
-    term->esc.selector = 0;
-}
-static inline void term_esc_start_string(nss_term_t *term) {
-    term->esc.si = 0;
-    term->esc.str[0] = 0;
-    term->esc.selector = 0;
-}
-
-static void term_esc_dump(nss_term_t *term, _Bool use_info) {
-    if (use_info && nss_config_integer(NSS_ICONFIG_LOG_LEVEL) < 3) return;
-
-    char buf[ESC_DUMP_MAX] = "^[";
-    size_t pos = 2;
-    switch(term->esc.state) {
-        case esc_esc_entry:
-        case esc_esc_1:
-            buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
-        case esc_esc_2:
-            buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
-            buf[pos++] = E_MASK & term->esc.selector;
-            break;
-        case esc_csi_entry:
-        case esc_csi_0:
-        case esc_csi_1:
-        case esc_csi_2:
-        case esc_dcs_string:
-            buf[pos++] = term->esc.state == esc_dcs_string ? 'P' :'[';
-            if (term->esc.selector & P_MASK)
-                buf[pos++] = '<' + ((term->esc.selector & P_MASK) >> 6) - 1;
-            for (size_t i = 0; i < term->esc.i; i++) {
-                pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRId32, term->esc.param[i]);
-                if (i < term->esc.i - 1) buf[pos++] = term->esc.subpar_mask & (1 << (i + 1)) ? ':' : ';' ;
-            }
-            if (term->esc.selector & I0_MASK)
-                buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
-            if (term->esc.selector & I1_MASK)
-                buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
-            buf[pos++] = (C_MASK & term->esc.selector) + 0x40;
-            if (term->esc.state != esc_dcs_string) break;
-            strncat(buf + pos, (char *)term->esc.str, ESC_DUMP_MAX - pos);
-            pos += term->esc.si + 3;
-            strncat(buf + pos - 3, "^[\\", ESC_DUMP_MAX - pos);
-            break;
-        case esc_osc_string:
-            (use_info ? info : warn)("^[]%u;%s^[\\", term->esc.selector, term->esc.str);
-        default:
-            return;
-    }
-    buf[pos] = 0;
-    (use_info ? info : warn)("%s", buf);
 }
 
 static void term_load_config(nss_term_t *term) {
@@ -1675,145 +1816,6 @@ static void term_dispatch_osc(nss_term_t *term) {
 
     term->esc.old_state = 0;
     term->esc.state = esc_ground;
-}
-
-static size_t term_define_color(nss_term_t *term, size_t arg, nss_color_t *rcol, nss_cid_t *rcid, nss_cid_t *valid) {
-    *valid = 0;
-    size_t argc = arg + 1 < ESC_MAX_PARAM;
-    _Bool subpars = arg && (term->esc.subpar_mask >> (arg + 1)) & 1;
-    for (size_t i = arg + 1; i < ESC_MAX_PARAM &&
-        !subpars ^ ((term->esc.subpar_mask >> i) & 1); i++) argc++;
-    if (argc > 0) {
-        if (term->esc.param[arg] == 2 && argc > 3) {
-            nss_color_t col = 0xFF;
-            _Bool wrong = 0, space = subpars && argc > 4;
-            for (size_t i = 1 + space; i < 4U + space; i++) {
-                wrong |= term->esc.param[arg + i] > 255;
-                col = (col << 8) + MIN(MAX(0, term->esc.param[arg + i]), 0xFF);
-            }
-            if (wrong) term_esc_dump(term, 1);
-            *rcol = col;
-            *rcid = 0xFFFF;
-            *valid = 1;
-            if (!subpars) argc = MIN(argc, 4);
-        } else if (term->esc.param[arg] == 5 && argc > 1) {
-            if (term->esc.param[arg + 1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS && term->esc.param[arg + 1] >= 0) {
-                *rcid = term->esc.param[arg + 1];
-                *valid = 1;
-            } else term_esc_dump(term, 0);
-            if (!subpars) argc = MIN(argc, 2);
-        } else {
-            if (!subpars) argc = MIN(argc, 1);
-             term_esc_dump(term, 0);
-         }
-    } else term_esc_dump(term, 0);
-    return argc;
-}
-
-static void term_decode_sgr(nss_term_t *term, size_t i, nss_cell_t *mask, nss_cell_t *val, nss_color_t *fg, nss_color_t *bg) {
-#define SET(f) (mask->attr |= (f), val->attr |= (f))
-#define RESET(f) (mask->attr |= (f), val->attr &= ~(f))
-#define SETFG(f) (mask->fg = 1, val->fg = (f))
-#define SETBG(f) (mask->bg = 1, val->bg = (f))
-    do {
-        param_t par = PARAM(i, 0);
-        if ((term->esc.subpar_mask >> i) & 1) return;
-        switch (par) {
-        case 0:
-            RESET(0xFF);
-            SETFG(NSS_SPECIAL_FG);
-            SETBG(NSS_SPECIAL_BG);
-            break;
-        case 1:  SET(nss_attrib_bold); break;
-        case 2:  SET(nss_attrib_faint); break;
-        case 3:  SET(nss_attrib_italic); break;
-        case 21: /* <- should be double underlind */
-        case 4:
-            if (i < term->esc.i && (term->esc.subpar_mask >> (i + 1)) & 1 &&
-                term->esc.param[++i] <= 0) RESET(nss_attrib_underlined);
-            else SET(nss_attrib_underlined);
-            break;
-        case 5:  /* <- should be slow blink */
-        case 6:  SET(nss_attrib_blink); break;
-        case 7:  SET(nss_attrib_inverse); break;
-        case 8:  SET(nss_attrib_invisible); break;
-        case 9:  SET(nss_attrib_strikethrough); break;
-        case 22: RESET(nss_attrib_faint | nss_attrib_bold); break;
-        case 23: RESET(nss_attrib_italic); break;
-        case 24: RESET(nss_attrib_underlined); break;
-        case 25: /* <- should be slow blink reset */
-        case 26: RESET(nss_attrib_blink); break;
-        case 27: RESET(nss_attrib_inverse); break;
-        case 28: RESET(nss_attrib_invisible); break;
-        case 29: RESET(nss_attrib_strikethrough); break;
-        case 30: case 31: case 32: case 33:
-        case 34: case 35: case 36: case 37:
-            SETFG(par - 30); break;
-        case 38:
-            i += term_define_color(term, i + 1, fg, &val->fg, &mask->fg);
-            break;
-        case 39: SETFG(NSS_SPECIAL_FG); break;
-        case 40: case 41: case 42: case 43:
-        case 44: case 45: case 46: case 47:
-            SETBG(par - 40); break;
-        case 48:
-            i += term_define_color(term, i + 1, bg, &val->bg, &mask->bg);
-            break;
-        case 49: SETBG(NSS_SPECIAL_BG); break;
-        case 90: case 91: case 92: case 93:
-        case 94: case 95: case 96: case 97:
-            SETFG(par - 90); break;
-        case 100: case 101: case 102: case 103:
-        case 104: case 105: case 106: case 107:
-            SETBG(par - 100); break;
-        default:
-            term_esc_dump(term, 0);
-        }
-    } while (++i < term->esc.i);
-#undef SET
-#undef RESET
-#undef SETFG
-#undef SETBG
-}
-
-static void term_reverse_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
-    term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
-    nss_color_t fg = 0, bg = 0;
-    nss_cell_t mask = {0}, val = {0};
-    term_decode_sgr(term, 4, &mask, &val, &fg, &bg);
-
-    _Bool rect = term->mode & nss_tm_attr_ext_rectangle;
-    for (; ys < ye; ys++) {
-        nss_line_t *line = term->screen[ys];
-        for (nss_coord_t i = xs; i < (rect || ys == ye - 1 ? xe : term_max_ox(term)); i++) {
-            line->cell[i].attr ^= mask.attr;
-            line->cell[i].attr &= ~nss_attrib_drawn;
-        }
-        if (!rect) xs = term_min_ox(term);
-    }
-}
-
-static void term_apply_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
-    term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
-    nss_color_t fg = 0, bg = 0;
-    nss_cell_t mask = {0}, val = {0};
-    term_decode_sgr(term, 4, &mask, &val, &fg, &bg);
-
-    mask.attr |= nss_attrib_drawn;
-    val.attr &= ~nss_attrib_drawn;
-    _Bool rect = term->mode & nss_tm_attr_ext_rectangle;
-    for (; ys < ye; ys++) {
-        nss_line_t *line = term->screen[ys];
-        if (val.fg >= NSS_PALETTE_SIZE) val.fg = alloc_color(line, fg);
-        if (val.bg >= NSS_PALETTE_SIZE) val.bg = alloc_color(line, bg);
-        for (nss_coord_t i = xs; i < (rect || ys == ye - 1 ? xe : term_max_ox(term)); i++) {
-            nss_cell_t *cel = &line->cell[i];
-            cel->attr = (cel->attr & ~mask.attr) | (val.attr & mask.attr);
-            if (mask.fg) cel->fg = val.fg;
-            if (mask.bg) cel->bg = val.bg;
-        }
-        if (!rect) xs = term_min_ox(term);
-    }
 }
 
 static void term_dispatch_srm(nss_term_t *term, _Bool set) {
