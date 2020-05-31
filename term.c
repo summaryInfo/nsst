@@ -2154,7 +2154,7 @@ static void term_dispatch_tmode(nss_term_t *term, _Bool set) {
 static void term_putchar(nss_term_t *term, nss_char_t ch) {
     // 'print' state
 
-    term->prev_ch = ch; // For REP CSI Ps b
+    term->prev_ch = ch; // For REP CSI
 
     nss_coord_t width = wcwidth(ch);
     if (width < 0) /*ch = UTF_INVAL,*/ width = 1;
@@ -2174,7 +2174,8 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
 
     // Wrap line if needed
     if (term->mode & nss_tm_wrap) {
-        if (term->c.x + width > term_max_x(term)) {
+        if (term->c.x + width > term_max_x(term) &&
+                (term->c.x <= term_max_x(term) || term->c.x + width > term->width)) {
             term->screen[term->c.y]->wrap_at = term->c.x;
             if ((term->mode & (nss_tm_print_enabled | nss_tm_print_auto)) == nss_tm_print_auto)
                 term_print_line(term, term->screen[term->c.y]);
