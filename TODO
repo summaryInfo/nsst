@@ -1,6 +1,4 @@
 Until version 1.4:
-    Something wrong with REP
-    Left/right margins
     Recursive input buffer refilling
         Buffer position should be stored in nss_term_t
         tty_write_raw should just read a portion of data to buffer,
@@ -11,6 +9,9 @@ Until version 1.4:
     Window operations
         only title stack for now
     Colored glyphs?
+    Cursor is not always damaged
+        Only noticed in vimpc
+        Old cursor bar is is left behind
 More:
     Window operations
     Implement named values for options instead of numeric
@@ -71,7 +72,6 @@ Term
         14 -- Cursor blinking XORing
         35 -- font shifting functions
         44 -- margin bell [bell]
-        69 -- DECLRMM [left/right margins]
         80 -- DECSDM [SIXEL]
         1001 -- Hightlight mouse tracking [mouse]
         1005 -- UTF-8 mouse [mouse]
@@ -96,6 +96,8 @@ Term
         CSI Ps ; Pu ' z -- DECELR
         CSI Pm ' { -- DECSLE
         CSI Ps ' | -- DECRQLP ->  CSI Pe ; Pb ; Pr ; Pc ; Pp & w
+    Hightlight tracking
+        CSI Ps ; Ps ; Ps ; Ps ; Ps T
     Window operations
         CSI 1 ; 0 ; 0 t -- Deiconify
         CSI 2 ; 0 ; 0 t -- Iconfiy
@@ -132,8 +134,12 @@ Term
         CSI Ps t -- Ps > 23,Resize window to Ps lines
         CSI Ps $ | -- DECSCPP
         CSI Ps * | -- DECSNLS
-    Left/Right margins
-        CSI Pl ; Pr s -- DECSLRM
+        CSI > Ps p -- Pointer mode
+        DCS + Q Pt ST -- XTGETXRES -> DCS Ps + R Pt ST
+        OSC I Pt ST -- Set icon XPM file
+        OSC 13 Pt ST -- Set mouse foreground color
+        OSC 13 Pt ST -- Set mouse background color
+        OSC 3 ; Pt ST -- Set X property
     Reports
         CSI Pt ; Pl ; Pb ; Pr # | -- XTREPORTSGR
         CSI Ps # y -- XTCHECKSUM
@@ -157,34 +163,26 @@ Term
     SIXEL
         CSI ? Pi ; Pa; Pv S -- Set/request graphics attributes (Pi = 1, 2; Pa = 1, 2, 3, 4)
         DSC Pa ; Pb ; Ph q Ps..Ps ST -- Send sixel image
-    Hightlight tracking
-        CSI Ps ; Ps ; Ps ; Ps ; Ps T
     Other sequences
-        CSI > Ps p -- Pointer mode
         CSI Pm # p, CSI Pm # { -- XPUSHSGR
         CSI # q, CSI # } -- XPOPSGR
         CSI ? Pm r -- Restore DEC private modes
         CSI ? s -- Save DEC private modes
-        DCS + Q Pt ST -- XTGETXRES -> DCS Ps + R Pt ST
         DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
         DCS + p Pt ST -- XTSETTCAP
         DCS + q Pt ST -- XTGETTCAP
         DCS Ps ; Ps | Pt ST -- DECUDK
-        OSC 3 ; Pt ST -- Set X property
         OSC 5 ; Pt ST -- Set special color
         OSC 6 ; Pc ; Pt ST -- Enable/disable special color
         OSC 50 ; Pt ST -- Set font
         OSC 105 ; Pt ST -- Reset special color
         OSC 106 ; Pc ; Pf ST -- Enable/disable special color
-        OSC 13 Pt ST -- Set mouse foreground color
-        OSC 13 Pt ST -- Set mouse background color
         OSC 17 Pt ST -- Set hightlight background color
         OSC 18 Pt ST -- Set hightlight foreground color
         OSC 113 Pt ST -- Reset color mouse foreground color
         OSC 113 Pt ST -- Reset color mouse background color
         OSC 117 Pt ST -- Reset color hightlight background color
         OSC 118 Pt ST -- Reset color hightlight foreground color
-        OSC I Pt ST -- Set icon XPM file
     Bell
         CSI Ps SP t -- DECSWBV
         CSI Ps SP u -- DECSMBV
