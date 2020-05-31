@@ -836,7 +836,7 @@ static void term_bounded_move_to(nss_term_t *term, nss_coord_t x, nss_coord_t y)
 }
 
 static void term_move_left(nss_term_t *term, nss_coord_t amount) {
-    nss_coord_t x = MIN(term->c.x, term->width - 1), y = term->c.y,
+    nss_coord_t x = term->c.x, y = term->c.y,
         first_left = x < term_min_x(term) ? 0 : term_min_x(term);
     if (amount > x - first_left && (term->mode &
                 (nss_tm_wrap | nss_tm_reverse_wrap)) == (nss_tm_wrap | nss_tm_reverse_wrap)) {
@@ -2952,7 +2952,7 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
         else {}/* term_bell() -- TODO */;
         break;
     case 0x08: /* BS */
-        term_move_left(term, 1);
+        term_move_left(term, 1 + (term->c.x == term->width));
         break;
     case 0x09: /* HT */
         term_tabs(term, 1);
