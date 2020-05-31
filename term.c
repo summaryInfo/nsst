@@ -962,6 +962,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
                                 term->screen[top + i]->pal->data[cel.bg - NSS_PALETTE_SIZE]);
                         ln->cell[k] = cel;
                     }
+                    term_append_history(term, ln);
                 }
             }
 
