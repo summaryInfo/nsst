@@ -954,7 +954,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
             if (save && !(term->mode & nss_tm_altscreen) && term->top == top) {
                 for (nss_coord_t i = 0; i < amount; i++) {
                     nss_line_t *ln = term_create_line(term, term_max_x(term));
-                    for (size_t k = term_min_x(term); k < term_max_x(term); k++) {
+                    for (ssize_t k = term_min_x(term); k < term_max_x(term); k++) {
                         nss_cell_t cel = term->screen[top + i]->cell[k];
                         if (cel.fg >= NSS_PALETTE_SIZE) cel.fg = alloc_color(ln,
                                 term->screen[top + i]->pal->data[cel.fg - NSS_PALETTE_SIZE]);
