@@ -1,49 +1,42 @@
 Until version 1.4:
+    Selections
+        Selection colors && Xterm special colors
+        How should selections interact with DECLRMM?
+    Set pseudoterminal attributes
     Recursive input buffer refilling
         Buffer position should be stored in nss_term_t
         tty_write_raw should just read a portion of data to buffer,
             possibly discarding some data, not invoking term_write
-    Selections
-        Selection colors && Xterm special colors
-    Set pseudoterminal attributes
     Window operations
         only title stack for now
-    Colored glyphs?
+Until version 1.5
+    Reports
+    XTPOPSGR, XTPUSHSGR, Save restore private mode
+    Special colors
+    Option to disable blinking
+    Colored glyphs
     Cursor is not always damaged
         Only noticed in vimpc
         Old cursor bar is is left behind
+    Dynamically allocated string buffer
+        for huge OSC/DSC strings
 More:
+    SL,SR
+        If the current cursor position is outside of the current scroll region it does nothing???
     Window operations
     Implement named values for options instead of numeric
     Make key modifiers T,A,M configurable
+    Query modifiers by names, instead of using predefined?
     User-prefered charset
-    Option to disable blinking
     Support new color syntax
     Bell
     Proper combining characters support
     Wayland
     Implement proper daemon mode
-    Make X resources names more or less correspond to Xterm/rxvt-unicode
+    Make X resources names more or less correspond to Xterm/rxvt-unicode?
     SIXEL
-    Reports
     DEC Locator
 ===================
-Selections
-    [x] Mouse selection internal state
-    [x] Rendering
-    [x] Reduce screen invalidation (damge only difference between selections)
-    [x] X11 clipboard
-    [x] Bracketed paste
-    [x] Privite modes 1040, 1041, 1044
-    [x] OSC 52
-    [ ] Selection colors
-Input
-    What if nss_term_read would be called recursively?
-        It could happen because like:
-            nss_term_read -> term_write -> ... -> term_answerback -> term_tty_wirte -> term_tty_wirte_raw -> nss_term_read
-        Should store buffer data start and end in nss_term_t
-            and that data should be refilled preseving previous data until there's some space left
-            and discard read data otherwise
 Render
     [ ] Colored glyphs
     [ ] Double width/height, Down-Line-Loadable fonts
@@ -164,8 +157,8 @@ Term
         CSI ? Pi ; Pa; Pv S -- Set/request graphics attributes (Pi = 1, 2; Pa = 1, 2, 3, 4)
         DSC Pa ; Pb ; Ph q Ps..Ps ST -- Send sixel image
     Other sequences
-        CSI Pm # p, CSI Pm # { -- XPUSHSGR
-        CSI # q, CSI # } -- XPOPSGR
+        CSI Pm # p, CSI Pm # { -- XTPUSHSGR
+        CSI # q, CSI # } -- XTPOPSGR
         CSI ? Pm r -- Restore DEC private modes
         CSI ? s -- Save DEC private modes
         DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
