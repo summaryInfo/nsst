@@ -89,7 +89,7 @@ typedef struct nss_term nss_term_t;
 
 nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t height);
 void nss_free_term(nss_term_t *term);
-_Bool nss_term_redraw_dirty(nss_term_t *term, _Bool cursor);
+_Bool nss_term_redraw_dirty(nss_term_t *term);
 void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height);
 void nss_term_focus(nss_term_t *term, _Bool focused);
 _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button);

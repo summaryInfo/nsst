@@ -1174,7 +1174,7 @@ void nss_context_run(void) {
 
                 remains = frame_time;
                 _Bool old_drawn = win->drawn_somthing;
-                win->drawn_somthing = nss_term_redraw_dirty(win->term, 1);
+                win->drawn_somthing = nss_term_redraw_dirty(win->term);
 
                 if (win->drawn_somthing || old_drawn) {
                     win->next_draw = cur;
