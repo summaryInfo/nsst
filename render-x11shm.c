@@ -272,10 +272,12 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                 int16_t cw = win->char_width, ch = win->char_height;
                 int16_t cd = win->char_depth, ul = win->underline_width;
                 int16_t x = i * cw, y = line_iter_y(it) * (ch + cd);
+                int16_t ls = nss_config_integer(NSS_ICONFIG_LINE_SPACING)/2;
+                int16_t fs = nss_config_integer(NSS_ICONFIG_FONT_SPACING)/2;
 
                 nss_rect_t r_cell = { x, y, cw * (1 + spec.wide), ch + cd};
-                nss_rect_t r_under = { x, y + ch + 1, cw, ul };
-                nss_rect_t r_strike = { x, y + 2*ch/3 - ul/2, cw, ul };
+                nss_rect_t r_under = { x + fs, y + ch + 1 + ls, cw, ul };
+                nss_rect_t r_strike = { x + fs, y + 2*ch/3 - ul/2 + ls, cw, ul };
 
                 // Backround
                 nss_image_draw_rect(win->ren.im, r_cell, spec.bg);
@@ -283,7 +285,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                 // Glyph
                 if (glyph) {
                     if (g_wide) r_cell.width = 2*cw;
-                    nss_image_compose_glyph(win->ren.im, x, y + ch, glyph, spec.fg, r_cell);
+                    nss_image_compose_glyph(win->ren.im, x + fs, y + ch + ls, glyph, spec.fg, r_cell);
                 }
 
                 // Underline

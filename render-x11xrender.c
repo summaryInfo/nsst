@@ -55,8 +55,8 @@ static nss_render_context_t rctx;
 static void register_glyph(nss_window_t *win, uint32_t ch, nss_glyph_t * glyph) {
     xcb_render_glyphinfo_t spec = {
         .width = glyph->width, .height = glyph->height,
-        .x = glyph->x, .y = glyph->y,
-        .x_off = glyph->x_off, .y_off = glyph->y_off
+        .x = glyph->x - nss_config_integer(NSS_ICONFIG_FONT_SPACING)/2, .y = glyph->y - nss_config_integer(NSS_ICONFIG_LINE_SPACING)/2,
+        .x_off = win->char_width, .y_off = glyph->y_off
     };
     xcb_void_cookie_t c;
     c = xcb_render_add_glyphs_checked(con, win->ren.gsid, 1, &ch, &spec, glyph->height*glyph->stride, glyph->data);
@@ -331,12 +331,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                 _Bool fetched = nss_cache_is_fetched(win->font_cache, g);
                 if (spec.ch) glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
 
-                if (!fetched && glyph) {
-                    int16_t oldw = glyph->x_off;
-                    glyph->x_off = win->char_width;
-                    register_glyph(win, g, glyph);
-                    glyph->x_off = oldw;
-                }
+                if (!fetched && glyph) register_glyph(win, g, glyph);
 
                 g_wide = glyph && glyph->x_off > win->char_width - nss_config_integer(NSS_ICONFIG_FONT_SPACING);
             }
@@ -493,7 +488,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                     rctx.cbuffer[k].fg == rctx.cbuffer[i].fg && rctx.cbuffer[i].underlined);
             push_rect(&(xcb_rectangle_t) {
                 .x = rctx.cbuffer[k].x,
-                .y = rctx.cbuffer[k].y + win->char_height + 1,
+                .y = rctx.cbuffer[k].y + win->char_height + 1 + nss_config_integer(NSS_ICONFIG_LINE_SPACING)/2,
                 .width = rctx.cbuffer[i - 1].x + win->char_width - rctx.cbuffer[k].x,
                 .height = win->underline_width
             });
@@ -509,7 +504,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                     rctx.cbuffer[k].fg == rctx.cbuffer[i].fg && rctx.cbuffer[i].strikethrough);
             push_rect(&(xcb_rectangle_t) {
                 .x = rctx.cbuffer[k].x,
-                .y = rctx.cbuffer[k].y + 2*win->char_height/3 - win->underline_width/2,
+                .y = rctx.cbuffer[k].y + 2*win->char_height/3 - win->underline_width/2 + nss_config_integer(NSS_ICONFIG_LINE_SPACING)/2,
                 .width = rctx.cbuffer[i - 1].x + win->char_width - rctx.cbuffer[k].x,
                 .height = win->underline_width
             });

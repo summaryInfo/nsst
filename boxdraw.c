@@ -48,8 +48,9 @@ nss_glyph_t *nss_make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t
     nss_glyph_t *glyph = calloc(1, sizeof(nss_glyph_t) + stride * (height + depth) * sizeof(uint8_t));
     if (!glyph) return NULL;
 
-    glyph->y_off = glyph->x = 0;
-    glyph->y = height;
+    glyph->y_off = 0;
+    glyph->x = nss_config_integer(NSS_ICONFIG_FONT_SPACING)/2;
+    glyph->y = height + nss_config_integer(NSS_ICONFIG_LINE_SPACING)/2;
     glyph->height = height + depth;
     glyph->x_off = glyph->width = width;
     glyph->stride = stride;
