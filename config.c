@@ -67,7 +67,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"key-reset", "\t\t(Terminal reset hotkey)", "key.reset", NSS_KCONFIG_RESET},
     {"key-reset-font", "\t(Reset font size hotkey)", "key.resetFontSize", NSS_KCONFIG_FONT_RESET},
     {"key-scroll-down", "\t(Scroll down hotkey)", "key.scrollDown", NSS_KCONFIG_SCROLL_DOWN},
-    {"key-scroll-up", "\t(Scroll up hotkey)", "key.scrollUp", NSS_KCONFIG_SCROLL_UP},
+    {"key-scroll-up", "\t\t(Scroll up hotkey)", "key.scrollUp", NSS_KCONFIG_SCROLL_UP},
     {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", "keyboardDialect", NSS_ICONFIG_KEYBOARD_NRCS},
     {"keyboard-mapping", "\t(Initial keyboad mapping)", "keyboardMapping", NSS_ICONFIG_INPUT_MAPPING},
     {"line-spacing", "\t\t(Additional lines vertical spacing)", "lineSpacing", NSS_ICONFIG_LINE_SPACING},
@@ -84,7 +84,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
 #if USE_BOXDRAWING
     {"override-boxdrawing", "\t(Use built-in box drawing characters)", "overrideBoxdrawing", NSS_ICONFIG_OVERRIDE_BOXDRAW},
 #endif
-    {"pixel-mode", "\t(Subpixel rendering config: 0 - mono, 1 - BGR, 2 - RGB, 3 - BGRV, 4 - RGBV)", "pixelMode", NSS_ICONFIG_PIXEL_MODE},
+    {"pixel-mode", "\t\t(Subpixel rendering config: 0 - mono, 1 - BGR, 2 - RGB, 3 - BGRV, 4 - RGBV)", "pixelMode", NSS_ICONFIG_PIXEL_MODE},
     {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", "printer", NSS_SCONFIG_PRINTER},
     {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", NSS_ICONFIG_RESIZE_DELAY},
     {"reverse-video", "\t\t(Initial reverse video setting)", "enableReverseVideo", NSS_ICONFIG_REVERSE_VIDEO},
