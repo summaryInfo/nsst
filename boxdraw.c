@@ -18,25 +18,17 @@ static void draw_rect(nss_glyph_t * glyph, _Bool lcd, int16_t xs, int16_t ys, in
         ys = MAX(0, ys);
         ye = MIN(ye, glyph->height);
 
-        if (!lcd)
-            for (int16_t j = ys; j < ye; j++)
-                for (int16_t i = xs; i < xe; i++)
-                    glyph->data[j * glyph->stride + i] = val;
-        else
-            for (int16_t j = ys; j < ye; j++)
-                for (int16_t i = 3*xs; i < 3*xe; i ++)
-                    glyph->data[j * glyph->stride + (i/3) * 4 + (2 - i % 3)] = val;
+        if (lcd) xs *= 4, xe *= 4;
+        for (int16_t j = ys; j < ye; j++)
+            for (int16_t i = xs; i < xe; i++)
+                glyph->data[j * glyph->stride + i] = val;
     }
 }
 
 static void put(nss_glyph_t *glyph, _Bool lcd, int16_t x, int16_t y, uint8_t val) {
-    if (!lcd)
-        glyph->data[glyph->stride * y + x] = val;
-    else {
-        glyph->data[glyph->stride*y + 4*x + 0] = val;
-        glyph->data[glyph->stride*y + 4*x + 1] = val;
-        glyph->data[glyph->stride*y + 4*x + 2] = val;
-    }
+    if (!lcd) glyph->data[glyph->stride * y + x] = val;
+    else for(size_t i = 0; i < 4; i++)
+        glyph->data[glyph->stride*y + 4*x + i] = val;
 }
 
 nss_glyph_t *nss_make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t depth) {
