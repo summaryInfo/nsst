@@ -1,7 +1,4 @@
 Until version 1.4:
-    Selections
-        Selection colors && Xterm special colors
-        How should selections interact with DECLRMM?
     Set pseudoterminal attributes
     Recursive input buffer refilling
         Buffer position should be stored in nss_term_t
@@ -21,6 +18,8 @@ Until version 1.5
     Dynamically allocated string buffer
         for huge OSC/DSC strings
 More:
+    Selections
+        How should selections interact with DECLRMM?
     SL,SR
         If the current cursor position is outside of the current scroll region it does nothing???
     Window operations
@@ -170,12 +169,10 @@ Term
         OSC 50 ; Pt ST -- Set font
         OSC 105 ; Pt ST -- Reset special color
         OSC 106 ; Pc ; Pf ST -- Enable/disable special color
-        OSC 17 Pt ST -- Set hightlight background color
-        OSC 18 Pt ST -- Set hightlight foreground color
+        OSC 13 Pt ST -- Set mouse background color
+        OSC 14 Pt ST -- Set mouse foreground color
         OSC 113 Pt ST -- Reset color mouse foreground color
-        OSC 113 Pt ST -- Reset color mouse background color
-        OSC 117 Pt ST -- Reset color hightlight background color
-        OSC 118 Pt ST -- Reset color hightlight foreground color
+        OSC 114 Pt ST -- Reset color mouse background color
     Bell
         CSI Ps SP t -- DECSWBV
         CSI Ps SP u -- DECSMBV
