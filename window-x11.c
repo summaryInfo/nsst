@@ -100,9 +100,8 @@ static void load_config(void) {
     for(size_t i = 0; i < OPT_MAP_SIZE; i++) {
         snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", optmap[i].name);
         char *res = NULL;
-        if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
+        if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res))
             nss_config_set_string(optmap[i].opt, res);
-        }
         if (res) free(res);
     }
 
@@ -427,6 +426,11 @@ struct nss_cellspec nss_describe_cell(nss_cell_t cell, nss_color_t *palette, nss
         res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
     if ((cell.attr & nss_attrib_inverse) ^ selected) SWAP(nss_color_t, res.fg, res.bg);
     if ((!selected && cell.attr & nss_attrib_invisible) || (cell.attr & nss_attrib_blink && blink)) res.fg = res.bg;
+
+    // If selected colors are set use them
+
+    if (palette[NSS_SPECIAL_SELECTED_BG] && selected) res.bg = palette[NSS_SPECIAL_SELECTED_BG];
+    if (palette[NSS_SPECIAL_SELECTED_FG] && selected) res.fg = palette[NSS_SPECIAL_SELECTED_FG];
 
     // Optimize rendering of U+2588 FULL BLOCK
 

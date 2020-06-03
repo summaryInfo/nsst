@@ -94,6 +94,8 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", "scrollOnOutput", NSS_ICONFIG_SCROLL_ON_OUTPUT},
     {"scrollback-size", ", -H<value> (Number of saved lines)", "scrollbackSize", NSS_ICONFIG_HISTORY_LINES},
     {"select-to-clipboard", "\t(Use CLIPBOARD selection to store hightlighted data)", "selectToClipboard", NSS_ICONFIG_SELECT_TO_CLIPBOARD},
+    {"selected-background", "\t(Color of selected background)", "selectedBackground", NSS_CCONFIG_SELECTED_BG},
+    {"selected-foreground", "\t(Color of selected text)", "selectedForeground", NSS_CCONFIG_SELECTED_FG},
     {"shell", ", -s<value>\t(Shell to start in new instance)", "shell", NSS_SCONFIG_SHELL},
     {"sync-timeout", "\t\t(Syncronous update timeout)", "syncTimeout", NSS_ICONFIG_SYNC_TIME},
     {"tab-width", "\t\t(Initial width of tab character)", "tabWidth", NSS_ICONFIG_TAB_WIDTH},
@@ -240,6 +242,10 @@ static nss_color_t color(uint32_t opt) {
     case NSS_CCONFIG_FG:
     case NSS_CCONFIG_CURSOR_FG:
         return base[15];
+    case NSS_CCONFIG_SELECTED_BG:
+    case NSS_CCONFIG_SELECTED_FG:
+        /* Invert text by default */
+        return 0;
     }
 
     opt -= NSS_CCONFIG_COLOR_0;
@@ -334,6 +340,7 @@ void nss_config_set_string(uint32_t opt, const char *val) {
             nss_color_t col = parse_color((uint8_t*)val, (uint8_t*)val + strlen(val));
             if (col) {
                 nss_color_t old = nss_config_color(opt);
+                if ((opt == NSS_CCONFIG_SELECTED_BG || opt == NSS_CCONFIG_SELECTED_FG) && !old) old = 0xFF000000;
                 nss_config_set_color(opt, (col & 0xFFFFFF) | (old & 0xFF000000));
             } else warn("Wrong color format: '%s'", val);
     } else {

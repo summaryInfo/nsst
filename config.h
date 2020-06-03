@@ -139,6 +139,8 @@ enum nss_config_opt {
     NSS_CCONFIG_FG,
     NSS_CCONFIG_CURSOR_BG,
     NSS_CCONFIG_CURSOR_FG,
+    NSS_CCONFIG_SELECTED_BG,
+    NSS_CCONFIG_SELECTED_FG,
     NSS_CCONFIG_MAX,
 
     NSS_CONFIG_MAX = NSS_CCONFIG_MAX,
@@ -152,9 +154,9 @@ typedef struct nss_optmap_item {
 } nss_optmap_item_t;
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 82
+#    define OPT_MAP_SIZE 84
 #else
-#    define OPT_MAP_SIZE 83
+#    define OPT_MAP_SIZE 85
 #endif
 
 extern nss_optmap_item_t optmap[OPT_MAP_SIZE];
