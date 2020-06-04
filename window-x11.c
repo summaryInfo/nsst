@@ -361,6 +361,10 @@ void nss_window_set_sync(nss_window_t *win, _Bool state) {
     win->sync_active = state;
 }
 
+void nss_window_delay(nss_window_t *win) {
+    clock_gettime(NSS_CLOCK, &win->last_scroll);
+}
+
 static int32_t nss_window_get_font_size(nss_window_t *win) {
     return win->font_size;
 }
@@ -775,8 +779,7 @@ void nss_window_handle_resize(nss_window_t *win, int16_t width, int16_t height) 
     if (delta_x || delta_y) {
         nss_term_resize(win->term, new_cw, new_ch);
         nss_renderer_resize(win, new_cw, new_ch);
-        clock_gettime(NSS_CLOCK, &win->last_scroll);
-        win->last_resize = win->last_scroll;
+        clock_gettime(NSS_CLOCK, &win->last_resize);
     }
 
     if (delta_x < 0 || delta_y < 0)

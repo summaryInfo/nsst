@@ -857,6 +857,8 @@ inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t
         *ye = MAX(0, MIN(*ye, term->height));
     }
 
+    nss_window_delay(term->win);
+
     if (term->vsel.state == nss_sstate_none) return;
 
 #define RECT_INTRS(x10, x11, y10, y11) \
