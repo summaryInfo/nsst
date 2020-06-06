@@ -50,7 +50,7 @@ static _Noreturn void usage(char *argv0, int code) {
 }
 
 static _Noreturn void version(void) {
-    fprintf(stderr, "Not So Simple Terminal v1.3\n"
+    fprintf(stderr, "Not So Simple Terminal v1.3.2\n"
             "Features: nsst"
 #if USE_PPOLL
             "+ppoll"
@@ -60,6 +60,9 @@ static _Noreturn void version(void) {
 #endif
 #if USE_X11SHM
             "+mitshm"
+#endif
+#if USE_POSIX_SHM
+            "+posixshm"
 #endif
 #if USE_PRECOMPOSE
             "+precompose"
