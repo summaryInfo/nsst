@@ -311,11 +311,11 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                     .height = win->char_height + win->char_depth
                 }, win->bg);
                 l_bound.width = win->cw - 1;
+                if (l_bound.x < 0) l_bound.x = line->width;
             }
             l_bound.width = MIN(l_bound.width - l_bound.x + 1, win->cw);
             win->ren.bounds[win->ren.boundc++] = l_bound;
         }
-
     }
 
     if (cursor) {
