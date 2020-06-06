@@ -117,4 +117,6 @@ void nss_term_paste_begin(nss_term_t *term);
 void nss_term_paste_end(nss_term_t *term);
 _Bool nss_term_keep_clipboard(nss_term_t *term);
 
+void nss_setup_default_termios(void);
+
 #endif

@@ -230,6 +230,7 @@ int main(int argc, char **argv) {
     (void)argc;
 
     nss_parse_options(argv);
+    nss_setup_default_termios();
 
     nss_create_window();
     nss_context_run();

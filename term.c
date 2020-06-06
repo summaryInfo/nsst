@@ -3,6 +3,7 @@
 #include "feature.h"
 
 #define _XOPEN_SOURCE 700
+#define _BSD_SOURCE
 
 #include "config.h"
 #include "input.h"
@@ -252,6 +253,9 @@ struct nss_term {
     uint8_t fd_buf[NSS_FD_BUF_SZ];
 };
 
+/* Default termios, initialized from main */
+static struct termios dtio;
+
 static void term_answerback(nss_term_t *term, const char *str, ...);
 static void term_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save);
 static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss_color_t y, _Bool rectangular);
@@ -331,6 +335,7 @@ static void exec_shell(const char *cmd, const char **args) {
     unsetenv("COLUMNS");
     unsetenv("LINES");
     unsetenv("TERMCAP");
+
     setenv("LOGNAME", pw->pw_name, 1);
     setenv("USER", pw->pw_name, 1);
     setenv("SHELL", sh, 1);
@@ -344,11 +349,190 @@ static void exec_shell(const char *cmd, const char **args) {
     signal(SIGTERM, SIG_DFL);
     signal(SIGALRM, SIG_DFL);
 
+    // Disable job control signals by default
+    // like login does
+#ifdef SIGTSTP
+    signal(SIGTSTP, SIG_IGN);
+    signal(SIGTTIN, SIG_IGN);
+    signal(SIGTTOU, SIG_IGN);
+#endif
+
     execvp(cmd, (char *const *)args);
     _exit(1);
 }
 
-int tty_open(nss_term_t *term, const char *cmd, const char **args) {
+void nss_setup_default_termios(void) {
+    /* Use stdin as base configuration */
+    if (tcgetattr(STDIN_FILENO, &dtio) < 0)
+        memset(&dtio, 0, sizeof(dtio));
+
+    /* Setup keys */
+
+    /* Disable everything */
+    for (size_t i = 0; i < NCCS; i++)
+#ifdef _POSIX_VDISABLE
+        dtio.c_cc[i] = _POSIX_VDISABLE;
+#else
+        dtio.c_cc[i] = 255;
+#endif
+
+    /* Then enable all known */
+
+#ifdef CINTR
+    dtio.c_cc[VINTR] = CINTR;
+#else
+    dtio.c_cc[VINTR] = '\003';
+#endif
+
+#ifdef CQUIT
+    dtio.c_cc[VQUIT] = CQUIT;
+#else
+    dtio.c_cc[VQUIT] = '\034';
+#endif
+
+#ifdef CERASE
+    dtio.c_cc[VERASE] = CERASE;
+#elif defined(__linux__)
+    dtio.c_cc[VERASE] = '\177';
+#else
+    dtio.c_cc[VERASE] = '\010';
+#endif
+
+#ifdef CKILL
+    dtio.c_cc[VKILL] = CKILL;
+#else
+    dtio.c_cc[VKILL] = '\025';
+#endif
+
+#ifdef CEOF
+    dtio.c_cc[VEOF] = CEOF;
+#else
+    dtio.c_cc[VEOF] = '\004';
+#endif
+
+#ifdef CSTART
+    dtio.c_cc[VSTART] = CSTART;
+#else
+    dtio.c_cc[VSTART] = '\021';
+#endif
+
+#ifdef CSTOP
+    dtio.c_cc[VSTOP] = CSTOP;
+#else
+    dtio.c_cc[VSTOP] = '\023';
+#endif
+
+#ifdef CSUSP
+    dtio.c_cc[VSUSP] = CSUSP;
+#else
+    dtio.c_cc[VSUSP] = '\032';
+#endif
+
+#ifdef VERASE2
+    dtio.c_cc[VERASE2] = CERASE2;
+#endif
+
+#ifdef VDSUSP
+#   ifdef CDSUSP
+    dtio.c_cc[VDSUSP] = CDSUSP;
+#   else
+    dtio.c_cc[VDSUSP] = '\031';
+#   endif
+#endif
+
+#ifdef VREPRINT
+#   ifdef CRPRNT
+    dtio.c_cc[VREPRINT] = CRPRNT;
+#   else
+    dtio.c_cc[VREPRINT] = '\022';
+#   endif
+#endif
+
+#ifdef VDISCRD
+#   ifdef CFLUSH
+    dtio.c_cc[VDISCRD] = CFLUSH;
+#   else
+    dtio.c_cc[VDISCRD] = '\017';
+#   endif
+#elif defined(VDISCARD)
+#   ifdef CFLUSH
+    dtio.c_cc[VDISCARD] = CFLUSH;
+#   else
+    dtio.c_cc[VDISCARD] = '\017';
+#   endif
+#endif
+
+#ifdef VWERSE
+    dtio.c_cc[VWERSE] = CWERASE;
+#elif defined(VWERASE)
+    dtio.c_cc[VWERASE] = '\027';
+#endif
+
+#ifdef VLNEXT
+#   ifdef CLNEXT
+    dtio.c_cc[VLNEXT] = CLNEXT;
+#   else
+    dtio.c_cc[VLNEXT] = '\026';
+#   endif
+#endif
+
+#ifdef VSTATUS
+    dtio.c_cc[VSTATUS] = CSTATUS;
+#endif
+
+#if VMIN != VEOF
+    dtio.c_cc[VMIN] = 1;
+#endif
+
+#if VTIME != VEOL
+    dtio.c_cc[VTIME] = 0;
+#endif
+
+    /* Input modes */
+#ifdef IMAXBEL
+    dtio.c_iflag = BRKINT | IGNPAR | ICRNL | IMAXBEL | IXON;
+#else
+    dtio.c_iflag = BRKINT | IGNPAR | ICRNL | IXON;
+#endif
+
+    /* Output modes */
+#ifdef ONLCR
+    dtio.c_oflag = OPOST | ONLCR;
+#else
+    dtio.c_oflag = OPOST;
+#endif
+
+    /* Control modes */
+    dtio.c_cflag = CS8 | CREAD;
+
+    /* Local modes */
+#if defined (ECHOCTL) && defined (ECHOKE)
+    dtio.c_lflag = ISIG | ICANON | IEXTEN | ECHO | ECHOCTL | ECHOKE | ECHOE | ECHOK;
+#else
+    dtio.c_lflag = ISIG | ICANON | IEXTEN | ECHO | ECHOE | ECHOK;
+#endif
+
+    /* Find and set max I/O baud rate */
+    int rate =
+#if defined(B230400)
+            B230400;
+#elif defined(B115200)
+            B115200;
+#elif defined(B57600)
+            B57600;
+#elif defined(B38400)
+            B38400;
+#elif defined(B19200)
+            B19200;
+#else
+            B9600;
+#endif
+    cfsetispeed(&dtio, rate);
+    cfsetospeed(&dtio, rate);
+
+}
+
+static int tty_open(nss_term_t *term, const char *cmd, const char **args) {
     int slave, master;
     if (openpty(&master, &slave, NULL, NULL, NULL) < 0) {
         warn("Can't create pseudo terminal");
@@ -356,18 +540,20 @@ int tty_open(nss_term_t *term, const char *cmd, const char **args) {
         return -1;
     }
 
+    /* Configure PTY */
 
+    struct termios tio = dtio;
+    
+    tio.c_cc[VERASE] = nss_config_input_mode().backspace_is_del ? '\177' : '\010';
+    
     /* If IUTF8 is defined, enable it by default,
-     * when terminal itself is in UTF-8 mode
-     */
+     * when terminal itself is in UTF-8 mode */
 #ifdef IUTF8
-    if (nss_config_integer(NSS_ICONFIG_UTF8)) {
-        struct termios tio;
-        tcgetattr(slave, &tio);
-            tio.c_iflag |= IUTF8;
-        tcsetattr(slave, TCSANOW, &tio);
-    }
+    if (nss_config_integer(NSS_ICONFIG_UTF8))
+        tio.c_iflag |= IUTF8;
 #endif
+
+    tcsetattr(slave, TCSANOW, &tio);
 
     pid_t pid;
     switch ((pid = fork())) {
