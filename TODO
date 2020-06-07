@@ -1,11 +1,8 @@
 Until version 1.4:
-    Set pseudoterminal attributes
     Recursive input buffer refilling
         Buffer position should be stored in nss_term_t
         tty_write_raw should just read a portion of data to buffer,
             possibly discarding some data, not invoking term_write
-    Window operations
-        only title stack for now
 Until version 1.5
     Reports
     XTPOPSGR, XTPUSHSGR, Save restore private mode
@@ -17,7 +14,24 @@ Until version 1.5
         Old cursor bar is is left behind
     Dynamically allocated string buffer
         for huge OSC/DSC strings
+    Refactor frame timings
+        use separate timings for erase,scroll,resize
+        just wait for screen update completion?
+            do not redraw if erase/scroll/resize reached
+                or probably just wait until nothing read
+                from master in main loop
+            draw if max frame time reached
 More:
+    Refactor config:
+        some options are per-instance
+            needs to be updated on reload
+        some are global
+    Probably remove short options support (v2)
+        breaks all cmd options
+        simplifies things
+        makes it possible to be (somewhat) compatible with XTerm
+        they are unused now
+        Use single dash for all options
     Selections
         How should selections interact with DECLRMM?
     SL,SR
@@ -30,7 +44,7 @@ More:
     Support new color syntax
     Bell
     Proper combining characters support
-    Wayland
+    Wayland (v2)
     Implement proper daemon mode
     Make X resources names more or less correspond to Xterm/rxvt-unicode?
     SIXEL
@@ -115,14 +129,6 @@ Term
         CSI 16 ; 0 ; 0 t -- Report cell size in pixels -> CSI 6 ; Ph ; Pw t
         CSI 18 ; 0 ; 0 t -- Report text area size in chars -> CSI 8 ; Ph ; Pw t
         CSI 19 ; 0 ; 0 t -- Report screen size in chars -> CSI 9 ; Ph ; Pw t
-        CSI 20 ; 0 ; 0 t -- Report icon label -> OSC L Pt ST
-        CSI 21 ; 0 ; 0 t -- Report title -> OSC L Pt ST
-        CSI 22 ; 0 ; 0 t -- Save icon label and title
-        CSI 22 ; 1 ; 0 t -- Save icon label
-        CSI 22 ; 2 ; 0 t -- Save title
-        CSI 23 ; 0 ; 0 t -- Restore icon lable and title
-        CSI 23 ; 1 ; 0 t -- Restore icon label
-        CSI 23 ; 2 ; 0 t -- Restore title
         CSI Ps t -- Ps > 23,Resize window to Ps lines
         CSI Ps $ | -- DECSCPP
         CSI Ps * | -- DECSNLS
