@@ -1229,8 +1229,8 @@ static void term_move_left(nss_term_t *term, nss_coord_t amount) {
     nss_coord_t x = MIN(term->c.x, term->width - 1), y = term->c.y,
         first_left = x < term_min_x(term) ? 0 : term_min_x(term);
 
-	// This is a hack that allows using proper line editing with reverse wrap
-	// mode while staying compatible with VT100 wrapping mode
+    // This is a hack that allows using proper line editing with reverse wrap
+    // mode while staying compatible with VT100 wrapping mode
     if (term->mode & nss_tm_reverse_wrap) x = term->c.x;
 
     if (amount > x - first_left && (term->mode &
@@ -1595,8 +1595,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
 
         term->vt_level = term->vt_version / 100;
 
-        nss_window_set_title(term->win, NULL, term->mode & nss_tm_title_set_utf8);
-        nss_window_set_icon_name(term->win, NULL, term->mode & nss_tm_title_set_utf8);
+        nss_window_set_title(term->win, nss_tt_icon_label | nss_tt_title, NULL, term->mode & nss_tm_title_set_utf8);
 
         // Hmm?..
         // term->mode |= nss_tm_echo;
@@ -1835,11 +1834,7 @@ static void term_dispatch_osc(nss_term_t *term) {
                 *dst++ = val;
             *dst = '\0';
         }
-        // If it's not UTF-8, assume Latin-1
-        if (term->esc.selector < 2)
-            nss_window_set_icon_name(term->win, (char *)term->esc.str, term->mode & nss_tm_utf8);
-        if (term->esc.selector & 2)
-            nss_window_set_title(term->win, (char *)term->esc.str, term->mode & nss_tm_utf8);
+        nss_window_set_title(term->win, 3 - term->esc.selector, (char *)term->esc.str, term->mode & nss_tm_utf8);
         break;
     case 4: /* Set color */ {
         char *pstr = (char *)term->esc.str, *pnext = NULL, *s_end;
@@ -2691,7 +2686,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_move_to(term, term_min_ox(term), term_min_oy(term));
         break;
     //case C('r') | P('?'): /* Restore DEC privite mode */
-    //    break
+    //    break;
     case C('s'): /* DECSLRM/(SCOSC) */
         if (term->mode & nss_tm_lr_margins) {
             term_set_lr_margins(term, PARAM(0, 1) - 1, PARAM(1, term->width) - 1);
@@ -2700,9 +2695,41 @@ static void term_dispatch_csi(nss_term_t *term) {
             term_cursor_mode(term, 1);
         break;
     //case C('s') | P('?'): /* Save DEC privite mode */
-    //    break
-    //case C('t'): /* Window operations, xterm */
-    //    break
+    //    break;
+    case C('t'): /* Window operations, xterm */
+        switch (PARAM(0, 24)) {
+        case 20: /* Report icon label */
+            term_answerback(term, OSC"L%s"ST, nss_window_get_title(term->win, nss_tt_icon_label));
+            break;
+        case 21: /* Report title */
+            term_answerback(term, OSC"l%s"ST, nss_window_get_title(term->win, nss_tt_title));
+            break;
+        case 22: /* Save */
+            switch(PARAM(1, 0)) {
+            case 0: /* Title and icon label */
+            case 1: /* Icon label */
+            case 2: /* Title */
+                nss_window_push_title(term->win, 3 - PARAM(1, 0));
+                break;
+            default:
+                term_esc_dump(term, 0);
+            }
+            break;
+        case 23: /* Restore */
+            switch(PARAM(1, 0)) {
+            case 0: /* Title and icon label */
+            case 1: /* Icon label */
+            case 2: /* Title */
+                nss_window_pop_title(term->win, 3 - PARAM(1, 0));
+                break;
+            default:
+                term_esc_dump(term, 0);
+            }
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        break;
     case C('t') | P('>'):/* Set title mode, xterm */
         term_dispatch_tmode(term, 1);
         break;

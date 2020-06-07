@@ -393,18 +393,80 @@ static void nss_window_set_font(nss_window_t *win, const char * name, int32_t si
     }
 }
 
-void nss_window_set_title(nss_window_t *win, const char *title, _Bool utf8) {
-    if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid,
-            utf8 ? ctx.atom_net_wm_name : XCB_ATOM_WM_NAME,
-            utf8 ? ctx.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
+static void set_title(xcb_window_t wid, const char *title, _Bool utf8) {
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, wid,
+        utf8 ? ctx.atom_net_wm_name : XCB_ATOM_WM_NAME,
+        utf8 ? ctx.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
-void nss_window_set_icon_name(nss_window_t *win, const char *title, _Bool utf8) {
+static void set_icon_label(xcb_window_t wid, const char *title, _Bool utf8) {
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, wid,
+        utf8 ? ctx.atom_net_wm_icon_name : XCB_ATOM_WM_ICON_NAME,
+        utf8 ? ctx.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
+}
+
+static void title_push(nss_title_stack_item_t **head, const char *title, _Bool utf8) {
+    nss_title_stack_item_t *new = malloc(strlen(title) + sizeof(*new) + 1);
+    if (new) {
+        strcpy(new->data, title);
+        new->next = *head;
+        new->utf8 = utf8;
+        new->pushed = 0;
+        *head = new;
+    }
+}
+
+static void title_pop(nss_title_stack_item_t **head) {
+    if (*head && !(*head)->pushed--) {
+        nss_title_stack_item_t *next = (*head)->next;
+        free(*head);
+        *head = next;
+    }
+}
+
+static void title_dup(nss_title_stack_item_t **head) {
+    // Duplicate lazily
+    if (*head) (*head)->pushed++;
+}
+
+void nss_window_set_title(nss_window_t *win, nss_title_target_t which, const char *title, _Bool utf8) {
     if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid,
-            utf8 ? ctx.atom_net_wm_icon_name : XCB_ATOM_WM_ICON_NAME,
-            utf8 ? ctx.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
+
+    if (which & nss_tt_title) {
+        title_pop(&win->title_top);
+        title_push(&win->title_top, title, utf8);
+        set_title(win->wid, title, utf8);
+    }
+
+    if (which & nss_tt_icon_label) {
+        title_pop(&win->icon_top);
+        title_push(&win->icon_top, title, utf8);
+        set_icon_label(win->wid, title, utf8);
+    }
+}
+
+void nss_window_push_title(nss_window_t *win, nss_title_target_t which) {
+    if (which & nss_tt_title) title_dup(&win->title_top);
+    if (which & nss_tt_icon_label) title_dup(&win->icon_top);
+}
+
+void nss_window_pop_title(nss_window_t *win, nss_title_target_t which) {
+    // Pop stack top
+    if (which & nss_tt_title) {
+        title_pop(&win->title_top);
+        if (win->title_top) set_title(win->wid, win->title_top->data, win->title_top->utf8);
+    }
+    if (which & nss_tt_icon_label) {
+        title_pop(&win->icon_top);
+        if (win->icon_top) set_icon_label(win->wid, win->icon_top->data, win->title_top->utf8);
+    }
+}
+
+char *nss_window_get_title(nss_window_t *win, nss_title_target_t which) {
+    // Return stack top
+    if (which & nss_tt_title) return win->title_top->data;
+    if (which & nss_tt_icon_label) return win->icon_top->data;
+    return "";
 }
 
 uint32_t get_win_gravity_from_config() {
@@ -593,8 +655,7 @@ nss_window_t *nss_create_window(void) {
     if (!win->term) goto error;
 
     nss_window_set_default_props(win);
-    nss_window_set_title(win, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
-    nss_window_set_icon_name(win, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
+    nss_window_set_title(win, nss_tt_title | nss_tt_icon_label, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
 
     win->next = win_list_head;
     win->prev = NULL;

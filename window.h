@@ -54,6 +54,11 @@ typedef enum nss_clipboard_target {
     nss_ct_MAX,
 } nss_clipboard_target_t;
 
+typedef enum nss_title_target {
+    nss_tt_title = 1,
+    nss_tt_icon_label = 2,
+} nss_title_target_t;
+
 typedef struct nss_window nss_window_t;
 typedef struct nss_line_iter nss_line_iter_t;
 typedef uint32_t nss_color_t;
@@ -71,8 +76,12 @@ void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coo
 void nss_window_paste_clip(nss_window_t *win, nss_clipboard_target_t target);
 void nss_window_delay(nss_window_t *win);
 
-void nss_window_set_title(nss_window_t *win, const char *name, _Bool utf8);
-void nss_window_set_icon_name(nss_window_t *win, const char *name, _Bool utf8);
+void nss_window_set_title(nss_window_t *win, nss_title_target_t which, const char *name, _Bool utf8);
+void nss_window_push_title(nss_window_t *win, nss_title_target_t which);
+void nss_window_pop_title(nss_window_t *win, nss_title_target_t which);
+/* Both at the same time are not supported */
+char *nss_window_get_title(nss_window_t *win, nss_title_target_t which);
+
 void nss_window_set_mouse(nss_window_t *win, _Bool enabled);
 void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor_fg);
 void nss_window_set_cursor(nss_window_t *win, nss_cursor_type_t type);

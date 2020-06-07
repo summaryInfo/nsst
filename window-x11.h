@@ -56,6 +56,13 @@ struct nss_cellspec {
     _Bool wide;
 };
 
+typedef struct nss_title_stack_item {
+    struct nss_title_stack_item *next;
+    size_t pushed;
+    char utf8;
+    char data[];
+} nss_title_stack_item_t;
+
 struct nss_window {
     struct nss_window *prev, *next;
 
@@ -108,6 +115,10 @@ struct nss_window {
 
     nss_term_t *term;
     size_t poll_index;
+
+	// Used for title stack implementation
+    nss_title_stack_item_t *title_top;
+    nss_title_stack_item_t *icon_top;
 
     nss_renderer_t ren;
 };
