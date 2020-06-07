@@ -1226,8 +1226,13 @@ static void term_bounded_move_to(nss_term_t *term, nss_coord_t x, nss_coord_t y)
 }
 
 static void term_move_left(nss_term_t *term, nss_coord_t amount) {
-    nss_coord_t x = term->c.x, y = term->c.y,
+    nss_coord_t x = MIN(term->c.x, term->width - 1), y = term->c.y,
         first_left = x < term_min_x(term) ? 0 : term_min_x(term);
+
+	// This is a hack that allows using proper line editing with reverse wrap
+	// mode while staying compatible with VT100 wrapping mode
+    if (term->mode & nss_tm_reverse_wrap) x = term->c.x;
+
     if (amount > x - first_left && (term->mode &
                 (nss_tm_wrap | nss_tm_reverse_wrap)) == (nss_tm_wrap | nss_tm_reverse_wrap)) {
         amount -= x - first_left;
@@ -1237,7 +1242,7 @@ static void term_move_left(nss_term_t *term, nss_coord_t amount) {
         if ((y %= term->height) < 0) y += term->height;
     }
 
-    (term->c.x >= term_min_x(term) ? term_bounded_move_to : term_move_to)(term,  x - amount, y);
+    (term->c.x >= term_min_x(term) ? term_bounded_move_to : term_move_to)(term, x - amount, y);
 }
 
 static void term_cursor_mode(nss_term_t *term, _Bool mode) {
@@ -3164,7 +3169,7 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
         else {}/* term_bell() -- TODO */;
         break;
     case 0x08: /* BS */
-        term_move_left(term, 1 + (term->c.x == term->width));
+        term_move_left(term, 1);
         break;
     case 0x09: /* HT */
         term_tabs(term, 1);
