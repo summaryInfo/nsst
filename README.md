@@ -41,8 +41,8 @@ See TODO file for things that are to be implemented.
 
 ## Notes
 
-Use TERM=xterm. The only unimplemented thing I encountered so far is unimplemented title stack.
-There are other missing escape sequences, but they are not generally used (and still would be eventually implemented).
+Use `TERM=xterm` for now. Almost every escape sequence from `ctlseqs.ms` is implemented.
+See Term section of TODO for not yet implemented escape sequences.
 
 Works well with [Iosevka](https://github.com/be5invis/Iosevka) font. (Set font spacing to -1 it it feels to wide.)
 Multiple fonts could be loaded by enumerating them in parameter:
