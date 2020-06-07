@@ -464,8 +464,8 @@ void nss_window_pop_title(nss_window_t *win, nss_title_target_t which) {
 
 char *nss_window_get_title(nss_window_t *win, nss_title_target_t which) {
     // Return stack top
-    if (which & nss_tt_title) return win->title_top->data;
-    if (which & nss_tt_icon_label) return win->icon_top->data;
+    if (which & nss_tt_title && win->title_top) return win->title_top->data;
+    if (which & nss_tt_icon_label && win->icon_top) return win->icon_top->data;
     return "";
 }
 
