@@ -319,15 +319,17 @@ const char *nss_config_string(uint32_t opt) {
 void nss_config_set_string(uint32_t opt, const char *val) {
     if (NSS_SCONFIG_MIN <= opt && opt < NSS_SCONFIG_MAX) {
         opt -= NSS_SCONFIG_MIN;
-        if(soptions[opt].val)
+        if (!val) val = soptions[opt].dflt;
+        if (soptions[opt].val)
             free(soptions[opt].val);
         soptions[opt].val = strdup(val);
     } else if (opt < NSS_ICONFIG_MAX) {
-        int32_t ival = -1;
-        if (sscanf(val, "%"SCNd32, &ival) == 1)
+        int32_t ival = ioptions[opt - NSS_ICONFIG_MIN].dflt;
+        if (!val || sscanf(val, "%"SCNd32, &ival) == 1)
             nss_config_set_integer(opt, ival);
         // Boolean option
         else if (ioptions[opt].min == 0 && ioptions[opt].max == 1) {
+            ival = -1;
             if (strcasecmp(val, "yes") || strcasecmp(val, "y") || strcasecmp(val, "true")) ival = 1;
             else if (strcasecmp(val, "no") || strcasecmp(val, "n") || strcasecmp(val, "false")) ival = 0;
             if (ival >= 0) nss_config_set_integer(opt, ival);
@@ -335,9 +337,11 @@ void nss_config_set_string(uint32_t opt, const char *val) {
         } else warn("Unknown string option %d", opt);
     } else if (NSS_KCONFIG_MIN <= opt && opt < NSS_KCONFIG_MAX) {
         enum nss_shortcut_action sa = opt - NSS_KCONFIG_MIN + 1;
-        nss_input_set_hotkey(sa, val);
+        if (val) nss_input_set_hotkey(sa, val);
     } else if (NSS_CCONFIG_MIN <= opt && opt < NSS_CCONFIG_MAX) {
-            nss_color_t col = parse_color((uint8_t*)val, (uint8_t*)val + strlen(val));
+            nss_color_t col;
+            if (val) col = parse_color((uint8_t*)val, (uint8_t*)val + strlen(val));
+            else col = color(opt);
             if (col) {
                 nss_color_t old = nss_config_color(opt);
                 if ((opt == NSS_CCONFIG_SELECTED_BG || opt == NSS_CCONFIG_SELECTED_FG) && !old) old = 0xFF000000;
