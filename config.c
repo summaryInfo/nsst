@@ -344,8 +344,11 @@ void nss_config_set_string(uint32_t opt, const char *val) {
             else col = color(opt);
             if (col || !val) {
                 nss_color_t old = nss_config_color(opt);
-                if ((opt == NSS_CCONFIG_SELECTED_BG || opt == NSS_CCONFIG_SELECTED_FG) && !old) old = 0xFF000000;
-                nss_config_set_color(opt, (col & 0xFFFFFF) | (old & 0xFF000000));
+                if (val) {
+                    if ((opt == NSS_CCONFIG_SELECTED_BG || opt == NSS_CCONFIG_SELECTED_FG) && !old) old = 0xFF000000;
+                    col = (col & 0xFFFFFF) | (old & 0xFF000000);
+                }
+                nss_config_set_color(opt, col);
             } else warn("Wrong color format: '%s'", val);
     } else {
         warn("Unknown string option %d", opt);
