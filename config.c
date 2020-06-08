@@ -342,7 +342,7 @@ void nss_config_set_string(uint32_t opt, const char *val) {
             nss_color_t col;
             if (val) col = parse_color((uint8_t*)val, (uint8_t*)val + strlen(val));
             else col = color(opt);
-            if (col) {
+            if (col || !val) {
                 nss_color_t old = nss_config_color(opt);
                 if ((opt == NSS_CCONFIG_SELECTED_BG || opt == NSS_CCONFIG_SELECTED_FG) && !old) old = 0xFF000000;
                 nss_config_set_color(opt, (col & 0xFFFFFF) | (old & 0xFF000000));
