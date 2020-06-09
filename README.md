@@ -111,7 +111,26 @@ Example:
 * `xkbcommon`
 * `xkbcommon-x11`
 
+#### Void Linux
+
+    xbps-install libxcb-devel libxkbcommon-devel xcb-util-xrm-devel \
+        fontconfig-devel freetype-devel
+
+#### Arch Linux and derivatives
+
+    pacman -S libxcb xcb-util-xrm libxkbcommon libxkbcommon-x11 \
+        fontconfig freetype2
+
+#### Debian and derivatives
+
+    apt update
+    apt install libx11-xcb-dev libxcb-shm0-dev libxcb-render0-dev \
+        libxcb-xrm-dev libxkbcommon-dev xkbcommon-x11-dev \
+        libfontconfig1-dev libfreetype-dev
+
 ## How to get it
+
+You need all dependencies installed before getting started.
 
 First clone this repo and cd into its folder like this:
 
