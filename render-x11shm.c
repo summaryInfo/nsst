@@ -246,7 +246,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
         _Bool next_dirty = 0;
         nss_rect_t l_bound = {-1, line_iter_y(it), 0, 1};
         for (nss_coord_t i =  MIN(win->cw, line->width) - 1; i >= 0; i--) {
-            _Bool dirty = !(line->cell[i].attr & nss_attrib_drawn) ||
+            _Bool dirty = line->force_damage || !(line->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink)) ||
                     (cond_cblink && line_iter_y(it) == cur_y && i == cur_x);
 
@@ -316,6 +316,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
             l_bound.width = MIN(l_bound.width - l_bound.x + 1, win->cw);
             win->ren.bounds[win->ren.boundc++] = l_bound;
         }
+        line->force_damage = 0;
     }
 
     if (cursor) {
@@ -359,8 +360,6 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
         }
         win->ren.boundc = 0;
     }
-
-    win->damaged_y0 = win->damaged_y1 = 0;
 
     return drawn_any;
 }

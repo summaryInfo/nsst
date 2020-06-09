@@ -543,9 +543,9 @@ static int tty_open(nss_term_t *term, const char *cmd, const char **args) {
     /* Configure PTY */
 
     struct termios tio = dtio;
-    
+
     tio.c_cc[VERASE] = nss_config_input_mode().backspace_is_del ? '\177' : '\010';
-    
+
     /* If IUTF8 is defined, enable it by default,
      * when terminal itself is in UTF-8 mode */
 #ifdef IUTF8
@@ -726,13 +726,18 @@ int nss_term_fd(nss_term_t *term) {
     return term->fd;
 }
 
-void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
+void term_damage(nss_term_t *term, nss_rect_t damage) {
     if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
         nss_line_iter_t it = make_screen_iter(term, damage.y - term->view, damage.y + damage.height - term->view);
         for (nss_line_t *line; (line = line_iter_next(&it));)
             for (nss_coord_t j = damage.x; j <  MIN(damage.x + damage.width, line->width); j++)
                 line->cell[j].attr &= ~nss_attrib_drawn;
     }
+}
+
+void nss_term_damage_lines(nss_term_t *term, nss_coord_t ys, nss_coord_t yd) {
+    nss_line_iter_t it = make_screen_iter(term, ys - term->view, yd - term->view);
+    for (nss_line_t *line; (line = line_iter_next(&it));) line->force_damage = 1;
 }
 
 _Bool nss_term_redraw_dirty(nss_term_t *term) {
@@ -762,7 +767,7 @@ static void term_reset_view(nss_term_t *term, _Bool damage) {
     term->view = 0;
     if (term->vsel.state == nss_sstate_progress)
         term_change_selection(term, nss_sstate_progress, term->vsel.r.x1, term->vsel.r.y1 + old_view, term->vsel.r.rect);
-    if (damage) nss_term_damage(term, (nss_rect_t){0, 0, term->width, term->height});
+    if (damage) nss_term_damage_lines(term, 0, term->height);
 }
 
 void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
@@ -778,10 +783,10 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
 
     ssize_t delta = term->view - old_view;
     if (delta > 0) { //Up
-        nss_term_damage(term, (nss_rect_t){0, 0, term->width, delta});
+        nss_term_damage_lines(term, 0, delta);
         nss_window_shift(term->win, 0, delta, term->height - delta, 0);
     } else if (delta < 0) { // Down
-        nss_term_damage(term, (nss_rect_t){0, term->height + delta, term->width, -delta});
+        nss_term_damage_lines(term, term->height + delta, term->height);
         nss_window_shift(term->win, -delta, 0, term->height + delta, 0);
     }
 
@@ -1267,12 +1272,14 @@ static void term_swap_screen(nss_term_t *term, _Bool damage) {
 static void term_scroll_horizontal(nss_term_t *term, nss_coord_t left, nss_coord_t amount) {
     nss_coord_t top = term_min_y(term), right = term_max_x(term), bottom = term_max_y(term);
 
+    /* Don't need to touch cursor unless copying window content
     if (term->prev_c_y >= 0 && top <= term->prev_c_y && term->prev_c_y < bottom &&
         left <= term->prev_c_y && term->prev_c_x < right) {
         term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
         if (amount >= 0) term->prev_c_x = MAX(0, term->prev_c_x - amount);
         else term->prev_c_x = MIN(term->width - 1, term->prev_c_x - amount);
     }
+    */
 
     for (nss_coord_t i = top; i < bottom; i++) {
         term_adjust_wide_left(term, left, i);
@@ -1295,14 +1302,13 @@ static void term_scroll_horizontal(nss_term_t *term, nss_coord_t left, nss_coord
 static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _Bool save) {
     nss_coord_t left = term_min_x(term), right = term_max_x(term), bottom = term_max_y(term);
 
-    if (term->prev_c_y >= 0 && top <= term->prev_c_y && term->prev_c_y < bottom &&
-        left <= term->prev_c_y && term->prev_c_x < right) {
-        term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
-        if (amount >= 0) term->prev_c_x = MAX(0, term->prev_c_x - amount);
-        else term->prev_c_x = MIN(term->width - 1, term->prev_c_x - amount);
-    }
-
     if (left == 0 && right == term->width) { // Fast scrolling without margins
+        if (top <= term->prev_c_y && term->prev_c_y < bottom) {
+            term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
+            if (amount >= 0) term->prev_c_y = MAX(top, term->prev_c_y - amount);
+            else term->prev_c_y = MIN(bottom, term->prev_c_y - amount);
+        }
+
         if (amount > 0) { /* up */
             amount = MIN(amount, (bottom - top));
             nss_coord_t rest = (bottom - top) - amount;
@@ -1317,26 +1323,20 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
             for (nss_coord_t i = 0; i < rest; i++)
                 SWAP(nss_line_t *, term->screen[top + i], term->screen[top + amount + i]);
 
+            if (term->view || !nss_window_shift(term->win, top + amount, top, bottom - top - amount, 1))
+                nss_term_damage_lines(term, term->view + top, term->view + bottom - amount);
         } else { /* down */
             amount = MAX(amount, -(bottom - top));
             nss_coord_t rest = (bottom - top) + amount;
 
+            term_erase(term, 0, bottom + amount, term->width, bottom, 0);
+
             for (nss_coord_t i = 1; i <= rest; i++)
                 SWAP(nss_line_t *, term->screen[bottom - i], term->screen[bottom + amount - i]);
 
-            term_erase(term, 0, top, term->width, top - amount, 0);
+            if (term->view || !nss_window_shift(term->win, top, top - amount, bottom - top + amount, 1))
+                nss_term_damage_lines(term, term->view + top - amount, term->view + bottom);
         }
-
-        if (!term->view) {
-            if (amount > 0)
-                nss_window_shift(term->win, top + amount, top, bottom - top - amount, 1);
-            else if (amount < 0)
-                nss_window_shift(term->win, top, top - amount, bottom - top + amount, 1);
-        } else {
-            nss_term_damage(term, (nss_rect_t){ .y = top - MAX(0, amount),
-                    .width = term->width, .height = bottom - top - abs(amount) });
-        }
-
     } else { // Slow scrolling with margins
         for (nss_coord_t i = top; i < bottom; i++) {
             term_adjust_wide_left(term, left, i);
@@ -3564,7 +3564,7 @@ static void term_write(nss_term_t *term, const uint8_t **start, const uint8_t **
 static ssize_t term_refill(nss_term_t *term) {
     if (term->fd == -1) return -1;
 
-	ssize_t inc, sz = term->fd_end - term->fd_start;
+    ssize_t inc, sz = term->fd_end - term->fd_start;
 
     if (term->fd_start != term->fd_buf) {
         memmove(term->fd_buf, term->fd_start, sz);
@@ -3809,8 +3809,8 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
     // Damage screen
 
     if (!(term->mode & nss_tm_altscreen)) {
-        if (dy > 0) nss_term_damage(term, (nss_rect_t) { 0, minh, minw, dy });
-        if (dx > 0) nss_term_damage(term, (nss_rect_t) { minw, 0, dx, height });
+        if (dy > 0) term_damage(term, (nss_rect_t) { 0, minh, minw, dy });
+        if (dx > 0) term_damage(term, (nss_rect_t) { minw, 0, dx, height });
     }
 }
 
@@ -3943,7 +3943,7 @@ static void term_update_selection(nss_term_t *term, uint8_t oldstate, nss_select
     }
 
     for (size_t i = 0; i < count; i++)
-        nss_term_damage(term, res[i]);
+        term_damage(term, res[i]);
 }
 
 void nss_term_clear_selection(nss_term_t *term) {

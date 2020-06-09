@@ -343,7 +343,7 @@ void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor
     }
 
     if ((bg && bg != obg) || cursor_fg) {
-        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
+        nss_term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
 }
@@ -372,7 +372,7 @@ static int32_t nss_window_get_font_size(nss_window_t *win) {
 static void reload_all_fonts(void) {
     for (nss_window_t *win = win_list_head; win; win = win->next) {
         nss_renderer_reload_font(win, 1);
-        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
+        nss_term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
 }
@@ -388,7 +388,7 @@ static void nss_window_set_font(nss_window_t *win, const char * name, int32_t si
 
     if (reload) {
         nss_renderer_reload_font(win, 1);
-        nss_term_damage(win->term, (nss_rect_t){0, 0, win->cw, win->ch});
+        nss_term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
 }
@@ -724,7 +724,7 @@ void nss_free_window(nss_window_t *win) {
     free(win);
 };
 
-void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coord_t height, _Bool delay) {
+_Bool nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coord_t height, _Bool delay) {
     struct timespec cur;
     clock_gettime(NSS_CLOCK, &cur);
 
@@ -732,31 +732,13 @@ void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coo
 
     win->last_scroll = cur;
 
+    if (delay && scrolled_recently) return 0;
+
     ys = MAX(0, MIN(ys, win->ch));
     yd = MAX(0, MIN(yd, win->ch));
     height = MIN(height, MIN(win->ch - ys, win->ch - yd));
 
-    if (delay && scrolled_recently) {
-        if (!win->damaged_y1) {
-            win->damaged_y0 = yd, win->damaged_y1 = yd + height;
-            nss_term_damage(win->term, (nss_rect_t){ .x = 0, .y = yd,
-                    .width = win->cw, .height = height });
-        } else {
-            if (yd < win->damaged_y0){
-                nss_term_damage(win->term, (nss_rect_t){ .x = 0, .y = yd,
-                        .width = win->cw, .height = MAX(yd + height, win->damaged_y0 + 1) - yd });
-                win->damaged_y1 = yd;
-            }
-            if (yd + height > win->damaged_y1){
-                nss_term_damage(win->term, (nss_rect_t){ .x = 0, .y = MIN(win->damaged_y1, yd) - 1,
-                        .width = win->cw, .height = yd + height - MIN(win->damaged_y1, yd)});
-                win->damaged_y1 = yd + height;
-            }
-        }
-        return;
-    }
-
-    if (!height) return;
+    if (!height) return 1;
 
     ys *= win->char_height + win->char_depth;
     yd *= win->char_height + win->char_depth;
@@ -764,6 +746,8 @@ void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coo
     height *= win->char_depth + win->char_height;
 
     nss_renderer_copy(win, (nss_rect_t){0, yd, width, height}, 0, ys);
+
+    return 1;
 }
 
 inline static xcb_atom_t target_to_atom(nss_clipboard_target_t target) {

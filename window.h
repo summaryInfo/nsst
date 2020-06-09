@@ -72,7 +72,7 @@ nss_window_t *nss_create_window();
 void nss_free_window(nss_window_t *win);
 
 _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor);
-void nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coord_t height, _Bool delay);
+_Bool nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coord_t height, _Bool delay);
 void nss_window_paste_clip(nss_window_t *win, nss_clipboard_target_t target);
 void nss_window_delay(nss_window_t *win);
 

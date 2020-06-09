@@ -61,6 +61,7 @@ typedef struct nss_line {
     nss_line_palette_t *pal;
     int16_t width;
     int16_t wrap_at;
+    uint16_t force_damage : 1;
     nss_cell_t cell[];
 } nss_line_t;
 
@@ -106,7 +107,7 @@ nss_input_mode_t *nss_term_inmode(nss_term_t *term);
 _Bool nss_term_is_utf8(nss_term_t *term);
 _Bool nss_term_is_nrcs_enabled(nss_term_t *term);
 _Bool nss_term_is_cursor_enabled(nss_term_t *term);
-void nss_term_damage(nss_term_t *term, nss_rect_t damage);
+void nss_term_damage_lines(nss_term_t *term, nss_coord_t ys, nss_coord_t yd);
 void nss_term_reset(nss_term_t *term);
 
 /* Selection related functions */

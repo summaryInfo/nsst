@@ -308,7 +308,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
             next_dirty = 1;
         }
         for (nss_coord_t i = MIN(win->cw, line->width) - 1; i >= 0; i--) {
-            _Bool dirty = !(line->cell[i].attr & nss_attrib_drawn) ||
+            _Bool dirty = line->force_damage || !(line->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink)) ||
                     (cond_cblink && line_iter_y(it) == cur_y && i == cur_x);
 
@@ -358,6 +358,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
             }
             next_dirty = dirty;
         }
+        line->force_damage = 0;
     }
 
     if (rctx.bufpos) {
@@ -553,8 +554,6 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
     if (rctx.cbufpos)
         nss_renderer_update(win, rect_scale_up((nss_rect_t){0, 0, win->cw, win->ch},
                 win->char_width, win->char_height + win->char_depth));
-
-    win->damaged_y0 = win->damaged_y1 = 0;
 
     return rctx.cbufpos;
 }
