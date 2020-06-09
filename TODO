@@ -1,8 +1,3 @@
-Until version 1.4:
-    Recursive input buffer refilling
-        Buffer position should be stored in nss_term_t
-        tty_write_raw should just read a portion of data to buffer,
-            possibly discarding some data, not invoking term_write
 Until version 1.5
     Reports
     XTPOPSGR, XTPUSHSGR, Save restore private mode
@@ -37,6 +32,10 @@ More:
     SL,SR
         If the current cursor position is outside of the current scroll region it does nothing???
     Window operations
+        In window-x11.c:
+            State request
+            Resize request
+            Move request
     Implement named values for options instead of numeric
     Make key modifiers T,A,M configurable
     Query modifiers by names, instead of using predefined?

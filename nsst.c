@@ -50,7 +50,7 @@ static _Noreturn void usage(char *argv0, int code) {
 }
 
 static _Noreturn void version(void) {
-    printf("Not So Simple Terminal v1.3.2\n"
+    printf("Not So Simple Terminal v1.4\n"
             "Features: nsst"
 #if USE_PPOLL
             "+ppoll"

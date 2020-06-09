@@ -10,7 +10,7 @@ Inspired by [Simple Terminal](https://st.suckless.org/)
 * Small size and almost no dependencies
 * Uses xcb as X11 library
     * So it is faster and more lightweight
-    * `size` including all loaded shared libs is only 75% of `st` on my system
+    * `size` including all loaded shared libs is only 80% of `st` on my system
 * Most escape sequences are already implemented
 * Ful keyboard mode from XTerm
 * OSC 13001 "Set background opacity"
@@ -111,29 +111,37 @@ Example:
 * `xkbcommon`
 * `xkbcommon-x11`
 
-## Building
+## How to get it
 
-### To build:
+First clone this repo and cd into its folder like this:
+
+    git clone https://github.com/nsst
+    cd nsst
+
+Then configure and build:
 
     ./configure
-    make
+    make -j
 
 Default config is generally sane.
-Use `./configure CFLAGS='-flto -O3 -march=native'` to make it faster (but also bigger).
-It's more relevant for MIT-SHM backend.
+Alternatively do
 
-I'd suggest PGO to optimize even better:
+    ./configure CFLAGS='-flto -O3 -march=native'
+    make -j
 
-    ./configure CFLAGS='-flto -fprofile-generate -O3 -march=native'
-    make -j
-    nsst # Run it and emulate your typical usage
-    ./configure CFLAGS='-flto -fprofile-use -O3 -march=native'
-    make -j
+if you want to use it the machine you compile it on.
+These more aggressive optimization options works fine.
+It's more relevant for MIT-SHM backend (default one).
+
+XRender backend is slightly faster on more powerfull machines,
+but a lot slower on some corner cases (small font and a lot of true color cells).
+Use `--backend=x11xrender` configure option to enable it.
 
 See `./configure --help` for more.
 
-### To install:
+Finally install:
 
     make install
 
-Default location is `/usr/local/bin/$name`
+Default binary location is `/usr/local/bin/$name`
+Sadly there is no man page yet.
