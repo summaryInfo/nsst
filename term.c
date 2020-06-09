@@ -248,7 +248,8 @@ struct nss_term {
     int fd;
     int printerfd;
 
-    size_t fd_pos;
+    uint8_t *fd_start;
+    uint8_t *fd_end;
     uint8_t fd_buf[NSS_FD_BUF_SZ];
 };
 
@@ -1622,6 +1623,7 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t he
     term->sb_max_caps = nss_config_integer(NSS_ICONFIG_HISTORY_LINES);
     term->vt_version = nss_config_integer(NSS_ICONFIG_VT_VERION);
     term->vt_level = term->vt_version / 100;
+    term->fd_start = term->fd_end = term->fd_buf;
 
     term_load_config(term);
 
@@ -3537,14 +3539,12 @@ static void term_dispatch(nss_term_t *term, nss_char_t ch) {
 }
 
 
-static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Bool show_ctl) {
-    const uint8_t *end = buf + len, *start = buf;
-
-    while (start < end) {
+static void term_write(nss_term_t *term, const uint8_t **start, const uint8_t **end, _Bool show_ctl) {
+    while (*start < *end) {
         nss_char_t ch;
         // Try to handle unencoded C1 bytes even if UTF-8 is enabled
-        if (!(term->mode & nss_tm_utf8) || IS_C1(*start)) ch = *start++;
-        else if (!utf8_decode(&ch, &start, end)) break;
+        if (!(term->mode & nss_tm_utf8) || IS_C1(**start)) ch = *(*start)++;
+        else if (!utf8_decode(&ch, (const uint8_t **)start, *end)) break;
 
         if (show_ctl) {
             if (IS_C1(ch)) {
@@ -3558,32 +3558,41 @@ static ssize_t term_write(nss_term_t *term, const uint8_t *buf, size_t len, _Boo
         }
         term_dispatch(term, ch);
     }
-
-    return start - buf;
 }
 
-ssize_t nss_term_read(nss_term_t *term) {
+
+static ssize_t term_refill(nss_term_t *term) {
     if (term->fd == -1) return -1;
 
-    if (term->mode & nss_tm_scroll_on_output && term->view)
-        term_reset_view(term, 1);
+	ssize_t inc, sz = term->fd_end - term->fd_start;
 
-    ssize_t inc = read(term->fd, term->fd_buf + term->fd_pos, sizeof(term->fd_buf) - term->fd_pos);
-    if (inc < 0) {
+    if (term->fd_start != term->fd_buf) {
+        memmove(term->fd_buf, term->fd_start, sz);
+        term->fd_end = term->fd_buf + sz;
+        term->fd_start = term->fd_buf;
+    }
+
+    if ((inc = read(term->fd, term->fd_end, sizeof(term->fd_buf) - sz)) < 0) {
         warn("Can't read from tty");
         nss_term_hang(term);
         return -1;
     }
-    term->fd_pos += inc;
 
-    ssize_t dec = term_write(term, term->fd_buf, term->fd_pos, 0);
-    term->fd_pos -= dec;
-    if (term->fd_pos)
-        memmove(term->fd_buf, term->fd_buf + dec, term->fd_pos);
+    term->fd_end += inc;
     return inc;
 }
 
-static void tty_write_raw(nss_term_t *term, const uint8_t *buf, ssize_t len) {
+void nss_term_read(nss_term_t *term) {
+    if (term_refill(term) <= 0) return;
+
+    if (term->mode & nss_tm_scroll_on_output && term->view)
+        term_reset_view(term, 1);
+
+    term_write(term, (const uint8_t **)&term->fd_start,
+            (const uint8_t **)&term->fd_end, 0);
+}
+
+inline static void tty_write_raw(nss_term_t *term, const uint8_t *buf, ssize_t len) {
     ssize_t res, lim = TTY_MAX_WRITE;
     struct pollfd pfd = {
         .events = POLLIN | POLLOUT,
@@ -3604,18 +3613,17 @@ static void tty_write_raw(nss_term_t *term, const uint8_t *buf, ssize_t len) {
 
             if (res < (ssize_t)len) {
                 if (len < lim)
-                    lim = nss_term_read(term);
+                    lim = term_refill(term);
                 len -= res;
                 buf += res;
             } else break;
         }
         if (pfd.revents & POLLIN)
-            lim = nss_term_read(term);
+            lim = term_refill(term);
     }
-
 }
 
-void term_tty_write(nss_term_t *term, const uint8_t *buf, size_t len) {
+inline static void term_tty_write(nss_term_t *term, const uint8_t *buf, size_t len) {
     if (term->fd == -1) return;
 
     const uint8_t *next;
@@ -3625,7 +3633,7 @@ void term_tty_write(nss_term_t *term, const uint8_t *buf, size_t len) {
     else while (len) {
         if (*buf == '\r') {
             next = buf + 1;
-            tty_write_raw(term, (uint8_t *)"\r\n", 2);
+            tty_write_raw(term, (const uint8_t *)"\r\n", 2);
         } else {
             next = memchr(buf , '\r', len);
             if (!next) next = buf + len;
@@ -3653,7 +3661,7 @@ static size_t term_encode_c1(nss_term_t *term, const uint8_t *in, uint8_t *out) 
     return fmtp - out;
 }
 
-void term_answerback(nss_term_t *term, const char *str, ...) {
+static void term_answerback(nss_term_t *term, const char *str, ...) {
     static uint8_t fmt[MAX_REPORT], csi[MAX_REPORT];
     va_list vl;
     va_start(vl, str);
@@ -3668,11 +3676,13 @@ void nss_term_sendkey(nss_term_t *term, const uint8_t *str, size_t len) {
     _Bool encode = !len;
     if (!len) len = strlen((char *)str);
 
+    const uint8_t *end = len + str;
     if (term->mode & nss_tm_echo)
-        term_write(term, str, len, 1);
+        term_write(term, (const uint8_t **)&str, &end, 1);
 
     if (!(term->mode & nss_tm_dont_scroll_on_input) && term->view)
         term_reset_view(term, 1);
+
     uint8_t rep[MAX_REPORT];
 
     if (encode) len = term_encode_c1(term, str, rep);

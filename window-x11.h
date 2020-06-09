@@ -116,7 +116,7 @@ struct nss_window {
     nss_term_t *term;
     size_t poll_index;
 
-	// Used for title stack implementation
+    // Used for title stack implementation
     nss_title_stack_item_t *title_top;
     nss_title_stack_item_t *icon_top;
 

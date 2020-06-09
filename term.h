@@ -98,7 +98,7 @@ _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_s
 void nss_term_sendkey(nss_term_t *term, const uint8_t *data, size_t size);
 void nss_term_sendbreak(nss_term_t *term);
 void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount);
-ssize_t nss_term_read(nss_term_t *term);
+void nss_term_read(nss_term_t *term);
 int nss_term_fd(nss_term_t *term);
 void nss_term_hang(nss_term_t *term);
 void nss_term_toggle_numlock(nss_term_t *term);
