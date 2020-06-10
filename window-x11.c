@@ -565,8 +565,8 @@ void nss_window_set_default_props(nss_window_t *win) {
     uint32_t pid = getpid();
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom_net_wm_pid, XCB_ATOM_CARDINAL, 32, 1, &pid);
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom_wm_protocols, XCB_ATOM_ATOM, 32, 1, &ctx.atom_wm_delete_window);
-    const char class[] = "Nsst", *extra;
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(class), class);
+    const char *extra;
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(NSS_CLASS), NSS_CLASS);
     if ((extra = nss_config_string(NSS_SCONFIG_TERM_CLASS)))
         xcb_change_property(con, XCB_PROP_MODE_APPEND, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, strlen(extra), extra);
     uint32_t nhints[] = {
