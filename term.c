@@ -845,6 +845,8 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
             term->sb_top = term->sb_limit++;
             term->scrollback[term->sb_top] = line;
         }
+
+        if (term->view) term->view++;
     } else term_free_line(line);
 }
 
