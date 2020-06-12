@@ -51,6 +51,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"font-size-step", "\t(Font size step in points)", "fontSizeStep", NSS_ICONFIG_FONT_SIZE_STEP},
     {"font-spacing", "\t\t(Additional spacing for individual symbols)", "fontSpacing", NSS_ICONFIG_FONT_SPACING},
     {"force-dpi", "\t\t(DPI value for fonts)", "dpi", NSS_ICONFIG_DPI},
+    {"force-mouse-mod", "\t(Modifer to force mouse action)", "forceMouseMod", NSS_SCONFIG_FORCE_MOUSE_MOD},
     {"force-nrcs", "\t\t(Enable NRCS translation when UTF-8 mode is enabled)", "forceNrcs", NSS_ICONFIG_FORCE_UTF8_NRCS},
     {"foreground", "\t\t(Default foreground color)", "foreground", NSS_CCONFIG_FG},
     {"fps", "\t\t\t(Window refresh rate)", "fps", NSS_ICONFIG_FPS},
@@ -99,6 +100,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"shell", ", -s<value>\t(Shell to start in new instance)", "shell", NSS_SCONFIG_SHELL},
     {"sync-timeout", "\t\t(Syncronous update timeout)", "syncTimeout", NSS_ICONFIG_SYNC_TIME},
     {"tab-width", "\t\t(Initial width of tab character)", "tabWidth", NSS_ICONFIG_TAB_WIDTH},
+    {"term-mod", "\t\t(Meaning of 'T' modifer)", "termMod", NSS_SCONFIG_TERM_MOD},
     {"term-name", ", -D<value>\t(TERM value)", "termName", NSS_SCONFIG_TERM_NAME},
     {"title", ", -T<value>, -t<value> (Initial window title)", "title", NSS_SCONFIG_TITLE},
     {"triple-click-time", "\t(Time gap in milliseconds in witch tree mouse presses will be considered triple)", "trippleClickTime", NSS_ICONFIG_TRIPLE_CLICK_TIME},
@@ -180,6 +182,8 @@ static struct {
     [NSS_SCONFIG_TITLE - NSS_SCONFIG_MIN] = { "Not So Simple Terminal", NULL },
     [NSS_SCONFIG_PRINTER - NSS_SCONFIG_MIN] = { NULL, NULL },
     [NSS_SCONFIG_TERM_CLASS - NSS_SCONFIG_MIN] = { NULL, NULL },
+    [NSS_SCONFIG_FORCE_MOUSE_MOD - NSS_SCONFIG_MIN] = { "T", NULL },
+    [NSS_SCONFIG_TERM_MOD - NSS_SCONFIG_MIN] = {"SC", NULL },
     [NSS_SCONFIG_WORD_SEPARATORS - NSS_SCONFIG_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`", NULL },
 };
 
@@ -319,10 +323,8 @@ const char *nss_config_string(uint32_t opt) {
 void nss_config_set_string(uint32_t opt, const char *val) {
     if (NSS_SCONFIG_MIN <= opt && opt < NSS_SCONFIG_MAX) {
         opt -= NSS_SCONFIG_MIN;
-        if (!val) val = soptions[opt].dflt;
-        if (soptions[opt].val)
-            free(soptions[opt].val);
-        soptions[opt].val = strdup(val);
+        if (soptions[opt].val) free(soptions[opt].val);
+        soptions[opt].val = val ? strdup(val) : NULL;
     } else if (opt < NSS_ICONFIG_MAX) {
         int32_t ival = ioptions[opt - NSS_ICONFIG_MIN].dflt;
         if (!val || sscanf(val, "%"SCNd32, &ival) == 1)

@@ -61,7 +61,7 @@ typedef struct nss_line {
     nss_line_palette_t *pal;
     int16_t width;
     int16_t wrap_at;
-    uint16_t force_damage : 1;
+    uint32_t force_damage : 1;
     nss_cell_t cell[];
 } nss_line_t;
 
@@ -95,7 +95,7 @@ void nss_free_term(nss_term_t *term);
 _Bool nss_term_redraw_dirty(nss_term_t *term);
 void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height);
 void nss_term_focus(nss_term_t *term, _Bool focused);
-_Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button);
+void nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button);
 void nss_term_sendkey(nss_term_t *term, const uint8_t *data, size_t size);
 void nss_term_sendbreak(nss_term_t *term);
 void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount);

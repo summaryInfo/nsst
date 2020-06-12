@@ -102,6 +102,7 @@ typedef struct nss_term nss_term_t;
 typedef struct nss_window nss_window_t;
 void nss_handle_input(nss_key_t k, nss_term_t *term);
 nss_key_t nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode);
+uint32_t nss_input_force_mouse_mask(void);
 void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *val);
 enum nss_shortcut_action nss_input_lookup_hotkey(nss_key_t k);
 

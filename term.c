@@ -4209,32 +4209,27 @@ static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x
     term_update_selection(term, oldstate, old);
 }
 
-_Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
+void nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
     x = MIN(MAX(0, x), term->width - 1);
     y = MIN(MAX(0, y), term->height - 1);
 
-    // TODO: Force selection
-
-    /* Scroll view */
-    if (event == nss_me_press && !(term->mode & nss_tm_altscreen) && (button == 3 || button == 4) && !(mask & nss_ms_modifer_mask)) {
-        nss_term_scroll_view(term, (2 *(button == 3) - 1) * nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));
     /* Report mouse */
-    } else if (term->mode & nss_tm_mouse_mask) {
-        if (term->mode & nss_tm_mouse_x10 && button > 2) return 0;
-        if (!(term->mode & nss_tm_mouse_mask)) return 0;
+    if (term->mode & nss_tm_mouse_mask && (mask & 0xFF) != nss_input_force_mouse_mask()) {
+        if (term->mode & nss_tm_mouse_x10 && button > 2) return;
+        if (!(term->mode & nss_tm_mouse_mask)) return;
 
         if (event == nss_me_motion) {
-            if (!(term->mode & (nss_tm_mouse_many | nss_tm_mouse_motion))) return 0;
-            if (term->mode & nss_tm_mouse_button && term->prev_mouse_button == 3) return 0;
-            if (x == term->prev_mouse_x && y == term->prev_mouse_y) return 0;
+            if (!(term->mode & (nss_tm_mouse_many | nss_tm_mouse_motion))) return;
+            if (term->mode & nss_tm_mouse_button && term->prev_mouse_button == 3) return;
+            if (x == term->prev_mouse_x && y == term->prev_mouse_y) return;
             button = term->prev_mouse_button + 32;
         } else {
             if (button > 6) button += 128 - 7;
             else if (button > 2) button += 64 - 3;
             if (event == nss_me_release) {
-                if (term->mode & nss_tm_mouse_x10) return 0;
+                if (term->mode & nss_tm_mouse_x10) return;
                 /* Don't report wheel relese events */
-                if (button == 64 || button == 65) return 0;
+                if (button == 64 || button == 65) return;
                 if (!(term->mode & nss_tm_mouse_format_sgr)) button = 3;
             }
             term->prev_mouse_button = button;
@@ -4249,23 +4244,23 @@ _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_s
         if (term->mode & nss_tm_mouse_format_sgr) {
             term_answerback(term, CSI"<%"PRIu8";%"PRIu16";%"PRIu16"%c",
                     button, x + 1, y + 1, event == nss_me_release ? 'm' : 'M');
-        } else {
-            if (x >= 223 || y >= 223) return 0;
+        } else if (x < 223 || y < 223) {
             term_answerback(term, CSI"%s%c%c%c",
-                    term->inmode.keyboard_mapping == nss_km_sco ? ">M" : "M", button + ' ', x + 1 + ' ', y + 1 + ' ');
-        }
+                    term->inmode.keyboard_mapping == nss_km_sco ? ">M" : "M",
+                    button + ' ', x + 1 + ' ', y + 1 + ' ');
+        } else return;
 
         term->prev_mouse_x = x;
         term->prev_mouse_y = y;
-        return 1;
-    /* Or else select */
+    /* Scroll view */
+    } else if (event == nss_me_press && (button == 3 || button == 4)) {
+        nss_term_scroll_view(term, (2 *(button == 3) - 1) * nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));
+    /* Select */
     } else if ((event == nss_me_press && button == 0) ||
-               (event == nss_me_motion && mask & nss_ms_button_1) ||
-               (event == nss_me_release && button == 0)) {
-
-        if (event == nss_me_motion && term->vsel.state != nss_sstate_progress &&
-                term->vsel.state != nss_sstate_pressed) return 0;
-        if (event == nss_me_release && term->vsel.state != nss_sstate_progress) return 0;
+               (event == nss_me_motion && mask & nss_ms_button_1 &&
+                    (term->vsel.state == nss_sstate_progress || term->vsel.state == nss_sstate_pressed)) ||
+               (event == nss_me_release && button == 0 &&
+                    (term->vsel.state == nss_sstate_progress))) {
 
         term_change_selection(term, event + 1, x, y, mask & nss_mm_mod1);
 
@@ -4273,14 +4268,10 @@ _Bool nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_s
             term->vsel.targ = term->mode & nss_tm_select_to_clipboard ? nss_ct_clipboard : nss_ct_primary;
             nss_window_set_clip(term->win, term_selection_data(term), NSS_TIME_NOW, term->vsel.targ);
         }
-
-        return 1;
+    /* Paste */
     } else if (button == 1 && event == nss_me_release) {
         nss_window_paste_clip(term->win, nss_ct_primary);
-        return 1;
     }
-
-    return 0;
 }
 
 void nss_term_hang(nss_term_t *term) {

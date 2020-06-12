@@ -129,6 +129,8 @@ enum nss_config_opt {
     NSS_SCONFIG_TITLE,
     NSS_SCONFIG_PRINTER,
     NSS_SCONFIG_WORD_SEPARATORS,
+    NSS_SCONFIG_TERM_MOD,
+    NSS_SCONFIG_FORCE_MOUSE_MOD,
     NSS_SCONFIG_MAX,
 
     NSS_CCONFIG_MIN = NSS_SCONFIG_MAX,
@@ -154,9 +156,9 @@ typedef struct nss_optmap_item {
 } nss_optmap_item_t;
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 84
+#    define OPT_MAP_SIZE 86
 #else
-#    define OPT_MAP_SIZE 85
+#    define OPT_MAP_SIZE 87
 #endif
 
 extern nss_optmap_item_t optmap[OPT_MAP_SIZE];

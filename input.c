@@ -610,40 +610,62 @@ nss_key_t nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode) {
     return k;
 }
 
-void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *c) {
-    uint32_t sym, mask = 0;
-    char *dash;
+static uint32_t decode_mask(const char *c, const char *end) {
+    uint32_t mask = 0;
 
-    /* TODO: Make T, M and A meannings configurable,
+    /* TODO: Make M and A meannings configurable,
      * and query them by names by default */
 
-    if ((dash = strchr(c, '-'))) {
-        while(c < dash) switch(*c++) {
-        case 'T':
-            mask |= nss_mm_control;
-        case 'S':
-            mask |= nss_mm_shift;
-            break;
-        case 'C':
-            mask |= nss_mm_control;
-            break;
-        case 'L':
-            mask |= nss_mm_lock;
-            break;
-        case 'M':
-        case 'A':
-        case '1':
-            mask |= nss_mm_mod1;
-            break;
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-            mask |= nss_mm_mod1 + c[-1] - '1';
-            break;
-        }
+    // This is not thread-safe
+    static _Bool recur = 0;
+
+    while(c < end) switch(*c++) {
+    case 'T':;
+        if (!recur) {
+            const char *tms = nss_config_string(NSS_SCONFIG_TERM_MOD);
+            recur = 1;
+            mask |= decode_mask(tms, tms + strlen(tms));
+            recur = 0;
+        } else mask |= nss_mm_shift | nss_mm_control;
+        break;
+    case 'S':
+        mask |= nss_mm_shift;
+        break;
+    case 'C':
+        mask |= nss_mm_control;
+        break;
+    case 'L':
+        mask |= nss_mm_lock;
+        break;
+    case 'M':
+    case 'A':
+    case '1':
+        mask |= nss_mm_mod1;
+        break;
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+        mask |= nss_mm_mod1 + c[-1] - '1';
+        break;
     }
-    if (dash) c++;
+
+    return mask;
+}
+
+uint32_t nss_input_force_mouse_mask(void) {
+    const char *tmodstr = nss_config_string(NSS_SCONFIG_FORCE_MOUSE_MOD);
+    return decode_mask(tmodstr, tmodstr + strlen(tmodstr));
+}
+
+void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *c) {
+    uint32_t sym, mask = 0;
+    char *dash = strchr(c, '-');
+
+    if (dash) {
+        mask = decode_mask(c, dash);
+        c = dash + 1;
+    }
 
     if ((sym = xkb_keysym_from_name(c, 0)) == XKB_KEY_NoSymbol)
         sym = xkb_keysym_from_name(c, XKB_KEYSYM_CASE_INSENSITIVE);
