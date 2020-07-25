@@ -4,9 +4,6 @@ Until version 1.5
     Special colors
     Option to disable blinking
     Colored glyphs
-    Cursor is not always damaged
-        Only noticed in vimpc
-        Old cursor bar is is left behind
     Dynamically allocated string buffer
         for huge OSC/DSC strings
     Refactor frame timings
