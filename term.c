@@ -741,20 +741,22 @@ void nss_term_damage_lines(nss_term_t *term, nss_coord_t ys, nss_coord_t yd) {
 }
 
 _Bool nss_term_redraw_dirty(nss_term_t *term) {
-    if (MIN(term->c.x, term->width - 1) != term->prev_c_x || term->c.y != term->prev_c_y || term->prev_c_view_changed) {
-        if (!(term->mode & nss_tm_hide_cursor) && !term->view)
-            term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
-        if ((term->prev_c_view_changed || !term->prev_c_hidden) && term->prev_c_y < term->height && term->prev_c_x < term->width)
+    _Bool c_hidden = (term->mode & nss_tm_hide_cursor) || term->view;
+
+    if (MIN(term->c.x, term->width - 1) != term->prev_c_x || term->c.y != term->prev_c_y ||
+            term->prev_c_hidden != c_hidden || term->prev_c_view_changed) {
+        if (!c_hidden) term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr &= ~nss_attrib_drawn;
+        if ((!term->prev_c_hidden || term->prev_c_view_changed) && term->prev_c_y < term->height && term->prev_c_x < term->width)
             term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
     }
 
     term->prev_c_x = MIN(term->c.x, term->width - 1);
     term->prev_c_y = term->c.y;
-    term->prev_c_hidden = (term->mode & nss_tm_hide_cursor) || term->view;
+    term->prev_c_hidden = c_hidden;
     term->prev_c_view_changed = 0;
 
     _Bool cursor = !term->prev_c_hidden &&
-            !(term->screen[term->c.y]->cell[MIN(term->c.x, term->width - 1)].attr & nss_attrib_drawn);
+            !(term->screen[term->prev_c_y]->cell[term->prev_c_x].attr & nss_attrib_drawn);
 
     nss_line_iter_t it = make_screen_iter(term, -term->view, term->height - term->view);
 
