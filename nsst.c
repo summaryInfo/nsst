@@ -199,7 +199,7 @@ static void nss_parse_options(char **argv) {
             }
         }
     next:
-        if(argv[ind]) ind++;
+        if (argv[ind]) ind++;
     }
 
     if (argv[ind]) nss_config_set_argv((const char**)&argv[ind]);

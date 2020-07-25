@@ -90,7 +90,7 @@ static nss_image_t nss_create_image_shm(nss_window_t *win, int16_t width, int16_
 #endif
 
         xcb_void_cookie_t c;
-        if(!win->ren.shm_seg) {
+        if (!win->ren.shm_seg) {
             win->ren.shm_seg = xcb_generate_id(con);
         } else {
             if (rctx.has_shm_pixmaps && win->ren.shm_pixmap)
@@ -220,9 +220,9 @@ static int rect_cmp(const void *a, const void *b) {
 static void optimize_bounds(nss_rect_t *bounds, size_t *boundc, _Bool fine_grained) {
     qsort(bounds, *boundc, sizeof(nss_rect_t), rect_cmp);
     size_t j = 0;
-    for(size_t i = 0; i < *boundc; ) {
+    for (size_t i = 0; i < *boundc; ) {
         bounds[j] = bounds[i];
-        while(++i < *boundc && (bounds[i].y <= bounds[j].y + bounds[j].height)) {
+        while (++i < *boundc && (bounds[i].y <= bounds[j].y + bounds[j].height)) {
             nss_rect_t uni = rect_union(bounds[j], bounds[i]);
             if (fine_grained && bounds[i].y >= bounds[j].y + bounds[j].height &&
                 3*(bounds[j].height*bounds[j].width + bounds[i].height*bounds[i].width)/2 < uni.width*uni.height) break;
@@ -331,7 +331,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
         size_t off = 0, count = 4;
         if (win->focused) {
             if (((win->cursor_type + 1) & ~1) == nss_cursor_bar) {
-                if(marg) {
+                if (marg) {
                     off = 2;
                     rects[2].width = win->cursor_width;
                     rects[2].x -= win->cursor_width - 1;

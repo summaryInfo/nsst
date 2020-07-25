@@ -375,7 +375,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
     for (size_t i = 0; i < rctx.cbufpos; ) {
         rctx.bufpos = 0;
         size_t j = i;
-        while(i < rctx.cbufpos && rctx.cbuffer[i].bg == rctx.cbuffer[j].bg) {
+        while (i < rctx.cbufpos && rctx.cbuffer[i].bg == rctx.cbuffer[j].bg) {
             size_t k = i;
             do i++;
             while (i < rctx.cbufpos && rctx.cbuffer[k].y == rctx.cbuffer[i].y &&
@@ -433,7 +433,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
         int16_t ox = 0, oy = 0;
         size_t j = i;
 
-        while(i < rctx.cbufpos && rctx.cbuffer[i].fg == rctx.cbuffer[j].fg) {
+        while (i < rctx.cbufpos && rctx.cbuffer[i].fg == rctx.cbuffer[j].fg) {
             if (rctx.bufpos + WORDS_IN_MESSAGE * sizeof(uint32_t) >= rctx.bufsize) {
                 uint8_t *new = realloc(rctx.buffer, rctx.bufsize + WORDS_IN_MESSAGE * sizeof(uint32_t));
                 if (!new) break;
@@ -475,7 +475,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
 
     // Draw underline and strikethrough lines
     for (size_t i = 0; i < rctx.cbufpos; ) {
-        while(i < rctx.cbufpos && !rctx.cbuffer[i].underlined && !rctx.cbuffer[i].strikethrough) i++;
+        while (i < rctx.cbufpos && !rctx.cbuffer[i].underlined && !rctx.cbuffer[i].strikethrough) i++;
         if (i >= rctx.cbufpos) break;
         rctx.bufpos = 0;
         size_t j = i;
@@ -529,7 +529,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
         size_t off = 0, count = 4;
         if (win->focused) {
             if (((win->cursor_type + 1) & ~1) == nss_cursor_bar) {
-                if(marg) {
+                if (marg) {
                     off = 2;
                     rects[2].width = win->cursor_width;
                     rects[2].x -= win->cursor_width - 1;

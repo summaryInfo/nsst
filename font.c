@@ -316,7 +316,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
 
     double gamma = nss_config_integer(NSS_ICONFIG_GAMMA) / 10000.0;
 
-    switch(face->glyph->bitmap.pixel_mode) {
+    switch (face->glyph->bitmap.pixel_mode) {
     case FT_PIXEL_MODE_MONO:
         for (size_t i = 0; i < glyph->height; i++)
             for (size_t j = 0; j < glyph->width; j++)
@@ -475,7 +475,7 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, nss_char_t ch, nss_font_a
     size_t h = hash(g);
 
     nss_glyph_t *res = cache->tab[h % cache->caps];
-    for(; res; res = res->next)
+    for (; res; res = res->next)
         if (g == res->g) return res;
 
     nss_glyph_t *new;
@@ -516,7 +516,7 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, nss_char_t ch, nss_font_a
 _Bool nss_cache_is_fetched(nss_glyph_cache_t *cache, nss_char_t ch) {
     size_t h = hash(ch);
     nss_glyph_t *res = cache->tab[h % cache->caps];
-    for(; res; res = res->next)
+    for (; res; res = res->next)
         if (ch == res->g) return 1;
     return 0;
 }

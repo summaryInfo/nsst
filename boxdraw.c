@@ -27,7 +27,7 @@ static void draw_rect(nss_glyph_t * glyph, _Bool lcd, int16_t xs, int16_t ys, in
 
 static void put(nss_glyph_t *glyph, _Bool lcd, int16_t x, int16_t y, uint8_t val) {
     if (!lcd) glyph->data[glyph->stride * y + x] = val;
-    else for(size_t i = 0; i < 4; i++)
+    else for (size_t i = 0; i < 4; i++)
         glyph->data[glyph->stride*y + 4*x + i] = val;
 }
 
@@ -123,10 +123,10 @@ nss_glyph_t *nss_make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t
         if (desc & HR) draw_rect(glyph, lcd, 0, 0, w, h*(desc & 7)/8, 0xFF);
         if (desc & VR) draw_rect(glyph, lcd, w*(7 - (desc & 7))/8, 0, w, h, 0xFF);
         if (desc & LX)
-            for(int16_t i = 0; i < h; i++)
+            for (int16_t i = 0; i < h; i++)
                 put(glyph, lcd, (w*i/h), i, 0xFF);
         if (desc & RX)
-            for(int16_t i = 0; i < h; i++)
+            for (int16_t i = 0; i < h; i++)
                 put(glyph, lcd, w - 1 - (w*i/h), i, 0xFF);
         if (dt1 | dt2)
             for (int16_t i = 0; i < h; i += (1 + dt1))

@@ -239,7 +239,7 @@ static nss_color_t color(uint32_t opt) {
     // to get default xterm colors
     };
 
-    switch(opt) {
+    switch (opt) {
     case NSS_CCONFIG_BG:
     case NSS_CCONFIG_CURSOR_BG:
         return base[0];
@@ -280,7 +280,7 @@ void nss_config_set_integer(uint32_t opt, int32_t val) {
         else if (val < ioptions[opt].min) val = ioptions[opt].min;
         ioptions[opt].val = val;
     } else if (opt < NSS_ICONFIG_MAX) {
-        switch(opt) {
+        switch (opt) {
         case NSS_ICONFIG_INPUT_APPCURSOR: input_mode.appcursor = !!val; break;
         case NSS_ICONFIG_INPUT_APPKEY: input_mode.appkey = !!val; break;
         case NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE: input_mode.backspace_is_del = !!val; break;
@@ -363,7 +363,7 @@ _Bool nss_config_bool(uint32_t opt, _Bool val) {
         ioptions[opt].val = val;
         return 1;
     } else if (opt < NSS_ICONFIG_MAX) {
-        switch(opt) {
+        switch (opt) {
         case NSS_ICONFIG_INPUT_APPCURSOR: input_mode.appcursor = val; break;
         case NSS_ICONFIG_INPUT_APPKEY: input_mode.appkey = val; break;
         case NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE: input_mode.backspace_is_del = val; break;

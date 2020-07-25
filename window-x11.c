@@ -97,7 +97,7 @@ static void load_config(void) {
     }
 
     //optmap is defined in config.c
-    for(size_t i = 0; i < OPT_MAP_SIZE; i++) {
+    for (size_t i = 0; i < OPT_MAP_SIZE; i++) {
         snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", optmap[i].name);
         char *res = NULL;
         if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res))
@@ -987,13 +987,13 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
                 pos = data;
                 size = 0;
                 if (rep->type == ctx.atom_utf8_string) {
-                    while(pos < end) {
+                    while (pos < end) {
                         nss_char_t ch;
                         if (utf8_decode(&ch, (const uint8_t **)&pos, end))
                             buf[size++] = ch;
                     }
                 } else {
-                    while(pos < end)
+                    while (pos < end)
                         size += utf8_encode(*pos++, buf + size, buf + BUFSIZ);
                 }
 

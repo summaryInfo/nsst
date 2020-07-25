@@ -168,7 +168,7 @@ nss_char_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, nss_char_t ch
         return ch;
     case nss_94cs_dec_sup:
     case nss_94cs_dec_sup_graph:
-        switch(ch |= 0x80) {
+        switch (ch |= 0x80) {
         case 0xA8: return U'¤';
         case 0xD7: return U'Œ';
         case 0xDD: return U'Ÿ';
@@ -190,7 +190,7 @@ nss_char_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, nss_char_t ch
         }
         return ch | 0x80;
     case nss_96cs_latin_5:
-        switch(ch |= 0x80) {
+        switch (ch |= 0x80) {
         case 0xD0: ch = U'Ğ'; break;
         case 0xDD: ch = U'İ'; break;
         case 0xDE: ch = U'Ş'; break;

@@ -111,7 +111,7 @@ _Bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end) {
                 }
                 part = (part << 6) + (*(*buf)++ & ~0xC0);
             }
-            if(part >= 0xD800 && part < 0xE000 &&
+            if (part >= 0xD800 && part < 0xE000 &&
                     part >= (uint32_t[]){0x80, 0x800, 0x10000, 0x110000}[len - 1])
                 part = UTF_INVAL;
         }
@@ -165,7 +165,7 @@ nss_color_t parse_color(const uint8_t *str, const uint8_t *end) {
 uint8_t *hex_decode(uint8_t *dst, uint8_t *hex, uint8_t *end) {
     uint8_t val = 0;
     _Bool state = 0;
-    while(hex  < end) {
+    while (hex  < end) {
         val <<= 4;
         if ('0' <= *hex && *hex <= '9')
             val |= *hex - '0';
@@ -190,7 +190,7 @@ static int32_t decode_base64_byte(uint8_t b) {
 
 uint8_t *base64_decode(uint8_t *dst, uint8_t *buf, uint8_t *end) {
     int32_t acc = 0, b, bits = 0;
-    while(buf < end && (b = decode_base64_byte(*buf)) >= 0) {
+    while (buf < end && (b = decode_base64_byte(*buf)) >= 0) {
         acc = (acc << 6) | b;
         if ((bits += 6) > 7) {
             *dst++ = acc >> (bits -= 8);
@@ -199,7 +199,7 @@ uint8_t *base64_decode(uint8_t *dst, uint8_t *buf, uint8_t *end) {
         buf++;
     }
     bits /= 2;
-    while(bits-- && *buf == '=') buf++;
+    while (bits-- && *buf == '=') buf++;
     *dst++ = '\0';
     return buf;
 }
@@ -207,7 +207,7 @@ uint8_t *base64_decode(uint8_t *dst, uint8_t *buf, uint8_t *end) {
 uint8_t *base64_encode(uint8_t *dst, uint8_t *buf, uint8_t *end) {
     static uint8_t conv[]  = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     uint32_t acc = 0, bits = 0, pad = (3 - (end - buf)) % 3;
-    while(buf < end) {
+    while (buf < end) {
         acc = (acc << 8) | *buf++;
         bits += 8;
         while (bits > 5) {
@@ -216,7 +216,7 @@ uint8_t *base64_encode(uint8_t *dst, uint8_t *buf, uint8_t *end) {
         }
     }
     if (bits) *dst++ = conv[acc << (6 - bits)];
-    while(pad--)  *dst++ = '=';
+    while (pad--)  *dst++ = '=';
 
     return dst;
 }

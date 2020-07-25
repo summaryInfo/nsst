@@ -207,7 +207,7 @@ static void modify_others(nss_char_t ch, nss_char_t param, _Bool fmt, nss_reply_
 
 static void modify_cursor(nss_char_t param, nss_char_t level, nss_reply_t *reply) {
     if (!param) return;
-    switch(level) {
+    switch (level) {
     case 4: reply->priv = '>';
     case 3: if (!reply->idx) reply->param[reply->idx++] = 1;
     case 2: reply->init = '\233';
@@ -504,7 +504,7 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
             reply.init = mode.keyboad_vt52 ? '\033' : '\217';
             reply.final = " ABCDEFGHIJKLMNOPQRSTUVWXYZ??????abcdefghijklmnopqrstuvwxyzXXX" [k.sym - XKB_KEY_KP_Space];
             modify_cursor(param, mode.modkey_keypad, &reply);
-            if(mode.keyboad_vt52) reply.priv = '?';
+            if (mode.keyboad_vt52) reply.priv = '?';
             dump_reply(term, &reply);
         } else {
             uint8_t ch = " XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXXXXXXXXXXXXX*+,-./0123456789XXX=" [k.sym - XKB_KEY_KP_Space];
@@ -619,7 +619,7 @@ static uint32_t decode_mask(const char *c, const char *end) {
     // This is not thread-safe
     static _Bool recur = 0;
 
-    while(c < end) switch(*c++) {
+    while (c < end) switch (*c++) {
     case 'T':;
         if (!recur) {
             const char *tms = nss_config_string(NSS_SCONFIG_TERM_MOD);
