@@ -12,7 +12,7 @@ Inspired by [Simple Terminal](https://st.suckless.org/)
     * So it is faster and more lightweight
     * `size` including all loaded shared libs is only 80% of `st` on my system
 * Most escape sequences are already implemented
-* Ful keyboard mode from XTerm
+* Full keyboard mode from XTerm
 * OSC 13001 "Set background opacity"
 * Multiple terminal windows
     * This would be extended to full daemon mode
