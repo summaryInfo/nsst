@@ -1761,7 +1761,7 @@ static void term_dispatch_dsr(nss_term_t *term) {
             term_answerback(term, CSI"0n");
             break;
         case 6: /* Cursor position -- Y;X */
-            term_answerback(term, CSI"%"PRIu16";%"PRIu16"R",
+            term_answerback(term, CSI"%d;%dR",
                     term->c.y - term_min_oy(term) + 1,
                     MIN(term->c.x, term->width - 1) - term_min_ox(term) + 1);
             break;
@@ -1795,6 +1795,96 @@ static void term_dispatch_dcs(nss_term_t *term) {
         default:
             term_esc_dump(term, 0);
         }
+        break;
+    case C('q') | I0('$'): /* DECRQSS */ {
+        if (term->esc.si && term->esc.si < 3) {
+            uint16_t id = term->esc.str[0] | term->esc.str[1] << 8;
+            switch(id) {
+            case 'm': /* SGR */ {
+                char sgr[128] = DCS"1$r0";
+                // Encode attributes
+                if (term->c.cel.attr & nss_attrib_bold) strncat(sgr, ";1", sizeof sgr - 1);
+                if (term->c.cel.attr & nss_attrib_faint) strncat(sgr, ";2", sizeof sgr - 1);
+                if (term->c.cel.attr & nss_attrib_italic) strncat(sgr, ";3", sizeof sgr - 1);
+                if (term->c.cel.attr & nss_attrib_underlined) strncat(sgr, ";4", sizeof sgr - 1);
+                if (term->c.cel.attr & nss_attrib_blink) strncat(sgr, ";6", sizeof sgr - 1);
+                if (term->c.cel.attr & nss_attrib_inverse) strncat(sgr, ";7", sizeof sgr - 1);
+                if (term->c.cel.attr & nss_attrib_invisible) strncat(sgr, ";8", sizeof sgr - 1);
+                if (term->c.cel.attr & nss_attrib_strikethrough) strncat(sgr, ";9", sizeof sgr - 1);
+                size_t len = strlen(sgr);
+                // Encode foreground color
+                if (term->c.cel.fg < 8)
+                    snprintf(sgr + len, sizeof sgr - len, ";%d", 30 + term->c.cel.fg);
+                else if (term->c.cel.fg < 16)
+                    snprintf(sgr + len, sizeof sgr - len, ";%d", 90 + term->c.cel.fg - 8);
+                else if (term->c.cel.fg < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS)
+                    snprintf(sgr + len, sizeof sgr - len, ";38:5:%d", term->c.cel.fg);
+                else if (term->c.cel.fg == NSS_SPECIAL_FG)
+                    strncat(sgr, ";39", sizeof sgr - 1);
+                else // Direct color
+                    snprintf(sgr + len, sizeof sgr - len, ";38:2:%d:%d:%d",
+                            (term->c.fg >> 16) & 0xFF,
+                            (term->c.fg >>  8) & 0xFF,
+                            (term->c.fg >>  0) & 0xFF);
+                len = strlen(sgr);
+                // Encode background color
+                if (term->c.cel.bg < 8)
+                    snprintf(sgr + len, sizeof sgr - len, ";%d", 40 + term->c.cel.bg);
+                else if (term->c.cel.bg < 16)
+                    snprintf(sgr + len, sizeof sgr - len, ";%d", 100 + term->c.cel.bg - 8);
+                else if (term->c.cel.bg < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS)
+                    snprintf(sgr + len, sizeof sgr - len, ";48:5:%d", term->c.cel.bg);
+                else if (term->c.cel.bg == NSS_SPECIAL_BG)
+                    strncat(sgr, ";49", sizeof sgr - 1);
+                else // Direct color
+                    snprintf(sgr + len, sizeof sgr - len, ";48:2:%d:%d:%d",
+                            (term->c.bg >> 16) & 0xFF,
+                            (term->c.bg >>  8) & 0xFF,
+                            (term->c.bg >>  0) & 0xFF);
+                term_answerback(term, "%sm"ST, sgr);
+                break;
+            }
+            case 'r': /* -> DECSTBM */
+                term_answerback(term, DCS"1$r%d;%dr"ST, term->top + 1, term->bottom + 1);
+                break;
+            case 's': /* -> DECSLRM */
+                term_answerback(term, term->vt_level >= 4 ? DCS"1$r%d;%ds"ST :
+                        DCS"0$r"ST, term->left + 1, term->right + 1);
+                break;
+            case 't': /* -> DECSLPP */
+                // Can't report less than 24 lines
+                term_answerback(term, DCS"1$r%dt"ST, MAX(term->height, 24));
+                break;
+            case '|' << 8 | '$': /* -> DECSCPP */
+                // It should be either 80 or 132 despite actual column count
+                // New apps use ioctl(TIOGWINSZ, ...) instead
+                term_answerback(term, DCS"1$r%d$|"ST, term->mode & nss_tm_132cols ? 132 : 80);
+                break;
+            case 'q' << 8 | '"': /* -> DECSCA */
+                term_answerback(term, DCS"1$r%d\"q"ST, term->mode & nss_tm_protected ? 2 :
+                        term->c.cel.attr & nss_attrib_protected ? 1 : 2);
+                break;
+            case 'q' << 8 | ' ': /* -> DECSCUSR */
+                term_answerback(term, DCS"1$r%d q"ST, nss_window_get_cursor(term->win));
+                break;
+            case '|' << 8 | '*': /* -> DECSLNS */
+                term_answerback(term, DCS"1$r%d*|"ST, term->height);
+                break;
+            case 'x' << 8 | '*': /* -> DECSACE */
+                term_answerback(term, term->vt_level < 4 ? DCS"0$r"ST :
+                        DCS"1$r%d*x"ST, term->mode & nss_tm_attr_ext_rectangle ? 2 : 1);
+                break;
+            case 'p' << 8 | '"': /* -> DECSCL */
+                term_answerback(term, DCS"1$r%d%s\"p"ST, 60 + MAX(term->vt_level, 1),
+                        term->vt_level >= 2 ? (term->mode & nss_tm_8bit ? ";2" : ";1") : "");
+                break;
+            default:
+                // Invalid request
+                term_answerback(term, DCS"0$r"ST);
+                term_esc_dump(term, 0);
+            }
+        } else term_esc_dump(term, 0);
+    }
         break;
     default:
         term_esc_dump(term, 0);

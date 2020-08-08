@@ -1,11 +1,11 @@
 Until version 1.5
     Reports
-    XTPOPSGR, XTPUSHSGR, Save restore private mode
-    Special colors
     Option to disable blinking
-    Colored glyphs
     Dynamically allocated string buffer
         for huge OSC/DSC strings
+    XTPOPSGR, XTPUSHSGR, Save restore private mode
+    Special colors
+    Colored glyphs
     Refactor frame timings
         use separate timings for erase,scroll,resize
         just wait for screen update completion?
@@ -138,15 +138,6 @@ Term
         CSI Pt ; Pl ; Pb ; Pr # | -- XTREPORTSGR
         CSI Ps # y -- XTCHECKSUM
         CSI Pi ; Pg ; Pt ; Pl ; Pb ; Pr * y -- DECRQCRA -> DCS"%"PRId32"!~%04X"ST
-        DCS $ q m ST -- DECRQSS -> SGR
-        DCS $ q " p ST -- DECRQSS -> DECSCL
-        DCS $ q SP q ST -- DECRQSS -> DECSCUSR
-        DCS $ q " q ST -- DECRQSS -> DECSCA
-        DCS $ q r ST -- DECRQSS -> DECSTBM
-        DCS $ q s ST -- DECRQSS -> DECSLRM
-        DCS $ q t ST -- DECRQSS -> DECSLPP
-        DCS $ q $ | ST -- DECRQSS -> DECSCPP
-        DCS $ q * | ST -- DECRQSS -> DECSNLS
         DCS 1 $ t Pt ST -- DECRSPS -> DECCIR
         DCS 2 $ t Pt ST -- DECRSPS -> DECTABSR
         CSI Ps $ p -- RQM
