@@ -1,18 +1,14 @@
 Until version 1.5
     Reports
+	Add 'disable 132 cols mode' setting
+    Window operations
+	Checksumms
+    XTPOPSGR, XTPUSHSGR, Save restore private mode
     Option to disable blinking
     Dynamically allocated string buffer
         for huge OSC/DSC strings
-    XTPOPSGR, XTPUSHSGR, Save restore private mode
     Special colors
     Colored glyphs
-    Refactor frame timings
-        use separate timings for erase,scroll,resize
-        just wait for screen update completion?
-            do not redraw if erase/scroll/resize reached
-                or probably just wait until nothing read
-                from master in main loop
-            draw if max frame time reached
 More:
     Refactor config:
         some options are per-instance
@@ -24,15 +20,17 @@ More:
         makes it possible to be (somewhat) compatible with XTerm
         they are unused now
         Use single dash for all options
+    Refactor frame timings
+        use separate timings for erase,scroll,resize
+        just wait for screen update completion?
+            do not redraw if erase/scroll/resize reached
+                or probably just wait until nothing read
+                from master in main loop
+            draw if max frame time reached
     Selections
         How should selections interact with DECLRMM?
     SL,SR
         If the current cursor position is outside of the current scroll region it does nothing???
-    Window operations
-        In window-x11.c:
-            State request
-            Resize request
-            Move request
     Implement named values for options instead of numeric
     Make key modifiers T,A,M configurable
     Query modifiers by names, instead of using predefined?
@@ -140,8 +138,6 @@ Term
         CSI Pi ; Pg ; Pt ; Pl ; Pb ; Pr * y -- DECRQCRA -> DCS"%"PRId32"!~%04X"ST
         DCS 1 $ t Pt ST -- DECRSPS -> DECCIR
         DCS 2 $ t Pt ST -- DECRSPS -> DECTABSR
-        CSI Ps $ p -- RQM
-        CSI ? Ps $ p -- DECRQM
         CSI 0 # w -- DECRQPSR -> Error
         CSI 1 # w -- DECRQPSR -> DECCIR
         CSI 2 # w -- DECRQPSR -> DECTABSR
