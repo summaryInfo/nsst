@@ -1195,7 +1195,8 @@ void nss_context_run(void) {
         for (nss_window_t *win = win_list_head; win; win = win->next) {
             if (TIMEDIFF(win->last_sync, cur) > nss_config_integer(NSS_ICONFIG_SYNC_TIME)*1000LL && win->sync_active)
                 win->sync_active = 0;
-            if (TIMEDIFF(win->last_blink, cur) > nss_config_integer(NSS_ICONFIG_BLINK_TIME)*1000LL && win->active) {
+            if (TIMEDIFF(win->last_blink, cur) > nss_config_integer(NSS_ICONFIG_BLINK_TIME)*1000LL &&
+                    win->active && nss_config_integer(NSS_ICONFIG_ALLOW_BLINKING)) {
                 win->blink_state = !win->blink_state;
                 win->blink_commited = 0;
                 win->last_blink = cur;

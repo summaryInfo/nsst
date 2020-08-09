@@ -24,6 +24,7 @@
 
 nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"allow-alternate", "\t(Enable alternate screen)", "allowAlternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
+    {"allow-blinking", "\t\t(Allow blinking text and cursor)", "allowBlinking", NSS_ICONFIG_ALLOW_BLINKING},
     {"allow-modify-edit-keypad", " (Allow modifing edit keypad keys)", "modkeyAllowEditKeypad", NSS_ICONFIG_INPUT_MALLOW_EDIT},
     {"allow-modify-function", "\t(Allow modifing function keys)", "modkeyAllowFunction", NSS_ICONFIG_INPUT_MALLOW_FUNCTION},
     {"allow-modify-keypad", "\t(Allow modifing keypad keys)", "modkeyAllowKeypad", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
@@ -169,6 +170,7 @@ static struct {
     [NSS_ICONFIG_KEEP_CLIPBOARD - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
     [NSS_ICONFIG_KEEP_SELECTION - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
     [NSS_ICONFIG_SELECT_TO_CLIPBOARD - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_ALLOW_BLINKING - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
 };
 
 static struct {

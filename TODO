@@ -1,10 +1,8 @@
 Until version 1.5
     Reports
-	Add 'disable 132 cols mode' setting
     Window operations
-	Checksumms
+    Checksumms
     XTPOPSGR, XTPUSHSGR, Save restore private mode
-    Option to disable blinking
     Dynamically allocated string buffer
         for huge OSC/DSC strings
     Special colors
