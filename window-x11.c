@@ -365,6 +365,60 @@ void nss_window_delay(nss_window_t *win) {
     clock_gettime(NSS_CLOCK, &win->last_scroll);
 }
 
+void nss_window_resize(nss_window_t *win, int16_t width, int16_t height) {
+    //TODO
+}
+void nss_window_move(nss_window_t *win, int16_t x, int16_t y) {
+    //TODO
+
+}
+void nss_window_action(nss_window_t *win, nss_window_action_t act) {
+    //TODO
+}
+
+void nss_window_get_dim_ext(nss_window_t *win, nss_window_dim_type_t which, int16_t *width, int16_t *height) {
+    int16_t x = 0, y = 0;
+    switch (which) {
+        case nss_dt_window_position:
+        case nss_dt_grid_position:;
+            xcb_get_geometry_cookie_t gc = xcb_get_geometry(con, win->wid);
+            xcb_get_geometry_reply_t *rep = xcb_get_geometry_reply(con, gc, NULL);
+            if (rep) {
+                x = rep->x;
+                y = rep->y;
+                free(rep);
+            }
+            if (which == nss_dt_grid_position) {
+                x += win->left_border;
+                y += win->top_border;
+            }
+            break;
+        case nss_dt_grid_size:
+            x = win->char_width * win->cw;
+            y = (win->char_height + win->char_depth) * win->ch;
+            break;
+        case nss_dt_screen_size:
+            x = ctx.screen->width_in_pixels;
+            y = ctx.screen->height_in_pixels;
+            break;
+        case nss_dt_cell_size:
+            x = win->char_width;
+            y = win->char_depth + win->char_height;
+            break;
+        case nss_dt_border:
+            x = win->left_border;
+            y = win->top_border;
+            break;
+    }
+
+    if (width) *width = x;
+    if (height) *height = y;
+}
+
+_Bool nss_window_is_mapped(nss_window_t *win) {
+    return win->active;
+}
+
 static int32_t nss_window_get_font_size(nss_window_t *win) {
     return win->font_size;
 }

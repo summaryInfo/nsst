@@ -59,6 +59,29 @@ typedef enum nss_title_target {
     nss_tt_icon_label = 2,
 } nss_title_target_t;
 
+typedef enum nss_window_action {
+    nss_wa_minimize,
+    nss_wa_undo_minimize,
+    nss_wa_maximize,
+    nss_wa_maximize_width,
+    nss_wa_maximize_height,
+    nss_wa_undo_maximize,
+    nss_wa_fullscreen,
+    nss_wa_undo_fullscreen,
+    nss_wa_toggle_fullscreen,
+    nss_wa_lower,
+    nss_wa_raise,
+} nss_window_action_t;
+
+typedef enum nss_window_dim_type {
+    nss_dt_window_position,
+    nss_dt_grid_position,
+    nss_dt_grid_size,
+    nss_dt_screen_size,
+    nss_dt_cell_size,
+    nss_dt_border,
+} nss_window_dim_type_t;
+
 typedef struct nss_window nss_window_t;
 typedef struct nss_line_iter nss_line_iter_t;
 typedef uint32_t nss_color_t;
@@ -75,6 +98,10 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
 _Bool nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coord_t height, _Bool delay);
 void nss_window_paste_clip(nss_window_t *win, nss_clipboard_target_t target);
 void nss_window_delay(nss_window_t *win);
+void nss_window_resize(nss_window_t *win, int16_t width, int16_t height);
+void nss_window_move(nss_window_t *win, int16_t x, int16_t y);
+void nss_window_action(nss_window_t *win, nss_window_action_t act);
+_Bool nss_window_is_mapped(nss_window_t *win);
 
 void nss_window_set_title(nss_window_t *win, nss_title_target_t which, const char *name, _Bool utf8);
 void nss_window_push_title(nss_window_t *win, nss_title_target_t which);
@@ -86,6 +113,7 @@ void nss_window_set_mouse(nss_window_t *win, _Bool enabled);
 void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor_fg);
 void nss_window_set_cursor(nss_window_t *win, nss_cursor_type_t type);
 void nss_window_get_dim(nss_window_t *win, int16_t *width, int16_t *height);
+void nss_window_get_dim_ext(nss_window_t *win, nss_window_dim_type_t which, int16_t *width, int16_t *height);
 nss_cursor_type_t nss_window_get_cursor(nss_window_t *win);
 void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, nss_clipboard_target_t target);
 void nss_window_set_sync(nss_window_t *win, _Bool state);

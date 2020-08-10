@@ -67,6 +67,7 @@ struct nss_window {
     struct nss_window *prev, *next;
 
     xcb_window_t wid;
+    int32_t screen;
     xcb_gcontext_t gc;
     xcb_event_mask_t ev_mask;
 
