@@ -1660,11 +1660,12 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t he
 static void term_dispatch_da(nss_term_t *term, param_t mode) {
     if (PARAM(0, 0)) return;
     switch (mode) {
-    case P('='):
+    case P('='): /* Tertinary DA */
         CHK_VT(4);
+        /* DECREPTUI */
         term_answerback(term, DCS"!|00000000"ST);
         break;
-    case P('>'): {
+    case P('>'): /* Secondary DA */ {
         param_t ver = 0;
         switch (term->vt_version) {
         case 100: ver = 0; break;
@@ -1683,7 +1684,7 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
         term_answerback(term, CSI">%"PRIu32";10;0c", ver);
         break;
     }
-    default:
+    default: /* Primary DA */
         if (term->vt_version < 200) {
             switch (term->vt_version) {
             case 125: term_answerback(term, CSI"?12;2;0;10c"); break;
@@ -1708,9 +1709,10 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
              *28 - Rectangular editing
              *29 - ANSI text locator (i.e., DEC Locator mode).
              */
-            term_answerback(term, CSI"?%u;1;2;6%s;9;22%sc",
+            term_answerback(term, CSI"?%u;1;2;6%s;9%s;22%sc",
                     60 + term->vt_version/100,
                     term->inmode.keyboard_mapping == nss_km_vt220 ? ";8" : "",
+                    term->vt_level >= 4 ? ";21" : "",
                     term->vt_level >= 4 ? ";28" : "");
         }
     }
@@ -1741,8 +1743,7 @@ static void term_dispatch_dsr(nss_term_t *term) {
             break;
         case 62: /* DECMSR, Macro space -- No data, no space for macros */
             CHK_VT(4);
-            //TODO Why is it hex?
-            term_answerback(term, CSI"0000*{");
+            term_answerback(term, CSI"0*{");
             break;
         case 63: /* DECCKSR, Memory checksum -- 0000 (hex) */
             CHK_VT(4);
