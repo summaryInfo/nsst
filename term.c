@@ -2676,7 +2676,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_scroll(term, term_min_y(term), -PARAM(0, 1), 0);
         break;
     case C('X'): /* ECH */
-        term_protective_erase(term, term->c.x, term->c.y, term->c.x + PARAM(0, 1), term->c.y + 1, 0);
+        term_erase(term, term->c.x, term->c.y, term->c.x + PARAM(0, 1), term->c.y + 1, 0);
         term_move_to(term, term->c.x, term->c.y);
         break;
     case C('Z'): /* CBT */
