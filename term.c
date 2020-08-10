@@ -2122,6 +2122,25 @@ static void term_dispatch_osc(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
+static void term_request_resize(nss_term_t *term, int16_t w, int16_t h, _Bool in_cells) {
+    int16_t cur_w, cur_h, scr_w, scr_h;
+    nss_window_get_dim(term->win, &cur_w, &cur_h);
+    nss_window_get_dim_ext(term->win, nss_dt_screen_size, &scr_w, &scr_h);
+
+    if (in_cells) {
+        int16_t ce_w, ce_h, bo_w, bo_h;
+        nss_window_get_dim_ext(term->win, nss_dt_cell_size, &ce_w, &ce_h);
+        nss_window_get_dim_ext(term->win, nss_dt_border, &bo_w, &bo_h);
+        if (w > 0) w = w * ce_w + bo_w * 2;
+        if (h > 0) h = w * ce_h + bo_h * 2;
+    }
+
+    w = !w ? scr_w : w < 0 ? cur_w : w;
+    h = !h ? scr_h : h < 0 ? cur_h : h;
+
+    nss_window_resize(term->win, w, h);
+}
+
 static void term_dispatch_srm(nss_term_t *term, _Bool set) {
     if (term->esc.selector & P_MASK) {
         for (size_t i = 0; i < term->esc.i; i++) {
@@ -2146,14 +2165,14 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 }
                 break;
             case 3: /* DECCOLM */
-                //Just clear screen
                 if (term->mode & nss_tm_disable_132cols) {
                     term_reset_margins(term);
                     term_move_to(term, 0, 0);
                     if (!(term->mode & nss_tm_132_preserve_display))
                         term_erase(term, 0, 0, term->width, term->height, 0);
+                    if (nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS))
+                        term_request_resize(term, -1, set ? 132 : 80, 1);
                     ENABLE_IF(set, term->mode, nss_tm_132cols);
-                    //TODO Resize window to 80/132 cols if nss_tm_132cols is set
                 }
                 break;
             case 4: /* DECSCLM */
@@ -2523,8 +2542,6 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
     term->c.x += width;
 }
 
-
-
 static void term_dispatch_csi(nss_term_t *term) {
     // Fixup parameter count
     term->esc.i += term->esc.param[term->esc.i] >= 0;
@@ -2814,23 +2831,9 @@ static void term_dispatch_csi(nss_term_t *term) {
             nss_window_move(term->win, PARAM(1,0), PARAM(2,0));
             break;
         case 4: /* Resize */
-        case 8: /* Resize (in cell units) */ {
-            int16_t cur_w, cur_h, scr_w, scr_h;
-            nss_window_get_dim(term->win, &cur_w, &cur_h);
-            nss_window_get_dim_ext(term->win, nss_dt_screen_size, &scr_w, &scr_h);
-            int16_t w = term->esc.param[1], h = term->esc.param[2];
-            if (pa == 8) {
-                int16_t ce_w, ce_h, bo_w, bo_h;
-                nss_window_get_dim_ext(term->win, nss_dt_cell_size, &ce_w, &ce_h);
-                nss_window_get_dim_ext(term->win, nss_dt_border, &bo_w, &bo_h);
-                if (w > 0) w = w * ce_w + bo_w * 2;
-                if (h > 0) h = w * ce_h + bo_h * 2;
-            }
-            w = !w ? scr_w : w < 0 ? cur_w : w;
-            h = !h ? scr_h : h < 0 ? cur_h : h;
-            nss_window_resize(term->win, w, h);
+        case 8: /* Resize (in cell units) */
+            term_request_resize(term, term->esc.param[1], term->esc.param[2], pa == 8);
             break;
-        }
         case 5: /* Raise */
             nss_window_action(term->win, nss_wa_raise);
             break;
@@ -2970,11 +2973,7 @@ static void term_dispatch_csi(nss_term_t *term) {
             term_esc_dump(term, 0);
             break;
         default:; /* Resize window to PARAM(0, 24) lines */
-            int16_t wx, by, cy;
-            nss_window_get_dim(term->win, &wx, NULL);
-            nss_window_get_dim_ext(term->win, nss_dt_border, NULL, &by);
-            nss_window_get_dim_ext(term->win, nss_dt_cell_size, NULL, &cy);
-            nss_window_resize(term->win, wx, 2*by + cy * pa);
+            term_request_resize(term, -1, PARAM(0, 24), 1);
         }
         break;
     }
@@ -3311,9 +3310,15 @@ static void term_dispatch_csi(nss_term_t *term) {
             term_esc_dump(term, 0);
         }
         break;
+    case C('|') | I0('$'): /* DECSCPP */
+        if (nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS))
+            term_request_resize(term, PARAM(0, 80), -1, 1);
+        break;
+    case C('|') | I0('*'): /* DECSNLS */
+        if (nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS))
+            term_request_resize(term, -1, PARAM(0, 24), 1);
+        break;
     //case C('y') | I0('*'): /* DECRQCRA */
-    //    break;
-    //case C('|') | I0('*'): /* DECSNLS */
     //    break;
     default:
         term_esc_dump(term, 0);
@@ -3323,7 +3328,7 @@ static void term_dispatch_csi(nss_term_t *term) {
 }
 
 static enum nss_char_set parse_nrcs(param_t selector, _Bool is96, uint16_t vt_level, _Bool nrcs) {
-    #define NRC {if (!nrcs) return -1;}
+#define NRC {if (!nrcs) return -1;}
     selector &= (I1_MASK | E_MASK);
     if (!is96) {
         switch (vt_level) {
