@@ -1,7 +1,6 @@
 Until version 1.5
     Reports
-    Window operations
-    Checksumms
+    Checksums
     XTPOPSGR, XTPUSHSGR, Save restore private mode
     Dynamically allocated string buffer
         for huge OSC/DSC strings
@@ -96,44 +95,11 @@ Term
         CSI Ps ' | -- DECRQLP ->  CSI Pe ; Pb ; Pr ; Pc ; Pp & w
     Hightlight tracking
         CSI Ps ; Ps ; Ps ; Ps ; Ps T
-    Window operations
-        CSI 1 ; 0 ; 0 t -- Deiconify
-        CSI 2 ; 0 ; 0 t -- Iconfiy
-        CSI 3 ; Px ; Py t -- Mode to x ; y
-        CSI 4 ; Ph ; Pw t -- Resize (in pixels), defaults are current, zero are fullscreen
-        CSI 5 ; 0 ; 0 t -- Raise
-        CSI 6 ; 0 ; 0 t -- Lower
-        CSI 7 ; 0 ; 0 t -- Refresh
-        CSI 8 ; Px ; Py t -- Resize (in chars), defaults are current, zero are fullscreen
-        CSI 9 ; 0 ; 0 t -- Restore maximized
-        CSI 9 ; 1 ; 0 t -- Maximize
-        CSI 9 ; 2 ; 0 t -- Maximize vertically
-        CSI 9 ; 3 ; 0 t -- Maximize horizontally
-        CSI 10 ; 0 ; 0 t -- Undo fullscreen
-        CSI 10 ; 1 ; 0 t -- Set fullscreen
-        CSI 10 ; 2 ; 0 t -- Toggle fullscreen
-        CSI 11 ; 0 ; 0 t -- Report state (CSI 1 t/ CSI 2 t -- mapped/unmapped)
-        CSI 13 ; 0 ; 0 t -- Report position (as uint16_t, two's complement) -> CSI 3 ; Px ; Py t
-        CSI 13 ; 2 ; 0 t -- Report text area position -> CSI 3 ; Px ; Py t
-        CSI 14 ; 0 ; 0 t -- Report text area size in pixels -> CSI 4 ; Ph ; Pw t
-        CSI 14 ; 2 ; 0 t -- Report window size in pixels -> CSI 4 ; Ph ; Pw t
-        CSI 15 ; 0 ; 0 t -- Report screen size in pixels -> CSI 5 ; Ph ; Pw t
-        CSI 16 ; 0 ; 0 t -- Report cell size in pixels -> CSI 6 ; Ph ; Pw t
-        CSI 18 ; 0 ; 0 t -- Report text area size in chars -> CSI 8 ; Ph ; Pw t
-        CSI 19 ; 0 ; 0 t -- Report screen size in chars -> CSI 9 ; Ph ; Pw t
-        CSI Ps t -- Ps > 23,Resize window to Ps lines
-        CSI Ps $ | -- DECSCPP
-        CSI Ps * | -- DECSNLS
-        CSI > Ps p -- Pointer mode
-        DCS + Q Pt ST -- XTGETXRES -> DCS Ps + R Pt ST
-        OSC I Pt ST -- Set icon XPM file
-        OSC 13 Pt ST -- Set mouse foreground color
-        OSC 13 Pt ST -- Set mouse background color
-        OSC 3 ; Pt ST -- Set X property
-    Reports
-        CSI Pt ; Pl ; Pb ; Pr # | -- XTREPORTSGR
+	Checksums
         CSI Ps # y -- XTCHECKSUM
         CSI Pi ; Pg ; Pt ; Pl ; Pb ; Pr * y -- DECRQCRA -> DCS"%"PRId32"!~%04X"ST
+    Reports
+        CSI Pt ; Pl ; Pb ; Pr # | -- XTREPORTSGR
         DCS 1 $ t Pt ST -- DECRSPS -> DECCIR
         DCS 2 $ t Pt ST -- DECRSPS -> DECTABSR
         CSI 0 # w -- DECRQPSR -> Error
@@ -160,6 +126,12 @@ Term
         OSC 14 Pt ST -- Set mouse foreground color
         OSC 113 Pt ST -- Reset color mouse foreground color
         OSC 114 Pt ST -- Reset color mouse background color
+        CSI > Ps p -- Pointer mode
+        DCS + Q Pt ST -- XTGETXRES -> DCS Ps + R Pt ST
+        OSC I Pt ST -- Set icon XPM file
+        OSC 13 Pt ST -- Set mouse foreground color
+        OSC 13 Pt ST -- Set mouse background color
+        OSC 3 ; Pt ST -- Set X property
     Bell
         CSI Ps SP t -- DECSWBV
         CSI Ps SP u -- DECSMBV
