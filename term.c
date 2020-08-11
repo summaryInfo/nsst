@@ -2543,6 +2543,169 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
     term->c.x += width;
 }
 
+static void term_dispatch_window_op(nss_term_t *term) {
+    param_t pa = PARAM(0, 24);
+    // Only title operations allowed by default
+    if (!nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS) &&
+            (pa < 20 || pa > 23)) return;
+
+    switch (pa) {
+    case 1: /* Undo minimize */
+        nss_window_action(term->win, nss_wa_undo_minimize);
+        break;
+    case 2: /* Minimize */
+        nss_window_action(term->win, nss_wa_minimize);
+        break;
+    case 3: /* Move */
+        nss_window_move(term->win, PARAM(1,0), PARAM(2,0));
+        break;
+    case 4: /* Resize */
+    case 8: /* Resize (in cell units) */
+        term_request_resize(term, term->esc.param[1], term->esc.param[2], pa == 8);
+        break;
+    case 5: /* Raise */
+        nss_window_action(term->win, nss_wa_raise);
+        break;
+    case 6: /* Lower */
+        nss_window_action(term->win, nss_wa_lower);
+        break;
+    case 7: /* Refresh */
+        nss_term_damage_lines(term, 0, term->height);
+        break;
+    case 9: /* Maximize operations */ {
+        nss_window_action_t act = -1;
+
+        switch(PARAM(1, 0)) {
+        case 0: /* Undo maximize */
+            act = nss_wa_undo_maximize;
+            break;
+        case 1: /* Maximize */
+            act = nss_wa_maximize;
+            break;
+        case 2: /* Maximize vertically */
+            act = nss_wa_maximize_height;
+            break;
+        case 3: /* Maximize horizontally */
+            act = nss_wa_maximize_width;
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        if (act >= 0) nss_window_action(term->win, act);
+        break;
+    }
+    case 10: /* Fullscreen operations */ {
+        nss_window_action_t act = -1;
+
+        switch(PARAM(1, 0)) {
+        case 0: /* Undo fullscreen */
+            act = nss_wa_undo_fullscreen;
+            break;
+        case 1: /* Fullscreen */
+            act = nss_wa_fullscreen;
+            break;
+        case 2: /* Toggle fullscreen */
+            act = nss_wa_toggle_fullscreen;
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        if (act >= 0) nss_window_action(term->win, act);
+        break;
+    }
+    case 11: /* Report state */
+        term_answerback(term, CSI"%dt", 1 + !nss_window_is_mapped(term->win));
+        break;
+    case 13: /* Report position opetations */
+        switch(PARAM(1,0)) {
+            int16_t x, y;
+        case 0: /* Report window position */
+            nss_window_get_dim_ext(term->win, nss_dt_window_position, &x, &y);
+            term_answerback(term, CSI"3;%d;%dt", x, y);
+            break;
+        case 2: /* Report grid position */
+            nss_window_get_dim_ext(term->win, nss_dt_grid_position, &x, &y);
+            term_answerback(term, CSI"3;%d;%dt", x, y);
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        break;
+    case 14: /* Report size operations */
+        switch(PARAM(1,0)) {
+            int16_t x, y;
+        case 0: /* Report grid size */
+            nss_window_get_dim_ext(term->win, nss_dt_grid_size, &x, &y);
+            term_answerback(term, CSI"4;%d;%dt", x, y);
+            break;
+        case 2: /* Report window size */
+            nss_window_get_dim(term->win, &x, &y);
+            term_answerback(term, CSI"4;%d;%dt", x, y);
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        break;
+    case 15: /* Report screen size */ {
+        int16_t x, y;
+        nss_window_get_dim_ext(term->win, nss_dt_screen_size, &x, &y);
+        term_answerback(term, CSI"5;%d;%dt", x, y);
+        break;
+    }
+    case 16: /* Report cell size */ {
+        int16_t x, y;
+        nss_window_get_dim_ext(term->win, nss_dt_cell_size, &x, &y);
+        term_answerback(term, CSI"6;%d;%dt", x, y);
+        break;
+    }
+    case 18: /* Report grid size (in cell units) */
+        term_answerback(term, CSI"8;%d;%dt", term->width, term->height);
+        break;
+    case 19: /* Report screen size (in cell units) */ {
+        int16_t s_w, s_h, c_w, c_h;
+        nss_window_get_dim_ext(term->win, nss_dt_screen_size, &s_w, &s_h);
+        nss_window_get_dim_ext(term->win, nss_dt_cell_size, &c_w, &c_h);
+        term_answerback(term, CSI"9;%d;%dt", s_w/c_w, s_h/c_h);
+        break;
+    }
+    case 20: /* Report icon label */
+        term_answerback(term, OSC"L%s"ST, nss_window_get_title(term->win, nss_tt_icon_label));
+        break;
+    case 21: /* Report title */
+        term_answerback(term, OSC"l%s"ST, nss_window_get_title(term->win, nss_tt_title));
+        break;
+    case 22: /* Save */
+        switch (PARAM(1, 0)) {
+        case 0: /* Title and icon label */
+        case 1: /* Icon label */
+        case 2: /* Title */
+            nss_window_push_title(term->win, 3 - PARAM(1, 0));
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        break;
+    case 23: /* Restore */
+        switch (PARAM(1, 0)) {
+        case 0: /* Title and icon label */
+        case 1: /* Icon label */
+        case 2: /* Title */
+            nss_window_pop_title(term->win, 3 - PARAM(1, 0));
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        break;
+    case 0:
+    case 12:
+    case 17: /* Invalid */
+        term_esc_dump(term, 0);
+        break;
+    default: /* Resize window to PARAM(0, 24) lines */
+        term_request_resize(term, -1, PARAM(0, 24), 1);
+    }
+}
+
 static void term_dispatch_csi(nss_term_t *term) {
     // Fixup parameter count
     term->esc.i += term->esc.param[term->esc.i] >= 0;
@@ -2814,170 +2977,9 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     //case C('s') | P('?'): /* XSAVE, Save DEC privite mode */
     //    break;
-    case C('t'): /* XWINOPS, xterm */ {
-        param_t pa = PARAM(0, 24);
-
-        // Only title operations allowed by default
-        if (!nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS) &&
-                (pa < 20 || pa > 23)) break;
-
-        switch (pa) {
-        case 1: /* Undo minimize */
-            nss_window_action(term->win, nss_wa_undo_minimize);
-            break;
-        case 2: /* Minimize */
-            nss_window_action(term->win, nss_wa_minimize);
-            break;
-        case 3: /* Move */
-            nss_window_move(term->win, PARAM(1,0), PARAM(2,0));
-            break;
-        case 4: /* Resize */
-        case 8: /* Resize (in cell units) */
-            term_request_resize(term, term->esc.param[1], term->esc.param[2], pa == 8);
-            break;
-        case 5: /* Raise */
-            nss_window_action(term->win, nss_wa_raise);
-            break;
-        case 6: /* Lower */
-            nss_window_action(term->win, nss_wa_lower);
-            break;
-        case 7: /* Refresh */
-            nss_term_damage_lines(term, 0, term->height);
-            break;
-        case 9: /* Maximize operations */ {
-            nss_window_action_t act = -1;
-
-            switch(PARAM(1, 0)) {
-            case 0: /* Undo maximize */
-                act = nss_wa_undo_maximize;
-                break;
-            case 1: /* Maximize */
-                act = nss_wa_maximize;
-                break;
-            case 2: /* Maximize vertically */
-                act = nss_wa_maximize_height;
-                break;
-            case 3: /* Maximize horizontally */
-                act = nss_wa_maximize_width;
-                break;
-            default:
-                term_esc_dump(term, 0);
-            }
-            if (act >= 0) nss_window_action(term->win, act);
-            break;
-        }
-        case 10: /* Fullscreen operations */ {
-            nss_window_action_t act = -1;
-
-            switch(PARAM(1, 0)) {
-            case 0: /* Undo fullscreen */
-                act = nss_wa_undo_fullscreen;
-                break;
-            case 1: /* Fullscreen */
-                act = nss_wa_fullscreen;
-                break;
-            case 2: /* Toggle fullscreen */
-                act = nss_wa_toggle_fullscreen;
-                break;
-            default:
-                term_esc_dump(term, 0);
-            }
-            if (act >= 0) nss_window_action(term->win, act);
-            break;
-        }
-        case 11: /* Report state */
-            term_answerback(term, CSI"%dt", 1 + !nss_window_is_mapped(term->win));
-            break;
-        case 13: /* Report position opetations */
-            switch(PARAM(1,0)) {
-                int16_t x, y;
-            case 0: /* Report window position */
-                nss_window_get_dim_ext(term->win, nss_dt_window_position, &x, &y);
-                term_answerback(term, CSI"3;%d;%dt", x, y);
-                break;
-            case 2: /* Report grid position */
-                nss_window_get_dim_ext(term->win, nss_dt_grid_position, &x, &y);
-                term_answerback(term, CSI"3;%d;%dt", x, y);
-                break;
-            default:
-                term_esc_dump(term, 0);
-            }
-            break;
-        case 14: /* Report size operations */
-            switch(PARAM(1,0)) {
-                int16_t x, y;
-            case 0: /* Report grid size */
-                nss_window_get_dim_ext(term->win, nss_dt_grid_size, &x, &y);
-                term_answerback(term, CSI"4;%d;%dt", x, y);
-                break;
-            case 2: /* Report window size */
-                nss_window_get_dim(term->win, &x, &y);
-                term_answerback(term, CSI"4;%d;%dt", x, y);
-                break;
-            default:
-                term_esc_dump(term, 0);
-            }
-            break;
-        case 15: /* Report screen size */ {
-            int16_t x, y;
-            nss_window_get_dim_ext(term->win, nss_dt_screen_size, &x, &y);
-            term_answerback(term, CSI"5;%d;%dt", x, y);
-            break;
-        }
-        case 16: /* Report cell size */ {
-            int16_t x, y;
-            nss_window_get_dim_ext(term->win, nss_dt_cell_size, &x, &y);
-            term_answerback(term, CSI"6;%d;%dt", x, y);
-            break;
-        }
-        case 18: /* Report grid size (in cell units) */
-            term_answerback(term, CSI"8;%d;%dt", term->width, term->height);
-            break;
-        case 19: /* Report screen size (in cell units) */ {
-            int16_t s_w, s_h, c_w, c_h;
-            nss_window_get_dim_ext(term->win, nss_dt_screen_size, &s_w, &s_h);
-            nss_window_get_dim_ext(term->win, nss_dt_cell_size, &c_w, &c_h);
-            term_answerback(term, CSI"9;%d;%dt", s_w/c_w, s_h/c_h);
-            break;
-        }
-        case 20: /* Report icon label */
-            term_answerback(term, OSC"L%s"ST, nss_window_get_title(term->win, nss_tt_icon_label));
-            break;
-        case 21: /* Report title */
-            term_answerback(term, OSC"l%s"ST, nss_window_get_title(term->win, nss_tt_title));
-            break;
-        case 22: /* Save */
-            switch (PARAM(1, 0)) {
-            case 0: /* Title and icon label */
-            case 1: /* Icon label */
-            case 2: /* Title */
-                nss_window_push_title(term->win, 3 - PARAM(1, 0));
-                break;
-            default:
-                term_esc_dump(term, 0);
-            }
-            break;
-        case 23: /* Restore */
-            switch (PARAM(1, 0)) {
-            case 0: /* Title and icon label */
-            case 1: /* Icon label */
-            case 2: /* Title */
-                nss_window_pop_title(term->win, 3 - PARAM(1, 0));
-                break;
-            default:
-                term_esc_dump(term, 0);
-            }
-            break;
-        case 0:
-        case 12:
-        case 17: /* Invalid */
-            term_esc_dump(term, 0);
-            break;
-        default:; /* Resize window to PARAM(0, 24) lines */
-            term_request_resize(term, -1, PARAM(0, 24), 1);
-        }
+    case C('t'): /* XWINOPS, xterm */
+        term_dispatch_window_op(term);
         break;
-    }
     case C('t') | P('>'):/* Set title mode, xterm */
         term_dispatch_tmode(term, 1);
         break;
