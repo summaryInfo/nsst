@@ -1,12 +1,13 @@
 Until version 1.5
-    Reports
     Checksums
-    XTPOPSGR, XTPUSHSGR, Save restore private mode
+    XTPOPSGR, XTPUSHSGR, XTSAVE, XTRESTORE, XTREPORTSGR
     Dynamically allocated string buffer
         for huge OSC/DSC strings
+More:
+    Window operations
+        Root window messages does not work?
     Special colors
     Colored glyphs
-More:
     Refactor config:
         some options are per-instance
             needs to be updated on reload
@@ -95,24 +96,19 @@ Term
         CSI Ps ' | -- DECRQLP ->  CSI Pe ; Pb ; Pr ; Pc ; Pp & w
     Hightlight tracking
         CSI Ps ; Ps ; Ps ; Ps ; Ps T
-	Checksums
+    Checksums
         CSI Ps # y -- XTCHECKSUM
         CSI Pi ; Pg ; Pt ; Pl ; Pb ; Pr * y -- DECRQCRA -> DCS"%"PRId32"!~%04X"ST
     Reports
         CSI Pt ; Pl ; Pb ; Pr # | -- XTREPORTSGR
-        DCS 1 $ t Pt ST -- DECRSPS -> DECCIR
-        DCS 2 $ t Pt ST -- DECRSPS -> DECTABSR
-        CSI 0 # w -- DECRQPSR -> Error
-        CSI 1 # w -- DECRQPSR -> DECCIR
-        CSI 2 # w -- DECRQPSR -> DECTABSR
     SIXEL
         CSI ? Pi ; Pa; Pv S -- Set/request graphics attributes (Pi = 1, 2; Pa = 1, 2, 3, 4)
         DSC Pa ; Pb ; Ph q Ps..Ps ST -- Send sixel image
     Other sequences
         CSI Pm # p, CSI Pm # { -- XTPUSHSGR
         CSI # q, CSI # } -- XTPOPSGR
-        CSI ? Pm r -- Restore DEC private modes
-        CSI ? s -- Save DEC private modes
+        CSI ? Pm r -- XTRESTORE
+        CSI ? s -- XTSAVE
         DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
         DCS + p Pt ST -- XTSETTCAP
         DCS + q Pt ST -- XTGETTCAP
