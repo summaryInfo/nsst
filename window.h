@@ -61,14 +61,13 @@ typedef enum nss_title_target {
 
 typedef enum nss_window_action {
     nss_wa_minimize,
-    nss_wa_undo_minimize,
+    nss_wa_restore_minimized,
     nss_wa_maximize,
     nss_wa_maximize_width,
     nss_wa_maximize_height,
-    nss_wa_undo_maximize,
     nss_wa_fullscreen,
-    nss_wa_undo_fullscreen,
     nss_wa_toggle_fullscreen,
+    nss_wa_restore,
     nss_wa_lower,
     nss_wa_raise,
 } nss_window_action_t;

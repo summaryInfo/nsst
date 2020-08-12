@@ -99,6 +99,13 @@ struct nss_window {
     nss_coord_t damaged_y0;
     nss_coord_t damaged_y1;
 
+    // Used to restore maximized window
+    _Bool saved_geometry;
+    int16_t saved_x;
+    int16_t saved_y;
+    int16_t saved_width;
+    int16_t saved_height;
+
     nss_color_t bg;
     nss_color_t cursor_fg;
     nss_cursor_type_t cursor_type;

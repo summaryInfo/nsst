@@ -43,20 +43,26 @@ struct nss_context {
     xcb_colormap_t mid;
     xcb_visualtype_t *vis;
 
-    xcb_atom_t atom_net_wm_pid;
-    xcb_atom_t atom_net_wm_name;
-    xcb_atom_t atom_net_wm_icon_name;
-    xcb_atom_t atom_net_active_window;
-    xcb_atom_t atom_net_moveresize_window;
-    xcb_atom_t atom_wm_delete_window;
-    xcb_atom_t atom_wm_protocols;
-    xcb_atom_t atom_wm_normal_hints;
-    xcb_atom_t atom_wm_size_hints;
-    xcb_atom_t atom_wm_change_state;
-    xcb_atom_t atom_utf8_string;
-    xcb_atom_t atom_clipboard;
-    xcb_atom_t atom_incr;
-    xcb_atom_t atom_targets;
+    struct atom_ {
+        xcb_atom_t _NET_WM_PID;
+        xcb_atom_t _NET_WM_NAME;
+        xcb_atom_t _NET_WM_ICON_NAME;
+        xcb_atom_t _NET_WM_STATE;
+        xcb_atom_t _NET_WM_STATE_FULLSCREEN;
+        xcb_atom_t _NET_WM_STATE_MAXIMIZED_VERT;
+        xcb_atom_t _NET_WM_STATE_MAXIMIZED_HORZ;
+        xcb_atom_t _NET_ACTIVE_WINDOW;
+        xcb_atom_t _NET_MOVERESIZE_WINDOW;
+        xcb_atom_t WM_DELETE_WINDOW;
+        xcb_atom_t WM_PROTOCOLS;
+        xcb_atom_t WM_NORMAL_HINTS;
+        xcb_atom_t WM_SIZE_HINTS;
+        xcb_atom_t WM_CHANGE_STATE;
+        xcb_atom_t UTF8_STRING;
+        xcb_atom_t CLIPBOARD;
+        xcb_atom_t INCR;
+        xcb_atom_t TARGETS;
+    } atom;
 
     struct xkb_context *xkb_ctx;
     struct xkb_state *xkb_state;
@@ -282,20 +288,25 @@ void nss_init_context(void) {
         die("Can't configure XKB");
     }
 
-    ctx.atom_net_wm_pid = intern_atom("_NET_WM_PID");
-    ctx.atom_wm_delete_window = intern_atom("WM_DELETE_WINDOW");
-    ctx.atom_wm_protocols = intern_atom("WM_PROTOCOLS");
-    ctx.atom_wm_normal_hints = intern_atom("WM_NORMAL_HINTS");
-    ctx.atom_wm_size_hints = intern_atom("WM_SIZE_HINTS");
-    ctx.atom_wm_change_state = intern_atom("WM_CHANGE_STATE");
-    ctx.atom_net_active_window = intern_atom("_NET_ACTIVE_WINDOW");
-    ctx.atom_utf8_string = intern_atom("UTF8_STRING");
-    ctx.atom_net_wm_name = intern_atom("_NET_WM_NAME");
-    ctx.atom_net_wm_icon_name = intern_atom("_NET_WM_ICON_NAME");
-    ctx.atom_net_moveresize_window = intern_atom("_NET_MOVERESIZE_WINDOW");
-    ctx.atom_clipboard = intern_atom("CLIPBOARD");
-    ctx.atom_incr = intern_atom("INCR");
-    ctx.atom_targets = intern_atom("TARGETS");
+    // Intern all used atoms
+    ctx.atom._NET_WM_PID = intern_atom("_NET_WM_PID");
+    ctx.atom._NET_WM_NAME = intern_atom("_NET_WM_NAME");
+    ctx.atom._NET_WM_ICON_NAME = intern_atom("_NET_WM_ICON_NAME");
+    ctx.atom._NET_WM_STATE = intern_atom("_NET_WM_STATE");
+    ctx.atom._NET_WM_STATE_FULLSCREEN = intern_atom("_NET_WM_STATE_FULLSCREEN");
+    ctx.atom._NET_WM_STATE_MAXIMIZED_VERT = intern_atom("_NET_WM_STATE_MAXIMIZED_VERT");
+    ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ = intern_atom("_NET_WM_STATE_MAXIMIZED_HORZ");
+    ctx.atom._NET_ACTIVE_WINDOW = intern_atom("_NET_ACTIVE_WINDOW");
+    ctx.atom._NET_MOVERESIZE_WINDOW = intern_atom("_NET_MOVERESIZE_WINDOW");
+    ctx.atom.WM_DELETE_WINDOW = intern_atom("WM_DELETE_WINDOW");
+    ctx.atom.WM_PROTOCOLS = intern_atom("WM_PROTOCOLS");
+    ctx.atom.WM_NORMAL_HINTS = intern_atom("WM_NORMAL_HINTS");
+    ctx.atom.WM_SIZE_HINTS = intern_atom("WM_SIZE_HINTS");
+    ctx.atom.WM_CHANGE_STATE = intern_atom("WM_CHANGE_STATE");
+    ctx.atom.UTF8_STRING = intern_atom("UTF8_STRING");
+    ctx.atom.CLIPBOARD = intern_atom("CLIPBOARD");
+    ctx.atom.INCR = intern_atom("INCR");
+    ctx.atom.TARGETS = intern_atom("TARGETS");
 
     int32_t dpi = -1;
     xcb_screen_iterator_t it = xcb_setup_roots_iterator(xcb_get_setup(con));
@@ -381,46 +392,56 @@ void nss_window_move(nss_window_t *win, int16_t x, int16_t y) {
     xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
 }
 
-void nss_window_action(nss_window_t *win, nss_window_action_t act) {
+static void send_wm_client_event(xcb_window_t win, uint32_t type, uint32_t data0, uint32_t data1) {
     xcb_client_message_event_t ev = {
         .response_type = XCB_CLIENT_MESSAGE,
         .format = 32,
         .sequence = 0,
-        .window = win->wid,
+        .window = win,
+        .type = type,
+        .data = {
+            .data32 = {
+                data0,
+                data1,
+                0, 0, 0,
+            }
+        }
     };
+    xcb_send_event(con, 0, ctx.screen->root, 0, (const char *)&ev);
+}
+
+#define WM_STATE_WITHDRAWN 0
+#define WM_STATE_NORMAL 1
+#define WM_STATE_ICONIC 3
+#define _NET_WM_STATE_REMOVE 0
+#define _NET_WM_STATE_ADD 1
+#define _NET_WM_STATE_TOGGLE 2
+
+inline static void save_pos(nss_window_t *win) {
+    if (!win->saved_geometry) {
+        nss_window_get_dim_ext(win, nss_dt_window_position, &win->saved_x, &win->saved_y);
+        nss_window_get_dim(win, &win->saved_width, &win->saved_height);
+        win->saved_geometry = 1;
+    }
+}
+
+inline static void restore_pos(nss_window_t *win) {
+    if (win->saved_geometry) {
+        uint32_t vals[] = {win->saved_x, win->saved_y, win->saved_width, win->saved_height};
+        xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH |
+                XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
+        win->saved_geometry = 0;
+    }
+}
+
+void nss_window_action(nss_window_t *win, nss_window_action_t act) {
     switch(act) {
         uint32_t val;
     case nss_wa_minimize:
-        ev.type = ctx.atom_wm_change_state;
-        ev.data.data32[0] = 3; // IconicState
-        xcb_send_event(con, 0, ctx.screen->root, 0, (const char *)&ev);
+        send_wm_client_event(win->wid, ctx.atom.WM_CHANGE_STATE, WM_STATE_ICONIC, 0);
         break;
-    case nss_wa_undo_minimize:
-        ev.type = ctx.atom_net_active_window;
-        ev.data.data32[0] = 1;
-        ev.data.data32[1] = XCB_CURRENT_TIME;
-        xcb_send_event(con, 0, ctx.screen->root, 0, (const char *)&ev);
-        break;
-    case nss_wa_maximize:
-        //TODO
-        break;
-    case nss_wa_maximize_width:
-        //TODO
-        break;
-    case nss_wa_maximize_height:
-        //TODO
-        break;
-    case nss_wa_undo_maximize:
-        //TODO
-        break;
-    case nss_wa_fullscreen:
-        //TODO
-        break;
-    case nss_wa_undo_fullscreen:
-        //TODO
-        break;
-    case nss_wa_toggle_fullscreen:
-        //TODO
+    case nss_wa_restore_minimized:
+        send_wm_client_event(win->wid, ctx.atom._NET_ACTIVE_WINDOW, 1, XCB_CURRENT_TIME);
         break;
     case nss_wa_lower:
         val = XCB_STACK_MODE_BELOW;
@@ -429,6 +450,40 @@ void nss_window_action(nss_window_t *win, nss_window_action_t act) {
     case nss_wa_raise:
         val = XCB_STACK_MODE_ABOVE;
         xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_STACK_MODE, &val);
+        break;
+    case nss_wa_maximize:
+        save_pos(win);
+        send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE,
+                _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
+        send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE,
+                _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
+        uint32_t vals[] = {0, 0, ctx.screen->width_in_pixels, ctx.screen->height_in_pixels};
+        xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH |
+                XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
+        break;
+    case nss_wa_maximize_width:
+        save_pos(win);
+        send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE,
+                _NET_WM_STATE_ADD,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
+        break;
+    case nss_wa_maximize_height:
+        save_pos(win);
+        send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE,
+                _NET_WM_STATE_ADD,  ctx.atom._NET_WM_STATE_MAXIMIZED_VERT);
+        break;
+    case nss_wa_fullscreen:
+        save_pos(win);
+        send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE,
+                _NET_WM_STATE_ADD,  ctx.atom._NET_WM_STATE_FULLSCREEN);
+        break;
+    case nss_wa_restore:
+        send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
+        send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
+        send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_FULLSCREEN);
+        restore_pos(win);
+        break;
+    case nss_wa_toggle_fullscreen:
+        nss_window_action(win, win->saved_geometry ? nss_wa_restore : nss_wa_fullscreen);
         break;
     }
 }
@@ -507,14 +562,14 @@ static void nss_window_set_font(nss_window_t *win, const char * name, int32_t si
 
 static void set_title(xcb_window_t wid, const char *title, _Bool utf8) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, wid,
-        utf8 ? ctx.atom_net_wm_name : XCB_ATOM_WM_NAME,
-        utf8 ? ctx.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
+        utf8 ? ctx.atom._NET_WM_NAME : XCB_ATOM_WM_NAME,
+        utf8 ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
 static void set_icon_label(xcb_window_t wid, const char *title, _Bool utf8) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, wid,
-        utf8 ? ctx.atom_net_wm_icon_name : XCB_ATOM_WM_ICON_NAME,
-        utf8 ? ctx.atom_utf8_string : XCB_ATOM_STRING, 8, strlen(title), title);
+        utf8 ? ctx.atom._NET_WM_ICON_NAME : XCB_ATOM_WM_ICON_NAME,
+        utf8 ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
 static void title_push(nss_title_stack_item_t **head, const char *title, _Bool utf8) {
@@ -675,8 +730,8 @@ nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free) {
 
 void nss_window_set_default_props(nss_window_t *win) {
     uint32_t pid = getpid();
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom_net_wm_pid, XCB_ATOM_CARDINAL, 32, 1, &pid);
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom_wm_protocols, XCB_ATOM_ATOM, 32, 1, &ctx.atom_wm_delete_window);
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom._NET_WM_PID, XCB_ATOM_CARDINAL, 32, 1, &pid);
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom.WM_PROTOCOLS, XCB_ATOM_ATOM, 32, 1, &ctx.atom.WM_DELETE_WINDOW);
     const char *extra;
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(NSS_CLASS), NSS_CLASS);
     if ((extra = nss_config_string(NSS_SCONFIG_TERM_CLASS)))
@@ -701,8 +756,8 @@ void nss_window_set_default_props(nss_window_t *win) {
         nhints[8] = nhints[6] = nhints[4];
         nhints[0] |= 16 | 32; // PMinSize, PMaxSize
     }
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom_wm_normal_hints,
-            ctx.atom_wm_size_hints, 8*sizeof(*nhints), sizeof(nhints)/sizeof(*nhints), nhints);
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom.WM_NORMAL_HINTS,
+            ctx.atom.WM_SIZE_HINTS, 8*sizeof(*nhints), sizeof(nhints)/sizeof(*nhints), nhints);
 }
 
 /* Create new window */
@@ -866,7 +921,7 @@ inline static xcb_atom_t target_to_atom(nss_clipboard_target_t target) {
     switch (target) {
     case nss_ct_secondary: return XCB_ATOM_SECONDARY;
     case nss_ct_primary: return XCB_ATOM_PRIMARY;
-    default: return ctx.atom_clipboard;
+    default: return ctx.atom.CLIPBOARD;
     }
 }
 
@@ -903,7 +958,7 @@ void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, nss_cl
 
 void nss_window_paste_clip(nss_window_t *win, nss_clipboard_target_t target) {
     xcb_convert_selection(con, win->wid, target_to_atom(target),
-          nss_term_is_utf8(win->term) ? ctx.atom_utf8_string : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
+          nss_term_is_utf8(win->term) ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
 }
 
 static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right) {
@@ -1034,15 +1089,15 @@ static void send_selection_data(nss_window_t *win, xcb_window_t req, xcb_atom_t 
 
     if (prop == XCB_NONE) prop = target;
 
-    if (target == ctx.atom_targets) {
-        uint32_t data[] = {ctx.atom_utf8_string, XCB_ATOM_STRING};
+    if (target == ctx.atom.TARGETS) {
+        uint32_t data[] = {ctx.atom.UTF8_STRING, XCB_ATOM_STRING};
         xcb_change_property(con, XCB_PROP_MODE_REPLACE, req, prop, XCB_ATOM_ATOM, 32, sizeof(data)/sizeof(*data), data);
-    } else if (target == ctx.atom_utf8_string || target == XCB_ATOM_STRING) {
+    } else if (target == ctx.atom.UTF8_STRING || target == XCB_ATOM_STRING) {
         uint8_t *data = NULL;
 
         if (sel == XCB_ATOM_PRIMARY) data = win->clipped[nss_ct_primary];
         else if (sel == XCB_ATOM_SECONDARY) data = win->clipped[nss_ct_secondary];
-        else if (sel == ctx.atom_clipboard) data = nss_term_keep_clipboard(win->term) ?
+        else if (sel == ctx.atom.CLIPBOARD) data = nss_term_keep_clipboard(win->term) ?
                 win->clipboard : win->clipped[nss_ct_clipboard];
 
         if (data) {
@@ -1076,7 +1131,7 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
            xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
         }
 
-        if (rep->type == ctx.atom_incr) {
+        if (rep->type == ctx.atom.INCR) {
            win->ev_mask |= XCB_EVENT_MASK_PROPERTY_CHANGE;
            xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
            xcb_delete_property(con, win->wid, prop);
@@ -1093,12 +1148,12 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
         if (size) {
             if (!offset) nss_term_paste_begin(win->term);
 
-            if ((rep->type == ctx.atom_utf8_string) ^ nss_term_is_utf8(win->term)) {
+            if ((rep->type == ctx.atom.UTF8_STRING) ^ nss_term_is_utf8(win->term)) {
                 static uint8_t buf[2*PASTE_BLOCK_SIZE];
 
                 pos = data;
                 size = 0;
-                if (rep->type == ctx.atom_utf8_string) {
+                if (rep->type == ctx.atom.UTF8_STRING) {
                     while (pos < end) {
                         nss_char_t ch;
                         if (utf8_decode(&ch, (const uint8_t **)&pos, end))
@@ -1214,7 +1269,7 @@ void nss_context_run(void) {
                     xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
                     if ((ev->atom == XCB_ATOM_PRIMARY || ev->atom == XCB_ATOM_SECONDARY ||
-                            ev->atom == ctx.atom_clipboard) && ev->state == XCB_PROPERTY_NEW_VALUE)
+                            ev->atom == ctx.atom.CLIPBOARD) && ev->state == XCB_PROPERTY_NEW_VALUE)
                         receive_selection_data(win, ev->atom, 1);
                     break;
                 }
@@ -1233,7 +1288,7 @@ void nss_context_run(void) {
                 case XCB_CLIENT_MESSAGE: {
                     xcb_client_message_event_t *ev = (xcb_client_message_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
-                    if (ev->format == 32 && ev->data.data32[0] == ctx.atom_wm_delete_window) {
+                    if (ev->format == 32 && ev->data.data32[0] == ctx.atom.WM_DELETE_WINDOW) {
                         nss_free_window(win);
                         if (!win_list_head && !ctx.daemon_mode)
                             return free(event);

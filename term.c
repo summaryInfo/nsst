@@ -2133,7 +2133,7 @@ static void term_request_resize(nss_term_t *term, int16_t w, int16_t h, _Bool in
         nss_window_get_dim_ext(term->win, nss_dt_cell_size, &ce_w, &ce_h);
         nss_window_get_dim_ext(term->win, nss_dt_border, &bo_w, &bo_h);
         if (w > 0) w = w * ce_w + bo_w * 2;
-        if (h > 0) h = w * ce_h + bo_h * 2;
+        if (h > 0) h = h * ce_h + bo_h * 2;
     }
 
     w = !w ? scr_w : w < 0 ? cur_w : w;
@@ -2551,7 +2551,7 @@ static void term_dispatch_window_op(nss_term_t *term) {
 
     switch (pa) {
     case 1: /* Undo minimize */
-        nss_window_action(term->win, nss_wa_undo_minimize);
+        nss_window_action(term->win, nss_wa_restore_minimized);
         break;
     case 2: /* Minimize */
         nss_window_action(term->win, nss_wa_minimize);
@@ -2577,7 +2577,7 @@ static void term_dispatch_window_op(nss_term_t *term) {
 
         switch(PARAM(1, 0)) {
         case 0: /* Undo maximize */
-            act = nss_wa_undo_maximize;
+            act = nss_wa_restore;
             break;
         case 1: /* Maximize */
             act = nss_wa_maximize;
@@ -2599,7 +2599,7 @@ static void term_dispatch_window_op(nss_term_t *term) {
 
         switch(PARAM(1, 0)) {
         case 0: /* Undo fullscreen */
-            act = nss_wa_undo_fullscreen;
+            act = nss_wa_restore;
             break;
         case 1: /* Fullscreen */
             act = nss_wa_fullscreen;
@@ -2977,7 +2977,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     //case C('s') | P('?'): /* XSAVE, Save DEC privite mode */
     //    break;
-    case C('t'): /* XWINOPS, xterm */
+    case C('t'): /* XTWINOPS, xterm */
         term_dispatch_window_op(term);
         break;
     case C('t') | P('>'):/* Set title mode, xterm */
