@@ -56,6 +56,10 @@
 #define IS_STREND(c) (IS_C1(c) || (c) == 0x1b || (c) == 0x1a || (c) == 0x18 || (c) == 0x07)
 #define ENABLE_IF(c, m, f) { if (c) { (m) |= (f); } else { (m) &= ~(f); }}
 
+#define TABSR_INIT_CAP 48
+#define TABSR_CAP_STEP(x) (4*(x)/3)
+#define TABSR_MAX_ENTRY 6
+
 #define MAX_EXTRA_PALETTE (0x10000 - NSS_PALETTE_SIZE)
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
 #define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
@@ -2706,6 +2710,119 @@ static void term_dispatch_window_op(nss_term_t *term) {
     }
 }
 
+inline static const char *unparse_nrcs(enum nss_char_set cs) {
+    return (const char *[nss_nrcs_MAX + 1]){
+        [nss_94cs_ascii]              = "B",
+        [nss_94cs_british]            = "A",
+        [nss_94cs_dec_altchars]       = "1",
+        [nss_94cs_dec_altgraph]       = "2",
+        [nss_94cs_dec_graph]          = "0",
+        [nss_94cs_dec_greek]          = "\"?",
+        [nss_94cs_dec_hebrew]         = "\"4",
+        [nss_94cs_dec_sup]            = "<",
+        [nss_94cs_dec_sup_graph]      = "%5",
+        [nss_94cs_dec_tech]           = ">",
+        [nss_94cs_dec_turkish]        = "%0",
+        [nss_96cs_greek]              = "F",
+        [nss_96cs_hebrew]             = "H",
+        [nss_96cs_latin_1]            = "A",
+        [nss_96cs_latin_5]            = "M",
+        [nss_96cs_latin_cyrillic]     = "L",
+        [nss_nrcs_cyrillic]           = "&4",
+        [nss_nrcs_dutch]              = "4",
+        [nss_nrcs_finnish2]           = "5",
+        [nss_nrcs_finnish]            = "C",
+        [nss_nrcs_french2]            = "f",
+        [nss_nrcs_french]             = "R",
+        [nss_nrcs_french_canadian2]   = "9",
+        [nss_nrcs_french_canadian]    = "Q",
+        [nss_nrcs_german]             = "K",
+        [nss_nrcs_greek]              = "\">",
+        [nss_nrcs_hebrew]             = "%=",
+        [nss_nrcs_itallian]           = "Y",
+        [nss_nrcs_norwegian_dannish2] = "6",
+        [nss_nrcs_norwegian_dannish3] = "`",
+        [nss_nrcs_norwegian_dannish]  = "E",
+        [nss_nrcs_portuguese]         = "%6",
+        [nss_nrcs_spannish]           = "Z",
+        [nss_nrcs_swedish2]           = "7",
+        [nss_nrcs_swedish]            = "H",
+        [nss_nrcs_swiss]              = "=",
+        [nss_nrcs_turkish]            = "%2",
+    }[cs];
+}
+
+inline static _Bool nrcs_is_96(enum nss_char_set cs) {
+    return cs >= nss_96cs_latin_1;
+}
+
+static void term_report_cursor(nss_term_t *term) {
+    char csgr[3] = { 0x40, 0, 0 };
+    if (term->c.cel.attr & nss_attrib_bold) csgr[0] |= 1;
+    if (term->c.cel.attr & nss_attrib_underlined) csgr[0] |= 2;
+    if (term->c.cel.attr & nss_attrib_blink) csgr[0] |= 4;
+    if (term->c.cel.attr & nss_attrib_inverse) csgr[0] |= 8;
+
+    if (nss_config_integer(NSS_ICONFIG_EXTENDED_CIR)) {
+        csgr[0] |= 0x20;
+        csgr[1] |= 0x40;
+        // Extended byte
+        if (term->c.cel.attr & nss_attrib_italic) csgr[1] |= 1;
+        if (term->c.cel.attr & nss_attrib_faint) csgr[1] |= 2;
+        if (term->c.cel.attr & nss_attrib_strikethrough) csgr[1] |= 4;
+        if (term->c.cel.attr & nss_attrib_invisible) csgr[1] |= 8;
+    }
+
+    char cflags = 0x40;
+    if (term->c.origin) cflags |= 1; // origin
+    if (term->c.gl_ss == 2 && term->c.gl != 2) cflags |= 2; // ss2
+    if (term->c.gl_ss == 3 && term->c.gl != 3) cflags |= 4; // ss3
+    if (term->c.x == term->width) cflags |= 8; // pending wrap
+
+    char cg96 = 0x40;
+    if (nrcs_is_96(term->c.gn[0])) cg96 |= 1;
+    if (nrcs_is_96(term->c.gn[1])) cg96 |= 2;
+    if (nrcs_is_96(term->c.gn[2])) cg96 |= 4;
+    if (nrcs_is_96(term->c.gn[3])) cg96 |= 8;
+
+    term_answerback(term, DCS"1$u%d;%d;1;%s;%c;%c;%d;%d;%c;%s%s%s%s"ST,
+        /* line */ term->c.y + 1,
+        /* column */ MIN(term->c.x, term->width - 1) + 1,
+        /* attributes */ csgr,
+        /* cell protection */ 0x40 + !!(term->c.cel.attr & nss_attrib_protected),
+        /* flags */ cflags,
+        /* gl */ term->c.gl,
+        /* gr */ term->c.gr,
+        /* cs size */ cg96,
+        /* g0 */ unparse_nrcs(term->c.gn[0]),
+        /* g1 */ unparse_nrcs(term->c.gn[1]),
+        /* g2 */ unparse_nrcs(term->c.gn[2]),
+        /* g3 */ unparse_nrcs(term->c.gn[3]));
+}
+
+static void term_report_tabs(nss_term_t *term) {
+    size_t caps = TABSR_INIT_CAP, len = 0;
+    char *tabs = malloc(caps), *tmp;
+
+    for (nss_coord_t i = 0; tabs && i < term->width; i++) {
+        if (term->tabs[i]) {
+            if (len + TABSR_MAX_ENTRY > caps) {
+                tmp = realloc(tabs, caps = TABSR_CAP_STEP(caps));
+                if (!tmp) {
+                    free(tabs);
+                    tabs = NULL;
+                    break;
+                }
+                tabs = tmp;
+            }
+            len += snprintf(tabs + len, caps, len ? "/%d" : "%d", i + 1);
+        }
+    }
+
+    if (!tabs) tabs = "";
+    term_answerback(term, DCS"2$u%s"ST, tabs);
+}
+
 static void term_dispatch_csi(nss_term_t *term) {
     // Fixup parameter count
     term->esc.i += term->esc.param[term->esc.i] >= 0;
@@ -2966,7 +3083,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_set_tb_margins(term, PARAM(0, 1) - 1, PARAM(1, term->height) - 1);
         term_move_to(term, term_min_ox(term), term_min_oy(term));
         break;
-    //case C('r') | P('?'): /* Restore DEC privite mode */
+    //case C('r') | P('?'): /* XTRESTORE, Restore DEC privite mode */
     //    break;
     case C('s'): /* DECSLRM/(SCOSC) */
         if (term->mode & nss_tm_lr_margins) {
@@ -2975,7 +3092,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         } else
             term_cursor_mode(term, 1);
         break;
-    //case C('s') | P('?'): /* XSAVE, Save DEC privite mode */
+    //case C('s') | P('?'): /* XTSAVE, Save DEC privite mode */
     //    break;
     case C('t'): /* XTWINOPS, xterm */
         term_dispatch_window_op(term);
@@ -3151,7 +3268,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         case 69: /* DECLRMM */
             val = 1 + !(term->mode & nss_tm_lr_margins);
             break;
-        //case 80: /* DECSDM */
+        //case 80: /* DECSDM */ //TODO SIXEL
         //   break;
         case 95: /* DECNCSM */
             val = 1 + !(term->mode & nss_tm_132_preserve_display);
@@ -3264,8 +3381,18 @@ static void term_dispatch_csi(nss_term_t *term) {
                 term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)),
                 term_min_ox(term) + PARAM(6, 1) - 1, term_min_oy(term) + PARAM(5, 1) - 1, 1);
         break;
-    //case C('w') | I0('$'): /* DECRQPSR */
-    //    break;
+    case C('w') | I0('$'): /* DECRQPSR */
+        switch(PARAM(0, 0)) {
+        case 1: /* -> DECCIR */
+            term_report_cursor(term);
+            break;
+        case 2: /* -> DECTABSR */
+            term_report_tabs(term);
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        break;
     case C('x') | I0('$'): /* DECFRA */
         CHK_VT(4);
         term_fill(term, term_min_ox(term) + PARAM(2, 1) - 1, term_min_oy(term) + PARAM(1, 1) - 1,
@@ -3403,50 +3530,6 @@ static enum nss_char_set parse_nrcs(param_t selector, _Bool is96, uint16_t vt_le
     return -1;
 #undef NRC
 }
-
-#if 0
-static const char *unparse_nrcs(enum nss_char_set cs) {
-    return (const char *[nss_nrcs_MAX + 1]){
-        [nss_94cs_ascii]              = "B",
-        [nss_94cs_british]            = "A",
-        [nss_94cs_dec_altchars]       = "1",
-        [nss_94cs_dec_altgraph]       = "2",
-        [nss_94cs_dec_graph]          = "0",
-        [nss_94cs_dec_greek]          = "\"?",
-        [nss_94cs_dec_hebrew]         = "\"4",
-        [nss_94cs_dec_sup]            = "<",
-        [nss_94cs_dec_sup_graph]      = "%5",
-        [nss_94cs_dec_tech]           = ">",
-        [nss_94cs_dec_turkish]        = "%0",
-        [nss_96cs_greek]              = "F",
-        [nss_96cs_hebrew]             = "H",
-        [nss_96cs_latin_1]            = "A",
-        [nss_96cs_latin_5]            = "M",
-        [nss_96cs_latin_cyrillic]     = "L",
-        [nss_nrcs_cyrillic]           = "&4",
-        [nss_nrcs_dutch]              = "4",
-        [nss_nrcs_finnish2]           = "5",
-        [nss_nrcs_finnish]            = "C",
-        [nss_nrcs_french2]            = "f",
-        [nss_nrcs_french]             = "R",
-        [nss_nrcs_french_canadian2]   = "9",
-        [nss_nrcs_french_canadian]    = "Q",
-        [nss_nrcs_german]             = "K",
-        [nss_nrcs_greek]              = "\">",
-        [nss_nrcs_hebrew]             = "%=",
-        [nss_nrcs_itallian]           = "Y",
-        [nss_nrcs_norwegian_dannish2] = "6",
-        [nss_nrcs_norwegian_dannish3] = "`",
-        [nss_nrcs_norwegian_dannish]  = "E",
-        [nss_nrcs_portuguese]         = "%6",
-        [nss_nrcs_spannish]           = "Z",
-        [nss_nrcs_swedish2]           = "7",
-        [nss_nrcs_swedish]            = "H",
-        [nss_nrcs_swiss]              = "=",
-        [nss_nrcs_turkish]            = "%2",
-    }[cs];
-}
-#endif
 
 static void term_dispatch_esc(nss_term_t *term) {
     if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 2) {

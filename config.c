@@ -44,6 +44,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"cursor-width", "\t\t(Width of lines that forms cursor)", "cursorWidth", NSS_ICONFIG_CURSOR_WIDTH},
     {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", "deleteIsDelete", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
     {"double-click-time", "\t(Time gap in milliseconds in witch two mouse presses will be considered double)", "doubleClickTime", NSS_ICONFIG_DOUBLE_CLICK_TIME},
+    {"extended-cir", "\t\t(Report all SGR attributes in DECCIR)", "extendedCir", NSS_ICONFIG_EXTENDED_CIR},
     {"fixed", "\t\t\t(Don't allow to change window size, if supported)", "fixed", NSS_ICONFIG_FIXED_SIZE},
     {"fkey-increment", "\t(Step in numbering function keys)", "fkeyIncrement", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
     {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)", "font", NSS_SCONFIG_FONT_NAME},
@@ -171,6 +172,7 @@ static struct {
     [NSS_ICONFIG_KEEP_SELECTION - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
     [NSS_ICONFIG_SELECT_TO_CLIPBOARD - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
     [NSS_ICONFIG_ALLOW_BLINKING - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
+    [NSS_ICONFIG_EXTENDED_CIR - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
 };
 
 static struct {
