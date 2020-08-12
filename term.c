@@ -1950,6 +1950,37 @@ inline static void term_parse_tabs_report(nss_term_t *term) {
     }
 }
 
+static void term_encode_sgr(char *dst, char *end, nss_cell_t cel, nss_color_t fg, nss_color_t bg) {
+#define FMT(...) dst += snprintf(dst, end - dst, __VA_ARGS__)
+    // Reset everything
+    FMT("0");
+
+    // Encode attributes
+    if (cel.attr & nss_attrib_bold) FMT(";1");
+    if (cel.attr & nss_attrib_faint) FMT(";2");
+    if (cel.attr & nss_attrib_italic) FMT(";3");
+    if (cel.attr & nss_attrib_underlined) FMT(";4");
+    if (cel.attr & nss_attrib_blink) FMT(";6");
+    if (cel.attr & nss_attrib_inverse) FMT(";7");
+    if (cel.attr & nss_attrib_invisible) FMT(";8");
+    if (cel.attr & nss_attrib_strikethrough) FMT(";9");
+
+    // Encode foreground color
+    if (cel.fg < 8) FMT(";%d", 30 + cel.fg);
+    else if (cel.fg < 16) FMT(";%d", 90 + cel.fg - 8);
+    else if (cel.fg < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) FMT(";38:5:%d", cel.fg);
+    else if (cel.fg == NSS_SPECIAL_FG) FMT(";39");
+    else FMT(";38:2:%d:%d:%d", fg >> 16 & 0xFF, fg >>  8 & 0xFF, fg >>  0 & 0xFF);
+
+    // Encode background color
+    if (cel.bg < 8) FMT(";%d", 40 + cel.bg);
+    else if (cel.bg < 16) FMT(";%d", 100 + cel.bg - 8);
+    else if (cel.bg < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) FMT(";48:5:%d", cel.bg);
+    else if (cel.bg == NSS_SPECIAL_BG) FMT(";49");
+    else FMT(";48:2:%d:%d:%d", bg >> 16 & 0xFF, bg >>  8 & 0xFF, bg >>  0 & 0xFF);
+#undef FMT
+}
+
 static void term_dispatch_dcs(nss_term_t *term) {
     // Fixup parameter count
     term->esc.i += term->esc.param[term->esc.i] >= 0;
@@ -1982,46 +2013,8 @@ static void term_dispatch_dcs(nss_term_t *term) {
             uint16_t id = term->esc.str[0] | term->esc.str[1] << 8;
             switch(id) {
             case 'm': /* SGR */ {
-                char sgr[128] = DCS"1$r0";
-                // Encode attributes
-                if (term->c.cel.attr & nss_attrib_bold) strncat(sgr, ";1", sizeof sgr - 1);
-                if (term->c.cel.attr & nss_attrib_faint) strncat(sgr, ";2", sizeof sgr - 1);
-                if (term->c.cel.attr & nss_attrib_italic) strncat(sgr, ";3", sizeof sgr - 1);
-                if (term->c.cel.attr & nss_attrib_underlined) strncat(sgr, ";4", sizeof sgr - 1);
-                if (term->c.cel.attr & nss_attrib_blink) strncat(sgr, ";6", sizeof sgr - 1);
-                if (term->c.cel.attr & nss_attrib_inverse) strncat(sgr, ";7", sizeof sgr - 1);
-                if (term->c.cel.attr & nss_attrib_invisible) strncat(sgr, ";8", sizeof sgr - 1);
-                if (term->c.cel.attr & nss_attrib_strikethrough) strncat(sgr, ";9", sizeof sgr - 1);
-                size_t len = strlen(sgr);
-                // Encode foreground color
-                if (term->c.cel.fg < 8)
-                    snprintf(sgr + len, sizeof sgr - len, ";%d", 30 + term->c.cel.fg);
-                else if (term->c.cel.fg < 16)
-                    snprintf(sgr + len, sizeof sgr - len, ";%d", 90 + term->c.cel.fg - 8);
-                else if (term->c.cel.fg < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS)
-                    snprintf(sgr + len, sizeof sgr - len, ";38:5:%d", term->c.cel.fg);
-                else if (term->c.cel.fg == NSS_SPECIAL_FG)
-                    strncat(sgr, ";39", sizeof sgr - 1);
-                else // Direct color
-                    snprintf(sgr + len, sizeof sgr - len, ";38:2:%d:%d:%d",
-                            (term->c.fg >> 16) & 0xFF,
-                            (term->c.fg >>  8) & 0xFF,
-                            (term->c.fg >>  0) & 0xFF);
-                len = strlen(sgr);
-                // Encode background color
-                if (term->c.cel.bg < 8)
-                    snprintf(sgr + len, sizeof sgr - len, ";%d", 40 + term->c.cel.bg);
-                else if (term->c.cel.bg < 16)
-                    snprintf(sgr + len, sizeof sgr - len, ";%d", 100 + term->c.cel.bg - 8);
-                else if (term->c.cel.bg < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS)
-                    snprintf(sgr + len, sizeof sgr - len, ";48:5:%d", term->c.cel.bg);
-                else if (term->c.cel.bg == NSS_SPECIAL_BG)
-                    strncat(sgr, ";49", sizeof sgr - 1);
-                else // Direct color
-                    snprintf(sgr + len, sizeof sgr - len, ";48:2:%d:%d:%d",
-                            (term->c.bg >> 16) & 0xFF,
-                            (term->c.bg >>  8) & 0xFF,
-                            (term->c.bg >>  0) & 0xFF);
+                char sgr[128] = DCS"1$r";
+                term_encode_sgr(sgr + strlen(sgr), sgr + sizeof sgr - strlen(sgr), term->c.cel, term->c.fg, term->c.bg);
                 term_answerback(term, "%sm"ST, sgr);
                 break;
             }
