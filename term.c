@@ -2561,7 +2561,7 @@ static void term_dispatch_window_op(nss_term_t *term) {
         break;
     case 4: /* Resize */
     case 8: /* Resize (in cell units) */
-        term_request_resize(term, term->esc.param[1], term->esc.param[2], pa == 8);
+        term_request_resize(term, term->esc.param[2], term->esc.param[1], pa == 8);
         break;
     case 5: /* Raise */
         nss_window_action(term->win, nss_wa_raise);
