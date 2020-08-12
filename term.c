@@ -1775,6 +1775,181 @@ static void term_dispatch_dsr(nss_term_t *term) {
     }
 }
 
+static enum nss_char_set parse_nrcs(param_t selector, _Bool is96, uint16_t vt_level, _Bool nrcs) {
+#define NRC {if (!nrcs) return -1;}
+    selector &= (I1_MASK | E_MASK);
+    if (!is96) {
+        switch (vt_level) {
+        default:
+            switch (selector) {
+            case E('4') | I1('"'): return nss_94cs_dec_hebrew;
+            case E('?') | I1('"'): return nss_94cs_dec_greek;
+            case E('0') | I1('%'): return nss_94cs_dec_turkish;
+            case E('=') | I1('%'): NRC; return nss_nrcs_hebrew;
+            case E('>') | I1('"'): NRC; return nss_nrcs_greek;
+            case E('2') | I1('%'): NRC; return nss_nrcs_turkish;
+            case E('4') | I1('&'): NRC; return nss_nrcs_cyrillic;
+            }
+        case 4: case 3:
+            switch (selector) {
+            case E('5') | I1('%'): return nss_94cs_dec_sup_graph;
+            case E('`'): NRC; return nss_nrcs_norwegian_dannish3;
+            case E('9'): NRC; return nss_nrcs_french_canadian2;
+            case E('>'): return nss_94cs_dec_tech;
+            case E('6') | I1('%'): NRC; return nss_nrcs_portuguese;
+            }
+        case 2:
+            switch (selector) {
+            case E('C'): NRC; return nss_nrcs_finnish;
+            case E('5'): NRC; return nss_nrcs_finnish2;
+            case E('H'): NRC; return nss_nrcs_swedish;
+            case E('7'): NRC; return nss_nrcs_swedish2;
+            case E('K'): NRC; return nss_nrcs_german;
+            case E('Q'): NRC; return nss_nrcs_french_canadian;
+            case E('R'): NRC; return nss_nrcs_french;
+            case E('f'): NRC; return nss_nrcs_french2;
+            case E('Y'): NRC; return nss_nrcs_itallian;
+            case E('Z'): NRC; return nss_nrcs_spannish;
+            case E('4'): NRC; return nss_nrcs_dutch;
+            case E('='): NRC; return nss_nrcs_swiss;
+            case E('E'): NRC; return nss_nrcs_norwegian_dannish;
+            case E('6'): NRC; return nss_nrcs_norwegian_dannish2;
+            case E('<'): return nss_94cs_dec_sup;
+            }
+        case 1:
+            switch (selector) {
+            case E('A'): return nss_94cs_british;
+            case E('B'): return nss_94cs_ascii;
+            case E('0'): return nss_94cs_dec_graph;
+            case E('1'): if (vt_level != 1) break;
+                         return nss_94cs_dec_altchars;
+            case E('2'): if (vt_level != 1) break;
+                         return nss_94cs_dec_altgraph;
+            }
+        case 0: break;
+        }
+    } else {
+        switch (vt_level) {
+        default:
+            switch (selector) {
+            case E('F'): return nss_96cs_greek;
+            case E('H'): return nss_96cs_hebrew;
+            case E('L'): return nss_96cs_latin_cyrillic;
+            case E('M'): return nss_96cs_latin_5;
+            }
+        case 4: case 3:
+            switch (selector) {
+            case E('A'): return nss_96cs_latin_1;
+            }
+        case 2: case 1: case 0:
+            break;
+        }
+    }
+    return -1U;
+#undef NRC
+}
+
+inline static void term_parse_cursor_report(nss_term_t *term) {
+    char *str = (char *)term->esc.str;
+
+    // Cursor Y
+    ssize_t y = strtoul(str, &str, 10);
+    if (!str || *str++ != ';') goto err;
+
+    // Cursor X
+    ssize_t x = strtoul(str, &str, 10);
+    if (!str || *str++ != ';') goto err;
+
+    // Page, always '1'
+    if (*str++ != '1' || *str++ != ';') goto err;
+
+    // SGR
+    char sgr0 = *str++, sgr1 = 0x40;
+    if ((sgr0 & 0xD0) != 0x40) goto err;
+
+    // Optional extended byte
+    if (sgr0 & 0x20) sgr1 = *str++;
+    if ((sgr1 & 0xF0) != 0x40 || *str++ != ';') goto err;
+
+    // Protection
+    char prot = *str++;
+    if ((prot & 0xFE) != 0x40 || *str++ != ';') goto err;
+
+    // Flags
+    char flags = *str++;
+    if ((flags & 0xF0) != 0x40 || *str++ != ';') goto err;
+
+    // GL
+    unsigned long gl = strtoul(str, &str, 10);
+    if (!str || *str++ != ';'|| gl > 3) goto err;
+
+    // GR
+    unsigned long gr = strtoul(str, &str, 10);
+    if (!str || *str++ != ';' || gr > 3) goto err;
+
+    // G0 - G3 sizes
+    char c96 = *str++;
+    if ((flags & 0xF0) != 0x40 || *str++ != ';') goto err;
+
+    // G0 - G3
+    enum nss_char_set gn[4];
+    for (size_t i = 0; i < 4; i++) {
+        param_t sel = 0;
+        char c;
+        if ((c = *str++) < 0x30) {
+            sel |= I1(c);
+            if ((c = *str++) < 0x30) goto err;
+        }
+        sel |= E(c);
+        if ((gn[i] = parse_nrcs(sel, (c96 >> i) & 1, term->vt_level,
+                term->mode & nss_tm_enable_nrcs)) == -1U) goto err;
+    }
+
+    // Everything is OK, load
+
+    term->c = (nss_cursor_t) {
+        .x = flags & 8 ? term->width : MIN(x, term->width - 1),
+        .y = MIN(y, term->height - 1),
+        .cel = (nss_cell_t) {
+            .fg = term->c.cel.fg,
+            .bg = term->c.cel.bg,
+        },
+        .fg = term->c.fg,
+        .bg = term->c.bg,
+        .origin = flags & 1,
+        .gn = { gn[0], gn[1], gn[2], gn[3] },
+        .gl = gl,
+        .gr = gr,
+        .gl_ss = flags & 4 ? 3 : flags & 2 ? 2 : term->c.gl
+    };
+
+    if (sgr0 & 1) term->c.cel.attr |= nss_attrib_bold;
+    if (sgr0 & 2) term->c.cel.attr |= nss_attrib_underlined;
+    if (sgr0 & 4) term->c.cel.attr |= nss_attrib_blink;
+    if (sgr0 & 8) term->c.cel.attr |= nss_attrib_inverse;
+    if (sgr1 & 1) term->c.cel.attr |= nss_attrib_italic;
+    if (sgr1 & 2) term->c.cel.attr |= nss_attrib_faint;
+    if (sgr1 & 4) term->c.cel.attr |= nss_attrib_strikethrough;
+    if (sgr1 & 8) term->c.cel.attr |= nss_attrib_invisible;
+    if (prot & 1) term->c.cel.attr |= nss_attrib_protected;
+
+    return;
+err:
+    term_esc_dump(term, 0);
+}
+
+inline static void term_parse_tabs_report(nss_term_t *term) {
+    memset(term->tabs, 0, term->width*sizeof(*term->tabs));
+    for (ssize_t tab = 0, i = 0; i <= (ssize_t)term->esc.si; i++) {
+        if (term->esc.str[i] == '/' || i == (ssize_t)term->esc.si) {
+            if (tab - 1 <= term->width) term->tabs[tab - 1] = 1;
+            tab = 0;
+        } else if (isdigit(term->esc.str[i])) {
+            tab = 10 * tab + term->esc.str[i] - '0';
+        } else  term_esc_dump(term, 0);
+    }
+}
+
 static void term_dispatch_dcs(nss_term_t *term) {
     // Fixup parameter count
     term->esc.i += term->esc.param[term->esc.i] >= 0;
@@ -1890,7 +2065,19 @@ static void term_dispatch_dcs(nss_term_t *term) {
                 term_esc_dump(term, 0);
             }
         } else term_esc_dump(term, 0);
+        break;
     }
+    case C('t') | I0('$'): /* DECRSPS */
+        switch(PARAM(0, 0)) {
+        case 1: /* <- DECCIR */
+            term_parse_cursor_report(term);
+            break;
+        case 2: /* <- DECTABSR */
+            term_parse_tabs_report(term);
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
         break;
     default:
         term_esc_dump(term, 0);
@@ -3455,80 +3642,6 @@ static void term_dispatch_csi(nss_term_t *term) {
     }
 
     term->esc.state = esc_ground;
-}
-
-static enum nss_char_set parse_nrcs(param_t selector, _Bool is96, uint16_t vt_level, _Bool nrcs) {
-#define NRC {if (!nrcs) return -1;}
-    selector &= (I1_MASK | E_MASK);
-    if (!is96) {
-        switch (vt_level) {
-        default:
-            switch (selector) {
-            case E('4') | I1('"'): return nss_94cs_dec_hebrew;
-            case E('?') | I1('"'): return nss_94cs_dec_greek;
-            case E('0') | I1('%'): return nss_94cs_dec_turkish;
-            case E('=') | I1('%'): NRC; return nss_nrcs_hebrew;
-            case E('>') | I1('"'): NRC; return nss_nrcs_greek;
-            case E('2') | I1('%'): NRC; return nss_nrcs_turkish;
-            case E('4') | I1('&'): NRC; return nss_nrcs_cyrillic;
-            }
-        case 4: case 3:
-            switch (selector) {
-            case E('5') | I1('%'): return nss_94cs_dec_sup_graph;
-            case E('`'): NRC; return nss_nrcs_norwegian_dannish3;
-            case E('9'): NRC; return nss_nrcs_french_canadian2;
-            case E('>'): return nss_94cs_dec_tech;
-            case E('6') | I1('%'): NRC; return nss_nrcs_portuguese;
-            }
-        case 2:
-            switch (selector) {
-            case E('C'): NRC; return nss_nrcs_finnish;
-            case E('5'): NRC; return nss_nrcs_finnish2;
-            case E('H'): NRC; return nss_nrcs_swedish;
-            case E('7'): NRC; return nss_nrcs_swedish2;
-            case E('K'): NRC; return nss_nrcs_german;
-            case E('Q'): NRC; return nss_nrcs_french_canadian;
-            case E('R'): NRC; return nss_nrcs_french;
-            case E('f'): NRC; return nss_nrcs_french2;
-            case E('Y'): NRC; return nss_nrcs_itallian;
-            case E('Z'): NRC; return nss_nrcs_spannish;
-            case E('4'): NRC; return nss_nrcs_dutch;
-            case E('='): NRC; return nss_nrcs_swiss;
-            case E('E'): NRC; return nss_nrcs_norwegian_dannish;
-            case E('6'): NRC; return nss_nrcs_norwegian_dannish2;
-            case E('<'): return nss_94cs_dec_sup;
-            }
-        case 1:
-            switch (selector) {
-            case E('A'): return nss_94cs_british;
-            case E('B'): return nss_94cs_ascii;
-            case E('0'): return nss_94cs_dec_graph;
-            case E('1'): if (vt_level != 1) break;
-                         return nss_94cs_dec_altchars;
-            case E('2'): if (vt_level != 1) break;
-                         return nss_94cs_dec_altgraph;
-            }
-        case 0: break;
-        }
-    } else {
-        switch (vt_level) {
-        default:
-            switch (selector) {
-            case E('F'): return nss_96cs_greek;
-            case E('H'): return nss_96cs_hebrew;
-            case E('L'): return nss_96cs_latin_cyrillic;
-            case E('M'): return nss_96cs_latin_5;
-            }
-        case 4: case 3:
-            switch (selector) {
-            case E('A'): return nss_96cs_latin_1;
-            }
-        case 2: case 1: case 0:
-            break;
-        }
-    }
-    return -1;
-#undef NRC
 }
 
 static void term_dispatch_esc(nss_term_t *term) {
