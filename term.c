@@ -2357,13 +2357,13 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 }
                 break;
             case 3: /* DECCOLM */
-                if (term->mode & nss_tm_disable_132cols) {
+                if (!(term->mode & nss_tm_disable_132cols)) {
                     term_reset_margins(term);
                     term_move_to(term, 0, 0);
                     if (!(term->mode & nss_tm_132_preserve_display))
                         term_erase(term, 0, 0, term->width, term->height, 0);
                     if (nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS))
-                        term_request_resize(term, -1, set ? 132 : 80, 1);
+                        term_request_resize(term, set ? 132 : 80, -1, 1);
                     ENABLE_IF(set, term->mode, nss_tm_132cols);
                 }
                 break;
