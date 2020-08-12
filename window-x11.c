@@ -407,7 +407,8 @@ static void send_wm_client_event(xcb_window_t win, uint32_t type, uint32_t data0
             }
         }
     };
-    xcb_send_event(con, 0, ctx.screen->root, 0, (const char *)&ev);
+    xcb_send_event(con, 0, ctx.screen->root, XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
+            XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, (const char *)&ev);
 }
 
 #define WM_STATE_WITHDRAWN 0
