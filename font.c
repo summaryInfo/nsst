@@ -419,7 +419,7 @@ nss_glyph_cache_t *nss_create_cache(nss_font_t *font) {
         warn("Can't allocate glyph cache");
         return NULL;
     }
-    cache->tab = calloc(HASH_INIT_CAP, sizeof(cache->tab));
+    cache->tab = calloc(HASH_INIT_CAP, sizeof(*cache->tab));
     cache->caps = HASH_INIT_CAP;
     cache->refc = 1;
     cache->font = font;

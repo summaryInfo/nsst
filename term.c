@@ -218,6 +218,7 @@ struct nss_term {
         nss_tm_attr_ext_rectangle   = 1LL << 41,
         nss_tm_lr_margins           = 1LL << 42,
         nss_tm_disable_132cols      = 1LL << 43,
+        nss_tm_smooth_scroll        = 1LL << 44,
 
         // Need to modify XTCHECKSUM aswell if theses values gets modified
         nss_tm_cksm_positive        = 1LL << 48,
@@ -1101,6 +1102,8 @@ inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t
 static uint16_t term_checksum(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
     term_rect_pre(term, &xs, &ys, &xe, &ye);
 
+    // TODO Test this thing
+
     uint32_t res = 0, spc = 0, trm = 0;
     enum nss_char_set gr = term->c.gn[term->c.gr];
     _Bool first = 1, notrim = term->mode & nss_tm_cksm_no_trim;
@@ -1683,6 +1686,8 @@ static void term_load_config(nss_term_t *term) {
         term->mode |= nss_tm_reverse_video;
     }
 
+    //term->mode |= nss_tm_cksm_mask;
+
     if (nss_config_integer(NSS_ICONFIG_UTF8)) term->mode |= nss_tm_utf8 | nss_tm_title_query_utf8 | nss_tm_title_set_utf8;
     if (!nss_config_integer(NSS_ICONFIG_ALLOW_ALTSCREEN)) term->mode |= nss_tm_disable_altscreen;
     if (nss_config_integer(NSS_ICONFIG_INIT_WRAP)) term->mode |= nss_tm_wrap;
@@ -1799,7 +1804,6 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t he
 }
 
 static void term_dispatch_da(nss_term_t *term, param_t mode) {
-    if (PARAM(0, 0)) return;
     switch (mode) {
     case P('='): /* Tertinary DA */
         CHK_VT(4);
@@ -1867,6 +1871,7 @@ static void term_dispatch_dsr(nss_term_t *term) {
                     term->c.y - term_min_oy(term) + 1,
                     MIN(term->c.x, term->width - 1) - term_min_ox(term) + 1,
                     term->vt_level >= 4 ? ";1" : "");
+            break;
         case 15: /* Printer status -- Has printer*/
             CHK_VT(2);
             term_answerback(term, term->printerfd >= 0 ? CSI"?10n" : CSI"?13n");
@@ -1880,6 +1885,15 @@ static void term_dispatch_dsr(nss_term_t *term) {
             term_answerback(term, CSI"?27;1%sn",
                     term->vt_level >= 4 ? ";0;0" : // ready, LK201
                     term->vt_level >= 3 ? ";0" : ""); // ready
+            break;
+        case 53: /* Report locator status */
+        case 55:
+            CHK_VT(4);
+            term_answerback(term, CSI"?50n"); // no locator
+            break;
+        case 56: /* Report locator type */
+            CHK_VT(4);
+            term_answerback(term, CSI"?57;0n"); // can't identify
             break;
         case 62: /* DECMSR, Macro space -- No data, no space for macros */
             CHK_VT(4);
@@ -2212,7 +2226,7 @@ static void term_dispatch_osc(nss_term_t *term) {
             if (*end) {
                 term_esc_dump(term, 0);
                 break;
-            } else *(end = term->esc.str + (end - term->esc.str)/2) = '\0';
+            } else *(term->esc.str + (end - term->esc.str)/2) = '\0';
         } else if (!(term->mode & nss_tm_title_set_utf8) && (term->mode & nss_tm_utf8)) {
             uint8_t *dst = term->esc.str;
             const uint8_t *ptr = dst;
@@ -2466,7 +2480,7 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 }
                 break;
             case 4: /* DECSCLM */
-                // TODO
+                ENABLE_IF(set, term->mode, nss_tm_smooth_scroll);
                 break;
             case 5: /* DECSCNM */
                 if (set ^ !!(term->mode & nss_tm_reverse_video)) {
@@ -2925,11 +2939,11 @@ static void term_dispatch_window_op(nss_term_t *term) {
             int16_t x, y;
         case 0: /* Report grid size */
             nss_window_get_dim_ext(term->win, nss_dt_grid_size, &x, &y);
-            term_answerback(term, CSI"4;%d;%dt", x, y);
+            term_answerback(term, CSI"4;%d;%dt", y, x);
             break;
         case 2: /* Report window size */
             nss_window_get_dim(term->win, &x, &y);
-            term_answerback(term, CSI"4;%d;%dt", x, y);
+            term_answerback(term, CSI"4;%d;%dt", y, x);
             break;
         default:
             term_esc_dump(term, 0);
@@ -2938,23 +2952,23 @@ static void term_dispatch_window_op(nss_term_t *term) {
     case 15: /* Report screen size */ {
         int16_t x, y;
         nss_window_get_dim_ext(term->win, nss_dt_screen_size, &x, &y);
-        term_answerback(term, CSI"5;%d;%dt", x, y);
+        term_answerback(term, CSI"5;%d;%dt", y, x);
         break;
     }
     case 16: /* Report cell size */ {
         int16_t x, y;
         nss_window_get_dim_ext(term->win, nss_dt_cell_size, &x, &y);
-        term_answerback(term, CSI"6;%d;%dt", x, y);
+        term_answerback(term, CSI"6;%d;%dt", y, x);
         break;
     }
     case 18: /* Report grid size (in cell units) */
-        term_answerback(term, CSI"8;%d;%dt", term->width, term->height);
+        term_answerback(term, CSI"8;%d;%dt", term->height, term->width);
         break;
     case 19: /* Report screen size (in cell units) */ {
         int16_t s_w, s_h, c_w, c_h;
         nss_window_get_dim_ext(term->win, nss_dt_screen_size, &s_w, &s_h);
         nss_window_get_dim_ext(term->win, nss_dt_cell_size, &c_w, &c_h);
-        term_answerback(term, CSI"9;%d;%dt", s_w/c_w, s_h/c_h);
+        term_answerback(term, CSI"9;%d;%dt", s_h/c_h, s_w/c_w);
         break;
     }
     case 20: /* Report icon label */
@@ -3172,7 +3186,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('J') | P('?'): /* DECSED */
     case C('J'): /* ED */ {
         void (*erase)(nss_term_t *, nss_coord_t, nss_coord_t, nss_coord_t, nss_coord_t, _Bool) =
-                term->esc.selector & P_MASK ? term_selective_erase :
+                term->esc.selector & P_MASK ? (term->mode & nss_tm_protected ? term_erase : term_selective_erase) :
                 term->mode & nss_tm_protected ? term_protective_erase : term_erase;
         switch (PARAM(0, 0)) {
         case 0: /* Below */
@@ -3198,9 +3212,9 @@ static void term_dispatch_csi(nss_term_t *term) {
     }
     case C('K') | P('?'): /* DECSEL */
     case C('K'): /* EL */ {
-        void (*erase)(nss_term_t *, nss_coord_t, nss_coord_t, nss_coord_t, nss_coord_t, _Bool) = term_erase;
-        if (term->esc.selector & P_MASK) erase = term_selective_erase;
-        else if (term->mode & nss_tm_protected) erase = term_protective_erase;
+        void (*erase)(nss_term_t *, nss_coord_t, nss_coord_t, nss_coord_t, nss_coord_t, _Bool) =
+                term->esc.selector & P_MASK ? (term->mode & nss_tm_protected ? term_erase : term_selective_erase) :
+                term->mode & nss_tm_protected ? term_protective_erase : term_erase;
         switch (PARAM(0, 0)) {
         case 0: /* To the right */
             term_adjust_wide_left(term, term->c.x, term->c.y);
@@ -3239,7 +3253,8 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_scroll(term, term_min_y(term), -PARAM(0, 1), 0);
         break;
     case C('X'): /* ECH */
-        term_erase(term, term->c.x, term->c.y, term->c.x + PARAM(0, 1), term->c.y + 1, 0);
+        (term->mode & nss_tm_protected ? term_protective_erase : term_erase)
+                (term, term->c.x, term->c.y, term->c.x + PARAM(0, 1), term->c.y + 1, 0);
         term_move_to(term, term->c.x, term->c.y);
         break;
     case C('Z'): /* CBT */
@@ -3256,6 +3271,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('c'): /* DA1 */
     case C('c') | P('>'): /* DA2 */
     case C('c') | P('='): /* DA3 */
+        if (PARAM(0, 0)) break;
         term_dispatch_da(term, term->esc.selector & P_MASK);
         break;
     case C('d'): /* VPA */
@@ -3431,6 +3447,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         case 7: /* VEM */
         case 10: /* HEM */
         case 11: /* PUM */
+        case 13: /* FEAM */
         case 14: /* FETM */
         case 15: /* MATM */
         case 16: /* TTM */
@@ -3473,7 +3490,7 @@ static void term_dispatch_csi(nss_term_t *term) {
             val = 1 + !(term->mode & nss_tm_132cols);
             break;
         case 4: /* DECSCLM */
-            val = 4; //TODO Smooth scroll
+            val = 1 + !(term->mode & nss_tm_smooth_scroll);
             break;
         case 5: /* DECCNM */
             val = 1 + !(term->mode & nss_tm_reverse_video);
@@ -3543,6 +3560,7 @@ static void term_dispatch_csi(nss_term_t *term) {
             break;
         case 1001: /* Highlight mouse tracking */
             val = 4;
+            break;
         case 1002: /* Cell motion tracking on keydown */
             val = 1 + !(term->mode & nss_tm_mouse_motion);
             break;
@@ -3673,13 +3691,15 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('z') | I0('$'): /* DECERA */
         CHK_VT(4);
-        term_erase(term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
+        (term->mode & nss_tm_protected ? term_protective_erase : term_erase)
+                (term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
                 term_min_ox(term) + PARAM(3, term_max_ox(term) - term_min_ox(term)),
                 term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)), 1);
         break;
     case C('{') | I0('$'): /* DECSERA */
         CHK_VT(4);
-        term_selective_erase(term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
+        (term->mode & nss_tm_protected ? term_erase : term_selective_erase)
+                (term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
                 term_min_ox(term) + PARAM(3, term_max_ox(term) - term_min_ox(term)),
                 term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)), 1);
         break;
@@ -3693,7 +3713,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('y') | I0('#'): /* XTCHECKSUM */
         term->mode &= ~nss_tm_cksm_mask;
-        term->mode |= ~(PARAM(0, 0) & 0x3FULL) << 48;
+        term->mode |= (PARAM(0, 0) & 0x3FULL) << 48;
         break;
     case C('}') | I0('\''): /* DECIC */
         CHK_VT(4);
@@ -4405,12 +4425,14 @@ inline static void term_tty_write(nss_term_t *term, const uint8_t *buf, size_t l
 static size_t term_encode_c1(nss_term_t *term, const uint8_t *in, uint8_t *out) {
     uint8_t *fmtp = out;
     for (uint8_t *it = (uint8_t *)in; *it && fmtp - out < MAX_REPORT - 1; it++) {
-        if (IS_C1(*it) && (!(term->mode & nss_tm_8bit ) || term->vt_level < 2)) {
+        if (IS_C1(*it) && (!(term->mode & nss_tm_8bit) || term->vt_level < 2)) {
             *fmtp++ = 0x1B;
             *fmtp++ = *it ^ 0xC0;
         } else if ((*it > 0x7F) && term->mode & nss_tm_utf8) {
-            *fmtp++ = 0xC0 | (*it >> 6);
-            *fmtp++ = 0x80 | (*it & 0x3F);
+            //*fmtp++ = 0xC0 | (*it >> 6);
+            //*fmtp++ = 0x80 | (*it & 0x3F);
+            *fmtp++ = 0x1B;
+            *fmtp++ = *it ^ 0xC0;
         } else {
             *fmtp++ = *it;
         }

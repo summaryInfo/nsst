@@ -54,7 +54,7 @@ _Bool nrcs_encode(enum nss_char_set set, nss_char_t *ch, _Bool nrcs) {
         break;
     case nss_94cs_british:
     case nss_96cs_latin_1:
-        if (!nrcs) {
+        if (!nrcs || set == nss_96cs_latin_1) {
             if (0x80 <= *ch && *ch < 0x100)
                 *ch -= 0x80, done = 1;
         } else {

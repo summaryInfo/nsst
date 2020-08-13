@@ -626,7 +626,7 @@ void nss_window_pop_title(nss_window_t *win, nss_title_target_t which) {
     }
     if (which & nss_tt_icon_label) {
         title_pop(&win->icon_top);
-        if (win->icon_top) set_icon_label(win->wid, win->icon_top->data, win->title_top->utf8);
+        if (win->icon_top) set_icon_label(win->wid, win->icon_top->data, win->icon_top->utf8);
     }
 }
 
