@@ -43,6 +43,7 @@
 #define ESC_DUMP_MAX 768
 #define MAX_REPORT 1024
 #define SEL_INIT_SIZE 32
+#define SGR_BUFSIZ 64
 
 #define CSI "\x9B"
 #define OSC "\x9D"
@@ -1098,6 +1099,80 @@ static void term_reverse_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, n
     }
 }
 
+static void term_encode_sgr(char *dst, char *end, nss_cell_t cel, nss_color_t fg, nss_color_t bg) {
+    // Maximal sequence is 0;1;2;3;4;6;7;8;9;38:2:255:255:255;48:2:255:255:255
+    // 64 byte buffer is enough
+#define FMT(...) dst += snprintf(dst, end - dst, __VA_ARGS__)
+    // Reset everything
+    FMT("0");
+
+    // Encode attributes
+    if (cel.attr & nss_attrib_bold) FMT(";1");
+    if (cel.attr & nss_attrib_faint) FMT(";2");
+    if (cel.attr & nss_attrib_italic) FMT(";3");
+    if (cel.attr & nss_attrib_underlined) FMT(";4");
+    if (cel.attr & nss_attrib_blink) FMT(";6");
+    if (cel.attr & nss_attrib_inverse) FMT(";7");
+    if (cel.attr & nss_attrib_invisible) FMT(";8");
+    if (cel.attr & nss_attrib_strikethrough) FMT(";9");
+
+    // Encode foreground color
+    if (cel.fg < 8) FMT(";%d", 30 + cel.fg);
+    else if (cel.fg < 16) FMT(";%d", 90 + cel.fg - 8);
+    else if (cel.fg < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) FMT(";38:5:%d", cel.fg);
+    else if (cel.fg == NSS_SPECIAL_FG) /* FMT(";39") -- default, skip */;
+    else FMT(";38:2:%d:%d:%d", fg >> 16 & 0xFF, fg >>  8 & 0xFF, fg >>  0 & 0xFF);
+
+    // Encode background color
+    if (cel.bg < 8) FMT(";%d", 40 + cel.bg);
+    else if (cel.bg < 16) FMT(";%d", 100 + cel.bg - 8);
+    else if (cel.bg < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) FMT(";48:5:%d", cel.bg);
+    else if (cel.bg == NSS_SPECIAL_BG) /* FMT(";49") -- default, skip */;
+    else FMT(";48:2:%d:%d:%d", bg >> 16 & 0xFF, bg >>  8 & 0xFF, bg >>  0 & 0xFF);
+#undef FMT
+}
+
+static void term_report_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
+    xs = MAX(term_min_oy(term), MIN(xs, term_max_ox(term) - 1));
+    xe = MAX(term_min_oy(term), MIN(xe, term_max_ox(term)));
+    ys = MAX(term_min_oy(term), MIN(ys, term_max_oy(term) - 1));
+    ye = MAX(term_min_oy(term), MIN(ye, term_max_oy(term)));
+
+    if (ys >= ye || xs >= xe) {
+        // Invalid rectangle
+        term_answerback(term, CSI"0m");
+        return;
+    }
+
+    nss_cell_t common = term->screen[ys]->cell[xs];
+    nss_color_t common_fg = 0, common_bg = 0;
+    _Bool has_common_fg = 1, has_common_bg = 1;
+    _Bool true_fg = 0, true_bg = 0;
+
+    if (common.fg >= NSS_PALETTE_SIZE && term->screen[ys]->pal)
+        common_fg = term->screen[ys]->pal->data[common.fg - NSS_PALETTE_SIZE], true_fg = 1;
+    if (common.bg >= NSS_PALETTE_SIZE && term->screen[ys]->pal)
+        common_bg = term->screen[ys]->pal->data[common.bg - NSS_PALETTE_SIZE], true_bg = 1;
+
+    for (; ys < ye; ys++) {
+        nss_line_t *line = term->screen[ys];
+        for (nss_coord_t i = xs; i < xe; i++) {
+            has_common_fg &= (common.fg == line->cell[i].fg || (true_fg && line->cell[i].fg >= NSS_PALETTE_SIZE &&
+                    common_fg == line->pal->data[line->cell[i].fg - NSS_PALETTE_SIZE]));
+            has_common_bg &= (common.bg == line->cell[i].bg || (true_bg && line->cell[i].bg >= NSS_PALETTE_SIZE &&
+                    common_bg == line->pal->data[line->cell[i].bg - NSS_PALETTE_SIZE]));
+            common.attr &= line->cell[i].attr;
+        }
+    }
+
+    if (!has_common_bg) common.bg = NSS_SPECIAL_BG;
+    if (!has_common_fg) common.fg = NSS_SPECIAL_FG;
+
+    char sgr[SGR_BUFSIZ];
+    term_encode_sgr(sgr, sgr + sizeof sgr, common, common_fg, common_bg);
+    term_answerback(term, CSI"%sm", sgr);
+}
+
 static void term_apply_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
     nss_color_t fg = 0, bg = 0;
@@ -1725,15 +1800,14 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
 static void term_dispatch_dsr(nss_term_t *term) {
     if (term->esc.selector & P_MASK) {
         switch (term->esc.param[0]) {
-        case 6: /* Cursor position -- Y;X */
+        case 6: /* DECXCPR -- CSI ? Py ; Px ; R ; 1  */
             term_answerback(term, CSI"%"PRIu16";%"PRIu16"%sR",
                     term->c.y - term_min_oy(term) + 1,
                     MIN(term->c.x, term->width - 1) - term_min_ox(term) + 1,
                     term->vt_level >= 4 ? ";1" : "");
         case 15: /* Printer status -- Has printer*/
             CHK_VT(2);
-            term_answerback(term, CSI"?10n");
-            //term_answerback(term, CSI"?13n");  // Has no printer
+            term_answerback(term, term->printerfd >= 0 ? CSI"?10n" : CSI"?13n");
             break;
         case 25: /* User defined keys lock -- Locked */
             CHK_VT(2);
@@ -1766,7 +1840,7 @@ static void term_dispatch_dsr(nss_term_t *term) {
         case 5: /* Health report -- OK */
             term_answerback(term, CSI"0n");
             break;
-        case 6: /* Cursor position -- Y;X */
+        case 6: /* CPR -- CSI Py ; Px R */
             term_answerback(term, CSI"%d;%dR",
                     term->c.y - term_min_oy(term) + 1,
                     MIN(term->c.x, term->width - 1) - term_min_ox(term) + 1);
@@ -1950,37 +2024,6 @@ inline static void term_parse_tabs_report(nss_term_t *term) {
     }
 }
 
-static void term_encode_sgr(char *dst, char *end, nss_cell_t cel, nss_color_t fg, nss_color_t bg) {
-#define FMT(...) dst += snprintf(dst, end - dst, __VA_ARGS__)
-    // Reset everything
-    FMT("0");
-
-    // Encode attributes
-    if (cel.attr & nss_attrib_bold) FMT(";1");
-    if (cel.attr & nss_attrib_faint) FMT(";2");
-    if (cel.attr & nss_attrib_italic) FMT(";3");
-    if (cel.attr & nss_attrib_underlined) FMT(";4");
-    if (cel.attr & nss_attrib_blink) FMT(";6");
-    if (cel.attr & nss_attrib_inverse) FMT(";7");
-    if (cel.attr & nss_attrib_invisible) FMT(";8");
-    if (cel.attr & nss_attrib_strikethrough) FMT(";9");
-
-    // Encode foreground color
-    if (cel.fg < 8) FMT(";%d", 30 + cel.fg);
-    else if (cel.fg < 16) FMT(";%d", 90 + cel.fg - 8);
-    else if (cel.fg < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) FMT(";38:5:%d", cel.fg);
-    else if (cel.fg == NSS_SPECIAL_FG) FMT(";39");
-    else FMT(";38:2:%d:%d:%d", fg >> 16 & 0xFF, fg >>  8 & 0xFF, fg >>  0 & 0xFF);
-
-    // Encode background color
-    if (cel.bg < 8) FMT(";%d", 40 + cel.bg);
-    else if (cel.bg < 16) FMT(";%d", 100 + cel.bg - 8);
-    else if (cel.bg < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) FMT(";48:5:%d", cel.bg);
-    else if (cel.bg == NSS_SPECIAL_BG) FMT(";49");
-    else FMT(";48:2:%d:%d:%d", bg >> 16 & 0xFF, bg >>  8 & 0xFF, bg >>  0 & 0xFF);
-#undef FMT
-}
-
 static void term_dispatch_dcs(nss_term_t *term) {
     // Fixup parameter count
     term->esc.i += term->esc.param[term->esc.i] >= 0;
@@ -2008,14 +2051,14 @@ static void term_dispatch_dcs(nss_term_t *term) {
             term_esc_dump(term, 0);
         }
         break;
-    case C('q') | I0('$'): /* DECRQSS */ {
+    case C('q') | I0('$'): /* DECRQSS -> DECRPSS */ {
         if (term->esc.si && term->esc.si < 3) {
             uint16_t id = term->esc.str[0] | term->esc.str[1] << 8;
             switch(id) {
-            case 'm': /* SGR */ {
-                char sgr[128] = DCS"1$r";
+            case 'm': /* -> SGR */ {
+                char sgr[SGR_BUFSIZ];
                 term_encode_sgr(sgr + strlen(sgr), sgr + sizeof sgr - strlen(sgr), term->c.cel, term->c.fg, term->c.bg);
-                term_answerback(term, "%sm"ST, sgr);
+                term_answerback(term, DCS"1$r%sm"ST, sgr);
                 break;
             }
             case 'r': /* -> DECSTBM */
@@ -2361,9 +2404,9 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 }
                 break;
             case 4: /* DECSCLM */
-                // IGNORE
+                // TODO
                 break;
-            case 5: /* DECCNM */
+            case 5: /* DECSCNM */
                 if (set ^ !!(term->mode & nss_tm_reverse_video)) {
                     SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
                     SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
@@ -3123,12 +3166,10 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('P'): /* DCH */
         term_delete_cells(term, PARAM(0, 1));
         break;
-    //case C('S') | P('>'): /* Set graphics attributes, xterm */ //TODO SIXEL
-    //    break;
     case C('S'): /* SU */
         term_scroll(term, term_min_y(term), PARAM(0, 1), 0);
         break;
-    case C('T') | P('>'): /* Reset title, xterm */
+    case C('T') | P('>'): /* XTRMTITLE */
         term_dispatch_tmode(term, 0);
         break;
     case C('T'): /* SD */
@@ -3150,9 +3191,9 @@ static void term_dispatch_csi(nss_term_t *term) {
         for (param_t i = PARAM(0, 1); i > 0; i--)
             term_putchar(term, term->prev_ch);
         break;
-    case C('c'): /* Primary DA */
-    case C('c') | P('>'): /* Secondary DA */
-    case C('c') | P('='): /* Tertinary DA */
+    case C('c'): /* DA1 */
+    case C('c') | P('>'): /* DA2 */
+    case C('c') | P('='): /* DA3 */
         term_dispatch_da(term, term->esc.selector & P_MASK);
         break;
     case C('d'): /* VPA */
@@ -3183,7 +3224,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('l') | P('?'):/* DECRST */
         term_dispatch_srm(term, 0);
         break;
-    case C('m') | P('>'): /* Modify keys, xterm */ {
+    case C('m') | P('>'): /* XTMODKEYS */ {
         nss_input_mode_t mode = nss_config_input_mode();
         param_t p = PARAM(0, 0), inone = !term->esc.i && term->esc.param[0] < 0;
         if (term->esc.i > 0 && term->esc.param[1] >= 0) {
@@ -3242,8 +3283,6 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('n'):
         term_dispatch_dsr(term);
         break;
-    //case C('p') | P('>'): /* Set pointer mode, xterm */
-    //    break;
     case C('q'): /* DECLL */
         for (param_t i = 0; i < term->esc.i; i++) {
             switch (PARAM(i, 0)) {
@@ -3263,8 +3302,6 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_set_tb_margins(term, PARAM(0, 1) - 1, PARAM(1, term->height) - 1);
         term_move_to(term, term_min_ox(term), term_min_oy(term));
         break;
-    //case C('r') | P('?'): /* XTRESTORE, Restore DEC privite mode */
-    //    break;
     case C('s'): /* DECSLRM/(SCOSC) */
         if (term->mode & nss_tm_lr_margins) {
             term_set_lr_margins(term, PARAM(0, 1) - 1, PARAM(1, term->width) - 1);
@@ -3272,12 +3309,10 @@ static void term_dispatch_csi(nss_term_t *term) {
         } else
             term_cursor_mode(term, 1);
         break;
-    //case C('s') | P('?'): /* XTSAVE, Save DEC privite mode */
-    //    break;
     case C('t'): /* XTWINOPS, xterm */
         term_dispatch_window_op(term);
         break;
-    case C('t') | P('>'):/* Set title mode, xterm */
+    case C('t') | P('>'):/* XTSMTITLE */
         term_dispatch_tmode(term, 1);
         break;
     case C('u'): /* (SCORC) */
@@ -3289,8 +3324,6 @@ static void term_dispatch_csi(nss_term_t *term) {
             if (p < 2) term_answerback(term, CSI"%d;1;1;128;128;1;0x", p + 2);
         }
         break;
-    //case C('t') | I0(' '): /* DECSWBV */
-    //    break;
     case C('q') | I0(' '): /* DECSCUSR */ {
         nss_cursor_type_t csr = PARAM(0, 1);
         if (csr < 7) nss_window_set_cursor(term->win, csr);
@@ -3328,16 +3361,6 @@ static void term_dispatch_csi(nss_term_t *term) {
         }
         term->mode &= ~nss_tm_protected;
         break;
-    //case C('y') | I0('#'): /* XTCHECKSUM */
-    //    break;
-    //case C('p') | I0('#'): /* XTPUSHSGR */
-    //case C('{') | I0('#'):
-    //    break;
-    //case C('|') | I0('#'): /* XTREPORTSGR */
-    //    break;
-    //case C('q') | I0('#'): /* XTPOPSGR */
-    //case C('}') | I0('#'):
-    //    break;
     case C('p') | I0('$'): /* RQM */ {
         param_t val = 0; /* unknown */
         switch(PARAM(0, 0)) {
@@ -3539,6 +3562,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         default:
             term_esc_dump(term, 0);
         }
+        // DECRPM
         term_answerback(term, CSI"?%d;%d$y", PARAM(0, 0), val);
         break;
     }
@@ -3560,6 +3584,12 @@ static void term_dispatch_csi(nss_term_t *term) {
                 term_min_ox(term) + PARAM(3, term_max_ox(term) - term_min_ox(term)),
                 term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)),
                 term_min_ox(term) + PARAM(6, 1) - 1, term_min_oy(term) + PARAM(5, 1) - 1, 1);
+        break;
+    case C('|') | I0('#'): /* XTREPORTSGR */
+        CHK_VT(4);
+        term_report_sgr(term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
+                term_min_ox(term) + PARAM(3, term_max_ox(term) - term_min_ox(term)),
+                term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)));
         break;
     case C('w') | I0('$'): /* DECRQPSR */
         switch(PARAM(0, 0)) {
@@ -3591,14 +3621,6 @@ static void term_dispatch_csi(nss_term_t *term) {
                 term_min_ox(term) + PARAM(3, term_max_ox(term) - term_min_ox(term)),
                 term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)), 1);
         break;
-    //case C('w') | I0('\''): /* DECEFR */
-    //    break;
-    //case C('z') | I0('\''): /* DECELR */
-    //    break;
-    //case C('{') | I0('\''): /* DECSLE */
-    //    break;
-    //case C('|') | I0('\''): /* DECRQLP */
-    //    break;
     case C('}') | I0('\''): /* DECIC */
         CHK_VT(4);
         term_insert_columns(term, PARAM(0, 1));
@@ -3628,7 +3650,27 @@ static void term_dispatch_csi(nss_term_t *term) {
         if (nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS))
             term_request_resize(term, -1, PARAM(0, 24), 1);
         break;
+    //case C('t') | I0(' '): /* DECSWBV */
+    //    break;
+    //case C('u') | I0(' '): /* DECSMBV */
+    //    break;
+    //case C('w') | I0('\''): /* DECEFR */
+    //    break;
+    //case C('z') | I0('\''): /* DECELR */
+    //    break;
+    //case C('{') | I0('\''): /* DECSLE */
+    //    break;
+    //case C('|') | I0('\''): /* DECRQLP */
+    //    break;
     //case C('y') | I0('*'): /* DECRQCRA */
+    //    break;
+    //case C('p') | P('>'): /* XTSMPOINTER */
+    //    break;
+    //case C('S') | P('?'): /* XTSMSGRAPHICS */
+    //    break;
+    //case C('S') | P('>'): /* Set graphics attributes, xterm */ //TODO SIXEL
+    //    break;
+    //case C('y') | I0('#'): /* XTCHECKSUM */
     //    break;
     default:
         term_esc_dump(term, 0);
