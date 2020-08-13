@@ -2833,10 +2833,12 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
 
     // Shift characters to the left if insert mode is enabled
     nss_cell_t *cell = &term->screen[term->c.y]->cell[term->c.x];
-    if (term->mode & nss_tm_insert && term->c.x + width < term_max_x(term)) {
-        for (nss_cell_t *c = cell + width; c - term->screen[term->c.y]->cell < term_max_x(term); c++)
-            c->attr &= ~nss_attrib_drawn;
-        memmove(cell + width, cell, term_max_x(term) - term->c.x - width);
+    if (term->mode & nss_tm_insert) {
+        if (term->c.x + width < term_max_x(term)) {
+            for (nss_cell_t *c = cell + width; c - term->screen[term->c.y]->cell < term_max_x(term); c++)
+                c->attr &= ~nss_attrib_drawn;
+            memmove(cell + width, cell, (term_max_x(term) - term->c.x - width)*sizeof(*cell));
+        }
     }
 
     // Erase overwritten parts of wide characters
