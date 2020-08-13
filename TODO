@@ -1,92 +1,69 @@
 Until version 1.5
-    Checksums
-    XTPOPSGR, XTPUSHSGR, XTSAVE, XTRESTORE, XTREPORTSGR
-    Dynamically allocated string buffer
-        for huge OSC/DSC strings
-More:
-    Window operations
-        Root window messages does not work?
+    Dynamically allocated string buffer for huge OSC/DSC strings
+Until version 1.6:
+    URXVT/UTF-8 mouse
+    DEC Locator
     Special colors
-    Colored glyphs
-    Refactor config:
-        some options are per-instance
-            needs to be updated on reload
-        some are global
-    Probably remove short options support (v2)
-        breaks all cmd options
-        simplifies things
-        makes it possible to be (somewhat) compatible with XTerm
-        they are unused now
-        Use single dash for all options
-    Refactor frame timings
-        use separate timings for erase,scroll,resize
-        just wait for screen update completion?
-            do not redraw if erase/scroll/resize reached
-                or probably just wait until nothing read
-                from master in main loop
-            draw if max frame time reached
-    Selections
-        How should selections interact with DECLRMM?
-    SL,SR
-        If the current cursor position is outside of the current scroll region it does nothing???
+    Bell
+    DECUDK
+    Configurable modifiers
+    OSC 50
+    Refactor config
+    Clear selection if scroll will break them in DECLRMM
+    ...
+
+11 16 35 38 41 43 44 46 53 60 61 64 68 73 1039 1042 1043 2001 2002 2003 2005 2006
+===================
+General
+    Write man page
     Implement named values for options instead of numeric
     Make key modifiers T,A,M configurable
     Query modifiers by names, instead of using predefined?
-    User-prefered charset
+    Refactor config
+        Separate
+        some options are per-instance
+            needs to be updated on reload
+        some are global
     Support new color syntax
-    Bell
-    Proper combining characters support
-    Wayland (v2)
     Implement proper daemon mode
-    Make X resources names more or less correspond to Xterm/rxvt-unicode?
-    SIXEL
-    DEC Locator
-===================
+    Make X resource/option names more or less correspond to Xterm/rxvt-unicode?
 Render
-    [ ] Colored glyphs
-    [ ] Double width/height, Down-Line-Loadable fonts
-    [ ] Add options to select width of ambigues characters
-    [ ] Combining characters support
-    [ ] Add fallback fonts support back (optionally enabled)
-    [x] XRender
-        [?] Slow scrolling of full-color images (with small font in chafa)
-        [ ] Rendering refactoring:
-            -Use multiple separate buffers for cells parts:
-                1. Background
-                2. Lines
-                3. Glyphs
-            -Merge adjacent cells with same color while pushing
-            -Then sort and draw, groupping by color
-Term
-    (?) Geometry should be measured in characters
-    Capability restriction
-        Now this works like in xterm
-    Printing with attributes and also support specifing print command
-    Is private mode 1044 semantics correct?
+    General
+        Colored glyphs
+        Double width/height
+        Down-Line-Loadable fonts
+        Add options to select width of ambigues characters
+        Combining characters support
+        Add fallback fonts support back (optionally enabled)
+        Refactor frame timings
+            use separate timings for erase,scroll,resize
+            just wait for screen update completion?
+                do not redraw if erase/scroll/resize reached
+                    or probably just wait until nothing read
+                    from master in main loop
+                draw if max frame time reached
+        Window operations
+            Make it work with reparenting
+    XRender
+        Slow scrolling of full-color images (with small font in chafa)
+        Use multiple separate buffers for background/lines/glyphs to sort less
+    Wayland
+Emulation
+    Clear selection if scroll will break them in DECLRMM
+    User-prefered charset
+    Allow geometry to be specified in characters
+    Proper vt level restriction
+    SL,SR: If the current cursor position is outside of the current scroll region it does nothing???
+    Printing with SGR
+    More advanced printing method (command with pipe)
+    Is private mode 1044 semantics correct/sould it be implemented at all?
     Is reset correctly implemented?
-    Private modes
-        4 -- DECSCLM
-        8 -- DECARM (When ported to wayland)
-        14 -- Cursor blinking XORing
-        35 -- font shifting functions
-        44 -- margin bell [bell]
-        80 -- DECSDM [SIXEL]
-        1001 -- Hightlight mouse tracking [mouse]
-        1005 -- UTF-8 mouse [mouse]
-        1015 -- URXVT mouse [mouse]
-        1042 -- bell is window urgency [bell]
-        1043 -- raise on bell [bell]
-        1039 -- Alt sends escape [input]
-        1040 -- terminfo/termcap function key mode [input]
-        1070 -- Use private resgisters [SIXEL]
-        8452 -- Sixel scrolling leaves cursor to the right of graphics [SIXEL]
-        These need further invastigation:
-            srm_BUTTON1_MOVE_POINT = 2001
-            srm_BUTTON2_MOVE_POINT = 2002
-            srm_DBUTTON3_DELETE = 2003
-            srm_PASTE_QUOTE = 2005
-            srm_PASTE_LITERAL_NL = 2006
-    DEC Locator [mouse]
+    VT220
+        CSI ? 4 l / CSI ? 4 h -- DECSCLM
+        CSI ? 8 l / CSI ? 8 h -- DECARM (When ported to wayland)
+        DCS Ps ; Ps | Pt ST -- DECUDK
+        DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
+    Mouse
         CSI ? 53 n
         CSI ? 55 n
         CSI ? 56 n
@@ -94,30 +71,45 @@ Term
         CSI Ps ; Pu ' z -- DECELR
         CSI Pm ' { -- DECSLE
         CSI Ps ' | -- DECRQLP ->  CSI Pe ; Pb ; Pr ; Pc ; Pp & w
-    Hightlight tracking
-        CSI Ps ; Ps ; Ps ; Ps ; Ps T
-    Checksums
-        CSI Ps # y -- XTCHECKSUM
-        CSI Pi ; Pg ; Pt ; Pl ; Pb ; Pr * y -- DECRQCRA -> DCS"%"PRId32"!~%04X"ST
-    Reports
-        CSI Pt ; Pl ; Pb ; Pr # | -- XTREPORTSGR
+        CSI ? 1005 l / CSI ? 1005 h -- UTF-8 mouse format
+        CSI ? 1015 l / CSI ? 1015 h -- URXVT mouse format
     SIXEL
-        CSI ? Pi ; Pa; Pv S -- Set/request graphics attributes (Pi = 1, 2; Pa = 1, 2, 3, 4)
+        CSI ? Pi ; Pa; Pv S -- XTSMGRAPHICS (Pi = 1, 2; Pa = 1, 2, 3, 4)
         DSC Pa ; Pb ; Ph q Ps..Ps ST -- Send sixel image
+        CSI ? 80 l / CSI ? 80 h -- DECSDM
+        CSI ? 1070 l / CSI ? 1070 h -- Use private resgisters
+        CSI ? 8452 l / CSI ? 8452 h -- Sixel scrolling leaves cursor to the right of graphics
     Other sequences
+        CSI ? 1039 l / CSI ? 1039 h -- Alt sends escape [input]
+        OSC 5 ; Pt ST -- Set special color
+        OSC 6 ; Pc ; Pt ST -- Enable/disable special color
+        OSC 105 ; Pt ST -- Reset special color
+        OSC 106 ; Pc ; Pf ST -- Enable/disable special color
+        OSC 50 ; Pt ST -- Set font
+    Bell
+        CSI Ps SP t -- DECSWBV
+        CSI Ps SP u -- DECSMBV
+        CSI ? 44 l / CSI ? 44 h -- margin bell
+        CSI ? 1042 l / CSI ? 1042 h -- bell is window urgency
+        CSI ? 1043 l / CSI ? 1043 h -- raise on bell
+    Misc (won't be implemented any time soon)
+        CSI ? 38 l / CSI ? 38 h -- DECTEK
+        CSI ? 1040 l / CSI ? 1040 h -- terminfo/termcap function key mode [input]
+        CSI ? 1001 l / CSI ? 1001 h -- Hightlight mouse tracking
+        CSI Ps ; Ps ; Ps ; Ps ; Ps T -- XTHIMOUSE
+        CSI ? 14 l / CSI ? 14 h -- Cursor blinking XORing
+        CSI ? 35 l / CSI ? 35 h -- font shifting functions
         CSI Pm # p, CSI Pm # { -- XTPUSHSGR
         CSI # q, CSI # } -- XTPOPSGR
         CSI ? Pm r -- XTRESTORE
         CSI ? s -- XTSAVE
-        DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
+        CSI Pm # Q -- XTPOPCOLORS
+        CSI Pm # P -- XTPUSHCOLORS
+        CSI # R -- XTREPORTCOLORS
         DCS + p Pt ST -- XTSETTCAP
         DCS + q Pt ST -- XTGETTCAP
-        DCS Ps ; Ps | Pt ST -- DECUDK
-        OSC 5 ; Pt ST -- Set special color
-        OSC 6 ; Pc ; Pt ST -- Enable/disable special color
-        OSC 50 ; Pt ST -- Set font
-        OSC 105 ; Pt ST -- Reset special color
-        OSC 106 ; Pc ; Pf ST -- Enable/disable special color
+        CSI > Ps p -- XTSMPOINTER
+        CSI > Ps q -- XTVERSION -> DCS > | text ST
         OSC 13 Pt ST -- Set mouse background color
         OSC 14 Pt ST -- Set mouse foreground color
         OSC 113 Pt ST -- Reset color mouse foreground color
@@ -128,6 +120,9 @@ Term
         OSC 13 Pt ST -- Set mouse foreground color
         OSC 13 Pt ST -- Set mouse background color
         OSC 3 ; Pt ST -- Set X property
-    Bell
-        CSI Ps SP t -- DECSWBV
-        CSI Ps SP u -- DECSMBV
+    What should these do (not mentioned in ctlseqs.txt):
+        srm_BUTTON1_MOVE_POINT = 2001
+        srm_BUTTON2_MOVE_POINT = 2002
+        srm_DBUTTON3_DELETE = 2003
+        srm_PASTE_QUOTE = 2005
+        srm_PASTE_LITERAL_NL = 2006
