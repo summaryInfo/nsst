@@ -1650,6 +1650,13 @@ static void term_free_scrollback(nss_term_t *term) {
     term->sb_top = 0;
 }
 
+static void term_reset_tabs(nss_term_t *term) {
+    memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
+    nss_coord_t tabw = nss_config_integer(NSS_ICONFIG_TAB_WIDTH);
+    for (nss_coord_t i = tabw; i < term->width; i += tabw)
+        term->tabs[i] = 1;
+}
+
 static void term_reset(nss_term_t *term, _Bool hard) {
 
     term->mode &= nss_tm_focused;
@@ -1659,16 +1666,13 @@ static void term_reset(nss_term_t *term, _Bool hard) {
 
     term_load_config(term);
     term_reset_margins(term);
+    term_reset_tabs(term);
 
     nss_window_set_mouse(term->win, 0);
     nss_window_set_cursor(term->win, nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE));
     nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
 
     if (hard) {
-        memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
-        nss_coord_t tabw = nss_config_integer(NSS_ICONFIG_TAB_WIDTH);
-        for (nss_coord_t i = tabw; i < term->width; i += tabw)
-            term->tabs[i] = 1;
 
         for (size_t i = 0; i < 2; i++) {
             term_cursor_mode(term, 1);
@@ -3649,6 +3653,9 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('|') | I0('*'): /* DECSNLS */
         if (nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS))
             term_request_resize(term, -1, PARAM(0, 24), 1);
+    case C('W') | P('?'): /* DECST8C */
+        if (PARAM(0, 5) == 5) term_reset_tabs(term);
+        else term_esc_dump(term, 0);
         break;
     //case C('t') | I0(' '): /* DECSWBV */
     //    break;
