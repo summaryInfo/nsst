@@ -1635,34 +1635,38 @@ static void term_delete_columns(nss_term_t *term, nss_coord_t n) {
 static void term_index_horizonal(nss_term_t *term) {
     if (term->c.x == term_max_x(term) - 1 && term_cursor_in_region(term)) {
         term_scroll_horizontal(term, term_min_x(term), 1);
-        term_move_to(term, term->c.x, term->c.y);
-    } else term_move_to(term, term->c.x + 1, term->c.y);
+        term_reset_pending(term);
+    } else if (term->c.x != term_max_x(term) - 1)
+        term_move_to(term, term->c.x + 1, term->c.y);
 }
 
 static void term_rindex_horizonal(nss_term_t *term) {
     if (term->c.x == term_min_x(term) && term_cursor_in_region(term)) {
         term_scroll_horizontal(term, term_min_x(term), -1);
-        term_move_to(term, term->c.x, term->c.y);
-    } else term_move_to(term, term->c.x - 1, term->c.y);
+        term_reset_pending(term);
+    } else if (term->c.x != term_min_x(term))
+        term_move_to(term, term->c.x - 1, term->c.y);
 }
 
 static void term_index(nss_term_t *term) {
     if (term->c.y == term_max_y(term) - 1 && term_cursor_in_region(term)) {
         term_scroll(term, term_min_y(term), 1, 1);
-        term_move_to(term, term->c.x, term->c.y);
-    } else term_move_to(term, term->c.x, term->c.y + 1);
-}
-
-static void term_cr(nss_term_t *term) {
-    term_move_to(term, term->c.x < term_min_x(term) ?
-            term_min_ox(term) : term_min_x(term), term->c.y);
+        term_reset_pending(term);
+    } else if (term->c.y != term_max_y(term) - 1)
+        term_move_to(term, term->c.x, term->c.y + 1);
 }
 
 static void term_rindex(nss_term_t *term) {
     if (term->c.y == term_min_y(term) && term_cursor_in_region(term)) {
         term_scroll(term,  term_min_y(term), -1, 1);
-        term_move_to(term, term->c.x, term->c.y);
-    } else term_move_to(term, term->c.x, term->c.y - 1);
+        term_reset_pending(term);
+    } else if (term->c.y != term_min_y(term))
+        term_move_to(term, term->c.x, term->c.y - 1);
+}
+
+static void term_cr(nss_term_t *term) {
+    term_move_to(term, term->c.x < term_min_x(term) ?
+            term_min_ox(term) : term_min_x(term), term->c.y);
 }
 
 static void term_tabs(nss_term_t *term, nss_coord_t n) {
@@ -1733,7 +1737,38 @@ static void term_reset_tabs(nss_term_t *term) {
         term->tabs[i] = 1;
 }
 
+static void term_request_resize(nss_term_t *term, int16_t w, int16_t h, _Bool in_cells) {
+    int16_t cur_w, cur_h, scr_w, scr_h;
+    nss_window_get_dim(term->win, &cur_w, &cur_h);
+    nss_window_get_dim_ext(term->win, nss_dt_screen_size, &scr_w, &scr_h);
+
+    if (in_cells) {
+        int16_t ce_w, ce_h, bo_w, bo_h;
+        nss_window_get_dim_ext(term->win, nss_dt_cell_size, &ce_w, &ce_h);
+        nss_window_get_dim_ext(term->win, nss_dt_border, &bo_w, &bo_h);
+        if (w > 0) w = w * ce_w + bo_w * 2;
+        if (h > 0) h = h * ce_h + bo_h * 2;
+    }
+
+    w = !w ? scr_w : w < 0 ? cur_w : w;
+    h = !h ? scr_h : h < 0 ? cur_h : h;
+
+    nss_window_resize(term->win, w, h);
+}
+
+static void term_set_132(nss_term_t *term, _Bool set) {
+    term_reset_margins(term);
+    term_move_to(term, term_min_ox(term), term_min_oy(term));
+    if (!(term->mode & nss_tm_132_preserve_display))
+        term_erase(term, 0, 0, term->width, term->height, 0);
+    if (nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS))
+        term_request_resize(term, set ? 132 : 80, -1, 1);
+    ENABLE_IF(set, term->mode, nss_tm_132cols);
+}
+
 static void term_reset(nss_term_t *term, _Bool hard) {
+    if (term->mode & nss_tm_132cols) term_set_132(term, 0);
+    if (term->mode & nss_tm_altscreen) term_swap_screen(term, 1);
 
     term->mode &= nss_tm_focused;
     term->inmode = nss_config_input_mode();
@@ -1750,21 +1785,15 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
 
     if (hard) {
-
-        for (size_t i = 0; i < 2; i++) {
-            term_cursor_mode(term, 1);
-            term_erase(term, 0, 0, term->width, term->height, 0);
-            term_swap_screen(term, 0);
-        }
+        term_cursor_mode(term, 1);
+        term->back_cs = term->cs;
+        term_erase(term, 0, 0, term->width, term->height, 0);
 
         term_free_scrollback(term);
 
         term->vt_level = term->vt_version / 100;
 
         nss_window_set_title(term->win, nss_tt_icon_label | nss_tt_title, NULL, term->mode & nss_tm_title_set_utf8);
-
-        // Hmm?..
-        // term->mode |= nss_tm_echo;
     } else {
         term->c.x = cx;
         term->c.y = cy;
@@ -1838,10 +1867,8 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
         case 510: ver = 61; break;
         case 520: ver = 64; break;
         case 525: ver = 65; break;
-        default:
-            ver = term->vt_level * 100 + 20;
         }
-        term_answerback(term, CSI">%"PRIu32";10;0c", ver);
+        term_answerback(term, CSI">%"PRIu32";666;0c", ver);
         break;
     }
     default: /* Primary DA */
@@ -2442,25 +2469,6 @@ static void term_dispatch_osc(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static void term_request_resize(nss_term_t *term, int16_t w, int16_t h, _Bool in_cells) {
-    int16_t cur_w, cur_h, scr_w, scr_h;
-    nss_window_get_dim(term->win, &cur_w, &cur_h);
-    nss_window_get_dim_ext(term->win, nss_dt_screen_size, &scr_w, &scr_h);
-
-    if (in_cells) {
-        int16_t ce_w, ce_h, bo_w, bo_h;
-        nss_window_get_dim_ext(term->win, nss_dt_cell_size, &ce_w, &ce_h);
-        nss_window_get_dim_ext(term->win, nss_dt_border, &bo_w, &bo_h);
-        if (w > 0) w = w * ce_w + bo_w * 2;
-        if (h > 0) h = h * ce_h + bo_h * 2;
-    }
-
-    w = !w ? scr_w : w < 0 ? cur_w : w;
-    h = !h ? scr_h : h < 0 ? cur_h : h;
-
-    nss_window_resize(term->win, w, h);
-}
-
 static void term_dispatch_srm(nss_term_t *term, _Bool set) {
     if (term->esc.selector & P_MASK) {
         for (size_t i = 0; i < term->esc.i; i++) {
@@ -2485,15 +2493,8 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 }
                 break;
             case 3: /* DECCOLM */
-                if (!(term->mode & nss_tm_disable_132cols)) {
-                    term_reset_margins(term);
-                    term_move_to(term, term_min_ox(term), term_min_oy(term));
-                    if (!(term->mode & nss_tm_132_preserve_display))
-                        term_erase(term, 0, 0, term->width, term->height, 0);
-                    if (nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS))
-                        term_request_resize(term, set ? 132 : 80, -1, 1);
-                    ENABLE_IF(set, term->mode, nss_tm_132cols);
-                }
+                if (!(term->mode & nss_tm_disable_132cols))
+                    term_set_132(term, set);
                 break;
             case 4: /* DECSCLM */
                 ENABLE_IF(set, term->mode, nss_tm_smooth_scroll);
@@ -3459,6 +3460,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         term->mode &= ~nss_tm_protected;
         break;
     case C('p') | I0('$'): /* RQM */ {
+        CHK_VT(3);
         param_t val = 0; /* unknown */
         switch(PARAM(0, 0)) {
         case 1: /* GATM */
@@ -3497,6 +3499,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     }
     case C('p') | P('?') | I0('$'): /* DECRQM */ {
+        CHK_VT(3);
         param_t val = 0; /* unknown */
         switch(PARAM(0, 0)) {
         case 1: /* DECCKM */
