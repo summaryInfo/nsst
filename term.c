@@ -1392,17 +1392,23 @@ static void term_move_left(nss_term_t *term, nss_coord_t amount) {
     nss_coord_t x = term->c.x, y = term->c.y,
         first_left = x < term_min_x(term) ? 0 : term_min_x(term);
 
+
     // This is a hack that allows using proper line editing with reverse wrap
     // mode while staying compatible with VT100 wrapping mode
     if (term->mode & nss_tm_reverse_wrap) x += term->c.pending;
 
-    if (amount > x - first_left && (term->mode &
-                (nss_tm_wrap | nss_tm_reverse_wrap)) == (nss_tm_wrap | nss_tm_reverse_wrap)) {
+    if (amount > x - first_left && (term->mode & nss_tm_wrap) && (term->mode & nss_tm_reverse_wrap)) {
+        _Bool in_tbm = term_min_y(term) <= term->c.y && term->c.y < term_max_y(term);
+        nss_coord_t height = in_tbm ? term_max_y(term) - term_min_y(term) : term->height;
+        nss_coord_t top = in_tbm ? term_min_y(term) : 0;
+
         amount -= x - first_left;
         x = term_max_x(term);
         y -= 1 + amount/(term_max_x(term) - term_min_x(term));
         amount %= term_max_x(term) - term_min_x(term);
-        if ((y %= term->height) < 0) y += term->height;
+
+        y = (y - top) % height + top;
+        if (y < top) y += height;
     }
 
     (term->c.x >= term_min_x(term) ? term_bounded_move_to : term_move_to)(term, x - amount, y);
@@ -1584,7 +1590,8 @@ static void term_insert_cells(nss_term_t *term, nss_coord_t n) {
 }
 
 static void term_delete_cells(nss_term_t *term, nss_coord_t n) {
-    if (term_cursor_in_region(term)) {
+    // Do not check top/bottom margins, DCH sould work outside them
+    if (term->c.x >= term_min_x(term) && term->c.x < term_max_x(term)) {
         n = MAX(0, MIN(n, term_max_x(term) - term->c.x));
 
         nss_line_t *line = term->screen[term->c.y];

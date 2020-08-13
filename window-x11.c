@@ -383,8 +383,11 @@ void nss_window_delay(nss_window_t *win) {
 }
 
 void nss_window_resize(nss_window_t *win, int16_t width, int16_t height) {
-    uint32_t vals[] = {width, height};
-    xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
+    if (win->height != height || win->width != width) {
+        uint32_t vals[] = {width, height};
+        xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
+        nss_window_handle_resize(win, width, height);
+    }
 }
 
 void nss_window_move(nss_window_t *win, int16_t x, int16_t y) {
@@ -431,6 +434,7 @@ inline static void restore_pos(nss_window_t *win) {
         uint32_t vals[] = {win->saved_x, win->saved_y, win->saved_width, win->saved_height};
         xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH |
                 XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
+        nss_window_handle_resize(win, vals[2], vals[3]);
         win->saved_geometry = 0;
     }
 }
@@ -461,6 +465,7 @@ void nss_window_action(nss_window_t *win, nss_window_action_t act) {
         uint32_t vals[] = {0, 0, ctx.screen->width_in_pixels, ctx.screen->height_in_pixels};
         xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH |
                 XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
+        nss_window_handle_resize(win, vals[2], vals[3]);
         break;
     case nss_wa_maximize_width:
         save_pos(win);
