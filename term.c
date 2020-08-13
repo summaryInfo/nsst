@@ -218,6 +218,19 @@ struct nss_term {
         nss_tm_attr_ext_rectangle   = 1LL << 41,
         nss_tm_lr_margins           = 1LL << 42,
         nss_tm_disable_132cols      = 1LL << 43,
+
+        // Need to modify XTCHECKSUM aswell if theses values gets modified
+        nss_tm_cksm_positive        = 1LL << 48,
+        nss_tm_cksm_no_attr         = 1LL << 49,
+        nss_tm_cksm_no_trim         = 1LL << 50,
+        nss_tm_cksm_no_implicit     = 1LL << 51,
+        nss_tm_cksm_wide            = 1LL << 52,
+        nss_tm_cksm_8bit            = 1LL << 53,
+
+        nss_tm_cksm_mask =
+            nss_tm_cksm_positive | nss_tm_cksm_no_attr |
+            nss_tm_cksm_no_trim | nss_tm_cksm_no_implicit |
+            nss_tm_cksm_wide | nss_tm_cksm_8bit,
         nss_tm_mouse_mask =
             nss_tm_mouse_x10 | nss_tm_mouse_button |
             nss_tm_mouse_motion | nss_tm_mouse_many,
@@ -1045,13 +1058,17 @@ static void term_decode_sgr(nss_term_t *term, size_t i, nss_cell_t *mask, nss_ce
 #undef SETBG
 }
 
+
+inline static void term_rect_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t *ys, nss_coord_t *xe, nss_coord_t *ye) {
+    *xs = MAX(term_min_oy(term), MIN(*xs, term_max_ox(term) - 1));
+    *xe = MAX(term_min_oy(term), MIN(*xe, term_max_ox(term)));
+    *ys = MAX(term_min_oy(term), MIN(*ys, term_max_oy(term) - 1));
+    *ye = MAX(term_min_oy(term), MIN(*ye, term_max_oy(term)));
+}
+
 inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t *ys, nss_coord_t *xe, nss_coord_t *ye, _Bool origin) {
-    if (origin) {
-        *xs = MAX(term_min_oy(term), MIN(*xs, term_max_ox(term) - 1));
-        *xe = MAX(term_min_oy(term), MIN(*xe, term_max_ox(term)));
-        *ys = MAX(term_min_oy(term), MIN(*ys, term_max_oy(term) - 1));
-        *ye = MAX(term_min_oy(term), MIN(*ye, term_max_oy(term)));
-    } else {
+    if (origin) term_rect_pre(term, xs, ys, xe, ye);
+    else {
         *xs = MAX(0, MIN(*xs, term->width - 1));
         *xe = MAX(0, MIN(*xe, term->width));
         *ys = MAX(0, MIN(*ys, term->height - 1));
@@ -1081,6 +1098,50 @@ inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t
 #undef RECT_INTRS
 }
 
+static uint16_t term_checksum(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
+    term_rect_pre(term, &xs, &ys, &xe, &ye);
+
+    uint32_t res = 0, spc = 0, trm = 0;
+    enum nss_char_set gr = term->c.gn[term->c.gr];
+    _Bool first = 1, notrim = term->mode & nss_tm_cksm_no_trim;
+
+    for (; ys < ye; ys++) {
+        nss_line_t *line = term->screen[ys];
+        for (nss_coord_t i = xs; i < xe; i++) {
+            nss_char_t ch = line->cell[i].ch;
+            uint32_t attr = line->cell[i].attr;
+            if (!(term->mode & nss_tm_cksm_no_implicit) && !ch) ch = ' ';
+
+            if (!(term->mode & nss_tm_cksm_wide)) {
+                if (ch > 0x7F && gr != nss_94cs_ascii) {
+                    nrcs_encode(gr, &ch, term->mode & nss_tm_enable_nrcs);
+                    if (!(term->mode & nss_tm_cksm_8bit) && ch < 0x80) ch |= 0x80;
+                }
+                ch &= 0xFF;
+            }
+            if (!(term->mode & nss_tm_cksm_no_attr)) {
+                if (attr & nss_attrib_underlined) ch += 0x10;
+                if (attr & nss_attrib_inverse) ch += 0x20;
+                if (attr & nss_attrib_blink) ch += 0x40;
+                if (attr & nss_attrib_bold) ch += 0x80;
+                if (attr & nss_attrib_italic) ch += 0x100;
+                if (attr & nss_attrib_faint) ch += 0x200;
+                if (attr & nss_attrib_strikethrough) ch += 0x400;
+                if (attr & nss_attrib_invisible) ch += 0x800;
+            }
+            if (first || line->cell[i].ch || (attr & 0xFF))
+                trm += ch + spc, spc = 0;
+            else if (!line->cell[i].ch && notrim) spc += ' ';
+
+            res += ch;
+            first = notrim;
+        }
+        if (!notrim) spc = first = 0;
+    }
+
+    if (!notrim) res = trm;
+    return term->mode & nss_tm_cksm_positive ? res : -res;
+}
 
 static void term_reverse_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
@@ -1133,10 +1194,7 @@ static void term_encode_sgr(char *dst, char *end, nss_cell_t cel, nss_color_t fg
 }
 
 static void term_report_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
-    xs = MAX(term_min_oy(term), MIN(xs, term_max_ox(term) - 1));
-    xe = MAX(term_min_oy(term), MIN(xe, term_max_ox(term)));
-    ys = MAX(term_min_oy(term), MIN(ys, term_max_oy(term) - 1));
-    ye = MAX(term_min_oy(term), MIN(ye, term_max_oy(term)));
+    term_rect_pre(term, &xs, &ys, &xe, &ye);
 
     if (ys >= ye || xs >= xe) {
         // Invalid rectangle
@@ -3625,6 +3683,18 @@ static void term_dispatch_csi(nss_term_t *term) {
                 term_min_ox(term) + PARAM(3, term_max_ox(term) - term_min_ox(term)),
                 term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)), 1);
         break;
+    case C('y') | I0('*'): /* DECRQCRA */
+        CHK_VT(4);
+        uint16_t sum = term_checksum(term, term_min_ox(term) + PARAM(3, 1) - 1, term_min_oy(term) + PARAM(2, 1) - 1,
+                term_min_ox(term) + PARAM(5, term_max_ox(term) - term_min_ox(term)),
+                term_min_oy(term) + PARAM(4, term_max_oy(term) - term_min_oy(term)));
+        // DECRPCRA
+        term_answerback(term, DCS"%d!~%04X"ST, PARAM(0, 0), sum);
+        break;
+    case C('y') | I0('#'): /* XTCHECKSUM */
+        term->mode &= ~nss_tm_cksm_mask;
+        term->mode |= ~(PARAM(0, 0) & 0x3FULL) << 48;
+        break;
     case C('}') | I0('\''): /* DECIC */
         CHK_VT(4);
         term_insert_columns(term, PARAM(0, 1));
@@ -3669,15 +3739,11 @@ static void term_dispatch_csi(nss_term_t *term) {
     //    break;
     //case C('|') | I0('\''): /* DECRQLP */
     //    break;
-    //case C('y') | I0('*'): /* DECRQCRA */
-    //    break;
     //case C('p') | P('>'): /* XTSMPOINTER */
     //    break;
     //case C('S') | P('?'): /* XTSMSGRAPHICS */
     //    break;
     //case C('S') | P('>'): /* Set graphics attributes, xterm */ //TODO SIXEL
-    //    break;
-    //case C('y') | I0('#'): /* XTCHECKSUM */
     //    break;
     default:
         term_esc_dump(term, 0);
