@@ -2455,7 +2455,7 @@ static void term_dispatch_osc(nss_term_t *term) {
                 for (size_t i = 0; i < nss_ct_MAX; i++) {
                     if (ts[i]) {
                         if (i == term->vsel.targ) term->vsel.targ = -1;
-                        nss_window_set_clip(term->win, parg, NSS_TIME_NOW, i);
+                        nss_window_set_clip(term->win, parg ? (uint8_t *)strdup((char *)parg) : parg, NSS_TIME_NOW, i);
                     }
                 }
             }

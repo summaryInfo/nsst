@@ -1144,7 +1144,7 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
         xcb_get_property_cookie_t pc = xcb_get_property(con, 0, win->wid, prop, XCB_GET_PROPERTY_TYPE_ANY, offset, PASTE_BLOCK_SIZE/4);
         xcb_generic_error_t *err = NULL;
         xcb_get_property_reply_t *rep = xcb_get_property_reply(con, pc, &err);
-        if (err) {
+        if (err || !rep) {
             free(err);
             free(rep);
             return;
@@ -1179,11 +1179,10 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
                 pos = data;
                 size = 0;
                 if (rep->type == ctx.atom.UTF8_STRING) {
-                    while (pos < end) {
-                        nss_char_t ch;
+                    nss_char_t ch;
+                    while (pos < end)
                         if (utf8_decode(&ch, (const uint8_t **)&pos, end))
                             buf[size++] = ch;
-                    }
                 } else {
                     while (pos < end)
                         size += utf8_encode(*pos++, buf + size, buf + BUFSIZ);

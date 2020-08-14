@@ -220,7 +220,7 @@ const uint8_t *base64_decode(uint8_t *dst, const uint8_t *buf, const uint8_t *en
 
 uint8_t *base64_encode(uint8_t *dst, const uint8_t *buf, const uint8_t *end) {
     static uint8_t conv[]  = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    uint32_t acc = 0, bits = 0, pad = (3 - (end - buf)) % 3;
+    uint32_t acc = 0, bits = 0, pad = (3 - (end - buf) % 3) % 3;
     while (buf < end) {
         acc = (acc << 8) | *buf++;
         bits += 8;
