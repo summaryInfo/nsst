@@ -2368,13 +2368,13 @@ static void term_dispatch_osc(nss_term_t *term) {
                 nss_color_t col = parse_color(parg, pnext);
                 if (col) term->palette[idx] = col;
                 else if (parg[0] == '?' && parg[1] == '\0')
-                    term_answerback(term, OSC"4;#%06X"ST, term->palette[idx] & 0x00FFFFFF);
+                    term_answerback(term, OSC"4;%d;#%06X"ST, idx, term->palette[idx] & 0x00FFFFFF);
                 else term_esc_dump(term, 0);
             }
             pstr = pnext + 1;
         }
         if (pstr < dend && !pnext) {
-            while (dstr++ < dend) if (!*dstr) *dstr = ';';
+            while (++dstr < dend) if (!*dstr) *dstr = ';';
             term_esc_dump(term, 0);
         }
         break;
