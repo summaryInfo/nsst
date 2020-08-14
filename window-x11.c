@@ -900,6 +900,18 @@ void nss_free_window(nss_window_t *win) {
     for (size_t i = 0; i < nss_ct_MAX; i++)
         free(win->clipped[i]);
 
+    nss_title_stack_item_t *tmp;
+    while (win->title_top) {
+        tmp = win->title_top->next;
+        free(win->title_top);
+        win->title_top = tmp;
+    }
+    while (win->icon_top) {
+        tmp = win->icon_top->next;
+        free(win->icon_top);
+        win->icon_top = tmp;
+    }
+
     free(win->font_name);
     free(win);
 };

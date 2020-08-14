@@ -162,7 +162,7 @@ nss_color_t parse_color(const uint8_t *str, const uint8_t *end) {
     return col;
 }
 
-uint8_t *hex_decode(uint8_t *dst, uint8_t *hex, uint8_t *end) {
+const uint8_t *hex_decode(uint8_t *dst, const uint8_t *hex, const uint8_t *end) {
     uint8_t val = 0;
     _Bool state = 0;
     while (hex  < end) {
@@ -181,7 +181,7 @@ uint8_t *hex_decode(uint8_t *dst, uint8_t *hex, uint8_t *end) {
 }
 
 inline static uint8_t tohexdigit(uint8_t c) {
-	return  c > 9 ? c + 'A' - 10 : c + '0';
+    return  c > 9 ? c + 'A' - 10 : c + '0';
 }
 
 uint8_t *hex_encode(uint8_t *dst, const uint8_t *str, const uint8_t *end) {
@@ -202,7 +202,7 @@ static int32_t decode_base64_byte(uint8_t b) {
     return -1;
 }
 
-uint8_t *base64_decode(uint8_t *dst, uint8_t *buf, uint8_t *end) {
+const uint8_t *base64_decode(uint8_t *dst, const uint8_t *buf, const uint8_t *end) {
     int32_t acc = 0, b, bits = 0;
     while (buf < end && (b = decode_base64_byte(*buf)) >= 0) {
         acc = (acc << 6) | b;
@@ -218,7 +218,7 @@ uint8_t *base64_decode(uint8_t *dst, uint8_t *buf, uint8_t *end) {
     return buf;
 }
 
-uint8_t *base64_encode(uint8_t *dst, uint8_t *buf, uint8_t *end) {
+uint8_t *base64_encode(uint8_t *dst, const uint8_t *buf, const uint8_t *end) {
     static uint8_t conv[]  = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     uint32_t acc = 0, bits = 0, pad = (3 - (end - buf)) % 3;
     while (buf < end) {

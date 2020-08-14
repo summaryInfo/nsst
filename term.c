@@ -39,7 +39,8 @@
 #define TTY_MAX_WRITE 256
 #define NSS_FD_BUF_SZ 4096
 #define ESC_MAX_PARAM 32
-#define ESC_MAX_STR 512
+#define ESC_MAX_STR 256
+#define ESC_MAX_LONG_STR 0x10000000
 #define ESC_DUMP_MAX 768
 #define MAX_REPORT 1024
 #define SEL_INIT_SIZE 32
@@ -64,6 +65,7 @@
 #define MAX_EXTRA_PALETTE (0x10000 - NSS_PALETTE_SIZE)
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
 #define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
+#define STR_CAP_STEP(x) (4*(x)/3)
 #define PARAM(i, d) (term->esc.param[i] > 0 ? (param_t)term->esc.param[i] : (param_t)(d))
 #define CHK_VT(v) { if (term->vt_level < (v)) break; }
 
@@ -221,6 +223,7 @@ struct nss_term {
         nss_tm_disable_132cols      = 1LL << 43,
         nss_tm_smooth_scroll        = 1LL << 44,
         nss_tm_xterm_more_hack      = 1LL << 45,
+        nss_tm_allow_change_font    = 1LL << 46,
 
         // Need to modify XTCHECKSUM aswell if theses values gets modified
         nss_tm_cksm_positive        = 1LL << 48,
@@ -258,7 +261,11 @@ struct nss_term {
         int32_t param[ESC_MAX_PARAM];
         uint32_t subpar_mask;
         size_t si;
-        uint8_t str[ESC_MAX_STR + 1];
+        size_t str_cap;
+        // Short strings are not allocated
+        uint8_t str_data[ESC_MAX_STR + 1];
+        // Long strings are
+        uint8_t *str_ptr;
     } esc;
 
     uint16_t vt_version;
@@ -683,11 +690,11 @@ static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
     return NSS_PALETTE_SIZE + line->pal->size - 1;
 }
 
-static nss_cell_t fixup_color(nss_line_t *line, nss_cursor_t *cur) {
+inline static nss_cell_t fixup_color(nss_line_t *line, nss_cursor_t *cur) {
     nss_cell_t cel = cur->cel;
-    if (cel.bg >= NSS_PALETTE_SIZE)
+    if (__builtin_expect(cel.bg >= NSS_PALETTE_SIZE, 0))
         cel.bg = alloc_color(line, cur->bg);
-    if (cel.fg >= NSS_PALETTE_SIZE)
+    if (__builtin_expect(cel.fg >= NSS_PALETTE_SIZE, 0))
         cel.fg = alloc_color(line, cur->fg);
     return cel;
 }
@@ -698,6 +705,7 @@ static nss_line_t *term_create_line(nss_term_t *term, nss_coord_t width) {
         line->width = width;
         line->wrap_at = 0;
         line->pal = NULL;
+        line->force_damage = 0;
         nss_cell_t cel = fixup_color(line, &term->c);
         for (nss_coord_t i = 0; i < width; i++)
             line->cell[i] = cel;
@@ -918,8 +926,13 @@ inline static void term_esc_start_seq(nss_term_t *term) {
 }
 inline static void term_esc_start_string(nss_term_t *term) {
     term->esc.si = 0;
-    term->esc.str[0] = 0;
+    term->esc.str_data[0] = 0;
+    term->esc.str_cap = ESC_MAX_STR;
     term->esc.selector = 0;
+}
+inline static void term_esc_finish_string(nss_term_t *term) {
+    free(term->esc.str_ptr);
+    term->esc.str_ptr = NULL;
 }
 
 static void term_esc_dump(nss_term_t *term, _Bool use_info) {
@@ -953,12 +966,12 @@ static void term_esc_dump(nss_term_t *term, _Bool use_info) {
                 buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
             buf[pos++] = (C_MASK & term->esc.selector) + 0x40;
             if (term->esc.state != esc_dcs_string) break;
-            strncat(buf + pos, (char *)term->esc.str, ESC_DUMP_MAX - pos);
-            pos += term->esc.si + 3;
-            strncat(buf + pos - 3, "^[\\", ESC_DUMP_MAX - pos);
-            break;
+
+            buf[pos] = 0;
+            (use_info ? info : warn)("%s%s^[\\", buf, term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data);
+            return;
         case esc_osc_string:
-            (use_info ? info : warn)("^[]%u;%s^[\\", term->esc.selector, term->esc.str);
+            (use_info ? info : warn)("^[]%u;%s^[\\", term->esc.selector, term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data);
         default:
             return;
     }
@@ -2083,55 +2096,55 @@ static enum nss_char_set parse_nrcs(param_t selector, _Bool is96, uint16_t vt_le
 }
 
 inline static void term_parse_cursor_report(nss_term_t *term) {
-    char *str = (char *)term->esc.str;
+    char *dstr = (char *)(term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data);
 
     // Cursor Y
-    ssize_t y = strtoul(str, &str, 10);
-    if (!str || *str++ != ';') goto err;
+    ssize_t y = strtoul(dstr, &dstr, 10);
+    if (!dstr || *dstr++ != ';') goto err;
 
     // Cursor X
-    ssize_t x = strtoul(str, &str, 10);
-    if (!str || *str++ != ';') goto err;
+    ssize_t x = strtoul(dstr, &dstr, 10);
+    if (!dstr || *dstr++ != ';') goto err;
 
     // Page, always '1'
-    if (*str++ != '1' || *str++ != ';') goto err;
+    if (*dstr++ != '1' || *dstr++ != ';') goto err;
 
     // SGR
-    char sgr0 = *str++, sgr1 = 0x40;
+    char sgr0 = *dstr++, sgr1 = 0x40;
     if ((sgr0 & 0xD0) != 0x40) goto err;
 
     // Optional extended byte
-    if (sgr0 & 0x20) sgr1 = *str++;
-    if ((sgr1 & 0xF0) != 0x40 || *str++ != ';') goto err;
+    if (sgr0 & 0x20) sgr1 = *dstr++;
+    if ((sgr1 & 0xF0) != 0x40 || *dstr++ != ';') goto err;
 
     // Protection
-    char prot = *str++;
-    if ((prot & 0xFE) != 0x40 || *str++ != ';') goto err;
+    char prot = *dstr++;
+    if ((prot & 0xFE) != 0x40 || *dstr++ != ';') goto err;
 
     // Flags
-    char flags = *str++;
-    if ((flags & 0xF0) != 0x40 || *str++ != ';') goto err;
+    char flags = *dstr++;
+    if ((flags & 0xF0) != 0x40 || *dstr++ != ';') goto err;
 
     // GL
-    unsigned long gl = strtoul(str, &str, 10);
-    if (!str || *str++ != ';'|| gl > 3) goto err;
+    unsigned long gl = strtoul(dstr, &dstr, 10);
+    if (!dstr || *dstr++ != ';'|| gl > 3) goto err;
 
     // GR
-    unsigned long gr = strtoul(str, &str, 10);
-    if (!str || *str++ != ';' || gr > 3) goto err;
+    unsigned long gr = strtoul(dstr, &dstr, 10);
+    if (!dstr || *dstr++ != ';' || gr > 3) goto err;
 
     // G0 - G3 sizes
-    char c96 = *str++;
-    if ((flags & 0xF0) != 0x40 || *str++ != ';') goto err;
+    char c96 = *dstr++;
+    if ((flags & 0xF0) != 0x40 || *dstr++ != ';') goto err;
 
     // G0 - G3
     enum nss_char_set gn[4];
     for (size_t i = 0; i < 4; i++) {
         param_t sel = 0;
         char c;
-        if ((c = *str++) < 0x30) {
+        if ((c = *dstr++) < 0x30) {
             sel |= I1(c);
-            if ((c = *str++) < 0x30) goto err;
+            if ((c = *dstr++) < 0x30) goto err;
         }
         sel |= E(c);
         if ((gn[i] = parse_nrcs(sel, (c96 >> i) & 1, term->vt_level,
@@ -2174,12 +2187,14 @@ err:
 
 inline static void term_parse_tabs_report(nss_term_t *term) {
     memset(term->tabs, 0, term->width*sizeof(*term->tabs));
-    for (ssize_t tab = 0, i = 0; i <= (ssize_t)term->esc.si; i++) {
-        if (term->esc.str[i] == '/' || i == (ssize_t)term->esc.si) {
+    uint8_t *dstr = term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
+    uint8_t *dend = dstr + term->esc.si;
+    for (ssize_t tab = 0; dstr <= dend; dstr++) {
+        if (*dstr == '/' || dstr == dend) {
             if (tab - 1 < term->width) term->tabs[tab - 1] = 1;
             tab = 0;
-        } else if (isdigit(term->esc.str[i])) {
-            tab = 10 * tab + term->esc.str[i] - '0';
+        } else if (isdigit(*dstr)) {
+            tab = 10 * tab + *dstr - '0';
         } else  term_esc_dump(term, 0);
     }
 }
@@ -2198,6 +2213,8 @@ static void term_dispatch_dcs(nss_term_t *term) {
     // Only SGR is allowed to have subparams
     if (term->esc.subpar_mask) return;
 
+    uint8_t *dstr = term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
+
     switch (term->esc.selector) {
     case C('s') | P('='): /* iTerm2 syncronous updates */
         switch (PARAM(0,0)) {
@@ -2213,7 +2230,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
         break;
     case C('q') | I0('$'): /* DECRQSS -> DECRPSS */ {
         if (term->esc.si && term->esc.si < 3) {
-            uint16_t id = term->esc.str[0] | term->esc.str[1] << 8;
+            uint16_t id = *dstr | dstr[1] << 8;
             switch(id) {
             case 'm': /* -> SGR */ {
                 char sgr[SGR_BUFSIZ];
@@ -2279,6 +2296,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
         term_esc_dump(term, 0);
     }
 
+    term_esc_finish_string(term);
     term->esc.old_state = 0;
     term->esc.state = esc_ground;
 }
@@ -2300,44 +2318,54 @@ static void term_dispatch_osc(nss_term_t *term) {
     }
     term_esc_dump(term, 1);
 
+    uint8_t *dstr = term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
+    uint8_t *dend = dstr + term->esc.si;
+
     switch (term->esc.selector) {
         nss_color_t col;
     case 0: /* Change window icon name and title */
     case 1: /* Change window icon name */
     case 2: /* Change window title */
         if (term->mode & nss_tm_title_set_hex) {
-            if (*hex_decode(term->esc.str, term->esc.str, term->esc.str + term->esc.si)) {
+            if (*hex_decode(dstr, dstr, dend)) {
                 term_esc_dump(term, 0);
                 break;
             }
+            dend = memchr(dstr, 0, ESC_MAX_STR);
         }
+        uint8_t *res = NULL;
         if (!(term->mode & nss_tm_title_set_utf8) && term->mode & nss_tm_utf8) {
-            uint8_t *dst = term->esc.str;
+            uint8_t *dst = dstr;
             const uint8_t *ptr = dst;
             nss_char_t val = 0;
-            while (*ptr && utf8_decode(&val, &ptr, term->esc.str + term->esc.si))
+            while (*ptr && utf8_decode(&val, &ptr, dend))
                 *dst++ = val;
             *dst = '\0';
         } else if (term->mode & nss_tm_title_set_utf8 && !(term->mode & nss_tm_utf8)) {
-            //TODO Encode UTF-8
+            res = malloc(term->esc.si * 2 + 1);
+            uint8_t *ptr = res, *src = dstr;
+            if (res) {
+                while (*src) ptr += utf8_encode(*src++, ptr, res + term->esc.si * 2);
+                *ptr = '\0';
+                dstr = res;
+            }
         }
-        nss_window_set_title(term->win, 3 - term->esc.selector, (char *)term->esc.str, term->mode & nss_tm_utf8);
+        nss_window_set_title(term->win, 3 - term->esc.selector, (char *)dstr, term->mode & nss_tm_utf8);
+        free(res);
         break;
     case 4: /* Set color */ {
-        char *pstr = (char *)term->esc.str, *pnext = NULL, *s_end;
-        char *pend = pstr + term->esc.si;
-        while (pstr < pend && (pnext = strchr(pstr, ';'))) {
+        uint8_t *pstr = dstr, *pnext = NULL, *s_end;
+        while (pstr < dend && (pnext = memchr(pstr, ';', dend - pstr))) {
             *pnext = '\0';
             errno = 0;
-            unsigned long idx = strtoul(pstr, &s_end, 10);
+            unsigned long idx = strtoul((char *)pstr, (char **)&s_end, 10);
 
-            char *parg  = pnext + 1;
-            if ((pnext = strchr(parg, ';'))) *pnext = '\0';
-            else pnext = pend;
+            uint8_t *parg  = pnext + 1;
+            if ((pnext = memchr(parg, ';', dend - parg))) *pnext = '\0';
+            else pnext = dend;
 
             if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
-
-                nss_color_t col = parse_color((uint8_t *)parg, (uint8_t *)pnext);
+                nss_color_t col = parse_color(parg, pnext);
                 if (col) term->palette[idx] = col;
                 else if (parg[0] == '?' && parg[1] == '\0')
                     term_answerback(term, OSC"4;#%06X"ST, term->palette[idx] & 0x00FFFFFF);
@@ -2345,9 +2373,8 @@ static void term_dispatch_osc(nss_term_t *term) {
             }
             pstr = pnext + 1;
         }
-        if (pstr < pend && !pnext) {
-            for (size_t i = 0; i < term->esc.si; i++)
-                if (!term->esc.str[i]) term->esc.str[i] = ';';
+        if (pstr < dend && !pnext) {
+            while (dstr++ < dend) if (!*dstr) *dstr = ';';
             term_esc_dump(term, 0);
         }
         break;
@@ -2357,7 +2384,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         term_esc_dump(term, 0);
         break;
     case 10: /* Set VT100 foreground color */
-        if ((col = parse_color(term->esc.str, term->esc.str + term->esc.si))) {
+        if ((col = parse_color(dstr, dend))) {
             if (term->mode & nss_tm_reverse_video) {
                 term->palette[NSS_SPECIAL_BG] = col;
                 nss_window_set_colors(term->win, col, 0);
@@ -2365,7 +2392,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         } else term_esc_dump(term, 0);
         break;
     case 11: /* Set VT100 background color */
-        if ((col = parse_color(term->esc.str, term->esc.str + term->esc.si))) {
+        if ((col = parse_color(dstr, dend))) {
             nss_color_t def = term->palette[NSS_SPECIAL_BG];
             col = (col & 0x00FFFFFF) | (0xFF000000 & def); // Keep alpha
             if (!(term->mode & nss_tm_reverse_video)) {
@@ -2378,7 +2405,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         } else term_esc_dump(term, 0);
         break;
     case 12: /* Set Cursor color */
-        if ((col = parse_color(term->esc.str, term->esc.str + term->esc.si))) {
+        if ((col = parse_color(dstr, dend))) {
             if (!(term->mode & nss_tm_reverse_video)) {
                 nss_window_set_colors(term->win, 0, term->palette[NSS_SPECIAL_CURSOR_FG] = col);
             } else term->palette[NSS_SPECIAL_CURSOR_BG] = col;
@@ -2388,7 +2415,7 @@ static void term_dispatch_osc(nss_term_t *term) {
     case 14: /* Set Mouse background color */
         break;
     case 17: /* Set Highlight background color */
-        if ((col = parse_color(term->esc.str, term->esc.str + term->esc.si))) {
+        if ((col = parse_color(dstr, dend))) {
             if (!(term->mode & nss_tm_reverse_video))
                 term->palette[NSS_SPECIAL_SELECTED_BG] = col;
             else term->palette[NSS_SPECIAL_SELECTED_FG] = col;
@@ -2396,7 +2423,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         } else term_esc_dump(term, 0);
         break;
     case 19: /* Set Highlight foreground color */
-        if ((col = parse_color(term->esc.str, term->esc.str + term->esc.si))) {
+        if ((col = parse_color(dstr, dend))) {
             if (!(term->mode & nss_tm_reverse_video))
                 term->palette[NSS_SPECIAL_SELECTED_FG] = col;
             else term->palette[NSS_SPECIAL_SELECTED_BG] = col;
@@ -2411,20 +2438,20 @@ static void term_dispatch_osc(nss_term_t *term) {
 
         nss_clipboard_target_t ts[nss_ct_MAX] = {0};
         _Bool toclip = term->mode & nss_tm_select_to_clipboard;
-        uint8_t *parg = term->esc.str, *end = term->esc.str + term->esc.si, letter = 0;
-        for (; parg < end && *parg !=  ';'; parg++) {
+        uint8_t *parg = dstr, letter = 0;
+        for (; parg < dend && *parg !=  ';'; parg++) {
             if (strchr("pqsc", *parg)) {
                 ts[decode_target(*parg, toclip)] = 1;
                 if (!letter) letter = *parg;
             }
         }
-        if (parg++ < end) {
+        if (parg++ < dend) {
             if (!letter) ts[decode_target((letter = 'c'), toclip)] = 1;
             if (!strcmp("?", (char*)parg)) {
                 term->paste_from = letter;
                 nss_window_paste_clip(term->win, decode_target(letter, toclip));
             } else {
-                if (base64_decode(parg, parg, end) != end) parg = NULL;
+                if (base64_decode(parg, parg, dend) != dend) parg = NULL;
                 for (size_t i = 0; i < nss_ct_MAX; i++) {
                     if (ts[i]) {
                         if (i == term->vsel.targ) term->vsel.targ = -1;
@@ -2437,15 +2464,15 @@ static void term_dispatch_osc(nss_term_t *term) {
     }
     case 104: /* Reset color */
         if (term->esc.si) {
-            char *pstr = (char *)term->esc.str, *pnext, *s_end;
-            while ((pnext = strchr(pstr, ';'))) {
+            uint8_t *pnext, *s_end;
+            while ((pnext = memchr(dstr, ';', dend - dstr))) {
                 *pnext = '\0';
                 errno = 0;
-                unsigned long idx = strtoul(pstr, &s_end, 10);
-                if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
+                unsigned long idx = strtoul((char *)dstr, (char **)&s_end, 10);
+                if (!errno && !*s_end && s_end != dstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
                     term->palette[idx] = nss_config_color(NSS_CCONFIG_COLOR_0 + idx);
                 } else term_esc_dump(term, 0);
-                pstr = pnext + 1;
+                dstr = pnext + 1;
             }
         } else {
             for (size_t i = 0; i < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; i++)
@@ -2492,10 +2519,9 @@ static void term_dispatch_osc(nss_term_t *term) {
         term_update_selection(term, nss_ssnap_none, (nss_selected_t){0});
         break;
     case 13001: {
-        char *end = (char *)term->esc.str;
         errno = 0;
-        unsigned long res = strtoul(end, &end, 10);
-        if (res > 255 || errno || *end) {
+        unsigned long res = strtoul((char *)dstr, (char **)&dstr, 10);
+        if (res > 255 || errno || *dstr) {
             term_esc_dump(term, 0);
             break;
         }
@@ -2508,6 +2534,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         term_esc_dump(term, 0);
     }
 
+    term_esc_finish_string(term);
     term->esc.old_state = 0;
     term->esc.state = esc_ground;
 }
@@ -2591,6 +2618,9 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 break;
             case 30: /* Show scrollbar */
                 // IGNORE - There is no scrollbar
+                break;
+            case 35: /* URXVT Allow change font */
+                ENABLE_IF(set, term->mode, nss_tm_allow_change_font);
                 break;
             case 40: /* 132COLS */
                 ENABLE_IF(!set, term->mode, nss_tm_disable_132cols);
@@ -3592,6 +3622,9 @@ static void term_dispatch_csi(nss_term_t *term) {
         case 30: /* Show scrollbar */
             val = 4;
             break;
+        case 35: /* URXVT Allow change font */
+            val = 1 + !(term->mode & nss_tm_allow_change_font);
+            break;
         case 40: /* 132COLS */
             val = 1 + !!(term->mode & nss_tm_disable_132cols);
             break;
@@ -4015,6 +4048,7 @@ static void term_dispatch_esc(nss_term_t *term) {
     }
     }
 
+    term_esc_finish_string(term);
     term->esc.old_state = 0;
     term->esc.state = esc_ground;
 }
@@ -4082,6 +4116,7 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
             nss_term_clear_selection(term);
         term_put_cell(term, term->c.x, term->c.y, '?');
     case 0x18: /* CAN */
+        term_esc_finish_string(term);
         term->esc.state = esc_ground;
         break;
     case 0x19: /* EM (IGNORE) */
@@ -4329,17 +4364,17 @@ static void term_dispatch(nss_term_t *term, nss_char_t ch) {
             size_t char_len = utf8_encode(ch, buf, buf + UTF8_MAX_LEN);
             buf[char_len] = '\0';
 
-            /* TODO Don't ignore long strings but process them to free buffer
-             * (need some complicated code to process incomplete OSC/DCS strings)
-             * This is only relevant to OSC 52, SIXEL, DECUDK and DECDLD
-             * The latter three is not implemented yet
-             * so nss_window_append_clip
-             *      -- it appends to selection data if only we still own selection
-             *         and just ignores data otherwise
-             *      -- also, it shouldn't own passed buffer to decode base64 in-place */
+            if (term->esc.si + char_len + 1 > term->esc.str_cap) {
+                size_t new_cap = STR_CAP_STEP(term->esc.str_cap);
+                if (new_cap > ESC_MAX_LONG_STR) break;
+                uint8_t *new = realloc(term->esc.str_ptr, new_cap + 1);
+                if (!new) break;
+                if (!term->esc.str_ptr) memcpy(new, term->esc.str_data, term->esc.si);
+                term->esc.str_ptr = new;
+                term->esc.str_cap = new_cap;
+            }
 
-            if (term->esc.si + char_len + 1 > ESC_MAX_STR) return;
-            memcpy(term->esc.str + term->esc.si, buf, char_len + 1);
+            memcpy((term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data) + term->esc.si, buf, char_len + 1);
             term->esc.si += char_len;
         }
         break;
