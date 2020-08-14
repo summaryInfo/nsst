@@ -220,6 +220,7 @@ struct nss_term {
         nss_tm_lr_margins           = 1LL << 42,
         nss_tm_disable_132cols      = 1LL << 43,
         nss_tm_smooth_scroll        = 1LL << 44,
+        nss_tm_xterm_more_hack      = 1LL << 45,
 
         // Need to modify XTCHECKSUM aswell if theses values gets modified
         nss_tm_cksm_positive        = 1LL << 48,
@@ -1669,10 +1670,51 @@ static void term_cr(nss_term_t *term) {
             term_min_ox(term) : term_min_x(term), term->c.y);
 }
 
+static void term_print_char(nss_term_t *term, nss_char_t ch) {
+    uint8_t buf[5] = {ch};
+    size_t sz = 1;
+    if (term->mode & nss_tm_utf8) sz = utf8_encode(ch, buf, buf + 5);
+    if (write(term->printerfd, buf, sz) < 0) {
+        warn("Printer error");
+        if (term->printerfd != STDOUT_FILENO)
+            close(term->printerfd);
+        term->printerfd = -1;
+    }
+}
+
+static void term_print_line(nss_term_t *term, nss_line_t *line) {
+    if (term->printerfd < 0) return;
+
+    for (nss_coord_t i = 0; i < MIN(line->width, term->width); i++)
+        term_print_char(term, line->cell[i].ch);
+    term_print_char(term, '\n');
+}
+
+static void term_print_screen(nss_term_t *term, _Bool ext) {
+    if (term->printerfd < 0) return;
+
+    nss_coord_t top = ext ? 0 : term->top;
+    nss_coord_t bottom = ext ? term->height - 1 : term->bottom;
+
+    while (top < bottom) term_print_line(term, term->screen[top++]);
+    if (term->mode & nss_tm_print_form_feed)
+        term_print_char(term, '\f');
+}
+
+inline static void term_do_wrap(nss_term_t *term) {
+    term->screen[term->c.y]->wrap_at = term->c.x + 1;
+    if ((term->mode & nss_tm_print_mask) == nss_tm_print_auto)
+        term_print_line(term, term->screen[term->c.y]);
+    term_index(term);
+    term_cr(term);
+}
+
 static void term_tabs(nss_term_t *term, nss_coord_t n) {
     //TODO CHT is not affected by DECCOM but CBT is?
 
     if (n >= 0) {
+        if (term->mode & nss_tm_xterm_more_hack && term->c.pending)
+            term_do_wrap(term);
         while (term->c.x < term_max_x(term) - 1 && n--) {
             do term->c.x++;
             while (term->c.x < term_max_x(term) - 1 && !term->tabs[term->c.x]);
@@ -2554,6 +2596,9 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             case 40: /* 132COLS */
                 ENABLE_IF(!set, term->mode, nss_tm_disable_132cols);
                 break;
+            case 41: /* XTerm more(1) hack */
+                ENABLE_IF(set, term->mode, nss_tm_xterm_more_hack);
+                break;
             case 42: /* DECNRCM */
                 CHK_VT(3);
                 ENABLE_IF(set, term->mode, nss_tm_enable_nrcs);
@@ -2710,37 +2755,6 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
     }
 }
 
-static void term_print_char(nss_term_t *term, nss_char_t ch) {
-    uint8_t buf[5] = {ch};
-    size_t sz = 1;
-    if (term->mode & nss_tm_utf8) sz = utf8_encode(ch, buf, buf + 5);
-    if (write(term->printerfd, buf, sz) < 0) {
-        warn("Printer error");
-        if (term->printerfd != STDOUT_FILENO)
-            close(term->printerfd);
-        term->printerfd = -1;
-    }
-}
-
-static void term_print_line(nss_term_t *term, nss_line_t *line) {
-    if (term->printerfd < 0) return;
-
-    for (nss_coord_t i = 0; i < MIN(line->width, term->width); i++)
-        term_print_char(term, line->cell[i].ch);
-    term_print_char(term, '\n');
-}
-
-static void term_print_screen(nss_term_t *term, _Bool ext) {
-    if (term->printerfd < 0) return;
-
-    nss_coord_t top = ext ? 0 : term->top;
-    nss_coord_t bottom = ext ? term->height - 1 : term->bottom;
-
-    while (top < bottom) term_print_line(term, term->screen[top++]);
-    if (term->mode & nss_tm_print_form_feed)
-        term_print_char(term, '\f');
-}
-
 static void term_dispatch_mc(nss_term_t *term) {
     if (term->esc.selector & P_MASK) {
         switch (PARAM(0, 0)) {
@@ -2826,13 +2840,8 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
 
     // Wrap line if needed
     if (term->mode & nss_tm_wrap) {
-        if (term->c.pending || (width == 2 && term->c.x == term_max_x(term) - 1)) {
-            term->screen[term->c.y]->wrap_at = term->c.x + 1;
-            if ((term->mode & nss_tm_print_mask) == nss_tm_print_auto)
-                term_print_line(term, term->screen[term->c.y]);
-            term_index(term);
-            term_cr(term);
-        }
+        if (term->c.pending || (width == 2 && term->c.x == term_max_x(term) - 1))
+            term_do_wrap(term);
     } else term->c.x = MIN(term->c.x, term_max_x(term) - width);
 
     nss_cell_t *cell = &term->screen[term->c.y]->cell[term->c.x];
@@ -3586,6 +3595,9 @@ static void term_dispatch_csi(nss_term_t *term) {
         case 40: /* 132COLS */
             val = 1 + !!(term->mode & nss_tm_disable_132cols);
             break;
+        case 41: /* XTerm more(1) hack */
+        	val = 1 + !(term->mode & nss_tm_xterm_more_hack);
+        	break;
         case 42: /* DECNRCM */
             val = 1 + !(term->mode & nss_tm_enable_nrcs);
             break;
