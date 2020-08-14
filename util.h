@@ -97,6 +97,7 @@ _Bool utf8_decode(nss_char_t *res, const uint8_t **buf, const uint8_t *end);
 
 /* *_decode returns source buffer end */
 /* *_encode returns destination buffer end */
+uint8_t *hex_encode(uint8_t *dst, const uint8_t *str, const uint8_t *end);
 uint8_t *hex_decode(uint8_t *dst, uint8_t *hex, uint8_t *end);
 uint8_t *base64_decode(uint8_t *dst, uint8_t *buf, uint8_t *end);
 uint8_t *base64_encode(uint8_t *dst, uint8_t *buf, uint8_t *end);

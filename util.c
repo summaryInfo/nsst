@@ -176,7 +176,21 @@ uint8_t *hex_decode(uint8_t *dst, uint8_t *hex, uint8_t *end) {
         if (!(state = !state))
             *dst++ = val, val = 0;
     }
+    *dst = '\0';
     return hex;
+}
+
+inline static uint8_t tohexdigit(uint8_t c) {
+	return  c > 9 ? c + 'A' - 10 : c + '0';
+}
+
+uint8_t *hex_encode(uint8_t *dst, const uint8_t *str, const uint8_t *end) {
+    while (str < end) {
+        *dst++ = tohexdigit(*str >> 4);
+        *dst++ = tohexdigit(*str++ & 0xF);
+    }
+    *dst = '\0';
+    return dst;
 }
 
 static int32_t decode_base64_byte(uint8_t b) {
@@ -200,7 +214,7 @@ uint8_t *base64_decode(uint8_t *dst, uint8_t *buf, uint8_t *end) {
     }
     bits /= 2;
     while (bits-- && *buf == '=') buf++;
-    *dst++ = '\0';
+    *dst = '\0';
     return buf;
 }
 

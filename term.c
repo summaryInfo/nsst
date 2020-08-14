@@ -1353,7 +1353,7 @@ static void term_selective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t y
 }
 
 
-static void term_adjust_wide_left(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
+inline static void term_adjust_wide_left(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
     if (x < 1) return;
     nss_cell_t *cell = &term->screen[y]->cell[x - 1];
     if (cell->attr & nss_attrib_wide) {
@@ -1362,7 +1362,7 @@ static void term_adjust_wide_left(nss_term_t *term, nss_coord_t x, nss_coord_t y
     }
 }
 
-static void term_adjust_wide_right(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
+inline static void term_adjust_wide_right(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
     if (x >= term->screen[y]->width - 1) return;
     nss_cell_t *cell = &term->screen[y]->cell[x + 1];
     if (cell[-1].attr & nss_attrib_wide) {
@@ -2265,18 +2265,20 @@ static void term_dispatch_osc(nss_term_t *term) {
     case 1: /* Change window icon name */
     case 2: /* Change window title */
         if (term->mode & nss_tm_title_set_hex) {
-            uint8_t *end = hex_decode(term->esc.str, term->esc.str, term->esc.str + term->esc.si);
-            if (*end) {
+            if (*hex_decode(term->esc.str, term->esc.str, term->esc.str + term->esc.si)) {
                 term_esc_dump(term, 0);
                 break;
-            } else *(term->esc.str + (end - term->esc.str)/2) = '\0';
-        } else if (!(term->mode & nss_tm_title_set_utf8) && (term->mode & nss_tm_utf8)) {
+            }
+        }
+        if (!(term->mode & nss_tm_title_set_utf8) && term->mode & nss_tm_utf8) {
             uint8_t *dst = term->esc.str;
             const uint8_t *ptr = dst;
             nss_char_t val = 0;
             while (*ptr && utf8_decode(&val, &ptr, term->esc.str + term->esc.si))
                 *dst++ = val;
             *dst = '\0';
+        } else if (term->mode & nss_tm_title_set_utf8 && !(term->mode & nss_tm_utf8)) {
+            //TODO Encode UTF-8
         }
         nss_window_set_title(term->win, 3 - term->esc.selector, (char *)term->esc.str, term->mode & nss_tm_utf8);
         break;
@@ -2806,9 +2808,10 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
 
     term->prev_ch = ch; // For REP CSI
 
-    nss_coord_t width = MIN(wcwidth(ch), 2);
-    if (width < 0) /*ch = UTF_INVAL,*/ width = 1;
-    else if (!width) {
+    nss_coord_t width = wcwidth(ch);
+    if (width < 0) width = 1;
+    else if (width > 1) width = 2;
+    else if(!width) {
         nss_cell_t *cel = &term->screen[term->c.y]->cell[term->c.x];
         if (term->c.x) cel--;
         if (!cel->ch && term->c.x > 1 && cel[-1].attr & nss_attrib_wide) cel--;
@@ -2823,7 +2826,7 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
 
     // Wrap line if needed
     if (term->mode & nss_tm_wrap) {
-        if (term->c.pending || (term->c.x == term_max_x(term) - 1 && width == 2)) {
+        if (term->c.pending || (width == 2 && term->c.x == term_max_x(term) - 1)) {
             term->screen[term->c.y]->wrap_at = term->c.x + 1;
             if ((term->mode & nss_tm_print_mask) == nss_tm_print_auto)
                 term_print_line(term, term->screen[term->c.y]);
@@ -2832,14 +2835,13 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
         }
     } else term->c.x = MIN(term->c.x, term_max_x(term) - width);
 
-    // Shift characters to the left if insert mode is enabled
     nss_cell_t *cell = &term->screen[term->c.y]->cell[term->c.x];
-    if (term->mode & nss_tm_insert) {
-        if (term->c.x + width < term_max_x(term)) {
-            for (nss_cell_t *c = cell + width; c - term->screen[term->c.y]->cell < term_max_x(term); c++)
-                c->attr &= ~nss_attrib_drawn;
-            memmove(cell + width, cell, (term_max_x(term) - term->c.x - width)*sizeof(*cell));
-        }
+
+    // Shift characters to the left if insert mode is enabled
+    if (term->mode & nss_tm_insert && term->c.x + width < term_max_x(term)) {
+        for (nss_cell_t *c = cell + width; c - term->screen[term->c.y]->cell < term_max_x(term); c++)
+            c->attr &= ~nss_attrib_drawn;
+        memmove(cell + width, cell, (term_max_x(term) - term->c.x - width)*sizeof(*cell));
     }
 
     // Erase overwritten parts of wide characters
@@ -2859,9 +2861,8 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
         cell[0].attr |= nss_attrib_wide;
     }
 
-    term->c.x += width;
-    term->c.pending = term->c.x == term_max_x(term);
-    term->c.x -= term->c.pending;
+    term->c.pending = term->c.x + width == term_max_x(term);
+    term->c.x += width - term->c.pending;
 
     term->c.gl_ss = term->c.gl; // Reset single shift
 }
@@ -2992,11 +2993,42 @@ static void term_dispatch_window_op(nss_term_t *term) {
         break;
     }
     case 20: /* Report icon label */
-        term_answerback(term, OSC"L%s"ST, nss_window_get_title(term->win, nss_tt_icon_label));
+    case 21: /* Report title */ {
+        uint8_t *res = NULL, *res2 = NULL, *tmp;
+        const uint8_t *title = (const uint8_t *)nss_window_get_title(term->win,
+                pa == 20 ? nss_tt_icon_label : nss_tt_title);
+        _Bool tutf8 = nss_window_is_title_utf8(term->win,
+                pa == 20 ? nss_tt_icon_label : nss_tt_title);
+        size_t tlen = strlen((const char *)title);
+
+        if (!(term->mode & nss_tm_title_query_utf8) && tutf8) {
+            if ((tmp = res2 = malloc(tlen + 1))) {
+                const uint8_t *end = title + tlen;
+                uint32_t u;
+                while (utf8_decode(&u, &title, end)) *tmp++ = u;
+                *tmp = '\0';
+                tlen = tmp - res2;
+                title = res2;
+            }
+        } else if (term->mode & nss_tm_title_query_utf8 && !tutf8) {
+            if ((tmp = res2 = malloc(2 * tlen + 1))) {
+                while (*title) tmp += utf8_encode(*title++, tmp, res2 + 2 * tlen);
+                *tmp = '\0';
+                tlen = tmp - res2;
+                title = res2;
+            }
+        }
+        if (term->mode & nss_tm_title_query_hex) {
+            if ((res = malloc(tlen*2 + 1))) {
+                hex_encode(res, title, title + tlen);
+                title = res;
+            }
+        }
+        term_answerback(term, OSC"%c%s"ST, pa == 20 ? 'L' : 'l', title);
+        free(res);
+        free(res2);
         break;
-    case 21: /* Report title */
-        term_answerback(term, OSC"l%s"ST, nss_window_get_title(term->win, nss_tt_title));
-        break;
+    }
     case 22: /* Save */
         switch (PARAM(1, 0)) {
         case 0: /* Title and icon label */
@@ -4157,7 +4189,7 @@ static void term_dispatch(nss_term_t *term, nss_char_t ch) {
     if (term->mode & nss_tm_print_enabled)
         term_print_char(term, ch);
 
-    if (IS_C1(ch) && (term->vt_level > 1)) {
+    if (IS_C1(ch) && term->vt_level > 1) {
         term->esc.old_selector = term->esc.selector;
         term->esc.old_state = term->esc.state;
         term->esc.state = esc_esc_entry;

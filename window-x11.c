@@ -635,11 +635,18 @@ void nss_window_pop_title(nss_window_t *win, nss_title_target_t which) {
     }
 }
 
-char *nss_window_get_title(nss_window_t *win, nss_title_target_t which) {
+const char *nss_window_get_title(nss_window_t *win, nss_title_target_t which) {
     // Return stack top
     if (which & nss_tt_title && win->title_top) return win->title_top->data;
     if (which & nss_tt_icon_label && win->icon_top) return win->icon_top->data;
     return "";
+}
+
+_Bool nss_window_is_title_utf8(nss_window_t *win, nss_title_target_t which) {
+    // Return stack top
+    if (which & nss_tt_title && win->title_top) return win->title_top->utf8;
+    if (which & nss_tt_icon_label && win->icon_top) return win->icon_top->utf8;
+    return 0;
 }
 
 uint32_t get_win_gravity_from_config() {
