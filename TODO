@@ -1,6 +1,5 @@
-Until version 1.5
-    Dynamically allocated string buffer for huge OSC/DSC strings
 Until version 1.6:
+    Title and icon share stack
     URXVT/UTF-8 mouse
     DEC Locator
     Special colors
