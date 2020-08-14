@@ -1938,11 +1938,10 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
              *28 - Rectangular editing
              *29 - ANSI text locator (i.e., DEC Locator mode).
              */
-            term_answerback(term, CSI"?%u;1;2;6%s;9%s;22%sc",
+            term_answerback(term, CSI"?%u;1;2;6%s;9%sc",
                     60 + term->vt_version/100,
                     term->inmode.keyboard_mapping == nss_km_vt220 ? ";8" : "",
-                    term->vt_level >= 4 ? ";21" : "",
-                    term->vt_level >= 4 ? ";28" : "");
+                    term->vt_level >= 4 ? ";21;22;28" : ";22");
         }
     }
 }
@@ -2995,10 +2994,11 @@ static void term_dispatch_window_op(nss_term_t *term) {
         term_answerback(term, CSI"8;%d;%dt", term->height, term->width);
         break;
     case 19: /* Report screen size (in cell units) */ {
-        int16_t s_w, s_h, c_w, c_h;
+        int16_t s_w, s_h, c_w, c_h, b_w, b_h;
         nss_window_get_dim_ext(term->win, nss_dt_screen_size, &s_w, &s_h);
         nss_window_get_dim_ext(term->win, nss_dt_cell_size, &c_w, &c_h);
-        term_answerback(term, CSI"9;%d;%dt", s_h/c_h, s_w/c_w);
+        nss_window_get_dim_ext(term->win, nss_dt_border, &b_w, &b_h);
+        term_answerback(term, CSI"9;%d;%dt", (s_h - 2*b_h)/c_h, (s_w - 2*b_w)/c_w);
         break;
     }
     case 20: /* Report icon label */
@@ -3596,8 +3596,8 @@ static void term_dispatch_csi(nss_term_t *term) {
             val = 1 + !!(term->mode & nss_tm_disable_132cols);
             break;
         case 41: /* XTerm more(1) hack */
-        	val = 1 + !(term->mode & nss_tm_xterm_more_hack);
-        	break;
+            val = 1 + !(term->mode & nss_tm_xterm_more_hack);
+            break;
         case 42: /* DECNRCM */
             val = 1 + !(term->mode & nss_tm_enable_nrcs);
             break;
