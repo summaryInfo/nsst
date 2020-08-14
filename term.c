@@ -5043,9 +5043,9 @@ static uint8_t *term_selection_data(nss_term_t *term) {
                 append_line(&pos, &cap, &res, line, term->vsel.n.x0, term->vsel.n.x1 + 1);
         } else {
             while ((line = line_iter_next(&it))) {
-                if (line_iter_y(&it) == term->vsel.n.y0)
+                if (!line_iter_y(&it))
                     append_line(&pos, &cap, &res, line, term->vsel.n.x0, line->width);
-                else if (line_iter_y(&it) == term->vsel.n.y1 && term->vsel.n.y1 != term->vsel.n.y0)
+                else if (line_iter_y(&it) == term->vsel.n.y1 - term->vsel.n.y0)
                     append_line(&pos, &cap, &res, line, 0, term->vsel.n.x1 + 1);
                 else
                     append_line(&pos, &cap, &res, line, 0, line->width);
