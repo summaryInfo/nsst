@@ -197,8 +197,8 @@ nss_color_t parse_color(const uint8_t *str, const uint8_t *end) {
         for (; str < end && i < 3; i++) {
             size_t clen = 0;
             while(str + clen < end && str[clen] != '/') {
-                if (!isxdigit(*str)) return 0;
-                rgb[i] = (rgb[i] << 4) | fromhexdigit(*str);
+                if (!isxdigit(str[clen])) return 0;
+                rgb[i] = (rgb[i] << 4) | fromhexdigit(str[clen]);
                clen++;
             }
             if (!i) {
@@ -215,17 +215,17 @@ nss_color_t parse_color(const uint8_t *str, const uint8_t *end) {
             return 0xFF000000 |
                 (rgb[0] << 20) |
                 (rgb[1] << 12) |
-                (rgb[2] << 4 );
+                (rgb[2] <<  4);
         case 2:
             return 0xFF000000 |
                 (rgb[0] << 16) |
-                (rgb[1] << 8 ) |
-                (rgb[2] << 0 );
+                (rgb[1] <<  8) |
+                (rgb[2] <<  0);
         default:
             return 0xFF000000 |
-                ((rgb[0] & 0xFF) << 20) |
-                ((rgb[1] & 0xFF) << 12) |
-                ((rgb[2] & 0xFF) << 4 );
+                ((rgb[0] & 0xFF) << 16) |
+                ((rgb[1] & 0xFF) <<  8) |
+                ((rgb[2] & 0xFF) <<  0);
         }
     } else return 0;
 }

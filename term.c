@@ -2367,9 +2367,12 @@ static void term_dispatch_osc(nss_term_t *term) {
             if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
                 nss_color_t col = parse_color(parg, pnext);
                 if (col) term->palette[idx] = col;
-                else if (parg[0] == '?' && parg[1] == '\0')
-                    term_answerback(term, OSC"4;%d;#%06X"ST, idx, term->palette[idx] & 0x00FFFFFF);
-                else term_esc_dump(term, 0);
+                else if (parg[0] == '?' && parg[1] == '\0') {
+                    term_answerback(term, OSC"4;%d;rgb:%04x/%04x/%04x"ST, idx,
+                            ((term->palette[idx] >> 16) & 0xFF) * 0x101,
+                            ((term->palette[idx] >>  8) & 0xFF) * 0x101,
+                            ((term->palette[idx] >>  0) & 0xFF) * 0x101);
+                } else term_esc_dump(term, 0);
             }
             pstr = pnext + 1;
         }
@@ -2384,6 +2387,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         term_esc_dump(term, 0);
         break;
     case 10: /* Set VT100 foreground color */
+    	//TODO Support queries and two argumentes
         if ((col = parse_color(dstr, dend))) {
             if (term->mode & nss_tm_reverse_video) {
                 term->palette[NSS_SPECIAL_BG] = col;
