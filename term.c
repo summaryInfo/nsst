@@ -2311,6 +2311,69 @@ static nss_clipboard_target_t decode_target(uint8_t targ, _Bool mode) {
     }
 }
 
+static uint32_t selector_to_cid(uint32_t sel, _Bool rev) {
+    switch(sel) {
+    case 10: return rev ? NSS_SPECIAL_BG : NSS_SPECIAL_FG; break;
+    case 11: return rev ? NSS_SPECIAL_FG : NSS_SPECIAL_BG; break;
+    case 12: return rev ? NSS_SPECIAL_CURSOR_BG : NSS_SPECIAL_CURSOR_FG; break;
+    case 17: return rev ? NSS_SPECIAL_SELECTED_FG : NSS_SPECIAL_SELECTED_BG; break;
+    case 19: return rev ? NSS_SPECIAL_SELECTED_BG : NSS_SPECIAL_SELECTED_FG; break;
+    }
+    warn("Unreachable");
+    return 0;
+}
+
+static void term_colors_changed(nss_term_t *term, uint32_t sel, nss_color_t col) {
+    switch(sel) {
+    case 10:
+        if(term->mode & nss_tm_reverse_video)
+            nss_window_set_colors(term->win, col, 0);
+        break;
+    case 11:
+        if(!(term->mode & nss_tm_reverse_video))
+            nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_CURSOR_BG] = col, 0);
+        else
+            nss_window_set_colors(term->win, 0, term->palette[NSS_SPECIAL_CURSOR_FG] = col);
+        break;
+    case 12:
+        if(!(term->mode & nss_tm_reverse_video))
+            nss_window_set_colors(term->win, 0, col);
+        break;
+    case 17: case 19:
+        term_update_selection(term, nss_sstate_none, (nss_selected_t){0});
+    }
+}
+
+static void term_do_set_color(nss_term_t *term, uint32_t sel, uint8_t *dstr, uint8_t *dend) {
+    nss_color_t col;
+    nss_cid_t cid = selector_to_cid(sel, term->mode & nss_tm_reverse_video);
+
+    if (!strcmp((char *)dstr, "?")) {
+        col = term->palette[cid];
+
+        term_answerback(term, OSC"%d;rgb:%04x/%04x/%04x"ST, sel,
+               ((col >> 16) & 0xFF) * 0x101,
+               ((col >>  8) & 0xFF) * 0x101,
+               ((col >>  0) & 0xFF) * 0x101);
+    } if ((col = parse_color(dstr, dend))) {
+        term->palette[cid] = col = (col & 0x00FFFFFF) | (0xFF000000 & term->palette[cid]); // Keep alpha
+
+        term_colors_changed(term, sel, col);
+
+    } else term_esc_dump(term, 0);
+}
+
+static void term_do_reset_color(nss_term_t *term) {
+    _Bool rev = term->mode & nss_tm_reverse_video;
+
+    nss_cid_t cid = selector_to_cid(term->esc.selector - 100, rev);
+
+    term->palette[cid] = nss_config_color(selector_to_cid(term->esc.selector - 100, 0));
+
+    term_colors_changed(term, term->esc.selector - 100, term->esc.selector == 111 ?
+            nss_config_color(NSS_CCONFIG_CURSOR_BG) : term->palette[cid]);
+}
+
 static void term_dispatch_osc(nss_term_t *term) {
     if (term->esc.state != esc_osc_string) {
         term->esc.state = term->esc.old_state;
@@ -2325,7 +2388,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         nss_color_t col;
     case 0: /* Change window icon name and title */
     case 1: /* Change window icon name */
-    case 2: /* Change window title */
+    case 2: /* Change window title */ {
         if (term->mode & nss_tm_title_set_hex) {
             if (*hex_decode(dstr, dstr, dend)) {
                 term_esc_dump(term, 0);
@@ -2353,6 +2416,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         nss_window_set_title(term->win, 3 - term->esc.selector, (char *)dstr, term->mode & nss_tm_utf8);
         free(res);
         break;
+    }
     case 4: /* Set color */ {
         uint8_t *pstr = dstr, *pnext = NULL, *s_end;
         while (pstr < dend && (pnext = memchr(pstr, ';', dend - pstr))) {
@@ -2365,14 +2429,14 @@ static void term_dispatch_osc(nss_term_t *term) {
             else pnext = dend;
 
             if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
-                nss_color_t col = parse_color(parg, pnext);
-                if (col) term->palette[idx] = col;
-                else if (parg[0] == '?' && parg[1] == '\0') {
+                if (parg[0] == '?' && parg[1] == '\0')
                     term_answerback(term, OSC"4;%d;rgb:%04x/%04x/%04x"ST, idx,
                             ((term->palette[idx] >> 16) & 0xFF) * 0x101,
                             ((term->palette[idx] >>  8) & 0xFF) * 0x101,
                             ((term->palette[idx] >>  0) & 0xFF) * 0x101);
-                } else term_esc_dump(term, 0);
+                else if ((col = parse_color(parg, pnext)))
+                    term->palette[idx] = col;
+                else term_esc_dump(term, 0);
             }
             pstr = pnext + 1;
         }
@@ -2382,64 +2446,48 @@ static void term_dispatch_osc(nss_term_t *term) {
         }
         break;
     }
-    case 5: /* Set special color */
-    case 6: /* Enable/disable special color */
-        term_esc_dump(term, 0);
+    case 104: /* Reset color */ {
+        if (term->esc.si) {
+            uint8_t *pnext, *s_end;
+            do {
+                pnext = memchr(dstr, ';', dend - dstr);
+                if (!pnext) pnext = dend;
+                else *pnext = '\0';
+                errno = 0;
+                unsigned long idx = strtoul((char *)dstr, (char **)&s_end, 10);
+                if (!errno && !*s_end && s_end != dstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
+                    term->palette[idx] = nss_config_color(NSS_CCONFIG_COLOR_0 + idx);
+                } else term_esc_dump(term, 0);
+                dstr = pnext + 1;
+            } while (pnext != dend);
+        } else {
+            for (size_t i = 0; i < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; i++)
+                term->palette[i] = nss_config_color(NSS_CCONFIG_COLOR_0 + i);
+        }
         break;
-    case 10: /* Set VT100 foreground color */
-        //TODO Support queries and two argumentes
-        if ((col = parse_color(dstr, dend))) {
-            if (term->mode & nss_tm_reverse_video) {
-                term->palette[NSS_SPECIAL_BG] = col;
-                nss_window_set_colors(term->win, col, 0);
-            } else term->palette[NSS_SPECIAL_FG] = col;
-        } else term_esc_dump(term, 0);
-        break;
+    }
+    case 10: /* Set VT100 foreground color */ {
+        // OSC 10 can also have second argument that works as OSC 11
+        uint8_t *str2;
+        if ((str2 = memchr(dstr, ';', dend - dstr))) {
+            *str2 = '\0';
+            term_do_set_color(term, 10, dstr, str2);
+            dstr = str2 + 1;
+            term->esc.selector++;
+        }
+    }
     case 11: /* Set VT100 background color */
-        //TODO Support queries
-        if ((col = parse_color(dstr, dend))) {
-            nss_color_t def = term->palette[NSS_SPECIAL_BG];
-            col = (col & 0x00FFFFFF) | (0xFF000000 & def); // Keep alpha
-            if (!(term->mode & nss_tm_reverse_video)) {
-                term->palette[NSS_SPECIAL_CURSOR_BG] = term->palette[NSS_SPECIAL_BG] = col;
-                nss_window_set_colors(term->win, col, 0);
-            } else  {
-                term->palette[NSS_SPECIAL_CURSOR_FG] = term->palette[NSS_SPECIAL_FG] = col;
-                nss_window_set_colors(term->win, 0, col);
-            }
-        } else term_esc_dump(term, 0);
-        break;
     case 12: /* Set Cursor color */
-        //TODO Support queries
-        if ((col = parse_color(dstr, dend))) {
-            if (!(term->mode & nss_tm_reverse_video)) {
-                nss_window_set_colors(term->win, 0, term->palette[NSS_SPECIAL_CURSOR_FG] = col);
-            } else term->palette[NSS_SPECIAL_CURSOR_BG] = col;
-        } else term_esc_dump(term, 0);
-        break;
-    case 13: /* Set Mouse foreground color */
-    case 14: /* Set Mouse background color */
-        break;
     case 17: /* Set Highlight background color */
-        //TODO Support queries
-        if ((col = parse_color(dstr, dend))) {
-            if (!(term->mode & nss_tm_reverse_video))
-                term->palette[NSS_SPECIAL_SELECTED_BG] = col;
-            else term->palette[NSS_SPECIAL_SELECTED_FG] = col;
-            term_update_selection(term, nss_sstate_none, (nss_selected_t){0});
-        } else term_esc_dump(term, 0);
-        break;
     case 19: /* Set Highlight foreground color */
-        //TODO Support queries
-        if ((col = parse_color(dstr, dend))) {
-            if (!(term->mode & nss_tm_reverse_video))
-                term->palette[NSS_SPECIAL_SELECTED_FG] = col;
-            else term->palette[NSS_SPECIAL_SELECTED_BG] = col;
-            term_update_selection(term, nss_sstate_none, (nss_selected_t){0});
-        } else term_esc_dump(term, 0);
+        term_do_set_color(term, term->esc.selector, dstr, dend);
         break;
-    case 50: /* Set Font */
-        term_esc_dump(term, 0);
+    case 110: /*Reset  VT100 foreground color */
+    case 111: /*Reset  VT100 background color */
+    case 112: /*Reset  Cursor color */
+    case 117: /*Reset  Highlight background color */
+    case 119: /*Reset  Highlight foreground color */
+        term_do_reset_color(term);
         break;
     case 52: /* Manipulate selecion data */ {
         if (!nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS)) break;
@@ -2470,76 +2518,26 @@ static void term_dispatch_osc(nss_term_t *term) {
         } else term_esc_dump(term, 0);
         break;
     }
-    case 104: /* Reset color */
-        if (term->esc.si) {
-            uint8_t *pnext, *s_end;
-            do {
-                pnext = memchr(dstr, ';', dend - dstr);
-                if (!pnext) pnext = dend;
-                else *pnext = '\0';
-                errno = 0;
-                unsigned long idx = strtoul((char *)dstr, (char **)&s_end, 10);
-                if (!errno && !*s_end && s_end != dstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
-                    term->palette[idx] = nss_config_color(NSS_CCONFIG_COLOR_0 + idx);
-                } else term_esc_dump(term, 0);
-                dstr = pnext + 1;
-            } while (pnext != dend);
-        } else {
-            for (size_t i = 0; i < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; i++)
-                term->palette[i] = nss_config_color(NSS_CCONFIG_COLOR_0 + i);
-        }
-        break;
-    case 105: /* Reset special color */
-    case 106: /* Enable/disable special color */
-        term_esc_dump(term, 0);
-        break;
-    case 110: /*Reset  VT100 foreground color */
-        if (!(term->mode & nss_tm_reverse_video))
-            term->palette[NSS_SPECIAL_FG] = nss_config_color(NSS_CCONFIG_FG);
-        else
-            term->palette[NSS_SPECIAL_BG] = nss_config_color(NSS_CCONFIG_FG);
-        break;
-    case 111: /*Reset  VT100 background color */
-        if (!(term->mode & nss_tm_reverse_video)) {
-            term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(NSS_CCONFIG_CURSOR_BG);
-            nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG] = nss_config_color(NSS_CCONFIG_BG), 0);
-        } else {
-            term->palette[NSS_SPECIAL_FG] = nss_config_color(NSS_CCONFIG_BG);
-            nss_window_set_colors(term->win, 0, term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(NSS_CCONFIG_CURSOR_BG));
-        }
-        break;
-    case 112: /*Reset  Cursor color */
-        if (!(term->mode & nss_tm_reverse_video)) {
-            nss_window_set_colors(term->win, 0, term->palette[NSS_SPECIAL_CURSOR_FG] = nss_config_color(NSS_CCONFIG_CURSOR_FG));
-        } else term->palette[NSS_SPECIAL_CURSOR_BG] = nss_config_color(NSS_CCONFIG_CURSOR_FG);
-        break;
-    case 113: /*Reset  Mouse foreground color */
-    case 114: /*Reset  Mouse background color */
-        break;
-    case 117: /*Reset  Highlight background color */
-        if (!(term->mode & nss_tm_reverse_video))
-            term->palette[NSS_SPECIAL_SELECTED_BG] = nss_config_color(NSS_CCONFIG_SELECTED_BG);
-        else term->palette[NSS_SPECIAL_SELECTED_FG] = nss_config_color(NSS_CCONFIG_SELECTED_BG);
-        term_update_selection(term, nss_ssnap_none, (nss_selected_t){0});
-        break;
-    case 119: /*Reset  Highlight foreground color */
-        if (!(term->mode & nss_tm_reverse_video)) {
-            term->palette[NSS_SPECIAL_SELECTED_FG] = nss_config_color(NSS_CCONFIG_SELECTED_FG);
-        } else term->palette[NSS_SPECIAL_SELECTED_BG] = nss_config_color(NSS_CCONFIG_SELECTED_FG);
-        term_update_selection(term, nss_ssnap_none, (nss_selected_t){0});
-        break;
-    case 13001: {
+    case 13001: /* Select background alpha */ {
         errno = 0;
         unsigned long res = strtoul((char *)dstr, (char **)&dstr, 10);
         if (res > 255 || errno || *dstr) {
             term_esc_dump(term, 0);
             break;
         }
-        term->palette[NSS_SPECIAL_BG] &= 0x00FFFFFF;
-        term->palette[NSS_SPECIAL_BG] |= res << 24;
+        term->palette[NSS_SPECIAL_BG] = (term->palette[NSS_SPECIAL_BG] & 0x00FFFFFF) | res << 24;
         nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], 0);
         break;
     }
+    case 5: /* Set special color */
+    case 6: /* Enable/disable special color */
+    case 13: /* Set Mouse foreground color */
+    case 14: /* Set Mouse background color */
+    case 50: /* Set Font */
+    case 105: /* Reset special color */
+    case 106: /* Enable/disable special color */
+    case 113: /*Reset  Mouse foreground color */
+    case 114: /*Reset  Mouse background color */
     default:
         term_esc_dump(term, 0);
     }
