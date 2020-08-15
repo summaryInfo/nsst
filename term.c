@@ -2387,7 +2387,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         term_esc_dump(term, 0);
         break;
     case 10: /* Set VT100 foreground color */
-    	//TODO Support queries and two argumentes
+        //TODO Support queries and two argumentes
         if ((col = parse_color(dstr, dend))) {
             if (term->mode & nss_tm_reverse_video) {
                 term->palette[NSS_SPECIAL_BG] = col;
@@ -2396,6 +2396,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         } else term_esc_dump(term, 0);
         break;
     case 11: /* Set VT100 background color */
+        //TODO Support queries
         if ((col = parse_color(dstr, dend))) {
             nss_color_t def = term->palette[NSS_SPECIAL_BG];
             col = (col & 0x00FFFFFF) | (0xFF000000 & def); // Keep alpha
@@ -2409,6 +2410,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         } else term_esc_dump(term, 0);
         break;
     case 12: /* Set Cursor color */
+        //TODO Support queries
         if ((col = parse_color(dstr, dend))) {
             if (!(term->mode & nss_tm_reverse_video)) {
                 nss_window_set_colors(term->win, 0, term->palette[NSS_SPECIAL_CURSOR_FG] = col);
@@ -2419,6 +2421,7 @@ static void term_dispatch_osc(nss_term_t *term) {
     case 14: /* Set Mouse background color */
         break;
     case 17: /* Set Highlight background color */
+        //TODO Support queries
         if ((col = parse_color(dstr, dend))) {
             if (!(term->mode & nss_tm_reverse_video))
                 term->palette[NSS_SPECIAL_SELECTED_BG] = col;
@@ -2427,6 +2430,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         } else term_esc_dump(term, 0);
         break;
     case 19: /* Set Highlight foreground color */
+        //TODO Support queries
         if ((col = parse_color(dstr, dend))) {
             if (!(term->mode & nss_tm_reverse_video))
                 term->palette[NSS_SPECIAL_SELECTED_FG] = col;
@@ -2469,15 +2473,17 @@ static void term_dispatch_osc(nss_term_t *term) {
     case 104: /* Reset color */
         if (term->esc.si) {
             uint8_t *pnext, *s_end;
-            while ((pnext = memchr(dstr, ';', dend - dstr))) {
-                *pnext = '\0';
+            do {
+                pnext = memchr(dstr, ';', dend - dstr);
+                if (!pnext) pnext = dend;
+                else *pnext = '\0';
                 errno = 0;
                 unsigned long idx = strtoul((char *)dstr, (char **)&s_end, 10);
                 if (!errno && !*s_end && s_end != dstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
                     term->palette[idx] = nss_config_color(NSS_CCONFIG_COLOR_0 + idx);
                 } else term_esc_dump(term, 0);
                 dstr = pnext + 1;
-            }
+            } while (pnext != dend);
         } else {
             for (size_t i = 0; i < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; i++)
                 term->palette[i] = nss_config_color(NSS_CCONFIG_COLOR_0 + i);
