@@ -2368,7 +2368,7 @@ static void term_do_reset_color(nss_term_t *term) {
 
     nss_cid_t cid = selector_to_cid(term->esc.selector - 100, rev);
 
-    term->palette[cid] = nss_config_color(selector_to_cid(term->esc.selector - 100, 0));
+    term->palette[cid] = nss_config_color(NSS_CCONFIG_COLOR_0 + selector_to_cid(term->esc.selector - 100, 0));
 
     term_colors_changed(term, term->esc.selector - 100, term->esc.selector == 111 ?
             nss_config_color(NSS_CCONFIG_CURSOR_BG) : term->palette[cid]);
@@ -2531,11 +2531,11 @@ static void term_dispatch_osc(nss_term_t *term) {
     }
     case 5: /* Set special color */
     case 6: /* Enable/disable special color */
+    case 105: /* Reset special color */
+    case 106: /* Enable/disable special color */
     case 13: /* Set Mouse foreground color */
     case 14: /* Set Mouse background color */
     case 50: /* Set Font */
-    case 105: /* Reset special color */
-    case 106: /* Enable/disable special color */
     case 113: /*Reset  Mouse foreground color */
     case 114: /*Reset  Mouse background color */
     default:
