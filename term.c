@@ -2609,9 +2609,9 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                 // IGNORE - There is no toolbar
                 break;
             case 12: /* Start blinking cursor */
-            case 13:
                 nss_window_set_cursor(term->win, ((nss_window_get_cursor(term->win) + 1) & ~1) - set);
                 break;
+            case 13: /* Start blinking cursor (menu item) */
             case 14: /* Enable XOR of controll sequence and menu for blinking */
                 // IGNORE
                 break;
@@ -3614,9 +3614,9 @@ static void term_dispatch_csi(nss_term_t *term) {
             val = 4;
             break;
         case 12: /* Start blinking cursor */
-        case 13:
             val = 1 + !(nss_window_get_cursor(term->win) & 1);
             break;
+        case 13: /* Start blinking cursor (menu item) */
         case 14: /* Enable XORG of control sequence and menu for blinking */
             val = 4;
             break;
