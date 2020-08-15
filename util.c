@@ -7,10 +7,12 @@
 #include "config.h"
 #include "util.h"
 
+#include <ctype.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 _Noreturn void die(const char *fmt, ...) {
     if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0) {
@@ -120,68 +122,125 @@ _Bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end) {
     return 1;
 }
 
-nss_color_t parse_color(const uint8_t *str, const uint8_t *end) {
-    uint64_t val = 0;
-    ptrdiff_t sz = end - str;
-    if (*str != '#') return 0;
-    while (++str < end) {
-        if (*str - '0' < 10)
-            val = (val << 4) + *str - '0';
-        else if (*str - 'A' < 6)
-            val = (val << 4) + 10 + *str - 'A';
-        else if (*str - 'a' < 6)
-            val = (val << 4) + 10 + *str - 'a';
-        else return 0;
-    }
-    nss_color_t col = 0xFF000000;
-    switch (sz) {
-    case 4:
-        for (size_t i = 0; i < 3; i++) {
-            col |= (val & 0xF) << (8*i + 4);
-            val >>= 4;
-        }
-        break;
-    case 7:
-        col |= val;
-        break;
-    case 10:
-        for (size_t i = 0; i < 3; i++) {
-            col |= ((val >> 4) & 0xFF) << 8*i;
-            val >>= 12;
-        }
-        break;
-    case 13:
-        for (size_t i = 0; i < 3; i++) {
-            col |= ((val >> 8) & 0xFF) << 8*i;
-            val >>= 16;
-        }
-        break;
-    default:
+inline static uint8_t tohexdigit(uint8_t c) {
+    return  c > 9 ? c + 'A' - 10 : c + '0';
+}
+
+inline static uint8_t fromhexdigit(uint8_t c) {
+    if (c - '0' < 10)
+        return  c - '0';
+    else if (c - 'A' < 6)
+        return  10 + c - 'A';
+    else if (c - 'a' < 6)
+        return  10 + c - 'a';
+    else
         return 0;
-    }
-    return col;
+}
+
+inline static int32_t frombase64digit(uint8_t b) {
+    if ('A' <= b && b <= 'Z') return b - 'A';
+    if ('a' <= b && b <= 'z') return b - 'a' + 26;
+    if ('0' <= b && b <= '9') return b - '0' + 52;
+    if (b == '+') return 62;
+    if (b == '/') return 63;
+    return -1;
+}
+
+
+
+nss_color_t parse_color(const uint8_t *str, const uint8_t *end) {
+    if (*str == '#') {
+        // Format #RGB
+
+        uint64_t val = 0;
+        ptrdiff_t sz = end - str;
+
+        while (++str < end) {
+            if (!isxdigit(*str)) return 0;
+            val = (val << 4) + fromhexdigit(*str);
+        }
+
+        nss_color_t col = 0xFF000000;
+
+        switch (sz) {
+        case 4:
+            for (size_t i = 0; i < 3; i++) {
+                col |= (val & 0xF) << (8*i + 4);
+                val >>= 4;
+            }
+            break;
+        case 7:
+            col |= val;
+            break;
+        case 10:
+            for (size_t i = 0; i < 3; i++) {
+                col |= ((val >> 4) & 0xFF) << 8*i;
+                val >>= 12;
+            }
+            break;
+        case 13:
+            for (size_t i = 0; i < 3; i++) {
+                col |= ((val >> 8) & 0xFF) << 8*i;
+                val >>= 16;
+            }
+            break;
+        default:
+            return 0;
+        }
+        return col;
+    } else if (!memcmp(str, "rgb:", 4)) {
+        // Format rgb:R/G/B
+        str += 4;
+
+        size_t len = 0, i = 0;
+        uint32_t rgb[3] = {0};
+        for (; str < end && i < 3; i++) {
+            size_t clen = 0;
+            while(str + clen < end && str[clen] != '/') {
+                if (!isxdigit(*str)) return 0;
+                rgb[i] = (rgb[i] << 4) | fromhexdigit(*str);
+               clen++;
+            }
+            if (!i) {
+                len = clen;
+                if (!len || len > 4) return 0;
+            }
+            str += clen + 1;
+            if (len != clen) return 0;
+        }
+        if (i != 3 || str - 1 != end) return 0;
+
+        switch(len) {
+        case 1:
+            return 0xFF000000 |
+                (rgb[0] << 20) |
+                (rgb[1] << 12) |
+                (rgb[2] << 4 );
+        case 2:
+            return 0xFF000000 |
+                (rgb[0] << 16) |
+                (rgb[1] << 8 ) |
+                (rgb[2] << 0 );
+        default:
+            return 0xFF000000 |
+                ((rgb[0] & 0xFF) << 20) |
+                ((rgb[1] & 0xFF) << 12) |
+                ((rgb[2] & 0xFF) << 4 );
+        }
+    } else return 0;
 }
 
 const uint8_t *hex_decode(uint8_t *dst, const uint8_t *hex, const uint8_t *end) {
     uint8_t val = 0;
     _Bool state = 0;
     while (hex  < end) {
-        val <<= 4;
-        if ('0' <= *hex && *hex <= '9')
-            val |= *hex - '0';
-        else if ('A' <= *hex && *hex <= 'F')
-            val |= *hex - 'A' + 10;
-        else break;
-        hex++;
+        if (!isxdigit(*hex)) break;
+        val = (val << 4) | fromhexdigit(*hex++);
         if (!(state = !state))
             *dst++ = val, val = 0;
     }
     *dst = '\0';
     return hex;
-}
-
-inline static uint8_t tohexdigit(uint8_t c) {
-    return  c > 9 ? c + 'A' - 10 : c + '0';
 }
 
 uint8_t *hex_encode(uint8_t *dst, const uint8_t *str, const uint8_t *end) {
@@ -193,18 +252,9 @@ uint8_t *hex_encode(uint8_t *dst, const uint8_t *str, const uint8_t *end) {
     return dst;
 }
 
-static int32_t decode_base64_byte(uint8_t b) {
-    if ('A' <= b && b <= 'Z') return b - 'A';
-    if ('a' <= b && b <= 'z') return b - 'a' + 26;
-    if ('0' <= b && b <= '9') return b - '0' + 52;
-    if (b == '+') return 62;
-    if (b == '/') return 63;
-    return -1;
-}
-
 const uint8_t *base64_decode(uint8_t *dst, const uint8_t *buf, const uint8_t *end) {
     int32_t acc = 0, b, bits = 0;
-    while (buf < end && (b = decode_base64_byte(*buf)) >= 0) {
+    while (buf < end && (b = frombase64digit(*buf)) >= 0) {
         acc = (acc << 6) | b;
         if ((bits += 6) > 7) {
             *dst++ = acc >> (bits -= 8);
