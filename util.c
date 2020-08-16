@@ -18,7 +18,7 @@ _Noreturn void die(const char *fmt, ...) {
     if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0) {
         va_list args;
         va_start(args, fmt);
-        fputs("[\e[31;1mFATAL\e[0m] ", stderr);
+        fputs("[\033[31;1mFATAL\033[m] ", stderr);
         vfprintf(stderr, fmt, args);
         fputc('\n', stderr);
         va_end(args);
@@ -30,7 +30,7 @@ void fatal(const char *fmt, ...) {
     if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0) {
         va_list args;
         va_start(args, fmt);
-        fputs("[\e[31;1mFATAL\e[0m] ", stderr);
+        fputs("[\033[31;1mFATAL\033[m] ", stderr);
         vfprintf(stderr, fmt, args);
         fputc('\n', stderr);
         va_end(args);
@@ -41,7 +41,7 @@ void warn(const char *fmt, ...) {
     if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 1) {
         va_list args;
         va_start(args, fmt);
-        fputs("[\e[33;1mWARN\e[0m] ", stderr);
+        fputs("[\033[33;1mWARN\033[m] ", stderr);
         vfprintf(stderr, fmt, args);
         fputc('\n', stderr);
         va_end(args);
@@ -52,7 +52,7 @@ void info(const char *fmt, ...) {
     if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 2) {
         va_list args;
         va_start(args, fmt);
-        fputs("[\e[32;1mINFO\e[0m] ", stderr);
+        fputs("[\033[32;1mINFO\033[m] ", stderr);
         vfprintf(stderr, fmt, args);
         fputc('\n', stderr);
         va_end(args);
