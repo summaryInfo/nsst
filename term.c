@@ -4742,7 +4742,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
     // Reset scroll region
 
     term_reset_margins(term);
-    term_reset_pending(term);
+    term_move_to(term, term->c.x, term->c.y);
     if (cur_moved) {
         term->screen[term->c.y]->cell[term->c.x].attr &= ~nss_attrib_drawn;
         term->screen[term->c.y]->cell[MAX(term->c.x - 1, 0)].attr &= ~nss_attrib_drawn;

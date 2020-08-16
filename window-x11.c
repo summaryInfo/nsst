@@ -1209,7 +1209,7 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
                 data = buf2;
             } else if (nss_term_is_paste_quote_enabled(win->term)) {
                 _Bool quote_c1 = !nss_term_is_utf8(win->term);
-                size_t i = 0, j = 0;
+                ssize_t i = 0, j = 0;
                 while (i < size) {
                     // Prefix control symbols with Ctrl-V
                     if (buf1[i] < 0x20 || buf1[i] == 0x7F ||
