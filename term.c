@@ -753,7 +753,7 @@ _Bool nss_term_is_paste_nl_enabled(nss_term_t *term) {
 }
 
 _Bool nss_term_is_paste_quote_enabled(nss_term_t *term) {
-	return term->mode & nss_tm_paste_quote;
+    return term->mode & nss_tm_paste_quote;
 }
 
 _Bool nss_term_is_nrcs_enabled(nss_term_t *term) {
@@ -2457,11 +2457,12 @@ static void term_dispatch_osc(nss_term_t *term) {
             unsigned long idx = strtoul((char *)pstr, (char **)&s_end, 10);
             if (term->esc.selector == 5) idx += NSS_SPECIAL_BOLD;
 
+            *pnext = ';';
             uint8_t *parg  = pnext + 1;
             if ((pnext = memchr(parg, ';', dend - parg))) *pnext = '\0';
             else pnext = dend;
 
-            if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS + 5) {
+            if (!errno && s_end == parg - 1 && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS + 5) {
                 if (parg[0] == '?' && parg[1] == '\0')
                     term_answerback(term, OSC"%d;%d;rgb:%04x/%04x/%04x"ST,
                             term->esc.selector, idx - (term->esc.selector == 5) * NSS_SPECIAL_BOLD,
@@ -2470,14 +2471,15 @@ static void term_dispatch_osc(nss_term_t *term) {
                             ((term->palette[idx] >>  0) & 0xFF) * 0x101);
                 else if ((col = parse_color(parg, pnext)))
                     term->palette[idx] = col;
-                else term_esc_dump(term, 0);
+                else {
+                    if (pnext != dend) *pnext = ';';
+                    term_esc_dump(term, 0);
+                }
             }
+            if (pnext != dend) *pnext = ';';
             pstr = pnext + 1;
         }
-        if (pstr < dend && !pnext) {
-            while (++dstr < dend) if (!*dstr) *dstr = ';';
-            term_esc_dump(term, 0);
-        }
+        if (pstr < dend && !pnext) term_esc_dump(term, 0);
         break;
     }
     case 104: /* Reset color */
@@ -2494,6 +2496,7 @@ static void term_dispatch_osc(nss_term_t *term) {
                 if (!errno && !*s_end && s_end != dstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS + 5)
                     term->palette[idx] = nss_config_color(NSS_CCONFIG_COLOR_0 + idx);
                 else term_esc_dump(term, 0);
+                if (pnext != dend) *pnext = ';';
                 dstr = pnext + 1;
             } while (pnext != dend);
         } else {
@@ -2518,6 +2521,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         if ((str2 = memchr(dstr, ';', dend - dstr))) {
             *str2 = '\0';
             term_do_set_color(term, 10, dstr, str2);
+            *str2 = ';';
             dstr = str2 + 1;
             term->esc.selector++;
         }
