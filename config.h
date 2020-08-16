@@ -78,6 +78,11 @@ enum nss_config_opt {
     NSS_ICONFIG_SELECT_TO_CLIPBOARD,
     NSS_ICONFIG_ALLOW_BLINKING,
     NSS_ICONFIG_EXTENDED_CIR,
+    NSS_ICONFIG_SPEICAL_BOLD,
+    NSS_ICONFIG_SPEICAL_UNDERLINE,
+    NSS_ICONFIG_SPEICAL_BLINK,
+    NSS_ICONFIG_SPEICAL_REVERSE,
+    NSS_ICONFIG_SPEICAL_ITALIC,
 
     // These can't be read with nss_config_integer
     // Use nss_config_input_mode to get the copy of the whole structure
@@ -139,7 +144,12 @@ enum nss_config_opt {
     NSS_CCONFIG_COLOR_0 = NSS_CCONFIG_MIN,
     //Here NSS_CCONFIG_COLOR_1 - NSS_CCONFIG_COLOR_{NSS_PALETTE_SIZE}
     //NSS_CONFIG_COLOR_{N} is NSS_CCONFIG_COLOR_0 + N
-    NSS_CCONFIG_BG = NSS_CCONFIG_COLOR_0 + NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS,
+    NSS_CCONFIG_BOLD = NSS_CCONFIG_COLOR_0 + NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS,
+    NSS_CCONFIG_UNDERLINE,
+    NSS_CCONFIG_BLINK,
+    NSS_CCONFIG_REVERSE,
+    NSS_CCONFIG_ITALIC,
+    NSS_CCONFIG_BG,
     NSS_CCONFIG_FG,
     NSS_CCONFIG_CURSOR_BG,
     NSS_CCONFIG_CURSOR_FG,
@@ -158,9 +168,9 @@ typedef struct nss_optmap_item {
 } nss_optmap_item_t;
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 88
+#    define OPT_MAP_SIZE 98
 #else
-#    define OPT_MAP_SIZE 89
+#    define OPT_MAP_SIZE 99
 #endif
 
 extern nss_optmap_item_t optmap[OPT_MAP_SIZE];

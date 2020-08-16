@@ -17,14 +17,19 @@ typedef uint32_t nss_char_t;
 typedef int16_t nss_coord_t;
 typedef uint32_t param_t;
 
-#define NSS_SPECIAL_COLORS 6
+#define NSS_SPECIAL_COLORS 11
 #define NSS_PALETTE_SIZE (256 + NSS_SPECIAL_COLORS)
-#define NSS_SPECIAL_BG 256
-#define NSS_SPECIAL_FG 257
-#define NSS_SPECIAL_CURSOR_BG 258
-#define NSS_SPECIAL_CURSOR_FG 259
-#define NSS_SPECIAL_SELECTED_BG 260
-#define NSS_SPECIAL_SELECTED_FG 261
+#define NSS_SPECIAL_BOLD 256
+#define NSS_SPECIAL_UNDERLINE 257
+#define NSS_SPECIAL_BLINK 258
+#define NSS_SPECIAL_REVERSE 259
+#define NSS_SPECIAL_ITALIC 260
+#define NSS_SPECIAL_BG 261
+#define NSS_SPECIAL_FG 262
+#define NSS_SPECIAL_CURSOR_BG 263
+#define NSS_SPECIAL_CURSOR_FG 264
+#define NSS_SPECIAL_SELECTED_BG 265
+#define NSS_SPECIAL_SELECTED_FG 266
 
 typedef enum nss_attrs {
     nss_attrib_italic = 1 << 0,

@@ -2214,6 +2214,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
     if (term->esc.subpar_mask) return;
 
     uint8_t *dstr = term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
+    uint8_t *dend = dstr + term->esc.si;
 
     switch (term->esc.selector) {
     case C('s') | P('='): /* iTerm2 syncronous updates */
@@ -2292,6 +2293,22 @@ static void term_dispatch_dcs(nss_term_t *term) {
             term_esc_dump(term, 0);
         }
         break;
+    case C('q') | I0('+'): /* XTGETTCAP */ {
+        // TODO: Support proper tcap db
+        // for now, just implement Co/colors
+        _Bool valid = 0;
+        if (!strcmp((char *)dstr, "436F") || // "Co"
+                !strcmp((char *)dstr, "636F6C6F7266")) { // "colors"
+            uint8_t tmp[16];
+            int len = snprintf((char *)tmp, sizeof tmp, "%d", NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS);
+            *dend = '=';
+            hex_encode(dend + 1, tmp, tmp + len);
+            valid = 1;
+        }
+        term_answerback(term, DCS"%d+r%s"ST, valid, dstr);
+        break;
+    }
+    case C('p') | I0('+'): /* XTSETTCAP */
     default:
         term_esc_dump(term, 0);
     }
@@ -2374,8 +2391,12 @@ static void term_do_reset_color(nss_term_t *term) {
             nss_config_color(NSS_CCONFIG_CURSOR_BG) : term->palette[cid]);
 }
 
+inline static _Bool is_osc_state(uint32_t state) {
+    return state == esc_osc_string || state == esc_osc_1 || state == esc_osc_2;
+}
+
 static void term_dispatch_osc(nss_term_t *term) {
-    if (term->esc.state != esc_osc_string) {
+    if (!is_osc_state(term->esc.state)) {
         term->esc.state = term->esc.old_state;
         term->esc.selector = term->esc.old_selector;
     }
@@ -2417,20 +2438,23 @@ static void term_dispatch_osc(nss_term_t *term) {
         free(res);
         break;
     }
-    case 4: /* Set color */ {
+    case 4: /* Set color */
+    case 5: /* Set special color */ {
         uint8_t *pstr = dstr, *pnext = NULL, *s_end;
         while (pstr < dend && (pnext = memchr(pstr, ';', dend - pstr))) {
             *pnext = '\0';
             errno = 0;
             unsigned long idx = strtoul((char *)pstr, (char **)&s_end, 10);
+            if (term->esc.selector == 5) idx += NSS_SPECIAL_BOLD;
 
             uint8_t *parg  = pnext + 1;
             if ((pnext = memchr(parg, ';', dend - parg))) *pnext = '\0';
             else pnext = dend;
 
-            if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
+            if (!errno && !*s_end && s_end != pstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS + 5) {
                 if (parg[0] == '?' && parg[1] == '\0')
-                    term_answerback(term, OSC"4;%d;rgb:%04x/%04x/%04x"ST, idx,
+                    term_answerback(term, OSC"%d;%d;rgb:%04x/%04x/%04x"ST,
+                            term->esc.selector, idx - (term->esc.selector == 5) * NSS_SPECIAL_BOLD,
                             ((term->palette[idx] >> 16) & 0xFF) * 0x101,
                             ((term->palette[idx] >>  8) & 0xFF) * 0x101,
                             ((term->palette[idx] >>  0) & 0xFF) * 0x101);
@@ -2446,7 +2470,8 @@ static void term_dispatch_osc(nss_term_t *term) {
         }
         break;
     }
-    case 104: /* Reset color */ {
+    case 104: /* Reset color */
+    case 105: /* Reset special color */ {
         if (term->esc.si) {
             uint8_t *pnext, *s_end;
             do {
@@ -2455,15 +2480,26 @@ static void term_dispatch_osc(nss_term_t *term) {
                 else *pnext = '\0';
                 errno = 0;
                 unsigned long idx = strtoul((char *)dstr, (char **)&s_end, 10);
-                if (!errno && !*s_end && s_end != dstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) {
+                if (term->esc.selector == 105) idx += NSS_SPECIAL_BOLD;
+                if (!errno && !*s_end && s_end != dstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS + 5)
                     term->palette[idx] = nss_config_color(NSS_CCONFIG_COLOR_0 + idx);
-                } else term_esc_dump(term, 0);
+                else term_esc_dump(term, 0);
                 dstr = pnext + 1;
             } while (pnext != dend);
         } else {
-            for (size_t i = 0; i < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; i++)
+            for (size_t i = 0; i < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS + 5; i++)
                 term->palette[i] = nss_config_color(NSS_CCONFIG_COLOR_0 + i);
         }
+        break;
+    }
+    case 6:
+    case 106: /* Enable/disable special color */ {
+        // IMPORTANT: this option affects all instances
+        ssize_t n;
+        param_t idx, val;
+        if (scanf((char *)dstr, "%u;%u%zn", &idx, &val, &n) == 2 && n == dend - dstr && idx < 5)
+            nss_config_set_integer(NSS_ICONFIG_SPEICAL_BOLD + idx, !!val);
+        else term_esc_dump(term, 0);
         break;
     }
     case 10: /* Set VT100 foreground color */ {
@@ -2529,13 +2565,9 @@ static void term_dispatch_osc(nss_term_t *term) {
         nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], 0);
         break;
     }
-    case 5: /* Set special color */
-    case 6: /* Enable/disable special color */
-    case 105: /* Reset special color */
-    case 106: /* Enable/disable special color */
+    case 50: /* Set Font */
     case 13: /* Set Mouse foreground color */
     case 14: /* Set Mouse background color */
-    case 50: /* Set Font */
     case 113: /*Reset  Mouse foreground color */
     case 114: /*Reset  Mouse background color */
     default:
@@ -3931,7 +3963,7 @@ static void term_dispatch_esc(nss_term_t *term) {
     case E('\\'): /* ST */
         if (term->esc.old_state == esc_dcs_string)
             term_dispatch_dcs(term);
-        else if (term->esc.old_state == esc_osc_string)
+        else if (is_osc_state(term->esc.old_state))
             term_dispatch_osc(term);
         break;
     case E(']'): /* OSC */
@@ -4079,7 +4111,7 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
     case 0x07: /* BEL */
         if (term->esc.state == esc_dcs_string)
             term_dispatch_dcs(term);
-        else if (term->esc.state == esc_osc_string)
+        else if (is_osc_state(term->esc.state))
             term_dispatch_osc(term);
         else {}/* term_bell() -- TODO */;
         break;

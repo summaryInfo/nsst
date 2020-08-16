@@ -37,7 +37,9 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"autowrap", "\t\t(Initial autowrap setting)", "enableAutowrap", NSS_ICONFIG_INIT_WRAP},
     {"background", "\t\t(Default backround color)", "background", NSS_CCONFIG_BG},
     {"backspace-is-del", "\t(Backspace sends DEL instead of BS)", "backspaceIsDelete", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
+    {"blink-color", "\t\t(Special color of blinking text)", "blinkColor", NSS_CCONFIG_BLINK},
     {"blink-time", "\t\t(Text blink interval in microseconds)","blinkTime", NSS_ICONFIG_BLINK_TIME},
+    {"bold-color", "\t\t(Special color of bold text)", "boldColor", NSS_CCONFIG_BOLD},
     {"cursor-background", "\t(Default cursor backround color)", "cursorBackground", NSS_CCONFIG_CURSOR_BG},
     {"cursor-foreground", "\t(Default cursor foreround color)", "cursorForeground", NSS_CCONFIG_CURSOR_FG},
     {"cursor-shape", "\t\t(Shape of cursor)", "cursorShape", NSS_ICONFIG_CURSOR_SHAPE},
@@ -59,6 +61,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"fps", "\t\t\t(Window refresh rate)", "fps", NSS_ICONFIG_FPS},
     {"has-meta", "\t\t(Handle meta/alt)", "hasMeta", NSS_ICONFIG_INPUT_HAS_META},
     {"horizontal-border", "\t(Top and bottom botders)", "horizontalBorder", NSS_ICONFIG_TOP_BORDER},
+    {"italic-color", "\t\t(Special color of italic text)", "italicColor", NSS_CCONFIG_ITALIC},
     {"keep-clipboard", "\t(Reuse copied clipboard content instead of current selection data)", "keepClipboard", NSS_ICONFIG_KEEP_CLIPBOARD},
     {"keep-selection", "\t(Don't clear X11 selection when unhighlighted)", "keepSelection", NSS_ICONFIG_KEEP_SELECTION},
     {"key-break", "\t\t(Send break hotkey", "key.break)", NSS_KCONFIG_BREAK},
@@ -91,6 +94,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", "printer", NSS_SCONFIG_PRINTER},
     {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", NSS_ICONFIG_RESIZE_DELAY},
     {"reverse-video", "\t\t(Initial reverse video setting)", "enableReverseVideo", NSS_ICONFIG_REVERSE_VIDEO},
+    {"reversed-color", "\t\t(Special color of reversed text)", "reversedColor", NSS_CCONFIG_REVERSE},
     {"scroll-amount", "\t\t(Number of lines scrolled in a time)", "scrollAmout", NSS_ICONFIG_SCROLL_AMOUNT},
     {"scroll-delay", "\t\t(Additional delay after scroll in microseconds)", "scrollDelay", NSS_ICONFIG_SCROLL_DELAY},
     {"scroll-on-input", "\t(Scroll view to bottom on key press)", "scrollOnInput", NSS_ICONFIG_SCROLL_ON_INPUT},
@@ -100,6 +104,11 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"selected-background", "\t(Color of selected background)", "selectedBackground", NSS_CCONFIG_SELECTED_BG},
     {"selected-foreground", "\t(Color of selected text)", "selectedForeground", NSS_CCONFIG_SELECTED_FG},
     {"shell", ", -s<value>\t(Shell to start in new instance)", "shell", NSS_SCONFIG_SHELL},
+    {"special-bold", "\t\t(If special color should be used for bold text)", "specialBold", NSS_ICONFIG_SPEICAL_BOLD},
+    {"special-blink", "\t\t(If special color should be used for blinking text)", "specialBlink", NSS_ICONFIG_SPEICAL_BLINK},
+    {"special-italic", "\t\t(If special color should be used for bold italic)", "specialBold", NSS_ICONFIG_SPEICAL_ITALIC},
+    {"special-reverse", "\t\t(If special color should be used for reverse text)", "specialReverse", NSS_ICONFIG_SPEICAL_REVERSE},
+    {"special-underlined", "\t\t(If special color should be used for underlined text)", "specialUnderlined", NSS_ICONFIG_SPEICAL_UNDERLINE},
     {"sync-timeout", "\t\t(Syncronous update timeout)", "syncTimeout", NSS_ICONFIG_SYNC_TIME},
     {"tab-width", "\t\t(Initial width of tab character)", "tabWidth", NSS_ICONFIG_TAB_WIDTH},
     {"term-mod", "\t\t(Meaning of 'T' modifer)", "termMod", NSS_SCONFIG_TERM_MOD},
@@ -107,6 +116,7 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"title", ", -T<value>, -t<value> (Initial window title)", "title", NSS_SCONFIG_TITLE},
     {"triple-click-time", "\t(Time gap in milliseconds in witch tree mouse presses will be considered triple)", "trippleClickTime", NSS_ICONFIG_TRIPLE_CLICK_TIME},
     {"underline-width", "\t(Text underline width)", "underlineWidth", NSS_ICONFIG_UNDERLINE_WIDTH},
+    {"underlined-color", "\t(Special color of underlined text)", "underlinedColor", NSS_CCONFIG_UNDERLINE},
     {"use-utf8", "\t\t(Enable uft-8 i/o)", "useUTF8", NSS_ICONFIG_UTF8},
     {"vertical-border", "\t(Left and right borders)", "verticalBorder", NSS_ICONFIG_LEFT_BORDER},
     {"vt-version", ", -V<value>\t(Emulated VT version)", "vtVersion", NSS_ICONFIG_VT_VERION},
@@ -173,6 +183,11 @@ static struct {
     [NSS_ICONFIG_SELECT_TO_CLIPBOARD - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
     [NSS_ICONFIG_ALLOW_BLINKING - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
     [NSS_ICONFIG_EXTENDED_CIR - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
+    [NSS_ICONFIG_SPEICAL_BOLD - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_SPEICAL_BLINK - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_SPEICAL_UNDERLINE - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_SPEICAL_ITALIC - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_SPEICAL_REVERSE - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
 };
 
 static struct {
@@ -249,10 +264,16 @@ static nss_color_t color(uint32_t opt) {
         return base[0];
     case NSS_CCONFIG_FG:
     case NSS_CCONFIG_CURSOR_FG:
+    case NSS_CCONFIG_BOLD:
+    case NSS_CCONFIG_UNDERLINE:
+    case NSS_CCONFIG_BLINK:
+    case NSS_CCONFIG_REVERSE:
+    case NSS_CCONFIG_ITALIC:
         return base[15];
+        /* Invert text by default */
     case NSS_CCONFIG_SELECTED_BG:
     case NSS_CCONFIG_SELECTED_FG:
-        /* Invert text by default */
+        /* No default special colors */
         return 0;
     }
 
@@ -351,7 +372,7 @@ void nss_config_set_string(uint32_t opt, const char *val) {
             if (col || !val) {
                 nss_color_t old = nss_config_color(opt);
                 if (val) {
-                    if ((opt == NSS_CCONFIG_SELECTED_BG || opt == NSS_CCONFIG_SELECTED_FG) && !old) old = 0xFF000000;
+                    if ((opt >= NSS_CCONFIG_SELECTED_BG) && !old) old = 0xFF000000;
                     col = (col & 0xFFFFFF) | (old & 0xFF000000);
                 }
                 nss_config_set_color(opt, col);
