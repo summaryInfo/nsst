@@ -188,7 +188,8 @@ nss_color_t parse_color(const uint8_t *str, const uint8_t *end) {
             return 0;
         }
         return col;
-    } else if (!memcmp(str, "rgb:", 4)) {
+    } else if (tolower(str[0]) == 'r' && tolower(str[1]) == 'g' &&
+            tolower(str[2] == 'b') && str[3] == ':') {
         // Format rgb:R/G/B
         str += 4;
 
