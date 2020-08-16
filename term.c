@@ -948,6 +948,8 @@ inline static void term_esc_finish_string(nss_term_t *term) {
 static void term_esc_dump(nss_term_t *term, _Bool use_info) {
     if (use_info && nss_config_integer(NSS_ICONFIG_LOG_LEVEL) < 3) return;
 
+    char *pref = use_info ? "Seq " : "Unrecognized ";
+
     char buf[ESC_DUMP_MAX] = "^[";
     size_t pos = 2;
     switch (term->esc.state) {
@@ -978,15 +980,15 @@ static void term_esc_dump(nss_term_t *term, _Bool use_info) {
             if (term->esc.state != esc_dcs_string) break;
 
             buf[pos] = 0;
-            (use_info ? info : warn)("%s%s^[\\", buf, term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data);
+            (use_info ? info : warn)("%s%s%s^[\\", pref, buf, term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data);
             return;
         case esc_osc_string:
-            (use_info ? info : warn)("^[]%u;%s^[\\", term->esc.selector, term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data);
+            (use_info ? info : warn)("%s^[]%u;%s^[\\", pref, term->esc.selector, term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data);
         default:
             return;
     }
     buf[pos] = 0;
-    (use_info ? info : warn)("%s", buf);
+    (use_info ? info : warn)("%s%s", pref, buf);
 }
 
 static size_t term_decode_color(nss_term_t *term, size_t arg, nss_color_t *rcol, nss_cid_t *rcid, nss_cid_t *valid) {
@@ -4120,7 +4122,7 @@ static void term_dispatch_esc(nss_term_t *term) {
 }
 
 static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
-    if (ch != 0x1B) debug("^%c", ch ^ 0x40);
+    if (ch != 0x1B) info("Seq ^%c", ch ^ 0x40);
 
     switch (ch) {
     case 0x00: /* NUL (IGNORE) */
@@ -4285,7 +4287,7 @@ static void term_dispatch_vt52(nss_term_t *term, nss_char_t ch) {
         term->mode &= ~nss_tm_print_auto;
         break;
     default:
-        warn("^[%c", ch);
+        warn("Unrecognized ^[%c", ch);
     }
 
     term->esc.state = esc_ground;
