@@ -224,7 +224,7 @@ struct nss_term {
         nss_tm_smooth_scroll        = 1LL << 44,
         nss_tm_xterm_more_hack      = 1LL << 45,
         nss_tm_allow_change_font    = 1LL << 46,
-
+        nss_tm_paste_literal_nl     = 1LL << 47,
         // Need to modify XTCHECKSUM aswell if theses values gets modified
         nss_tm_cksm_positive        = 1LL << 48,
         nss_tm_cksm_no_attr         = 1LL << 49,
@@ -232,6 +232,8 @@ struct nss_term {
         nss_tm_cksm_no_implicit     = 1LL << 51,
         nss_tm_cksm_wide            = 1LL << 52,
         nss_tm_cksm_8bit            = 1LL << 53,
+
+        nss_tm_paste_quote          = 1LL << 54,
 
         nss_tm_cksm_mask =
             nss_tm_cksm_positive | nss_tm_cksm_no_attr |
@@ -744,6 +746,14 @@ _Bool nss_term_is_cursor_enabled(nss_term_t *term) {
 
 _Bool nss_term_is_utf8(nss_term_t *term) {
     return term->mode & nss_tm_utf8;
+}
+
+_Bool nss_term_is_paste_nl_enabled(nss_term_t *term) {
+    return term->mode & nss_tm_paste_literal_nl;
+}
+
+_Bool nss_term_is_paste_quote_enabled(nss_term_t *term) {
+	return term->mode & nss_tm_paste_quote;
 }
 
 _Bool nss_term_is_nrcs_enabled(nss_term_t *term) {
@@ -2796,6 +2806,12 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             case 2004: /* Bracketed paste */
                 ENABLE_IF(set, term->mode, nss_tm_bracketed_paste);
                 break;
+            case 2005: /* Paste quote */
+                ENABLE_IF(set, term->mode, nss_tm_paste_literal_nl);
+                break;
+            case 2006: /* Paste literal NL */
+                ENABLE_IF(set, term->mode, nss_tm_paste_literal_nl);
+                break;
             default:
                 term_esc_dump(term, 0);
             }
@@ -3777,6 +3793,12 @@ static void term_dispatch_csi(nss_term_t *term) {
             break;
         case 2004: /* Bracketed paste */
             val = 1 + !(term->mode & nss_tm_bracketed_paste);
+            break;
+        case 2005: /* Paste literal NL */
+            val = 1 + !(term->mode & nss_tm_paste_literal_nl);
+            break;
+        case 2006: /* Paste quote */
+            val = 1 + !(term->mode & nss_tm_paste_quote);
             break;
         default:
             term_esc_dump(term, 0);

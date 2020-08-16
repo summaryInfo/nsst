@@ -1168,34 +1168,34 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
         uint8_t *data = xcb_get_property_value(rep);
         uint8_t *pos = data, *end = data + size;
 
-        while ((pos = memchr(pos, '\n', end - pos))) *pos++ = '\r';
+        if (!nss_term_is_paste_nl_enabled(win->term))
+            while ((pos = memchr(pos, '\n', end - pos))) *pos++ = '\r';
 
         if (size) {
             if (!offset) nss_term_paste_begin(win->term);
 
-            if ((rep->type == ctx.atom.UTF8_STRING) ^ nss_term_is_utf8(win->term)) {
-                static uint8_t buf[2*PASTE_BLOCK_SIZE];
+            static uint8_t buf1[2*PASTE_BLOCK_SIZE];
+            static uint8_t buf2[4*PASTE_BLOCK_SIZE];
 
+            if ((rep->type == ctx.atom.UTF8_STRING) ^ nss_term_is_utf8(win->term)) {
                 pos = data;
                 size = 0;
                 if (rep->type == ctx.atom.UTF8_STRING) {
                     nss_char_t ch;
                     while (pos < end)
                         if (utf8_decode(&ch, (const uint8_t **)&pos, end))
-                            buf[size++] = ch;
+                            buf1[size++] = ch;
                 } else {
                     while (pos < end)
-                        size += utf8_encode(*pos++, buf + size, buf + BUFSIZ);
+                        size += utf8_encode(*pos++, buf1 + size, buf1 + BUFSIZ);
                 }
 
-                data = buf;
+                data = buf1;
             }
 
             if (nss_term_paste_need_encode(win->term)) {
-                static uint8_t base64[4*(2*PASTE_BLOCK_SIZE)/3 + 4];
-
                 while (leftover_len < 3 && size) leftover[leftover_len++] = *data++, size--;
-                size_t pre = base64_encode(base64, leftover, leftover + leftover_len) - base64;
+                size_t pre = base64_encode(buf2, leftover, leftover + leftover_len) - buf2;
 
                 if (size) {
                     if (left) {
@@ -1204,9 +1204,21 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
                         if (leftover_len > 1) leftover[1] = data[size - 1], size--;
                     }
 
-                    size = base64_encode(base64 + pre, data, data + size) - base64;
+                    size = base64_encode(buf2 + pre, data, data + size) - buf2;
                 }
-                data = base64;
+                data = buf2;
+            } else if (nss_term_is_paste_quote_enabled(win->term)) {
+                _Bool quote_c1 = !nss_term_is_utf8(win->term);
+                size_t i = 0, j = 0;
+                while (i < size) {
+                    // Prefix control symbols with Ctrl-V
+                    if (buf1[i] < 0x20 || buf1[i] == 0x7F ||
+                            (quote_c1 && buf1[i] > 0x7F && buf1[i] < 0xA0))
+                        buf2[j++] = 0x16;
+                    buf2[j++] = buf1[i++];
+                }
+                size = j;
+                data = buf2;
             }
 
             nss_term_sendkey(win->term, data, size);
