@@ -106,7 +106,7 @@ void nss_window_set_title(nss_window_t *win, nss_title_target_t which, const cha
 void nss_window_push_title(nss_window_t *win, nss_title_target_t which);
 void nss_window_pop_title(nss_window_t *win, nss_title_target_t which);
 /* Both at the same time are not supported */
-const char *nss_window_get_title(nss_window_t *win, nss_title_target_t which);
+void nss_window_get_title(nss_window_t *win, nss_title_target_t which, char **name, _Bool *utf8);
 _Bool nss_window_is_title_utf8(nss_window_t *win, nss_title_target_t which);
 
 void nss_window_set_mouse(nss_window_t *win, _Bool enabled);

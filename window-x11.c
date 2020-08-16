@@ -578,76 +578,113 @@ static void set_icon_label(xcb_window_t wid, const char *title, _Bool utf8) {
         utf8 ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
-static void title_push(nss_title_stack_item_t **head, const char *title, _Bool utf8) {
-    nss_title_stack_item_t *new = malloc(strlen(title) + sizeof(*new) + 1);
-    if (new) {
-        strcpy(new->data, title);
-        new->next = *head;
-        new->utf8 = utf8;
-        new->pushed = 0;
-        *head = new;
-    }
-}
-
-static void title_pop(nss_title_stack_item_t **head) {
-    if (*head && !(*head)->pushed--) {
-        nss_title_stack_item_t *next = (*head)->next;
-        free(*head);
-        *head = next;
-    }
-}
-
-static void title_dup(nss_title_stack_item_t **head) {
-    // Duplicate lazily
-    if (*head) (*head)->pushed++;
-}
-
 void nss_window_set_title(nss_window_t *win, nss_title_target_t which, const char *title, _Bool utf8) {
     if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
 
-    if (which & nss_tt_title) {
-        title_pop(&win->title_top);
-        title_push(&win->title_top, title, utf8);
-        set_title(win->wid, title, utf8);
-    }
+    if (which & nss_tt_title) set_title(win->wid, title, utf8);
 
-    if (which & nss_tt_icon_label) {
-        title_pop(&win->icon_top);
-        title_push(&win->icon_top, title, utf8);
-        set_icon_label(win->wid, title, utf8);
+    if (which & nss_tt_icon_label) set_icon_label(win->wid, title, utf8);
+}
+
+char *get_full_property(xcb_window_t wid, xcb_atom_t prop, xcb_atom_t *type, size_t *psize) {
+    size_t left = 0, offset = 0, size = 0;
+    char *data = NULL, *tmp;
+    do {
+        xcb_get_property_cookie_t c = xcb_get_property(con, 0, wid,
+                prop, XCB_GET_PROPERTY_TYPE_ANY, offset, PASTE_BLOCK_SIZE/4);
+        xcb_get_property_reply_t *rep = xcb_get_property_reply(con, c, NULL);
+        if (!rep || !rep->value_len) {
+            free(rep);
+            break;
+        }
+
+        size_t len = rep->value_len * rep->format / 8;
+        left = rep->bytes_after;
+
+        if (type && !offset) *type = rep->type;
+        offset += len/4;
+
+        tmp = realloc(data, size + len + 1);
+        if (!tmp) {
+            free(rep);
+            break;
+        }
+
+        data = tmp;
+        memcpy(data + size, xcb_get_property_value(rep), len);
+        data[size += len] = 0;
+
+        free(rep);
+    } while(left);
+
+    if (psize) *psize = size - 1;
+
+    return data;
+}
+
+void nss_window_get_title(nss_window_t *win, nss_title_target_t which, char **name, _Bool *utf8) {
+    xcb_atom_t type = XCB_ATOM_ANY;
+    char *data = NULL;
+    if (which & nss_tt_title) {
+        data = get_full_property(win->wid, ctx.atom._NET_WM_NAME, &type, NULL);
+        if (!data) data = get_full_property(win->wid, XCB_ATOM_WM_NAME, &type, NULL);
+    } else if (which & nss_tt_icon_label) {
+        data = get_full_property(win->wid, ctx.atom._NET_WM_ICON_NAME, &type, NULL);
+        if (!data) data = get_full_property(win->wid, XCB_ATOM_WM_ICON_NAME, &type, NULL);
     }
+    if (utf8) *utf8 = type == ctx.atom.UTF8_STRING;
+    if (name) *name = data;
+    else free(data);
 }
 
 void nss_window_push_title(nss_window_t *win, nss_title_target_t which) {
-    if (which & nss_tt_title) title_dup(&win->title_top);
-    if (which & nss_tt_icon_label) title_dup(&win->icon_top);
+    char *title = NULL, *icon = NULL;
+    _Bool tutf8 = 0, iutf8 = 0;
+    if (which & nss_tt_title) nss_window_get_title(win, nss_tt_title, &title, &tutf8);
+    if (which & nss_tt_icon_label) nss_window_get_title(win, nss_tt_icon_label, &icon, &iutf8);
+
+    size_t len = sizeof(nss_title_stack_item_t), tlen = 0, ilen = 0;
+    if (title) len += tlen = strlen(title) + 1;
+    if (icon) len += ilen = strlen(icon) + 1;
+
+    nss_title_stack_item_t *new = malloc(len);
+    if (!new) {
+        free(title);
+        free(icon);
+        return;
+    }
+
+    if (title) memcpy(new->title_data = new->data, title, tlen);
+    else new->title_data = NULL;
+    new->title_utf8 = tutf8;
+
+    if (icon) memcpy(new->icon_data = new->data + tlen, icon, ilen);
+    else new->icon_data = NULL;
+    new->icon_utf8 = iutf8;
+
+    new->next = win->title_stack;
+    win->title_stack = new;
+
+    free(title);
+    free(icon);
 }
 
 void nss_window_pop_title(nss_window_t *win, nss_title_target_t which) {
-    // Pop stack top
-    if (which & nss_tt_title) {
-        title_pop(&win->title_top);
-        if (win->title_top) set_title(win->wid, win->title_top->data, win->title_top->utf8);
-    }
-    if (which & nss_tt_icon_label) {
-        title_pop(&win->icon_top);
-        if (win->icon_top) set_icon_label(win->wid, win->icon_top->data, win->icon_top->utf8);
+    nss_title_stack_item_t *top = win->title_stack, *it;
+    if (top) {
+        if (which & nss_tt_title) {
+            for (it = top; it && !it->title_data; it = it->next);
+            if (it) set_title(win->wid, it->title_data, it->title_utf8);
+        }
+        if (which & nss_tt_icon_label) {
+            for (it = top; it && !it->icon_data; it = it->next);
+            if (it) set_icon_label(win->wid, it->icon_data, it->icon_utf8);
+        }
+        win->title_stack = top->next;
+        free(top);
     }
 }
 
-const char *nss_window_get_title(nss_window_t *win, nss_title_target_t which) {
-    // Return stack top
-    if (which & nss_tt_title && win->title_top) return win->title_top->data;
-    if (which & nss_tt_icon_label && win->icon_top) return win->icon_top->data;
-    return "";
-}
-
-_Bool nss_window_is_title_utf8(nss_window_t *win, nss_title_target_t which) {
-    // Return stack top
-    if (which & nss_tt_title && win->title_top) return win->title_top->utf8;
-    if (which & nss_tt_icon_label && win->icon_top) return win->icon_top->utf8;
-    return 0;
-}
 
 uint32_t get_win_gravity_from_config() {
     _Bool nx = nss_config_integer(NSS_ICONFIG_WINDOW_NEGATIVE_X);
@@ -901,15 +938,10 @@ void nss_free_window(nss_window_t *win) {
         free(win->clipped[i]);
 
     nss_title_stack_item_t *tmp;
-    while (win->title_top) {
-        tmp = win->title_top->next;
-        free(win->title_top);
-        win->title_top = tmp;
-    }
-    while (win->icon_top) {
-        tmp = win->icon_top->next;
-        free(win->icon_top);
-        win->icon_top = tmp;
+    while (win->title_stack) {
+        tmp = win->title_stack->next;
+        free(win->title_stack);
+        win->title_stack = tmp;
     }
 
     free(win->font_name);

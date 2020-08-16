@@ -3111,22 +3111,22 @@ static void term_dispatch_window_op(nss_term_t *term) {
     }
     case 20: /* Report icon label */
     case 21: /* Report title */ {
-        uint8_t *res = NULL, *res2 = NULL, *tmp;
-        const uint8_t *title = (const uint8_t *)nss_window_get_title(term->win,
-                pa == 20 ? nss_tt_icon_label : nss_tt_title);
-        _Bool tutf8 = nss_window_is_title_utf8(term->win,
-                pa == 20 ? nss_tt_icon_label : nss_tt_title);
-        size_t tlen = strlen((const char *)title);
+        _Bool tutf8;
+        uint8_t *res = NULL, *res2 = NULL, *tit = NULL;
+        nss_window_get_title(term->win, pa == 20 ? nss_tt_icon_label : nss_tt_title, (char **)&tit, &tutf8);
+        if (!tit) {
+            warn("Can't get title");
+            term_answerback(term, OSC"%c"ST, pa == 20 ? 'L' : 'l');
+            break;
+        }
+        size_t tlen = strlen((const char *)tit);
+        uint8_t *title = tit, *tmp = tit, *end = tit + tlen;
 
         if (!(term->mode & nss_tm_title_query_utf8) && tutf8) {
-            if ((tmp = res2 = malloc(tlen + 1))) {
-                const uint8_t *end = title + tlen;
-                uint32_t u;
-                while (utf8_decode(&u, &title, end)) *tmp++ = u;
-                *tmp = '\0';
-                tlen = tmp - res2;
-                title = res2;
-            }
+            uint32_t u;
+            while (utf8_decode(&u, (const uint8_t **)&title, end)) *tmp++ = u;
+            *tmp = '\0';
+            tlen = tmp - tit;
         } else if (term->mode & nss_tm_title_query_utf8 && !tutf8) {
             if ((tmp = res2 = malloc(2 * tlen + 1))) {
                 while (*title) tmp += utf8_encode(*title++, tmp, res2 + 2 * tlen);
@@ -3136,13 +3136,14 @@ static void term_dispatch_window_op(nss_term_t *term) {
             }
         }
         if (term->mode & nss_tm_title_query_hex) {
-            if ((res = malloc(tlen*2 + 1))) {
+            if ((res = malloc(2 * tlen + 1))) {
                 hex_encode(res, title, title + tlen);
                 title = res;
             }
         }
         term_answerback(term, OSC"%c%s"ST, pa == 20 ? 'L' : 'l', title);
         free(res);
+        free(tit);
         free(res2);
         break;
     }

@@ -58,8 +58,10 @@ struct nss_cellspec {
 
 typedef struct nss_title_stack_item {
     struct nss_title_stack_item *next;
-    size_t pushed;
-    char utf8;
+    char *title_data;
+    char *icon_data;
+    _Bool title_utf8;
+    _Bool icon_utf8;
     char data[];
 } nss_title_stack_item_t;
 
@@ -124,9 +126,7 @@ struct nss_window {
     nss_term_t *term;
     size_t poll_index;
 
-    // Used for title stack implementation
-    nss_title_stack_item_t *title_top;
-    nss_title_stack_item_t *icon_top;
+    nss_title_stack_item_t *title_stack;
 
     nss_renderer_t ren;
 };
