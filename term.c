@@ -3,6 +3,7 @@
 #include "feature.h"
 
 #define _XOPEN_SOURCE 700
+#include <assert.h>
 
 #include "config.h"
 #include "input.h"
@@ -4702,7 +4703,16 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
         }
 
         memmove(term->screen, term->screen + delta, (term->height - delta)* sizeof(term->screen[0]));
-        if (delta) nss_window_shift(term->win, delta, 0, term->height - delta, 0);
+        if (delta) {
+            nss_window_shift(term->win, delta, 0, term->height - delta, 0);
+            _Bool tmp = term->mode & nss_tm_lr_margins;
+            nss_coord_t old_top = term->top;
+            term->top = 0;
+            term->mode &= ~nss_tm_lr_margins;
+            term_scroll_selection(term, delta, 1);
+            term->top = old_top;
+            ENABLE_IF(tmp, term->mode, nss_tm_lr_margins);
+        }
 
         if (term->mode & nss_tm_altscreen)
             SWAP(nss_line_t **, term->screen, term->back_screen);
@@ -4929,32 +4939,38 @@ void nss_term_clear_selection(nss_term_t *term) {
 }
 
 static void term_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save) {
-    // TODO Selction now just ignores margins
-
     if (term->vsel.state == nss_sstate_none) return;
 
-    _Bool cond0 = (term->top <= term->vsel.n.y0 && term->vsel.n.y0 <= term->bottom);
-    _Bool cond1 = (term->top <= term->vsel.n.y1 && term->vsel.n.y1 <= term->bottom);
+    ssize_t x0, x1, y0 = term->vsel.n.y0, y1 = term->vsel.n.y1;
+    if (y1 == y0 || term->vsel.n.rect)
+        x1 = term->vsel.n.x1, x0 = term->vsel.n.x0;
+    else
+        x1 = term->width - 1, x0 = 0;
+    ssize_t top = save ? -term->sb_limit : term->top;
+
+    save &= amount >= 0;
+    _Bool yins = top <= y0 && y1 < term_max_y(term);
+    _Bool youts = top > y1 || y0 >= term_max_y(term);
+    _Bool xins = term_min_x(term) <= x0 && x1 < term_max_x(term);
+    _Bool xouts = term_min_x(term) > x1 || x0 >= term_max_x(term);
+    _Bool damaged = term_min_y(term) && save && term_min_y(term) < y1 && y0 - amount < 0;
 
     // Clear sellection if it is going to be split by scroll
-    if ((cond0 ^ cond1) && !(save && term->vsel.n.y1 <= term->bottom)) nss_term_clear_selection(term);
-    else if (term->vsel.n.y1 <= term->bottom) {
+    if ((!xins && !xouts) || (!yins && !youts) || (xins && yins && damaged)) nss_term_clear_selection(term);
+    else if (xins && yins) {
         // Scroll and cut off scroll off lines
-
         term->vsel.r.y0 -= amount;
         term->vsel.n.y0 -= amount;
         term->vsel.r.y1 -= amount;
         term->vsel.n.y1 -= amount;
 
         _Bool swapped = term->vsel.r.y0 > term->vsel.r.y1;
-
         if (swapped) {
             SWAP(ssize_t, term->vsel.r.y0, term->vsel.r.y1);
             SWAP(ssize_t, term->vsel.r.x0, term->vsel.r.x1);
         }
 
-        ssize_t top = save ? -term->sb_limit : term->top;
-        if (term->vsel.r.y0 < top) {
+        if (term->vsel.n.y0 < top) {
             term->vsel.r.y0 = top;
             term->vsel.n.y0 = top;
             if (!term->vsel.r.rect) {
@@ -4963,22 +4979,24 @@ static void term_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool sa
             }
         }
 
-        if (term->vsel.r.y1 > term->bottom) {
-            term->vsel.r.y1 = term->bottom;
-            term->vsel.n.y1 = term->bottom;
+        ssize_t bottom = term->bottom;
+        if (term->vsel.n.y1 > bottom) {
+            term->vsel.r.y1 = bottom;
+            term->vsel.n.y1 = bottom;
             if (!term->vsel.r.rect) {
-                term->vsel.r.x1 = term->screen[term->bottom]->width - 1;
-                term->vsel.n.x1 = term->screen[term->bottom]->width - 1;
+                term->vsel.r.x1 = term->screen[bottom]->width - 1;
+                term->vsel.n.x1 = term->screen[bottom]->width - 1;
             }
         }
 
-        if (term->vsel.r.y0 > term->vsel.r.y1)
-            nss_term_clear_selection(term);
 
         if (swapped) {
             SWAP(ssize_t, term->vsel.r.y0, term->vsel.r.y1);
             SWAP(ssize_t, term->vsel.r.x0, term->vsel.r.x1);
         }
+
+        if (term->vsel.n.y0 > term->vsel.n.y1)
+            nss_term_clear_selection(term);
     }
  }
 
