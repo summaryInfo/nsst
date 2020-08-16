@@ -2372,7 +2372,7 @@ static void term_do_set_color(nss_term_t *term, uint32_t sel, uint8_t *dstr, uin
                ((col >> 16) & 0xFF) * 0x101,
                ((col >>  8) & 0xFF) * 0x101,
                ((col >>  0) & 0xFF) * 0x101);
-    } if ((col = parse_color(dstr, dend))) {
+    } else if ((col = parse_color(dstr, dend))) {
         term->palette[cid] = col = (col & 0x00FFFFFF) | (0xFF000000 & term->palette[cid]); // Keep alpha
 
         term_colors_changed(term, sel, col);
