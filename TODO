@@ -1,28 +1,33 @@
 Until version 1.6:
     Title and icon share stack
+    Clear selection if scroll will break them in DECLRMM
+    XTSAVE/XTRESTORE
+        CSI ? Pm r -- XTRESTORE
+        CSI ? s -- XTSAVE
     URXVT/UTF-8 mouse
-    DEC Locator
-    Special colors
+        CSI ? 1005 l / CSI ? 1005 h -- UTF-8 mouse format
+        CSI ? 1015 l / CSI ? 1015 h -- URXVT mouse format
+    New color syntax
+        RGBI,TekHVC
     Bell
+        CSI Ps SP t -- DECSWBV
+        CSI Ps SP u -- DECSMBV
+        CSI ? 44 l / CSI ? 44 h -- margin bell
+        CSI ? 1042 l / CSI ? 1042 h -- bell is window urgency
+        CSI ? 1043 l / CSI ? 1043 h -- raise on bell
     DECUDK
     Configurable modifiers
-    OSC 50
+    OSC 50 ; Pt ST -- Set font
     Refactor config
-    Clear selection if scroll will break them in DECLRMM
     ...
 
-11 16 35 38 41 43 44 46 53 60 61 64 68 73 1039 1042 1043 2001 2002 2003 2005 2006
+ResetSpecialColorTests.test_ResetSpecialColor_Dynamic -- esctest2 bug
 ===================
 General
     Write man page
     Implement named values for options instead of numeric
-    Make key modifiers T,A,M configurable
-    Query modifiers by names, instead of using predefined?
-    Refactor config
-        Separate
-        some options are per-instance
-            needs to be updated on reload
-        some are global
+    Query modifiers by names, instead of using predefined
+    Refactor config (split global and perinstance settings, reload reliably)
     Support new color syntax
     Implement proper daemon mode
     Make X resource/option names more or less correspond to Xterm/rxvt-unicode?
@@ -70,58 +75,37 @@ Emulation
         CSI Ps ; Pu ' z -- DECELR
         CSI Pm ' { -- DECSLE
         CSI Ps ' | -- DECRQLP ->  CSI Pe ; Pb ; Pr ; Pc ; Pp & w
-        CSI ? 1005 l / CSI ? 1005 h -- UTF-8 mouse format
-        CSI ? 1015 l / CSI ? 1015 h -- URXVT mouse format
     SIXEL
-        CSI ? Pi ; Pa; Pv S -- XTSMGRAPHICS (Pi = 1, 2; Pa = 1, 2, 3, 4)
-        DSC Pa ; Pb ; Ph q Ps..Ps ST -- Send sixel image
         CSI ? 80 l / CSI ? 80 h -- DECSDM
         CSI ? 1070 l / CSI ? 1070 h -- Use private resgisters
         CSI ? 8452 l / CSI ? 8452 h -- Sixel scrolling leaves cursor to the right of graphics
-    Other sequences
-        CSI ? 1039 l / CSI ? 1039 h -- Alt sends escape [input]
-        OSC 5 ; Pt ST -- Set special color
-        OSC 6 ; Pc ; Pt ST -- Enable/disable special color
-        OSC 105 ; Pt ST -- Reset special color
-        OSC 106 ; Pc ; Pf ST -- Enable/disable special color
-        OSC 50 ; Pt ST -- Set font
-    Bell
-        CSI Ps SP t -- DECSWBV
-        CSI Ps SP u -- DECSMBV
-        CSI ? 44 l / CSI ? 44 h -- margin bell
-        CSI ? 1042 l / CSI ? 1042 h -- bell is window urgency
-        CSI ? 1043 l / CSI ? 1043 h -- raise on bell
+        CSI ? Pi ; Pa; Pv S -- XTSMGRAPHICS (Pi = 1, 2; Pa = 1, 2, 3, 4)
+        DSC Pa ; Pb ; Ph q Ps..Ps ST -- Send sixel image
     Misc (won't be implemented any time soon)
         CSI ? 38 l / CSI ? 38 h -- DECTEK
-        CSI ? 1040 l / CSI ? 1040 h -- terminfo/termcap function key mode [input]
         CSI ? 1001 l / CSI ? 1001 h -- Hightlight mouse tracking
-        CSI Ps ; Ps ; Ps ; Ps ; Ps T -- XTHIMOUSE
+        CSI ? 1040 l / CSI ? 1040 h -- terminfo/termcap function key mode [input]
+        CSI ? 1039 l / CSI ? 1039 h -- Alt sends escape [input]
+        CSI ? 2001 l / CSI ? 2001 h -- srm_BUTTON1_MOVE_POINT
+        CSI ? 2002 l / CSI ? 2002 h -- srm_BUTTON2_MOVE_POINT
+        CSI ? 2003 l / CSI ? 2003 h -- srm_DBUTTON3_DELETE
         CSI ? 14 l / CSI ? 14 h -- Cursor blinking XORing
         CSI ? 35 l / CSI ? 35 h -- font shifting functions
+        CSI Ps ; Ps ; Ps ; Ps ; Ps T -- XTHIMOUSE
         CSI Pm # p, CSI Pm # { -- XTPUSHSGR
         CSI # q, CSI # } -- XTPOPSGR
-        CSI ? Pm r -- XTRESTORE
-        CSI ? s -- XTSAVE
         CSI Pm # Q -- XTPOPCOLORS
         CSI Pm # P -- XTPUSHCOLORS
         CSI # R -- XTREPORTCOLORS
-        DCS + p Pt ST -- XTSETTCAP
-        DCS + q Pt ST -- XTGETTCAP
         CSI > Ps p -- XTSMPOINTER
         CSI > Ps q -- XTVERSION -> DCS > | text ST
+        CSI > Ps p -- Pointer mode
+        DCS + p Pt ST -- XTSETTCAP
+        DCS + q Pt ST -- XTGETTCAP
+        DCS + Q Pt ST -- XTGETXRES -> DCS Ps + R Pt ST
+        OSC I Pt ST -- Set icon XPM file
+        OSC 3 ; Pt ST -- Set X property
         OSC 13 Pt ST -- Set mouse background color
         OSC 14 Pt ST -- Set mouse foreground color
         OSC 113 Pt ST -- Reset color mouse foreground color
         OSC 114 Pt ST -- Reset color mouse background color
-        CSI > Ps p -- Pointer mode
-        DCS + Q Pt ST -- XTGETXRES -> DCS Ps + R Pt ST
-        OSC I Pt ST -- Set icon XPM file
-        OSC 13 Pt ST -- Set mouse foreground color
-        OSC 13 Pt ST -- Set mouse background color
-        OSC 3 ; Pt ST -- Set X property
-    What should these do (not mentioned in ctlseqs.txt):
-        srm_BUTTON1_MOVE_POINT = 2001
-        srm_BUTTON2_MOVE_POINT = 2002
-        srm_DBUTTON3_DELETE = 2003
-        srm_PASTE_QUOTE = 2005
-        srm_PASTE_LITERAL_NL = 2006
