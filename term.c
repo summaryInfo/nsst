@@ -329,19 +329,24 @@ inline static nss_line_t *line_iter_prev(nss_line_iter_t *it) {
 
 static void handle_chld(int arg) {
     int status;
+    char str[128];
+    ssize_t len = 0;
+
     pid_t pid = waitpid(-1, &status, WNOHANG);
+    uint32_t loglevel = nss_config_integer(NSS_ICONFIG_LOG_LEVEL);
+
     if (pid < 0) {
-        // Thats unsafe
-        warn("Child wait failed");
-        return;
+        if (loglevel > 1) len = snprintf(str, sizeof str,
+                "[\033[33;1mWARN\033[m] Child wait failed");
+    } else if (WIFEXITED(status) && WEXITSTATUS(status)) {
+        if (loglevel > 2) len = snprintf(str, sizeof str,
+                "[\033[32;1mINFO\033[m] Child exited with status: %d\n", WEXITSTATUS(status));
+    } else if (WIFSIGNALED(status)) {
+        if (loglevel > 2) len = snprintf(str, sizeof str,
+                "[\033[32;1mINFO\033[m] Child terminated due to the signal: %d\n", WTERMSIG(status));
     }
 
-    // TODO Need to hang terminal here
-
-    if (WIFEXITED(status) && WEXITSTATUS(status))
-        info("Child exited with status: %d", WEXITSTATUS(status));
-    else if (WIFSIGNALED(status))
-        info("Child terminated due to the signal: %d", WTERMSIG(status));
+    if (len) write(STDERR_FILENO, str, len);
 
     (void)arg;
 }
@@ -791,8 +796,6 @@ _Bool nss_term_redraw_dirty(nss_term_t *term) {
         if ((!term->prev_c_hidden || term->prev_c_view_changed) && term->prev_c_y < term->height && term->prev_c_x < term->width)
             term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
     }
-
-    //TODO Fix margin cursor
 
     term->prev_c_x = term->c.x;
     term->prev_c_y = term->c.y;
