@@ -234,6 +234,8 @@ struct nss_term {
         nss_tm_cksm_8bit            = 1LL << 53,
 
         nss_tm_paste_quote          = 1LL << 54,
+        nss_tm_mouse_format_utf8    = 1LL << 55,
+        nss_tm_mouse_format_urxvt   = 1LL << 56,
 
         nss_tm_cksm_mask =
             nss_tm_cksm_positive | nss_tm_cksm_no_attr |
@@ -243,7 +245,11 @@ struct nss_term {
             nss_tm_mouse_x10 | nss_tm_mouse_button |
             nss_tm_mouse_motion | nss_tm_mouse_many,
         nss_tm_print_mask =
-            nss_tm_print_auto | nss_tm_print_enabled
+            nss_tm_print_auto | nss_tm_print_enabled,
+        nss_tm_mouse_format_mask =
+            nss_tm_mouse_format_sgr |
+            nss_tm_mouse_format_utf8 |
+            nss_tm_mouse_format_urxvt,
     } mode, vt52mode;
 
     struct nss_escape {
@@ -2737,10 +2743,12 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             case 1004: /* Focus in/out events */
                 ENABLE_IF(set, term->mode, nss_tm_track_focus);
                 break;
-            case 1005: /* UTF-8 mouse tracking */
-                // IGNORE
+            case 1005: /* UTF-8 mouse format */
+                term->mode &= ~nss_tm_mouse_mask;
+                ENABLE_IF(set, term->mode, nss_tm_mouse_format_utf8);
                 break;
-            case 1006: /* SGR mouse tracking */
+            case 1006: /* SGR mouse format */
+                term->mode &= ~nss_tm_mouse_mask;
                 ENABLE_IF(set, term->mode, nss_tm_mouse_format_sgr);
                 break;
             case 1007: /* Alternate scroll */
@@ -2752,8 +2760,9 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
             case 1011: /* Scroll to bottom on keypress */
                 ENABLE_IF(!set, term->mode, nss_tm_dont_scroll_on_input);
                 break;
-            case 1015: /* Urxvt mouse tracking */
-                // IGNORE
+            case 1015: /* Urxvt mouse format */
+                term->mode &= ~nss_tm_mouse_mask;
+                ENABLE_IF(set, term->mode, nss_tm_mouse_format_urxvt);
                 break;
             case 1034: /* Interpret meta */
                 term->inmode.has_meta = set;
@@ -2796,6 +2805,9 @@ static void term_dispatch_srm(nss_term_t *term, _Bool set) {
                     if (!set) term_cursor_mode(term, 0);
                 }
                 if (set) term_erase(term, 0, 0, term->width, term->height, 0);
+                break;
+            case 1050: /* termcap function keys */
+                // IGNORE
                 break;
             case 1051: /* SUN function keys */
                 term->inmode.keyboard_mapping = set ? nss_km_sun : nss_km_default;
@@ -3735,7 +3747,7 @@ static void term_dispatch_csi(nss_term_t *term) {
             val = 1 + !(term->mode & nss_tm_track_focus);
             break;
         case 1005: /* UTF-8 mouse tracking */
-            val = 4;
+            val = 1 + !(term->mode & nss_tm_mouse_format_utf8);
             break;
         case 1006: /* SGR Mouse tracking */
             val = 1 + !(term->mode & nss_tm_mouse_format_sgr);
@@ -3750,7 +3762,7 @@ static void term_dispatch_csi(nss_term_t *term) {
             val = 1 + !!(term->mode & nss_tm_dont_scroll_on_input);
             break;
         case 1015: /* Urxvt mouse tracking */
-            val = 4;
+            val = 1 + !(term->mode & nss_tm_mouse_format_urxvt);
             break;
         case 1034: /* Interpret meta */
             val = 1 + !term->inmode.has_meta;
@@ -3784,6 +3796,9 @@ static void term_dispatch_csi(nss_term_t *term) {
             break;
         case 1049: /* Save cursor and switch to altscreen */
             val = 1 + !(term->mode & nss_tm_altscreen);
+            break;
+        case 1050: /* termcap function keys */
+            val = 4;
             break;
         case 1051: /* SUN function keys */
             val = 1 + !(term->inmode.keyboard_mapping == nss_km_sun);
@@ -5193,6 +5208,16 @@ void nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_st
         if (term->mode & nss_tm_mouse_format_sgr) {
             term_answerback(term, CSI"<%"PRIu8";%"PRIu16";%"PRIu16"%c",
                     button, x + 1, y + 1, event == nss_me_release ? 'm' : 'M');
+        } else if (term->mode & nss_tm_mouse_format_urxvt) {
+            term_answerback(term, CSI"%"PRIu8";%"PRIu16";%"PRIu16"M", button + ' ', x + 1, y + 1);
+        } else if (term->mode & nss_tm_mouse_format_utf8) {
+            size_t off = 0;
+            uint8_t buf[UTF8_MAX_LEN * 3 + 3];
+            off += utf8_encode(button + ' ', buf + off, buf + sizeof buf);
+            off += utf8_encode(x + ' ', buf + off, buf + sizeof buf);
+            off += utf8_encode(y + ' ', buf + off, buf + sizeof buf);
+            term_answerback(term, CSI"%s%s",
+                    term->inmode.keyboard_mapping == nss_km_sco ? ">M" : "M", buf);
         } else if (x < 223 || y < 223) {
             term_answerback(term, CSI"%s%c%c%c",
                     term->inmode.keyboard_mapping == nss_km_sco ? ">M" : "M",
