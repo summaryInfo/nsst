@@ -75,6 +75,8 @@ struct nss_context {
     struct pollfd *pfds;
     size_t pfdn;
     size_t pfdcap;
+
+    size_t vbell_count;
 };
 
 struct nss_context ctx;
@@ -534,6 +536,53 @@ void nss_window_get_dim_ext(nss_window_t *win, nss_window_dim_type_t which, int1
     if (height) *height = y;
 }
 
+_Bool nss_window_get_bell_raise(nss_window_t *win) {
+    return win->bell_raise;
+}
+
+_Bool nss_window_get_bell_urgent(nss_window_t *win) {
+    return win->bell_urgent;
+}
+
+void nss_window_set_bell_raise(nss_window_t *win, _Bool set) {
+    win->bell_raise = set;
+}
+
+void nss_window_set_bell_urgent(nss_window_t *win, _Bool set) {
+    win->bell_urgent = set;
+}
+
+#define WM_HINTS_LEN 8
+static void set_urgency(xcb_window_t wid, _Bool set) {
+    xcb_get_property_cookie_t c = xcb_get_property(con, 0, wid, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 0, WM_HINTS_LEN);
+    xcb_get_property_reply_t *rep = xcb_get_property_reply(con, c, NULL);
+    if (rep) {
+        uint32_t *hints = xcb_get_property_value(rep);
+        if (set) *hints |= 256; // UrgentcyHint
+        else *hints &= ~256; // UrgentcyHint
+        xcb_change_property(con, XCB_PROP_MODE_REPLACE, wid, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 32, WM_HINTS_LEN, hints);
+        free(rep);
+    }
+
+}
+
+void nss_window_bell(nss_window_t *win, uint8_t vol) {
+    if (!win->focused) {
+        if (win->bell_raise) nss_window_action(win, nss_wa_restore_minimized);
+        if (win->bell_urgent) set_urgency(win->wid, 1);
+    }
+    if (nss_config_integer(NSS_ICONFIG_VISUAL_BELL)) {
+        win->init_invert = nss_term_get_invert(win->term);
+        win->in_blink = 1;
+        ctx.vbell_count++;
+        clock_gettime(NSS_CLOCK, &win->vbell_start);
+        nss_term_set_invert(win->term, !win->init_invert);
+    } else {
+        xcb_xkb_bell(con, XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_ID_DFLT_XI_CLASS,
+                XCB_XKB_ID_DFLT_XI_ID, vol, 1, 0, 0, 0, XCB_ATOM_ANY, win->wid);
+    }
+}
+
 _Bool nss_window_is_mapped(nss_window_t *win) {
     return win->active;
 }
@@ -806,8 +855,20 @@ void nss_window_set_default_props(nss_window_t *win) {
         nhints[8] = nhints[6] = nhints[4];
         nhints[0] |= 16 | 32; // PMinSize, PMaxSize
     }
+    uint32_t wmhints[] = {
+        1, // Flags: InputHint
+        XCB_WINDOW_CLASS_INPUT_OUTPUT, // Input
+        0, // Inital state
+        XCB_NONE, // Icon pixmap
+        XCB_NONE, // Icon Window
+        0, 0, // Icon X and Y
+        XCB_NONE, // Icon mask bitmap
+        XCB_NONE // Window group
+    };
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom.WM_NORMAL_HINTS,
             ctx.atom.WM_SIZE_HINTS, 8*sizeof(*nhints), sizeof(nhints)/sizeof(*nhints), nhints);
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_HINTS,
+            XCB_ATOM_WM_HINTS, 8*sizeof(*wmhints), sizeof(wmhints)/sizeof(*wmhints), wmhints);
 }
 
 /* Create new window */
@@ -825,6 +886,8 @@ nss_window_t *nss_create_window(void) {
     win->font_size = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
     win->width = nss_config_integer(NSS_ICONFIG_WINDOW_WIDTH);
     win->height = nss_config_integer(NSS_ICONFIG_WINDOW_HEIGHT);
+    win->bell_raise = nss_config_integer(NSS_ICONFIG_RAISE_ON_BELL);
+    win->bell_urgent = nss_config_integer(NSS_ICONFIG_URGENT_ON_BELL);
 
     win->active = 1;
     win->focused = 1;
@@ -917,6 +980,10 @@ void nss_free_window(nss_window_t *win) {
         xcb_destroy_window(con, win->wid);
         xcb_flush(con);
     }
+
+    // Decrement count of currently blinking
+    // windows if window gets freed during blink
+    if (win->in_blink) ctx.vbell_count--;
 
     if (win->next) win->next->prev = win->prev;
     if (win->prev) win->prev->next = win->next;
@@ -1423,13 +1490,18 @@ void nss_context_run(void) {
                 nss_free_window(win);
         }
 
-        next_timeout = nss_config_integer(NSS_ICONFIG_BLINK_TIME)*1000LL;
+        next_timeout = nss_config_integer(ctx.vbell_count ? NSS_ICONFIG_VISUAL_BELL_TIME : NSS_ICONFIG_BLINK_TIME)*1000LL;
         struct timespec cur;
         clock_gettime(NSS_CLOCK, &cur);
 
         for (nss_window_t *win = win_list_head; win; win = win->next) {
             if (TIMEDIFF(win->last_sync, cur) > nss_config_integer(NSS_ICONFIG_SYNC_TIME)*1000LL && win->sync_active)
                 win->sync_active = 0;
+            if (win->in_blink && TIMEDIFF(win->vbell_start, cur) > nss_config_integer(NSS_ICONFIG_VISUAL_BELL_TIME)*1000LL) {
+                nss_term_set_invert(win->term, win->init_invert);
+                win->in_blink = 0;
+                ctx.vbell_count--;
+            }
             if (TIMEDIFF(win->last_blink, cur) > nss_config_integer(NSS_ICONFIG_BLINK_TIME)*1000LL &&
                     win->active && nss_config_integer(NSS_ICONFIG_ALLOW_BLINKING)) {
                 win->blink_state = !win->blink_state;

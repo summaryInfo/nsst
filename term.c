@@ -251,6 +251,7 @@ struct nss_term {
         nss_tm_mouse_format_urxvt   = 1LL << 56,
         nss_tm_mouse_format_sgr     = 1LL << 57,
         nss_tm_udk_locked           = 1LL << 58,
+        nss_tm_margin_bell          = 1LL << 59,
 
         nss_tm_cksm_mask =
             nss_tm_cksm_positive | nss_tm_cksm_no_attr |
@@ -266,6 +267,9 @@ struct nss_term {
             nss_tm_mouse_format_utf8 |
             nss_tm_mouse_format_urxvt,
     } mode, vt52mode;
+
+    uint8_t bvol;
+    uint8_t mbvol;
 
     /* This is compressed bit array,
      * that stores encoded modes for
@@ -1832,6 +1836,16 @@ static void term_load_config(nss_term_t *term) {
     if (nss_config_integer(NSS_ICONFIG_KEEP_CLIPBOARD)) term->mode |= nss_tm_keep_clipboard;
     if (nss_config_integer(NSS_ICONFIG_KEEP_SELECTION)) term->mode |= nss_tm_keep_selection;
     if (nss_config_integer(NSS_ICONFIG_SELECT_TO_CLIPBOARD)) term->mode |= nss_tm_select_to_clipboard;
+
+    switch(nss_config_integer(NSS_ICONFIG_BELL_VOLUME)) {
+    case 0: term->bvol = 0; break;
+    case 1: term->bvol = nss_config_integer(NSS_ICONFIG_BELL_LOW_VOLUME); break;
+    case 2: term->bvol = nss_config_integer(NSS_ICONFIG_BELL_HIGH_VOLUME); }
+
+    switch(nss_config_integer(NSS_ICONFIG_MARGIN_BELL_VOLUME)) {
+    case 0: term->mbvol = 0; break;
+    case 1: term->mbvol = nss_config_integer(NSS_ICONFIG_MARGIN_BELL_LOW_VOLUME); break;
+    case 2: term->mbvol = nss_config_integer(NSS_ICONFIG_MARGIN_BELL_HIGH_VOLUME); }
 }
 
 static void term_free_scrollback(nss_term_t *term) {
@@ -1902,6 +1916,8 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     nss_window_set_mouse(term->win, 0);
     nss_window_set_cursor(term->win, nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE));
     nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
+    nss_window_set_bell_raise(term->win, nss_config_integer(NSS_ICONFIG_RAISE_ON_BELL));
+    nss_window_set_bell_urgent(term->win, nss_config_integer(NSS_ICONFIG_URGENT_ON_BELL));
 
     if (hard) {
         term_cursor_mode(term, 1);
@@ -2337,7 +2353,20 @@ static void term_dispatch_dcs(nss_term_t *term) {
             case 'p' << 8 | '"': /* -> DECSCL */
                 term_answerback(term, DCS"1$r%"PRIparam"%s\"p"ST, 60 + MAX(term->vt_level, 1),
                         term->vt_level >= 2 ? (term->mode & nss_tm_8bit ? ";2" : ";1") : "");
+            case 't' << 8 | ' ': /* -> DECSWBV */ {
+                nss_param_t val = 8;
+                if (term->bvol == nss_config_integer(NSS_ICONFIG_BELL_LOW_VOLUME)) val = 4;
+                else if (!term->bvol) val = 0;
+                term_answerback(term, DCS"1$r%"PRIparam" t"ST, val);
                 break;
+            }
+            case 'u' << 8 | ' ': /* -> DECSMBV */ {
+                nss_param_t val = 8;
+                if (term->mbvol == nss_config_integer(NSS_ICONFIG_MARGIN_BELL_LOW_VOLUME)) val = 4;
+                else if (!term->mbvol) val = 0;
+                term_answerback(term, DCS"1$r%"PRIparam" u"ST, val);
+                break;
+            }
             default:
                 // Invalid request
                 term_answerback(term, DCS"0$r"ST);
@@ -2783,8 +2812,9 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             CHK_VT(3);
             ENABLE_IF(set, term->mode, nss_tm_enable_nrcs);
             break;
-        //case 44: /* Margin bell */ // TODO Bell
-        //    break;
+        case 44: /* Margin bell */
+            ENABLE_IF(set, term->mode, nss_tm_margin_bell);
+            break;
         case 45: /* Reverse wrap */
             ENABLE_IF(set, term->mode, nss_tm_reverse_wrap);
             break;
@@ -2870,10 +2900,12 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
         case 1041: /* Use CLIPBOARD instead of PRIMARY */
             ENABLE_IF(set, term->mode, nss_tm_select_to_clipboard);
             break;
-        //case 1042: /* Urgency on bell */ // TODO Bell
-        //    break;
-        //case 1043: /* Raise window on bell */ // TODO Bell
-        //    break;
+        case 1042: /* Urgency on bell */
+            nss_window_set_bell_urgent(term->win, set);
+            break;
+        case 1043: /* Raise window on bell */
+            nss_window_set_bell_raise(term->win, set);
+            break;
         case 1044: /* Don't clear X11 CLIPBOARD selection */
             ENABLE_IF(set, term->mode, nss_tm_keep_clipboard);
             break;
@@ -2951,6 +2983,16 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
     return 1;
 }
 
+void nss_term_set_invert(nss_term_t *term, _Bool set) {
+    term_srm(term, 1, 5, set);
+
+}
+
+_Bool nss_term_get_invert(nss_term_t *term) {
+    return term->mode & nss_tm_reverse_video;
+}
+
+
 static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t mode) {
     nss_modbit_t val = nss_mv_unrecognized;
 #define MODBIT(x) (nss_mv_enabled + !(x))
@@ -3017,8 +3059,8 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
         case 42: /* DECNRCM */
             val = MODBIT(term->mode & nss_tm_enable_nrcs);
             break;
-        case 44: /* Margin bell */ // TODO Bell
-            val = nss_mv_aways_disabled;
+        case 44: /* Margin bell */
+            val = MODBIT(term->mode & nss_tm_margin_bell);
             break;
         case 45: /* Reverse wrap */
             val = MODBIT(term->mode & nss_tm_reverse_wrap);
@@ -3092,11 +3134,11 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
         case 1041: /* Use CLIPBOARD instead of PRIMARY */
             val = MODBIT(term->mode & nss_tm_select_to_clipboard);
             break;
-        case 1042: /* Urgency on bell */ // TODO Bell
-            val = nss_mv_aways_disabled;
+        case 1042: /* Urgency on bell */
+            val = MODBIT(nss_window_get_bell_urgent(term->win));
             break;
-        case 1043: /* Raise window on bell */ // TODO Bell
-            val = nss_mv_aways_disabled;
+        case 1043: /* Raise window on bell */
+            val = MODBIT(nss_window_get_bell_raise(term->win));
             break;
         case 1044: /* Don't clear X11 CLIPBOARD */
             val = MODBIT(term->mode & nss_tm_keep_clipboard);
@@ -3297,8 +3339,15 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
         cell[0].attr |= nss_attrib_wide;
     }
 
+    if (term->mode & nss_tm_margin_bell) {
+        nss_coord_t bcol = term->right - nss_config_integer(NSS_ICONFIG_MARGIN_BELL_COLUMN);
+        if (term->c.x < bcol && term->c.x + width >= bcol)
+            nss_window_bell(term->win, term->mbvol);
+    }
+
     term->c.pending = term->c.x + width == term_max_x(term);
     term->c.x += width - term->c.pending;
+
 
     term->c.gl_ss = term->c.gl; // Reset single shift
 }
@@ -4128,11 +4177,31 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('u') | I0('&'): /* DECRQUPSS */
         term_answerback(term, DCS"%"PRIparam"!u%s"ST, term->c.ups > nss_96cs_latin_1, unparse_nrcs(term->c.ups));
         break;
-    //case C('t') | I0(' '): /* DECSWBV */ // TODO Bell
-    //    break;
-    //case C('u') | I0(' '): /* DECSMBV */ // TODO Bell
-    //    break;
-    //case C('w') | I0('\''): /* DECEFR */ // TODO Bell
+    case C('t') | I0(' '): /* DECSWBV */
+        switch (PARAM(0, 1)) {
+        case 1:
+            term->bvol = 0;
+            break;
+        case 2: case 3: case 4:
+            term->bvol = nss_config_integer(NSS_ICONFIG_BELL_LOW_VOLUME);
+            break;
+        default:
+            term->bvol = nss_config_integer(NSS_ICONFIG_BELL_HIGH_VOLUME);
+        }
+        break;
+    case C('u') | I0(' '): /* DECSMBV */
+        switch (PARAM(0, 8)) {
+        case 1:
+            term->mbvol = 0;
+            break;
+        case 2: case 3: case 4:
+            term->mbvol = nss_config_integer(NSS_ICONFIG_MARGIN_BELL_LOW_VOLUME);
+            break;
+        default:
+            term->mbvol = nss_config_integer(NSS_ICONFIG_MARGIN_BELL_HIGH_VOLUME);
+        }
+        break;
+    //case C('w') | I0('\''): /* DECEFR */ // TODO DEC Locator
     //    break;
     //case C('z') | I0('\''): /* DECELR */ // TODO DEC Locator
     //    break;
@@ -4355,7 +4424,7 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
             term_dispatch_dcs(term);
         else if (is_osc_state(term->esc.state))
             term_dispatch_osc(term);
-        else {}/* term_bell() -- TODO */;
+        else nss_window_bell(term->win, term->bvol);
         break;
     case 0x08: /* BS */
         term_move_left(term, 1);

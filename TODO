@@ -1,10 +1,4 @@
 Until version 1.6:
-    Bell
-        CSI Ps SP t -- DECSWBV
-        CSI Ps SP u -- DECSMBV
-        CSI ? 44 l / CSI ? 44 h -- margin bell
-        CSI ? 1042 l / CSI ? 1042 h -- bell is window urgency
-        CSI ? 1043 l / CSI ? 1043 h -- raise on bell
     Mouse
         CSI ? 53 n
         CSI ? 55 n
@@ -65,6 +59,7 @@ Emulation
         CSI ? 4 l / CSI ? 4 h -- DECSCLM
         CSI ? 8 l / CSI ? 8 h -- DECARM (When ported to wayland)
         DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
+        DECDHL/DECDHL/DECSWL/DECDWL
     SIXEL
         CSI ? 80 l / CSI ? 80 h -- DECSDM
         CSI ? 1070 l / CSI ? 1070 h -- Use private resgisters

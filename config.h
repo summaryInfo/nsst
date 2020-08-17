@@ -83,6 +83,17 @@ enum nss_config_opt {
     NSS_ICONFIG_SPEICAL_BLINK,
     NSS_ICONFIG_SPEICAL_REVERSE,
     NSS_ICONFIG_SPEICAL_ITALIC,
+    NSS_ICONFIG_BELL_VOLUME,
+    NSS_ICONFIG_MARGIN_BELL_VOLUME,
+    NSS_ICONFIG_MARGIN_BELL_COLUMN,
+    NSS_ICONFIG_VISUAL_BELL,
+    NSS_ICONFIG_RAISE_ON_BELL,
+    NSS_ICONFIG_URGENT_ON_BELL,
+    NSS_ICONFIG_BELL_LOW_VOLUME,
+    NSS_ICONFIG_MARGIN_BELL_LOW_VOLUME,
+    NSS_ICONFIG_BELL_HIGH_VOLUME,
+    NSS_ICONFIG_MARGIN_BELL_HIGH_VOLUME,
+    NSS_ICONFIG_VISUAL_BELL_TIME,
 
     // These can't be read with nss_config_integer
     // Use nss_config_input_mode to get the copy of the whole structure
@@ -168,9 +179,9 @@ typedef struct nss_optmap_item {
 } nss_optmap_item_t;
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 98
+#    define OPT_MAP_SIZE 109
 #else
-#    define OPT_MAP_SIZE 99
+#    define OPT_MAP_SIZE 110
 #endif
 
 extern nss_optmap_item_t optmap[OPT_MAP_SIZE];

@@ -84,6 +84,10 @@ struct nss_window {
     unsigned drawn_somthing : 1;
     unsigned sync_active : 1;
     unsigned slow_mode : 1;
+    unsigned bell_urgent : 1;
+    unsigned bell_raise : 1;
+    unsigned in_blink : 1;
+    unsigned init_invert : 1;
 
     int16_t width;
     int16_t height;
@@ -98,6 +102,7 @@ struct nss_window {
     struct timespec last_resize;
     struct timespec last_sync;
     struct timespec next_draw;
+    struct timespec vbell_start;
     nss_coord_t damaged_y0;
     nss_coord_t damaged_y1;
 

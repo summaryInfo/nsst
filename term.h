@@ -127,6 +127,8 @@ _Bool nss_term_is_cursor_enabled(nss_term_t *term);
 nss_udk_t nss_term_lookup_udk(nss_term_t *term, nss_param_t n);
 void nss_term_damage_lines(nss_term_t *term, nss_coord_t ys, nss_coord_t yd);
 void nss_term_reset(nss_term_t *term);
+void nss_term_set_invert(nss_term_t *term, _Bool set);
+_Bool nss_term_get_invert(nss_term_t *term);
 
 /* Selection related functions */
 _Bool nss_term_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y);
