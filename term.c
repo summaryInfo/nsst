@@ -4125,6 +4125,9 @@ static void term_dispatch_csi(nss_term_t *term) {
             }
         }
         break;
+    case C('u') | I0('&'): /* DECRQUPSS */
+        term_answerback(term, DCS"%"PRIparam"!u%s"ST, term->c.ups > nss_96cs_latin_1, unparse_nrcs(term->c.ups));
+        break;
     //case C('t') | I0(' '): /* DECSWBV */ // TODO Bell
     //    break;
     //case C('u') | I0(' '): /* DECSMBV */ // TODO Bell
