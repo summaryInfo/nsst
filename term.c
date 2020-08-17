@@ -4029,8 +4029,7 @@ static void term_dispatch_csi(nss_term_t *term) {
             case 1002: case 1003:
                 term->mode &= ~nss_tm_mouse_mask;
                 term->mode |= (term->saved_mouse_mask & MOUSE_MASK) << MOUSE_OFFSET;
-                if (term->mode & nss_tm_mouse_many)
-                    nss_window_set_mouse(term->win, 1);
+                nss_window_set_mouse(term->win, term->mode & nss_tm_mouse_many);
                 break;
             case 1050: case 1051: case 1052:
             case 1053: case 1060: case 1061:
