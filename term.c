@@ -2766,11 +2766,11 @@ static _Bool term_srm(nss_term_t *term, _Bool private, param_t mode, _Bool set) 
             ENABLE_IF(set, term->mode, nss_tm_track_focus);
             break;
         case 1005: /* UTF-8 mouse format */
-            term->mode &= ~nss_tm_mouse_mask;
+            term->mode &= ~nss_tm_mouse_format_mask;
             ENABLE_IF(set, term->mode, nss_tm_mouse_format_utf8);
             break;
         case 1006: /* SGR mouse format */
-            term->mode &= ~nss_tm_mouse_mask;
+            term->mode &= ~nss_tm_mouse_format_mask;
             ENABLE_IF(set, term->mode, nss_tm_mouse_format_sgr);
             break;
         case 1007: /* Alternate scroll */
@@ -2783,7 +2783,7 @@ static _Bool term_srm(nss_term_t *term, _Bool private, param_t mode, _Bool set) 
             ENABLE_IF(!set, term->mode, nss_tm_dont_scroll_on_input);
             break;
         case 1015: /* Urxvt mouse format */
-            term->mode &= ~nss_tm_mouse_mask;
+            term->mode &= ~nss_tm_mouse_format_mask;
             ENABLE_IF(set, term->mode, nss_tm_mouse_format_urxvt);
             break;
         case 1034: /* Interpret meta */
@@ -4027,8 +4027,10 @@ static void term_dispatch_csi(nss_term_t *term) {
                 break;
             case 9: case 1000: case 1001:
             case 1002: case 1003:
-                term->mode &= ~nss_tm_mouse_format_mask;
+                term->mode &= ~nss_tm_mouse_mask;
                 term->mode |= (term->saved_mouse_mask & MOUSE_MASK) << MOUSE_OFFSET;
+                if (term->mode & nss_tm_mouse_many)
+                    nss_window_set_mouse(term->win, 1);
                 break;
             case 1050: case 1051: case 1052:
             case 1053: case 1060: case 1061:
