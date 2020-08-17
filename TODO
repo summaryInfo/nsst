@@ -1,31 +1,37 @@
 Until version 1.6:
-    Title and icon share stack
-    Clear selection if scroll will break them in DECLRMM
-    XTSAVE/XTRESTORE
-        CSI ? Pm r -- XTRESTORE
-        CSI ? s -- XTSAVE
-    URXVT/UTF-8 mouse
-        CSI ? 1005 l / CSI ? 1005 h -- UTF-8 mouse format
-        CSI ? 1015 l / CSI ? 1015 h -- URXVT mouse format
-    New color syntax
-        RGBI,TekHVC
+    Configurable modifiers
+    DECUDK
     Bell
         CSI Ps SP t -- DECSWBV
         CSI Ps SP u -- DECSMBV
         CSI ? 44 l / CSI ? 44 h -- margin bell
         CSI ? 1042 l / CSI ? 1042 h -- bell is window urgency
         CSI ? 1043 l / CSI ? 1043 h -- raise on bell
-    DECUDK
-    Configurable modifiers
+    Mouse
+        CSI ? 53 n
+        CSI ? 55 n
+        CSI ? 56 n
+        CSI Pt ; Pl ; Pb ; Pr ' w -- DECEFR
+        CSI Ps ; Pu ' z -- DECELR
+        CSI Pm ' { -- DECSLE
+        CSI Ps ' | -- DECRQLP ->  CSI Pe ; Pb ; Pr ; Pc ; Pp & w
     OSC 50 ; Pt ST -- Set font
     Refactor config
+    Refactor debug output
+        make it more granular
+            --trace-characters
+            --trace-escapes
+            --trace-fonts
+            --trace-events
+            --trace-misc
     ...
 
-ResetSpecialColorTests.test_ResetSpecialColor_Dynamic -- esctest2 bug
 ===================
 General
     Write man page
+    Allow short lines to be seleted properly
     Implement named values for options instead of numeric
+    Some alternative to XParseColor
     Query modifiers by names, instead of using predefined
     Refactor config (split global and perinstance settings, reload reliably)
     Support new color syntax
@@ -67,14 +73,6 @@ Emulation
         CSI ? 8 l / CSI ? 8 h -- DECARM (When ported to wayland)
         DCS Ps ; Ps | Pt ST -- DECUDK
         DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
-    Mouse
-        CSI ? 53 n
-        CSI ? 55 n
-        CSI ? 56 n
-        CSI Pt ; Pl ; Pb ; Pr ' w -- DECEFR
-        CSI Ps ; Pu ' z -- DECELR
-        CSI Pm ' { -- DECSLE
-        CSI Ps ' | -- DECRQLP ->  CSI Pe ; Pb ; Pr ; Pc ; Pp & w
     SIXEL
         CSI ? 80 l / CSI ? 80 h -- DECSDM
         CSI ? 1070 l / CSI ? 1070 h -- Use private resgisters
