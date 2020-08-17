@@ -92,6 +92,7 @@ typedef struct nss_cursor {
     uint8_t gl;
     uint8_t gr;
     uint8_t gl_ss;
+    uint8_t ups;
     enum nss_char_set gn[4];
 
     _Bool origin;
@@ -1807,6 +1808,7 @@ static void term_load_config(nss_term_t *term) {
         .fg = nss_config_color(NSS_CCONFIG_FG),
         .bg = nss_config_color(NSS_CCONFIG_BG),
         .gl = 0, .gl_ss = 0, .gr = 2,
+        .ups = nss_96cs_latin_1,
         .gn = {nss_94cs_ascii, nss_94cs_ascii, nss_94cs_ascii, nss_94cs_ascii}
     };
 
@@ -2229,6 +2231,7 @@ inline static void term_parse_cursor_report(nss_term_t *term) {
         .gn = { gn[0], gn[1], gn[2], gn[3] },
         .gl = gl,
         .gr = gr,
+        .ups = term->c.ups,
         .gl_ss = flags & 4 ? 3 : flags & 2 ? 2 : term->c.gl
     };
 
@@ -2378,7 +2381,18 @@ static void term_dispatch_dcs(nss_term_t *term) {
             }
         }
         break;
-
+    case C('u') | I0('!'): /* DECAUPSS */ {
+        uint32_t sel = 0;
+        if (term->esc.str_len == 1 && *dstr > 0x2F && *dstr < 0x7F) {
+            sel = E(*dstr);
+        } else if (term->esc.str_len == 2 && *dstr >= 0x20 && *dstr < 0x30 && dstr[1] > 0x2F && dstr[1] < 0x7F) {
+            sel = E(dstr[1]) | I0(dstr[0]);
+        } else goto err;
+        enum nss_char_set cs = parse_nrcs(E(*dstr), 0, term->vt_level, term->mode & nss_tm_enable_nrcs);
+        if (cs == -1U) cs = parse_nrcs(E(*dstr), 1, term->vt_level, term->mode & nss_tm_enable_nrcs);
+        if (cs != -1U) term->c.ups = cs;
+        break;
+    }
     case C('q') | I0('+'): /* XTGETTCAP */ {
         // TODO Termcap: Support proper tcap db
         // for now, just implement Co/colors
@@ -4675,7 +4689,7 @@ static void term_dispatch(nss_term_t *term, nss_char_t ch) {
             if ((term->mode & nss_tm_utf8) && !nss_config_integer(NSS_ICONFIG_FORCE_UTF8_NRCS))
                 ch = nrcs_decode_fast(glv, ch);
             else
-                ch = nrcs_decode(glv, term->c.gn[term->c.gr], ch, term->mode & nss_tm_enable_nrcs);
+                ch = nrcs_decode(glv, term->c.gn[term->c.gr], term->c.ups, ch, term->mode & nss_tm_enable_nrcs);
 
             term_putchar(term, ch);
         }

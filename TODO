@@ -31,6 +31,7 @@ General
     Refactor config (split global and perinstance settings, reload reliably)
     Support new color syntax
     Implement proper daemon mode
+    Allow geometry to be specified in characters
     Make X resource/option names more or less correspond to Xterm/rxvt-unicode?
 Render
     General
@@ -54,9 +55,6 @@ Render
         Use multiple separate buffers for background/lines/glyphs to sort less
     Wayland
 Emulation
-    Clear selection if scroll will break them in DECLRMM
-    User-prefered charset
-    Allow geometry to be specified in characters
     Proper vt level restriction
     SL,SR: If the current cursor position is outside of the current scroll region it does nothing???
     Printing with SGR

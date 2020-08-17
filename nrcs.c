@@ -155,11 +155,14 @@ nss_char_t nrcs_decode_fast(enum nss_char_set gl, nss_char_t ch) {
     return ch;
 }
 
-nss_char_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, nss_char_t ch, _Bool nrcs) {
+nss_char_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, nss_char_t ch, enum nss_char_set ups, _Bool nrcs) {
     if (ch > 0xFF) return ch;
     if (ch == 0x7F) return U' ';
 
     enum nss_char_set set = ch > 0x7F ? gr : gl;
+
+    // User prefered supplemental
+    if (set == nss_94cs_dec_sup) set = ups;
 
     switch (set) {
     case nss_94cs_ascii:

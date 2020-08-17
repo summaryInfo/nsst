@@ -33,8 +33,8 @@ enum nss_char_set {
     nss_94cs_ascii,
     nss_94cs_dec_altchars,
     nss_94cs_dec_altgraph,
-    nss_94cs_british, // same as latin-1
-    nss_94cs_dec_sup,
+    nss_94cs_british, // Same as latin-1
+    nss_94cs_dec_sup, // User prefered
     nss_94cs_dec_sup_graph,
     nss_94cs_dec_graph,
     nss_94cs_dec_tech,
@@ -53,7 +53,7 @@ enum nss_char_set {
 typedef uint32_t nss_char_t;
 
 _Bool nrcs_encode(nss_char_t set, enum nss_char_set *ch, _Bool nrcs);
-nss_char_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, nss_char_t ch, _Bool nrcs);
+nss_char_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, nss_char_t ch, enum nss_char_set ups, _Bool nrcs);
 nss_char_t nrcs_decode_fast(enum nss_char_set gl, nss_char_t ch);
 
 #endif
