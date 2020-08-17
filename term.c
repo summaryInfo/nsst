@@ -126,6 +126,13 @@ typedef struct nss_visual_selection {
     nss_clipboard_target_t targ;
 } nss_visual_selection_t;
 
+typedef enum nss_modbit {
+    nss_mv_unrecognized,
+    nss_mv_enabled,
+    nss_mv_disabled,
+    nss_mv_aways_enabled,
+    nss_mv_aways_disabled,
+} nss_modbit_t;
 
 struct nss_term {
     nss_line_t **screen;
@@ -197,11 +204,13 @@ struct nss_term {
         nss_tm_132_preserve_display = 1LL << 16,
         nss_tm_scroll_on_output     = 1LL << 17,
         nss_tm_dont_scroll_on_input = 1LL << 18,
+#define MOUSE_OFFSET 19
+#define MOUSE_MASK 0xFULL
         nss_tm_mouse_x10            = 1LL << 19,
         nss_tm_mouse_button         = 1LL << 20,
         nss_tm_mouse_motion         = 1LL << 21,
         nss_tm_mouse_many           = 1LL << 22,
-        nss_tm_mouse_format_sgr     = 1LL << 23,
+        nss_tm_paste_quote          = 1LL << 23,
         nss_tm_print_extend         = 1LL << 24,
         nss_tm_print_form_feed      = 1LL << 25,
         nss_tm_print_enabled        = 1LL << 26,
@@ -226,17 +235,19 @@ struct nss_term {
         nss_tm_xterm_more_hack      = 1LL << 45,
         nss_tm_allow_change_font    = 1LL << 46,
         nss_tm_paste_literal_nl     = 1LL << 47,
-        // Need to modify XTCHECKSUM aswell if theses values gets modified
+#define CKSM_OFFSET 48
+#define CKSM_MASK 0x3FULL
         nss_tm_cksm_positive        = 1LL << 48,
         nss_tm_cksm_no_attr         = 1LL << 49,
         nss_tm_cksm_no_trim         = 1LL << 50,
         nss_tm_cksm_no_implicit     = 1LL << 51,
         nss_tm_cksm_wide            = 1LL << 52,
         nss_tm_cksm_8bit            = 1LL << 53,
-
-        nss_tm_paste_quote          = 1LL << 54,
+#define MFORMAT_OFFSET (56-4)
+#define MFORMAT_MASK 0x30ULL
         nss_tm_mouse_format_utf8    = 1LL << 55,
         nss_tm_mouse_format_urxvt   = 1LL << 56,
+        nss_tm_mouse_format_sgr     = 1LL << 57,
 
         nss_tm_cksm_mask =
             nss_tm_cksm_positive | nss_tm_cksm_no_attr |
@@ -252,6 +263,16 @@ struct nss_term {
             nss_tm_mouse_format_utf8 |
             nss_tm_mouse_format_urxvt,
     } mode, vt52mode;
+
+    /* This is compressed bit array,
+     * that stores encoded modes for
+     * XTSAVE/XTRESTORE
+     * [0-96] : 12 bytes;
+     * [1000-1063] : 8 bytes;
+     * [2000-2007] : 1 byte */
+    uint8_t saved_modbits[21];
+    uint8_t saved_mouse_mask;
+    uint8_t saved_keyboard_type;
 
     struct nss_escape {
         enum nss_escape_state {
@@ -2346,7 +2367,8 @@ static nss_clipboard_target_t decode_target(uint8_t targ, _Bool mode) {
     case 'q': return nss_ct_secondary;
     case 'c': return nss_ct_clipboard;
     case 's': return mode ? nss_ct_clipboard : nss_ct_primary;
-    default: return -1;
+    default:
+        return -1;
     }
 }
 
@@ -2564,7 +2586,7 @@ static void term_dispatch_osc(nss_term_t *term) {
             }
         }
         if (parg++ < dend) {
-            if (!letter) ts[decode_target((letter = 'c'), toclip)] = 1;
+            if (!letter) ts[decode_target((letter = 's'), toclip)] = 1;
             if (!strcmp("?", (char*)parg)) {
                 term->paste_from = letter;
                 nss_window_paste_clip(term->win, decode_target(letter, toclip));
@@ -2605,261 +2627,479 @@ static void term_dispatch_osc(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static void term_dispatch_srm(nss_term_t *term, _Bool set) {
-    if (term->esc.selector & P_MASK) {
-        for (size_t i = 0; i < term->esc.i; i++) {
-            switch (PARAM(i, 0)) {
-            case 0: /* Default - nothing */
-                break;
-            case 1: /* DECCKM */
-                term->inmode.appcursor = set;
-                break;
-            case 2: /* DECANM */
-                if (!set) {
-                    term->vt52c = term->c;
-                    term->vt52mode = term->mode;
-                    term->inmode.keyboad_vt52 = 1;
-                    term->vt_level = 0;
-                    term->c.gl_ss = term->c.gl = 0;
-                    term->c.gr = 2,
-                    term->c.gn[0] = term->c.gn[2] = term->c.gn[3] = nss_94cs_ascii;
-                    term->c.gn[1] = nss_94cs_dec_graph;
-                    term->mode &= nss_tm_focused | nss_tm_reverse_video;
-                    term_esc_start_seq(term);
-                }
-                break;
-            case 3: /* DECCOLM */
-                if (!(term->mode & nss_tm_disable_132cols))
-                    term_set_132(term, set);
-                break;
-            case 4: /* DECSCLM */
-                ENABLE_IF(set, term->mode, nss_tm_smooth_scroll);
-                break;
-            case 5: /* DECSCNM */
-                if (set ^ !!(term->mode & nss_tm_reverse_video)) {
-                    SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
-                    SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
-                    SWAP(nss_color_t, term->palette[NSS_SPECIAL_SELECTED_BG], term->palette[NSS_SPECIAL_SELECTED_FG]);
-                    term_update_selection(term, nss_sstate_none, (nss_selected_t){0});
-                    nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
-                }
-                ENABLE_IF(set, term->mode, nss_tm_reverse_video);
-                break;
-            case 6: /* DECCOM */
-                term->c.origin = set;
-                term_move_to(term, term_min_ox(term), term_min_oy(term));
-                break;
-            case 7: /* DECAWM */
-                ENABLE_IF(set, term->mode, nss_tm_wrap);
-                if (!set) term_reset_pending(term);
-                break;
-            case 8: /* DECARM */
-                // IGNORE
-                break;
-            case 9: /* X10 Mouse tracking */
-                nss_window_set_mouse(term->win, 0);
-                term->mode &= ~nss_tm_mouse_mask;
-                ENABLE_IF(set, term->mode, nss_tm_mouse_x10);
-                break;
-            case 10: /* Show toolbar */
-                // IGNORE - There is no toolbar
-                break;
-            case 12: /* Start blinking cursor */
-                nss_window_set_cursor(term->win, ((nss_window_get_cursor(term->win) + 1) & ~1) - set);
-                break;
-            case 13: /* Start blinking cursor (menu item) */
-            case 14: /* Enable XOR of controll sequence and menu for blinking */
-                // IGNORE
-                break;
-            case 18: /* DECPFF */
-                ENABLE_IF(set, term->mode, nss_tm_print_form_feed);
-                break;
-            case 19: /* DECREX */
-                ENABLE_IF(set, term->mode, nss_tm_print_extend);
-                break;
-            case 25: /* DECTCEM */
-                if (set ^ !!(term->mode & nss_tm_hide_cursor))
-                    term->screen[term->c.y]->cell[term->c.x].attr &= ~nss_attrib_drawn;
-                ENABLE_IF(!set, term->mode, nss_tm_hide_cursor);
-                break;
-            case 30: /* Show scrollbar */
-                // IGNORE - There is no scrollbar
-                break;
-            case 35: /* URXVT Allow change font */
-                ENABLE_IF(set, term->mode, nss_tm_allow_change_font);
-                break;
-            case 40: /* 132COLS */
-                ENABLE_IF(!set, term->mode, nss_tm_disable_132cols);
-                break;
-            case 41: /* XTerm more(1) hack */
-                ENABLE_IF(set, term->mode, nss_tm_xterm_more_hack);
-                break;
-            case 42: /* DECNRCM */
-                CHK_VT(3);
-                ENABLE_IF(set, term->mode, nss_tm_enable_nrcs);
-                break;
-            case 45: /* Reverse wrap */
-                ENABLE_IF(set, term->mode, nss_tm_reverse_wrap);
-                break;
-            case 47: /* Enable altscreen */
-                if (term->mode & nss_tm_disable_altscreen) break;
-                if (set ^ !!(term->mode & nss_tm_altscreen)) {
-                    term_swap_screen(term, 1);
-                }
-                break;
-            case 66: /* DECNKM */
-                term->inmode.appkey = set;
-                break;
-            case 67: /* DECBKM */
-                term->inmode.backspace_is_del = !set;
-                break;
-            case 69: /* DECLRMM */
-                CHK_VT(4);
-                ENABLE_IF(set, term->mode, nss_tm_lr_margins);
-                break;
-            //case 80: /* DECSDM */ //TODO SIXEL
-            //    break;
-            case 95: /* DECNCSM */
-                CHK_VT(5);
-                ENABLE_IF(set, term->mode, nss_tm_132_preserve_display);
-                break;
-            case 1000: /* X11 Mouse tracking */
-                nss_window_set_mouse(term->win, 0);
-                term->mode &= ~nss_tm_mouse_mask;
-                ENABLE_IF(set, term->mode, nss_tm_mouse_button);
-                break;
-            case 1001: /* Highlight mouse tracking */
-                // IGNORE
-                break;
-            case 1002: /* Cell motion mouse tracking on keydown */
-                nss_window_set_mouse(term->win, 0);
-                term->mode &= ~nss_tm_mouse_mask;
-                ENABLE_IF(set, term->mode, nss_tm_mouse_motion);
-                break;
-            case 1003: /* All motion mouse tracking */
-                nss_window_set_mouse(term->win, set);
-                term->mode &= ~nss_tm_mouse_mask;
-                ENABLE_IF(set, term->mode, nss_tm_mouse_many);
-                break;
-            case 1004: /* Focus in/out events */
-                ENABLE_IF(set, term->mode, nss_tm_track_focus);
-                break;
-            case 1005: /* UTF-8 mouse format */
-                term->mode &= ~nss_tm_mouse_mask;
-                ENABLE_IF(set, term->mode, nss_tm_mouse_format_utf8);
-                break;
-            case 1006: /* SGR mouse format */
-                term->mode &= ~nss_tm_mouse_mask;
-                ENABLE_IF(set, term->mode, nss_tm_mouse_format_sgr);
-                break;
-            case 1007: /* Alternate scroll */
-                ENABLE_IF(set, term->mode, nss_tm_alternate_scroll);
-                break;
-            case 1010: /* Scroll to bottom on output */
-                ENABLE_IF(set, term->mode, nss_tm_scroll_on_output);
-                break;
-            case 1011: /* Scroll to bottom on keypress */
-                ENABLE_IF(!set, term->mode, nss_tm_dont_scroll_on_input);
-                break;
-            case 1015: /* Urxvt mouse format */
-                term->mode &= ~nss_tm_mouse_mask;
-                ENABLE_IF(set, term->mode, nss_tm_mouse_format_urxvt);
-                break;
-            case 1034: /* Interpret meta */
-                term->inmode.has_meta = set;
-                break;
-            case 1035: /* Numlock */
-                term->inmode.allow_numlock = set;
-                break;
-            case 1036: /* Meta sends escape */
-                term->inmode.meta_escape = set;
-                break;
-            case 1037: /* Backspace is delete */
-                term->inmode.backspace_is_del = set;
-                break;
-            case 1040: /* Don't clear X11 PRIMARY selection */
-                ENABLE_IF(set, term->mode, nss_tm_keep_selection);
-                break;
-            case 1041: /* Use CLIPBOARD instead of PRIMARY */
-                ENABLE_IF(set, term->mode, nss_tm_select_to_clipboard);
-                break;
-            case 1044: /* Don't clear X11 CLIPBOARD selection */
-                ENABLE_IF(set, term->mode, nss_tm_keep_clipboard);
-                break;
-            case 1046: /* Allow altscreen */
-                ENABLE_IF(!set, term->mode, nss_tm_disable_altscreen);
-                break;
-            case 1047: /* Enable altscreen and clear screen */
-                if (term->mode & nss_tm_disable_altscreen) break;
-                if (set == !(term->mode & nss_tm_altscreen))
-                    term_swap_screen(term, !set);
-                if (set) term_erase(term, 0, 0, term->width, term->height, 0);
-                break;
-            case 1048: /* Save cursor  */
-                term_cursor_mode(term, set);
-                break;
-            case 1049: /* Save cursor and switch to altscreen */
-                if (term->mode & nss_tm_disable_altscreen) break;
-                if (set == !(term->mode & nss_tm_altscreen)) {
-                    if (set) term_cursor_mode(term, 1);
-                    term_swap_screen(term, !set);
-                    if (!set) term_cursor_mode(term, 0);
-                }
-                if (set) term_erase(term, 0, 0, term->width, term->height, 0);
-                break;
-            case 1050: /* termcap function keys */
-                // IGNORE
-                break;
-            case 1051: /* SUN function keys */
-                term->inmode.keyboard_mapping = set ? nss_km_sun : nss_km_default;
-                break;
-            case 1052: /* HP function keys */
-                term->inmode.keyboard_mapping = set ? nss_km_hp : nss_km_default;
-                break;
-            case 1053: /* SCO function keys */
-                term->inmode.keyboard_mapping = set ? nss_km_sco : nss_km_default;
-                break;
-            case 1060: /* Legacy xterm function keys */
-                term->inmode.keyboard_mapping = set ? nss_km_legacy : nss_km_default;
-                break;
-            case 1061: /* VT220 function keys */
-                term->inmode.keyboard_mapping = set ? nss_km_vt220 : nss_km_default;
-                break;
-            case 2004: /* Bracketed paste */
-                ENABLE_IF(set, term->mode, nss_tm_bracketed_paste);
-                break;
-            case 2005: /* Paste quote */
-                ENABLE_IF(set, term->mode, nss_tm_paste_literal_nl);
-                break;
-            case 2006: /* Paste literal NL */
-                ENABLE_IF(set, term->mode, nss_tm_paste_literal_nl);
-                break;
-            default:
-                term_esc_dump(term, 0);
+static _Bool term_srm(nss_term_t *term, _Bool private, param_t mode, _Bool set) {
+    if (private) {
+        switch (mode) {
+        case 0: /* Default - nothing */
+            break;
+        case 1: /* DECCKM */
+            term->inmode.appcursor = set;
+            break;
+        case 2: /* DECANM */
+            if (!set) {
+                term->vt52c = term->c;
+                term->vt52mode = term->mode;
+                term->inmode.keyboad_vt52 = 1;
+                term->vt_level = 0;
+                term->c.gl_ss = term->c.gl = 0;
+                term->c.gr = 2,
+                term->c.gn[0] = term->c.gn[2] = term->c.gn[3] = nss_94cs_ascii;
+                term->c.gn[1] = nss_94cs_dec_graph;
+                term->mode &= nss_tm_focused | nss_tm_reverse_video;
+                term_esc_start_seq(term);
             }
+            break;
+        case 3: /* DECCOLM */
+            if (!(term->mode & nss_tm_disable_132cols))
+                term_set_132(term, set);
+            break;
+        case 4: /* DECSCLM */
+            ENABLE_IF(set, term->mode, nss_tm_smooth_scroll);
+            break;
+        case 5: /* DECSCNM */
+            if (set ^ !!(term->mode & nss_tm_reverse_video)) {
+                SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
+                SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
+                SWAP(nss_color_t, term->palette[NSS_SPECIAL_SELECTED_BG], term->palette[NSS_SPECIAL_SELECTED_FG]);
+                term_update_selection(term, nss_sstate_none, (nss_selected_t){0});
+                nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
+            }
+            ENABLE_IF(set, term->mode, nss_tm_reverse_video);
+            break;
+        case 6: /* DECCOM */
+            term->c.origin = set;
+            term_move_to(term, term_min_ox(term), term_min_oy(term));
+            break;
+        case 7: /* DECAWM */
+            ENABLE_IF(set, term->mode, nss_tm_wrap);
+            if (!set) term_reset_pending(term);
+            break;
+        case 8: /* DECARM */
+            // IGNORE
+            break;
+        case 9: /* X10 Mouse tracking */
+            nss_window_set_mouse(term->win, 0);
+            term->mode &= ~nss_tm_mouse_mask;
+            ENABLE_IF(set, term->mode, nss_tm_mouse_x10);
+            break;
+        case 10: /* Show toolbar */
+            // IGNORE - There is no toolbar
+            break;
+        case 12: /* Start blinking cursor */
+            nss_window_set_cursor(term->win, ((nss_window_get_cursor(term->win) + 1) & ~1) - set);
+            break;
+        case 13: /* Start blinking cursor (menu item) */
+        case 14: /* Enable XOR of controll sequence and menu for blinking */
+            // IGNORE
+            break;
+        case 18: /* DECPFF */
+            ENABLE_IF(set, term->mode, nss_tm_print_form_feed);
+            break;
+        case 19: /* DECREX */
+            ENABLE_IF(set, term->mode, nss_tm_print_extend);
+            break;
+        case 25: /* DECTCEM */
+            if (set ^ !!(term->mode & nss_tm_hide_cursor))
+                term->screen[term->c.y]->cell[term->c.x].attr &= ~nss_attrib_drawn;
+            ENABLE_IF(!set, term->mode, nss_tm_hide_cursor);
+            break;
+        case 30: /* Show scrollbar */
+            // IGNORE - There is no scrollbar
+            break;
+        case 35: /* URXVT Allow change font */
+            ENABLE_IF(set, term->mode, nss_tm_allow_change_font);
+            break;
+        case 40: /* 132COLS */
+            ENABLE_IF(!set, term->mode, nss_tm_disable_132cols);
+            break;
+        case 41: /* XTerm more(1) hack */
+            ENABLE_IF(set, term->mode, nss_tm_xterm_more_hack);
+            break;
+        case 42: /* DECNRCM */
+            CHK_VT(3);
+            ENABLE_IF(set, term->mode, nss_tm_enable_nrcs);
+            break;
+        case 45: /* Reverse wrap */
+            ENABLE_IF(set, term->mode, nss_tm_reverse_wrap);
+            break;
+        case 47: /* Enable altscreen */
+            if (term->mode & nss_tm_disable_altscreen) break;
+            if (set ^ !!(term->mode & nss_tm_altscreen)) {
+                term_swap_screen(term, 1);
+            }
+            break;
+        case 66: /* DECNKM */
+            term->inmode.appkey = set;
+            break;
+        case 67: /* DECBKM */
+            term->inmode.backspace_is_del = !set;
+            break;
+        case 69: /* DECLRMM */
+            CHK_VT(4);
+            ENABLE_IF(set, term->mode, nss_tm_lr_margins);
+            break;
+        //case 80: /* DECSDM */ //TODO SIXEL
+        //    break;
+        case 95: /* DECNCSM */
+            CHK_VT(5);
+            ENABLE_IF(set, term->mode, nss_tm_132_preserve_display);
+            break;
+        case 1000: /* X11 Mouse tracking */
+            nss_window_set_mouse(term->win, 0);
+            term->mode &= ~nss_tm_mouse_mask;
+            ENABLE_IF(set, term->mode, nss_tm_mouse_button);
+            break;
+        case 1001: /* Highlight mouse tracking */
+            // IGNORE
+            break;
+        case 1002: /* Cell motion mouse tracking on keydown */
+            nss_window_set_mouse(term->win, 0);
+            term->mode &= ~nss_tm_mouse_mask;
+            ENABLE_IF(set, term->mode, nss_tm_mouse_motion);
+            break;
+        case 1003: /* All motion mouse tracking */
+            nss_window_set_mouse(term->win, set);
+            term->mode &= ~nss_tm_mouse_mask;
+            ENABLE_IF(set, term->mode, nss_tm_mouse_many);
+            break;
+        case 1004: /* Focus in/out events */
+            ENABLE_IF(set, term->mode, nss_tm_track_focus);
+            break;
+        case 1005: /* UTF-8 mouse format */
+            term->mode &= ~nss_tm_mouse_mask;
+            ENABLE_IF(set, term->mode, nss_tm_mouse_format_utf8);
+            break;
+        case 1006: /* SGR mouse format */
+            term->mode &= ~nss_tm_mouse_mask;
+            ENABLE_IF(set, term->mode, nss_tm_mouse_format_sgr);
+            break;
+        case 1007: /* Alternate scroll */
+            ENABLE_IF(set, term->mode, nss_tm_alternate_scroll);
+            break;
+        case 1010: /* Scroll to bottom on output */
+            ENABLE_IF(set, term->mode, nss_tm_scroll_on_output);
+            break;
+        case 1011: /* Scroll to bottom on keypress */
+            ENABLE_IF(!set, term->mode, nss_tm_dont_scroll_on_input);
+            break;
+        case 1015: /* Urxvt mouse format */
+            term->mode &= ~nss_tm_mouse_mask;
+            ENABLE_IF(set, term->mode, nss_tm_mouse_format_urxvt);
+            break;
+        case 1034: /* Interpret meta */
+            term->inmode.has_meta = set;
+            break;
+        case 1035: /* Numlock */
+            term->inmode.allow_numlock = set;
+            break;
+        case 1036: /* Meta sends escape */
+            term->inmode.meta_escape = set;
+            break;
+        case 1037: /* Backspace is delete */
+            term->inmode.backspace_is_del = set;
+            break;
+        case 1040: /* Don't clear X11 PRIMARY selection */
+            ENABLE_IF(set, term->mode, nss_tm_keep_selection);
+            break;
+        case 1041: /* Use CLIPBOARD instead of PRIMARY */
+            ENABLE_IF(set, term->mode, nss_tm_select_to_clipboard);
+            break;
+        case 1044: /* Don't clear X11 CLIPBOARD selection */
+            ENABLE_IF(set, term->mode, nss_tm_keep_clipboard);
+            break;
+        case 1046: /* Allow altscreen */
+            ENABLE_IF(!set, term->mode, nss_tm_disable_altscreen);
+            break;
+        case 1047: /* Enable altscreen and clear screen */
+            if (term->mode & nss_tm_disable_altscreen) break;
+            if (set == !(term->mode & nss_tm_altscreen))
+                term_swap_screen(term, !set);
+            if (set) term_erase(term, 0, 0, term->width, term->height, 0);
+            break;
+        case 1048: /* Save cursor  */
+            term_cursor_mode(term, set);
+            break;
+        case 1049: /* Save cursor and switch to altscreen */
+            if (term->mode & nss_tm_disable_altscreen) break;
+            if (set == !(term->mode & nss_tm_altscreen)) {
+                if (set) term_cursor_mode(term, 1);
+                term_swap_screen(term, !set);
+                if (!set) term_cursor_mode(term, 0);
+            }
+            if (set) term_erase(term, 0, 0, term->width, term->height, 0);
+            break;
+        case 1050: /* termcap function keys */
+            // IGNORE
+            break;
+        case 1051: /* SUN function keys */
+            term->inmode.keyboard_mapping = set ? nss_km_sun : nss_km_default;
+            break;
+        case 1052: /* HP function keys */
+            term->inmode.keyboard_mapping = set ? nss_km_hp : nss_km_default;
+            break;
+        case 1053: /* SCO function keys */
+            term->inmode.keyboard_mapping = set ? nss_km_sco : nss_km_default;
+            break;
+        case 1060: /* Legacy xterm function keys */
+            term->inmode.keyboard_mapping = set ? nss_km_legacy : nss_km_default;
+            break;
+        case 1061: /* VT220 function keys */
+            term->inmode.keyboard_mapping = set ? nss_km_vt220 : nss_km_default;
+            break;
+        case 2004: /* Bracketed paste */
+            ENABLE_IF(set, term->mode, nss_tm_bracketed_paste);
+            break;
+        case 2005: /* Paste quote */
+            ENABLE_IF(set, term->mode, nss_tm_paste_literal_nl);
+            break;
+        case 2006: /* Paste literal NL */
+            ENABLE_IF(set, term->mode, nss_tm_paste_literal_nl);
+            break;
+        default:
+            return 0;
         }
     } else {
-        for (size_t i = 0; i < term->esc.i; i++) {
-            switch (PARAM(i, 0)) {
-            case 0: /* Default - nothing */
-                break;
-            case 2: /* KAM */
-                term->inmode.keylock = set;
-                break;
-            case 4: /* IRM */
-                ENABLE_IF(set, term->mode, nss_tm_insert);
-                break;
-            case 12: /* SRM */
-                ENABLE_IF(set, term->mode, nss_tm_echo);
-                break;
-            case 20: /* LNM */
-                ENABLE_IF(set, term->mode, nss_tm_crlf);
-                break;
-            default:
-                term_esc_dump(term, 0);
-            }
+        switch (mode) {
+        case 0: /* Default - nothing */
+            break;
+        case 2: /* KAM */
+            term->inmode.keylock = set;
+            break;
+        case 4: /* IRM */
+            ENABLE_IF(set, term->mode, nss_tm_insert);
+            break;
+        case 12: /* SRM */
+            ENABLE_IF(set, term->mode, nss_tm_echo);
+            break;
+        case 20: /* LNM */
+            ENABLE_IF(set, term->mode, nss_tm_crlf);
+            break;
+        default:
+            term_esc_dump(term, 0);
         }
     }
+    return 1;
+}
+
+static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, param_t mode) {
+    nss_modbit_t val = nss_mv_unrecognized;
+#define MODBIT(x) (nss_mv_enabled + !(x))
+    if (private) {
+        switch(mode) {
+        case 1: /* DECCKM */
+            val = MODBIT(term->inmode.appcursor);
+            break;
+        case 2: /* DECANM */
+            val = nss_mv_disabled;
+            break;
+        case 3: /* DECCOLM */
+            val = MODBIT(term->mode & nss_tm_132cols);
+            break;
+        case 4: /* DECSCLM */
+            val = MODBIT(term->mode & nss_tm_smooth_scroll);
+            break;
+        case 5: /* DECCNM */
+            val = MODBIT(term->mode & nss_tm_reverse_video);
+            break;
+        case 6: /* DECCOM */
+            val = MODBIT(term->c.origin);
+            break;
+        case 7: /* DECAWM */
+            val = MODBIT(term->mode & nss_tm_wrap);
+            break;
+        case 8: /* DECARM */
+            val = nss_mv_aways_disabled;
+            break;
+        case 9: /* X10 Mouse */
+            val = MODBIT(term->mode & nss_tm_mouse_x10);
+            break;
+        case 10: /* Show toolbar */
+            val = nss_mv_aways_disabled;
+            break;
+        case 12: /* Start blinking cursor */
+            val = MODBIT(nss_window_get_cursor(term->win) & 1);
+            break;
+        case 13: /* Start blinking cursor (menu item) */
+        case 14: /* Enable XORG of control sequence and menu for blinking */
+            val = nss_mv_aways_disabled;
+            break;
+        case 18: /* DECPFF */
+            val = MODBIT(term->mode & nss_tm_print_form_feed);
+            break;
+        case 19: /* DECREX */
+            val = MODBIT(term->mode & nss_tm_print_extend);
+            break;
+        case 25: /* DECTCEM */
+            val = MODBIT(!(term->mode & nss_tm_hide_cursor));
+            break;
+        case 30: /* Show scrollbar */
+            val = nss_mv_aways_disabled;
+            break;
+        case 35: /* URXVT Allow change font */
+            val = MODBIT(term->mode & nss_tm_allow_change_font);
+            break;
+        case 40: /* 132COLS */
+            val = MODBIT(!(term->mode & nss_tm_disable_132cols));
+            break;
+        case 41: /* XTerm more(1) hack */
+            val = MODBIT(term->mode & nss_tm_xterm_more_hack);
+            break;
+        case 42: /* DECNRCM */
+            val = MODBIT(term->mode & nss_tm_enable_nrcs);
+            break;
+        case 45: /* Reverse wrap */
+            val = MODBIT(term->mode & nss_tm_reverse_wrap);
+            break;
+        case 47: /* Enable altscreen */
+            val = MODBIT(term->mode & nss_tm_altscreen);
+            break;
+        case 66: /* DECNKM */
+            val = MODBIT(term->inmode.appkey);
+            break;
+        case 67: /* DECBKM */
+            val = MODBIT(!term->inmode.backspace_is_del);
+            break;
+        case 69: /* DECLRMM */
+            val = MODBIT(term->mode & nss_tm_lr_margins);
+            break;
+        //case 80: /* DECSDM */ //TODO SIXEL
+        //   break;
+        case 95: /* DECNCSM */
+            val = MODBIT(term->mode & nss_tm_132_preserve_display);
+            break;
+        case 1000: /* X11 Mouse tracking */
+            val = MODBIT(term->mode & nss_tm_mouse_button);
+            break;
+        case 1001: /* Highlight mouse tracking */
+            val = nss_mv_aways_disabled;
+            break;
+        case 1002: /* Cell motion tracking on keydown */
+            val = MODBIT(term->mode & nss_tm_mouse_motion);
+            break;
+        case 1003: /* All motion mouse tracking */
+            val = MODBIT(term->mode & nss_tm_mouse_many);
+            break;
+        case 1004: /* Focus in/out events */
+            val = MODBIT(term->mode & nss_tm_track_focus);
+            break;
+        case 1005: /* UTF-8 mouse tracking */
+            val = MODBIT(term->mode & nss_tm_mouse_format_utf8);
+            break;
+        case 1006: /* SGR Mouse tracking */
+            val = MODBIT(term->mode & nss_tm_mouse_format_sgr);
+            break;
+        case 1007: /* Alternate scroll */
+            val = MODBIT(term->mode & nss_tm_alternate_scroll);
+            break;
+        case 1010: /* Scroll to bottom on output */
+            val = MODBIT(term->mode & nss_tm_scroll_on_output);
+            break;
+        case 1011: /* Scroll to bottom on keypress */
+            val = MODBIT(!(term->mode & nss_tm_dont_scroll_on_input));
+            break;
+        case 1015: /* Urxvt mouse tracking */
+            val = MODBIT(term->mode & nss_tm_mouse_format_urxvt);
+            break;
+        case 1034: /* Interpret meta */
+            val = MODBIT(term->inmode.has_meta);
+            break;
+        case 1035: /* Numlock */
+            val = MODBIT(term->inmode.allow_numlock);
+            break;
+        case 1036: /* Meta sends escape */
+            val = MODBIT(term->inmode.meta_escape);
+            break;
+        case 1037: /* Backspace is delete */
+            val = MODBIT(term->inmode.backspace_is_del);
+            break;
+        case 1040: /* Don't clear X11 PRIMARY selecion */
+            val = MODBIT(term->mode & nss_tm_keep_selection);
+            break;
+        case 1041: /* Use CLIPBOARD instead of PRIMARY */
+            val = MODBIT(term->mode & nss_tm_select_to_clipboard);
+            break;
+        case 1044: /* Don't clear X11 CLIPBOARD */
+            val = MODBIT(term->mode & nss_tm_keep_clipboard);
+            break;
+        case 1046: /* Allow altscreen */
+            val = MODBIT(!(term->mode & nss_tm_disable_altscreen));
+            break;
+        case 1047: /* Enable altscreen and clear screen */
+            val = MODBIT(term->mode & nss_tm_altscreen);
+            break;
+        case 1048: /* Save cursor */
+            val = nss_mv_aways_enabled; // TODO: What should be reported there?
+            break;
+        case 1049: /* Save cursor and switch to altscreen */
+            val = MODBIT(term->mode & nss_tm_altscreen);
+            break;
+        case 1050: /* termcap function keys */
+            val = nss_mv_aways_disabled;
+            break;
+        case 1051: /* SUN function keys */
+            val = MODBIT(term->inmode.keyboard_mapping == nss_km_sun);
+            break;
+        case 1052: /* HP function keys */
+            val = MODBIT(term->inmode.keyboard_mapping == nss_km_hp);
+            break;
+        case 1053: /* SCO function keys */
+            val = MODBIT(term->inmode.keyboard_mapping == nss_km_sco);
+            break;
+        case 1060: /* Legacy xterm function keys */
+            val = MODBIT(term->inmode.keyboard_mapping == nss_km_legacy);
+            break;
+        case 1061: /* VT220 function keys */
+            val = MODBIT(term->inmode.keyboard_mapping == nss_km_vt220);
+            break;
+        case 2004: /* Bracketed paste */
+            val = MODBIT(term->mode & nss_tm_bracketed_paste);
+            break;
+        case 2005: /* Paste literal NL */
+            val = MODBIT(term->mode & nss_tm_paste_literal_nl);
+            break;
+        case 2006: /* Paste quote */
+            val = MODBIT(term->mode & nss_tm_paste_quote);
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+    } else {
+        switch(mode) {
+        case 1: /* GATM */
+        case 5: /* SRTM */
+        case 7: /* VEM */
+        case 10: /* HEM */
+        case 11: /* PUM */
+        case 13: /* FEAM */
+        case 14: /* FETM */
+        case 15: /* MATM */
+        case 16: /* TTM */
+        case 17: /* SATM */
+        case 18: /* TSM */
+        case 19: /* EBM */
+            val = nss_mv_aways_disabled; /* always reset */
+            break;
+        case 2: /* KAM */
+            val = MODBIT(term->inmode.keylock); /* reset/set */
+            break;
+        case 3: /* CRM */
+            val = nss_mv_disabled; /* reset */
+            break;
+        case 4: /* IRM */
+            val = MODBIT(term->mode & nss_tm_insert); /* reset/set */
+            break;
+        case 12: /* SRM */
+            val = MODBIT(term->mode & nss_tm_echo); /* reset/set */
+            break;
+        case 20: /* LNM */
+            val = MODBIT(term->mode & nss_tm_crlf); /* reset/set */
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+    }
+#undef MODBIT
+    return val;
 }
 
 static void term_dispatch_mc(nss_term_t *term) {
@@ -3292,6 +3532,31 @@ static void term_report_tabs(nss_term_t *term) {
     term_answerback(term, DCS"2$u%s"ST, tabs);
 }
 
+// Utility functions for XTSAVE/XTRESTORE
+
+inline static void store_mode(uint8_t modbits[], param_t mode, _Bool val) {
+    if (0 <= mode && mode < 96) modbits += mode / 8;
+    else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
+    else if (2000 <= mode && mode < 2007) modbits += 20;
+    else {
+        warn("Can't save mode %d", mode);
+        return;
+    }
+    if (val) *modbits |= 1 << (mode % 8);
+    else *modbits &= ~(1 << (mode % 8));
+}
+
+inline static _Bool load_mode(uint8_t modbits[], param_t mode) {
+    if (0 <= mode && mode < 96) modbits += mode / 8;
+    else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
+    else if (2000 <= mode && mode < 2007) modbits += 20;
+    else {
+        warn("Can't restore mode %d", mode);
+        return 0;
+    }
+    return (*modbits >> (mode % 8)) & 1;
+}
+
 static void term_dispatch_csi(nss_term_t *term) {
     // Fixup parameter count
     term->esc.i += term->esc.param[term->esc.i] >= 0;
@@ -3462,7 +3727,9 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('h'): /* SM */
     case C('h') | P('?'): /* DECSET */
-        term_dispatch_srm(term, 1);
+        for (size_t i = 0; i < term->esc.i; i++)
+            if (!term_srm(term, term->esc.selector & P_MASK, PARAM(i, 0), 1))
+                term_esc_dump(term, 0);
         break;
     case C('i'): /* MC */
     case C('i') | P('?'): /* MC */
@@ -3470,7 +3737,9 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('l'): /* RM */
     case C('l') | P('?'):/* DECRST */
-        term_dispatch_srm(term, 0);
+        for (size_t i = 0; i < term->esc.i; i++)
+            if (!term_srm(term, term->esc.selector & P_MASK, PARAM(i, 0), 0))
+                term_esc_dump(term, 0);
         break;
     case C('m') | P('>'): /* XTMODKEYS */ {
         nss_input_mode_t mode = nss_config_input_mode();
@@ -3609,230 +3878,14 @@ static void term_dispatch_csi(nss_term_t *term) {
         }
         term->mode &= ~nss_tm_protected;
         break;
-    case C('p') | I0('$'): /* RQM */ {
+    case C('p') | I0('$'): /* RQM -> RPM */
         CHK_VT(3);
-        param_t val = 0; /* unknown */
-        switch(PARAM(0, 0)) {
-        case 1: /* GATM */
-        case 5: /* SRTM */
-        case 7: /* VEM */
-        case 10: /* HEM */
-        case 11: /* PUM */
-        case 13: /* FEAM */
-        case 14: /* FETM */
-        case 15: /* MATM */
-        case 16: /* TTM */
-        case 17: /* SATM */
-        case 18: /* TSM */
-        case 19: /* EBM */
-            val = 4; /* always reset */
-            break;
-        case 2: /* KAM */
-            val = 1 + !term->inmode.keylock; /* reset/set */
-            break;
-        case 3: /* CRM */
-            val = 2; /* reset */
-            break;
-        case 4: /* IRM */
-            val = 1 + !(term->mode & nss_tm_insert); /* reset/set */
-            break;
-        case 12: /* SRM */
-            val = 1 + !(term->mode & nss_tm_echo); /* reset/set */
-            break;
-        case 20: /* LNM */
-            val = 1 + !(term->mode & nss_tm_crlf); /* reset/set */
-            break;
-        default:
-            term_esc_dump(term, 0);
-        }
-        term_answerback(term, CSI"%d;%d$y", PARAM(0, 0), val);
+        term_answerback(term, CSI"%d;%d$y", PARAM(0, 0), term_get_mode(term, 0, PARAM(0, 0)));
         break;
-    }
-    case C('p') | P('?') | I0('$'): /* DECRQM */ {
+    case C('p') | P('?') | I0('$'): /* DECRQM -> DECRPM */
         CHK_VT(3);
-        param_t val = 0; /* unknown */
-        switch(PARAM(0, 0)) {
-        case 1: /* DECCKM */
-            val = 1 + !term->inmode.appcursor;
-            break;
-        case 2: /* DECANM */
-            val = 2;
-            break;
-        case 3: /* DECCOLM */
-            val = 1 + !(term->mode & nss_tm_132cols);
-            break;
-        case 4: /* DECSCLM */
-            val = 1 + !(term->mode & nss_tm_smooth_scroll);
-            break;
-        case 5: /* DECCNM */
-            val = 1 + !(term->mode & nss_tm_reverse_video);
-            break;
-        case 6: /* DECCOM */
-            val = 1 + !term->c.origin;
-            break;
-        case 7: /* DECAWM */
-            val = 1 + !(term->mode & nss_tm_wrap);
-            break;
-        case 8: /* DECARM */
-            val = 4;
-            break;
-        case 9: /* X10 Mouse */
-            val = 1 + !(term->mode & nss_tm_mouse_x10);
-            break;
-        case 10: /* Show toolbar */
-            val = 4;
-            break;
-        case 12: /* Start blinking cursor */
-            val = 1 + !(nss_window_get_cursor(term->win) & 1);
-            break;
-        case 13: /* Start blinking cursor (menu item) */
-        case 14: /* Enable XORG of control sequence and menu for blinking */
-            val = 4;
-            break;
-        case 18: /* DECPFF */
-            val = 1 + !(term->mode & nss_tm_print_form_feed);
-            break;
-        case 19: /* DECREX */
-            val = 1 + !(term->mode & nss_tm_print_extend);
-            break;
-        case 25: /* DECTCEM */
-            val = 1 + !!(term->mode & nss_tm_hide_cursor);
-            break;
-        case 30: /* Show scrollbar */
-            val = 4;
-            break;
-        case 35: /* URXVT Allow change font */
-            val = 1 + !(term->mode & nss_tm_allow_change_font);
-            break;
-        case 40: /* 132COLS */
-            val = 1 + !!(term->mode & nss_tm_disable_132cols);
-            break;
-        case 41: /* XTerm more(1) hack */
-            val = 1 + !(term->mode & nss_tm_xterm_more_hack);
-            break;
-        case 42: /* DECNRCM */
-            val = 1 + !(term->mode & nss_tm_enable_nrcs);
-            break;
-        case 45: /* Reverse wrap */
-            val = 1 + !(term->mode & nss_tm_reverse_wrap);
-            break;
-        case 47: /* Enable altscreen */
-            val = 1 + !(term->mode & nss_tm_altscreen);
-            break;
-        case 66: /* DECNKM */
-            val = 1 + !term->inmode.appkey;
-            break;
-        case 67: /* DECBKM */
-            val = 1 + term->inmode.backspace_is_del;
-            break;
-        case 69: /* DECLRMM */
-            val = 1 + !(term->mode & nss_tm_lr_margins);
-            break;
-        //case 80: /* DECSDM */ //TODO SIXEL
-        //   break;
-        case 95: /* DECNCSM */
-            val = 1 + !(term->mode & nss_tm_132_preserve_display);
-            break;
-        case 1000: /* X11 Mouse tracking */
-            val = 1 + !(term->mode & nss_tm_mouse_button);
-            break;
-        case 1001: /* Highlight mouse tracking */
-            val = 4;
-            break;
-        case 1002: /* Cell motion tracking on keydown */
-            val = 1 + !(term->mode & nss_tm_mouse_motion);
-            break;
-        case 1003: /* All motion mouse tracking */
-            val = 1 + !(term->mode & nss_tm_mouse_many);
-            break;
-        case 1004: /* Focus in/out events */
-            val = 1 + !(term->mode & nss_tm_track_focus);
-            break;
-        case 1005: /* UTF-8 mouse tracking */
-            val = 1 + !(term->mode & nss_tm_mouse_format_utf8);
-            break;
-        case 1006: /* SGR Mouse tracking */
-            val = 1 + !(term->mode & nss_tm_mouse_format_sgr);
-            break;
-        case 1007: /* Alternate scroll */
-            val = 1 + !(term->mode & nss_tm_alternate_scroll);
-            break;
-        case 1010: /* Scroll to bottom on output */
-            val = 1 + !(term->mode & nss_tm_scroll_on_output);
-            break;
-        case 1011: /* Scroll to bottom on keypress */
-            val = 1 + !!(term->mode & nss_tm_dont_scroll_on_input);
-            break;
-        case 1015: /* Urxvt mouse tracking */
-            val = 1 + !(term->mode & nss_tm_mouse_format_urxvt);
-            break;
-        case 1034: /* Interpret meta */
-            val = 1 + !term->inmode.has_meta;
-            break;
-        case 1035: /* Numlock */
-            val = 1 + !term->inmode.allow_numlock;
-            break;
-        case 1036: /* Meta sends escape */
-            val = 1 + !term->inmode.meta_escape;
-            break;
-        case 1037: /* Backspace is delete */
-            val = 1 + !term->inmode.backspace_is_del;
-            break;
-        case 1040: /* Don't clear X11 PRIMARY selecion */
-            val = 1 + !(term->mode & nss_tm_keep_selection);
-            break;
-        case 1041: /* Use CLIPBOARD instead of PRIMARY */
-            val = 1 + !(term->mode & nss_tm_select_to_clipboard);
-            break;
-        case 1044: /* Don't clear X11 CLIPBOARD */
-            val = 1 + !(term->mode & nss_tm_keep_clipboard);
-            break;
-        case 1046: /* Allow altscreen */
-            val = 1 + !!(term->mode & nss_tm_disable_altscreen);
-            break;
-        case 1047: /* Enable altscreen and clear screen */
-            val = 1 + !(term->mode & nss_tm_altscreen);
-            break;
-        case 1048: /* Save cursor */
-            val = 3; // TODO: What should be reported there?
-            break;
-        case 1049: /* Save cursor and switch to altscreen */
-            val = 1 + !(term->mode & nss_tm_altscreen);
-            break;
-        case 1050: /* termcap function keys */
-            val = 4;
-            break;
-        case 1051: /* SUN function keys */
-            val = 1 + !(term->inmode.keyboard_mapping == nss_km_sun);
-            break;
-        case 1052: /* HP function keys */
-            val = 1 + !(term->inmode.keyboard_mapping == nss_km_hp);
-            break;
-        case 1053: /* SCO function keys */
-            val = 1 + !(term->inmode.keyboard_mapping == nss_km_sco);
-            break;
-        case 1060: /* Legacy xterm function keys */
-            val = 1 + !(term->inmode.keyboard_mapping == nss_km_legacy);
-            break;
-        case 1061: /* VT220 function keys */
-            val = 1 + !(term->inmode.keyboard_mapping == nss_km_vt220);
-            break;
-        case 2004: /* Bracketed paste */
-            val = 1 + !(term->mode & nss_tm_bracketed_paste);
-            break;
-        case 2005: /* Paste literal NL */
-            val = 1 + !(term->mode & nss_tm_paste_literal_nl);
-            break;
-        case 2006: /* Paste quote */
-            val = 1 + !(term->mode & nss_tm_paste_quote);
-            break;
-        default:
-            term_esc_dump(term, 0);
-        }
-        // DECRPM
-        term_answerback(term, CSI"?%d;%d$y", PARAM(0, 0), val);
+        term_answerback(term, CSI"?%d;%d$y", PARAM(0, 0), term_get_mode(term, 1, PARAM(0, 0)));
         break;
-    }
     case C('r') | I0('$'): /* DECCARA */
         CHK_VT(4);
         term_apply_sgr(term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
@@ -3900,7 +3953,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('y') | I0('#'): /* XTCHECKSUM */
         term->mode &= ~nss_tm_cksm_mask;
-        term->mode |= (PARAM(0, 0) & 0x3FULL) << 48;
+        term->mode |= (PARAM(0, 0) & CKSM_MASK) << CKSM_OFFSET;
         break;
     case C('}') | I0('\''): /* DECIC */
         CHK_VT(4);
@@ -3933,6 +3986,63 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('W') | P('?'): /* DECST8C */
         if (PARAM(0, 5) == 5) term_reset_tabs(term);
         else term_esc_dump(term, 0);
+        break;
+    case C('s') | P('?'): /* XTSAVE */
+        for (size_t i = 0; i < term->esc.i; i++) {
+            param_t mode = PARAM(i, 0);
+            nss_modbit_t val = term_get_mode(term, 1, mode);
+            if (val == nss_mv_enabled || val == nss_mv_disabled) {
+                switch(mode) {
+                case 1005: case 1006: case 1015:
+                    term->saved_mouse_mask &= ~MFORMAT_MASK;
+                    term->saved_mouse_mask |= ((term->mode >> MFORMAT_OFFSET) & MFORMAT_MASK);
+                    break;
+                case 9: case 1000: case 1001:
+                case 1002: case 1003:
+                    term->saved_mouse_mask &= ~MOUSE_MASK;
+                    term->saved_mouse_mask |= (term->mode >> MOUSE_OFFSET) & MOUSE_MASK;
+                    break;
+                case 1050: case 1051: case 1052:
+                case 1053: case 1060: case 1061:
+                    term->saved_keyboard_type = term->inmode.keyboard_mapping;
+                    break;
+                case 1048:
+                    term_cursor_mode(term, 1);
+                    break;
+                case 1047: case 1049:
+                    mode = 47;
+                default:
+                    store_mode(term->saved_modbits, mode, val == nss_mv_enabled);
+                }
+            }
+        }
+        break;
+    case C('r') | P('?'): /* XTRESTORE */
+        for (size_t i = 0; i < term->esc.i; i++) {
+            param_t mode = PARAM(i, 0);
+            switch(mode) {
+            case 1005: case 1006: case 1015:
+                term->mode &= ~nss_tm_mouse_format_mask;
+                term->mode |= (term->saved_mouse_mask & MFORMAT_MASK) << MFORMAT_OFFSET;
+                break;
+            case 9: case 1000: case 1001:
+            case 1002: case 1003:
+                term->mode &= ~nss_tm_mouse_format_mask;
+                term->mode |= (term->saved_mouse_mask & MOUSE_MASK) << MOUSE_OFFSET;
+                break;
+            case 1050: case 1051: case 1052:
+            case 1053: case 1060: case 1061:
+                term->inmode.keyboard_mapping = term->saved_keyboard_type;
+                break;
+            case 1048:
+                term_cursor_mode(term, 0);
+                break;
+            case 1047: case 1049:
+                mode = 47;
+            default:
+                term_srm(term, 1, mode, load_mode(term->saved_modbits, mode));
+            }
+        }
         break;
     //case C('t') | I0(' '): /* DECSWBV */
     //    break;
@@ -4931,7 +5041,7 @@ void nss_term_clear_selection(nss_term_t *term) {
 
     term_update_selection(term, oldstate, old);
 
-    if (term->vsel.targ > 0) {
+    if (term->vsel.targ != -1U) {
         if (term->mode & nss_tm_keep_selection) return;
 
         nss_window_set_clip(term->win, NULL, NSS_TIME_NOW, term->vsel.targ);
