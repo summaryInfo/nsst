@@ -46,6 +46,7 @@
 #define MAX_REPORT 1024
 #define SEL_INIT_SIZE 32
 #define SGR_BUFSIZ 64
+#define UDK_MAX 37
 
 #define CSI "\x9B"
 #define OSC "\x9D"
@@ -67,7 +68,7 @@
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
 #define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
 #define STR_CAP_STEP(x) (4*(x)/3)
-#define PARAM(i, d) (term->esc.param[i] > 0 ? (param_t)term->esc.param[i] : (param_t)(d))
+#define PARAM(i, d) (term->esc.param[i] > 0 ? (nss_param_t)term->esc.param[i] : (nss_param_t)(d))
 #define CHK_VT(v) { if (term->vt_level < (v)) break; }
 
 #define C(c) ((c) & 0x3F)
@@ -248,6 +249,7 @@ struct nss_term {
         nss_tm_mouse_format_utf8    = 1LL << 55,
         nss_tm_mouse_format_urxvt   = 1LL << 56,
         nss_tm_mouse_format_sgr     = 1LL << 57,
+        nss_tm_udk_locked           = 1LL << 58,
 
         nss_tm_cksm_mask =
             nss_tm_cksm_positive | nss_tm_cksm_no_attr |
@@ -274,6 +276,8 @@ struct nss_term {
     uint8_t saved_mouse_mask;
     uint8_t saved_keyboard_type;
 
+    nss_udk_t udk[UDK_MAX];
+
     struct nss_escape {
         enum nss_escape_state {
             esc_ground,
@@ -285,17 +289,19 @@ struct nss_term {
             esc_ign_entry, esc_ign_string,
             esc_vt52_entry, esc_vt52_cup_0, esc_vt52_cup_1,
         } state, old_state;
-        param_t selector;
-        param_t old_selector;
+        nss_param_t selector;
+        nss_param_t old_selector;
+
         size_t i;
-        int32_t param[ESC_MAX_PARAM];
+        nss_sparam_t param[ESC_MAX_PARAM];
         uint32_t subpar_mask;
-        size_t si;
-        size_t str_cap;
+
+        size_t str_len;
         // Short strings are not allocated
         uint8_t str_data[ESC_MAX_STR + 1];
         // Long strings are
         uint8_t *str_ptr;
+        size_t str_cap;
     } esc;
 
     uint16_t vt_version;
@@ -773,6 +779,10 @@ inline static void term_put_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y,
     term->screen[y]->cell[x] = MKCELLWITH(fixup_color(term->screen[y], &term->c), ch);
 }
 
+nss_udk_t nss_term_lookup_udk(nss_term_t *term, nss_param_t n) {
+    return n < UDK_MAX ? term->udk[n] : (nss_udk_t){};
+}
+
 _Bool nss_term_is_cursor_enabled(nss_term_t *term) {
     return !(term->mode & nss_tm_hide_cursor) && !term->view;
 }
@@ -850,7 +860,7 @@ static void term_reset_view(nss_term_t *term, _Bool damage) {
 void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
     if (term->mode & nss_tm_altscreen) {
         if (term->mode & nss_tm_alternate_scroll)
-            term_answerback(term, CSI"%d%c", abs(amount), amount > 0 ? 'A' : 'D');
+            term_answerback(term, CSI"%"PRIparam"%c", abs(amount), amount > 0 ? 'A' : 'D');
         return;
     }
 
@@ -966,7 +976,7 @@ inline static void term_esc_start_seq(nss_term_t *term) {
     term->esc.selector = 0;
 }
 inline static void term_esc_start_string(nss_term_t *term) {
-    term->esc.si = 0;
+    term->esc.str_len = 0;
     term->esc.str_data[0] = 0;
     term->esc.str_cap = ESC_MAX_STR;
     term->esc.selector = 0;
@@ -1000,7 +1010,7 @@ static void term_esc_dump(nss_term_t *term, _Bool use_info) {
             if (term->esc.selector & P_MASK)
                 buf[pos++] = '<' + ((term->esc.selector & P_MASK) >> 6) - 1;
             for (size_t i = 0; i < term->esc.i; i++) {
-                pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRId32, term->esc.param[i]);
+                pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%"PRIparam, term->esc.param[i]);
                 if (i < term->esc.i - 1) buf[pos++] = term->esc.subpar_mask & (1 << (i + 1)) ? ':' : ';' ;
             }
             if (term->esc.selector & I0_MASK)
@@ -1061,7 +1071,7 @@ static void term_decode_sgr(nss_term_t *term, size_t i, nss_cell_t *mask, nss_ce
 #define SETFG(f) (mask->fg = 1, val->fg = (f))
 #define SETBG(f) (mask->bg = 1, val->bg = (f))
     do {
-        param_t par = PARAM(i, 0);
+        nss_param_t par = PARAM(i, 0);
         if ((term->esc.subpar_mask >> i) & 1) return;
         switch (par) {
         case 0:
@@ -1614,6 +1624,14 @@ static void term_set_lr_margins(nss_term_t *term, nss_coord_t left, nss_coord_t 
     }
 }
 
+static void term_reset_udk(nss_term_t *term) {
+    for (size_t i = 0; i < UDK_MAX;  i++) {
+        free(term->udk[i].val);
+        term->udk[i].val = NULL;
+        term->udk[i].len = 0;
+    }
+}
+
 static void term_reset_margins(nss_term_t *term) {
     term->top = 0;
     term->left = 0;
@@ -1877,6 +1895,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term_load_config(term);
     term_reset_margins(term);
     term_reset_tabs(term);
+    term_reset_udk(term);
 
     nss_window_set_mouse(term->win, 0);
     nss_window_set_cursor(term->win, nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE));
@@ -1945,7 +1964,7 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t he
     return term;
 }
 
-static void term_dispatch_da(nss_term_t *term, param_t mode) {
+static void term_dispatch_da(nss_term_t *term, nss_param_t mode) {
     switch (mode) {
     case P('='): /* Tertinary DA */
         CHK_VT(4);
@@ -1953,7 +1972,7 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
         term_answerback(term, DCS"!|00000000"ST);
         break;
     case P('>'): /* Secondary DA */ {
-        param_t ver = 0;
+        nss_param_t ver = 0;
         switch (term->vt_version) {
         case 100: ver = 0; break;
         case 220: ver = 1; break;
@@ -1966,7 +1985,7 @@ static void term_dispatch_da(nss_term_t *term, param_t mode) {
         case 520: ver = 64; break;
         case 525: ver = 65; break;
         }
-        term_answerback(term, CSI">%"PRIu32";666;0c", ver);
+        term_answerback(term, CSI">%"PRIparam";10503;0c", ver);
         break;
     }
     default: /* Primary DA */
@@ -2006,7 +2025,7 @@ static void term_dispatch_dsr(nss_term_t *term) {
     if (term->esc.selector & P_MASK) {
         switch (term->esc.param[0]) {
         case 6: /* DECXCPR -- CSI ? Py ; Px ; R ; 1  */
-            term_answerback(term, CSI"%"PRIu16";%"PRIu16"%sR",
+            term_answerback(term, CSI"%"PRIparam";%"PRIparam"%sR",
                     term->c.y - term_min_oy(term) + 1,
                     term->c.x - term_min_ox(term) + 1,
                     term->vt_level >= 4 ? ";1" : "");
@@ -2015,9 +2034,9 @@ static void term_dispatch_dsr(nss_term_t *term) {
             CHK_VT(2);
             term_answerback(term, term->printerfd >= 0 ? CSI"?10n" : CSI"?13n");
             break;
-        case 25: /* User defined keys lock -- Locked */
+        case 25: /* User defined keys lock */
             CHK_VT(2);
-            term_answerback(term, CSI"?21n"); //TODO Unlocked - 20
+            term_answerback(term, CSI"?%"PRIparam"n", 20 + !!(term->mode & nss_tm_udk_locked));
             break;
         case 26: /* Keyboard language -- North American */
             CHK_VT(2);
@@ -2040,7 +2059,7 @@ static void term_dispatch_dsr(nss_term_t *term) {
             break;
         case 63: /* DECCKSR, Memory checksum -- 0000 (hex) */
             CHK_VT(4);
-            term_answerback(term, DCS"%"PRId16"!~0000"ST, term->esc.param[1]);
+            term_answerback(term, DCS"%"PRIparam"!~0000"ST, PARAM(1, 0));
             break;
         case 75: /* Data integrity -- Ready, no errors */
             CHK_VT(4);
@@ -2056,7 +2075,7 @@ static void term_dispatch_dsr(nss_term_t *term) {
             term_answerback(term, CSI"0n");
             break;
         case 6: /* CPR -- CSI Py ; Px R */
-            term_answerback(term, CSI"%d;%dR",
+            term_answerback(term, CSI"%"PRIparam";%"PRIparam"R",
                     term->c.y - term_min_oy(term) + 1,
                     term->c.x - term_min_ox(term) + 1);
             break;
@@ -2064,7 +2083,7 @@ static void term_dispatch_dsr(nss_term_t *term) {
     }
 }
 
-static enum nss_char_set parse_nrcs(param_t selector, _Bool is96, uint16_t vt_level, _Bool nrcs) {
+static enum nss_char_set parse_nrcs(nss_param_t selector, _Bool is96, uint16_t vt_level, _Bool nrcs) {
 #define NRC {if (!nrcs) return -1;}
     selector &= (I1_MASK | E_MASK);
     if (!is96) {
@@ -2183,7 +2202,7 @@ inline static void term_parse_cursor_report(nss_term_t *term) {
     // G0 - G3
     enum nss_char_set gn[4];
     for (size_t i = 0; i < 4; i++) {
-        param_t sel = 0;
+        nss_param_t sel = 0;
         char c;
         if ((c = *dstr++) < 0x30) {
             sel |= I1(c);
@@ -2231,7 +2250,7 @@ err:
 inline static void term_parse_tabs_report(nss_term_t *term) {
     memset(term->tabs, 0, term->width*sizeof(*term->tabs));
     uint8_t *dstr = term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
-    uint8_t *dend = dstr + term->esc.si;
+    uint8_t *dend = dstr + term->esc.str_len;
     for (ssize_t tab = 0; dstr <= dend; dstr++) {
         if (*dstr == '/' || dstr == dend) {
             if (tab - 1 < term->width) term->tabs[tab - 1] = 1;
@@ -2257,7 +2276,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
     if (term->esc.subpar_mask) return;
 
     uint8_t *dstr = term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
-    uint8_t *dend = dstr + term->esc.si;
+    uint8_t *dend = dstr + term->esc.str_len;
 
     switch (term->esc.selector) {
     case C('s') | P('='): /* iTerm2 syncronous updates */
@@ -2273,7 +2292,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
         }
         break;
     case C('q') | I0('$'): /* DECRQSS -> DECRPSS */ {
-        if (term->esc.si && term->esc.si < 3) {
+        if (term->esc.str_len && term->esc.str_len < 3) {
             uint16_t id = *dstr | dstr[1] << 8;
             switch(id) {
             case 'm': /* -> SGR */ {
@@ -2283,37 +2302,37 @@ static void term_dispatch_dcs(nss_term_t *term) {
                 break;
             }
             case 'r': /* -> DECSTBM */
-                term_answerback(term, DCS"1$r%d;%dr"ST, term->top + 1, term->bottom + 1);
+                term_answerback(term, DCS"1$r%"PRIparam";%"PRIparam"r"ST, term->top + 1, term->bottom + 1);
                 break;
             case 's': /* -> DECSLRM */
-                term_answerback(term, term->vt_level >= 4 ? DCS"1$r%d;%ds"ST :
+                term_answerback(term, term->vt_level >= 4 ? DCS"1$r%"PRIparam";%"PRIparam"s"ST :
                         DCS"0$r"ST, term->left + 1, term->right + 1);
                 break;
             case 't': /* -> DECSLPP */
                 // Can't report less than 24 lines
-                term_answerback(term, DCS"1$r%dt"ST, MAX(term->height, 24));
+                term_answerback(term, DCS"1$r%"PRIparam"t"ST, MAX(term->height, 24));
                 break;
             case '|' << 8 | '$': /* -> DECSCPP */
                 // It should be either 80 or 132 despite actual column count
                 // New apps use ioctl(TIOGWINSZ, ...) instead
-                term_answerback(term, DCS"1$r%d$|"ST, term->mode & nss_tm_132cols ? 132 : 80);
+                term_answerback(term, DCS"1$r%"PRIparam"$|"ST, term->mode & nss_tm_132cols ? 132 : 80);
                 break;
             case 'q' << 8 | '"': /* -> DECSCA */
-                term_answerback(term, DCS"1$r%d\"q"ST, term->mode & nss_tm_protected ? 2 :
+                term_answerback(term, DCS"1$r%"PRIparam"\"q"ST, term->mode & nss_tm_protected ? 2 :
                         term->c.cel.attr & nss_attrib_protected ? 1 : 2);
                 break;
             case 'q' << 8 | ' ': /* -> DECSCUSR */
-                term_answerback(term, DCS"1$r%d q"ST, nss_window_get_cursor(term->win));
+                term_answerback(term, DCS"1$r%"PRIparam" q"ST, nss_window_get_cursor(term->win));
                 break;
             case '|' << 8 | '*': /* -> DECSLNS */
-                term_answerback(term, DCS"1$r%d*|"ST, term->height);
+                term_answerback(term, DCS"1$r%"PRIparam"*|"ST, term->height);
                 break;
             case 'x' << 8 | '*': /* -> DECSACE */
                 term_answerback(term, term->vt_level < 4 ? DCS"0$r"ST :
-                        DCS"1$r%d*x"ST, term->mode & nss_tm_attr_ext_rectangle ? 2 : 1);
+                        DCS"1$r%"PRIparam"*x"ST, term->mode & nss_tm_attr_ext_rectangle ? 2 : 1);
                 break;
             case 'p' << 8 | '"': /* -> DECSCL */
-                term_answerback(term, DCS"1$r%d%s\"p"ST, 60 + MAX(term->vt_level, 1),
+                term_answerback(term, DCS"1$r%"PRIparam"%s\"p"ST, 60 + MAX(term->vt_level, 1),
                         term->vt_level >= 2 ? (term->mode & nss_tm_8bit ? ";2" : ";1") : "");
                 break;
             default:
@@ -2336,6 +2355,30 @@ static void term_dispatch_dcs(nss_term_t *term) {
             term_esc_dump(term, 0);
         }
         break;
+    case C('|'): /* DECUDK */
+        if (!(term->mode & nss_tm_udk_locked)) {
+            if (!PARAM(0, 0)) term_reset_udk(term);
+            if (!PARAM(1, 0)) term->mode |= nss_tm_udk_locked;
+            for (uint8_t *str = dstr; str < dend; str++) {
+                nss_param_t k = 0;
+                while (isdigit(*str) && *str != '/')
+                    k = 10 * k + *str - '0', str++;
+                if (*str++ != '/' || k >= UDK_MAX) goto err;
+                uint8_t *sem = memchr(str, ';', dend - str);
+                if (!sem) sem = dend;
+                uint8_t *udk = malloc((sem - str + 1)/2 + 1);
+                if (!udk || (hex_decode(udk, str, sem) != sem)) {
+                    free(udk);
+                    goto err;
+                }
+                free(term->udk[k].val);
+                term->udk[k].len = (sem - str)/2;
+                term->udk[k].val = udk;
+                str = sem;
+            }
+        }
+        break;
+
     case C('q') | I0('+'): /* XTGETTCAP */ {
         // TODO: Support proper tcap db
         // for now, just implement Co/colors
@@ -2348,11 +2391,12 @@ static void term_dispatch_dcs(nss_term_t *term) {
             hex_encode(dend + 1, tmp, tmp + len);
             valid = 1;
         }
-        term_answerback(term, DCS"%d+r%s"ST, valid, dstr);
+        term_answerback(term, DCS"%"PRIparam"+r%s"ST, valid, dstr);
         break;
     }
     case C('p') | I0('+'): /* XTSETTCAP */
     default:
+err:
         term_esc_dump(term, 0);
     }
 
@@ -2412,7 +2456,7 @@ static void term_do_set_color(nss_term_t *term, uint32_t sel, uint8_t *dstr, uin
     if (!strcmp((char *)dstr, "?")) {
         col = term->palette[cid];
 
-        term_answerback(term, OSC"%d;rgb:%04x/%04x/%04x"ST, sel,
+        term_answerback(term, OSC"%"PRIparam";rgb:%04x/%04x/%04x"ST, sel,
                ((col >> 16) & 0xFF) * 0x101,
                ((col >>  8) & 0xFF) * 0x101,
                ((col >>  0) & 0xFF) * 0x101);
@@ -2447,7 +2491,7 @@ static void term_dispatch_osc(nss_term_t *term) {
     term_esc_dump(term, 1);
 
     uint8_t *dstr = term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
-    uint8_t *dend = dstr + term->esc.si;
+    uint8_t *dend = dstr + term->esc.str_len;
 
     switch (term->esc.selector) {
         nss_color_t col;
@@ -2470,10 +2514,10 @@ static void term_dispatch_osc(nss_term_t *term) {
                 *dst++ = val;
             *dst = '\0';
         } else if (term->mode & nss_tm_title_set_utf8 && !(term->mode & nss_tm_utf8)) {
-            res = malloc(term->esc.si * 2 + 1);
+            res = malloc(term->esc.str_len * 2 + 1);
             uint8_t *ptr = res, *src = dstr;
             if (res) {
-                while (*src) ptr += utf8_encode(*src++, ptr, res + term->esc.si * 2);
+                while (*src) ptr += utf8_encode(*src++, ptr, res + term->esc.str_len * 2);
                 *ptr = '\0';
                 dstr = res;
             }
@@ -2498,7 +2542,7 @@ static void term_dispatch_osc(nss_term_t *term) {
 
             if (!errno && s_end == parg - 1 && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS + 5) {
                 if (parg[0] == '?' && parg[1] == '\0')
-                    term_answerback(term, OSC"%d;%d;rgb:%04x/%04x/%04x"ST,
+                    term_answerback(term, OSC"%"PRIparam";%"PRIparam";rgb:%04x/%04x/%04x"ST,
                             term->esc.selector, idx - (term->esc.selector == 5) * NSS_SPECIAL_BOLD,
                             ((term->palette[idx] >> 16) & 0xFF) * 0x101,
                             ((term->palette[idx] >>  8) & 0xFF) * 0x101,
@@ -2518,7 +2562,7 @@ static void term_dispatch_osc(nss_term_t *term) {
     }
     case 104: /* Reset color */
     case 105: /* Reset special color */ {
-        if (term->esc.si) {
+        if (term->esc.str_len) {
             uint8_t *pnext, *s_end;
             do {
                 pnext = memchr(dstr, ';', dend - dstr);
@@ -2543,8 +2587,8 @@ static void term_dispatch_osc(nss_term_t *term) {
     case 106: /* Enable/disable special color */ {
         // IMPORTANT: this option affects all instances
         ssize_t n;
-        param_t idx, val;
-        if (scanf((char *)dstr, "%u;%u%zn", &idx, &val, &n) == 2 && n == dend - dstr && idx < 5)
+        nss_param_t idx, val;
+        if (scanf((char *)dstr, "%"SCNparam";%"SCNparam"%zn", &idx, &val, &n) == 2 && n == dend - dstr && idx < 5)
             nss_config_set_integer(NSS_ICONFIG_SPEICAL_BOLD + idx, !!val);
         else term_esc_dump(term, 0);
         break;
@@ -2627,7 +2671,7 @@ static void term_dispatch_osc(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static _Bool term_srm(nss_term_t *term, _Bool private, param_t mode, _Bool set) {
+static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool set) {
     if (private) {
         switch (mode) {
         case 0: /* Default - nothing */
@@ -2881,7 +2925,7 @@ static _Bool term_srm(nss_term_t *term, _Bool private, param_t mode, _Bool set) 
     return 1;
 }
 
-static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, param_t mode) {
+static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t mode) {
     nss_modbit_t val = nss_mv_unrecognized;
 #define MODBIT(x) (nss_mv_enabled + !(x))
     if (private) {
@@ -3224,7 +3268,7 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
 }
 
 static void term_dispatch_window_op(nss_term_t *term) {
-    param_t pa = PARAM(0, 24);
+    nss_param_t pa = PARAM(0, 24);
     // Only title operations allowed by default
     if (!nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS) &&
             (pa < 20 || pa > 23)) return;
@@ -3294,18 +3338,18 @@ static void term_dispatch_window_op(nss_term_t *term) {
         break;
     }
     case 11: /* Report state */
-        term_answerback(term, CSI"%dt", 1 + !nss_window_is_mapped(term->win));
+        term_answerback(term, CSI"%"PRIparam"t", 1 + !nss_window_is_mapped(term->win));
         break;
     case 13: /* Report position opetations */
         switch(PARAM(1,0)) {
             int16_t x, y;
         case 0: /* Report window position */
             nss_window_get_dim_ext(term->win, nss_dt_window_position, &x, &y);
-            term_answerback(term, CSI"3;%d;%dt", x, y);
+            term_answerback(term, CSI"3;%"PRIparam";%"PRIparam"t", x, y);
             break;
         case 2: /* Report grid position */
             nss_window_get_dim_ext(term->win, nss_dt_grid_position, &x, &y);
-            term_answerback(term, CSI"3;%d;%dt", x, y);
+            term_answerback(term, CSI"3;%"PRIparam";%"PRIparam"t", x, y);
             break;
         default:
             term_esc_dump(term, 0);
@@ -3316,11 +3360,11 @@ static void term_dispatch_window_op(nss_term_t *term) {
             int16_t x, y;
         case 0: /* Report grid size */
             nss_window_get_dim_ext(term->win, nss_dt_grid_size, &x, &y);
-            term_answerback(term, CSI"4;%d;%dt", y, x);
+            term_answerback(term, CSI"4;%"PRIparam";%"PRIparam"t", y, x);
             break;
         case 2: /* Report window size */
             nss_window_get_dim(term->win, &x, &y);
-            term_answerback(term, CSI"4;%d;%dt", y, x);
+            term_answerback(term, CSI"4;%"PRIparam";%"PRIparam"t", y, x);
             break;
         default:
             term_esc_dump(term, 0);
@@ -3329,13 +3373,13 @@ static void term_dispatch_window_op(nss_term_t *term) {
     case 15: /* Report screen size */ {
         int16_t x, y;
         nss_window_get_dim_ext(term->win, nss_dt_screen_size, &x, &y);
-        term_answerback(term, CSI"5;%d;%dt", y, x);
+        term_answerback(term, CSI"5;%"PRIparam";%"PRIparam"t", y, x);
         break;
     }
     case 16: /* Report cell size */ {
         int16_t x, y;
         nss_window_get_dim_ext(term->win, nss_dt_cell_size, &x, &y);
-        term_answerback(term, CSI"6;%d;%dt", y, x);
+        term_answerback(term, CSI"6;%"PRIparam";%"PRIparam"t", y, x);
         break;
     }
     case 18: /* Report grid size (in cell units) */
@@ -3346,7 +3390,7 @@ static void term_dispatch_window_op(nss_term_t *term) {
         nss_window_get_dim_ext(term->win, nss_dt_screen_size, &s_w, &s_h);
         nss_window_get_dim_ext(term->win, nss_dt_cell_size, &c_w, &c_h);
         nss_window_get_dim_ext(term->win, nss_dt_border, &b_w, &b_h);
-        term_answerback(term, CSI"9;%d;%dt", (s_h - 2*b_h)/c_h, (s_w - 2*b_w)/c_w);
+        term_answerback(term, CSI"9;%"PRIparam";%"PRIparam"t", (s_h - 2*b_h)/c_h, (s_w - 2*b_w)/c_w);
         break;
     }
     case 20: /* Report icon label */
@@ -3494,7 +3538,7 @@ static void term_report_cursor(nss_term_t *term) {
     if (nrcs_is_96(term->c.gn[2])) cg96 |= 4;
     if (nrcs_is_96(term->c.gn[3])) cg96 |= 8;
 
-    term_answerback(term, DCS"1$u%d;%d;1;%s;%c;%c;%d;%d;%c;%s%s%s%s"ST,
+    term_answerback(term, DCS"1$u%"PRIparam";%"PRIparam";1;%s;%c;%c;%d;%d;%c;%s%s%s%s"ST,
         /* line */ term->c.y + 1,
         /* column */ term->c.x + 1,
         /* attributes */ csgr,
@@ -3524,7 +3568,7 @@ static void term_report_tabs(nss_term_t *term) {
                 }
                 tabs = tmp;
             }
-            len += snprintf(tabs + len, caps, len ? "/%d" : "%d", i + 1);
+            len += snprintf(tabs + len, caps, len ? "/%"PRIparam : "%"PRIparam, i + 1);
         }
     }
 
@@ -3534,24 +3578,24 @@ static void term_report_tabs(nss_term_t *term) {
 
 // Utility functions for XTSAVE/XTRESTORE
 
-inline static void store_mode(uint8_t modbits[], param_t mode, _Bool val) {
+inline static void store_mode(uint8_t modbits[], nss_param_t mode, _Bool val) {
     if (0 <= mode && mode < 96) modbits += mode / 8;
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
     else if (2000 <= mode && mode < 2007) modbits += 20;
     else {
-        warn("Can't save mode %d", mode);
+        warn("Can't save mode %"PRIparam, mode);
         return;
     }
     if (val) *modbits |= 1 << (mode % 8);
     else *modbits &= ~(1 << (mode % 8));
 }
 
-inline static _Bool load_mode(uint8_t modbits[], param_t mode) {
+inline static _Bool load_mode(uint8_t modbits[], nss_param_t mode) {
     if (0 <= mode && mode < 96) modbits += mode / 8;
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
     else if (2000 <= mode && mode < 2007) modbits += 20;
     else {
-        warn("Can't restore mode %d", mode);
+        warn("Can't restore mode %"PRIparam, mode);
         return 0;
     }
     return (*modbits >> (mode % 8)) & 1;
@@ -3700,7 +3744,7 @@ static void term_dispatch_csi(nss_term_t *term) {
                 (term, term->c.x + PARAM(0, 1), term->c.y + PARAM(1, 0));
         break;
     case C('b'): /* REP */
-        for (param_t i = PARAM(0, 1); i > 0; i--)
+        for (nss_param_t i = PARAM(0, 1); i > 0; i--)
             term_putchar(term, term->prev_ch);
         break;
     case C('c'): /* DA1 */
@@ -3743,7 +3787,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('m') | P('>'): /* XTMODKEYS */ {
         nss_input_mode_t mode = nss_config_input_mode();
-        param_t p = PARAM(0, 0), inone = !term->esc.i && term->esc.param[0] < 0;
+        nss_param_t p = PARAM(0, 0), inone = !term->esc.i && term->esc.param[0] < 0;
         if (term->esc.i > 0 && term->esc.param[1] >= 0) {
             switch (p) {
             case 0:
@@ -3783,7 +3827,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_decode_sgr(term, 0, &(nss_cell_t){0}, &term->c.cel, &term->c.fg, &term->c.bg);
         break;
     case C('n') | P('>'): /* Disable key modifires, xterm */ {
-            param_t p = term->esc.param[0];
+            nss_param_t p = term->esc.param[0];
             if (p == 0) {
                 term->inmode.modkey_legacy_allow_keypad = 0;
                 term->inmode.modkey_legacy_allow_edit_keypad = 0;
@@ -3801,7 +3845,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_dispatch_dsr(term);
         break;
     case C('q'): /* DECLL */
-        for (param_t i = 0; i < term->esc.i; i++) {
+        for (nss_param_t i = 0; i < term->esc.i; i++) {
             switch (PARAM(i, 0)) {
             case 1: term->mode |= nss_tm_led_num_lock; break;
             case 2: term->mode |= nss_tm_led_caps_lock; break;
@@ -3837,8 +3881,8 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('x'): /* DECREQTPARAM */
         if (term->vt_version < 200) {
-            param_t p = PARAM(0, 0);
-            if (p < 2) term_answerback(term, CSI"%d;1;1;128;128;1;0x", p + 2);
+            nss_param_t p = PARAM(0, 0);
+            if (p < 2) term_answerback(term, CSI"%"PRIparam";1;1;128;128;1;0x", p + 2);
         }
         break;
     case C('q') | I0(' '): /* DECSCUSR */ {
@@ -3853,7 +3897,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         if (term->vt_version < 200) break;
 
         term_reset(term, 0);
-        param_t p = PARAM(0, 65) - 60;
+        nss_param_t p = PARAM(0, 65) - 60;
         if (p && p <= term->vt_version/100)
             term->vt_level = p;
         if (p > 1) switch (PARAM(1, 2)) {
@@ -3880,11 +3924,11 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('p') | I0('$'): /* RQM -> RPM */
         CHK_VT(3);
-        term_answerback(term, CSI"%d;%d$y", PARAM(0, 0), term_get_mode(term, 0, PARAM(0, 0)));
+        term_answerback(term, CSI"%"PRIparam";%"PRIparam"$y", PARAM(0, 0), term_get_mode(term, 0, PARAM(0, 0)));
         break;
     case C('p') | P('?') | I0('$'): /* DECRQM -> DECRPM */
         CHK_VT(3);
-        term_answerback(term, CSI"?%d;%d$y", PARAM(0, 0), term_get_mode(term, 1, PARAM(0, 0)));
+        term_answerback(term, CSI"?%"PRIparam";%"PRIparam"$y", PARAM(0, 0), term_get_mode(term, 1, PARAM(0, 0)));
         break;
     case C('r') | I0('$'): /* DECCARA */
         CHK_VT(4);
@@ -3949,7 +3993,7 @@ static void term_dispatch_csi(nss_term_t *term) {
                 term_min_ox(term) + PARAM(5, term_max_ox(term) - term_min_ox(term)),
                 term_min_oy(term) + PARAM(4, term_max_oy(term) - term_min_oy(term)));
         // DECRPCRA
-        term_answerback(term, DCS"%d!~%04X"ST, PARAM(0, 0), sum);
+        term_answerback(term, DCS"%"PRIparam"!~%04X"ST, PARAM(0, 0), sum);
         break;
     case C('y') | I0('#'): /* XTCHECKSUM */
         term->mode &= ~nss_tm_cksm_mask;
@@ -3989,7 +4033,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('s') | P('?'): /* XTSAVE */
         for (size_t i = 0; i < term->esc.i; i++) {
-            param_t mode = PARAM(i, 0);
+            nss_param_t mode = PARAM(i, 0);
             nss_modbit_t val = term_get_mode(term, 1, mode);
             if (val == nss_mv_enabled || val == nss_mv_disabled) {
                 switch(mode) {
@@ -4019,7 +4063,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('r') | P('?'): /* XTRESTORE */
         for (size_t i = 0; i < term->esc.i; i++) {
-            param_t mode = PARAM(i, 0);
+            nss_param_t mode = PARAM(i, 0);
             switch(mode) {
             case 1005: case 1006: case 1015:
                 term->mode &= ~nss_tm_mouse_format_mask;
@@ -4563,18 +4607,18 @@ static void term_dispatch(nss_term_t *term, nss_char_t ch) {
             size_t char_len = utf8_encode(ch, buf, buf + UTF8_MAX_LEN);
             buf[char_len] = '\0';
 
-            if (term->esc.si + char_len + 1 > term->esc.str_cap) {
+            if (term->esc.str_len + char_len + 1 > term->esc.str_cap) {
                 size_t new_cap = STR_CAP_STEP(term->esc.str_cap);
                 if (new_cap > ESC_MAX_LONG_STR) break;
                 uint8_t *new = realloc(term->esc.str_ptr, new_cap + 1);
                 if (!new) break;
-                if (!term->esc.str_ptr) memcpy(new, term->esc.str_data, term->esc.si);
+                if (!term->esc.str_ptr) memcpy(new, term->esc.str_data, term->esc.str_len);
                 term->esc.str_ptr = new;
                 term->esc.str_cap = new_cap;
             }
 
-            memcpy((term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data) + term->esc.si, buf, char_len + 1);
-            term->esc.si += char_len;
+            memcpy((term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data) + term->esc.str_len, buf, char_len + 1);
+            term->esc.str_len += char_len;
         }
         break;
     case esc_vt52_entry:

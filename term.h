@@ -9,13 +9,18 @@
 #include "window.h"
 
 #include <stdint.h>
+#include <inttypes.h>
 #include <sys/types.h>
 
 typedef uint16_t nss_cid_t;
 typedef uint32_t nss_color_t;
 typedef uint32_t nss_char_t;
 typedef int16_t nss_coord_t;
-typedef uint32_t param_t;
+typedef uint32_t nss_param_t;
+typedef int32_t nss_sparam_t;
+
+#define PRIparam PRId32
+#define SCNparam SCNd32
 
 #define NSS_SPECIAL_COLORS 11
 #define NSS_PALETTE_SIZE (256 + NSS_SPECIAL_COLORS)
@@ -70,6 +75,11 @@ typedef struct nss_line {
     nss_cell_t cell[];
 } nss_line_t;
 
+typedef struct nss_udk {
+    uint8_t *val;
+    size_t len;
+} nss_udk_t;
+
 /* iterator for iterating both scrollback and screen */
 
 typedef struct nss_line_iter {
@@ -114,6 +124,7 @@ _Bool nss_term_is_nrcs_enabled(nss_term_t *term);
 _Bool nss_term_is_paste_nl_enabled(nss_term_t *term);
 _Bool nss_term_is_paste_quote_enabled(nss_term_t *term);
 _Bool nss_term_is_cursor_enabled(nss_term_t *term);
+nss_udk_t nss_term_lookup_udk(nss_term_t *term, nss_param_t n);
 void nss_term_damage_lines(nss_term_t *term, nss_coord_t ys, nss_coord_t yd);
 void nss_term_reset(nss_term_t *term);
 

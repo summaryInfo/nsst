@@ -51,6 +51,7 @@ static inline _Bool is_edit_keypad(nss_char_t ks, _Bool deldel) {
     }
     return 0;
 }
+
 static inline _Bool is_edit_function(nss_char_t ks, _Bool deldel) {
     switch (ks) {
     case XKB_KEY_KP_Insert:
@@ -60,38 +61,47 @@ static inline _Bool is_edit_function(nss_char_t ks, _Bool deldel) {
     }
     return is_edit_keypad(ks, deldel);
 }
+
 static inline _Bool is_cursor(nss_char_t ks) {
     return XKB_KEY_Home <= ks && ks <= XKB_KEY_Select;
 }
+
 static inline _Bool is_keypad(nss_char_t ks) {
     return XKB_KEY_KP_Space <= ks && ks <= XKB_KEY_KP_Equal;
 }
+
 static inline _Bool is_keypad_function(nss_char_t ks) {
     return XKB_KEY_KP_F1 <= ks && ks <= XKB_KEY_KP_F4;
 }
+
 static inline _Bool is_function(nss_char_t ks) {
     return XKB_KEY_F1 <= ks && ks <= XKB_KEY_F35;
 }
+
 static inline _Bool is_misc_function(nss_char_t ks) {
     return XKB_KEY_Select <= ks && ks <= XKB_KEY_Break;
 }
+
 static inline _Bool is_special(nss_char_t ks) {
     return XKB_KEY_ISO_Lock <= ks && ks <= XKB_KEY_Delete;
 }
-static inline _Bool is_privite(nss_char_t ks) {
+
+static inline _Bool is_private(nss_char_t ks) {
     return 0x11000000 <= ks && ks <= 0x1100FFFF;
 }
-static inline _Bool is_ctrl_input(nss_char_t ks) {
+
+static inline _Bool is_ctrl_letter(nss_char_t ks) {
     return ks >= 0x40 && ks <= 0x7F;
 }
-static inline _Bool is_ctrl_output(nss_char_t ks) {
+
+static inline _Bool is_ctrl(nss_char_t ks) {
     return ks < 0x20 || (ks >= 0x7F && ks < 0x100);
 }
 
 static inline _Bool is_xkb_ctrl(nss_key_t *k) {
     // Detect if thats something like Ctrl-3
     // which gets translated to ESC by XKB
-    return is_ctrl_output(k->utf32);
+    return is_ctrl(k->utf32);
 }
 
 static inline _Bool is_modify_allowed(nss_key_t *k, nss_input_mode_t mode) {
@@ -108,23 +118,24 @@ static inline _Bool is_modify_allowed(nss_key_t *k, nss_input_mode_t mode) {
     else return mode.modkey_other;
 }
 
-
-
 static nss_char_t filter_modifiers(nss_key_t *k, nss_input_mode_t mode) {
     nss_char_t res = k->mask & (nss_mm_control | nss_mm_shift | nss_mm_mod1);
-    if (mode.modkey_other < 2) {
-        if (is_ctrl_input(k->sym) && !(res & ~nss_mm_control)) {
+
+    if (mode.modkey_other <= 1) {
+        if (is_ctrl_letter(k->sym) && !(res & ~nss_mm_control)) {
             if (!mode.modkey_other) res &= ~nss_mm_control;
         } else if (k->sym == XKB_KEY_Return || k->sym == XKB_KEY_Tab) {
             /* do nothing */;
         } else if (is_xkb_ctrl(k)) {
             if (!(res & nss_mm_mod1)) res = 0;
-        } else if (!is_ctrl_output(k->sym) || !is_special(k->sym)) {
+        } else if (!is_ctrl(k->sym) || !is_special(k->sym)) {
             if (!(res & nss_mm_control)) res &= ~nss_mm_shift;
         }
         if (res & nss_mm_mod1) {
             if (!(res & ~nss_mm_mod1) && (mode.meta_escape || k->utf32 < 0x80)) res &= ~nss_mm_mod1;
-            if (((is_ctrl_input(k->sym) || is_ctrl_output(k->sym)) && (res & nss_mm_control)))
+            if (((is_ctrl_letter(k->sym) || is_ctrl(k->sym)) && (res & nss_mm_control)))
+                res &= ~(nss_mm_mod1 | nss_mm_control);
+            if (k->sym == XKB_KEY_Return || k->sym == XKB_KEY_Tab)
                 res &= ~(nss_mm_mod1 | nss_mm_control);
         }
     }
@@ -140,8 +151,7 @@ static inline nss_char_t mask_to_param(nss_char_t mask) {
 }
 
 static _Bool is_modify_others_allowed(nss_key_t *k, nss_input_mode_t mode) {
-    if (!mode.modkey_other || k->is_fkey || is_edit_function(k->sym, mode.delete_is_del) || is_keypad(k->sym) ||
-        is_cursor(k->sym) || is_keypad_function(k->sym) || is_misc_function(k->sym) || is_privite(k->sym)) return 0;
+    if (!mode.modkey_other || is_private(k->sym)) return 0;
     if (!(k->mask & (nss_mm_control | nss_mm_shift | nss_mm_mod1))) return 0;
 
     if (mode.modkey_other == 1) {
@@ -149,7 +159,6 @@ static _Bool is_modify_others_allowed(nss_key_t *k, nss_input_mode_t mode) {
         switch (k->sym) {
         case XKB_KEY_BackSpace:
         case XKB_KEY_Delete:
-            res = 1;
             break;
         case XKB_KEY_ISO_Left_Tab:
             res =  k->mask & (nss_mm_mod1 | nss_mm_control);
@@ -159,11 +168,11 @@ static _Bool is_modify_others_allowed(nss_key_t *k, nss_input_mode_t mode) {
             res = 1;
             break;
         default:
-            if (is_ctrl_input(k->sym)) {
+            if (is_ctrl_letter(k->sym))
                 res = k->mask != nss_mm_shift && k->mask != nss_mm_control;
-            } else if (is_xkb_ctrl(k)) {
+            else if (is_xkb_ctrl(k))
                 res = k->mask != nss_mm_shift && (k->mask & (nss_mm_shift | nss_mm_mod1));
-            } else res = 1;
+            else res = 1;
         }
         if (res) {
             nss_char_t new_mods = filter_modifiers(k, mode);
@@ -183,33 +192,29 @@ static _Bool is_modify_others_allowed(nss_key_t *k, nss_input_mode_t mode) {
         case XKB_KEY_Tab:
             return 1;
         default:
-            if (is_ctrl_input(k->sym)) {
+            if (is_ctrl_letter(k->sym))
                 return 1;
-            } else if (k->mask == nss_mm_shift) {
+            else if (k->mask == nss_mm_shift)
                 return k->sym == XKB_KEY_space || k->sym == XKB_KEY_Return;
-            } else if (k->mask & (nss_mm_mod1 | nss_mm_control)) {
+            else if (k->mask & (nss_mm_mod1 | nss_mm_control))
                 return 1;
-            } else return 0;
+            return 0;
         }
     }
 }
 
 static void modify_others(nss_char_t ch, nss_char_t param, _Bool fmt, nss_reply_t *reply) {
     if (!param) return;
-    reply->init = '\233';
-    reply->final = fmt ? 'u' : '~';
-    reply->idx = 0;
-    if (fmt) SWAP(nss_char_t, ch, param)
-    else reply->param[reply->idx++] = 27;
-    reply->param[reply->idx++] = param;
-    reply->param[reply->idx++] = ch;
+
+    if (fmt) *reply = (nss_reply_t) { 2, 'u', 0, '\233', {ch, param} };
+    else *reply = (nss_reply_t) { 3, '~', 0, '\233', {27, param, ch} };
 }
 
 static void modify_cursor(nss_char_t param, nss_char_t level, nss_reply_t *reply) {
-    if (!param) return;
-    switch (level) {
+    if (param) switch (level) {
     case 4: reply->priv = '>';
-    case 3: if (!reply->idx) reply->param[reply->idx++] = 1;
+    case 3: if (!reply->idx)
+                reply->param[reply->idx++] = 1;
     case 2: reply->init = '\233';
     case 1: reply->param[reply->idx++] = param;
     }
@@ -218,7 +223,7 @@ static void modify_cursor(nss_char_t param, nss_char_t level, nss_reply_t *reply
 static nss_char_t fnkey_dec(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
     if (is_fkey) {
         reply->final = '~';
-        nss_char_t values[] = {
+        uint8_t values[] = {
             11, 12, 13, 14, 15, 17, 18, 19, 20, 21,
             23, 24, 25, 26, 28, 29, 31, 32, 33, 34
         };
@@ -226,14 +231,13 @@ static nss_char_t fnkey_dec(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
                 (XKB_KEY_F1 <= ks && ks <= XKB_KEY_F20) ?
                 values[ks - XKB_KEY_F1] : 42 + ks - XKB_KEY_F21;
     } else {
-
         nss_char_t p;
         switch (ks) {
         case XKB_KEY_Find: p = 1; break;
-        case XKB_KEY_Insert: p = 2; break;
-        case XKB_KEY_Delete: p = 3; break;
+        case XKB_KEY_Insert:
         case XKB_KEY_KP_Insert: p = 2; break;
-        case XKB_KEY_KP_Delete: p = 3; break;
+        case XKB_KEY_Delete:
+        case XKB_KEY_KP_Delete:
         case XKB_KEY_DRemove: p = 3; break;
         case XKB_KEY_Select: p = 4; break;
         case XKB_KEY_Prior: p = 5; break;
@@ -254,10 +258,9 @@ static nss_char_t fnkey_dec(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
 static _Bool fnkey_hp(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
     nss_char_t res;
     if (is_fkey) {
-        nss_char_t values[] = { 'p', 'q', 'r', 's', 't', 'u', 'v', 'w' };
-        if (XKB_KEY_F1 <= ks && ks <= XKB_KEY_F8) {
-            res = values[ks - XKB_KEY_F1];
-        } else return 0;
+        if (XKB_KEY_F1 <= ks && ks <= XKB_KEY_F8)
+            res = "pqrstuvw"[ks - XKB_KEY_F1];
+        else return 0;
     } else {
         switch (ks) {
         case XKB_KEY_Up: res = 'A'; break;
@@ -317,7 +320,7 @@ static _Bool fnkey_sun(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
     nss_char_t arg = 0, fin = 0;
     if (is_fkey) {
         if (ks - XKB_KEY_F1 < 37) {
-            arg = (int32_t[]) {
+            arg = (uint8_t[]) {
                 224, 225, 226, 227, 228, 229, 230, 231, 232, 233,
                 192, 193, 194, 195, 196, 197, 198, 199, 200, 201,
                 208, 209, 210, 211, 212, 213, 214, 215, 216, 217,
@@ -350,82 +353,26 @@ static _Bool fnkey_sun(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
     return 1;
 }
 
-static void translate_adjust(nss_key_t *k, nss_input_mode_t *mode) {
-    if (k->utf8len <= 1 && !is_special(k->sym) && mode->modkey_other > 1 && !is_ctrl_input(k->sym))
-        k->utf8len = 1, k->utf8data[0] = (uint8_t)k->sym;
-
-    k->is_fkey = is_function(k->sym);
-
-    if (mode->keyboard_mapping == nss_km_vt220) {
-        if (!(k->mask & nss_mm_shift)) {
-            if (k->sym == XKB_KEY_KP_Add) k->sym = XKB_KEY_KP_Separator;
-            if (k->mask & nss_mm_control && k->sym == XKB_KEY_KP_Separator) {
-                k->sym = XKB_KEY_KP_Subtract;
-                k->mask &= ~nss_mm_control;
-            }
-
-            mode->appkey &= (k->utf8len == 1 && mode->allow_numlock && (k->mask & nss_mm_mod2));
-        }
-        if (k->sym != XKB_KEY_Delete || !mode->delete_is_del) {
-            struct { nss_char_t from, to; } tab[] = {
-                { XKB_KEY_Delete, XKB_KEY_DRemove },
-                { XKB_KEY_Home, XKB_KEY_Find },
-                { XKB_KEY_End, XKB_KEY_Select },
-                { XKB_KEY_KP_Delete, XKB_KEY_KP_Decimal },
-                { XKB_KEY_KP_Insert, XKB_KEY_KP_0 },
-                { XKB_KEY_KP_End, XKB_KEY_KP_1 },
-                { XKB_KEY_KP_Down, XKB_KEY_KP_2 },
-                { XKB_KEY_KP_Next, XKB_KEY_KP_3 },
-                { XKB_KEY_KP_Left, XKB_KEY_KP_4 },
-                { XKB_KEY_KP_Begin, XKB_KEY_KP_5 },
-                { XKB_KEY_KP_Right, XKB_KEY_KP_6 },
-                { XKB_KEY_KP_Home, XKB_KEY_KP_7 },
-                { XKB_KEY_KP_Up, XKB_KEY_KP_8 },
-                { XKB_KEY_KP_Prior, XKB_KEY_KP_9 },
-            };
-            for (size_t i = 0; i < sizeof(tab)/sizeof(tab[0]); i++) {
-                if (tab[i].from == k->sym) {
-                    k->sym = tab[i].to;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (k->sym == XKB_KEY_Tab || k->sym == XKB_KEY_ISO_Left_Tab) {
-        if (mode->modkey_other > 1) {
-            if (!k->utf8len) k->utf8data[k->utf8len++] = '\t';
-        } else if (k->utf8len < 2 && k->mask == nss_mm_shift)
-            k->sym = XKB_KEY_ISO_Left_Tab;
-    }
-
-    if (k->utf8len == 1 && k->sym == XKB_KEY_BackSpace &&
-            (mode->backspace_is_del ^ !!(k->mask & nss_mm_control)))
-        k->utf8data[0] = '\177', k->mask &= ~nss_mm_control;
-
-    if (XKB_KEY_KP_Home <= k->sym && k->sym <= XKB_KEY_KP_Begin)
-        k->sym += XKB_KEY_Home - XKB_KEY_KP_Home;
-
-    if (!k->is_fkey) {
-        if (k->sym == XKB_KEY_SunF36)
-            k->is_fkey = 1, k->sym = XKB_KEY_F1 + 36 - 1;
-        else if (k->sym == XKB_KEY_SunF37)
-            k->is_fkey = 1, k->sym = XKB_KEY_F1 + 37 - 1;
-    }
-
-    if (k->is_fkey && k->mask & (nss_mm_control | nss_mm_shift)) {
-        if (mode->keyboard_mapping == nss_km_vt220 || mode->keyboard_mapping == nss_km_legacy) {
-            if (k->mask & nss_mm_control)
-                k->sym += mode->fkey_inc_step;
-            k->mask &= ~nss_mm_control;
-        } else if (!mode->modkey_fn) {
-            if (k->mask & nss_mm_control)
-                k->sym += mode->fkey_inc_step * 2;
-            if (k->mask & nss_mm_shift)
-                k->sym += mode->fkey_inc_step;
-            k->mask &= ~(nss_mm_control | nss_mm_shift);
-        }
-    }
+inline static uint32_t translate_keypad(uint32_t in) {
+    struct { nss_char_t from, to; } tab[] = {
+        { XKB_KEY_Delete, XKB_KEY_DRemove },
+        { XKB_KEY_Home, XKB_KEY_Find },
+        { XKB_KEY_End, XKB_KEY_Select },
+        { XKB_KEY_KP_Delete, XKB_KEY_KP_Decimal },
+        { XKB_KEY_KP_Insert, XKB_KEY_KP_0 },
+        { XKB_KEY_KP_End, XKB_KEY_KP_1 },
+        { XKB_KEY_KP_Down, XKB_KEY_KP_2 },
+        { XKB_KEY_KP_Next, XKB_KEY_KP_3 },
+        { XKB_KEY_KP_Left, XKB_KEY_KP_4 },
+        { XKB_KEY_KP_Begin, XKB_KEY_KP_5 },
+        { XKB_KEY_KP_Right, XKB_KEY_KP_6 },
+        { XKB_KEY_KP_Home, XKB_KEY_KP_7 },
+        { XKB_KEY_KP_Up, XKB_KEY_KP_8 },
+        { XKB_KEY_KP_Prior, XKB_KEY_KP_9 },
+    };
+    for (size_t i = 0; i < sizeof(tab)/sizeof(tab[0]); i++)
+        if (tab[i].from == in) return tab[i].to;
+    return in;
 }
 
 static void dump_reply(nss_term_t *term, nss_reply_t *reply) {
@@ -450,6 +397,63 @@ static void dump_reply(nss_term_t *term, nss_reply_t *reply) {
     nss_term_sendkey(term, str, 0);
 }
 
+
+static void translate_adjust(nss_key_t *k, nss_input_mode_t *mode) {
+    if (k->utf8len <= 1 && !is_special(k->sym) && mode->modkey_other > 1 && !is_ctrl_letter(k->sym))
+        k->utf8len = 1, k->utf8data[0] = (uint8_t)k->sym;
+
+    k->is_fkey = is_function(k->sym);
+
+    if (mode->keyboard_mapping == nss_km_vt220) {
+        if (!(k->mask & nss_mm_shift)) {
+            if (k->sym == XKB_KEY_KP_Add) {
+                k->sym = XKB_KEY_KP_Separator;
+            } else if (k->sym == XKB_KEY_KP_Separator && k->mask & nss_mm_control) {
+                k->sym = XKB_KEY_KP_Subtract;
+                k->mask &= ~nss_mm_control;
+            }
+        }
+        if (k->sym != XKB_KEY_Delete || !mode->delete_is_del)
+            k->sym = translate_keypad(k->sym);
+    }
+
+    mode->appkey &= (k->utf8len == 1 && mode->allow_numlock && (k->mask & nss_mm_mod2));
+
+    if (k->sym == XKB_KEY_Tab || k->sym == XKB_KEY_ISO_Left_Tab) {
+        if (mode->modkey_other > 1) {
+            if (!k->utf8len) k->utf8data[k->utf8len++] = '\t';
+        } else if (k->utf8len < 2 && k->mask == nss_mm_shift) {
+            k->sym = XKB_KEY_ISO_Left_Tab;
+        }
+    } else if (XKB_KEY_KP_Home <= k->sym && k->sym <= XKB_KEY_KP_Begin) {
+        k->sym += XKB_KEY_Home - XKB_KEY_KP_Home;
+    } else if (k->sym == XKB_KEY_SunF36) {
+        k->is_fkey = 1, k->sym = XKB_KEY_F1 + 36 - 1;
+    } else if (k->sym == XKB_KEY_SunF37) {
+        k->is_fkey = 1, k->sym = XKB_KEY_F1 + 37 - 1;
+    } else if (k->sym == XKB_KEY_BackSpace) {
+        if (k->utf8len == 1 && (mode->backspace_is_del ^ !!(k->mask & nss_mm_control))) {
+            k->utf8data[0] = '\177';
+            k->mask &= ~nss_mm_control;
+            // k->sym = XKB_KEY_Delete;
+        }
+    }
+
+    if (k->is_fkey && k->mask & (nss_mm_control | nss_mm_shift)) {
+        if (mode->keyboard_mapping == nss_km_vt220 || mode->keyboard_mapping == nss_km_legacy) {
+            if (k->mask & nss_mm_control)
+                k->sym += mode->fkey_inc_step;
+            k->mask &= ~nss_mm_control;
+        } else if (!mode->modkey_fn) {
+            if (k->mask & nss_mm_control)
+                k->sym += mode->fkey_inc_step * 2;
+            if (k->mask & nss_mm_shift)
+                k->sym += mode->fkey_inc_step;
+            k->mask &= ~(nss_mm_control | nss_mm_shift);
+        }
+    }
+}
+
 void nss_handle_input(nss_key_t k, nss_term_t *term) {
     nss_input_mode_t mode = *nss_term_inmode(term);
 
@@ -458,16 +462,15 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
     translate_adjust(&k, &mode);
 
     nss_reply_t reply = { 0 };
-    nss_char_t param = 0;
-    if (k.mask && is_modify_allowed(&k, mode))
-        param = mask_to_param(k.mask);
+    nss_char_t param = k.mask && is_modify_allowed(&k, mode) ? mask_to_param(k.mask) : 0;
 
-    switch (mode.keyboard_mapping) {
-    case nss_km_hp: fnkey_hp(k.sym, k.is_fkey, &reply); break;
-    case nss_km_sun: fnkey_sun(k.sym, k.is_fkey, &reply); break;
-    case nss_km_sco: fnkey_sco(k.sym, k.is_fkey, &reply); break;
-    default: break;
-    }
+
+    _Bool (*kfn[nss_km_MAX])(nss_char_t, _Bool, nss_reply_t *) = {
+        [nss_km_hp] = fnkey_hp,
+        [nss_km_sun] = fnkey_sun,
+        [nss_km_sco] = fnkey_sco
+    };
+    if (kfn[mode.keyboard_mapping]) kfn[mode.keyboard_mapping](k.sym, k.is_fkey, &reply);
 
     if (reply.final) { // Applied in one of fnkey_* functions
         modify_cursor(param, (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode.delete_is_del)) ?
@@ -475,8 +478,9 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
         dump_reply(term, &reply);
     } else if (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode.delete_is_del)) {
         nss_char_t deccode = fnkey_dec(k.sym, k.is_fkey, &reply);
-        if (k.mask & nss_mm_shift && mode.keyboard_mapping == nss_km_vt220) {
-            /* TODO UDK Here. For now -- nothing */
+        if (k.is_fkey && k.mask & nss_mm_shift && mode.keyboard_mapping == nss_km_vt220) {
+            nss_udk_t udk = nss_term_lookup_udk(term, reply.param[0]);
+            if (udk.val) nss_term_sendkey(term, udk.val, udk.len);
             return;
         } else if (mode.keyboard_mapping != nss_km_legacy && deccode - 11 <= 3) {
             reply.init = mode.keyboad_vt52 ? '\033' : '\217';
@@ -502,12 +506,14 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
     } else if (is_keypad(k.sym)) {
         if (mode.appkey) {
             reply.init = mode.keyboad_vt52 ? '\033' : '\217';
-            reply.final = " ABCDEFGHIJKLMNOPQRSTUVWXYZ??????abcdefghijklmnopqrstuvwxyzXXX" [k.sym - XKB_KEY_KP_Space];
+            reply.final = " ABCDEFGHIJKLMNOPQRSTUVWXYZ??????"
+                    "abcdefghijklmnopqrstuvwxyzXXX" [k.sym - XKB_KEY_KP_Space];
             modify_cursor(param, mode.modkey_keypad, &reply);
             if (mode.keyboad_vt52) reply.priv = '?';
             dump_reply(term, &reply);
         } else {
-            uint8_t ch = " XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXXXXXXXXXXXXX*+,-./0123456789XXX=" [k.sym - XKB_KEY_KP_Space];
+            uint8_t ch = " XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXX"
+                    "XXXXXXXXXXX*+,-./0123456789XXX=" [k.sym - XKB_KEY_KP_Space];
             nss_term_sendkey(term, &ch, 1);
         }
     } else if (is_cursor(k.sym)) {
@@ -563,7 +569,6 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
  * in order to be able to distunguish NUL symbol and error condition...
  */
 
-/* Verbatim from libX11:src/xkb/XKBBind.c */
 static char to_control(char ch) {
     if ((ch >= '@' && ch < '\177') || ch == ' ') ch &= 0x1F;
     else if (ch == '2') ch = '\000';
@@ -616,17 +621,13 @@ static uint32_t decode_mask(const char *c, const char *end) {
     /* TODO: Make M and A meannings configurable,
      * and query them by names by default */
 
-    // This is not thread-safe
-    static _Bool recur = 0;
+    _Bool recur = 0, has_t = 0;
 
+again:
     while (c < end) switch (*c++) {
-    case 'T':;
-        if (!recur) {
-            const char *tms = nss_config_string(NSS_SCONFIG_TERM_MOD);
-            recur = 1;
-            mask |= decode_mask(tms, tms + strlen(tms));
-            recur = 0;
-        } else mask |= nss_mm_shift | nss_mm_control;
+    case 'T':
+        if (recur) mask |= nss_mm_shift | nss_mm_control;
+        else has_t = 1;
         break;
     case 'S':
         mask |= nss_mm_shift;
@@ -637,17 +638,21 @@ static uint32_t decode_mask(const char *c, const char *end) {
     case 'L':
         mask |= nss_mm_lock;
         break;
-    case 'M':
-    case 'A':
+    case 'M': case 'A':
     case '1':
         mask |= nss_mm_mod1;
         break;
-    case '2':
-    case '3':
-    case '4':
-    case '5':
+    case '2': case '3':
+    case '4': case '5':
         mask |= nss_mm_mod1 + c[-1] - '1';
         break;
+    }
+
+    if (has_t && !recur) {
+        c = nss_config_string(NSS_SCONFIG_TERM_MOD);
+        end = c + strlen(c);
+        recur = 1;
+        goto again;
     }
 
     return mask;
