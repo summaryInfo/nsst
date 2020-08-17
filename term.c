@@ -2044,12 +2044,12 @@ static void term_dispatch_dsr(nss_term_t *term) {
                     term->vt_level >= 4 ? ";0;0" : // ready, LK201
                     term->vt_level >= 3 ? ";0" : ""); // ready
             break;
-        case 53: /* Report locator status */
+        case 53: /* Report locator status */ //TODO DEC Locator
         case 55:
             CHK_VT(4);
             term_answerback(term, CSI"?50n"); // no locator
             break;
-        case 56: /* Report locator type */
+        case 56: /* Report locator type */ //TODO DEC Locator
             CHK_VT(4);
             term_answerback(term, CSI"?57;0n"); // can't identify
             break;
@@ -2380,7 +2380,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
         break;
 
     case C('q') | I0('+'): /* XTGETTCAP */ {
-        // TODO: Support proper tcap db
+        // TODO Termcap: Support proper tcap db
         // for now, just implement Co/colors
         _Bool valid = 0;
         if (!strcmp((char *)dstr, "436F") || // "Co"
@@ -2394,7 +2394,8 @@ static void term_dispatch_dcs(nss_term_t *term) {
         term_answerback(term, DCS"%"PRIparam"+r%s"ST, valid, dstr);
         break;
     }
-    case C('p') | I0('+'): /* XTSETTCAP */
+    //case C('p') | I0('+'): /* XTSETTCAP */ // TODO Termcap
+    //    break;
     default:
 err:
         term_esc_dump(term, 0);
@@ -2657,11 +2658,16 @@ static void term_dispatch_osc(nss_term_t *term) {
         nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], 0);
         break;
     }
-    case 50: /* Set Font */
-    case 13: /* Set Mouse foreground color */
-    case 14: /* Set Mouse background color */
-    case 113: /*Reset  Mouse foreground color */
-    case 114: /*Reset  Mouse background color */
+    //case 50: /* Set Font */ // TODO OSC 50
+    //    break;
+    //case 13: /* Set Mouse foreground color */ // TODO Pointer
+    //    break;
+    //case 14: /* Set Mouse background color */ // TODO Pointer
+    //    break;
+    //case 113: /*Reset  Mouse foreground color */ // TODO Pointer
+    //    break;
+    //case 114: /*Reset  Mouse background color */ // TODO Pointer
+    //    break;
     default:
         term_esc_dump(term, 0);
     }
@@ -2763,6 +2769,8 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             CHK_VT(3);
             ENABLE_IF(set, term->mode, nss_tm_enable_nrcs);
             break;
+        //case 44: /* Margin bell */ // TODO Bell
+        //    break;
         case 45: /* Reverse wrap */
             ENABLE_IF(set, term->mode, nss_tm_reverse_wrap);
             break;
@@ -2848,6 +2856,10 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
         case 1041: /* Use CLIPBOARD instead of PRIMARY */
             ENABLE_IF(set, term->mode, nss_tm_select_to_clipboard);
             break;
+        //case 1042: /* Urgency on bell */ // TODO Bell
+        //    break;
+        //case 1043: /* Raise window on bell */ // TODO Bell
+        //    break;
         case 1044: /* Don't clear X11 CLIPBOARD selection */
             ENABLE_IF(set, term->mode, nss_tm_keep_clipboard);
             break;
@@ -2991,6 +3003,9 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
         case 42: /* DECNRCM */
             val = MODBIT(term->mode & nss_tm_enable_nrcs);
             break;
+        case 44: /* Margin bell */ // TODO Bell
+            val = nss_mv_aways_disabled;
+            break;
         case 45: /* Reverse wrap */
             val = MODBIT(term->mode & nss_tm_reverse_wrap);
             break;
@@ -3006,8 +3021,9 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
         case 69: /* DECLRMM */
             val = MODBIT(term->mode & nss_tm_lr_margins);
             break;
-        //case 80: /* DECSDM */ //TODO SIXEL
-        //   break;
+        case 80: /* DECSDM */ //TODO SIXEL
+            val = nss_mv_aways_disabled;
+            break;
         case 95: /* DECNCSM */
             val = MODBIT(term->mode & nss_tm_132_preserve_display);
             break;
@@ -3062,6 +3078,12 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
         case 1041: /* Use CLIPBOARD instead of PRIMARY */
             val = MODBIT(term->mode & nss_tm_select_to_clipboard);
             break;
+        case 1042: /* Urgency on bell */ // TODO Bell
+            val = nss_mv_aways_disabled;
+            break;
+        case 1043: /* Raise window on bell */ // TODO Bell
+            val = nss_mv_aways_disabled;
+            break;
         case 1044: /* Don't clear X11 CLIPBOARD */
             val = MODBIT(term->mode & nss_tm_keep_clipboard);
             break;
@@ -3072,7 +3094,7 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
             val = MODBIT(term->mode & nss_tm_altscreen);
             break;
         case 1048: /* Save cursor */
-            val = nss_mv_aways_enabled; // TODO: What should be reported there?
+            val = nss_mv_aways_enabled;
             break;
         case 1049: /* Save cursor and switch to altscreen */
             val = MODBIT(term->mode & nss_tm_altscreen);
@@ -4089,21 +4111,21 @@ static void term_dispatch_csi(nss_term_t *term) {
             }
         }
         break;
-    //case C('t') | I0(' '): /* DECSWBV */
+    //case C('t') | I0(' '): /* DECSWBV */ // TODO Bell
     //    break;
-    //case C('u') | I0(' '): /* DECSMBV */
+    //case C('u') | I0(' '): /* DECSMBV */ // TODO Bell
     //    break;
-    //case C('w') | I0('\''): /* DECEFR */
+    //case C('w') | I0('\''): /* DECEFR */ // TODO Bell
     //    break;
-    //case C('z') | I0('\''): /* DECELR */
+    //case C('z') | I0('\''): /* DECELR */ // TODO DEC Locator
     //    break;
-    //case C('{') | I0('\''): /* DECSLE */
+    //case C('{') | I0('\''): /* DECSLE */ // TODO DEC Locator
     //    break;
-    //case C('|') | I0('\''): /* DECRQLP */
+    //case C('|') | I0('\''): /* DECRQLP */ // TODO DEC Locator
     //    break;
-    //case C('p') | P('>'): /* XTSMPOINTER */
+    //case C('p') | P('>'): /* XTSMPOINTER */ // TODO Pointer
     //    break;
-    //case C('S') | P('?'): /* XTSMSGRAPHICS */
+    //case C('S') | P('?'): /* XTSMSGRAPHICS */ // TODO SIXEL
     //    break;
     //case C('S') | P('>'): /* Set graphics attributes, xterm */ //TODO SIXEL
     //    break;

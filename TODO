@@ -1,6 +1,4 @@
 Until version 1.6:
-    Configurable modifiers
-    DECUDK
     Bell
         CSI Ps SP t -- DECSWBV
         CSI Ps SP u -- DECSMBV
@@ -24,15 +22,12 @@ Until version 1.6:
             --trace-fonts
             --trace-events
             --trace-misc
-    ...
-
 ===================
 General
     Write man page
     Allow short lines to be seleted properly
     Implement named values for options instead of numeric
     Some alternative to XParseColor
-    Query modifiers by names, instead of using predefined
     Refactor config (split global and perinstance settings, reload reliably)
     Support new color syntax
     Implement proper daemon mode
@@ -71,7 +66,6 @@ Emulation
     VT220
         CSI ? 4 l / CSI ? 4 h -- DECSCLM
         CSI ? 8 l / CSI ? 8 h -- DECARM (When ported to wayland)
-        DCS Ps ; Ps | Pt ST -- DECUDK
         DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
     SIXEL
         CSI ? 80 l / CSI ? 80 h -- DECSDM

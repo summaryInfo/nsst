@@ -617,10 +617,6 @@ nss_key_t nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode) {
 
 static uint32_t decode_mask(const char *c, const char *end) {
     uint32_t mask = 0;
-
-    /* TODO: Make M and A meannings configurable,
-     * and query them by names by default */
-
     _Bool recur = 0, has_t = 0;
 
 again:
