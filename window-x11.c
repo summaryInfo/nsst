@@ -765,6 +765,33 @@ uint32_t get_win_gravity_from_config() {
 struct nss_cellspec nss_describe_cell(nss_cell_t cell, nss_color_t *palette, nss_color_t *extra, _Bool blink, _Bool selected) {
     struct nss_cellspec res;
 
+    // Check special colors
+    if (__builtin_expect(nss_config_integer(NSS_ICONFIG_SPEICAL_BOLD), 0) &&
+            palette[NSS_SPECIAL_BOLD] && cell.attr & nss_attrib_bold) {
+        cell.fg = NSS_SPECIAL_BOLD;
+        cell.attr &= ~nss_attrib_bold;
+    }
+    if (__builtin_expect(nss_config_integer(NSS_ICONFIG_SPEICAL_UNDERLINE), 0) &&
+            palette[NSS_SPECIAL_UNDERLINE] && cell.attr & nss_attrib_underlined) {
+        cell.fg = NSS_SPECIAL_UNDERLINE;
+        cell.attr &= ~nss_attrib_underlined;
+    }
+    if (__builtin_expect(nss_config_integer(NSS_ICONFIG_SPEICAL_BLINK), 0) &&
+            palette[NSS_SPECIAL_BLINK] && cell.attr & nss_attrib_blink) {
+        cell.fg = NSS_SPECIAL_BLINK;
+        cell.attr &= ~nss_attrib_blink;
+    }
+    if (__builtin_expect(nss_config_integer(NSS_ICONFIG_SPEICAL_REVERSE), 0) &&
+            palette[NSS_SPECIAL_REVERSE] && cell.attr & nss_attrib_inverse) {
+        cell.fg = NSS_SPECIAL_REVERSE;
+        cell.attr &= ~nss_attrib_inverse;
+    }
+    if (__builtin_expect(nss_config_integer(NSS_ICONFIG_SPEICAL_ITALIC), 0) &&
+            palette[NSS_SPECIAL_ITALIC] && cell.attr & nss_attrib_italic) {
+        cell.fg = NSS_SPECIAL_ITALIC;
+        cell.attr &= ~nss_attrib_italic;
+    }
+
     // Calculate colors
 
     if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && cell.fg < 8) cell.fg += 8;
