@@ -777,8 +777,7 @@ _Bool nss_term_redraw_dirty(nss_term_t *term) {
     term->prev_c_hidden = c_hidden;
     term->prev_c_view_changed = 0;
 
-    _Bool cursor = !term->prev_c_hidden &&
-            !(term->screen[term->prev_c_y]->cell[term->prev_c_x].attr & nss_attrib_drawn);
+    _Bool cursor = !term->prev_c_hidden && !(term->screen[term->c.y]->cell[term->c.x].attr & nss_attrib_drawn);
 
     nss_line_iter_t it = nss_term_screen_iterator(term, -term->view, term->height - term->view);
 
@@ -1720,7 +1719,29 @@ static void term_tabs(nss_term_t *term, nss_coord_t n) {
     }
 }
 
+void nss_term_set_invert(nss_term_t *term, _Bool set) {
+    if (set ^ !!(term->mode & nss_tm_reverse_video)) {
+        SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
+        SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
+        SWAP(nss_color_t, term->palette[NSS_SPECIAL_SELECTED_BG], term->palette[NSS_SPECIAL_SELECTED_FG]);
+        nss_mouse_damage_selection(term);
+        nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
+    }
+    ENABLE_IF(set, term->mode, nss_tm_reverse_video);
+}
+
+_Bool nss_term_get_invert(nss_term_t *term) {
+    return term->mode & nss_tm_reverse_video;
+}
+
 static void term_load_config(nss_term_t *term) {
+
+    term->loc.mouse_mode = nss_mouse_mode_none;
+    term->loc.mouse_format = nss_mouse_format_default;
+    term->mode &= nss_tm_focused;
+    term->inmode = nss_config_input_mode();
+    term->vt_level = term->vt_version / 100;
+
     term->c = term->back_cs = term->cs = (nss_cursor_t) {
         .cel = MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, 0),
         .fg = nss_config_color(NSS_CCONFIG_FG),
@@ -1732,12 +1753,8 @@ static void term_load_config(nss_term_t *term) {
 
     for (size_t i = 0; i < NSS_PALETTE_SIZE; i++)
         term->palette[i] = nss_config_color(NSS_CCONFIG_COLOR_0 + i);
-    if (nss_config_integer(NSS_ICONFIG_REVERSE_VIDEO)) {
-        SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
-        SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
-        SWAP(nss_color_t, term->palette[NSS_SPECIAL_SELECTED_BG], term->palette[NSS_SPECIAL_SELECTED_FG]);
-        term->mode |= nss_tm_reverse_video;
-    }
+
+    nss_term_set_invert(term, nss_config_integer(NSS_ICONFIG_REVERSE_VIDEO));
 
     if (nss_config_integer(NSS_ICONFIG_UTF8)) term->mode |= nss_tm_utf8 | nss_tm_title_query_utf8 | nss_tm_title_set_utf8;
     if (!nss_config_integer(NSS_ICONFIG_ALLOW_ALTSCREEN)) term->mode |= nss_tm_disable_altscreen;
@@ -1813,11 +1830,6 @@ static void term_set_132(nss_term_t *term, _Bool set) {
 static void term_reset(nss_term_t *term, _Bool hard) {
     if (term->mode & nss_tm_132cols) term_set_132(term, 0);
     if (term->mode & nss_tm_altscreen) term_swap_screen(term, 1);
-
-    term->mode &= nss_tm_focused;
-    term->loc.mouse_mode = nss_mouse_mode_none;
-    term->loc.mouse_format = nss_mouse_format_default;
-    term->inmode = nss_config_input_mode();
 
     nss_coord_t cx = term->c.x, cy = term->c.y;
     _Bool cpending = term->c.pending;
@@ -1917,7 +1929,7 @@ static void term_dispatch_da(nss_term_t *term, nss_param_t mode) {
         case 520: ver = 64; break;
         case 525: ver = 65; break;
         }
-        nss_term_answerback(term, CSI">%"PRIparam";10503;0c", ver);
+        nss_term_answerback(term, CSI">%"PRIparam";%d;0c", ver, NSS_VERSION);
         break;
     }
     default: /* Primary DA */
@@ -2267,6 +2279,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
             case 'p' << 8 | '"': /* -> DECSCL */
                 nss_term_answerback(term, DCS"1$r%"PRIparam"%s\"p"ST, 60 + MAX(term->vt_level, 1),
                         term->vt_level >= 2 ? (term->mode & nss_tm_8bit ? ";2" : ";1") : "");
+                break;
             case 't' << 8 | ' ': /* -> DECSWBV */ {
                 nss_param_t val = 8;
                 if (term->bvol == nss_config_integer(NSS_ICONFIG_BELL_LOW_VOLUME)) val = 4;
@@ -2664,14 +2677,7 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             ENABLE_IF(set, term->mode, nss_tm_smooth_scroll);
             break;
         case 5: /* DECSCNM */
-            if (set ^ !!(term->mode & nss_tm_reverse_video)) {
-                SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
-                SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
-                SWAP(nss_color_t, term->palette[NSS_SPECIAL_SELECTED_BG], term->palette[NSS_SPECIAL_SELECTED_FG]);
-                nss_mouse_damage_selection(term);
-                nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
-            }
-            ENABLE_IF(set, term->mode, nss_tm_reverse_video);
+            nss_term_set_invert(term, set);
             break;
         case 6: /* DECCOM */
             term->c.origin = set;
@@ -2889,16 +2895,6 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
     }
     return 1;
 }
-
-void nss_term_set_invert(nss_term_t *term, _Bool set) {
-    term_srm(term, 1, 5, set);
-
-}
-
-_Bool nss_term_get_invert(nss_term_t *term) {
-    return term->mode & nss_tm_reverse_video;
-}
-
 
 static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t mode) {
     nss_modbit_t val = nss_mb_unrecognized;

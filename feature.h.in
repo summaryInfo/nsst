@@ -18,4 +18,7 @@
 /* Use posix shm interface */
 #define USE_POSIX_SHM @USE_POSIX_SHM@
 
+/* NSST Version number */
+#define NSS_VERSION @VERSION@
+
 #endif

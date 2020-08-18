@@ -50,7 +50,7 @@ static _Noreturn void usage(char *argv0, int code) {
 }
 
 static _Noreturn void version(void) {
-    printf("Not So Simple Terminal v1.5.3\n"
+    printf("Not So Simple Terminal v%d.%d.%d\n"
             "Features: nsst"
 #if USE_PPOLL
             "+ppoll"
@@ -67,8 +67,10 @@ static _Noreturn void version(void) {
 #if USE_PRECOMPOSE
             "+precompose"
 #endif
-            "\n"
-    );
+            "\n",
+            (NSS_VERSION / 10000) % 100,
+            (NSS_VERSION / 100) % 100,
+            NSS_VERSION % 100);
     nss_free_context();
     exit(EXIT_SUCCESS);
 }

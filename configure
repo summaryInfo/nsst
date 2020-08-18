@@ -9,6 +9,7 @@ prefix=/usr/local
 name=nsst
 backend=x11shm
 vars='CFLAGS = -O2 -flto'
+version=10503
 
 # Test some features by trying compiling snippets
 dotest() { echo "$1" | cc -lrt -x c - 2>&1 >/dev/null && rm -f a.out; }
@@ -113,7 +114,8 @@ sed < "./feature.h.in" > "./feature.h" \
     -e "s:@USE_BOXDRAWING@:$use_boxdrawing:g" \
     -e "s:@USE_X11SHM@:$use_x11shm:g" \
     -e "s:@USE_PRECOMPOSE@:$use_precompose:g" \
-    -e "s:@USE_POSIX_SHM@:$use_posix_shm:g"
+    -e "s:@USE_POSIX_SHM@:$use_posix_shm:g" \
+    -e "s:@VERSION@:$version:g"
 
 sed < "./Makefile.in" > "./Makefile" \
     -e "s:@NAME@:$name:" \

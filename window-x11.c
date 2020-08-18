@@ -351,7 +351,7 @@ nss_cursor_type_t nss_window_get_cursor(nss_window_t *win) {
 }
 
 void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor_fg) {
-    nss_color_t obg = win->bg;
+    nss_color_t obg = win->bg, ofg = win->cursor_fg;
     if (bg) win->bg = bg;
     if (cursor_fg) win->cursor_fg = cursor_fg;
 
@@ -362,7 +362,7 @@ void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor
         xcb_change_gc(con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
     }
 
-    if ((bg && bg != obg) || cursor_fg) {
+    if ((bg && bg != obg) || (cursor_fg && cursor_fg != ofg)) {
         nss_term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
