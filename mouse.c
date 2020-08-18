@@ -5,6 +5,7 @@
 #include "config.h"
 #include "mouse.h"
 #include "term.h"
+#include "window.h"
 
 #include <string.h>
 
@@ -424,12 +425,103 @@ void nss_mouse_scroll_view(nss_term_t *term, ssize_t delta) {
     }
 }
 
+inline static void adj_coords(nss_window_t *win, int16_t *x, int16_t *y) {
+    int16_t cw, ch, w, h, bw, bh;
+
+    nss_window_get_dim_ext(win, nss_dt_cell_size, &cw, &ch);
+    nss_window_get_dim_ext(win, nss_dt_border, &bw, &bh);
+    nss_window_get_dim_ext(win, nss_dt_grid_size, &w, &h);
+
+    *x = MAX(0, MIN(w - 1, (*x - bw))) / cw;
+    *y = MAX(0, MIN(h - 1, (*y - bh))) / ch;
+}
+
+void nss_mouse_report_locator(nss_term_t *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask) {
+
+    uint32_t lmask = 0;
+    if (mask & nss_ms_button_3) lmask |= 1;
+    if (mask & nss_ms_button_2) lmask |= 2;
+    if (mask & nss_ms_button_1) lmask |= 4;
+    if (mask & nss_ms_button_4) lmask |= 8;
+
+    int16_t w, h, bw, bh;
+    nss_window_get_dim_ext(nss_term_window(term), nss_dt_border, &bw, &bh);
+    nss_window_get_dim_ext(nss_term_window(term), nss_dt_grid_size, &w, &h);
+
+    if (x < bw || x >= w + bw || y < bh || y > h + bh) {
+        if (evt == 1) nss_term_answerback(term, CSI"0&w");
+    } else {
+        if (!term_locstate(term)->locator_pixels)
+            adj_coords(nss_term_window(term), &x, &y);
+        nss_term_answerback(term, CSI"%d;%d;%d;%d;1&w", evt, mask, y + 1, x + 1);
+    }
+}
+
+void nss_mouse_set_filter(nss_term_t *term, nss_sparam_t xs, nss_sparam_t xe, nss_sparam_t ys, nss_sparam_t ye) {
+    if (xs > xe) SWAP(nss_param_t, xs, xe);
+    if (ys > ye) SWAP(nss_param_t, ys, ye);
+
+    xe++, ye++;
+
+    nss_locator_state_t *loc = term_locstate(term);
+
+    int16_t cw, ch, bw, bh, w, h;
+    nss_window_get_dim_ext(nss_term_window(term), nss_dt_border, &bw, &bh);
+    nss_window_get_dim_ext(nss_term_window(term), nss_dt_cell_size, &cw, &ch);
+    nss_window_get_dim_ext(nss_term_window(term), nss_dt_grid_size, &w, &h);
+
+    if (!loc->locator_pixels) {
+        xs = xs * cw + bw;
+        xe = xe * cw + bw;
+        ys = ys * ch + bh;
+        ye = ye * ch + bh;
+    }
+
+    xs = MIN(xs, bw + w - 1);
+    xe = MIN(xe, bw + w);
+    ys = MIN(ys, bh + h - 1);
+    ye = MIN(ye, bh + h);
+
+    loc->filter = (nss_rect_t) { xs, ys, xe - xs, ye - ys };
+    loc->locator_filter = 1;
+
+    nss_window_set_mouse(nss_term_window(term), 1);
+}
+
 void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev) {
     nss_locator_state_t *loc = term_locstate(term);
-    loc->ev = ev;
     /* Report mouse */
-    if (loc->mouse_mode != nss_mouse_mode_none && (ev.mask & 0xFF) != nss_input_force_mouse_mask() && !nss_term_inmode(term)->keyboad_vt52) {
+    if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & 0xFF) != nss_input_force_mouse_mask() &&
+            !nss_term_inmode(term)->keyboad_vt52) {
+        if (loc->locator_filter) {
+            if (ev.x < loc->filter.x || ev.x >= loc->filter.x + loc->filter.width ||
+                    ev.y < loc->filter.y || ev.y >= loc->filter.y + loc->filter.height) {
+                if (ev.event == nss_me_press) ev.mask |= 1 << (ev.button + 8);
+                nss_mouse_report_locator(term, 10, ev.x, ev.y, ev.mask);
+                loc->locator_filter = 0;
+                nss_window_set_mouse(nss_term_window(term), loc->mouse_mode == nss_mouse_mode_motion);
+            }
+        } else if (loc->locator_enabled) {
+            if (loc->locator_oneshot) {
+                loc->locator_enabled = 0;
+                loc->locator_oneshot = 0;
+            }
+
+            if (ev.event == nss_me_motion) return;
+            else if (ev.event == nss_me_press && !loc->locator_report_press) return;
+            else if (ev.event == nss_me_release && !loc->locator_report_release) return;
+
+            if (ev.button < 3) {
+                if (ev.event == nss_me_press) ev.mask |= 1 << (ev.button + 8);
+                nss_mouse_report_locator(term, 2 + ev.button * 2 + (ev.event == nss_me_release), ev.x, ev.y, ev.mask);
+            }
+        }
+    } else if (loc->mouse_mode != nss_mouse_mode_none &&
+            (ev.mask & 0xFF) != nss_input_force_mouse_mask() && !nss_term_inmode(term)->keyboad_vt52) {
         enum nss_mouse_mode md = loc->mouse_mode;
+
+        adj_coords(nss_term_window(term), &ev.x, &ev.y);
+
         if (md == nss_mouse_mode_x10 && ev.button > 2) return;
 
         if (ev.event == nss_me_motion) {
@@ -491,6 +583,7 @@ void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev) {
                (ev.event == nss_me_release && ev.button == 0 &&
                     (loc->state == nss_sstate_progress))) {
 
+        adj_coords(nss_term_window(term), &ev.x, &ev.y);
         change_selection(term, ev.event + 1, ev.x, ev.y, ev.mask & nss_mm_mod1);
 
         if (ev.event == nss_me_release) {

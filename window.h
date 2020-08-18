@@ -126,6 +126,7 @@ void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor
 void nss_window_set_cursor(nss_window_t *win, nss_cursor_type_t type);
 void nss_window_get_dim(nss_window_t *win, int16_t *width, int16_t *height);
 void nss_window_get_dim_ext(nss_window_t *win, nss_window_dim_type_t which, int16_t *width, int16_t *height);
+void nss_window_get_pointer(nss_window_t *win, int16_t *px, int16_t *py, uint32_t *pmask);
 nss_cursor_type_t nss_window_get_cursor(nss_window_t *win);
 void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, nss_clipboard_target_t target);
 void nss_window_set_sync(nss_window_t *win, _Bool state);

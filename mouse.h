@@ -35,7 +35,6 @@ typedef struct nss_locator_state {
     struct timespec click1;
 
     nss_clipboard_target_t targ;
-    nss_mouse_event_t ev;
 
     uint8_t button;
     nss_coord_t x;
@@ -47,6 +46,8 @@ typedef struct nss_locator_state {
     uint32_t locator_pixels : 1;
     uint32_t locator_report_press : 1;
     uint32_t locator_report_release : 1;
+
+    nss_rect_t filter;
 
     enum nss_mouse_mode {
         nss_mouse_mode_none,
@@ -71,6 +72,8 @@ _Bool nss_mouse_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y);
 void nss_mouse_clear_selection(nss_term_t *term);
 void nss_mouse_damage_selection(nss_term_t *term);
 void nss_mouse_selection_erase(nss_term_t *term, nss_rect_t rect);
+void nss_mouse_report_locator(nss_term_t *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask);
+void nss_mouse_set_filter(nss_term_t *term, nss_sparam_t xs, nss_sparam_t xe, nss_sparam_t ys, nss_sparam_t ye);
 
 #endif
 

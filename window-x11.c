@@ -501,40 +501,55 @@ void nss_window_get_dim_ext(nss_window_t *win, nss_window_dim_type_t which, int1
     int16_t x = 0, y = 0;
     //TODO Handle reparenting
     switch (which) {
-        case nss_dt_window_position:
-        case nss_dt_grid_position:;
-            xcb_get_geometry_cookie_t gc = xcb_get_geometry(con, win->wid);
-            xcb_get_geometry_reply_t *rep = xcb_get_geometry_reply(con, gc, NULL);
-            if (rep) {
-                x = rep->x;
-                y = rep->y;
-                free(rep);
-            }
-            if (which == nss_dt_grid_position) {
-                x += win->left_border;
-                y += win->top_border;
-            }
-            break;
-        case nss_dt_grid_size:
-            x = win->char_width * win->cw;
-            y = (win->char_height + win->char_depth) * win->ch;
-            break;
-        case nss_dt_screen_size:
-            x = ctx.screen->width_in_pixels;
-            y = ctx.screen->height_in_pixels;
-            break;
-        case nss_dt_cell_size:
-            x = win->char_width;
-            y = win->char_depth + win->char_height;
-            break;
-        case nss_dt_border:
-            x = win->left_border;
-            y = win->top_border;
-            break;
+    case nss_dt_window_position:
+    case nss_dt_grid_position:;
+        xcb_get_geometry_cookie_t gc = xcb_get_geometry(con, win->wid);
+        xcb_get_geometry_reply_t *rep = xcb_get_geometry_reply(con, gc, NULL);
+        if (rep) {
+            x = rep->x;
+            y = rep->y;
+            free(rep);
+        }
+        if (which == nss_dt_grid_position) {
+            x += win->left_border;
+            y += win->top_border;
+        }
+        break;
+    case nss_dt_grid_size:
+        x = win->char_width * win->cw;
+        y = (win->char_height + win->char_depth) * win->ch;
+        break;
+    case nss_dt_screen_size:
+        x = ctx.screen->width_in_pixels;
+        y = ctx.screen->height_in_pixels;
+        break;
+    case nss_dt_cell_size:
+        x = win->char_width;
+        y = win->char_depth + win->char_height;
+        break;
+    case nss_dt_border:
+        x = win->left_border;
+        y = win->top_border;
+        break;
     }
 
     if (width) *width = x;
     if (height) *height = y;
+}
+
+void nss_window_get_pointer(nss_window_t *win, int16_t *px, int16_t *py, uint32_t *pmask) {
+    int32_t x = 0, y = 0, mask = 0;
+    xcb_query_pointer_cookie_t c = xcb_query_pointer(con, win->wid);
+    xcb_query_pointer_reply_t *qre = xcb_query_pointer_reply(con, c, NULL);
+    if (qre) {
+        x = MIN(MAX(0, qre->win_x), win->width);
+        y = MIN(MAX(0, qre->win_y), win->height);
+        mask = qre->mask;
+        free(qre);
+    }
+    if (px) *px = x;
+    if (py) *py = y;
+    if (pmask) *pmask = mask;
 }
 
 _Bool nss_window_get_bell_raise(nss_window_t *win) {
@@ -1385,8 +1400,8 @@ void nss_context_run(void) {
                          * XCB_MOTION_NOTIFY -> nss_me_motion */
                         .event = (ev->response_type & 0xF7) - 4,
                         .mask = ev->state & nss_ms_state_mask,
-                        .x = MAX(0, MIN(win->cw, (ev->event_x - win->left_border)/ win->char_width)),
-                        .y = MAX(0, MIN(win->ch, (ev->event_y - win->top_border) / (win->char_height + win->char_depth))),
+                        .x = ev->event_x,
+                        .y = ev->event_y,
                         .button = ev->detail - XCB_BUTTON_INDEX_1,
                     });
                     break;

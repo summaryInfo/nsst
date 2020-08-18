@@ -1738,8 +1738,7 @@ _Bool nss_term_get_invert(nss_term_t *term) {
 
 static void term_load_config(nss_term_t *term) {
 
-    term->loc.mouse_mode = nss_mouse_mode_none;
-    term->loc.mouse_format = nss_mouse_format_default;
+    term->loc = (nss_locator_state_t) {};
     term->mode &= nss_tm_focused;
     term->inmode = nss_config_input_mode();
     term->vt_level = term->vt_version / 100;
@@ -1990,14 +1989,14 @@ static void term_dispatch_dsr(nss_term_t *term) {
                     term->vt_level >= 4 ? ";0;0" : // ready, LK201
                     term->vt_level >= 3 ? ";0" : ""); // ready
             break;
-        case 53: /* Report locator status */ //TODO DEC Locator
+        case 53: /* Report locator status */
         case 55:
             CHK_VT(4);
-            nss_term_answerback(term, CSI"?50n"); // no locator
+            nss_term_answerback(term, CSI"?53n"); // Locator available
             break;
-        case 56: /* Report locator type */ //TODO DEC Locator
+        case 56: /* Report locator type */
             CHK_VT(4);
-            nss_term_answerback(term, CSI"?57;0n"); // can't identify
+            nss_term_answerback(term, CSI"?57;1n"); // Mouse
             break;
         case 62: /* DECMSR, Macro space -- No data, no space for macros */
             CHK_VT(4);
@@ -4105,14 +4104,66 @@ static void term_dispatch_csi(nss_term_t *term) {
             term->mbvol = nss_config_integer(NSS_ICONFIG_MARGIN_BELL_HIGH_VOLUME);
         }
         break;
-    //case C('w') | I0('\''): /* DECEFR */ // TODO DEC Locator
-    //    break;
-    //case C('z') | I0('\''): /* DECELR */ // TODO DEC Locator
-    //    break;
-    //case C('{') | I0('\''): /* DECSLE */ // TODO DEC Locator
-    //    break;
-    //case C('|') | I0('\''): /* DECRQLP */ // TODO DEC Locator
-    //    break;
+    case C('w') | I0('\''): /* DECEFR */ {
+        int16_t x, y;
+        nss_window_get_pointer(term->win, &x, &y, NULL);
+        nss_mouse_set_filter(term, PARAM(1, y), PARAM(0, x), PARAM(3, y), PARAM(4, x));
+        break;
+    }
+    case C('z') | I0('\''): /* DECELR */
+        switch(PARAM(0, 0)) {
+        case 0:
+            term->loc.locator_enabled = 0;
+            break;
+        case 1:
+            term->loc.locator_oneshot = 1;
+        case 2:
+            term->loc.locator_enabled = 1;
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        switch(PARAM(1, 2)) {
+        case 2:
+            term->loc.locator_pixels = 0;
+            break;
+        case 1:
+            term->loc.locator_pixels = 1;
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        break;
+    case C('{') | I0('\''): /* DECSLE */
+        term->esc.i += !term->esc.i;
+        for (size_t i = 0; i < term->esc.i; i++) {
+            switch(PARAM(i, 0)) {
+            case 0: /* Only explicit requests */
+                term->loc.locator_report_press = 0;
+            case 4: /* Disable up */
+                term->loc.locator_report_release = 0;
+                break;
+            case 1: /* Enable down */
+                term->loc.locator_report_press = 1;
+                break;
+            case 2: /* Disable down */
+                term->loc.locator_report_press = 0;
+                break;
+            case 3: /* Enable up */
+                term->loc.locator_report_release = 1;
+                break;
+            default:
+                term_esc_dump(term, 0);
+            }
+        }
+        break;
+    case C('|') | I0('\''): /* DECRQLP */ {
+        int16_t x, y;
+        uint32_t mask;
+        nss_window_get_pointer(term->win, &x, &y, &mask);
+        nss_mouse_report_locator(term, 1, x, y, mask);
+        break;
+    }
     //case C('p') | P('>'): /* XTSMPOINTER */ // TODO Pointer
     //    break;
     //case C('S') | P('?'): /* XTSMSGRAPHICS */ // TODO SIXEL
