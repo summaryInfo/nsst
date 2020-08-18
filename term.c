@@ -3671,8 +3671,12 @@ static void term_dispatch_csi(nss_term_t *term) {
         case 2: /* All */
             erase(term, 0, 0, term->width, term->height, 0);
             break;
-        case 3:
-            /* UNIMPLEMENTED - Erase scrollback, xterm */
+        case 3: /* Scrollback */
+            if (nss_config_integer(NSS_ICONFIG_ALLOW_ERASE_SCROLLBACK) &&
+                    !(term->mode & nss_tm_altscreen)) {
+                term_free_scrollback(term);
+                break;
+            }
         default:
             term_esc_dump(term, 0);
         }
