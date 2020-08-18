@@ -202,12 +202,12 @@ struct nss_term {
     } mode, vt52mode;
 
     enum nss_checksum_mode {
-        nss_tm_cksm_positive        = 1 << 0,
-        nss_tm_cksm_no_attr         = 1 << 1,
-        nss_tm_cksm_no_trim         = 1 << 2,
-        nss_tm_cksm_no_implicit     = 1 << 3,
-        nss_tm_cksm_wide            = 1 << 4,
-        nss_tm_cksm_8bit            = 1 << 5,
+        nss_cksm_positive        = 1 << 0,
+        nss_cksm_no_attr         = 1 << 1,
+        nss_cksm_no_trim         = 1 << 2,
+        nss_cksm_no_implicit     = 1 << 3,
+        nss_cksm_wide            = 1 << 4,
+        nss_cksm_8bit            = 1 << 5,
     } checksum_mode;
 
     uint8_t bvol;
@@ -1097,23 +1097,23 @@ static uint16_t term_checksum(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, 
 
     uint32_t res = 0, spc = 0, trm = 0;
     enum nss_char_set gr = term->c.gn[term->c.gr];
-    _Bool first = 1, notrim = term->mode & nss_tm_cksm_no_trim;
+    _Bool first = 1, notrim = term->checksum_mode & nss_cksm_no_trim;
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
         for (nss_coord_t i = xs; i < xe; i++) {
             nss_char_t ch = line->cell[i].ch;
             uint32_t attr = line->cell[i].attr;
-            if (!(term->mode & nss_tm_cksm_no_implicit) && !ch) ch = ' ';
+            if (!(term->checksum_mode & nss_cksm_no_implicit) && !ch) ch = ' ';
 
-            if (!(term->mode & nss_tm_cksm_wide)) {
+            if (!(term->checksum_mode & nss_cksm_wide)) {
                 if (ch > 0x7F && gr != nss_94cs_ascii) {
                     nrcs_encode(gr, &ch, term->mode & nss_tm_enable_nrcs);
-                    if (!(term->mode & nss_tm_cksm_8bit) && ch < 0x80) ch |= 0x80;
+                    if (!(term->checksum_mode & nss_cksm_8bit) && ch < 0x80) ch |= 0x80;
                 }
                 ch &= 0xFF;
             }
-            if (!(term->mode & nss_tm_cksm_no_attr)) {
+            if (!(term->checksum_mode & nss_cksm_no_attr)) {
                 if (attr & nss_attrib_underlined) ch += 0x10;
                 if (attr & nss_attrib_inverse) ch += 0x20;
                 if (attr & nss_attrib_blink) ch += 0x40;
@@ -1134,7 +1134,7 @@ static uint16_t term_checksum(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, 
     }
 
     if (!notrim) res = trm;
-    return term->mode & nss_tm_cksm_positive ? res : -res;
+    return term->checksum_mode & nss_cksm_positive ? res : -res;
 }
 
 static void term_reverse_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
