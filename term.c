@@ -2560,7 +2560,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         // IMPORTANT: this option affects all instances
         ssize_t n;
         nss_param_t idx, val;
-        if (scanf((char *)dstr, "%"SCNparam";%"SCNparam"%zn", &idx, &val, &n) == 2 && n == dend - dstr && idx < 5)
+        if (sscanf((char *)dstr, "%"SCNparam";%"SCNparam"%zn", &idx, &val, &n) == 2 && n == dend - dstr && idx < 5)
             nss_config_set_integer(NSS_ICONFIG_SPEICAL_BOLD + idx, !!val);
         else term_esc_dump(term, 0);
         break;
