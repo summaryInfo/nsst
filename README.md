@@ -4,7 +4,7 @@ This is an implementation of VT220-compatible X11 terminal emulator.
 Inspired by [Simple Terminal](https://st.suckless.org/)
 
 ## Features
-* Quiet fast rendering
+* Quite fast rendering
     * Almost same latency as `XTerm`, which is a lot faster than other modern terminals
     * Scrolling performance is higher than most other terminals measured on my system
 * Small size and almost no dependencies
