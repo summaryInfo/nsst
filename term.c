@@ -3235,10 +3235,11 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
         nss_mouse_clear_selection(term);
 
     // Put character itself
-    term_put_cell(term, term->c.x, term->c.y, ch);
+    cell[0] = fixup_color(term->screen[term->c.y], &term->c);
+    cell[0].ch = ch;
 
     // Put dummy character to the left of wide
-    if (width > 1) {
+    if (__builtin_expect(width > 1, 0)) {
         cell[1] = fixup_color(term->screen[term->c.y], &term->c);
         cell[0].attr |= nss_attrib_wide;
     }
