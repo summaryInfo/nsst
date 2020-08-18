@@ -1,14 +1,9 @@
 Until version 1.6:
-    Mouse
-        CSI ? 53 n
-        CSI ? 55 n
-        CSI ? 56 n
-        CSI Pt ; Pl ; Pb ; Pr ' w -- DECEFR
-        CSI Ps ; Pu ' z -- DECELR
-        CSI Pm ' { -- DECSLE
-        CSI Ps ' | -- DECRQLP ->  CSI Pe ; Pb ; Pr ; Pc ; Pp & w
     OSC 50 ; Pt ST -- Set font
     Refactor config
+        Split global and perinstance settings, reload reliably
+        Allow geometry to be specified in characters
+        Implement named values for options instead of numeric
     Refactor debug output
         make it more granular
             --trace-characters
@@ -20,12 +15,8 @@ Until version 1.6:
 General
     Write man page
     Allow short lines to be seleted properly
-    Implement named values for options instead of numeric
     Some alternative to XParseColor
-    Refactor config (split global and perinstance settings, reload reliably)
-    Support new color syntax
     Implement proper daemon mode
-    Allow geometry to be specified in characters
     Make X resource/option names more or less correspond to Xterm/rxvt-unicode?
 Render
     General
