@@ -571,7 +571,7 @@ void nss_window_bell(nss_window_t *win, uint8_t vol) {
         if (win->bell_raise) nss_window_action(win, nss_wa_restore_minimized);
         if (win->bell_urgent) set_urgency(win->wid, 1);
     }
-    if (nss_config_integer(NSS_ICONFIG_VISUAL_BELL)) {
+    if (nss_config_integer(NSS_ICONFIG_VISUAL_BELL) && !win->in_blink) {
         win->init_invert = nss_term_get_invert(win->term);
         win->in_blink = 1;
         ctx.vbell_count++;
