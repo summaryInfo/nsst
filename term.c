@@ -777,7 +777,9 @@ _Bool nss_term_redraw_dirty(nss_term_t *term) {
     term->prev_c_hidden = c_hidden;
     term->prev_c_view_changed = 0;
 
-    _Bool cursor = !term->prev_c_hidden && !(term->screen[term->c.y]->cell[term->c.x].attr & nss_attrib_drawn);
+    nss_line_t *cl = term->screen[term->c.y];
+
+    _Bool cursor = !term->prev_c_hidden && (!(cl->cell[term->c.x].attr & nss_attrib_drawn) || cl->force_damage);
 
     nss_line_iter_t it = nss_term_screen_iterator(term, -term->view, term->height - term->view);
 
