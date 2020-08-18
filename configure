@@ -84,7 +84,7 @@ done
 [ x = x"$mandir" ] && mandir=${prefix}/share/man
 
 deps="fontconfig freetype2 xkbcommon"
-objs="nsst.o util.o font.o term.o config.o input.o nrcs.o"
+objs="nsst.o util.o font.o term.o config.o mouse.o input.o nrcs.o"
 
 case "$backend" in
 x11shm)

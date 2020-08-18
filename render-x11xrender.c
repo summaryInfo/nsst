@@ -1,8 +1,10 @@
 /* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
 
 #include "feature.h"
+
 #include "config.h"
 #include "font.h"
+#include "mouse.h"
 #include "window-x11.h"
 
 #include <string.h>

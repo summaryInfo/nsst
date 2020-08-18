@@ -102,6 +102,29 @@ inline static nss_line_t *line_iter_next(nss_line_iter_t *it) {
         it->_scrollback[(it->_sb_0 + ++it->_y + it->_sb_limit) % it->_sb_limit];
 }
 
+inline static void line_iter_inc(nss_line_iter_t *it, ssize_t delta) {
+    it->_y += delta;
+}
+
+inline static nss_line_t *line_iter_ref(nss_line_iter_t *it) {
+    if (it->_y >= it->_y_max || it->_y < it->_y_min) return NULL;
+    return (it->_y >= 0) ? it->_screen[it->_y] :
+        it->_scrollback[(it->_sb_0 + it->_y + 1 + it->_sb_limit) % it->_sb_limit];
+}
+
+inline static nss_line_t *line_iter_prev(nss_line_iter_t *it) {
+    line_iter_inc(it, -1);
+    return line_iter_ref(it);
+}
+
+inline static nss_coord_t line_length(nss_line_t *line) {
+    nss_coord_t max_x = line->width;
+    if (!line->wrap_at)
+        while (max_x > 0 && !line->cell[max_x - 1].ch) max_x--;
+    else max_x = line->wrap_at;
+    return max_x;
+}
+
 typedef struct nss_input_mode nss_input_mode_t;
 typedef struct nss_term nss_term_t;
 
@@ -110,8 +133,8 @@ void nss_free_term(nss_term_t *term);
 _Bool nss_term_redraw_dirty(nss_term_t *term);
 void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height);
 void nss_term_focus(nss_term_t *term, _Bool focused);
-void nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button);
 void nss_term_sendkey(nss_term_t *term, const uint8_t *data, size_t size);
+void nss_term_answerback(nss_term_t *term, const char *str, ...);
 void nss_term_sendbreak(nss_term_t *term);
 void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount);
 void nss_term_read(nss_term_t *term);
@@ -126,17 +149,19 @@ _Bool nss_term_is_paste_quote_enabled(nss_term_t *term);
 _Bool nss_term_is_cursor_enabled(nss_term_t *term);
 nss_udk_t nss_term_lookup_udk(nss_term_t *term, nss_param_t n);
 void nss_term_damage_lines(nss_term_t *term, nss_coord_t ys, nss_coord_t yd);
+void nss_term_damage(nss_term_t *term, nss_rect_t damage);
 void nss_term_reset(nss_term_t *term);
 void nss_term_set_invert(nss_term_t *term, _Bool set);
 _Bool nss_term_get_invert(nss_term_t *term);
+nss_line_iter_t nss_term_screen_iterator(nss_term_t *term, ssize_t ymin, ssize_t ymax);
+nss_window_t *nss_term_window(nss_term_t *term);
 
-/* Selection related functions */
-_Bool nss_term_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y);
-void nss_term_clear_selection(nss_term_t *term);
 _Bool nss_term_paste_need_encode(nss_term_t *term);
 void nss_term_paste_begin(nss_term_t *term);
 void nss_term_paste_end(nss_term_t *term);
 _Bool nss_term_keep_clipboard(nss_term_t *term);
+_Bool nss_term_keep_selection(nss_term_t *term);
+_Bool nss_term_select_to_clipboard(nss_term_t *term);
 
 void nss_setup_default_termios(void);
 

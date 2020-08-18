@@ -7,6 +7,7 @@
 
 #include "config.h"
 #include "input.h"
+#include "mouse.h"
 #include "nrcs.h"
 #include "term.h"
 #include "window.h"
@@ -44,7 +45,6 @@
 #define ESC_MAX_LONG_STR 0x10000000
 #define ESC_DUMP_MAX 768
 #define MAX_REPORT 1024
-#define SEL_INIT_SIZE 32
 #define SGR_BUFSIZ 64
 #define UDK_MAX 37
 
@@ -99,41 +99,12 @@ typedef struct nss_cursor {
     _Bool pending;
 } nss_cursor_t;
 
-typedef struct nss_selected {
-    nss_coord_t x0;
-    ssize_t y0;
-    nss_coord_t x1;
-    ssize_t y1;
-    _Bool rect;
-} nss_selected_t;
-
-typedef struct nss_visual_selection {
-    nss_selected_t r;
-    nss_selected_t n;
-
-    enum {
-        nss_ssnap_none,
-        nss_ssnap_word,
-        nss_ssnap_line,
-    } snap;
-    enum {
-        nss_sstate_none,
-        nss_sstate_pressed = nss_me_press + 1,
-        nss_sstate_released = nss_me_release + 1,
-        nss_sstate_progress = nss_me_motion + 1,
-    } state;
-
-    struct timespec click0;
-    struct timespec click1;
-    nss_clipboard_target_t targ;
-} nss_visual_selection_t;
-
 typedef enum nss_modbit {
-    nss_mv_unrecognized,
-    nss_mv_enabled,
-    nss_mv_disabled,
-    nss_mv_aways_enabled,
-    nss_mv_aways_disabled,
+    nss_mb_unrecognized,
+    nss_mb_enabled,
+    nss_mb_disabled,
+    nss_mb_aways_enabled,
+    nss_mb_aways_disabled,
 } nss_modbit_t;
 
 struct nss_term {
@@ -170,14 +141,8 @@ struct nss_term {
      * of selection being pasted from */
     uint8_t paste_from;
 
-    /* Previous mouse state
-     * used reduce duplicated
-     * mouse events */
-    nss_coord_t prev_mouse_x;
-    nss_coord_t prev_mouse_y;
-    uint8_t prev_mouse_button;
-
-    nss_visual_selection_t vsel;
+    /* Mouse and selection state */
+    nss_locator_state_t loc;
 
     /* Previous cursor state
      * Used for effective cursor invalidation */
@@ -206,67 +171,44 @@ struct nss_term {
         nss_tm_132_preserve_display = 1LL << 16,
         nss_tm_scroll_on_output     = 1LL << 17,
         nss_tm_dont_scroll_on_input = 1LL << 18,
-#define MOUSE_OFFSET 19
-#define MOUSE_MASK 0xFULL
-        nss_tm_mouse_x10            = 1LL << 19,
-        nss_tm_mouse_button         = 1LL << 20,
-        nss_tm_mouse_motion         = 1LL << 21,
-        nss_tm_mouse_many           = 1LL << 22,
-        nss_tm_paste_quote          = 1LL << 23,
-        nss_tm_print_extend         = 1LL << 24,
-        nss_tm_print_form_feed      = 1LL << 25,
-        nss_tm_print_enabled        = 1LL << 26,
-        nss_tm_print_auto           = 1LL << 27,
-        nss_tm_title_set_utf8       = 1LL << 28,
-        nss_tm_title_query_utf8     = 1LL << 29,
-        nss_tm_title_set_hex        = 1LL << 30,
-        nss_tm_title_query_hex      = 1LL << 31,
-        nss_tm_bracketed_paste      = 1LL << 32,
-        nss_tm_keep_selection       = 1LL << 33,
-        nss_tm_keep_clipboard       = 1LL << 34,
-        nss_tm_select_to_clipboard  = 1LL << 35,
-        nss_tm_reverse_wrap         = 1LL << 36,
-        nss_tm_led_num_lock         = 1LL << 37,
-        nss_tm_led_caps_lock        = 1LL << 38,
-        nss_tm_led_scroll_lock      = 1LL << 39,
-        nss_tm_alternate_scroll     = 1LL << 40,
-        nss_tm_attr_ext_rectangle   = 1LL << 41,
-        nss_tm_lr_margins           = 1LL << 42,
-        nss_tm_disable_132cols      = 1LL << 43,
-        nss_tm_smooth_scroll        = 1LL << 44,
-        nss_tm_xterm_more_hack      = 1LL << 45,
-        nss_tm_allow_change_font    = 1LL << 46,
-        nss_tm_paste_literal_nl     = 1LL << 47,
-#define CKSM_OFFSET 48
-#define CKSM_MASK 0x3FULL
-        nss_tm_cksm_positive        = 1LL << 48,
-        nss_tm_cksm_no_attr         = 1LL << 49,
-        nss_tm_cksm_no_trim         = 1LL << 50,
-        nss_tm_cksm_no_implicit     = 1LL << 51,
-        nss_tm_cksm_wide            = 1LL << 52,
-        nss_tm_cksm_8bit            = 1LL << 53,
-#define MFORMAT_OFFSET (56-4)
-#define MFORMAT_MASK 0x30ULL
-        nss_tm_mouse_format_utf8    = 1LL << 55,
-        nss_tm_mouse_format_urxvt   = 1LL << 56,
-        nss_tm_mouse_format_sgr     = 1LL << 57,
-        nss_tm_udk_locked           = 1LL << 58,
-        nss_tm_margin_bell          = 1LL << 59,
-
-        nss_tm_cksm_mask =
-            nss_tm_cksm_positive | nss_tm_cksm_no_attr |
-            nss_tm_cksm_no_trim | nss_tm_cksm_no_implicit |
-            nss_tm_cksm_wide | nss_tm_cksm_8bit,
-        nss_tm_mouse_mask =
-            nss_tm_mouse_x10 | nss_tm_mouse_button |
-            nss_tm_mouse_motion | nss_tm_mouse_many,
-        nss_tm_print_mask =
-            nss_tm_print_auto | nss_tm_print_enabled,
-        nss_tm_mouse_format_mask =
-            nss_tm_mouse_format_sgr |
-            nss_tm_mouse_format_utf8 |
-            nss_tm_mouse_format_urxvt,
+        nss_tm_paste_quote          = 1LL << 19,
+        nss_tm_print_extend         = 1LL << 20,
+        nss_tm_print_form_feed      = 1LL << 21,
+        nss_tm_print_enabled        = 1LL << 22,
+        nss_tm_print_auto           = 1LL << 23,
+        nss_tm_title_set_utf8       = 1LL << 24,
+        nss_tm_title_query_utf8     = 1LL << 25,
+        nss_tm_title_set_hex        = 1LL << 26,
+        nss_tm_title_query_hex      = 1LL << 27,
+        nss_tm_bracketed_paste      = 1LL << 28,
+        nss_tm_keep_selection       = 1LL << 29,
+        nss_tm_keep_clipboard       = 1LL << 30,
+        nss_tm_select_to_clipboard  = 1LL << 31,
+        nss_tm_reverse_wrap         = 1LL << 32,
+        nss_tm_led_num_lock         = 1LL << 33,
+        nss_tm_led_caps_lock        = 1LL << 34,
+        nss_tm_led_scroll_lock      = 1LL << 35,
+        nss_tm_alternate_scroll     = 1LL << 36,
+        nss_tm_attr_ext_rectangle   = 1LL << 37,
+        nss_tm_lr_margins           = 1LL << 38,
+        nss_tm_disable_132cols      = 1LL << 39,
+        nss_tm_smooth_scroll        = 1LL << 40,
+        nss_tm_xterm_more_hack      = 1LL << 41,
+        nss_tm_allow_change_font    = 1LL << 42,
+        nss_tm_paste_literal_nl     = 1LL << 43,
+        nss_tm_udk_locked           = 1LL << 44,
+        nss_tm_margin_bell          = 1LL << 45,
+        nss_tm_print_mask = nss_tm_print_auto | nss_tm_print_enabled,
     } mode, vt52mode;
+
+    enum nss_checksum_mode {
+        nss_tm_cksm_positive        = 1 << 0,
+        nss_tm_cksm_no_attr         = 1 << 1,
+        nss_tm_cksm_no_trim         = 1 << 2,
+        nss_tm_cksm_no_implicit     = 1 << 3,
+        nss_tm_cksm_wide            = 1 << 4,
+        nss_tm_cksm_8bit            = 1 << 5,
+    } checksum_mode;
 
     uint8_t bvol;
     uint8_t mbvol;
@@ -278,7 +220,8 @@ struct nss_term {
      * [1000-1063] : 8 bytes;
      * [2000-2007] : 1 byte */
     uint8_t saved_modbits[21];
-    uint8_t saved_mouse_mask;
+    enum nss_mouse_mode saved_mouse_mode;
+    enum nss_mouse_format saved_mouse_format;
     uint8_t saved_keyboard_type;
 
     nss_udk_t udk[UDK_MAX];
@@ -328,12 +271,7 @@ struct nss_term {
 /* Default termios, initialized from main */
 static struct termios dtio;
 
-static void term_answerback(nss_term_t *term, const char *str, ...);
-static void term_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save);
-static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss_color_t y, _Bool rectangular);
-static void term_update_selection(nss_term_t *term, uint8_t oldstate, nss_selected_t old);
-
-inline static nss_line_iter_t make_screen_iter(nss_term_t *term, ssize_t ymin, ssize_t ymax) {
+nss_line_iter_t nss_term_screen_iterator(nss_term_t *term, ssize_t ymin, ssize_t ymax) {
     if (ymin > ymax) SWAP(ssize_t, ymin, ymax);
     return (nss_line_iter_t) {
         term->screen,
@@ -346,24 +284,9 @@ inline static nss_line_iter_t make_screen_iter(nss_term_t *term, ssize_t ymin, s
     };
 }
 
-inline static void line_iter_inc(nss_line_iter_t *it, ssize_t delta) {
-    it->_y += delta;
-}
-
-inline static nss_line_t *term_line_at(nss_term_t *term, ssize_t y) {
+nss_line_t *term_line_at(nss_term_t *term, ssize_t y) {
     return y >= 0 ? term->screen[y] :
         term->scrollback[(term->sb_top + term->sb_limit + y + 1) % term->sb_limit];
-}
-
-inline static nss_line_t *line_iter_ref(nss_line_iter_t *it) {
-    if (it->_y >= it->_y_max || it->_y < it->_y_min) return NULL;
-    return (it->_y >= 0) ? it->_screen[it->_y] :
-        it->_scrollback[(it->_sb_0 + it->_y + 1 + it->_sb_limit) % it->_sb_limit];
-}
-
-inline static nss_line_t *line_iter_prev(nss_line_iter_t *it) {
-    line_iter_inc(it, -1);
-    return line_iter_ref(it);
 }
 
 static void handle_chld(int arg) {
@@ -812,13 +735,22 @@ nss_input_mode_t *nss_term_inmode(nss_term_t *term) {
     return &term->inmode;
 }
 
+nss_locator_state_t *term_locstate(nss_term_t *term) {
+    return &term->loc;
+}
+
+nss_window_t *nss_term_window(nss_term_t *term) {
+    return term->win;
+}
+
+
 int nss_term_fd(nss_term_t *term) {
     return term->fd;
 }
 
-void term_damage(nss_term_t *term, nss_rect_t damage) {
+void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
     if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
-        nss_line_iter_t it = make_screen_iter(term, damage.y - term->view, damage.y + damage.height - term->view);
+        nss_line_iter_t it = nss_term_screen_iterator(term, damage.y - term->view, damage.y + damage.height - term->view);
         for (nss_line_t *line; (line = line_iter_next(&it));)
             for (nss_coord_t j = damage.x; j <  MIN(damage.x + damage.width, line->width); j++)
                 line->cell[j].attr &= ~nss_attrib_drawn;
@@ -826,7 +758,7 @@ void term_damage(nss_term_t *term, nss_rect_t damage) {
 }
 
 void nss_term_damage_lines(nss_term_t *term, nss_coord_t ys, nss_coord_t yd) {
-    nss_line_iter_t it = make_screen_iter(term, ys - term->view, yd - term->view);
+    nss_line_iter_t it = nss_term_screen_iterator(term, ys - term->view, yd - term->view);
     for (nss_line_t *line; (line = line_iter_next(&it));) line->force_damage = 1;
 }
 
@@ -848,7 +780,7 @@ _Bool nss_term_redraw_dirty(nss_term_t *term) {
     _Bool cursor = !term->prev_c_hidden &&
             !(term->screen[term->prev_c_y]->cell[term->prev_c_x].attr & nss_attrib_drawn);
 
-    nss_line_iter_t it = make_screen_iter(term, -term->view, term->height - term->view);
+    nss_line_iter_t it = nss_term_screen_iterator(term, -term->view, term->height - term->view);
 
     return nss_window_submit_screen(term->win, &it, term->palette, term->c.x, term->c.y, cursor, term->c.pending);
 }
@@ -857,15 +789,14 @@ static void term_reset_view(nss_term_t *term, _Bool damage) {
     term->prev_c_view_changed |= !!term->view;
     ssize_t old_view = term->view;
     term->view = 0;
-    if (term->vsel.state == nss_sstate_progress)
-        term_change_selection(term, nss_sstate_progress, term->vsel.r.x1, term->vsel.r.y1 + old_view, term->vsel.r.rect);
+    nss_mouse_scroll_view(term, -old_view);
     if (damage) nss_term_damage_lines(term, 0, term->height);
 }
 
 void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
     if (term->mode & nss_tm_altscreen) {
         if (term->mode & nss_tm_alternate_scroll)
-            term_answerback(term, CSI"%"PRIparam"%c", abs(amount), amount > 0 ? 'A' : 'D');
+            nss_term_answerback(term, CSI"%"PRIparam"%c", abs(amount), amount > 0 ? 'A' : 'D');
         return;
     }
 
@@ -882,18 +813,8 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
         nss_window_shift(term->win, -delta, 0, term->height + delta, 0);
     }
 
-    if (term->vsel.state == nss_sstate_progress)
-        term_change_selection(term, nss_sstate_progress,
-                term->vsel.r.x1, term->vsel.r.y1 + old_view, term->vsel.r.rect);
+    nss_mouse_scroll_view(term, delta);
     term->prev_c_view_changed |= !old_view ^ !term->view;
-}
-
-inline static nss_coord_t line_length(nss_line_t *line) {
-    nss_coord_t max_x = line->width;
-    if (!line->wrap_at)
-        while (max_x > 0 && !line->cell[max_x - 1].ch) max_x--;
-    else max_x = line->wrap_at;
-    return max_x;
 }
 
 static void term_append_history(nss_term_t *term, nss_line_t *line) {
@@ -943,17 +864,29 @@ static void term_append_history(nss_term_t *term, nss_line_t *line) {
 }
 
 /* Get min/max column/row */
-inline static nss_coord_t term_max_y(nss_term_t *term) {
+nss_coord_t term_max_y(nss_term_t *term) {
     return term->bottom + 1;
 }
-inline static nss_coord_t term_min_y(nss_term_t *term) {
+nss_coord_t term_min_y(nss_term_t *term) {
     return term->top;
 }
-inline static nss_coord_t term_max_x(nss_term_t *term) {
+nss_coord_t term_max_x(nss_term_t *term) {
     return term->mode & nss_tm_lr_margins ? term->right + 1 : term->width;
 }
-inline static nss_coord_t term_min_x(nss_term_t *term) {
+nss_coord_t term_min_x(nss_term_t *term) {
     return term->mode & nss_tm_lr_margins ? term->left : 0;
+}
+nss_coord_t term_width(nss_term_t *term) {
+    return term->width;
+}
+nss_coord_t term_height(nss_term_t *term) {
+    return term->height;
+}
+ssize_t term_scrollback_size(nss_term_t *term) {
+    return term->sb_limit;
+}
+ssize_t term_view_pos(nss_term_t *term) {
+    return term->view;
 }
 
 /* Get min/max column/row WRT origin */
@@ -1154,26 +1087,7 @@ inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t
     }
 
     nss_window_delay(term->win);
-
-    if (term->vsel.state == nss_sstate_none) return;
-
-#define RECT_INTRS(x10, x11, y10, y11) \
-    ((MAX(*xs, x10) <= MIN(*xe - 1, x11)) && (MAX(*ys, y10) <= MIN(*ye - 1, y11)))
-
-    if (term->vsel.r.rect || term->vsel.n.y0 == term->vsel.n.y1) {
-        if (RECT_INTRS(term->vsel.n.x0, term->vsel.n.x1, term->vsel.n.y0, term->vsel.n.y1))
-            nss_term_clear_selection(term);
-    } else {
-        if (RECT_INTRS(term->vsel.n.x0, term->width - 1, term->vsel.n.y0, term->vsel.n.y0))
-            nss_term_clear_selection(term);
-        if (term->vsel.n.y1 - term->vsel.n.y0 > 1)
-            if (RECT_INTRS(0, term->width - 1, term->vsel.n.y0 + 1, term->vsel.n.y1 - 1))
-                nss_term_clear_selection(term);
-        if (RECT_INTRS(0, term->vsel.n.x1, term->vsel.n.y1, term->vsel.n.y1))
-            nss_term_clear_selection(term);
-    }
-
-#undef RECT_INTRS
+    nss_mouse_selection_erase(term, (nss_rect_t){ *xs, *ys, *xe - *xs, *ye - *ys});
 }
 
 static uint16_t term_checksum(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
@@ -1278,7 +1192,7 @@ static void term_report_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, ns
 
     if (ys >= ye || xs >= xe) {
         // Invalid rectangle
-        term_answerback(term, CSI"0m");
+        nss_term_answerback(term, CSI"0m");
         return;
     }
 
@@ -1308,7 +1222,7 @@ static void term_report_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, ns
 
     char sgr[SGR_BUFSIZ];
     term_encode_sgr(sgr, sgr + sizeof sgr, common, common_fg, common_bg);
-    term_answerback(term, CSI"%sm", sgr);
+    nss_term_answerback(term, CSI"%sm", sgr);
 }
 
 static void term_apply_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
@@ -1501,7 +1415,7 @@ static void term_swap_screen(nss_term_t *term, _Bool damage) {
     SWAP(nss_cursor_t, term->back_cs, term->cs);
     SWAP(nss_line_t **, term->back_screen, term->screen);
     term_reset_view(term, damage);
-    if (damage) nss_term_clear_selection(term);
+    if (damage) nss_mouse_clear_selection(term);
 }
 
 static void term_scroll_horizontal(nss_term_t *term, nss_coord_t left, nss_coord_t amount) {
@@ -1606,7 +1520,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
 
         //TODO Optimize: shift window contents
     }
-    term_scroll_selection(term, amount, save);
+    nss_mouse_scroll_selection(term, amount, save);
 }
 
 static void term_set_tb_margins(nss_term_t *term, nss_coord_t top, nss_coord_t bottom) {
@@ -1825,8 +1739,6 @@ static void term_load_config(nss_term_t *term) {
         term->mode |= nss_tm_reverse_video;
     }
 
-    //term->mode |= nss_tm_cksm_mask;
-
     if (nss_config_integer(NSS_ICONFIG_UTF8)) term->mode |= nss_tm_utf8 | nss_tm_title_query_utf8 | nss_tm_title_set_utf8;
     if (!nss_config_integer(NSS_ICONFIG_ALLOW_ALTSCREEN)) term->mode |= nss_tm_disable_altscreen;
     if (nss_config_integer(NSS_ICONFIG_INIT_WRAP)) term->mode |= nss_tm_wrap;
@@ -1903,6 +1815,8 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     if (term->mode & nss_tm_altscreen) term_swap_screen(term, 1);
 
     term->mode &= nss_tm_focused;
+    term->loc.mouse_mode = nss_mouse_mode_none;
+    term->loc.mouse_format = nss_mouse_format_default;
     term->inmode = nss_config_input_mode();
 
     nss_coord_t cx = term->c.x, cy = term->c.y;
@@ -1987,7 +1901,7 @@ static void term_dispatch_da(nss_term_t *term, nss_param_t mode) {
     case P('='): /* Tertinary DA */
         CHK_VT(4);
         /* DECREPTUI */
-        term_answerback(term, DCS"!|00000000"ST);
+        nss_term_answerback(term, DCS"!|00000000"ST);
         break;
     case P('>'): /* Secondary DA */ {
         nss_param_t ver = 0;
@@ -2003,16 +1917,16 @@ static void term_dispatch_da(nss_term_t *term, nss_param_t mode) {
         case 520: ver = 64; break;
         case 525: ver = 65; break;
         }
-        term_answerback(term, CSI">%"PRIparam";10503;0c", ver);
+        nss_term_answerback(term, CSI">%"PRIparam";10503;0c", ver);
         break;
     }
     default: /* Primary DA */
         if (term->vt_version < 200) {
             switch (term->vt_version) {
-            case 125: term_answerback(term, CSI"?12;2;0;10c"); break;
-            case 102: term_answerback(term, CSI"?6c"); break;
-            case 101: term_answerback(term, CSI"?1;0c"); break;
-            default: term_answerback(term, CSI"?1;2c");
+            case 125: nss_term_answerback(term, CSI"?12;2;0;10c"); break;
+            case 102: nss_term_answerback(term, CSI"?6c"); break;
+            case 101: nss_term_answerback(term, CSI"?1;0c"); break;
+            default: nss_term_answerback(term, CSI"?1;2c");
             }
         } else {
             /*1 - 132-columns
@@ -2031,7 +1945,7 @@ static void term_dispatch_da(nss_term_t *term, nss_param_t mode) {
              *28 - Rectangular editing
              *29 - ANSI text locator (i.e., DEC Locator mode).
              */
-            term_answerback(term, CSI"?%u;1;2;6%s;9%sc",
+            nss_term_answerback(term, CSI"?%u;1;2;6%s;9%sc",
                     60 + term->vt_version/100,
                     term->inmode.keyboard_mapping == nss_km_vt220 ? ";8" : "",
                     term->vt_level >= 4 ? ";21;22;28" : ";22");
@@ -2043,57 +1957,57 @@ static void term_dispatch_dsr(nss_term_t *term) {
     if (term->esc.selector & P_MASK) {
         switch (term->esc.param[0]) {
         case 6: /* DECXCPR -- CSI ? Py ; Px ; R ; 1  */
-            term_answerback(term, CSI"%"PRIparam";%"PRIparam"%sR",
+            nss_term_answerback(term, CSI"%"PRIparam";%"PRIparam"%sR",
                     term->c.y - term_min_oy(term) + 1,
                     term->c.x - term_min_ox(term) + 1,
                     term->vt_level >= 4 ? ";1" : "");
             break;
         case 15: /* Printer status -- Has printer*/
             CHK_VT(2);
-            term_answerback(term, term->printerfd >= 0 ? CSI"?10n" : CSI"?13n");
+            nss_term_answerback(term, term->printerfd >= 0 ? CSI"?10n" : CSI"?13n");
             break;
         case 25: /* User defined keys lock */
             CHK_VT(2);
-            term_answerback(term, CSI"?%"PRIparam"n", 20 + !!(term->mode & nss_tm_udk_locked));
+            nss_term_answerback(term, CSI"?%"PRIparam"n", 20 + !!(term->mode & nss_tm_udk_locked));
             break;
         case 26: /* Keyboard language -- North American */
             CHK_VT(2);
-            term_answerback(term, CSI"?27;1%sn",
+            nss_term_answerback(term, CSI"?27;1%sn",
                     term->vt_level >= 4 ? ";0;0" : // ready, LK201
                     term->vt_level >= 3 ? ";0" : ""); // ready
             break;
         case 53: /* Report locator status */ //TODO DEC Locator
         case 55:
             CHK_VT(4);
-            term_answerback(term, CSI"?50n"); // no locator
+            nss_term_answerback(term, CSI"?50n"); // no locator
             break;
         case 56: /* Report locator type */ //TODO DEC Locator
             CHK_VT(4);
-            term_answerback(term, CSI"?57;0n"); // can't identify
+            nss_term_answerback(term, CSI"?57;0n"); // can't identify
             break;
         case 62: /* DECMSR, Macro space -- No data, no space for macros */
             CHK_VT(4);
-            term_answerback(term, CSI"0*{");
+            nss_term_answerback(term, CSI"0*{");
             break;
         case 63: /* DECCKSR, Memory checksum -- 0000 (hex) */
             CHK_VT(4);
-            term_answerback(term, DCS"%"PRIparam"!~0000"ST, PARAM(1, 0));
+            nss_term_answerback(term, DCS"%"PRIparam"!~0000"ST, PARAM(1, 0));
             break;
         case 75: /* Data integrity -- Ready, no errors */
             CHK_VT(4);
-            term_answerback(term, CSI"?70n");
+            nss_term_answerback(term, CSI"?70n");
             break;
         case 85: /* Multi-session configuration -- Not configured */
             CHK_VT(4);
-            term_answerback(term, CSI"?83n");
+            nss_term_answerback(term, CSI"?83n");
         }
     } else {
         switch (term->esc.param[0]) {
         case 5: /* Health report -- OK */
-            term_answerback(term, CSI"0n");
+            nss_term_answerback(term, CSI"0n");
             break;
         case 6: /* CPR -- CSI Py ; Px R */
-            term_answerback(term, CSI"%"PRIparam";%"PRIparam"R",
+            nss_term_answerback(term, CSI"%"PRIparam";%"PRIparam"R",
                     term->c.y - term_min_oy(term) + 1,
                     term->c.x - term_min_ox(term) + 1);
             break;
@@ -2317,59 +2231,59 @@ static void term_dispatch_dcs(nss_term_t *term) {
             case 'm': /* -> SGR */ {
                 char sgr[SGR_BUFSIZ];
                 term_encode_sgr(sgr, sgr + sizeof sgr, term->c.cel, term->c.fg, term->c.bg);
-                term_answerback(term, DCS"1$r%sm"ST, sgr);
+                nss_term_answerback(term, DCS"1$r%sm"ST, sgr);
                 break;
             }
             case 'r': /* -> DECSTBM */
-                term_answerback(term, DCS"1$r%"PRIparam";%"PRIparam"r"ST, term->top + 1, term->bottom + 1);
+                nss_term_answerback(term, DCS"1$r%"PRIparam";%"PRIparam"r"ST, term->top + 1, term->bottom + 1);
                 break;
             case 's': /* -> DECSLRM */
-                term_answerback(term, term->vt_level >= 4 ? DCS"1$r%"PRIparam";%"PRIparam"s"ST :
+                nss_term_answerback(term, term->vt_level >= 4 ? DCS"1$r%"PRIparam";%"PRIparam"s"ST :
                         DCS"0$r"ST, term->left + 1, term->right + 1);
                 break;
             case 't': /* -> DECSLPP */
                 // Can't report less than 24 lines
-                term_answerback(term, DCS"1$r%"PRIparam"t"ST, MAX(term->height, 24));
+                nss_term_answerback(term, DCS"1$r%"PRIparam"t"ST, MAX(term->height, 24));
                 break;
             case '|' << 8 | '$': /* -> DECSCPP */
                 // It should be either 80 or 132 despite actual column count
                 // New apps use ioctl(TIOGWINSZ, ...) instead
-                term_answerback(term, DCS"1$r%"PRIparam"$|"ST, term->mode & nss_tm_132cols ? 132 : 80);
+                nss_term_answerback(term, DCS"1$r%"PRIparam"$|"ST, term->mode & nss_tm_132cols ? 132 : 80);
                 break;
             case 'q' << 8 | '"': /* -> DECSCA */
-                term_answerback(term, DCS"1$r%"PRIparam"\"q"ST, term->mode & nss_tm_protected ? 2 :
+                nss_term_answerback(term, DCS"1$r%"PRIparam"\"q"ST, term->mode & nss_tm_protected ? 2 :
                         term->c.cel.attr & nss_attrib_protected ? 1 : 2);
                 break;
             case 'q' << 8 | ' ': /* -> DECSCUSR */
-                term_answerback(term, DCS"1$r%"PRIparam" q"ST, nss_window_get_cursor(term->win));
+                nss_term_answerback(term, DCS"1$r%"PRIparam" q"ST, nss_window_get_cursor(term->win));
                 break;
             case '|' << 8 | '*': /* -> DECSLNS */
-                term_answerback(term, DCS"1$r%"PRIparam"*|"ST, term->height);
+                nss_term_answerback(term, DCS"1$r%"PRIparam"*|"ST, term->height);
                 break;
             case 'x' << 8 | '*': /* -> DECSACE */
-                term_answerback(term, term->vt_level < 4 ? DCS"0$r"ST :
+                nss_term_answerback(term, term->vt_level < 4 ? DCS"0$r"ST :
                         DCS"1$r%"PRIparam"*x"ST, term->mode & nss_tm_attr_ext_rectangle ? 2 : 1);
                 break;
             case 'p' << 8 | '"': /* -> DECSCL */
-                term_answerback(term, DCS"1$r%"PRIparam"%s\"p"ST, 60 + MAX(term->vt_level, 1),
+                nss_term_answerback(term, DCS"1$r%"PRIparam"%s\"p"ST, 60 + MAX(term->vt_level, 1),
                         term->vt_level >= 2 ? (term->mode & nss_tm_8bit ? ";2" : ";1") : "");
             case 't' << 8 | ' ': /* -> DECSWBV */ {
                 nss_param_t val = 8;
                 if (term->bvol == nss_config_integer(NSS_ICONFIG_BELL_LOW_VOLUME)) val = 4;
                 else if (!term->bvol) val = 0;
-                term_answerback(term, DCS"1$r%"PRIparam" t"ST, val);
+                nss_term_answerback(term, DCS"1$r%"PRIparam" t"ST, val);
                 break;
             }
             case 'u' << 8 | ' ': /* -> DECSMBV */ {
                 nss_param_t val = 8;
                 if (term->mbvol == nss_config_integer(NSS_ICONFIG_MARGIN_BELL_LOW_VOLUME)) val = 4;
                 else if (!term->mbvol) val = 0;
-                term_answerback(term, DCS"1$r%"PRIparam" u"ST, val);
+                nss_term_answerback(term, DCS"1$r%"PRIparam" u"ST, val);
                 break;
             }
             default:
                 // Invalid request
-                term_answerback(term, DCS"0$r"ST);
+                nss_term_answerback(term, DCS"0$r"ST);
                 term_esc_dump(term, 0);
             }
         } else term_esc_dump(term, 0);
@@ -2434,7 +2348,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
             hex_encode(dend + 1, tmp, tmp + len);
             valid = 1;
         }
-        term_answerback(term, DCS"%"PRIparam"+r%s"ST, valid, dstr);
+        nss_term_answerback(term, DCS"%"PRIparam"+r%s"ST, valid, dstr);
         break;
     }
     //case C('p') | I0('+'): /* XTSETTCAP */ // TODO Termcap
@@ -2489,7 +2403,7 @@ static void term_colors_changed(nss_term_t *term, uint32_t sel, nss_color_t col)
             nss_window_set_colors(term->win, 0, col);
         break;
     case 17: case 19:
-        term_update_selection(term, nss_sstate_none, (nss_selected_t){0});
+        nss_mouse_damage_selection(term);
     }
 }
 
@@ -2500,7 +2414,7 @@ static void term_do_set_color(nss_term_t *term, uint32_t sel, uint8_t *dstr, uin
     if (!strcmp((char *)dstr, "?")) {
         col = term->palette[cid];
 
-        term_answerback(term, OSC"%"PRIparam";rgb:%04x/%04x/%04x"ST, sel,
+        nss_term_answerback(term, OSC"%"PRIparam";rgb:%04x/%04x/%04x"ST, sel,
                ((col >> 16) & 0xFF) * 0x101,
                ((col >>  8) & 0xFF) * 0x101,
                ((col >>  0) & 0xFF) * 0x101);
@@ -2586,7 +2500,7 @@ static void term_dispatch_osc(nss_term_t *term) {
 
             if (!errno && s_end == parg - 1 && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS + 5) {
                 if (parg[0] == '?' && parg[1] == '\0')
-                    term_answerback(term, OSC"%"PRIparam";%"PRIparam";rgb:%04x/%04x/%04x"ST,
+                    nss_term_answerback(term, OSC"%"PRIparam";%"PRIparam";rgb:%04x/%04x/%04x"ST,
                             term->esc.selector, idx - (term->esc.selector == 5) * NSS_SPECIAL_BOLD,
                             ((term->palette[idx] >> 16) & 0xFF) * 0x101,
                             ((term->palette[idx] >>  8) & 0xFF) * 0x101,
@@ -2682,7 +2596,7 @@ static void term_dispatch_osc(nss_term_t *term) {
                 if (base64_decode(parg, parg, dend) != dend) parg = NULL;
                 for (size_t i = 0; i < nss_ct_MAX; i++) {
                     if (ts[i]) {
-                        if (i == term->vsel.targ) term->vsel.targ = -1;
+                        if (i == term->loc.targ) term->loc.targ = -1;
                         nss_window_set_clip(term->win, parg ? (uint8_t *)strdup((char *)parg) : parg, NSS_TIME_NOW, i);
                     }
                 }
@@ -2754,7 +2668,7 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
                 SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
                 SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
                 SWAP(nss_color_t, term->palette[NSS_SPECIAL_SELECTED_BG], term->palette[NSS_SPECIAL_SELECTED_FG]);
-                term_update_selection(term, nss_sstate_none, (nss_selected_t){0});
+                nss_mouse_damage_selection(term);
                 nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
             }
             ENABLE_IF(set, term->mode, nss_tm_reverse_video);
@@ -2772,8 +2686,7 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             break;
         case 9: /* X10 Mouse tracking */
             nss_window_set_mouse(term->win, 0);
-            term->mode &= ~nss_tm_mouse_mask;
-            ENABLE_IF(set, term->mode, nss_tm_mouse_x10);
+            term->loc.mouse_mode = set ? nss_mouse_mode_x10 : nss_mouse_mode_none;
             break;
         case 10: /* Show toolbar */
             // IGNORE - There is no toolbar
@@ -2842,32 +2755,27 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             break;
         case 1000: /* X11 Mouse tracking */
             nss_window_set_mouse(term->win, 0);
-            term->mode &= ~nss_tm_mouse_mask;
-            ENABLE_IF(set, term->mode, nss_tm_mouse_button);
+            term->loc.mouse_mode = set ? nss_mouse_mode_button : nss_mouse_mode_none;
             break;
         case 1001: /* Highlight mouse tracking */
             // IGNORE
             break;
         case 1002: /* Cell motion mouse tracking on keydown */
             nss_window_set_mouse(term->win, 0);
-            term->mode &= ~nss_tm_mouse_mask;
-            ENABLE_IF(set, term->mode, nss_tm_mouse_motion);
+            term->loc.mouse_mode = set ? nss_mouse_mode_drag : nss_mouse_mode_none;
             break;
         case 1003: /* All motion mouse tracking */
             nss_window_set_mouse(term->win, set);
-            term->mode &= ~nss_tm_mouse_mask;
-            ENABLE_IF(set, term->mode, nss_tm_mouse_many);
+            term->loc.mouse_mode = set ? nss_mouse_mode_motion : nss_mouse_mode_none;
             break;
         case 1004: /* Focus in/out events */
             ENABLE_IF(set, term->mode, nss_tm_track_focus);
             break;
         case 1005: /* UTF-8 mouse format */
-            term->mode &= ~nss_tm_mouse_format_mask;
-            ENABLE_IF(set, term->mode, nss_tm_mouse_format_utf8);
+            term->loc.mouse_format = set ? nss_mouse_format_utf8 : nss_mouse_format_default;
             break;
         case 1006: /* SGR mouse format */
-            term->mode &= ~nss_tm_mouse_format_mask;
-            ENABLE_IF(set, term->mode, nss_tm_mouse_format_sgr);
+            term->loc.mouse_format = set ? nss_mouse_format_sgr : nss_mouse_format_default;
             break;
         case 1007: /* Alternate scroll */
             ENABLE_IF(set, term->mode, nss_tm_alternate_scroll);
@@ -2879,8 +2787,7 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             ENABLE_IF(!set, term->mode, nss_tm_dont_scroll_on_input);
             break;
         case 1015: /* Urxvt mouse format */
-            term->mode &= ~nss_tm_mouse_format_mask;
-            ENABLE_IF(set, term->mode, nss_tm_mouse_format_urxvt);
+            term->loc.mouse_format = set ? nss_mouse_format_uxvt : nss_mouse_format_default;
             break;
         case 1034: /* Interpret meta */
             term->inmode.has_meta = set;
@@ -2994,15 +2901,15 @@ _Bool nss_term_get_invert(nss_term_t *term) {
 
 
 static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t mode) {
-    nss_modbit_t val = nss_mv_unrecognized;
-#define MODBIT(x) (nss_mv_enabled + !(x))
+    nss_modbit_t val = nss_mb_unrecognized;
+#define MODBIT(x) (nss_mb_enabled + !(x))
     if (private) {
         switch(mode) {
         case 1: /* DECCKM */
             val = MODBIT(term->inmode.appcursor);
             break;
         case 2: /* DECANM */
-            val = nss_mv_disabled;
+            val = nss_mb_disabled;
             break;
         case 3: /* DECCOLM */
             val = MODBIT(term->mode & nss_tm_132cols);
@@ -3020,20 +2927,20 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
             val = MODBIT(term->mode & nss_tm_wrap);
             break;
         case 8: /* DECARM */
-            val = nss_mv_aways_disabled;
+            val = nss_mb_aways_disabled;
             break;
         case 9: /* X10 Mouse */
-            val = MODBIT(term->mode & nss_tm_mouse_x10);
+            val = MODBIT(term->loc.mouse_mode == nss_mouse_mode_x10);
             break;
         case 10: /* Show toolbar */
-            val = nss_mv_aways_disabled;
+            val = nss_mb_aways_disabled;
             break;
         case 12: /* Start blinking cursor */
             val = MODBIT(nss_window_get_cursor(term->win) & 1);
             break;
         case 13: /* Start blinking cursor (menu item) */
         case 14: /* Enable XORG of control sequence and menu for blinking */
-            val = nss_mv_aways_disabled;
+            val = nss_mb_aways_disabled;
             break;
         case 18: /* DECPFF */
             val = MODBIT(term->mode & nss_tm_print_form_feed);
@@ -3045,7 +2952,7 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
             val = MODBIT(!(term->mode & nss_tm_hide_cursor));
             break;
         case 30: /* Show scrollbar */
-            val = nss_mv_aways_disabled;
+            val = nss_mb_aways_disabled;
             break;
         case 35: /* URXVT Allow change font */
             val = MODBIT(term->mode & nss_tm_allow_change_font);
@@ -3078,31 +2985,31 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
             val = MODBIT(term->mode & nss_tm_lr_margins);
             break;
         case 80: /* DECSDM */ //TODO SIXEL
-            val = nss_mv_aways_disabled;
+            val = nss_mb_aways_disabled;
             break;
         case 95: /* DECNCSM */
             val = MODBIT(term->mode & nss_tm_132_preserve_display);
             break;
         case 1000: /* X11 Mouse tracking */
-            val = MODBIT(term->mode & nss_tm_mouse_button);
+            val = MODBIT(term->loc.mouse_mode == nss_mouse_mode_x10);
             break;
         case 1001: /* Highlight mouse tracking */
-            val = nss_mv_aways_disabled;
+            val = nss_mb_aways_disabled;
             break;
         case 1002: /* Cell motion tracking on keydown */
-            val = MODBIT(term->mode & nss_tm_mouse_motion);
+            val = MODBIT(term->loc.mouse_mode == nss_mouse_mode_drag);
             break;
         case 1003: /* All motion mouse tracking */
-            val = MODBIT(term->mode & nss_tm_mouse_many);
+            val = MODBIT(term->loc.mouse_mode == nss_mouse_mode_motion);
             break;
         case 1004: /* Focus in/out events */
             val = MODBIT(term->mode & nss_tm_track_focus);
             break;
         case 1005: /* UTF-8 mouse tracking */
-            val = MODBIT(term->mode & nss_tm_mouse_format_utf8);
+            val = MODBIT(term->loc.mouse_format == nss_mouse_format_utf8);
             break;
         case 1006: /* SGR Mouse tracking */
-            val = MODBIT(term->mode & nss_tm_mouse_format_sgr);
+            val = MODBIT(term->loc.mouse_format == nss_mouse_format_sgr);
             break;
         case 1007: /* Alternate scroll */
             val = MODBIT(term->mode & nss_tm_alternate_scroll);
@@ -3114,7 +3021,7 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
             val = MODBIT(!(term->mode & nss_tm_dont_scroll_on_input));
             break;
         case 1015: /* Urxvt mouse tracking */
-            val = MODBIT(term->mode & nss_tm_mouse_format_urxvt);
+            val = MODBIT(term->loc.mouse_format == nss_mouse_format_uxvt);
             break;
         case 1034: /* Interpret meta */
             val = MODBIT(term->inmode.has_meta);
@@ -3150,13 +3057,13 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
             val = MODBIT(term->mode & nss_tm_altscreen);
             break;
         case 1048: /* Save cursor */
-            val = nss_mv_aways_enabled;
+            val = nss_mb_aways_enabled;
             break;
         case 1049: /* Save cursor and switch to altscreen */
             val = MODBIT(term->mode & nss_tm_altscreen);
             break;
         case 1050: /* termcap function keys */
-            val = nss_mv_aways_disabled;
+            val = nss_mb_aways_disabled;
             break;
         case 1051: /* SUN function keys */
             val = MODBIT(term->inmode.keyboard_mapping == nss_km_sun);
@@ -3199,13 +3106,13 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
         case 17: /* SATM */
         case 18: /* TSM */
         case 19: /* EBM */
-            val = nss_mv_aways_disabled; /* always reset */
+            val = nss_mb_aways_disabled; /* always reset */
             break;
         case 2: /* KAM */
             val = MODBIT(term->inmode.keylock); /* reset/set */
             break;
         case 3: /* CRM */
-            val = nss_mv_disabled; /* reset */
+            val = nss_mb_disabled; /* reset */
             break;
         case 4: /* IRM */
             val = MODBIT(term->mode & nss_tm_insert); /* reset/set */
@@ -3327,8 +3234,8 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
     term_adjust_wide_right(term, term->c.x + width - 1, term->c.y);
 
     // Clear selection when selected cell is overwritten
-    if (nss_term_is_selected(term, term->c.x, term->c.y))
-        nss_term_clear_selection(term);
+    if (nss_mouse_is_selected(term, term->c.x, term->c.y))
+        nss_mouse_clear_selection(term);
 
     // Put character itself
     term_put_cell(term, term->c.x, term->c.y, ch);
@@ -3423,18 +3330,18 @@ static void term_dispatch_window_op(nss_term_t *term) {
         break;
     }
     case 11: /* Report state */
-        term_answerback(term, CSI"%"PRIparam"t", 1 + !nss_window_is_mapped(term->win));
+        nss_term_answerback(term, CSI"%"PRIparam"t", 1 + !nss_window_is_mapped(term->win));
         break;
     case 13: /* Report position opetations */
         switch(PARAM(1,0)) {
             int16_t x, y;
         case 0: /* Report window position */
             nss_window_get_dim_ext(term->win, nss_dt_window_position, &x, &y);
-            term_answerback(term, CSI"3;%"PRIparam";%"PRIparam"t", x, y);
+            nss_term_answerback(term, CSI"3;%"PRIparam";%"PRIparam"t", x, y);
             break;
         case 2: /* Report grid position */
             nss_window_get_dim_ext(term->win, nss_dt_grid_position, &x, &y);
-            term_answerback(term, CSI"3;%"PRIparam";%"PRIparam"t", x, y);
+            nss_term_answerback(term, CSI"3;%"PRIparam";%"PRIparam"t", x, y);
             break;
         default:
             term_esc_dump(term, 0);
@@ -3445,11 +3352,11 @@ static void term_dispatch_window_op(nss_term_t *term) {
             int16_t x, y;
         case 0: /* Report grid size */
             nss_window_get_dim_ext(term->win, nss_dt_grid_size, &x, &y);
-            term_answerback(term, CSI"4;%"PRIparam";%"PRIparam"t", y, x);
+            nss_term_answerback(term, CSI"4;%"PRIparam";%"PRIparam"t", y, x);
             break;
         case 2: /* Report window size */
             nss_window_get_dim(term->win, &x, &y);
-            term_answerback(term, CSI"4;%"PRIparam";%"PRIparam"t", y, x);
+            nss_term_answerback(term, CSI"4;%"PRIparam";%"PRIparam"t", y, x);
             break;
         default:
             term_esc_dump(term, 0);
@@ -3458,24 +3365,24 @@ static void term_dispatch_window_op(nss_term_t *term) {
     case 15: /* Report screen size */ {
         int16_t x, y;
         nss_window_get_dim_ext(term->win, nss_dt_screen_size, &x, &y);
-        term_answerback(term, CSI"5;%"PRIparam";%"PRIparam"t", y, x);
+        nss_term_answerback(term, CSI"5;%"PRIparam";%"PRIparam"t", y, x);
         break;
     }
     case 16: /* Report cell size */ {
         int16_t x, y;
         nss_window_get_dim_ext(term->win, nss_dt_cell_size, &x, &y);
-        term_answerback(term, CSI"6;%"PRIparam";%"PRIparam"t", y, x);
+        nss_term_answerback(term, CSI"6;%"PRIparam";%"PRIparam"t", y, x);
         break;
     }
     case 18: /* Report grid size (in cell units) */
-        term_answerback(term, CSI"8;%d;%dt", term->height, term->width);
+        nss_term_answerback(term, CSI"8;%d;%dt", term->height, term->width);
         break;
     case 19: /* Report screen size (in cell units) */ {
         int16_t s_w, s_h, c_w, c_h, b_w, b_h;
         nss_window_get_dim_ext(term->win, nss_dt_screen_size, &s_w, &s_h);
         nss_window_get_dim_ext(term->win, nss_dt_cell_size, &c_w, &c_h);
         nss_window_get_dim_ext(term->win, nss_dt_border, &b_w, &b_h);
-        term_answerback(term, CSI"9;%"PRIparam";%"PRIparam"t", (s_h - 2*b_h)/c_h, (s_w - 2*b_w)/c_w);
+        nss_term_answerback(term, CSI"9;%"PRIparam";%"PRIparam"t", (s_h - 2*b_h)/c_h, (s_w - 2*b_w)/c_w);
         break;
     }
     case 20: /* Report icon label */
@@ -3485,7 +3392,7 @@ static void term_dispatch_window_op(nss_term_t *term) {
         nss_window_get_title(term->win, pa == 20 ? nss_tt_icon_label : nss_tt_title, (char **)&tit, &tutf8);
         if (!tit) {
             warn("Can't get title");
-            term_answerback(term, OSC"%c"ST, pa == 20 ? 'L' : 'l');
+            nss_term_answerback(term, OSC"%c"ST, pa == 20 ? 'L' : 'l');
             break;
         }
         size_t tlen = strlen((const char *)tit);
@@ -3510,7 +3417,7 @@ static void term_dispatch_window_op(nss_term_t *term) {
                 title = res;
             }
         }
-        term_answerback(term, OSC"%c%s"ST, pa == 20 ? 'L' : 'l', title);
+        nss_term_answerback(term, OSC"%c%s"ST, pa == 20 ? 'L' : 'l', title);
         free(res);
         free(tit);
         free(res2);
@@ -3623,7 +3530,7 @@ static void term_report_cursor(nss_term_t *term) {
     if (nrcs_is_96(term->c.gn[2])) cg96 |= 4;
     if (nrcs_is_96(term->c.gn[3])) cg96 |= 8;
 
-    term_answerback(term, DCS"1$u%"PRIparam";%"PRIparam";1;%s;%c;%c;%d;%d;%c;%s%s%s%s"ST,
+    nss_term_answerback(term, DCS"1$u%"PRIparam";%"PRIparam";1;%s;%c;%c;%d;%d;%c;%s%s%s%s"ST,
         /* line */ term->c.y + 1,
         /* column */ term->c.x + 1,
         /* attributes */ csgr,
@@ -3658,7 +3565,7 @@ static void term_report_tabs(nss_term_t *term) {
     }
 
     if (!tabs) tabs = "";
-    term_answerback(term, DCS"2$u%s"ST, tabs);
+    nss_term_answerback(term, DCS"2$u%s"ST, tabs);
 }
 
 // Utility functions for XTSAVE/XTRESTORE
@@ -3967,7 +3874,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('x'): /* DECREQTPARAM */
         if (term->vt_version < 200) {
             nss_param_t p = PARAM(0, 0);
-            if (p < 2) term_answerback(term, CSI"%"PRIparam";1;1;128;128;1;0x", p + 2);
+            if (p < 2) nss_term_answerback(term, CSI"%"PRIparam";1;1;128;128;1;0x", p + 2);
         }
         break;
     case C('q') | I0(' '): /* DECSCUSR */ {
@@ -4009,11 +3916,11 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('p') | I0('$'): /* RQM -> RPM */
         CHK_VT(3);
-        term_answerback(term, CSI"%"PRIparam";%"PRIparam"$y", PARAM(0, 0), term_get_mode(term, 0, PARAM(0, 0)));
+        nss_term_answerback(term, CSI"%"PRIparam";%"PRIparam"$y", PARAM(0, 0), term_get_mode(term, 0, PARAM(0, 0)));
         break;
     case C('p') | P('?') | I0('$'): /* DECRQM -> DECRPM */
         CHK_VT(3);
-        term_answerback(term, CSI"?%"PRIparam";%"PRIparam"$y", PARAM(0, 0), term_get_mode(term, 1, PARAM(0, 0)));
+        nss_term_answerback(term, CSI"?%"PRIparam";%"PRIparam"$y", PARAM(0, 0), term_get_mode(term, 1, PARAM(0, 0)));
         break;
     case C('r') | I0('$'): /* DECCARA */
         CHK_VT(4);
@@ -4078,11 +3985,10 @@ static void term_dispatch_csi(nss_term_t *term) {
                 term_min_ox(term) + PARAM(5, term_max_ox(term) - term_min_ox(term)),
                 term_min_oy(term) + PARAM(4, term_max_oy(term) - term_min_oy(term)));
         // DECRPCRA
-        term_answerback(term, DCS"%"PRIparam"!~%04X"ST, PARAM(0, 0), sum);
+        nss_term_answerback(term, DCS"%"PRIparam"!~%04X"ST, PARAM(0, 0), sum);
         break;
     case C('y') | I0('#'): /* XTCHECKSUM */
-        term->mode &= ~nss_tm_cksm_mask;
-        term->mode |= (PARAM(0, 0) & CKSM_MASK) << CKSM_OFFSET;
+        term->checksum_mode = PARAM(0, 0);
         break;
     case C('}') | I0('\''): /* DECIC */
         CHK_VT(4);
@@ -4120,16 +4026,14 @@ static void term_dispatch_csi(nss_term_t *term) {
         for (size_t i = 0; i < term->esc.i; i++) {
             nss_param_t mode = PARAM(i, 0);
             nss_modbit_t val = term_get_mode(term, 1, mode);
-            if (val == nss_mv_enabled || val == nss_mv_disabled) {
+            if (val == nss_mb_enabled || val == nss_mb_disabled) {
                 switch(mode) {
                 case 1005: case 1006: case 1015:
-                    term->saved_mouse_mask &= ~MFORMAT_MASK;
-                    term->saved_mouse_mask |= ((term->mode >> MFORMAT_OFFSET) & MFORMAT_MASK);
+                    term->saved_mouse_format = term->loc.mouse_format;
                     break;
                 case 9: case 1000: case 1001:
                 case 1002: case 1003:
-                    term->saved_mouse_mask &= ~MOUSE_MASK;
-                    term->saved_mouse_mask |= (term->mode >> MOUSE_OFFSET) & MOUSE_MASK;
+                    term->saved_mouse_mode = term->loc.mouse_mode;
                     break;
                 case 1050: case 1051: case 1052:
                 case 1053: case 1060: case 1061:
@@ -4141,7 +4045,7 @@ static void term_dispatch_csi(nss_term_t *term) {
                 case 1047: case 1049:
                     mode = 47;
                 default:
-                    store_mode(term->saved_modbits, mode, val == nss_mv_enabled);
+                    store_mode(term->saved_modbits, mode, val == nss_mb_enabled);
                 }
             }
         }
@@ -4151,14 +4055,12 @@ static void term_dispatch_csi(nss_term_t *term) {
             nss_param_t mode = PARAM(i, 0);
             switch(mode) {
             case 1005: case 1006: case 1015:
-                term->mode &= ~nss_tm_mouse_format_mask;
-                term->mode |= (term->saved_mouse_mask & MFORMAT_MASK) << MFORMAT_OFFSET;
+                term->loc.mouse_format = term->saved_mouse_format;
                 break;
             case 9: case 1000: case 1001:
             case 1002: case 1003:
-                term->mode &= ~nss_tm_mouse_mask;
-                term->mode |= (term->saved_mouse_mask & MOUSE_MASK) << MOUSE_OFFSET;
-                nss_window_set_mouse(term->win, term->mode & nss_tm_mouse_many);
+                term->loc.mouse_mode = term->saved_mouse_mode;
+                nss_window_set_mouse(term->win, term->loc.mouse_mode == nss_mouse_mode_motion);
                 break;
             case 1050: case 1051: case 1052:
             case 1053: case 1060: case 1061:
@@ -4175,7 +4077,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         }
         break;
     case C('u') | I0('&'): /* DECRQUPSS */
-        term_answerback(term, DCS"%"PRIparam"!u%s"ST, term->c.ups > nss_96cs_latin_1, unparse_nrcs(term->c.ups));
+        nss_term_answerback(term, DCS"%"PRIparam"!u%s"ST, term->c.ups > nss_96cs_latin_1, unparse_nrcs(term->c.ups));
         break;
     case C('t') | I0(' '): /* DECSWBV */
         switch (PARAM(0, 1)) {
@@ -4360,7 +4262,7 @@ static void term_dispatch_esc(nss_term_t *term) {
     //    break;
     case E('8') | I0('#'): /* DECALN*/
         term_reset_margins(term);
-        nss_term_clear_selection(term);
+        nss_mouse_clear_selection(term);
         term->c.x = term->c.y = 0;
         for (nss_coord_t i = 0; i < term->height; i++)
             for (nss_coord_t j = 0; j < term->width; j++)
@@ -4415,7 +4317,7 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
     case 0x04: /* EOT (IGNORE) */
         break;
     case 0x05: /* ENQ */
-        term_answerback(term, "%s", nss_config_string(NSS_SCONFIG_ANSWERBACK_STRING));
+        nss_term_answerback(term, "%s", nss_config_string(NSS_SCONFIG_ANSWERBACK_STRING));
         break;
     case 0x06: /* ACK (IGNORE) */
         break;
@@ -4463,8 +4365,8 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
     case 0x1a: /* SUB */
         term_move_to(term, term->c.x, term->c.y);
         // Clear selection when selected cell is overwritten
-        if (nss_term_is_selected(term, term->c.x, term->c.y))
-            nss_term_clear_selection(term);
+        if (nss_mouse_is_selected(term, term->c.x, term->c.y))
+            nss_mouse_clear_selection(term);
         term_put_cell(term, term->c.x, term->c.y, '?');
     case 0x18: /* CAN */
         term_esc_finish_string(term);
@@ -4558,7 +4460,7 @@ static void term_dispatch_vt52(nss_term_t *term, nss_char_t ch) {
         term->esc.state = esc_vt52_cup_0;
         return;
     case 'Z':
-        term_answerback(term, ESC"/Z");
+        nss_term_answerback(term, ESC"/Z");
         break;
     case ']': /* Print screen */
         term_print_screen(term, term->mode & nss_tm_print_extend);
@@ -4892,7 +4794,7 @@ static size_t term_encode_c1(nss_term_t *term, const uint8_t *in, uint8_t *out) 
     return fmtp - out;
 }
 
-static void term_answerback(nss_term_t *term, const char *str, ...) {
+void nss_term_answerback(nss_term_t *term, const char *str, ...) {
     static uint8_t fmt[MAX_REPORT], csi[MAX_REPORT];
     va_list vl;
     va_start(vl, str);
@@ -4973,7 +4875,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
             nss_coord_t old_top = term->top;
             term->top = 0;
             term->mode &= ~nss_tm_lr_margins;
-            term_scroll_selection(term, delta, 1);
+            nss_mouse_scroll_selection(term, delta, 1);
             term->top = old_top;
             ENABLE_IF(tmp, term->mode, nss_tm_lr_margins);
         }
@@ -5049,8 +4951,8 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
     // Damage screen
 
     if (!(term->mode & nss_tm_altscreen)) {
-        if (dy > 0) term_damage(term, (nss_rect_t) { 0, minh, minw, dy });
-        if (dx > 0) term_damage(term, (nss_rect_t) { minw, 0, dx, height });
+        if (dy > 0) nss_term_damage(term, (nss_rect_t) { 0, minh, minw, dy });
+        if (dx > 0) nss_term_damage(term, (nss_rect_t) { minw, 0, dx, height });
     }
 }
 
@@ -5062,10 +4964,10 @@ void nss_term_paste_begin(nss_term_t *term) {
     /* If paste_from is not 0 application have requested
      * OSC 52 selection contents reply */
     if (term->paste_from)
-        term_answerback(term, OSC"52;%c;", term->paste_from);
+        nss_term_answerback(term, OSC"52;%c;", term->paste_from);
     /* Otherwize it's just paste (bracketed or not) */
     else if (term->mode & nss_tm_bracketed_paste)
-        term_answerback(term, CSI"200~");
+        nss_term_answerback(term, CSI"200~");
 }
 
 void nss_term_paste_end(nss_term_t *term) {
@@ -5084,450 +4986,29 @@ void nss_term_paste_end(nss_term_t *term) {
      * rather rare to deal with
      */
     if (term->paste_from) {
-        term_answerback(term, ST);
+        nss_term_answerback(term, ST);
         term->paste_from = 0;
     } else if (term->mode & nss_tm_bracketed_paste)
-        term_answerback(term, CSI"201~");
+        nss_term_answerback(term, CSI"201~");
 }
 
 _Bool nss_term_keep_clipboard(nss_term_t *term) {
     return term->mode & nss_tm_keep_clipboard;
 }
 
+_Bool nss_term_keep_selection(nss_term_t *term) {
+    return term->mode & nss_tm_keep_selection;
+}
+
+_Bool nss_term_select_to_clipboard(nss_term_t *term) {
+    return term->mode & nss_tm_select_to_clipboard;
+}
+
 void nss_term_focus(nss_term_t *term, _Bool focused) {
     ENABLE_IF(focused, term->mode, nss_tm_focused);
     if (term->mode & nss_tm_track_focus)
-        term_answerback(term, focused ? CSI"I" : CSI"O");
+        nss_term_answerback(term, focused ? CSI"I" : CSI"O");
     term->screen[term->c.y]->cell[term->c.x].attr &= ~nss_attrib_drawn;
-}
-
-inline static size_t descomose_selection(nss_rect_t dst[static 3], nss_selected_t seld, nss_rect_t bound, ssize_t pos) {
-    size_t count = 0;
-    nss_coord_t x0 = seld.x0, x1 = seld.x1 + 1;
-    ssize_t y0 = seld.y0 + pos, y1 = seld.y1 + 1 + pos;
-    if (seld.rect || y1 - y0 == 1) {
-        nss_rect_t r0 = {x0, y0, x1 - x0, y1 - y0};
-        if (intersect_with(&r0, &bound))
-            dst[count++] = r0;
-    } else {
-        nss_rect_t r0 = {x0, y0, bound.width - x0, 1};
-        nss_rect_t r1 = {0, y0 + 1, bound.width, y1 - y0 - 1};
-        nss_rect_t r2 = {0, y1 - 1, x1, 1};
-        if (intersect_with(&r0, &bound))
-            dst[count++] = r0;
-        if (y1 - y0 > 2 && intersect_with(&r1, &bound))
-            dst[count++] = r1;
-        if (intersect_with(&r2, &bound))
-            dst[count++] = r2;
-    }
-    return count;
-}
-
-inline static size_t xor_bands(nss_rect_t dst[static 2], nss_coord_t x00, nss_coord_t x01, nss_coord_t x10, nss_coord_t x11, nss_coord_t y0, nss_coord_t y1) {
-    nss_coord_t x0_min = MIN(x00, x10), x0_max = MAX(x00, x10);
-    nss_coord_t x1_min = MIN(x01, x11), x1_max = MAX(x01, x11);
-    size_t count = 0;
-    if (x0_max >= x1_min - 1) {
-        dst[count++] = (nss_rect_t) {x0_min, y0, x1_min - x0_min, y1 - y0};
-        dst[count++] = (nss_rect_t) {x0_max, y0, x1_max - x0_max, y1 - y0};
-    } else {
-        if (x0_min != x0_max) dst[count++] = (nss_rect_t) {x0_min, y0, x0_max - x0_min + 1, y1 - y0};
-        if (x1_min != x1_max) dst[count++] = (nss_rect_t) {x1_min - 1, y0, x1_max - x1_min + 1, y1 - y0};
-    }
-    return count;
-}
-
-static void term_update_selection(nss_term_t *term, uint8_t oldstate, nss_selected_t old) {
-    // There could be at most 6 difference rectangles
-
-    nss_rect_t d_old[4] = {{0}}, d_new[4] = {{0}}, d_diff[16] = {{0}};
-    size_t sz_old = 0, sz_new = 0, count = 0;
-    nss_rect_t *res = d_diff, bound = {0, 0, term->width, term->height};
-
-    if (oldstate != nss_sstate_none && oldstate != nss_sstate_pressed)
-        sz_old = descomose_selection(d_old, old, bound, term->view);
-    if (term->vsel.state != nss_sstate_none && term->vsel.state != nss_sstate_pressed)
-        sz_new = descomose_selection(d_new, term->vsel.n, bound, term->view);
-
-    if (!sz_old) res = d_new, count = sz_new;
-    else if (!sz_new) res = d_old, count = sz_old;
-    else {
-        // Insert dummy rectangles to simplify code
-        nss_coord_t max_yo = d_old[sz_old - 1].y + d_old[sz_old - 1].height;
-        nss_coord_t max_yn = d_new[sz_new - 1].y + d_new[sz_new - 1].height;
-        d_old[sz_old] = (nss_rect_t) {0, max_yo, 0, 0};
-        d_new[sz_new] = (nss_rect_t) {0, max_yn, 0, 0};
-
-        // Calculate y positions of bands
-        nss_coord_t ys[8];
-        size_t yp = 0;
-        for (size_t i_old = 0, i_new = 0; i_old <= sz_old || i_new <= sz_new; ) {
-            if (i_old > sz_old) ys[yp++] = d_new[i_new++].y;
-            else if (i_new > sz_new) ys[yp++] = d_old[i_old++].y;
-            else {
-                ys[yp++] = MIN(d_new[i_new].y, d_old[i_old].y);
-                i_old += ys[yp - 1] == d_old[i_old].y;
-                i_new += ys[yp - 1] == d_new[i_new].y;
-            }
-        }
-
-        nss_rect_t *ito = d_old, *itn = d_new;
-        nss_coord_t x00 = 0, x01 = 0, x10 = 0, x11 = 0;
-        for (size_t i = 0; i < yp - 1; i++) {
-            if (ys[i] >= max_yo) x00 = x01 = 0;
-            else if (ys[i] == ito->y) x00 = ito->x, x01 = ito->x + ito->width, ito++;
-            if (ys[i] >= max_yn) x10 = x11 = 0;
-            else if (ys[i] == itn->y) x10 = itn->x, x11 = itn->x + itn->width, itn++;
-            count += xor_bands(d_diff + count, x00, x01, x10, x11, ys[i], ys[i + 1]);
-        }
-    }
-
-    for (size_t i = 0; i < count; i++)
-        term_damage(term, res[i]);
-}
-
-void nss_term_clear_selection(nss_term_t *term) {
-    nss_selected_t old = term->vsel.n;
-    uint8_t oldstate = term->vsel.state;
-
-    term->vsel.state = nss_sstate_none;
-
-    term_update_selection(term, oldstate, old);
-
-    if (term->vsel.targ != -1U) {
-        if (term->mode & nss_tm_keep_selection) return;
-
-        nss_window_set_clip(term->win, NULL, NSS_TIME_NOW, term->vsel.targ);
-        term->vsel.targ = -1;
-    }
-}
-
-static void term_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save) {
-    if (term->vsel.state == nss_sstate_none) return;
-
-    ssize_t x0, x1, y0 = term->vsel.n.y0, y1 = term->vsel.n.y1;
-    if (y1 == y0 || term->vsel.n.rect)
-        x1 = term->vsel.n.x1, x0 = term->vsel.n.x0;
-    else
-        x1 = term->width - 1, x0 = 0;
-    ssize_t top = save ? -term->sb_limit : term->top;
-
-    save &= amount >= 0;
-    _Bool yins = top <= y0 && y1 < term_max_y(term);
-    _Bool youts = top > y1 || y0 >= term_max_y(term);
-    _Bool xins = term_min_x(term) <= x0 && x1 < term_max_x(term);
-    _Bool xouts = term_min_x(term) > x1 || x0 >= term_max_x(term);
-    _Bool damaged = term_min_y(term) && save && term_min_y(term) < y1 && y0 - amount < 0;
-
-    // Clear sellection if it is going to be split by scroll
-    if ((!xins && !xouts) || (!yins && !youts) || (xins && yins && damaged)) nss_term_clear_selection(term);
-    else if (xins && yins) {
-        // Scroll and cut off scroll off lines
-        term->vsel.r.y0 -= amount;
-        term->vsel.n.y0 -= amount;
-        term->vsel.r.y1 -= amount;
-        term->vsel.n.y1 -= amount;
-
-        _Bool swapped = term->vsel.r.y0 > term->vsel.r.y1;
-        if (swapped) {
-            SWAP(ssize_t, term->vsel.r.y0, term->vsel.r.y1);
-            SWAP(ssize_t, term->vsel.r.x0, term->vsel.r.x1);
-        }
-
-        if (term->vsel.n.y0 < top) {
-            term->vsel.r.y0 = top;
-            term->vsel.n.y0 = top;
-            if (!term->vsel.r.rect) {
-                term->vsel.r.x0 = 0;
-                term->vsel.n.x0 = 0;
-            }
-        }
-
-        ssize_t bottom = term->bottom;
-        if (term->vsel.n.y1 > bottom) {
-            term->vsel.r.y1 = bottom;
-            term->vsel.n.y1 = bottom;
-            if (!term->vsel.r.rect) {
-                term->vsel.r.x1 = term->screen[bottom]->width - 1;
-                term->vsel.n.x1 = term->screen[bottom]->width - 1;
-            }
-        }
-
-
-        if (swapped) {
-            SWAP(ssize_t, term->vsel.r.y0, term->vsel.r.y1);
-            SWAP(ssize_t, term->vsel.r.x0, term->vsel.r.x1);
-        }
-
-        if (term->vsel.n.y0 > term->vsel.n.y1)
-            nss_term_clear_selection(term);
-    }
- }
-
-inline static _Bool is_separator(nss_char_t ch) {
-        if (!ch) return 1;
-        uint8_t cbuf[UTF8_MAX_LEN + 1];
-        cbuf[utf8_encode(ch, cbuf, cbuf + UTF8_MAX_LEN)] = '\0';
-        return strstr(nss_config_string(NSS_SCONFIG_WORD_SEPARATORS), (char *)cbuf);
-}
-
-static void term_snap_selection(nss_term_t *term) {
-    term->vsel.n.x0 = term->vsel.r.x0, term->vsel.n.y0 = term->vsel.r.y0;
-    term->vsel.n.x1 = term->vsel.r.x1, term->vsel.n.y1 = term->vsel.r.y1;
-    term->vsel.r.rect = term->vsel.n.rect;
-    if (term->vsel.n.y1 <= term->vsel.n.y0) {
-        if (term->vsel.n.y1 < term->vsel.n.y0) {
-            SWAP(nss_coord_t, term->vsel.n.y0, term->vsel.n.y1);
-            SWAP(nss_coord_t, term->vsel.n.x0, term->vsel.n.x1);
-        } else if (term->vsel.n.x1 < term->vsel.n.x0) {
-            SWAP(nss_coord_t, term->vsel.n.x0, term->vsel.n.x1);
-        }
-    }
-    if (term->vsel.n.rect && term->vsel.n.x1 < term->vsel.n.x0)
-            SWAP(nss_coord_t, term->vsel.n.x0, term->vsel.n.x1);
-
-    if (term->vsel.snap != nss_ssnap_none && term->vsel.state == nss_sstate_pressed)
-        term->vsel.state = nss_sstate_progress;
-
-    if (term->vsel.snap == nss_ssnap_line) {
-        nss_line_iter_t it = make_screen_iter(term, -term->sb_limit, term->vsel.n.y0 + 1);
-        line_iter_inc(&it, term->vsel.n.y0 + term->sb_limit);
-        term->vsel.n.x0 = 0;
-        term->vsel.n.x1 = term->width - 1;
-
-        nss_line_t *line;
-        term->vsel.n.y0++;
-        do line = line_iter_prev(&it), term->vsel.n.y0--;
-        while (line && line->wrap_at);
-
-        it = make_screen_iter(term, term->vsel.n.y1, term->height);
-        line = line_iter_next(&it);
-        if (!line) return;
-
-        while (line && line->wrap_at)
-            line = line_iter_next(&it), term->vsel.n.y1++;
-
-    } else if (term->vsel.snap == nss_ssnap_word) {
-        nss_line_iter_t it = make_screen_iter(term, -term->sb_limit, term->vsel.n.y0 + 1);
-        line_iter_inc(&it, term->vsel.n.y0 + term->sb_limit);
-        nss_line_t *line = line_iter_ref(&it);
-
-        if (!line) return;
-
-        term->vsel.n.x0 = MIN(term->vsel.n.x0, line->width - 1);
-        _Bool first = 1, cat = is_separator(line->cell[term->vsel.n.x0].ch);
-        if (term->vsel.n.x0 >= 0) do {
-            if (!first) {
-                term->vsel.n.x0 = line->wrap_at;
-                term->vsel.n.y0--;
-            } else first = 0;
-            while (term->vsel.n.x0 > 0 &&
-                    cat == is_separator(line->cell[term->vsel.n.x0 - 1].ch)) term->vsel.n.x0--;
-            if (cat != is_separator(line->cell[0].ch)) break;
-        } while ((line = line_iter_prev(&it)) && line->wrap_at);
-
-        it = make_screen_iter(term, term->vsel.n.y1, term->height);
-        line = line_iter_next(&it);
-
-        if (!line) return;
-
-        term->vsel.n.x1 = MAX(term->vsel.n.x1, 0);
-        first = 1, cat = is_separator(line->cell[term->vsel.n.x1].ch);
-        ssize_t line_len = line->wrap_at ? line->wrap_at : line->width;
-        if (term->vsel.n.x1 < line->width) do {
-            if (!first) {
-                if (cat != is_separator(line->cell[0].ch)) break;
-                term->vsel.n.x1 = 0;
-                term->vsel.n.y1++;
-                line_len = line->wrap_at ? line->wrap_at : line->width;
-            } else first = 0;
-            while (term->vsel.n.x1 < line_len - 1 &&
-                    cat == is_separator(line->cell[term->vsel.n.x1 + 1].ch)) term->vsel.n.x1++;
-            if (cat != is_separator(line->cell[line_len - 1].ch)) break;
-        } while (line->wrap_at && (line = line_iter_next(&it)));
-    }
-
-    // Snap selection on wide characters
-    term->vsel.n.x1 += !!(term_line_at(term, term->vsel.n.y1)->cell[term->vsel.n.x1].attr & nss_attrib_wide);
-    if (term->vsel.n.x0 > 0)
-        term->vsel.n.x0 -= !!(term_line_at(term, term->vsel.n.y0)->cell[term->vsel.n.x0 - 1].attr & nss_attrib_wide);
-}
-
-_Bool nss_term_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
-    if (term->vsel.state == nss_sstate_none || term->vsel.state == nss_sstate_pressed) return 0;
-
-    y -= term->view;
-
-    if (term->vsel.n.rect) {
-        return (term->vsel.n.x0 <= x && x <= term->vsel.n.x1) &&
-                (term->vsel.n.y0 <= y && y <= term->vsel.n.y1);
-    } else {
-        return (term->vsel.n.y0 <= y && y <= term->vsel.n.y1) &&
-                !(term->vsel.n.y0 == y && x < term->vsel.n.x0) &&
-                !(term->vsel.n.y1 == y && x > term->vsel.n.x1);
-    }
-}
-
-inline static _Bool sel_adjust_buf(size_t *pos, size_t *cap, uint8_t **res) {
-    if (*pos + UTF8_MAX_LEN + 2 >= *cap) {
-        size_t new_cap = *cap * 3 / 2;
-        uint8_t *tmp = realloc(*res, new_cap);
-        if (!tmp) return 0;
-        *cap = new_cap;
-        *res = tmp;
-    }
-    return 1;
-}
-
-static void append_line(size_t *pos, size_t *cap, uint8_t **res, nss_line_t *line, nss_coord_t x0, nss_coord_t x1) {
-    nss_coord_t max_x = MIN(x1, line_length(line));
-
-    for (nss_coord_t j = x0; j < max_x; j++) {
-        uint8_t buf[UTF8_MAX_LEN];
-        if (line->cell[j].ch) {
-            size_t len = utf8_encode(line->cell[j].ch, buf, buf + UTF8_MAX_LEN);
-            // 2 is space for '\n' and '\0'
-            if (!sel_adjust_buf(pos, cap, res)) return;
-            memcpy(*res + *pos, buf, len);
-            *pos += len;
-        }
-    }
-    if (max_x != line->wrap_at) {
-        if (!sel_adjust_buf(pos, cap, res)) return;
-        (*res)[(*pos)++] = '\n';
-    }
-}
-
-static uint8_t *term_selection_data(nss_term_t *term) {
-    if (term->vsel.state == nss_sstate_released) {
-        uint8_t *res = malloc(SEL_INIT_SIZE * sizeof(*res));
-        if (!res) return NULL;
-        size_t pos = 0, cap = SEL_INIT_SIZE;
-
-        nss_line_t *line;
-        nss_line_iter_t it = make_screen_iter(term, term->vsel.n.y0, term->vsel.n.y1 + 1);
-        if (term->vsel.n.rect || term->vsel.n.y0 == term->vsel.n.y1) {
-            while ((line = line_iter_next(&it)))
-                append_line(&pos, &cap, &res, line, term->vsel.n.x0, term->vsel.n.x1 + 1);
-        } else {
-            while ((line = line_iter_next(&it))) {
-                if (!line_iter_y(&it))
-                    append_line(&pos, &cap, &res, line, term->vsel.n.x0, line->width);
-                else if (line_iter_y(&it) == term->vsel.n.y1 - term->vsel.n.y0)
-                    append_line(&pos, &cap, &res, line, 0, term->vsel.n.x1 + 1);
-                else
-                    append_line(&pos, &cap, &res, line, 0, line->width);
-            }
-        }
-        res[pos -= !!pos] = '\0';
-        return res;
-    } else return NULL;
-}
-
-static void term_change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss_color_t y, _Bool rectangular) {
-    nss_selected_t old = term->vsel.n;
-    uint8_t oldstate = term->vsel.state;
-
-    if (state == nss_sstate_pressed) {
-        term->vsel.r.x0 = x;
-        term->vsel.r.y0 = y - term->view;
-
-        struct timespec now;
-        clock_gettime(NSS_CLOCK, &now);
-
-        if (TIMEDIFF(term->vsel.click1, now) < nss_config_integer(NSS_ICONFIG_TRIPLE_CLICK_TIME)*(SEC/1000))
-            term->vsel.snap = nss_ssnap_line;
-        else if (TIMEDIFF(term->vsel.click0, now) < nss_config_integer(NSS_ICONFIG_DOUBLE_CLICK_TIME)*(SEC/1000))
-            term->vsel.snap = nss_ssnap_word;
-        else
-            term->vsel.snap = nss_ssnap_none;
-
-        term->vsel.click1 = term->vsel.click0;
-        term->vsel.click0 = now;
-    }
-
-    term->vsel.state = state;
-    term->vsel.r.rect = rectangular;
-    term->vsel.r.x1 = x;
-    term->vsel.r.y1 = y - term->view;
-
-    term_snap_selection(term);
-    term_update_selection(term, oldstate, old);
-}
-
-void nss_term_mouse(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_mouse_state_t mask, nss_mouse_event_t event, uint8_t button) {
-    x = MIN(MAX(0, x), term->width - 1);
-    y = MIN(MAX(0, y), term->height - 1);
-
-    /* Report mouse */
-    if (term->mode & nss_tm_mouse_mask && (mask & 0xFF) != nss_input_force_mouse_mask()) {
-        if (term->mode & nss_tm_mouse_x10 && button > 2) return;
-        if (!(term->mode & nss_tm_mouse_mask)) return;
-
-        if (event == nss_me_motion) {
-            if (!(term->mode & (nss_tm_mouse_many | nss_tm_mouse_motion))) return;
-            if (term->mode & nss_tm_mouse_button && term->prev_mouse_button == 3) return;
-            if (x == term->prev_mouse_x && y == term->prev_mouse_y) return;
-            button = term->prev_mouse_button + 32;
-        } else {
-            if (button > 6) button += 128 - 7;
-            else if (button > 2) button += 64 - 3;
-            if (event == nss_me_release) {
-                if (term->mode & nss_tm_mouse_x10) return;
-                /* Don't report wheel relese events */
-                if (button == 64 || button == 65) return;
-                if (!(term->mode & nss_tm_mouse_format_sgr)) button = 3;
-            }
-            term->prev_mouse_button = button;
-        }
-
-        if (!(term->mode & nss_tm_mouse_x10)) {
-            if (mask & nss_ms_shift) button |= 4;
-            if (mask & nss_ms_mod_1) button |= 8;
-            if (mask & nss_ms_control) button |= 16;
-        }
-
-        if (term->mode & nss_tm_mouse_format_sgr) {
-            term_answerback(term, CSI"<%"PRIu8";%"PRIu16";%"PRIu16"%c",
-                    button, x + 1, y + 1, event == nss_me_release ? 'm' : 'M');
-        } else if (term->mode & nss_tm_mouse_format_urxvt) {
-            term_answerback(term, CSI"%"PRIu8";%"PRIu16";%"PRIu16"M", button + ' ', x + 1, y + 1);
-        } else if (term->mode & nss_tm_mouse_format_utf8) {
-            size_t off = 0;
-            uint8_t buf[UTF8_MAX_LEN * 3 + 3];
-            off += utf8_encode(button + ' ', buf + off, buf + sizeof buf);
-            off += utf8_encode(x + ' ', buf + off, buf + sizeof buf);
-            off += utf8_encode(y + ' ', buf + off, buf + sizeof buf);
-            term_answerback(term, CSI"%s%s",
-                    term->inmode.keyboard_mapping == nss_km_sco ? ">M" : "M", buf);
-        } else if (x < 223 || y < 223) {
-            term_answerback(term, CSI"%s%c%c%c",
-                    term->inmode.keyboard_mapping == nss_km_sco ? ">M" : "M",
-                    button + ' ', x + 1 + ' ', y + 1 + ' ');
-        } else return;
-
-        term->prev_mouse_x = x;
-        term->prev_mouse_y = y;
-    /* Scroll view */
-    } else if (event == nss_me_press && (button == 3 || button == 4)) {
-        nss_term_scroll_view(term, (2 *(button == 3) - 1) * nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));
-    /* Select */
-    } else if ((event == nss_me_press && button == 0) ||
-               (event == nss_me_motion && mask & nss_ms_button_1 &&
-                    (term->vsel.state == nss_sstate_progress || term->vsel.state == nss_sstate_pressed)) ||
-               (event == nss_me_release && button == 0 &&
-                    (term->vsel.state == nss_sstate_progress))) {
-
-        term_change_selection(term, event + 1, x, y, mask & nss_mm_mod1);
-
-        if (event == nss_me_release) {
-            term->vsel.targ = term->mode & nss_tm_select_to_clipboard ? nss_ct_clipboard : nss_ct_primary;
-            nss_window_set_clip(term->win, term_selection_data(term), NSS_TIME_NOW, term->vsel.targ);
-        }
-    /* Paste */
-    } else if (button == 1 && event == nss_me_release) {
-        nss_window_paste_clip(term->win, nss_ct_primary);
-    }
 }
 
 void nss_term_hang(nss_term_t *term) {

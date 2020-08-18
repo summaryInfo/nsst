@@ -3,8 +3,10 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "feature.h"
+
 #include "config.h"
 #include "font.h"
+#include "mouse.h"
 #include "window-x11.h"
 
 #if USE_POSIX_SHM
@@ -260,7 +262,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                     cel.attr ^= nss_attrib_inverse;
 
                 spec = nss_describe_cell(cel, palette, line->pal->data,
-                        win->blink_state, nss_term_is_selected(win->term, i, line_iter_y(it)));
+                        win->blink_state, nss_mouse_is_selected(win->term, i, line_iter_y(it)));
 
                 if (spec.ch) glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
                 g_wide = glyph && glyph->x_off > win->char_width - nss_config_integer(NSS_ICONFIG_FONT_SPACING);

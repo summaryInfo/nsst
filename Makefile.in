@@ -38,16 +38,18 @@ $(NAME): $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
 
 font.o: util.h config.h window.h boxdraw.h feature.h
-window-x11.o: util.h config.h term.h window.h window-x11.h input.h feature.h
-render-x11shm.o: util.h config.h term.h window.h window-x11.h image.h feature.h
-render-x11xrender.o: util.h config.h term.h window.h window-x11.h feature.h
+window-x11.o: util.h config.h term.h window.h window-x11.h input.h mouse.h feature.h
+render-x11shm.o: util.h config.h term.h window.h window-x11.h mouse.h image.h feature.h
+render-x11xrender.o: util.h config.h term.h window.h window-x11.h mouse.h feature.h
 input.o: util.h config.h term.h input.h nrcs.h feature.h
-term.o: util.h config.h term.h input.h window.h nrcs.h feature.h
+term.o: util.h config.h term.h input.h mouse.h window.h nrcs.h feature.h
 nsst.o: util.h config.h term.h window.h feature.h
 util.o: util.h config.h feature.h precompose-table.h
 nrcs.o : nrcs.h feature.h
 config.o: config.h util.h term.h input.h feature.h
 boxdraw.o: boxdraw.h config.h font.h feature.h
 image.o: util.h image.h font.h feature.h
+mouse.o: config.h mouse.h window.h feature.h
+
 
 .PHONY: all clean install install-strip uninstall force

@@ -22,11 +22,11 @@ typedef enum nss_cursor_type {
 } nss_cursor_type_t;
 
 /* WARNING: Order is important */
-typedef enum nss_mouse_event {
+typedef enum nss_mouse_event_type {
     nss_me_press,
     nss_me_release,
     nss_me_motion,
-} nss_mouse_event_t;
+} nss_mouse_event_type_t;
 
 /* WARNING: Order is important */
 typedef enum nss_mouse_state {
@@ -80,6 +80,14 @@ typedef enum nss_window_dim_type {
     nss_dt_cell_size,
     nss_dt_border,
 } nss_window_dim_type_t;
+
+typedef struct nss_mouse_event {
+    nss_mouse_event_type_t event;
+    nss_mouse_state_t mask;
+    nss_coord_t x;
+    nss_coord_t y;
+    uint8_t button;
+} nss_mouse_event_t;
 
 typedef struct nss_window nss_window_t;
 typedef struct nss_line_iter nss_line_iter_t;

@@ -11,6 +11,7 @@
 #include "config.h"
 #include "font.h"
 #include "input.h"
+#include "mouse.h"
 #include "term.h"
 #include "util.h"
 #include "window-x11.h"
@@ -1378,26 +1379,23 @@ void nss_context_run(void) {
                     xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->event))) break;
 
-                    uint8_t button = ev->detail - XCB_BUTTON_INDEX_1;
-                    int16_t x = MAX(0, MIN(win->cw, (ev->event_x - win->left_border)/
-                            win->char_width));
-                    int16_t y = MAX(0, MIN(win->ch, (ev->event_y - win->top_border) /
-                            (win->char_height + win->char_depth)));
-                    /* XCB_BUTTON_PRESS -> nss_me_press
-                     * XCB_BUTTON_RELEASE -> nss_me_release
-                     * XCB_MOTION_NOTIFY -> nss_me_motion
-                     */
-                    nss_mouse_event_t evtype = (ev->response_type & 0xF7) - 4;
-                    nss_mouse_state_t mask = ev->state & nss_ms_state_mask;
-
-                    nss_term_mouse(win->term, x, y, mask, evtype, button);
+                    nss_handle_mouse(win->term, (nss_mouse_event_t) {
+                        /* XCB_BUTTON_PRESS -> nss_me_press
+                         * XCB_BUTTON_RELEASE -> nss_me_release
+                         * XCB_MOTION_NOTIFY -> nss_me_motion */
+                        .event = (ev->response_type & 0xF7) - 4,
+                        .mask = ev->state & nss_ms_state_mask,
+                        .x = MAX(0, MIN(win->cw, (ev->event_x - win->left_border)/ win->char_width)),
+                        .y = MAX(0, MIN(win->ch, (ev->event_y - win->top_border) / (win->char_height + win->char_depth))),
+                        .button = ev->detail - XCB_BUTTON_INDEX_1,
+                    });
                     break;
                 }
                 case XCB_SELECTION_CLEAR: {
                     xcb_selection_clear_event_t *ev = (xcb_selection_clear_event_t*)event;
                     if (!(win = window_for_xid(ev->owner))) break;
                     // Clear even if set keep?
-                    nss_term_clear_selection(win->term);
+                    nss_mouse_clear_selection(win->term);
                     break;
                 }
                 case XCB_PROPERTY_NOTIFY: {
