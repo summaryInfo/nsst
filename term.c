@@ -1726,7 +1726,7 @@ static void term_load_config(nss_term_t *term) {
         .fg = nss_config_color(NSS_CCONFIG_FG),
         .bg = nss_config_color(NSS_CCONFIG_BG),
         .gl = 0, .gl_ss = 0, .gr = 2,
-        .ups = nss_96cs_latin_1,
+        .ups = nss_94cs_dec_sup,
         .gn = {nss_94cs_ascii, nss_94cs_ascii, nss_94cs_ascii, nss_94cs_ascii}
     };
 

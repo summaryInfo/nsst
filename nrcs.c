@@ -155,7 +155,7 @@ nss_char_t nrcs_decode_fast(enum nss_char_set gl, nss_char_t ch) {
     return ch;
 }
 
-nss_char_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, nss_char_t ch, enum nss_char_set ups, _Bool nrcs) {
+nss_char_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, enum nss_char_set ups, nss_char_t ch, _Bool nrcs) {
     if (ch > 0xFF) return ch;
     if (ch == 0x7F) return U' ';
 
