@@ -9,7 +9,7 @@ prefix=/usr/local
 name=nsst
 backend=x11shm
 vars='CFLAGS = -O2 -flto'
-version=10503
+version=10600
 
 # Test some features by trying compiling snippets
 dotest() { echo "$1" | cc -lrt -x c - 2>&1 >/dev/null && rm -f a.out; }
