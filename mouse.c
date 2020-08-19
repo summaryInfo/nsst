@@ -2,10 +2,13 @@
 
 #include "feature.h"
 
+#define _POSIX_C_SOURCE 200809L
+
 #include "config.h"
 #include "mouse.h"
 #include "term.h"
 #include "window.h"
+#include "time.h"
 
 #include <string.h>
 
