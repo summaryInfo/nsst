@@ -1,3 +1,5 @@
+/* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
+
 #ifndef MOUSE_H_
 #define MOUSE_H_ 1
 
