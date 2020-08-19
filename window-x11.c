@@ -587,12 +587,14 @@ void nss_window_bell(nss_window_t *win, uint8_t vol) {
         if (win->bell_raise) nss_window_action(win, nss_wa_restore_minimized);
         if (win->bell_urgent) set_urgency(win->wid, 1);
     }
-    if (nss_config_integer(NSS_ICONFIG_VISUAL_BELL) && !win->in_blink) {
-        win->init_invert = nss_term_get_invert(win->term);
-        win->in_blink = 1;
-        ctx.vbell_count++;
-        clock_gettime(NSS_CLOCK, &win->vbell_start);
-        nss_term_set_invert(win->term, !win->init_invert);
+    if (nss_config_integer(NSS_ICONFIG_VISUAL_BELL)) {
+        if (!win->in_blink) {
+            win->init_invert = nss_term_get_invert(win->term);
+            win->in_blink = 1;
+            ctx.vbell_count++;
+            clock_gettime(NSS_CLOCK, &win->vbell_start);
+            nss_term_set_invert(win->term, !win->init_invert);
+        }
     } else {
         xcb_xkb_bell(con, XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_ID_DFLT_XI_CLASS,
                 XCB_XKB_ID_DFLT_XI_ID, vol, 1, 0, 0, 0, XCB_ATOM_ANY, win->wid);
