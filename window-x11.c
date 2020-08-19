@@ -1399,12 +1399,22 @@ void nss_context_run(void) {
                 case XCB_EXPOSE:{
                     xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
+                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                        info("Event: event=Expose win=0x%x x=%x y=%d width=%d height=%d",
+                                ev->window, ev->x, ev->y, ev->width, ev->height);
+                    }
                     handle_expose(win, (nss_rect_t){ev->x, ev->y, ev->width, ev->height});
                     break;
                 }
                 case XCB_CONFIGURE_NOTIFY:{
                     xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
+                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                        info("Event: event=ConfigureWindow win=0x%x x=%x y=%d width=%d"
+                                " height=%d border=%d redir=%d above_win=0x%x event_win=0x%x",
+                                ev->window, ev->x, ev->y, ev->width, ev->height, ev->border_width,
+                                ev->override_redirect, ev->above_sibling, ev->event);
+                    }
                     if (ev->width != win->width || ev->height != win->height)
                         nss_window_handle_resize(win, ev->width, ev->height);
                     break;
@@ -1412,6 +1422,9 @@ void nss_context_run(void) {
                 case XCB_KEY_PRESS:{
                     xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
                     if (!(win = window_for_xid(ev->event))) break;
+                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                        info("Event: event=KeyPress win=0x%x keycode=0x%x", ev->event, ev->detail);
+                    }
                     handle_keydown(win, ev->detail);
                     break;
                 }
@@ -1419,6 +1432,10 @@ void nss_context_run(void) {
                 case XCB_FOCUS_OUT:{
                     xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
                     if (!(win = window_for_xid(ev->event))) break;
+                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                        info("Event: event=%s win=0x%x", ev->response_type == XCB_FOCUS_IN ?
+                                "FocusIn" : "FocusOut", ev->event);
+                    }
                     handle_focus(win, event->response_type == XCB_FOCUS_IN);
                     break;
                 }
@@ -1427,6 +1444,12 @@ void nss_context_run(void) {
                 case XCB_MOTION_NOTIFY: {
                     xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->event))) break;
+                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                        info("Event: event=%s mask=%d button=%d x=%d y=%d",
+                                ev->response_type == XCB_BUTTON_PRESS ? "ButtonPress" :
+                                ev->response_type == XCB_BUTTON_RELEASE ? "ButtonRelease" : "MotionNotify",
+                                ev->state, ev->detail, ev->event_x, ev->event_y);
+                    }
 
                     nss_handle_mouse(win->term, (nss_mouse_event_t) {
                         /* XCB_BUTTON_PRESS -> nss_me_press
@@ -1443,6 +1466,9 @@ void nss_context_run(void) {
                 case XCB_SELECTION_CLEAR: {
                     xcb_selection_clear_event_t *ev = (xcb_selection_clear_event_t*)event;
                     if (!(win = window_for_xid(ev->owner))) break;
+                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                        info("Event: event=SelectionClear owner=0x%x selection=0x%x", ev->owner, ev->selection);
+                    }
                     // Clear even if set keep?
                     nss_mouse_clear_selection(win->term);
                     break;
@@ -1450,6 +1476,10 @@ void nss_context_run(void) {
                 case XCB_PROPERTY_NOTIFY: {
                     xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
+                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                        info("Event: event=PropertyNotify window=0x%x property=0x%x state=%d",
+                                ev->window, ev->atom, ev->state);
+                    }
                     if ((ev->atom == XCB_ATOM_PRIMARY || ev->atom == XCB_ATOM_SECONDARY ||
                             ev->atom == ctx.atom.CLIPBOARD) && ev->state == XCB_PROPERTY_NEW_VALUE)
                         receive_selection_data(win, ev->atom, 1);
@@ -1458,18 +1488,31 @@ void nss_context_run(void) {
                 case XCB_SELECTION_NOTIFY: {
                     xcb_selection_notify_event_t *ev = (xcb_selection_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->requestor))) break;
+                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                        info("Event: event=SelectionNotify owner=0x%x target=0x%x property=0x%x selection=0x%x",
+                                ev->requestor, ev->target, ev->property, ev->selection);
+                    }
                     receive_selection_data(win, ev->property, 0);
                     break;
                 }
                 case XCB_SELECTION_REQUEST: {
                     xcb_selection_request_event_t *ev = (xcb_selection_request_event_t*)event;
                     if (!(win = window_for_xid(ev->owner))) break;
+                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                        info("Event: event=SelectionRequest owner=0x%x requestor=0x%x target=0x%x property=0x%x selection=0x%x",
+                                ev->owner, ev->requestor, ev->target, ev->property, ev->selection);
+                    }
                     send_selection_data(win, ev->requestor, ev->selection, ev->target, ev->property, ev->time);
                     break;
                 }
                 case XCB_CLIENT_MESSAGE: {
                     xcb_client_message_event_t *ev = (xcb_client_message_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
+                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                        info("Event: event=ClientMessage window=0x%x type=0x%x data=[0x%08x,0x%08x,0x%08x,0x%08x,0x%08x]",
+                            ev->window, ev->type, ev->data.data32[0], ev->data.data32[1],
+                            ev->data.data32[2], ev->data.data32[3], ev->data.data32[4]);
+                    }
                     if (ev->format == 32 && ev->data.data32[0] == ctx.atom.WM_DELETE_WINDOW) {
                         nss_free_window(win);
                         if (!win_list_head && !ctx.daemon_mode)
@@ -1480,6 +1523,9 @@ void nss_context_run(void) {
                 case XCB_VISIBILITY_NOTIFY: {
                     xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
+                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                        info("Event: event=ClientMessage window=0x%x state=%d", ev->window, ev->state);
+                    }
                     win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
                     break;
                 }
@@ -1504,6 +1550,10 @@ void nss_context_run(void) {
                             xcb_timestamp_t time;
                             uint8_t device_id;
                         } *xkb_ev = (struct _xkb_any_event*)event;
+
+                        if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                            info("Event: XKB Event %d", xkb_ev->xkb_type);
+                        }
 
                         if (xkb_ev->device_id == ctx.xkb_core_kbd) {
                             switch (xkb_ev->xkb_type) {
@@ -1582,6 +1632,8 @@ void nss_context_run(void) {
                 remains = frame_time;
                 _Bool old_drawn = win->drawn_somthing;
                 win->drawn_somthing = nss_term_redraw_dirty(win->term);
+
+                if (nss_config_integer(NSS_ICONFIG_TRACE_MISC) && win->drawn_somthing) info("Redraw");
 
                 if (win->drawn_somthing || old_drawn) {
                     win->next_draw = cur;

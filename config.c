@@ -123,10 +123,16 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"term-mod", "\t\t(Meaning of 'T' modifer)", "termMod", NSS_SCONFIG_TERM_MOD},
     {"term-name", ", -D<value>\t(TERM value)", "termName", NSS_SCONFIG_TERM_NAME},
     {"title", ", -T<value>, -t<value> (Initial window title)", "title", NSS_SCONFIG_TITLE},
+    {"trace-characters", "\t(Trace interpreted characters)", "traceCharacters", NSS_ICONFIG_TRACE_CHARACTERS},
+    {"trace-controls", "\t(Trace interpreted control characters and sequences)", "traceControls", NSS_ICONFIG_TRACE_CONTROLS},
+    {"trace-events", "\t(Trace recieved events)", "traceEvents", NSS_ICONFIG_TRACE_EVENTS},
+    {"trace-fonts", "\t(Log font related information)", "traceFonts", NSS_ICONFIG_TRACE_FONTS},
+    {"trace-input", "\t(Trace user input)", "traceInput", NSS_ICONFIG_TRACE_INPUT},
+    {"trace-misc", "\t(Trace miscelleneous information)", "traceMisc", NSS_ICONFIG_TRACE_MISC},
     {"triple-click-time", "\t(Time gap in milliseconds in witch tree mouse presses will be considered triple)", "trippleClickTime", NSS_ICONFIG_TRIPLE_CLICK_TIME},
     {"underline-width", "\t(Text underline width)", "underlineWidth", NSS_ICONFIG_UNDERLINE_WIDTH},
-    {"urgent-on-bell", "\t(Set window urgency on bell)", "urgentOnBell", NSS_ICONFIG_URGENT_ON_BELL},
     {"underlined-color", "\t(Special color of underlined text)", "underlinedColor", NSS_CCONFIG_UNDERLINE},
+    {"urgent-on-bell", "\t(Set window urgency on bell)", "urgentOnBell", NSS_ICONFIG_URGENT_ON_BELL},
     {"use-utf8", "\t\t(Enable uft-8 i/o)", "useUTF8", NSS_ICONFIG_UTF8},
     {"vertical-border", "\t(Left and right borders)", "verticalBorder", NSS_ICONFIG_LEFT_BORDER},
     {"visual-bell", "\t\t(Whether bell should be visual or normal)", "visualBell", NSS_ICONFIG_VISUAL_BELL},
@@ -143,7 +149,7 @@ static struct {
     int32_t min;
     int32_t max;
 } ioptions[] = {
-    [NSS_ICONFIG_LOG_LEVEL - NSS_ICONFIG_MIN] = {2, 2, 0, 4},
+    [NSS_ICONFIG_LOG_LEVEL - NSS_ICONFIG_MIN] = {2, 2, 0, 3},
     [NSS_ICONFIG_WINDOW_X - NSS_ICONFIG_MIN] = {200, 200, -32768, 32767 },
     [NSS_ICONFIG_WINDOW_Y - NSS_ICONFIG_MIN] = {200, 200, -32768, 32767 },
     [NSS_ICONFIG_WINDOW_NEGATIVE_X - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
@@ -212,6 +218,12 @@ static struct {
     [NSS_ICONFIG_RAISE_ON_BELL - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
     [NSS_ICONFIG_URGENT_ON_BELL - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
     [NSS_ICONFIG_ALLOW_ERASE_SCROLLBACK - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
+    [NSS_ICONFIG_TRACE_CHARACTERS - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_TRACE_CONTROLS - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_TRACE_EVENTS - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_TRACE_FONTS - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_TRACE_INPUT - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_TRACE_MISC - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
 };
 
 static struct {

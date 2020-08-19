@@ -92,7 +92,8 @@ static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_pate
             index.u.i = 0;
         }
 
-        info("Font file: %s:%d", file.u.s, index.u.i);
+        if (nss_config_integer(NSS_ICONFIG_TRACE_FONTS))
+            info("Font file: %s:%d", file.u.s, index.u.i);
         FT_Error err = FT_New_Face(global.library, (const char*)file.u.s, index.u.i, &faces->faces[faces->length]);
         if (err != FT_Err_Ok) {
             if (err == FT_Err_Unknown_File_Format) warn("Wrong font file format");
@@ -369,10 +370,10 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
         return nss_font_render_glyph(font, 0, attr);
     }
 
-    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) == 4) {
-        debug("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
-        debug("Num grays: %d", face->glyph->bitmap.num_grays);
-        debug("Glyph: %d %d", glyph->width, glyph->height);
+    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) == 4 && nss_config_integer(NSS_ICONFIG_TRACE_FONTS)) {
+        info("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
+        info("Num grays: %d", face->glyph->bitmap.num_grays);
+        info("Glyph: %d %d", glyph->width, glyph->height);
         size_t img_width = glyph->width;
         if (lcd) img_width *= 3;
 
@@ -443,8 +444,10 @@ nss_glyph_cache_t *nss_create_cache(nss_font_t *font) {
     cache->char_height = maxh;
     cache->char_depth = maxd + nss_config_integer(NSS_ICONFIG_LINE_SPACING);
 
-    info("Font dim: width=%"PRId16", height=%"PRId16", depth=%"PRId16,
-            cache->char_width, cache->char_height, cache->char_depth);
+    if (nss_config_integer(NSS_ICONFIG_TRACE_FONTS)) {
+        info("Font dim: width=%"PRId16", height=%"PRId16", depth=%"PRId16,
+                cache->char_width, cache->char_height, cache->char_depth);
+    }
 
     return cache;
 }

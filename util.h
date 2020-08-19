@@ -33,7 +33,6 @@ typedef struct nss_rect {
     uint16_t height;
 } nss_rect_t;
 
-void debug(const char *fmt, ...);
 void info(const char *fmt, ...);
 void warn(const char *fmt, ...);
 void fatal(const char *fmt, ...);

@@ -1,16 +1,10 @@
 Until version 1.6:
     OSC 50 ; Pt ST -- Set font
+    CSI ? 35 l / CSI ? 35 h -- font shifting functions
     Refactor config
         Split global and perinstance settings, reload reliably
         Allow geometry to be specified in characters
         Implement named values for options instead of numeric
-    Refactor debug output
-        make it more granular
-            --trace-characters
-            --trace-escapes
-            --trace-fonts
-            --trace-events
-            --trace-misc
 ===================
 General
     Write man page
@@ -76,7 +70,6 @@ Emulation
         CSI ? 2002 l / CSI ? 2002 h -- srm_BUTTON2_MOVE_POINT
         CSI ? 2003 l / CSI ? 2003 h -- srm_DBUTTON3_DELETE
         CSI ? 14 l / CSI ? 14 h -- Cursor blinking XORing
-        CSI ? 35 l / CSI ? 35 h -- font shifting functions
         CSI Ps ; Ps ; Ps ; Ps ; Ps T -- XTHIMOUSE
         CSI Pm # p, CSI Pm # { -- XTPUSHSGR
         CSI # q, CSI # } -- XTPOPSGR

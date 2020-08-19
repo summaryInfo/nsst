@@ -913,9 +913,9 @@ inline static void term_esc_finish_string(nss_term_t *term) {
 }
 
 static void term_esc_dump(nss_term_t *term, _Bool use_info) {
-    if (use_info && nss_config_integer(NSS_ICONFIG_LOG_LEVEL) < 3) return;
+    if (use_info && !nss_config_integer(NSS_ICONFIG_TRACE_CONTROLS)) return;
 
-    char *pref = use_info ? "Seq " : "Unrecognized ";
+    char *pref = use_info ? "Seq: " : "Unrecognized ";
 
     char buf[ESC_DUMP_MAX] = "^[";
     size_t pos = 2;
@@ -3199,9 +3199,8 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
         return;
     }
 
-    // This call has mesurable perforemance impact
-    // so it should be commented out unless used for debugging
-    //debug("%lc (%u)", ch, ch);
+    if (nss_config_integer(NSS_ICONFIG_TRACE_CHARACTERS))
+        info("Char: (%x) '%lc' ", ch, ch);
 
     // Wrap line if needed
     if (term->mode & nss_tm_wrap) {
@@ -4173,7 +4172,7 @@ static void term_dispatch_csi(nss_term_t *term) {
 }
 
 static void term_dispatch_esc(nss_term_t *term) {
-    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 2) {
+    if (nss_config_integer(NSS_ICONFIG_TRACE_CONTROLS)) {
         if (term->esc.selector != E('[') && term->esc.selector != E('P') &&
                 term->esc.selector != E(']'))
             term_esc_dump(term, 1);
@@ -4355,7 +4354,8 @@ static void term_dispatch_esc(nss_term_t *term) {
 }
 
 static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
-    if (ch != 0x1B) info("Seq ^%c", ch ^ 0x40);
+    if (nss_config_integer(NSS_ICONFIG_TRACE_CONTROLS) && ch != 0x1B)
+        info("Seq: ^%c", ch ^ 0x40);
 
     switch (ch) {
     case 0x00: /* NUL (IGNORE) */
@@ -4849,6 +4849,19 @@ void nss_term_answerback(nss_term_t *term, const char *str, ...) {
     ssize_t res = vsnprintf((char *)csi, sizeof(csi), (char *)fmt, vl);
     va_end(vl);
     term_tty_write(term, csi, res);
+
+    if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT)) {
+        ssize_t j = MAX_REPORT;
+        for (size_t i = res; i; i--) {
+            if (IS_C0(csi[i - 1]) || IS_DEL(csi[i - 1]))
+                csi[--j] = csi[i - 1] ^ 0x40, csi[--j] = '^';
+            else if (IS_C1(csi[i - 1]))
+                csi[--j] = csi[i - 1] ^ 0xC0, csi[--j] = '[', csi[--j] = '^';
+            else
+                csi[--j] = csi[i - 1];
+        }
+        info("Rep: %s", csi + j);
+    }
 }
 
 /* If len == 0 encodes C1 controls and determines length by NUL character */

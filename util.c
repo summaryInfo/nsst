@@ -59,18 +59,6 @@ void info(const char *fmt, ...) {
     }
 }
 
-void debug(const char *fmt, ...) {
-    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 3) {
-        va_list args;
-        va_start(args, fmt);
-        fputs("[DEBUG] ", stderr);
-        vfprintf(stderr, fmt, args);
-        fputc('\n', stderr);
-        va_end(args);
-    }
-}
-
-
 size_t utf8_encode(uint32_t u, uint8_t *buf, uint8_t *end) {
     static const uint32_t utf8_min[] = {0x80, 0x800, 0x10000, 0x110000};
     static const uint8_t utf8_mask[] = {0x00, 0xc0, 0xe0, 0xf0};

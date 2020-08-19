@@ -395,6 +395,13 @@ static void dump_reply(nss_term_t *term, nss_reply_t *reply) {
     str[strp++] = reply->final;
     str[strp] = '\0';
     nss_term_sendkey(term, str, 0);
+
+    if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT)) {
+        char pre[4] = {'^'};
+        if (reply->init < 0x80) pre[1] = reply->init ^ 0x40;
+        else pre[1] = '[', pre[2] = reply->init ^ 0xC0;
+        info("Key seq: %s%s", pre, str + 1);
+    }
 }
 
 
@@ -457,6 +464,11 @@ static void translate_adjust(nss_key_t *k, nss_input_mode_t *mode) {
 void nss_handle_input(nss_key_t k, nss_term_t *term) {
     nss_input_mode_t mode = *nss_term_inmode(term);
 
+    if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT)) {
+        info("Key: sym=0x%X mask=0x%X ascii=0x%X utf32=0x%X",
+                k.sym, k.mask, k.ascii, k.utf32);
+    }
+
     if (mode.keylock) return;
 
     translate_adjust(&k, &mode);
@@ -480,7 +492,11 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
         nss_char_t deccode = fnkey_dec(k.sym, k.is_fkey, &reply);
         if (k.is_fkey && k.mask & nss_mm_shift && mode.keyboard_mapping == nss_km_vt220) {
             nss_udk_t udk = nss_term_lookup_udk(term, reply.param[0]);
-            if (udk.val) nss_term_sendkey(term, udk.val, udk.len);
+            if (udk.val) {
+                if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT))
+                    info("Key str: '%s' ", udk.val);
+                nss_term_sendkey(term, udk.val, udk.len);
+            }
             return;
         } else if (mode.keyboard_mapping != nss_km_legacy && deccode - 11 <= 3) {
             reply.init = mode.keyboad_vt52 ? '\033' : '\217';
@@ -514,6 +530,8 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
         } else {
             uint8_t ch = " XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXX"
                     "XXXXXXXXXXX*+,-./0123456789XXX=" [k.sym - XKB_KEY_KP_Space];
+            if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT))
+                info("Key char: (%x) '%c' ", ch, ch);
             nss_term_sendkey(term, &ch, 1);
         }
     } else if (is_cursor(k.sym)) {
@@ -560,6 +578,8 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
                 }
             }
             k.utf8data[k.utf8len] = '\0';
+            if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT))
+                info("Key char: (%x) '%s' ", k.utf32, k.utf8data);
             nss_term_sendkey(term, k.utf8data, k.utf8len);
         }
     }
@@ -663,6 +683,9 @@ void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *c) {
     uint32_t sym, mask = 0;
     char *dash = strchr(c, '-');
 
+    if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT))
+        info("Set hotkey: %d = '%s'", sa, c);
+
     if (dash) {
         mask = decode_mask(c, dash);
         c = dash + 1;
@@ -671,6 +694,7 @@ void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *c) {
     if ((sym = xkb_keysym_from_name(c, 0)) == XKB_KEY_NoSymbol)
         sym = xkb_keysym_from_name(c, XKB_KEYSYM_CASE_INSENSITIVE);
     if (sym == XKB_KEY_NoSymbol) warn("Wrong key name: '%s'", dash);
+
 
     cshorts[sa] = (struct nss_shortcut) { sym, mask };
 }
