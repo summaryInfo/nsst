@@ -1670,6 +1670,7 @@ static void term_print_char(nss_term_t *term, nss_char_t ch) {
 static void term_print_line(nss_term_t *term, nss_line_t *line) {
     if (term->printerfd < 0) return;
 
+    // TODO Print with SGR
     for (nss_coord_t i = 0; i < MIN(line->width, term->width); i++)
         term_print_char(term, line->cell[i].ch);
     term_print_char(term, '\n');
@@ -2836,7 +2837,7 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             if (set) term_erase(term, 0, 0, term->width, term->height, 0);
             break;
         case 1050: /* termcap function keys */
-            // IGNORE
+            // TODO Termcap
             break;
         case 1051: /* SUN function keys */
             term->inmode.keyboard_mapping = set ? nss_km_sun : nss_km_default;
@@ -3051,7 +3052,7 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
             val = MODBIT(term->mode & nss_tm_altscreen);
             break;
         case 1050: /* termcap function keys */
-            val = nss_mb_aways_disabled;
+            val = nss_mb_aways_disabled; //TODO Termcap
             break;
         case 1051: /* SUN function keys */
             val = MODBIT(term->inmode.keyboard_mapping == nss_km_sun);
@@ -3596,14 +3597,16 @@ static void term_dispatch_csi(nss_term_t *term) {
         term_insert_cells(term, PARAM(0, 1));
         break;
     case C('@') | I0(' '): /* SL */
-        term_scroll_horizontal(term, term_min_x(term), PARAM(0, 1));
+        if (term_cursor_in_region(term))
+            term_scroll_horizontal(term, term_min_x(term), PARAM(0, 1));
         break;
     case C('A'): /* CUU */
         (term->c.y >= term_min_y(term) ? term_bounded_move_to : term_move_to)
                 (term, term->c.x, term->c.y - PARAM(0, 1));
         break;
     case C('A') | I0(' '): /* SR */
-        term_scroll_horizontal(term, term_min_x(term), -PARAM(0, 1));
+        if (term_cursor_in_region(term))
+            term_scroll_horizontal(term, term_min_x(term), -PARAM(0, 1));
         break;
     case C('B'): /* CUD */
         (term->c.y < term_max_y(term) ? term_bounded_move_to : term_move_to)
@@ -4530,7 +4533,6 @@ static void term_dispatch_vt52_cup(nss_term_t *term) {
 }
 
 static void term_dispatch(nss_term_t *term, nss_char_t ch) {
-    // TODO More sophisticated filtering
     if (term->mode & nss_tm_print_enabled)
         term_print_char(term, ch);
 
