@@ -287,7 +287,7 @@ static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
         dst[i] = src[i];
 }
 
-_Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
+_Bool nss_window_submit_screen(nss_window_t *win, ssize_t view, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
     rctx.cbufpos = 0;
     rctx.bufpos = 0;
 
@@ -295,12 +295,13 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
 
     if (cond_cblink) cursor |= win->blink_state;
 
-    for (nss_line_t *line; (line = line_iter_next(it));) {
+    for (ssize_t k = 0; k < win->ch; k++) {
+        nss_line_t *line = nss_term_line_at(win->term, k + view);
         _Bool next_dirty = 0;
         if (win->cw > line->width) {
             push_rect(&(xcb_rectangle_t){
                 .x = line->width * win->char_width,
-                .y = line_iter_y(it) * (win->char_height + win->char_depth),
+                .y = k * (win->char_height + win->char_depth),
                 .width = (win->cw - line->width) * win->char_width,
                 .height = win->char_height + win->char_depth
             });
@@ -309,7 +310,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
         for (nss_coord_t i = MIN(win->cw, line->width) - 1; i >= 0; i--) {
             _Bool dirty = line->force_damage || !(line->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink)) ||
-                    (cond_cblink && line_iter_y(it) == cur_y && i == cur_x);
+                    (cond_cblink && k == cur_y && i == cur_x);
 
             struct nss_cellspec spec;
             nss_cell_t cel;
@@ -319,12 +320,12 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
             if (dirty || next_dirty) {
                 cel = line->cell[i];
 
-                if (line_iter_y(it) == cur_y && i == cur_x && cursor &&
+                if (k == cur_y && i == cur_x && cursor &&
                         win->focused && ((win->cursor_type + 1) & ~1) == nss_cursor_block)
                     cel.attr ^= nss_attrib_inverse;
 
                 spec = nss_describe_cell(cel, palette, line->pal->data,
-                        win->blink_state, nss_mouse_is_selected(win->term, i, line_iter_y(it)));
+                        win->blink_state, nss_mouse_is_selected(win->term, i, k));
                 g =  spec.ch | (spec.face << 24);
 
                 _Bool fetched = nss_cache_is_fetched(win->font_cache, g);
@@ -345,7 +346,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
 
                 rctx.cbuffer[rctx.cbufpos++] = (struct cell_desc) {
                     .x = i * win->char_width,
-                    .y = line_iter_y(it) * (win->char_height + win->char_depth),
+                    .y = k * (win->char_height + win->char_depth),
                     .fg = spec.fg, .bg = spec.bg,
                     .glyph = g,
                     .wide = spec.wide || g_wide,

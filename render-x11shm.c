@@ -235,20 +235,21 @@ static void optimize_bounds(nss_rect_t *bounds, size_t *boundc, _Bool fine_grain
     *boundc = j;
 }
 
-_Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
+_Bool nss_window_submit_screen(nss_window_t *win, ssize_t view, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
 
     _Bool scrolled = win->ren.boundc;
     _Bool cond_cblink = !win->blink_commited && (win->cursor_type & 1) && nss_term_is_cursor_enabled(win->term);
 
     if (cond_cblink) cursor |= win->blink_state;
 
-    for (nss_line_t *line; (line = line_iter_next(it));) {
+    for (ssize_t k = 0; k < win->ch; k++) {
+        nss_line_t *line = nss_term_line_at(win->term, k + view);
         _Bool next_dirty = 0;
-        nss_rect_t l_bound = {-1, line_iter_y(it), 0, 1};
+        nss_rect_t l_bound = {-1, k, 0, 1};
         for (nss_coord_t i =  MIN(win->cw, line->width) - 1; i >= 0; i--) {
             _Bool dirty = line->force_damage || !(line->cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink)) ||
-                    (cond_cblink && line_iter_y(it) == cur_y && i == cur_x);
+                    (cond_cblink && k == cur_y && i == cur_x);
 
             struct nss_cellspec spec;
             nss_cell_t cel;
@@ -257,12 +258,12 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
             if (dirty || next_dirty) {
                 cel = line->cell[i];
 
-                if (line_iter_y(it) == cur_y && i == cur_x && cursor &&
+                if (k == cur_y && i == cur_x && cursor &&
                         win->focused && ((win->cursor_type + 1) & ~1) == nss_cursor_block)
                     cel.attr ^= nss_attrib_inverse;
 
                 spec = nss_describe_cell(cel, palette, line->pal->data,
-                        win->blink_state, nss_mouse_is_selected(win->term, i, line_iter_y(it)));
+                        win->blink_state, nss_mouse_is_selected(win->term, i, k));
 
                 if (spec.ch) glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
                 g_wide = glyph && glyph->x_off > win->char_width - nss_config_integer(NSS_ICONFIG_FONT_SPACING);
@@ -271,7 +272,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
             if (dirty || (g_wide && next_dirty)) {
                 int16_t cw = win->char_width, ch = win->char_height;
                 int16_t cd = win->char_depth, ul = win->underline_width;
-                int16_t x = i * cw, y = line_iter_y(it) * (ch + cd);
+                int16_t x = i * cw, y = k * (ch + cd);
                 int16_t ls = nss_config_integer(NSS_ICONFIG_LINE_SPACING)/2;
                 int16_t fs = nss_config_integer(NSS_ICONFIG_FONT_SPACING)/2;
 
@@ -306,7 +307,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
             if (win->cw > line->width) {
                 nss_image_draw_rect(win->ren.im, (nss_rect_t){
                     .x = line->width * win->char_width,
-                    .y = line_iter_y(it) * (win->char_height + win->char_depth),
+                    .y = k * (win->char_height + win->char_depth),
                     .width = (win->cw - line->width) * win->char_width,
                     .height = win->char_height + win->char_depth
                 }, win->bg);

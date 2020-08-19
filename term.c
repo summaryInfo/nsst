@@ -271,22 +271,10 @@ struct nss_term {
 /* Default termios, initialized from main */
 static struct termios dtio;
 
-nss_line_iter_t nss_term_screen_iterator(nss_term_t *term, ssize_t ymin, ssize_t ymax) {
-    if (ymin > ymax) SWAP(ssize_t, ymin, ymax);
-    return (nss_line_iter_t) {
-        term->screen,
-        term->scrollback,
-        term->sb_top,
-        term->sb_limit,
-        MAX(-term->sb_limit, ymin),
-        MIN(term->height, ymax),
-        MAX(-term->sb_limit, ymin),
-    };
-}
-
-nss_line_t *term_line_at(nss_term_t *term, ssize_t y) {
-    return y >= 0 ? term->screen[y] :
-        term->scrollback[(term->sb_top + term->sb_limit + y + 1) % term->sb_limit];
+nss_line_t *nss_term_line_at(nss_term_t *term, ssize_t y) {
+    if (y >= 0) return (y >= term->height) ? NULL : term->screen[y];
+    else return (y < -term->sb_limit) ? NULL :
+            term->scrollback[(term->sb_top + term->sb_limit + y + 1) % term->sb_limit];
 }
 
 static void handle_chld(int arg) {
@@ -750,16 +738,15 @@ int nss_term_fd(nss_term_t *term) {
 
 void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
     if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
-        nss_line_iter_t it = nss_term_screen_iterator(term, damage.y - term->view, damage.y + damage.height - term->view);
-        for (nss_line_t *line; (line = line_iter_next(&it));)
-            for (nss_coord_t j = damage.x; j <  MIN(damage.x + damage.width, line->width); j++)
-                line->cell[j].attr &= ~nss_attrib_drawn;
+        for (ssize_t i = damage.y - term->view; i < damage.y + damage.height - term->view; i++)
+            for (nss_coord_t j = damage.x; j <  MIN(damage.x + damage.width, nss_term_line_at(term, i)->width); j++)
+                nss_term_line_at(term, i)->cell[j].attr &= ~nss_attrib_drawn;
     }
 }
 
 void nss_term_damage_lines(nss_term_t *term, nss_coord_t ys, nss_coord_t yd) {
-    nss_line_iter_t it = nss_term_screen_iterator(term, ys - term->view, yd - term->view);
-    for (nss_line_t *line; (line = line_iter_next(&it));) line->force_damage = 1;
+    for (ssize_t i = ys; i < yd; i++)
+        nss_term_line_at(term, i - term->view)->force_damage = 1;
 }
 
 _Bool nss_term_redraw_dirty(nss_term_t *term) {
@@ -781,9 +768,7 @@ _Bool nss_term_redraw_dirty(nss_term_t *term) {
 
     _Bool cursor = !term->prev_c_hidden && (!(cl->cell[term->c.x].attr & nss_attrib_drawn) || cl->force_damage);
 
-    nss_line_iter_t it = nss_term_screen_iterator(term, -term->view, term->height - term->view);
-
-    return nss_window_submit_screen(term->win, &it, term->palette, term->c.x, term->c.y, cursor, term->c.pending);
+    return nss_window_submit_screen(term->win, -term->view, term->palette, term->c.x, term->c.y, cursor, term->c.pending);
 }
 
 static void term_reset_view(nss_term_t *term, _Bool damage) {

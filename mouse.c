@@ -16,7 +16,6 @@
 #define CSI "\233"
 
 // From term.c
-nss_line_t *term_line_at(nss_term_t *term, ssize_t line);
 nss_coord_t term_max_y(nss_term_t *term);
 nss_coord_t term_max_x(nss_term_t *term);
 nss_coord_t term_min_y(nss_term_t *term);
@@ -208,8 +207,8 @@ void nss_mouse_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save
             loc->r.y1 = bottom;
             loc->n.y1 = bottom;
             if (!loc->r.rect) {
-                loc->r.x1 = term_line_at(term, bottom)->width - 1;
-                loc->n.x1 = term_line_at(term, bottom)->width - 1;
+                loc->r.x1 = nss_term_line_at(term, bottom)->width - 1;
+                loc->n.x1 = nss_term_line_at(term, bottom)->width - 1;
             }
         }
 
@@ -251,27 +250,20 @@ static void snap_selection(nss_term_t *term) {
         loc->state = nss_sstate_progress;
 
     if (loc->snap == nss_ssnap_line) {
-        nss_line_iter_t it = nss_term_screen_iterator(term, -term_scrollback_size(term), loc->n.y0 + 1);
-        line_iter_inc(&it, loc->n.y0 + term_scrollback_size(term));
         loc->n.x0 = 0;
         loc->n.x1 = term_width(term) - 1;
 
         nss_line_t *line;
         loc->n.y0++;
-        do line = line_iter_prev(&it), loc->n.y0--;
+        do line = nss_term_line_at(term, --loc->n.y0);
         while (line && line->wrap_at);
 
-        it = nss_term_screen_iterator(term, loc->n.y1, term_height(term));
-        line = line_iter_next(&it);
-        if (!line) return;
-
-        while (line && line->wrap_at)
-            line = line_iter_next(&it), loc->n.y1++;
-
+        do line = nss_term_line_at(term, loc->n.y1++);
+        while (line && line->wrap_at);
+        loc->n.y1--;
     } else if (loc->snap == nss_ssnap_word) {
-        nss_line_iter_t it = nss_term_screen_iterator(term, -term_scrollback_size(term), loc->n.y0 + 1);
-        line_iter_inc(&it, loc->n.y0 + term_scrollback_size(term));
-        nss_line_t *line = line_iter_ref(&it);
+        nss_line_t *line = nss_term_line_at(term, loc->n.y0);
+        ssize_t y = loc->n.y0;
 
         if (!line) return;
 
@@ -285,14 +277,14 @@ static void snap_selection(nss_term_t *term) {
             while (loc->n.x0 > 0 &&
                     cat == is_separator(line->cell[loc->n.x0 - 1].ch)) loc->n.x0--;
             if (cat != is_separator(line->cell[0].ch)) break;
-        } while ((line = line_iter_prev(&it)) && line->wrap_at);
+        } while ((line = nss_term_line_at(term, --y)) && line->wrap_at);
 
-        it = nss_term_screen_iterator(term, loc->n.y1, term_height(term));
-        line = line_iter_next(&it);
+        y = loc->n.y1;
+        line = nss_term_line_at(term, y++);
 
         if (!line) return;
 
-        loc->n.x1 = MAX(loc->n.x1, 0);
+        loc->n.x1 = MAX(MIN(loc->n.x1, line->width - 1), 0);
         first = 1, cat = is_separator(line->cell[loc->n.x1].ch);
         ssize_t line_len = line->wrap_at ? line->wrap_at : line->width;
         if (loc->n.x1 < line->width) do {
@@ -305,13 +297,18 @@ static void snap_selection(nss_term_t *term) {
             while (loc->n.x1 < line_len - 1 &&
                     cat == is_separator(line->cell[loc->n.x1 + 1].ch)) loc->n.x1++;
             if (cat != is_separator(line->cell[line_len - 1].ch)) break;
-        } while (line->wrap_at && (line = line_iter_next(&it)));
+        } while (line->wrap_at && (line = nss_term_line_at(term, y++)));
     }
 
     // Snap selection on wide characters
-    loc->n.x1 += !!(term_line_at(term, loc->n.y1)->cell[loc->n.x1].attr & nss_attrib_wide);
-    if (loc->n.x0 > 0)
-        loc->n.x0 -= !!(term_line_at(term, loc->n.y0)->cell[loc->n.x0 - 1].attr & nss_attrib_wide);
+
+    nss_line_t *ly1 = nss_term_line_at(term, loc->n.y1);
+    if (loc->n.x1 < ly1->width)
+        loc->n.x1 += !!(ly1->cell[loc->n.x1].attr & nss_attrib_wide);
+
+    nss_line_t *ly0 = nss_term_line_at(term, loc->n.y0);
+    if (loc->n.x0 < ly0->width && loc->n.x0 > 0)
+        loc->n.x0 -= !!(ly0->cell[loc->n.x0 - 1].attr & nss_attrib_wide);
 }
 
 _Bool nss_mouse_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
@@ -368,16 +365,16 @@ static uint8_t *selection_data(nss_term_t *term) {
         if (!res) return NULL;
         size_t pos = 0, cap = SEL_INIT_SIZE;
 
-        nss_line_t *line;
-        nss_line_iter_t it = nss_term_screen_iterator(term, loc->n.y0, loc->n.y1 + 1);
+        ssize_t y = loc->n.y0;
         if (loc->n.rect || loc->n.y0 == loc->n.y1) {
-            while ((line = line_iter_next(&it)))
-                append_line(&pos, &cap, &res, line, loc->n.x0, loc->n.x1 + 1);
+            while (y++ <= loc->n.y1)
+                append_line(&pos, &cap, &res, nss_term_line_at(term, y - 1), loc->n.x0, loc->n.x1 + 1);
         } else {
-            while ((line = line_iter_next(&it))) {
-                if (!line_iter_y(&it))
+            while (y++ <= loc->n.y1) {
+                nss_line_t *line = nss_term_line_at(term, y - 1);
+                if (y - 1 == loc->n.y0)
                     append_line(&pos, &cap, &res, line, loc->n.x0, line->width);
-                else if (line_iter_y(&it) == loc->n.y1 - loc->n.y0)
+                else if (y - 1 == loc->n.y1)
                     append_line(&pos, &cap, &res, line, 0, loc->n.x1 + 1);
                 else
                     append_line(&pos, &cap, &res, line, 0, line->width);

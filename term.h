@@ -80,43 +80,6 @@ typedef struct nss_udk {
     size_t len;
 } nss_udk_t;
 
-/* iterator for iterating both scrollback and screen */
-
-typedef struct nss_line_iter {
-    nss_line_t **_screen;
-    nss_line_t **_scrollback;
-    ssize_t _sb_0;
-    ssize_t _sb_limit;
-    ssize_t _y_min;
-    ssize_t _y_max;
-    ssize_t _y;
-} nss_line_iter_t;
-
-inline static ssize_t line_iter_y(nss_line_iter_t *it) {
-    return it->_y - 1 - it->_y_min;
-}
-
-inline static nss_line_t *line_iter_next(nss_line_iter_t *it) {
-    if (it->_y >= it->_y_max || it->_y < it->_y_min) return NULL;
-    return (it->_y >= 0) ? it->_screen[it->_y++] :
-        it->_scrollback[(it->_sb_0 + ++it->_y + it->_sb_limit) % it->_sb_limit];
-}
-
-inline static void line_iter_inc(nss_line_iter_t *it, ssize_t delta) {
-    it->_y += delta;
-}
-
-inline static nss_line_t *line_iter_ref(nss_line_iter_t *it) {
-    if (it->_y >= it->_y_max || it->_y < it->_y_min) return NULL;
-    return (it->_y >= 0) ? it->_screen[it->_y] :
-        it->_scrollback[(it->_sb_0 + it->_y + 1 + it->_sb_limit) % it->_sb_limit];
-}
-
-inline static nss_line_t *line_iter_prev(nss_line_iter_t *it) {
-    line_iter_inc(it, -1);
-    return line_iter_ref(it);
-}
-
 inline static nss_coord_t line_length(nss_line_t *line) {
     nss_coord_t max_x = line->width;
     if (!line->wrap_at)
@@ -155,6 +118,7 @@ void nss_term_set_invert(nss_term_t *term, _Bool set);
 _Bool nss_term_get_invert(nss_term_t *term);
 nss_line_iter_t nss_term_screen_iterator(nss_term_t *term, ssize_t ymin, ssize_t ymax);
 nss_window_t *nss_term_window(nss_term_t *term);
+nss_line_t *nss_term_line_at(nss_term_t *term, ssize_t y);
 
 _Bool nss_term_paste_need_encode(nss_term_t *term);
 void nss_term_paste_begin(nss_term_t *term);
