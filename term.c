@@ -2345,7 +2345,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
         } else if (term->esc.str_len == 2 && *dstr >= 0x20 && *dstr < 0x30 && dstr[1] > 0x2F && dstr[1] < 0x7F) {
             sel = E(dstr[1]) | I0(dstr[0]);
         } else goto err;
-        enum nss_char_set cs = parse_nrcs(E(*dstr), 0, term->vt_level, term->mode & nss_tm_enable_nrcs);
+        enum nss_char_set cs = parse_nrcs(sel, 0, term->vt_level, term->mode & nss_tm_enable_nrcs);
         if (cs == -1U) cs = parse_nrcs(E(*dstr), 1, term->vt_level, term->mode & nss_tm_enable_nrcs);
         if (cs != -1U) term->c.ups = cs;
         break;
@@ -3569,7 +3569,7 @@ static void term_report_tabs(nss_term_t *term) {
 // Utility functions for XTSAVE/XTRESTORE
 
 inline static void store_mode(uint8_t modbits[], nss_param_t mode, _Bool val) {
-    if (0 <= mode && mode < 96) modbits += mode / 8;
+    if (mode < 96) modbits += mode / 8;
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
     else if (2000 <= mode && mode < 2007) modbits += 20;
     else {
@@ -3581,7 +3581,7 @@ inline static void store_mode(uint8_t modbits[], nss_param_t mode, _Bool val) {
 }
 
 inline static _Bool load_mode(uint8_t modbits[], nss_param_t mode) {
-    if (0 <= mode && mode < 96) modbits += mode / 8;
+    if (mode < 96) modbits += mode / 8;
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
     else if (2000 <= mode && mode < 2007) modbits += 20;
     else {
