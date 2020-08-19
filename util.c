@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 _Noreturn void die(const char *fmt, ...) {
     if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0) {
@@ -176,8 +177,7 @@ nss_color_t parse_color(const uint8_t *str, const uint8_t *end) {
             return 0;
         }
         return col;
-    } else if (tolower(str[0]) == 'r' && tolower(str[1]) == 'g' &&
-            tolower(str[2] == 'b') && str[3] == ':') {
+    } else if (!strncasecmp((char*)str, "rgb:", 4)) {
         // Format rgb:R/G/B
         str += 4;
 

@@ -49,8 +49,8 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"cursor-width", "\t\t(Width of lines that forms cursor)", "cursorWidth", NSS_ICONFIG_CURSOR_WIDTH},
     {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", "deleteIsDelete", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
     {"double-click-time", "\t(Time gap in milliseconds in witch two mouse presses will be considered double)", "doubleClickTime", NSS_ICONFIG_DOUBLE_CLICK_TIME},
-    {"extended-cir", "\t\t(Report all SGR attributes in DECCIR)", "extendedCir", NSS_ICONFIG_EXTENDED_CIR},
     {"erase-scrollback", "\t(Allow ED 3 to clear scrollback buffer)", "eraseScrollback", NSS_ICONFIG_ALLOW_ERASE_SCROLLBACK},
+    {"extended-cir", "\t\t(Report all SGR attributes in DECCIR)", "extendedCir", NSS_ICONFIG_EXTENDED_CIR},
     {"fixed", "\t\t\t(Don't allow to change window size, if supported)", "fixed", NSS_ICONFIG_FIXED_SIZE},
     {"fkey-increment", "\t(Step in numbering function keys)", "fkeyIncrement", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
     {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)", "font", NSS_SCONFIG_FONT_NAME},
@@ -113,9 +113,9 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"selected-background", "\t(Color of selected background)", "selectedBackground", NSS_CCONFIG_SELECTED_BG},
     {"selected-foreground", "\t(Color of selected text)", "selectedForeground", NSS_CCONFIG_SELECTED_FG},
     {"shell", ", -s<value>\t(Shell to start in new instance)", "shell", NSS_SCONFIG_SHELL},
-    {"special-bold", "\t\t(If special color should be used for bold text)", "specialBold", NSS_ICONFIG_SPEICAL_BOLD},
     {"special-blink", "\t\t(If special color should be used for blinking text)", "specialBlink", NSS_ICONFIG_SPEICAL_BLINK},
-    {"special-italic", "\t(If special color should be used for bold italic)", "specialBold", NSS_ICONFIG_SPEICAL_ITALIC},
+    {"special-bold", "\t\t(If special color should be used for bold text)", "specialBold", NSS_ICONFIG_SPEICAL_BOLD},
+    {"special-italic", "\t(If special color should be used for italic text)", "specialItalic", NSS_ICONFIG_SPEICAL_ITALIC},
     {"special-reverse", "\t(If special color should be used for reverse text)", "specialReverse", NSS_ICONFIG_SPEICAL_REVERSE},
     {"special-underlined", "\t(If special color should be used for underlined text)", "specialUnderlined", NSS_ICONFIG_SPEICAL_UNDERLINE},
     {"sync-timeout", "\t\t(Syncronous update timeout)", "syncTimeout", NSS_ICONFIG_SYNC_TIME},
@@ -125,15 +125,15 @@ nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
     {"title", ", -T<value>, -t<value> (Initial window title)", "title", NSS_SCONFIG_TITLE},
     {"trace-characters", "\t(Trace interpreted characters)", "traceCharacters", NSS_ICONFIG_TRACE_CHARACTERS},
     {"trace-controls", "\t(Trace interpreted control characters and sequences)", "traceControls", NSS_ICONFIG_TRACE_CONTROLS},
-    {"trace-events", "\t(Trace recieved events)", "traceEvents", NSS_ICONFIG_TRACE_EVENTS},
-    {"trace-fonts", "\t(Log font related information)", "traceFonts", NSS_ICONFIG_TRACE_FONTS},
-    {"trace-input", "\t(Trace user input)", "traceInput", NSS_ICONFIG_TRACE_INPUT},
-    {"trace-misc", "\t(Trace miscelleneous information)", "traceMisc", NSS_ICONFIG_TRACE_MISC},
+    {"trace-events", "\t\t(Trace recieved events)", "traceEvents", NSS_ICONFIG_TRACE_EVENTS},
+    {"trace-fonts", "\t\t(Log font related information)", "traceFonts", NSS_ICONFIG_TRACE_FONTS},
+    {"trace-input", "\t\t(Trace user input)", "traceInput", NSS_ICONFIG_TRACE_INPUT},
+    {"trace-misc", "\t\t(Trace miscelleneous information)", "traceMisc", NSS_ICONFIG_TRACE_MISC},
     {"triple-click-time", "\t(Time gap in milliseconds in witch tree mouse presses will be considered triple)", "trippleClickTime", NSS_ICONFIG_TRIPLE_CLICK_TIME},
     {"underline-width", "\t(Text underline width)", "underlineWidth", NSS_ICONFIG_UNDERLINE_WIDTH},
     {"underlined-color", "\t(Special color of underlined text)", "underlinedColor", NSS_CCONFIG_UNDERLINE},
     {"urgent-on-bell", "\t(Set window urgency on bell)", "urgentOnBell", NSS_ICONFIG_URGENT_ON_BELL},
-    {"use-utf8", "\t\t(Enable uft-8 i/o)", "useUTF8", NSS_ICONFIG_UTF8},
+    {"use-utf8", "\t\t(Enable UTF-8 I/O)", "useUtf8", NSS_ICONFIG_UTF8},
     {"vertical-border", "\t(Left and right borders)", "verticalBorder", NSS_ICONFIG_LEFT_BORDER},
     {"visual-bell", "\t\t(Whether bell should be visual or normal)", "visualBell", NSS_ICONFIG_VISUAL_BELL},
     {"visual-bell-time", "\t(Length of visual bell)", "visualBellTime", NSS_ICONFIG_VISUAL_BELL_TIME},
@@ -393,8 +393,8 @@ void nss_config_set_string(uint32_t opt, const char *val) {
         // Boolean option
         else if (ioptions[opt].min == 0 && ioptions[opt].max == 1) {
             ival = -1;
-            if (strcasecmp(val, "yes") || strcasecmp(val, "y") || strcasecmp(val, "true")) ival = 1;
-            else if (strcasecmp(val, "no") || strcasecmp(val, "n") || strcasecmp(val, "false")) ival = 0;
+            if (!strcasecmp(val, "yes") || !strcasecmp(val, "y") || !strcasecmp(val, "true")) ival = 1;
+            else if (!strcasecmp(val, "no") || !strcasecmp(val, "n") || !strcasecmp(val, "false")) ival = 0;
             if (ival >= 0) nss_config_set_integer(opt, ival);
             else warn("Unknown string option %d", opt);
         } else warn("Unknown string option %d", opt);
