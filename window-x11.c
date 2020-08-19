@@ -595,7 +595,7 @@ void nss_window_bell(nss_window_t *win, uint8_t vol) {
             clock_gettime(NSS_CLOCK, &win->vbell_start);
             nss_term_set_invert(win->term, !win->init_invert);
         }
-    } else {
+    } else if (vol) {
         xcb_xkb_bell(con, XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_ID_DFLT_XI_CLASS,
                 XCB_XKB_ID_DFLT_XI_ID, vol, 1, 0, 0, 0, XCB_ATOM_ANY, win->wid);
     }
