@@ -793,26 +793,28 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
     ssize_t delta = term->view - old_view;
     if (delta > 0) { //Up
         nss_term_damage_lines(term, 0, delta);
-        nss_window_shift(term->win, 0, delta, term->height - delta, 0);
+        nss_window_shift(term->win, 0, 0, 0, delta, term->width, term->height - delta, 0);
     } else if (delta < 0) { // Down
         nss_term_damage_lines(term, term->height + delta, term->height);
-        nss_window_shift(term->win, -delta, 0, term->height + delta, 0);
+        nss_window_shift(term->win, 0, -delta, 0, 0, term->width, term->height + delta, 0);
     }
 
     nss_mouse_scroll_view(term, delta);
     term->prev_c_view_changed |= !old_view ^ !term->view;
 }
 
-static void term_append_history(nss_term_t *term, nss_line_t *line) {
+static void term_append_history(nss_term_t *term, nss_line_t *line, _Bool opt) {
     if (term->sb_max_caps > 0) {
         /* Minimize line size to save memory */
-        line = term_realloc_line(term, line, line_length(line));
-        if (line->pal) {
-            optimize_line_palette(line);
-            nss_line_palette_t *pal = realloc(line->pal, sizeof(nss_line_palette_t) + sizeof(nss_color_t)*(line->pal->size));
-            if (pal) {
-                line->pal = pal;
-                pal->caps = pal->size;
+        if (opt) {
+            line = term_realloc_line(term, line, line_length(line));
+            if (line->pal) {
+                optimize_line_palette(line);
+                nss_line_palette_t *pal = realloc(line->pal, sizeof(nss_line_palette_t) + sizeof(nss_color_t)*(line->pal->size));
+                if (pal) {
+                    line->pal = pal;
+                    pal->caps = pal->size;
+                }
             }
         }
 
@@ -1254,12 +1256,16 @@ static void term_copy(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coor
         ye = MAX(0, MIN(MIN(ye - ys + yd, term->height) - yd + ys, term->height));
     }
 
+    if (xs >= xe || ys >= ye) return;
+
+    _Bool dmg = term->view || !nss_window_shift(term->win, xs, ys, xd, yd, xe - xs, ye - ys, 1);
+
     if (yd < ys || (yd == ys && xd < xs)) {
         for (; ys < ye; ys++, yd++) {
             nss_line_t *sl = term->screen[ys], *dl = term->screen[yd];
             for (nss_coord_t x1 = xs, x2 = xd; x1 < xe; x1++, x2++) {
                 nss_cell_t cel = sl->cell[x1];
-                cel.attr &= ~nss_attrib_drawn;
+                if (dmg) cel.attr &= ~nss_attrib_drawn;
                 if (cel.fg >= NSS_PALETTE_SIZE)
                     cel.fg = alloc_color(dl, sl->pal->data[cel.fg - NSS_PALETTE_SIZE]);
                 if (cel.bg >= NSS_PALETTE_SIZE)
@@ -1272,7 +1278,7 @@ static void term_copy(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coor
             nss_line_t *sl = term->screen[ye - 1], *dl = term->screen[yd - 1];
             for (nss_coord_t x1 = xe, x2 = xd; x1 > xs; x1--, x2--) {
                 nss_cell_t cel = sl->cell[x1 - 1];
-                cel.attr &= ~nss_attrib_drawn;
+                if (dmg) cel.attr &= ~nss_attrib_drawn;
                 if (cel.fg >= NSS_PALETTE_SIZE)
                     cel.fg = alloc_color(dl, sl->pal->data[cel.fg - NSS_PALETTE_SIZE]);
                 if (cel.bg >= NSS_PALETTE_SIZE)
@@ -1407,14 +1413,11 @@ static void term_swap_screen(nss_term_t *term, _Bool damage) {
 static void term_scroll_horizontal(nss_term_t *term, nss_coord_t left, nss_coord_t amount) {
     nss_coord_t top = term_min_y(term), right = term_max_x(term), bottom = term_max_y(term);
 
-    /* Don't need to touch cursor unless copying window content
     if (term->prev_c_y >= 0 && top <= term->prev_c_y && term->prev_c_y < bottom &&
         left <= term->prev_c_y && term->prev_c_x < right) {
         term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
-        if (amount >= 0) term->prev_c_x = MAX(0, term->prev_c_x - amount);
-        else term->prev_c_x = MIN(term->width - 1, term->prev_c_x - amount);
+        term->prev_c_x = MAX(left, MIN(right, term->prev_c_x - amount));
     }
-    */
 
     for (nss_coord_t i = top; i < bottom; i++) {
         term_adjust_wide_left(term, left, i);
@@ -1430,8 +1433,6 @@ static void term_scroll_horizontal(nss_term_t *term, nss_coord_t left, nss_coord
         term_copy(term, left, top, right - amount, bottom, left + amount, top, 0);
         term_erase(term, left, top, left + amount, bottom, 0);
     }
-
-    //TODO Optimize: shift window contents
 }
 
 static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _Bool save) {
@@ -1450,7 +1451,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
 
             if (save && !(term->mode & nss_tm_altscreen) && term->top == top) {
                 for (nss_coord_t i = 0; i < amount; i++) {
-                    term_append_history(term, term->screen[top + i]);
+                    term_append_history(term, term->screen[top + i],  1);
                     term->screen[top + i] = term_create_line(term, term->width);
                 }
             } else term_erase(term, 0, top, term->width, top + amount, 0);
@@ -1458,7 +1459,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
             for (nss_coord_t i = 0; i < rest; i++)
                 SWAP(nss_line_t *, term->screen[top + i], term->screen[top + amount + i]);
 
-            if (term->view || !nss_window_shift(term->win, top + amount, top, bottom - top - amount, 1))
+            if (term->view || !nss_window_shift(term->win, 0, top + amount, 0, top, term->width, bottom - top - amount, 1))
                 nss_term_damage_lines(term, term->view + top, term->view + bottom - amount);
         } else { /* down */
             amount = MAX(amount, -(bottom - top));
@@ -1469,10 +1470,17 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
             for (nss_coord_t i = 1; i <= rest; i++)
                 SWAP(nss_line_t *, term->screen[bottom - i], term->screen[bottom + amount - i]);
 
-            if (term->view || !nss_window_shift(term->win, top, top - amount, bottom - top + amount, 1))
+            if (term->view || !nss_window_shift(term->win, 0, top, 0, top - amount, term->width, bottom - top + amount, 1))
                 nss_term_damage_lines(term, term->view + top - amount, term->view + bottom);
         }
     } else { // Slow scrolling with margins
+
+        if (term->prev_c_y >= 0 && top <= term->prev_c_y && term->prev_c_y < bottom &&
+            left <= term->prev_c_y && term->prev_c_x < right) {
+            term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
+            term->prev_c_y = MAX(top, MIN(bottom, term->prev_c_y - amount));
+        }
+
         for (nss_coord_t i = top; i < bottom; i++) {
             term_adjust_wide_left(term, left, i);
             term_adjust_wide_right(term, right - 1, i);
@@ -1483,8 +1491,8 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
 
             if (save && !(term->mode & nss_tm_altscreen) && term->top == top) {
                 for (nss_coord_t i = 0; i < amount; i++) {
-                    nss_line_t *ln = term_create_line(term, term_max_x(term));
-                    for (ssize_t k = term_min_x(term); k < term_max_x(term); k++) {
+                    nss_line_t *ln = term_create_line(term, line_length(term->screen[top + i]));
+                    for (ssize_t k = term_min_x(term); k < MIN(term_max_x(term), ln->width); k++) {
                         nss_cell_t cel = term->screen[top + i]->cell[k];
                         if (cel.fg >= NSS_PALETTE_SIZE) cel.fg = alloc_color(ln,
                                 term->screen[top + i]->pal->data[cel.fg - NSS_PALETTE_SIZE]);
@@ -1492,7 +1500,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
                                 term->screen[top + i]->pal->data[cel.bg - NSS_PALETTE_SIZE]);
                         ln->cell[k] = cel;
                     }
-                    term_append_history(term, ln);
+                    term_append_history(term, ln, 0);
                 }
             }
 
@@ -1503,8 +1511,6 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
             term_copy(term, left, top, right, bottom - amount, left, top + amount, 0);
             term_erase(term, left, top, right, top + amount, 0);
         }
-
-        //TODO Optimize: shift window contents
     }
     nss_mouse_scroll_selection(term, amount, save);
 }
@@ -4901,7 +4907,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
 
         for (nss_coord_t i = height; i < term->height; i++) {
             if (i < height + delta)
-                term_append_history(term, term->screen[i - height]);
+                term_append_history(term, term->screen[i - height], 1);
             else
                 term_free_line(term->screen[i]);
             term_free_line(term->back_screen[i]);
@@ -4909,7 +4915,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
 
         memmove(term->screen, term->screen + delta, (term->height - delta)* sizeof(term->screen[0]));
         if (delta) {
-            nss_window_shift(term->win, delta, 0, term->height - delta, 0);
+            nss_window_shift(term->win, 0, delta, 0,  0, term->width, term->height - delta, 0);
             _Bool tmp = term->mode & nss_tm_lr_margins;
             nss_coord_t old_top = term->top;
             term->top = 0;

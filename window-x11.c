@@ -1060,7 +1060,7 @@ void nss_free_window(nss_window_t *win) {
     free(win);
 };
 
-_Bool nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_coord_t height, _Bool delay) {
+_Bool nss_window_shift(nss_window_t *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, _Bool delay) {
     struct timespec cur;
     clock_gettime(NSS_CLOCK, &cur);
 
@@ -1072,16 +1072,21 @@ _Bool nss_window_shift(nss_window_t *win, nss_coord_t ys, nss_coord_t yd, nss_co
 
     ys = MAX(0, MIN(ys, win->ch));
     yd = MAX(0, MIN(yd, win->ch));
+    xs = MAX(0, MIN(xs, win->cw));
+    xd = MAX(0, MIN(xd, win->cw));
     height = MIN(height, MIN(win->ch - ys, win->ch - yd));
+    width = MIN(width, MIN(win->cw - xs, win->cw - xd));
 
-    if (!height) return 1;
+    if (!height || !width) return 1;
 
     ys *= win->char_height + win->char_depth;
     yd *= win->char_height + win->char_depth;
-    nss_coord_t width = win->cw * win->char_width;
+    xs *= win->char_width;
+    xd *= win->char_width;
     height *= win->char_depth + win->char_height;
+    width *= win->char_width;
 
-    nss_renderer_copy(win, (nss_rect_t){0, yd, width, height}, 0, ys);
+    nss_renderer_copy(win, (nss_rect_t){xd, yd, width, height}, xs, ys);
 
     return 1;
 }
