@@ -392,7 +392,7 @@ static void change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss
 
     if (state == nss_sstate_pressed) {
         loc->r.x0 = x;
-        loc->r.y0 = y - term_scrollback_size(term);
+        loc->r.y0 = y - term_view_pos(term);
 
         struct timespec now;
         clock_gettime(NSS_CLOCK, &now);
@@ -411,7 +411,7 @@ static void change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss
     loc->state = state;
     loc->r.rect = rectangular;
     loc->r.x1 = x;
-    loc->r.y1 = y - term_scrollback_size(term);
+    loc->r.y1 = y - term_view_pos(term);
 
     snap_selection(term);
     update_selection(term, oldstate, old);
