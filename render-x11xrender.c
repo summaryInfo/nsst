@@ -324,7 +324,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_line_iter_t *it, nss_color
                     cel.attr ^= nss_attrib_inverse;
 
                 spec = nss_describe_cell(cel, palette, line->pal->data,
-                        win->blink_state, nss_term_is_selected(win->term, i, line_iter_y(it)));
+                        win->blink_state, nss_mouse_is_selected(win->term, i, line_iter_y(it)));
                 g =  spec.ch | (spec.face << 24);
 
                 _Bool fetched = nss_cache_is_fetched(win->font_cache, g);
