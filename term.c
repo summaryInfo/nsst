@@ -682,6 +682,9 @@ static nss_line_t *term_realloc_line(nss_term_t *term, nss_line_t *line, nss_coo
             new->cell[i] = cell;
     }
 
+    // Reset line wrapping state
+    new->wrap_at = 0;
+
     new->width = width;
     return new;
 }
@@ -692,7 +695,12 @@ static void term_free_line(nss_line_t *line) {
 }
 
 inline static void term_put_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_char_t ch) {
-    term->screen[y]->cell[x] = MKCELLWITH(fixup_color(term->screen[y], &term->c), ch);
+    nss_line_t *line = term->screen[y];
+
+    // Writing to the line resets its wrapping state
+    line->wrap_at = 0;
+
+    line->cell[x] = MKCELLWITH(fixup_color(line, &term->c), ch);
 }
 
 nss_udk_t nss_term_lookup_udk(nss_term_t *term, nss_param_t n) {
@@ -1263,6 +1271,8 @@ static void term_copy(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coor
     if (yd < ys || (yd == ys && xd < xs)) {
         for (; ys < ye; ys++, yd++) {
             nss_line_t *sl = term->screen[ys], *dl = term->screen[yd];
+            // Reset line wrapping state
+            dl->wrap_at = 0;
             for (nss_coord_t x1 = xs, x2 = xd; x1 < xe; x1++, x2++) {
                 nss_cell_t cel = sl->cell[x1];
                 if (dmg) cel.attr &= ~nss_attrib_drawn;
@@ -1276,6 +1286,8 @@ static void term_copy(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coor
     } else {
         for (yd += ye - ys, xd += xe - xs; ys < ye; ye--, yd--) {
             nss_line_t *sl = term->screen[ye - 1], *dl = term->screen[yd - 1];
+            // Reset line wrapping state
+            dl->wrap_at = 0;
             for (nss_coord_t x1 = xe, x2 = xd; x1 > xs; x1--, x2--) {
                 nss_cell_t cel = sl->cell[x1 - 1];
                 if (dmg) cel.attr &= ~nss_attrib_drawn;
@@ -1294,6 +1306,8 @@ static void term_fill(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coor
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
+        // Reset line wrapping state
+        line->wrap_at = 0;
         nss_cell_t cell = fixup_color(line, &term->c);
         cell.ch = ch;
         cell.attr = 0;
@@ -1311,6 +1325,8 @@ static void term_protective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t 
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
+        // Reset line wrapping state
+        line->wrap_at = 0;
         nss_cell_t cell = fixup_color(line, &term->c);
         cell.attr = 0;
         for (nss_coord_t i = xs; i < xe; i++)
@@ -1324,6 +1340,8 @@ static void term_selective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t y
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
+        // Reset line wrapping state
+        line->wrap_at = 0;
         for (nss_coord_t i = xs; i < xe; i++)
             if (!(line->cell[i].attr & nss_attrib_protected))
                 line->cell[i] = MKCELLWITH(line->cell[i], 0);
@@ -3208,11 +3226,12 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
             term_do_wrap(term);
     } else term->c.x = MIN(term->c.x, term_max_x(term) - width);
 
-    nss_cell_t *cell = &term->screen[term->c.y]->cell[term->c.x];
+    nss_line_t *line = term->screen[term->c.y];
+    nss_cell_t *cell = &line->cell[term->c.x];
 
     // Shift characters to the left if insert mode is enabled
     if (term->mode & nss_tm_insert && term->c.x + width < term_max_x(term)) {
-        for (nss_cell_t *c = cell + width; c - term->screen[term->c.y]->cell < term_max_x(term); c++)
+        for (nss_cell_t *c = cell + width; c - line->cell < term_max_x(term); c++)
             c->attr &= ~nss_attrib_drawn;
         memmove(cell + width, cell, (term_max_x(term) - term->c.x - width)*sizeof(*cell));
     }
@@ -3226,12 +3245,13 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
         nss_mouse_clear_selection(term);
 
     // Put character itself
-    cell[0] = fixup_color(term->screen[term->c.y], &term->c);
-    cell[0].ch = ch;
+    term_put_cell(term, term->c.x, term->c.y, ch);
 
     // Put dummy character to the left of wide
     if (__builtin_expect(width > 1, 0)) {
-        cell[1] = fixup_color(term->screen[term->c.y], &term->c);
+        // Don't need to call fixup_color,
+        // it is already done
+        cell[1] = term->c.cel;
         cell[0].attr |= nss_attrib_wide;
     }
 
@@ -4310,7 +4330,7 @@ static void term_dispatch_esc(nss_term_t *term) {
     case E('8') | I0('#'): /* DECALN*/
         term_reset_margins(term);
         nss_mouse_clear_selection(term);
-        term->c.x = term->c.y = 0;
+        term_move_to(term, 0, 0);
         for (nss_coord_t i = 0; i < term->height; i++)
             for (nss_coord_t j = 0; j < term->width; j++)
                 term_put_cell(term, j, i, 'E');
@@ -4411,7 +4431,7 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
     case 0x17: /* ETB (IGNORE) */
         break;
     case 0x1a: /* SUB */
-        term_move_to(term, term->c.x, term->c.y);
+        term_reset_pending(term);
         // Clear selection when selected cell is overwritten
         if (nss_mouse_is_selected(term, term->c.x, term->c.y))
             nss_mouse_clear_selection(term);

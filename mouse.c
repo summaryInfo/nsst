@@ -255,58 +255,56 @@ static void snap_selection(nss_term_t *term) {
 
         nss_line_t *line;
 
-        loc->n.y0++;
         do line = nss_term_line_at(term, --loc->n.y0);
         while (line && line->wrap_at);
+        loc->n.y0++;
 
         do line = nss_term_line_at(term, loc->n.y1++);
         while (line && line->wrap_at);
         loc->n.y1--;
     } else if (loc->snap == nss_ssnap_word) {
         nss_line_t *line;
-        ssize_t y;
 
-        if ((line = nss_term_line_at(term, y = loc->n.y0))) {
+        if ((line = nss_term_line_at(term, loc->n.y0))) {
             loc->n.x0 = MAX(MIN(loc->n.x0, line->width - 1), 0);
             _Bool first = 1, cat = is_separator(line->cell[loc->n.x0].ch);
             do {
-                if (!first) {
-                    loc->n.x0 = line->wrap_at;
-                    loc->n.y0--;
-                } else first = 0;
+                if (!first) loc->n.x0 = line->wrap_at - 1;
+                first = 0;
                 while (loc->n.x0 > 0 &&
                         cat == is_separator(line->cell[loc->n.x0 - 1].ch)) loc->n.x0--;
-                if (loc->n.x0 > 0 || cat != is_separator(line->cell[0].ch)) break;
-            } while ((line = nss_term_line_at(term, --y)) && line->wrap_at);
+                if (loc->n.x0 > 0 || cat != is_separator(line->cell[0].ch)) {
+                    loc->n.y0--;
+                    break;
+                }
+            } while ((line = nss_term_line_at(term, --loc->n.y0)) && line->wrap_at);
+            loc->n.y0++;
         }
 
-        y = loc->n.y1;
-        if ((line = nss_term_line_at(term, y++))) {
+        if ((line = nss_term_line_at(term, loc->n.y1))) {
             loc->n.x1 = MAX(MIN(loc->n.x1, line->width - 1), 0);
             _Bool first = 1, cat = is_separator(line->cell[loc->n.x1].ch);
-            ssize_t line_len = line->wrap_at ? line->wrap_at : line->width;
+            ssize_t line_len;
             do {
+                line_len = line->wrap_at ? line->wrap_at : line->width;
                 if (!first) {
                     if (cat != is_separator(line->cell[0].ch)) break;
                     loc->n.x1 = 0;
-                    loc->n.y1++;
-                    line_len = line->wrap_at ? line->wrap_at : line->width;
                 } else first = 0;
                 while (loc->n.x1 < line_len - 1 &&
                         cat == is_separator(line->cell[loc->n.x1 + 1].ch)) loc->n.x1++;
-                if (loc->n.x0 < line_len - 1 || cat != is_separator(line->cell[line_len - 1].ch)) break;
-            } while (line->wrap_at && (line = nss_term_line_at(term, y++)));
+                if (loc->n.x1 < line_len - 1 || cat != is_separator(line->cell[line_len - 1].ch)) break;
+            } while (line->wrap_at && (line = nss_term_line_at(term, ++loc->n.y1)));
+            if (!line) loc->n.y1--;
         }
     }
-
-    // Snap selection on wide characters
 
     nss_line_t *ly1 = nss_term_line_at(term, loc->n.y1);
     if (loc->n.x1 < ly1->width)
         loc->n.x1 += !!(ly1->cell[loc->n.x1].attr & nss_attrib_wide);
 
     nss_line_t *ly0 = nss_term_line_at(term, loc->n.y0);
-    if (loc->n.x0 < ly0->width && loc->n.x0 > 0)
+    if (loc->n.x0 > 0 && loc->n.x0 < ly0->width)
         loc->n.x0 -= !!(ly0->cell[loc->n.x0 - 1].attr & nss_attrib_wide);
 }
 
