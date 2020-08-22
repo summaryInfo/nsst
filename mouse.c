@@ -419,7 +419,6 @@ static uint8_t *selection_data(nss_term_t *term) {
             }
         }
         res[pos -= !!pos] = '\0';
-        warn("S<%s>", res);
         return res;
     } else return NULL;
 }
