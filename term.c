@@ -1913,11 +1913,11 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
     nss_coord_t left = term_min_x(term), right = term_max_x(term), bottom = term_max_y(term);
 
     if (left == 0 && right == term->width) { // Fast scrolling without margins
-        //if (top <= term->prev_c_y && term->prev_c_y < bottom) {
-        //    term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
-        //    if (amount >= 0) term->prev_c_y = MAX(top, term->prev_c_y - amount);
-        //    else term->prev_c_y = MIN(bottom, term->prev_c_y - amount);
-        //}
+        if (top <= term->prev_c_y && term->prev_c_y < bottom) {
+            term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
+            if (amount >= 0) term->prev_c_y = MAX(top, term->prev_c_y - amount);
+            else term->prev_c_y = MIN(bottom, term->prev_c_y - amount);
+        }
 
         if (amount > 0) { /* up */
             amount = MIN(amount, (bottom - top));
