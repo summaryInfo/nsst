@@ -287,7 +287,8 @@ static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
         dst[i] = src[i];
 }
 
-_Bool nss_window_submit_screen(nss_window_t *win, ssize_t view, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
+_Bool nss_window_submit_screen(nss_window_t *win, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
+
     rctx.cbufpos = 0;
     rctx.bufpos = 0;
 
@@ -295,21 +296,22 @@ _Bool nss_window_submit_screen(nss_window_t *win, ssize_t view, nss_color_t *pal
 
     if (cond_cblink) cursor |= win->blink_state;
 
-    for (ssize_t k = 0; k < win->ch; k++) {
-        nss_line_t *line = nss_term_line_at(win->term, k + view);
+    nss_line_pos_t vpos = nss_term_get_view(win->term);
+    for (ssize_t k = 0; k < win->ch; k++, nss_term_inc_line_pos(win->term, &vpos, 1)) {
+        nss_line_view_t line = nss_term_line_at(win->term, vpos);
         _Bool next_dirty = 0;
-        if (win->cw > line->width) {
+        if (win->cw > line.width) {
             push_rect(&(xcb_rectangle_t){
-                .x = line->width * win->char_width,
+                .x = line.width * win->char_width,
                 .y = k * (win->char_height + win->char_depth),
-                .width = (win->cw - line->width) * win->char_width,
+                .width = (win->cw - line.width) * win->char_width,
                 .height = win->char_height + win->char_depth
             });
             next_dirty = 1;
         }
-        for (nss_coord_t i = MIN(win->cw, line->width) - 1; i >= 0; i--) {
-            _Bool dirty = line->force_damage || !(line->cell[i].attr & nss_attrib_drawn) ||
-                    (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink)) ||
+        for (nss_coord_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
+            _Bool dirty = line.line->force_damage || !(line.cell[i].attr & nss_attrib_drawn) ||
+                    (!win->blink_commited && (line.cell[i].attr & nss_attrib_blink)) ||
                     (cond_cblink && k == cur_y && i == cur_x);
 
             struct nss_cellspec spec;
@@ -318,14 +320,14 @@ _Bool nss_window_submit_screen(nss_window_t *win, ssize_t view, nss_color_t *pal
             _Bool g_wide = 0;
             nss_char_t g = 0;
             if (dirty || next_dirty) {
-                cel = line->cell[i];
+                cel = line.cell[i];
 
                 if (k == cur_y && i == cur_x && cursor &&
                         win->focused && ((win->cursor_type + 1) & ~1) == nss_cursor_block)
                     cel.attr ^= nss_attrib_inverse;
 
-                spec = nss_describe_cell(cel, palette, line->pal->data,
-                        win->blink_state, nss_mouse_is_selected(win->term, i, k));
+                spec = nss_describe_cell(cel, palette, line.line->pal->data,
+                        win->blink_state, nss_mouse_is_selected_in_view(win->term, i, k));
                 g =  spec.ch | (spec.face << 24);
 
                 _Bool fetched = nss_cache_is_fetched(win->font_cache, g);
@@ -354,11 +356,12 @@ _Bool nss_window_submit_screen(nss_window_t *win, ssize_t view, nss_color_t *pal
                     .strikethrough = spec.stroke
                 };
 
-                line->cell[i].attr |= nss_attrib_drawn;
+                line.cell[i].attr |= nss_attrib_drawn;
             }
             next_dirty = dirty;
         }
-        line->force_damage = 0;
+        // Only reset force flag for last part of the line
+        if (!nss_term_is_continuation_line(line)) line.line->force_damage = 0;
     }
 
     if (rctx.bufpos) {

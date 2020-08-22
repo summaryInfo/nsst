@@ -235,20 +235,21 @@ static void optimize_bounds(nss_rect_t *bounds, size_t *boundc, _Bool fine_grain
     *boundc = j;
 }
 
-_Bool nss_window_submit_screen(nss_window_t *win, ssize_t view, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
+_Bool nss_window_submit_screen(nss_window_t *win, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
 
     _Bool scrolled = win->ren.boundc;
     _Bool cond_cblink = !win->blink_commited && (win->cursor_type & 1) && nss_term_is_cursor_enabled(win->term);
 
     if (cond_cblink) cursor |= win->blink_state;
 
-    for (ssize_t k = 0; k < win->ch; k++) {
-        nss_line_t *line = nss_term_line_at(win->term, k + view);
+    nss_line_pos_t vpos = nss_term_get_view(win->term);
+    for (ssize_t k = 0; k < win->ch; k++, nss_term_inc_line_pos(win->term, &vpos, 1)) {
+        nss_line_view_t line = nss_term_line_at(win->term, vpos);
         _Bool next_dirty = 0;
         nss_rect_t l_bound = {-1, k, 0, 1};
-        for (nss_coord_t i =  MIN(win->cw, line->width) - 1; i >= 0; i--) {
-            _Bool dirty = line->force_damage || !(line->cell[i].attr & nss_attrib_drawn) ||
-                    (!win->blink_commited && (line->cell[i].attr & nss_attrib_blink)) ||
+        for (nss_coord_t i =  MIN(win->cw, line.width) - 1; i >= 0; i--) {
+            _Bool dirty = line.line->force_damage || !(line.cell[i].attr & nss_attrib_drawn) ||
+                    (!win->blink_commited && (line.cell[i].attr & nss_attrib_blink)) ||
                     (cond_cblink && k == cur_y && i == cur_x);
 
             struct nss_cellspec spec;
@@ -256,14 +257,14 @@ _Bool nss_window_submit_screen(nss_window_t *win, ssize_t view, nss_color_t *pal
             nss_glyph_t *glyph = NULL;
             _Bool g_wide = 0;
             if (dirty || next_dirty) {
-                cel = line->cell[i];
+                cel = line.cell[i];
 
                 if (k == cur_y && i == cur_x && cursor &&
                         win->focused && ((win->cursor_type + 1) & ~1) == nss_cursor_block)
                     cel.attr ^= nss_attrib_inverse;
 
-                spec = nss_describe_cell(cel, palette, line->pal->data,
-                        win->blink_state, nss_mouse_is_selected(win->term, i, k));
+                spec = nss_describe_cell(cel, palette, line.line->pal ? line.line->pal->data : NULL,
+                        win->blink_state, nss_mouse_is_selected_in_view(win->term, i, k));
 
                 if (spec.ch) glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
                 g_wide = glyph && glyph->x_off > win->char_width - nss_config_integer(NSS_ICONFIG_FONT_SPACING);
@@ -295,7 +296,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, ssize_t view, nss_color_t *pal
                 // Strikethough
                 if (spec.stroke) nss_image_draw_rect(win->ren.im, r_strike, spec.fg);
 
-                line->cell[i].attr |= nss_attrib_drawn;
+                line.cell[i].attr |= nss_attrib_drawn;
 
                 if (l_bound.x < 0) l_bound.width = i + g_wide;
 
@@ -303,21 +304,28 @@ _Bool nss_window_submit_screen(nss_window_t *win, ssize_t view, nss_color_t *pal
             }
             next_dirty = dirty;
         }
-        if (l_bound.x >= 0 || (scrolled && win->cw > line->width)) {
-            if (win->cw > line->width) {
+        if (l_bound.x >= 0 || (scrolled && win->cw > line.width)) {
+            if (win->cw > line.width) {
+                nss_color_t c = win->bg;
+                if (nss_mouse_is_selected_in_view(win->term, win->cw - 1, k)) {
+                    c = palette[NSS_SPECIAL_SELECTED_BG];
+                    if (!c) c = palette[NSS_SPECIAL_FG];
+                }
                 nss_image_draw_rect(win->ren.im, (nss_rect_t){
-                    .x = line->width * win->char_width,
+                    .x = line.width * win->char_width,
                     .y = k * (win->char_height + win->char_depth),
-                    .width = (win->cw - line->width) * win->char_width,
+                    .width = (win->cw - line.width) * win->char_width,
                     .height = win->char_height + win->char_depth
-                }, win->bg);
+                }, c);
                 l_bound.width = win->cw - 1;
-                if (l_bound.x < 0) l_bound.x = line->width;
+                if (l_bound.x < 0) l_bound.x = line.width;
             }
             l_bound.width = MIN(l_bound.width - l_bound.x + 1, win->cw);
             win->ren.bounds[win->ren.boundc++] = l_bound;
         }
-        line->force_damage = 0;
+
+        // Only reset force flag for last part of the line
+        if (!nss_term_is_continuation_line(line)) line.line->force_damage = 0;
     }
 
     if (cursor) {

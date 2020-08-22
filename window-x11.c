@@ -1157,7 +1157,7 @@ void nss_window_handle_resize(nss_window_t *win, int16_t width, int16_t height) 
     win->width = width;
     win->height = height;
 
-    nss_coord_t new_cw = MAX(1, (win->width - 2*win->left_border)/win->char_width);
+    nss_coord_t new_cw = MAX(2, (win->width - 2*win->left_border)/win->char_width);
     nss_coord_t new_ch = MAX(1, (win->height - 2*win->top_border)/(win->char_height+win->char_depth));
     nss_coord_t delta_x = new_cw - win->cw;
     nss_coord_t delta_y = new_ch - win->ch;

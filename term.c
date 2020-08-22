@@ -47,6 +47,7 @@
 #define MAX_REPORT 1024
 #define SGR_BUFSIZ 64
 #define UDK_MAX 37
+#define MAX_LINE_LEN 16384
 
 #define CSI "\x9B"
 #define OSC "\x9D"
@@ -114,11 +115,14 @@ struct nss_term {
     /* Cyclic buffer for
      * saved lines */
     nss_line_t **scrollback;
-    ssize_t view;
     ssize_t sb_top;
     ssize_t sb_limit;
     ssize_t sb_caps;
     ssize_t sb_max_caps;
+    /* offset in scrollback lines */
+    nss_line_pos_t view_pos;
+    /* virtual line number */
+    ssize_t view;
 
     nss_cursor_t c;
     nss_cursor_t cs;
@@ -270,12 +274,6 @@ struct nss_term {
 
 /* Default termios, initialized from main */
 static struct termios dtio;
-
-nss_line_t *nss_term_line_at(nss_term_t *term, ssize_t y) {
-    if (y >= 0) return (y >= term->height) ? NULL : term->screen[y];
-    else return (y < -term->sb_limit) ? NULL :
-            term->scrollback[(term->sb_top + term->sb_limit + y + 1) % term->sb_limit];
-}
 
 static void handle_chld(int arg) {
     int status;
@@ -521,13 +519,6 @@ void nss_setup_default_termios(void) {
 }
 
 static int tty_open(nss_term_t *term, const char *cmd, const char **args) {
-    int slave, master;
-    if (openpty(&master, &slave, NULL, NULL, NULL) < 0) {
-        warn("Can't create pseudo terminal");
-        term->fd = -1;
-        return -1;
-    }
-
     /* Configure PTY */
 
     struct termios tio = dtio;
@@ -541,7 +532,15 @@ static int tty_open(nss_term_t *term, const char *cmd, const char **args) {
         tio.c_iflag |= IUTF8;
 #endif
 
-    tcsetattr(slave, TCSANOW, &tio);
+    int slave, master;
+    if (openpty(&master, &slave, NULL, &tio, NULL) < 0) {
+        warn("Can't create pseudo terminal");
+        term->fd = -1;
+        return -1;
+    }
+
+    int fl = fcntl(master, F_GETFL);
+    if (fl >= 0) fcntl(master, F_SETFL, fl | O_NONBLOCK);
 
     pid_t pid;
     switch ((pid = fork())) {
@@ -656,12 +655,22 @@ inline static nss_cell_t fixup_color(nss_line_t *line, nss_cursor_t *cur) {
     return cel;
 }
 
+inline static void copy_cell(nss_line_t *dst, ssize_t dx, nss_line_t *src, ssize_t sx, _Bool dmg) {
+    nss_cell_t cel = src->cell[sx];
+    if (cel.fg >= NSS_PALETTE_SIZE) cel.fg = alloc_color(dst,
+            src->pal->data[cel.fg - NSS_PALETTE_SIZE]);
+    if (cel.bg >= NSS_PALETTE_SIZE) cel.bg = alloc_color(dst,
+            src->pal->data[cel.bg - NSS_PALETTE_SIZE]);
+    if (dmg) cel.attr &= ~nss_attrib_drawn;
+    dst->cell[dx] = cel;
+}
+
 static nss_line_t *term_create_line(nss_term_t *term, nss_coord_t width) {
     nss_line_t *line = malloc(sizeof(*line) + (size_t)width * sizeof(line->cell[0]));
     if (line) {
         line->width = width;
-        line->wrap_at = 0;
         line->pal = NULL;
+        line->wrapped = 0;
         line->force_damage = 0;
         nss_cell_t cel = fixup_color(line, &term->c);
         for (nss_coord_t i = 0; i < width; i++)
@@ -682,33 +691,33 @@ static nss_line_t *term_realloc_line(nss_term_t *term, nss_line_t *line, nss_coo
             new->cell[i] = cell;
     }
 
-    // Reset line wrapping state
-    new->wrap_at = 0;
-
     new->width = width;
     return new;
 }
 
 static void term_free_line(nss_line_t *line) {
-    free(line->pal);
+    if (line) free(line->pal);
     free(line);
+}
+
+inline static nss_coord_t line_length(nss_line_t *line) {
+    nss_coord_t max_x = line->width;
+    if (!line->wrapped)
+        while (max_x > 0 && !line->cell[max_x - 1].ch) max_x--;
+    return max_x;
 }
 
 inline static void term_put_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_char_t ch) {
     nss_line_t *line = term->screen[y];
 
     // Writing to the line resets its wrapping state
-    line->wrap_at = 0;
+    line->wrapped = 0;
 
     line->cell[x] = MKCELLWITH(fixup_color(line, &term->c), ch);
 }
 
 nss_udk_t nss_term_lookup_udk(nss_term_t *term, nss_param_t n) {
     return n < UDK_MAX ? term->udk[n] : (nss_udk_t){};
-}
-
-_Bool nss_term_is_cursor_enabled(nss_term_t *term) {
-    return !(term->mode & nss_tm_hide_cursor) && !term->view;
 }
 
 _Bool nss_term_is_utf8(nss_term_t *term) {
@@ -746,19 +755,556 @@ int nss_term_fd(nss_term_t *term) {
 
 void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
     if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
-        for (ssize_t i = damage.y - term->view; i < damage.y + damage.height - term->view; i++)
-            for (nss_coord_t j = damage.x; j <  MIN(damage.x + damage.width, nss_term_line_at(term, i)->width); j++)
-                nss_term_line_at(term, i)->cell[j].attr &= ~nss_attrib_drawn;
+        nss_line_pos_t vpos = nss_term_get_view(term);
+        nss_term_inc_line_pos(term, &vpos, damage.y);
+        for (ssize_t i = damage.y; i < damage.y + damage.height; i++) {
+            nss_line_view_t line = nss_term_line_at(term, vpos);
+            for (nss_coord_t j = damage.x; j <  MIN(damage.x + damage.width, line.width); j++)
+                line.cell[j].attr &= ~nss_attrib_drawn;
+            if (damage.x >= line.width) {
+                if (line.width) line.cell[line.width - 1].attr &= ~nss_attrib_drawn;
+                else line.line->force_damage = 1;
+            }
+            nss_term_inc_line_pos(term, &vpos, 1);
+        }
     }
 }
 
 void nss_term_damage_lines(nss_term_t *term, nss_coord_t ys, nss_coord_t yd) {
-    for (ssize_t i = ys; i < yd; i++)
-        nss_term_line_at(term, i - term->view)->force_damage = 1;
+    nss_line_pos_t vpos = nss_term_get_view(term);
+    nss_term_inc_line_pos(term, &vpos, ys);
+    for (ssize_t i = ys; i < yd; i++, nss_term_inc_line_pos(term, &vpos, 1))
+        nss_term_line_at(term, vpos).line->force_damage = 1;
+}
+
+_Bool term_view_is_reset(nss_term_t *term) {
+    return !term->view_pos.line;
+}
+
+ssize_t term_view(nss_term_t *term) {
+    return term->view;
+}
+
+inline static nss_line_t *line_at(nss_term_t *term, ssize_t y) {
+    return y >= 0 ? term->screen[y] :
+            term->scrollback[(term->sb_top + term->sb_caps + y + 1) % term->sb_caps];
+}
+
+inline static _Bool is_wide(nss_line_t *ln, ssize_t x) {
+    return ln->cell[x].attr & nss_attrib_wide;
+}
+
+inline static ssize_t line_wid(nss_line_t *ln, ssize_t off, ssize_t w) {
+    off += w;
+    if (off - 1 < ln->width)
+        off -= is_wide(ln, off - 1);
+    return MIN(off, ln->width);
+
+}
+
+inline static ssize_t line_segments(nss_line_t *ln, ssize_t off, ssize_t w) {
+    ssize_t n = off < ln->width || (!ln->width && !off);
+    while ((off = line_wid(ln, off, w)) < ln->width) n++;
+    return n;
+}
+
+nss_line_view_t nss_term_line_at(nss_term_t *term, nss_line_pos_t pos) {
+    if (pos.line >= -term->sb_limit && pos.line < term->height) {
+        nss_line_t *ln = line_at(term, pos.line);
+        ssize_t wid = line_wid(ln, pos.offset, term->width);
+        return (nss_line_view_t) {
+            .width = wid - pos.offset,
+            .wrapped = ln->wrapped || wid < ln->width,
+            .cell = ln->cell + pos.offset,
+            .line = ln,
+        };
+    } else return (nss_line_view_t){0};
+}
+
+
+ssize_t nss_term_inc_line_pos(nss_term_t *term, nss_line_pos_t *pos, ssize_t amount) {
+    nss_line_t *ln;
+    if (amount < 0) {
+        if (pos->line - 1 < -term->sb_limit) return amount;
+        ln = line_at(term, pos->line);
+        // TODO Litle optimization
+        amount += line_segments(ln, 0, term->width) - line_segments(ln, pos->offset, term->width);
+        pos->offset = 0;
+        while (amount < 0) {
+            if (pos->line - 1 < -term->sb_limit) return amount;
+            ln = line_at(term, --pos->line);
+            amount += line_segments(ln, 0, term->width);
+        }
+    }
+    if (amount > 0) {
+        if (pos->line >= term->height) return amount;
+        ln = line_at(term, pos->line);
+        while (pos->line < term->height && amount) {
+            if ((pos->offset = line_wid(ln, pos->offset, term->width)) >= ln->width) {
+                pos->offset = 0;
+                if (pos->line + 1 >= term->height) break;
+                ln = line_at(term, ++pos->line);
+            }
+            amount--;
+        }
+    }
+    return amount;
+}
+
+_Bool nss_term_is_continuation_line(nss_line_view_t line) {
+    return line.cell - line.line->cell + line.width < line.line->width;
+}
+
+nss_line_pos_t nss_term_get_view(nss_term_t *term) {
+    return term->view_pos;
+}
+
+nss_line_pos_t nss_term_get_line_pos(nss_term_t *term, ssize_t y) {
+    nss_line_pos_t pos = {0, 0};
+    nss_term_inc_line_pos(term, &pos, y);
+    return pos;
+}
+
+static void term_reset_view(nss_term_t *term, _Bool damage) {
+    term->prev_c_view_changed |= !!term_view_is_reset(term);
+    ssize_t old_view = term->view;
+    term->view_pos = (nss_line_pos_t){ 0 };
+    term->view = 0;
+    nss_mouse_scroll_view(term, -old_view);
+    if (damage) nss_term_damage_lines(term, 0, term->height);
+}
+
+static void term_free_scrollback(nss_term_t *term) {
+    if (!term->scrollback) return;
+
+    term_reset_view(term, 0);
+    for (ssize_t i = 1; i <= (term->sb_caps == term->sb_max_caps ? term->sb_caps : term->sb_limit); i++)
+        term_free_line(line_at(term, -i));
+    free(term->scrollback);
+
+    term->scrollback = NULL;
+    term->sb_caps = 0;
+    term->sb_limit = 0;
+    term->sb_top = -1;
+}
+
+void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
+    if (term->mode & nss_tm_altscreen) {
+        if (term->mode & nss_tm_alternate_scroll)
+            nss_term_answerback(term, CSI"%"PRIparam"%c", abs(amount), amount > 0 ? 'A' : 'D');
+        return;
+    }
+
+    _Bool old_viewr = term_view_is_reset(term);
+
+    ssize_t delta = nss_term_inc_line_pos(term, &term->view_pos, -amount) + amount;
+    if (term->view_pos.line > 0) {
+        delta += term->view_pos.line;
+        term->view_pos.line = 0;
+    }
+
+    term->view += delta;
+
+    if (delta > 0) /* View down, image up */ {
+        nss_window_shift(term->win, 0, 0, 0, delta, term->width, term->height - delta, 0);
+        nss_term_damage_lines(term, 0, delta);
+    } else if (delta < 0) /* View down, image up */ {
+        nss_window_shift(term->win, 0, -delta, 0, 0, term->width, term->height + delta, 0);
+        nss_term_damage_lines(term, term->height + delta, term->height);
+    }
+
+    nss_mouse_scroll_view(term, delta);
+    term->prev_c_view_changed |= old_viewr != term_view_is_reset(term);
+}
+
+static ssize_t term_append_history(nss_term_t *term, nss_line_t *line, _Bool opt) {
+    ssize_t res = 0;
+    if (term->sb_max_caps > 0) {
+        ssize_t llen = line_length(line);
+
+        /* If last line in history is wrapped concat current line to it */
+        if (term->sb_limit && line_at(term, -1)->wrapped && llen + line_at(term, -1)->width < MAX_LINE_LEN) {
+            nss_line_t **ptop = &term->scrollback[term->sb_top];
+            ssize_t oldw = (*ptop)->width;
+            *ptop = term_realloc_line(term, *ptop, oldw + llen);
+            for (ssize_t k = 0; k < llen; k++)
+                copy_cell(*ptop, oldw + k, line, k, 0);
+
+            (*ptop)->wrapped = line->wrapped;
+
+            /* Minimize line size to save memory */
+            if (opt && (*ptop)->pal) {
+                optimize_line_palette((*ptop));
+                nss_line_palette_t *pal = realloc((*ptop)->pal, sizeof(nss_line_palette_t) + sizeof(nss_color_t)*((*ptop)->pal->size));
+                if (pal) {
+                    (*ptop)->pal = pal;
+                    pal->caps = pal->size;
+                }
+            }
+
+            term_free_line(line);
+
+            if (term->view) term->view++;
+
+        } else {
+
+            /* Minimize line size to save memory */
+            if (opt) {
+                if (!line->wrapped)
+                    line = term_realloc_line(term, line, llen);
+                if (line->pal) {
+                    optimize_line_palette(line);
+                    nss_line_palette_t *pal = realloc(line->pal, sizeof(nss_line_palette_t) + sizeof(nss_color_t)*(line->pal->size));
+                    if (pal) {
+                        line->pal = pal;
+                        pal->caps = pal->size;
+                    }
+                }
+            }
+
+            if (term->sb_limit == term->sb_max_caps) {
+                /* If view points to the line that is to be freed, scroll it down */
+                if (term->view_pos.line == -term->sb_limit) {
+                    res = line_segments(line_at(term, -term->sb_limit), term->view_pos.offset, term->width);
+                    term->view -= res;
+                    term->view_pos.line++;
+                    term->view_pos.offset = 0;
+                    term->prev_c_view_changed |= !term->view_pos.line;
+                }
+
+                /* We reached maximal number of saved lines,
+                 * now term->scrollback functions as true cyclic buffer */
+                term->sb_top = (term->sb_top + 1) % term->sb_caps;
+                SWAP(nss_line_t *, line, term->scrollback[term->sb_top]);
+                term_free_line(line);
+            } else {
+                /* More lines can be saved, term->scrollback is not cyclic yet */
+
+                /* Adjust capacity as needed */
+                if (term->sb_limit + 1 >= term->sb_caps) {
+                    ssize_t new_cap = CBUF_STEP(term->sb_caps, term->sb_max_caps);
+                    nss_line_t **new = realloc(term->scrollback, new_cap * sizeof(*new));
+                    if (!new) {
+                        term_free_line(line);
+                        return res;
+                    }
+                    term->sb_caps = new_cap;
+                    term->scrollback = new;
+                }
+
+                /* And just save line */
+                term->sb_limit++;
+                term->sb_top = (term->sb_top + 1) % term->sb_caps;
+                term->scrollback[term->sb_top] = line;
+            }
+
+            if (term->view_pos.line) {
+                term->view_pos.line--;
+                term->view++;
+            }
+        }
+    } else term_free_line(line);
+    return res;
+}
+
+void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
+
+    // First try to read from tty to empty out input queue
+    // since this is input from program not yet aware about resize
+    nss_term_read(term);
+
+    _Bool cur_moved = term->c.x == term->width - 1 && term->c.pending;
+
+    // Ensure that term->back_screen is altscreen
+    _Bool altscreen = term->mode & nss_tm_altscreen;
+    if (altscreen) {
+        SWAP(nss_cursor_t, term->back_cs, term->cs);
+        SWAP(nss_line_t **, term->back_screen, term->screen);
+    }
+
+    { // Notify application
+
+        int16_t wwidth, wheight;
+        nss_window_get_dim(term->win, &wwidth, &wheight);
+
+        struct winsize wsz = {
+            .ws_col = width,
+            .ws_row = height,
+            .ws_xpixel = wwidth,
+            .ws_ypixel = wheight
+        };
+
+        if (ioctl(term->fd, TIOCSWINSZ, &wsz) < 0) {
+            warn("Can't change tty size");
+            nss_term_hang(term);
+        }
+    }
+
+    { // Resize tabs
+
+        _Bool *new_tabs = realloc(term->tabs, width * sizeof(*term->tabs));
+        if (!new_tabs) die("Can't alloc tabs");
+        term->tabs = new_tabs;
+
+        if (width > term->width) {
+            memset(new_tabs + term->width, 0, (width - term->width) * sizeof(new_tabs[0]));
+            nss_coord_t tab = term->width ? term->width - 1: 0, tabw = nss_config_integer(NSS_ICONFIG_TAB_WIDTH);
+            while (tab > 0 && !new_tabs[tab]) tab--;
+            while ((tab += tabw) < width) new_tabs[tab] = 1;
+        }
+    }
+
+    { // Resize altscreen
+
+        for (nss_coord_t i = height; i < term->height; i++)
+            term_free_line(term->back_screen[i]);
+
+        nss_line_t **new_back = realloc(term->back_screen, height * sizeof(term->back_screen[0]));
+        if (!new_back) die("Can't allocate lines");
+        term->back_screen = new_back;
+
+        for (nss_coord_t i = 0; i < MIN(term->height, height); i++)
+            term->back_screen[i] = term_realloc_line(term, term->back_screen[i], width);
+
+        for (nss_coord_t i = term->height; i < height; i++)
+            if (!(term->back_screen[i] = term_create_line(term, width)))
+                die("Can't allocate lines");
+
+        // Adjust altscreen saved cursor position
+
+        term->back_cs.x = MIN(MAX(term->back_cs.x, 0), width - 1);
+        term->back_cs.y = MIN(MAX(term->back_cs.y, 0), height - 1);
+        if (term->back_cs.pending) term->back_cs.x = width - 1;
+    }
+
+    // Clear mouse selection
+    // TODO Keep non-rectangular selection
+    nss_mouse_clear_selection(term);
+
+    // Find line of bottom left cell
+    nss_line_pos_t lower_left = term->view_pos;
+    nss_term_inc_line_pos(term, &lower_left, term->height - 1);
+    _Bool ll_translated = 0;
+    _Bool to_top = term->view_pos.line <= -term->sb_limit;
+    _Bool top_bottom = !term->view_pos.line;
+
+    {  // Resize main screen
+
+        nss_line_t **new_lines = term->screen;
+        ssize_t nnlines = term->height, old_y = term->c.y;
+
+        if (term->width != width && term->width) {
+            ssize_t lline = 0, loff = 0, y= 0;
+            nnlines = 0;
+
+            // If first line of screen is continuation line,
+            // start with fist line of scrollback
+            if (term->sb_limit && line_at(term, -1)->wrapped) {
+                loff = line_at(term, -1)->width;
+                y = -1;
+            }
+
+            _Bool cset = 0, csset = 0, aset = 0;
+            ssize_t approx_y = 0;
+
+            term->screen[term->height - 1]->wrapped = 0;
+
+            for (ssize_t i = 0; i < term->height; i++) {
+                // Calculate new apporiximate cursor y
+                if (!aset && i == term->c.y) {
+                    approx_y = nnlines + (loff + term->c.x) / width,
+                    aset = 1;
+                }
+                // Calculate new line number
+                if (!term->screen[i]->wrapped) {
+                    nnlines += (line_length(term->screen[i]) + loff + width - 1)/width;
+                    lline++;
+                    loff = 0;
+                } else loff += term->screen[i]->width;
+            }
+
+            // Pop lines from scrollback so cursor row won't be changed
+            while (y - 1 > -term->sb_limit && approx_y < old_y) {
+                nss_line_t *line = line_at(term, --y);
+                ssize_t delta = (line->width + width - 1) / width;
+                approx_y += delta;
+                nnlines += delta;
+            }
+
+            nnlines = MAX(nnlines * 2, MAX(approx_y * 2 - MIN(old_y, height - 1), 0) + height * 2);
+
+            new_lines = calloc(nnlines, sizeof(*new_lines));
+            if (!new_lines || !(new_lines[0] = term_create_line(term, width)))
+                die("Can't allocate line");
+
+            ssize_t y2 = y, dy = 0;
+            for (ssize_t dx = 0; y < term->height; y++) {
+                nss_line_t *line = line_at(term, y);
+                ssize_t len = line_length(line);
+                if (!ll_translated && lower_left.line == y) {
+                    lower_left.line = dy;
+                    lower_left.offset = dx;
+                    ll_translated = 1;
+                }
+                for (ssize_t x = 0; x < len; x++) {
+                    // If last character of line is wide, soft wrap
+                    if (dx == width - 1 && line->cell[x].attr & nss_attrib_wide) {
+                        new_lines[dy]->wrapped = 1;
+                        if (dy < nnlines - 1 && !(new_lines[++dy] = term_create_line(term, width)))
+                            die("Can't allocate line");
+                        dx = 0;
+                    }
+                    // Calculate new cursor...
+                    if (!cset && term->c.y == y && x == term->c.x) {
+                        term->c.y = dy;
+                        term->c.x = dx;
+                        cset = 1;
+                    }
+                    // ..and saved cursor position
+                    if (!csset && term->cs.y == y && x == term->cs.x) {
+                        term->cs.y = dy;
+                        term->cs.x = dx;
+                        csset = 1;
+                    }
+                    copy_cell(new_lines[dy], dx, line, x, 0);
+                    // Advance line, soft wrap
+                    if (++dx == width && (x < len - 1 || line->wrapped)) {
+                        new_lines[dy]->wrapped = 1;
+                        if (dy < nnlines - 1 && !(new_lines[++dy] = term_create_line(term, width)))
+                            die("Can't allocate line");
+                        dx = 0;
+                    }
+                }
+                // If cursor is to the right of line end, need to check separately
+                if (!cset && term->c.y == y && term->c.x >= len) {
+                    term->c.y = dy;
+                    term->c.x = MIN(width - 1, term->c.x - len + dx);
+                    cset = 1;
+                }
+                if (!csset && term->cs.y == y && term->cs.x >= len) {
+                    term->cs.y = dy;
+                    term->cs.x = MIN(width - 1, term->cs.x - len + dx);
+                    csset = 1;
+                }
+                // Advance line, hard wrap
+                if (!line->wrapped) {
+                    if (dy < nnlines - 1 && !(new_lines[++dy] = term_create_line(term, width)))
+                        die("Can't allocate line");
+                    dx = 0;
+                }
+
+                // Pop from scrollback
+                if (y < 0) term->scrollback[(term->sb_top + term->sb_caps + y + 1) % term->sb_caps] = NULL;
+                term_free_line(line);
+            }
+
+            // Update scrollback data
+            if (term->sb_limit) {
+                term->sb_top = (term->sb_top + y2 + term->sb_caps) % term->sb_caps;
+                term->sb_limit += y2;
+            }
+            if (!ll_translated) lower_left.line -= y2;
+
+            if (dy < nnlines) dy++;
+
+            nnlines = dy;
+        }
+
+        // Push extra lines from top back to scrollback
+        ssize_t start = 0;
+        while (term->c.y > MIN(height - 1, old_y)) {
+            if (term->sb_limit && line_at(term, -1)->wrapped) {
+                if (lower_left.line >= 0) {
+                    if (!lower_left.line) lower_left.offset += line_at(term, -1)->width;
+                    lower_left.line--;
+                }
+            } else lower_left.line--;
+
+            term_append_history(term, new_lines[start++], 1);
+            term->c.y--;
+            term->cs.y--;
+        }
+
+        ssize_t minh = MIN(nnlines - start, height);
+
+        // Adjust cursor
+        term->cs.y = MAX(MIN(term->cs.y, height - 1), 0);
+        if (term->cs.pending) term->cs.x = width - 1;
+        term->c.y = MAX(MIN(term->c.y, height - 1), 0);
+        if (term->c.pending) term->c.x = width - 1;
+
+        // Free extra lines from bottom
+        for (ssize_t i = start + height; i < nnlines; i++)
+            term_free_line(new_lines[i]);
+
+        // Resize line buffer
+        memmove(new_lines, new_lines + start, minh * sizeof(*new_lines));
+        new_lines = realloc(new_lines, height * sizeof(*new_lines));
+        if (!new_lines)  die("Can't allocate lines");
+
+        // Allocate new empty lines
+        for (ssize_t i = minh; i < height; i++)
+            if (!(new_lines[i] = term_create_line(term, width)))
+                die("Can't allocate lines");
+
+        // Change line buffer
+        if (term->width != width && term->width) free(term->screen);
+        term->screen = new_lines;
+    }
+
+    // Set state
+
+    term->width = width;
+    term->height = height;
+    term->left = term->top = 0;
+    term->right = width - 1;
+    term->bottom = height - 1;
+
+    { // Fixup view
+
+        // Reposition view
+        if (top_bottom) {
+            // Stick to bottom
+            term->view_pos.offset = 0;
+            term->view_pos.line = 0;
+        } else if (to_top) {
+            // Stick to top
+            term->view_pos.offset = 0;
+            term->view_pos.line = -term->sb_limit;
+        } else {
+            // Keep line of lower left view cell at the bottom
+            lower_left.offset -= lower_left.offset % width;
+            nss_term_inc_line_pos(term, &lower_left, 1 - height);
+            term->view_pos = lower_left;
+            if (term->view_pos.line >= 0 || term->view_pos.line < -term->sb_limit)
+                term->view_pos.offset = 0;
+        }
+
+        term->view_pos.line = MAX(MIN(0, term->view_pos.line), -term->sb_limit);
+
+        // Restore view offset
+        term->view = 0;
+        ssize_t vline = term->view_pos.line;
+        while (vline++ < 0) term->view += line_segments(line_at(term, vline - 1), 0, term->width);
+    }
+
+    // Damage screen
+    if (!altscreen) {
+        nss_term_damage_lines(term, 0, term->height);
+    } else if (cur_moved){
+        term->back_screen[term->c.y]->cell[term->c.x].attr &= ~nss_attrib_drawn;
+        term->back_screen[term->c.y]->cell[MAX(term->c.x - 1, 0)].attr &= ~nss_attrib_drawn;
+    }
+
+    if (altscreen) {
+        SWAP(nss_cursor_t, term->back_cs, term->cs);
+        SWAP(nss_line_t **, term->back_screen, term->screen);
+    }
+
 }
 
 _Bool nss_term_redraw_dirty(nss_term_t *term) {
-    _Bool c_hidden = (term->mode & nss_tm_hide_cursor) || term->view;
+    _Bool c_hidden = (term->mode & nss_tm_hide_cursor) || !term_view_is_reset(term);
 
     if (term->c.x != term->prev_c_x || term->c.y != term->prev_c_y ||
             term->prev_c_hidden != c_hidden || term->prev_c_view_changed) {
@@ -776,125 +1322,51 @@ _Bool nss_term_redraw_dirty(nss_term_t *term) {
 
     _Bool cursor = !term->prev_c_hidden && (!(cl->cell[term->c.x].attr & nss_attrib_drawn) || cl->force_damage);
 
-    return nss_window_submit_screen(term->win, -term->view, term->palette, term->c.x, term->c.y, cursor, term->c.pending);
+    return nss_window_submit_screen(term->win, term->palette, term->c.x, term->c.y, cursor, term->c.pending);
 }
 
-static void term_reset_view(nss_term_t *term, _Bool damage) {
-    term->prev_c_view_changed |= !!term->view;
-    ssize_t old_view = term->view;
-    term->view = 0;
-    nss_mouse_scroll_view(term, -old_view);
-    if (damage) nss_term_damage_lines(term, 0, term->height);
-}
-
-void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
-    if (term->mode & nss_tm_altscreen) {
-        if (term->mode & nss_tm_alternate_scroll)
-            nss_term_answerback(term, CSI"%"PRIparam"%c", abs(amount), amount > 0 ? 'A' : 'D');
-        return;
-    }
-
-    ssize_t old_view = term->view;
-
-    term->view = MAX(MIN(term->view + amount, term->sb_limit), 0);
-
-    ssize_t delta = term->view - old_view;
-    if (delta > 0) { //Up
-        nss_term_damage_lines(term, 0, delta);
-        nss_window_shift(term->win, 0, 0, 0, delta, term->width, term->height - delta, 0);
-    } else if (delta < 0) { // Down
-        nss_term_damage_lines(term, term->height + delta, term->height);
-        nss_window_shift(term->win, 0, -delta, 0, 0, term->width, term->height + delta, 0);
-    }
-
-    nss_mouse_scroll_view(term, delta);
-    term->prev_c_view_changed |= !old_view ^ !term->view;
-}
-
-static void term_append_history(nss_term_t *term, nss_line_t *line, _Bool opt) {
-    if (term->sb_max_caps > 0) {
-        /* Minimize line size to save memory */
-        if (opt) {
-            line = term_realloc_line(term, line, line_length(line));
-            if (line->pal) {
-                optimize_line_palette(line);
-                nss_line_palette_t *pal = realloc(line->pal, sizeof(nss_line_palette_t) + sizeof(nss_color_t)*(line->pal->size));
-                if (pal) {
-                    line->pal = pal;
-                    pal->caps = pal->size;
-                }
-            }
-        }
-
-        if (term->sb_limit == term->sb_max_caps) {
-            /* If view points to the line that is to be freed, scroll it down */
-            if (term->view == term->sb_limit) nss_term_scroll_view(term, -1);
-
-            /* We reached maximal number of saved lines,
-             * now term->scrollback functions as true cyclic buffer */
-            term->sb_top = (term->sb_limit + term->sb_top + 1) % term->sb_limit;
-            SWAP(nss_line_t *, line, term->scrollback[term->sb_top]);
-            term_free_line(line);
-        } else {
-            /* More lines can be saved, term->scrollback is not cyclic yet */
-
-            /* Adjust capacity as needed */
-            if (term->sb_limit + 1 >= term->sb_caps) {
-                ssize_t new_cap = CBUF_STEP(term->sb_caps, term->sb_max_caps);
-                nss_line_t **new = realloc(term->scrollback, new_cap * sizeof(*new));
-                if (!new) {
-                    term_free_line(line);
-                    return;
-                }
-                term->sb_caps = new_cap;
-                term->scrollback = new;
-            }
-
-            /* And just save line */
-            term->sb_top = term->sb_limit++;
-            term->scrollback[term->sb_top] = line;
-        }
-
-        if (term->view) term->view++;
-    } else term_free_line(line);
+_Bool nss_term_is_cursor_enabled(nss_term_t *term) {
+    return !(term->mode & nss_tm_hide_cursor) && term_view_is_reset(term);
 }
 
 /* Get min/max column/row */
 nss_coord_t term_max_y(nss_term_t *term) {
     return term->bottom + 1;
 }
+
 nss_coord_t term_min_y(nss_term_t *term) {
     return term->top;
 }
+
 nss_coord_t term_max_x(nss_term_t *term) {
     return term->mode & nss_tm_lr_margins ? term->right + 1 : term->width;
 }
+
 nss_coord_t term_min_x(nss_term_t *term) {
     return term->mode & nss_tm_lr_margins ? term->left : 0;
 }
+
 nss_coord_t term_width(nss_term_t *term) {
     return term->width;
 }
+
 nss_coord_t term_height(nss_term_t *term) {
     return term->height;
-}
-ssize_t term_scrollback_size(nss_term_t *term) {
-    return term->sb_limit;
-}
-ssize_t term_view_pos(nss_term_t *term) {
-    return term->view;
 }
 
 /* Get min/max column/row WRT origin */
 inline static nss_coord_t term_max_ox(nss_term_t *term) {
     return (term->mode & nss_tm_lr_margins && term->c.origin) ? term->right + 1: term->width;
 }
+
 inline static nss_coord_t term_min_ox(nss_term_t *term) {
     return (term->mode & nss_tm_lr_margins && term->c.origin) ? term->left : 0;
 }
+
 inline static nss_coord_t term_max_oy(nss_term_t *term) {
     return term->c.origin ? term->bottom + 1: term->height;
 }
+
 inline static nss_coord_t term_min_oy(nss_term_t *term) {
     return term->c.origin ? term->top : 0;
 }
@@ -902,6 +1374,7 @@ inline static nss_coord_t term_min_oy(nss_term_t *term) {
 inline static void term_esc_start(nss_term_t *term) {
     term->esc.selector = 0;
 }
+
 inline static void term_esc_start_seq(nss_term_t *term) {
     for (size_t i = 0; i <= term->esc.i; i++)
         term->esc.param[i] = -1;
@@ -909,12 +1382,14 @@ inline static void term_esc_start_seq(nss_term_t *term) {
     term->esc.subpar_mask = 0;
     term->esc.selector = 0;
 }
+
 inline static void term_esc_start_string(nss_term_t *term) {
     term->esc.str_len = 0;
     term->esc.str_data[0] = 0;
     term->esc.str_cap = ESC_MAX_STR;
     term->esc.selector = 0;
 }
+
 inline static void term_esc_finish_string(nss_term_t *term) {
     free(term->esc.str_ptr);
     term->esc.str_ptr = NULL;
@@ -1266,37 +1741,23 @@ static void term_copy(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coor
 
     if (xs >= xe || ys >= ye) return;
 
-    _Bool dmg = term->view || !nss_window_shift(term->win, xs, ys, xd, yd, xe - xs, ye - ys, 1);
+    _Bool dmg = !term_view_is_reset(term) || !nss_window_shift(term->win, xs, ys, xd, yd, xe - xs, ye - ys, 1);
 
     if (yd < ys || (yd == ys && xd < xs)) {
         for (; ys < ye; ys++, yd++) {
             nss_line_t *sl = term->screen[ys], *dl = term->screen[yd];
             // Reset line wrapping state
-            dl->wrap_at = 0;
-            for (nss_coord_t x1 = xs, x2 = xd; x1 < xe; x1++, x2++) {
-                nss_cell_t cel = sl->cell[x1];
-                if (dmg) cel.attr &= ~nss_attrib_drawn;
-                if (cel.fg >= NSS_PALETTE_SIZE)
-                    cel.fg = alloc_color(dl, sl->pal->data[cel.fg - NSS_PALETTE_SIZE]);
-                if (cel.bg >= NSS_PALETTE_SIZE)
-                    cel.bg = alloc_color(dl, sl->pal->data[cel.bg - NSS_PALETTE_SIZE]);
-                dl->cell[x2] = cel;
-            }
+            dl->wrapped = 0;
+            for (nss_coord_t x1 = xs, x2 = xd; x1 < xe; x1++, x2++)
+                copy_cell(dl, x2, sl, x1, dmg);
         }
     } else {
         for (yd += ye - ys, xd += xe - xs; ys < ye; ye--, yd--) {
             nss_line_t *sl = term->screen[ye - 1], *dl = term->screen[yd - 1];
             // Reset line wrapping state
-            dl->wrap_at = 0;
-            for (nss_coord_t x1 = xe, x2 = xd; x1 > xs; x1--, x2--) {
-                nss_cell_t cel = sl->cell[x1 - 1];
-                if (dmg) cel.attr &= ~nss_attrib_drawn;
-                if (cel.fg >= NSS_PALETTE_SIZE)
-                    cel.fg = alloc_color(dl, sl->pal->data[cel.fg - NSS_PALETTE_SIZE]);
-                if (cel.bg >= NSS_PALETTE_SIZE)
-                    cel.bg = alloc_color(dl, sl->pal->data[cel.bg - NSS_PALETTE_SIZE]);
-                dl->cell[x2 - 1] = cel;
-            }
+            dl->wrapped = 0;
+            for (nss_coord_t x1 = xe, x2 = xd; x1 > xs; x1--, x2--)
+                copy_cell(dl, x2 - 1, sl, x1 - 1, dmg);
         }
     }
 }
@@ -1307,7 +1768,7 @@ static void term_fill(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coor
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
         // Reset line wrapping state
-        line->wrap_at = 0;
+        line->wrapped = 0;
         nss_cell_t cell = fixup_color(line, &term->c);
         cell.ch = ch;
         cell.attr = 0;
@@ -1326,7 +1787,7 @@ static void term_protective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
         // Reset line wrapping state
-        line->wrap_at = 0;
+        line->wrapped = 0;
         nss_cell_t cell = fixup_color(line, &term->c);
         cell.attr = 0;
         for (nss_coord_t i = xs; i < xe; i++)
@@ -1341,7 +1802,7 @@ static void term_selective_erase(nss_term_t *term, nss_coord_t xs, nss_coord_t y
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
         // Reset line wrapping state
-        line->wrap_at = 0;
+        line->wrapped = 0;
         for (nss_coord_t i = xs; i < xe; i++)
             if (!(line->cell[i].attr & nss_attrib_protected))
                 line->cell[i] = MKCELLWITH(line->cell[i], 0);
@@ -1457,28 +1918,40 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
     nss_coord_t left = term_min_x(term), right = term_max_x(term), bottom = term_max_y(term);
 
     if (left == 0 && right == term->width) { // Fast scrolling without margins
-        if (top <= term->prev_c_y && term->prev_c_y < bottom) {
-            term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
-            if (amount >= 0) term->prev_c_y = MAX(top, term->prev_c_y - amount);
-            else term->prev_c_y = MIN(bottom, term->prev_c_y - amount);
-        }
+        //if (top <= term->prev_c_y && term->prev_c_y < bottom) {
+        //    term->screen[term->prev_c_y]->cell[term->prev_c_x].attr &= ~nss_attrib_drawn;
+        //    if (amount >= 0) term->prev_c_y = MAX(top, term->prev_c_y - amount);
+        //    else term->prev_c_y = MIN(bottom, term->prev_c_y - amount);
+        //}
 
         if (amount > 0) { /* up */
             amount = MIN(amount, (bottom - top));
             nss_coord_t rest = (bottom - top) - amount;
 
             if (save && !(term->mode & nss_tm_altscreen) && term->top == top) {
+                ssize_t scrolled = 0;
                 for (nss_coord_t i = 0; i < amount; i++) {
-                    term_append_history(term, term->screen[top + i],  1);
+                    scrolled -= term_append_history(term, term->screen[top + i],  1);
                     term->screen[top + i] = term_create_line(term, term->width);
+                }
+
+                if (scrolled < 0) /* View down, image up */ {
+                    nss_term_damage_lines(term, term->height + scrolled, term->height);
+                    nss_window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled, 0);
+                    nss_mouse_scroll_view(term, scrolled);
                 }
             } else term_erase(term, 0, top, term->width, top + amount, 0);
 
             for (nss_coord_t i = 0; i < rest; i++)
                 SWAP(nss_line_t *, term->screen[top + i], term->screen[top + amount + i]);
 
-            if (term->view || !nss_window_shift(term->win, 0, top + amount, 0, top, term->width, bottom - top - amount, 1))
-                nss_term_damage_lines(term, term->view + top, term->view + bottom - amount);
+            term->screen[bottom - amount - 1]->wrapped = 0;
+
+            if (!term_view_is_reset(term) || !nss_window_shift(term->win,
+                    0, top + amount, 0, top, term->width, bottom - top - amount, 1)) {
+                for (nss_coord_t i = top; i < bottom - amount; i++)
+                     term->screen[i]->force_damage = 1;
+            }
         } else { /* down */
             amount = MAX(amount, -(bottom - top));
             nss_coord_t rest = (bottom - top) + amount;
@@ -1488,8 +1961,13 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
             for (nss_coord_t i = 1; i <= rest; i++)
                 SWAP(nss_line_t *, term->screen[bottom - i], term->screen[bottom + amount - i]);
 
-            if (term->view || !nss_window_shift(term->win, 0, top, 0, top - amount, term->width, bottom - top + amount, 1))
-                nss_term_damage_lines(term, term->view + top - amount, term->view + bottom);
+            term->screen[bottom - 1]->wrapped = 0;
+
+            if (!term_view_is_reset(term) || !nss_window_shift(term->win, 0, top,
+                    0, top - amount, term->width, bottom - top + amount, 1)) {
+                for (nss_coord_t i = top - amount; i < bottom; i++)
+                     term->screen[i]->force_damage = 1;
+            }
         }
     } else { // Slow scrolling with margins
 
@@ -1508,17 +1986,17 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
             amount = MIN(amount, bottom - top);
 
             if (save && !(term->mode & nss_tm_altscreen) && term->top == top) {
+                ssize_t scrolled = 0;
                 for (nss_coord_t i = 0; i < amount; i++) {
                     nss_line_t *ln = term_create_line(term, line_length(term->screen[top + i]));
-                    for (ssize_t k = term_min_x(term); k < MIN(term_max_x(term), ln->width); k++) {
-                        nss_cell_t cel = term->screen[top + i]->cell[k];
-                        if (cel.fg >= NSS_PALETTE_SIZE) cel.fg = alloc_color(ln,
-                                term->screen[top + i]->pal->data[cel.fg - NSS_PALETTE_SIZE]);
-                        if (cel.bg >= NSS_PALETTE_SIZE) cel.bg = alloc_color(ln,
-                                term->screen[top + i]->pal->data[cel.bg - NSS_PALETTE_SIZE]);
-                        ln->cell[k] = cel;
-                    }
-                    term_append_history(term, ln, 0);
+                    for (ssize_t k = term_min_x(term); k < MIN(term_max_x(term), ln->width); k++)
+                        copy_cell(ln, k, term->screen[top + i], k, 0);
+                    scrolled -= term_append_history(term, ln, 0);
+                }
+                if (scrolled < 0) /* View down, image up */ {
+                    nss_term_damage_lines(term, term->height + scrolled, term->height);
+                    nss_window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled, 0);
+                    nss_mouse_scroll_view(term, scrolled);
                 }
             }
 
@@ -1706,7 +2184,7 @@ static void term_print_screen(nss_term_t *term, _Bool ext) {
 }
 
 inline static void term_do_wrap(nss_term_t *term) {
-    term->screen[term->c.y]->wrap_at = term->c.x + 1;
+    term->screen[term->c.y]->wrapped = 1;
     if ((term->mode & nss_tm_print_mask) == nss_tm_print_auto)
         term_print_line(term, term->screen[term->c.y]);
     term_index(term);
@@ -1786,20 +2264,6 @@ static void term_load_config(nss_term_t *term) {
     case 0: term->mbvol = 0; break;
     case 1: term->mbvol = nss_config_integer(NSS_ICONFIG_MARGIN_BELL_LOW_VOLUME); break;
     case 2: term->mbvol = nss_config_integer(NSS_ICONFIG_MARGIN_BELL_HIGH_VOLUME); }
-}
-
-static void term_free_scrollback(nss_term_t *term) {
-    if (!term->scrollback) return;
-
-    term_reset_view(term, 0);
-    for (ssize_t i = 0; i < term->sb_limit; i++)
-        term_free_line(term->scrollback[i]);
-    free(term->scrollback);
-
-    term->scrollback = NULL;
-    term->sb_caps = 0;
-    term->sb_limit = 0;
-    term->sb_top = 0;
 }
 
 static void term_reset_tabs(nss_term_t *term) {
@@ -1891,6 +2355,7 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t he
     term->vt_version = nss_config_integer(NSS_ICONFIG_VT_VERION);
     term->vt_level = term->vt_version / 100;
     term->fd_start = term->fd_end = term->fd_buf;
+    term->sb_top = -1;
 
     term_load_config(term);
 
@@ -3154,7 +3619,7 @@ static void term_dispatch_mc(nss_term_t *term) {
         case 11: /* Print scrollback and screen */
             if (term->printerfd < 0) break;
             for (ssize_t i = 1; i <= term->sb_limit; i++)
-                term_print_line(term, term->scrollback[(term->sb_top + i) % term->sb_limit]);
+                term_print_line(term, line_at(term, -i));
         case 10: /* Print screen */
             term_print_screen(term, 1);
             break;
@@ -4771,9 +5236,12 @@ static ssize_t term_refill(nss_term_t *term) {
     }
 
     if ((inc = read(term->fd, term->fd_end, sizeof(term->fd_buf) - sz)) < 0) {
-        warn("Can't read from tty");
-        nss_term_hang(term);
-        return -1;
+        if (errno != EAGAIN) {
+            warn("Can't read from tty");
+            nss_term_hang(term);
+            return -1;
+        }
+        inc = 0;
     }
 
     term->fd_end += inc;
@@ -4783,7 +5251,7 @@ static ssize_t term_refill(nss_term_t *term) {
 void nss_term_read(nss_term_t *term) {
     if (term_refill(term) <= 0) return;
 
-    if (term->mode & nss_tm_scroll_on_output && term->view)
+    if (term->mode & nss_tm_scroll_on_output && !term_view_is_reset(term))
         term_reset_view(term, 1);
 
     term_write(term, (const uint8_t **)&term->fd_start,
@@ -4804,7 +5272,7 @@ inline static void tty_write_raw(nss_term_t *term, const uint8_t *buf, ssize_t l
         }
         if (pfd.revents & POLLOUT) {
             if ((res = write(term->fd, buf, MIN(lim, len))) < 0) {
-                warn("Can't read from tty");
+                warn("Can't write to from tty");
                 nss_term_hang(term);
                 return;
             }
@@ -4893,7 +5361,7 @@ void nss_term_sendkey(nss_term_t *term, const uint8_t *str, size_t len) {
     if (term->mode & nss_tm_echo)
         term_write(term, (const uint8_t **)&str, &end, 1);
 
-    if (!(term->mode & nss_tm_dont_scroll_on_input) && term->view)
+    if (!(term->mode & nss_tm_dont_scroll_on_input) && !term_view_is_reset(term))
         term_reset_view(term, 1);
 
     uint8_t rep[MAX_REPORT];
@@ -4910,130 +5378,6 @@ void nss_term_sendbreak(nss_term_t *term) {
 
 void nss_term_toggle_numlock(nss_term_t *term) {
     term->inmode.allow_numlock = !term->inmode.allow_numlock;
-}
-
-void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
-    // Notify application
-
-    int16_t wwidth, wheight;
-    nss_window_get_dim(term->win, &wwidth, &wheight);
-
-    struct winsize wsz = {
-        .ws_col = width,
-        .ws_row = height,
-        .ws_xpixel = wwidth,
-        .ws_ypixel = wheight
-    };
-
-    if (ioctl(term->fd, TIOCSWINSZ, &wsz) < 0) {
-        warn("Can't change tty size");
-        nss_term_hang(term);
-    }
-
-    _Bool cur_moved = term->c.x == term->width - 1 && term->c.pending;
-
-    // Free extra lines, scrolling screen upwards
-
-    if (term->height > height) {
-        if (term->mode & nss_tm_altscreen)
-            SWAP(nss_line_t **, term->screen, term->back_screen);
-
-        nss_coord_t delta = MAX(0, term->c.y - height + 1);
-
-        for (nss_coord_t i = height; i < term->height; i++) {
-            if (i < height + delta)
-                term_append_history(term, term->screen[i - height], 1);
-            else
-                term_free_line(term->screen[i]);
-            term_free_line(term->back_screen[i]);
-        }
-
-        memmove(term->screen, term->screen + delta, (term->height - delta)* sizeof(term->screen[0]));
-        if (delta) {
-            nss_window_shift(term->win, 0, delta, 0,  0, term->width, term->height - delta, 0);
-            _Bool tmp = term->mode & nss_tm_lr_margins;
-            nss_coord_t old_top = term->top;
-            term->top = 0;
-            term->mode &= ~nss_tm_lr_margins;
-            nss_mouse_scroll_selection(term, delta, 1);
-            term->top = old_top;
-            ENABLE_IF(tmp, term->mode, nss_tm_lr_margins);
-        }
-
-        if (term->mode & nss_tm_altscreen)
-            SWAP(nss_line_t **, term->screen, term->back_screen);
-    }
-
-    // Resize screens
-
-    nss_line_t **new = realloc(term->screen, height * sizeof(term->screen[0]));
-    nss_line_t **new_back = realloc(term->back_screen, height * sizeof(term->back_screen[0]));
-
-    if (!new) die("Can't create lines");
-    if (!new_back) die("Can't create lines");
-
-    term->screen = new;
-    term->back_screen = new_back;
-
-    // Create new lines
-
-    if (height > term->height) {
-        for (nss_coord_t i = term->height; i < height; i++) {
-            term->screen[i] = term_create_line(term, width);
-            term->back_screen[i] = term_create_line(term, width);
-        }
-    }
-
-    // Resize tabs
-
-    _Bool *new_tabs = realloc(term->tabs, width * sizeof(*term->tabs));
-    if (!new_tabs) die("Can't alloc tabs");
-    term->tabs = new_tabs;
-
-    if (width > term->width) {
-        memset(new_tabs + term->width, 0, (width - term->width) * sizeof(new_tabs[0]));
-        nss_coord_t tab = term->width ? term->width - 1: 0, tabw = nss_config_integer(NSS_ICONFIG_TAB_WIDTH);
-        while (tab > 0 && !new_tabs[tab]) tab--;
-        while ((tab += tabw) < width) new_tabs[tab] = 1;
-    }
-
-    // Set parameters
-
-    nss_coord_t minh = MIN(height, term->height);
-    nss_coord_t minw = MIN(width, term->width);
-    nss_coord_t dx = width - term->width;
-    nss_coord_t dy = height - term->height;
-
-    term->width = width;
-    term->height = height;
-
-    // Clear new regions
-
-    ssize_t view = term->view;
-    for (size_t j = 0; j < 2; j++) {
-        // Reallocate line if it is not wide enough
-        for (nss_coord_t i = 0; i < minh; i++)
-            if (term->screen[i]->width < width)
-                term->screen[i] = term_realloc_line(term, term->screen[i], width);
-        term_swap_screen(term, 0);
-    }
-    term->view = view;
-
-    // Reset scroll region
-
-    term_reset_margins(term);
-    term_move_to(term, term->c.x, term->c.y);
-    if (cur_moved) {
-        term->screen[term->c.y]->cell[term->c.x].attr &= ~nss_attrib_drawn;
-        term->screen[term->c.y]->cell[MAX(term->c.x - 1, 0)].attr &= ~nss_attrib_drawn;
-    }
-
-    // Damage screen
-
-    if (!(term->mode & nss_tm_altscreen)) {
-        if (dy > 0) nss_term_damage(term, (nss_rect_t) { 0, minh, minw, dy });
-        if (dx > 0) nss_term_damage(term, (nss_rect_t) { minw, 0, dx, height });
-    }
 }
 
 _Bool nss_term_paste_need_encode(nss_term_t *term) {
@@ -5110,9 +5454,9 @@ void nss_free_term(nss_term_t *term) {
         term_free_line(term->screen[i]);
         term_free_line(term->back_screen[i]);
     }
+
     free(term->screen);
     free(term->back_screen);
-
 
     free(term->tabs);
     free(term->palette);

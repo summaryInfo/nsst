@@ -71,6 +71,7 @@ void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev);
 void nss_mouse_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save);
 void nss_mouse_scroll_view(nss_term_t *term, ssize_t delta);
 _Bool nss_mouse_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y);
+_Bool nss_mouse_is_selected_in_view(nss_term_t *term, nss_coord_t x, nss_coord_t y);
 void nss_mouse_clear_selection(nss_term_t *term);
 void nss_mouse_damage_selection(nss_term_t *term);
 void nss_mouse_selection_erase(nss_term_t *term, nss_rect_t rect);

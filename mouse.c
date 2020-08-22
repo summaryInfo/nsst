@@ -22,8 +22,7 @@ nss_coord_t term_min_y(nss_term_t *term);
 nss_coord_t term_min_x(nss_term_t *term);
 nss_coord_t term_width(nss_term_t *term);
 nss_coord_t term_height(nss_term_t *term);
-ssize_t term_scrollback_size(nss_term_t *term);
-ssize_t term_view_pos(nss_term_t *term);
+ssize_t term_view(nss_term_t *term);
 nss_locator_state_t *term_locstate(nss_term_t *term);
 
 inline static size_t descomose_selection(nss_rect_t dst[static 3], nss_selected_t seld, nss_rect_t bound, ssize_t pos) {
@@ -72,9 +71,9 @@ static void update_selection(nss_term_t *term, uint8_t oldstate, nss_selected_t 
     nss_rect_t *res = d_diff, bound = {0, 0, term_width(term), term_height(term)};
 
     if (oldstate != nss_sstate_none && oldstate != nss_sstate_pressed)
-        sz_old = descomose_selection(d_old, old, bound, term_view_pos(term));
+        sz_old = descomose_selection(d_old, old, bound, term_view(term));
     if (loc->state != nss_sstate_none && loc->state != nss_sstate_pressed)
-        sz_new = descomose_selection(d_new, loc->n, bound, term_view_pos(term));
+        sz_new = descomose_selection(d_new, loc->n, bound, term_view(term));
 
     if (!sz_old) res = d_new, count = sz_new;
     else if (!sz_new) res = d_old, count = sz_old;
@@ -141,7 +140,7 @@ void nss_mouse_selection_erase(nss_term_t *term, nss_rect_t rect) {
     ((MAX(rect.x, x10) <= MIN(rect.x + rect.width - 1, x11)) && (MAX(rect.y, y10) <= MIN(rect.y + rect.height - 1, y11)))
 
     if (loc->state != nss_sstate_none) {
-        if (loc->r.rect || loc->n.y0 == loc->n.y1) {
+        if (loc->n.rect || loc->n.y0 == loc->n.y1) {
             if (RECT_INTRS(loc->n.x0, loc->n.x1, loc->n.y0, loc->n.y1))
                 nss_mouse_clear_selection(term);
         } else {
@@ -168,14 +167,16 @@ void nss_mouse_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save
         x1 = loc->n.x1, x0 = loc->n.x0;
     else
         x1 = term_width(term) - 1, x0 = 0;
-    ssize_t top = save ? -term_scrollback_size(term) : term_min_y(term);
 
-    save &= amount >= 0;
-    _Bool yins = top <= y0 && y1 < term_max_y(term);
-    _Bool youts = top > y1 || y0 >= term_max_y(term);
+    ssize_t top = term_min_y(term);
+
+    _Bool yins = (save || top <= y0) && y1 < term_max_y(term);
+    _Bool youts = (save || top > y1) || y0 >= term_max_y(term);
     _Bool xins = term_min_x(term) <= x0 && x1 < term_max_x(term);
     _Bool xouts = term_min_x(term) > x1 || x0 >= term_max_x(term);
     _Bool damaged = term_min_y(term) && save && term_min_y(term) < y1 && y0 - amount < 0;
+
+    save &= amount >= 0;
 
     // Clear sellection if it is going to be split by scroll
     if ((!xins && !xouts) || (!yins && !youts) || (xins && yins && damaged)) {
@@ -193,10 +194,11 @@ void nss_mouse_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save
             SWAP(ssize_t, loc->r.x0, loc->r.x1);
         }
 
-        if (loc->n.y0 < top) {
+
+        if (!save && loc->n.y0 < top) {
             loc->r.y0 = top;
             loc->n.y0 = top;
-            if (!loc->r.rect) {
+            if (!loc->n.rect) {
                 loc->r.x0 = 0;
                 loc->n.x0 = 0;
             }
@@ -206,9 +208,9 @@ void nss_mouse_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save
         if (loc->n.y1 > bottom) {
             loc->r.y1 = bottom;
             loc->n.y1 = bottom;
-            if (!loc->r.rect) {
-                loc->r.x1 = nss_term_line_at(term, bottom)->width - 1;
-                loc->n.x1 = nss_term_line_at(term, bottom)->width - 1;
+            if (!loc->n.rect) {
+                loc->r.x1 = term_width(term);
+                loc->n.x1 = term_width(term);
             }
         }
 
@@ -234,7 +236,7 @@ static void snap_selection(nss_term_t *term) {
     nss_locator_state_t *loc = term_locstate(term);
     loc->n.x0 = loc->r.x0, loc->n.y0 = loc->r.y0;
     loc->n.x1 = loc->r.x1, loc->n.y1 = loc->r.y1;
-    loc->r.rect = loc->n.rect;
+    loc->n.rect = loc->r.rect;
     if (loc->n.y1 <= loc->n.y0) {
         if (loc->n.y1 < loc->n.y0) {
             SWAP(nss_coord_t, loc->n.y0, loc->n.y1);
@@ -249,63 +251,84 @@ static void snap_selection(nss_term_t *term) {
     if (loc->snap != nss_ssnap_none && loc->state == nss_sstate_pressed)
         loc->state = nss_sstate_progress;
 
+    nss_line_view_t line;
+    nss_line_pos_t vpos;
+
     if (loc->snap == nss_ssnap_line) {
         loc->n.x0 = 0;
         loc->n.x1 = term_width(term) - 1;
-
-        nss_line_t *line;
-
-        do line = nss_term_line_at(term, --loc->n.y0);
-        while (line && line->wrap_at);
-        loc->n.y0++;
-
-        do line = nss_term_line_at(term, loc->n.y1++);
-        while (line && line->wrap_at);
-        loc->n.y1--;
-    } else if (loc->snap == nss_ssnap_word) {
-        nss_line_t *line;
-
-        if ((line = nss_term_line_at(term, loc->n.y0))) {
-            loc->n.x0 = MAX(MIN(loc->n.x0, line->width - 1), 0);
-            _Bool first = 1, cat = is_separator(line->cell[loc->n.x0].ch);
-            do {
-                if (!first) loc->n.x0 = line->wrap_at - 1;
-                first = 0;
-                while (loc->n.x0 > 0 &&
-                        cat == is_separator(line->cell[loc->n.x0 - 1].ch)) loc->n.x0--;
-                if (loc->n.x0 > 0 || cat != is_separator(line->cell[0].ch)) {
-                    loc->n.y0--;
-                    break;
-                }
-            } while ((line = nss_term_line_at(term, --loc->n.y0)) && line->wrap_at);
-            loc->n.y0++;
-        }
-
-        if ((line = nss_term_line_at(term, loc->n.y1))) {
-            loc->n.x1 = MAX(MIN(loc->n.x1, line->width - 1), 0);
-            _Bool first = 1, cat = is_separator(line->cell[loc->n.x1].ch);
-            ssize_t line_len;
-            do {
-                line_len = line->wrap_at ? line->wrap_at : line->width;
-                if (!first) {
-                    if (cat != is_separator(line->cell[0].ch)) break;
-                    loc->n.x1 = 0;
-                } else first = 0;
-                while (loc->n.x1 < line_len - 1 &&
-                        cat == is_separator(line->cell[loc->n.x1 + 1].ch)) loc->n.x1++;
-                if (loc->n.x1 < line_len - 1 || cat != is_separator(line->cell[line_len - 1].ch)) break;
-            } while (line->wrap_at && (line = nss_term_line_at(term, ++loc->n.y1)));
-            if (!line) loc->n.y1--;
-        }
     }
 
-    nss_line_t *ly1 = nss_term_line_at(term, loc->n.y1);
-    if (loc->n.x1 < ly1->width)
-        loc->n.x1 += !!(ly1->cell[loc->n.x1].attr & nss_attrib_wide);
+    vpos = nss_term_get_line_pos(term, loc->n.y0);
 
-    nss_line_t *ly0 = nss_term_line_at(term, loc->n.y0);
-    if (loc->n.x0 > 0 && loc->n.x0 < ly0->width)
-        loc->n.x0 -= !!(ly0->cell[loc->n.x0 - 1].attr & nss_attrib_wide);
+    if (loc->snap == nss_ssnap_line) {
+        while (!nss_term_inc_line_pos(term, &vpos, -1)) {
+            line = nss_term_line_at(term, vpos);
+            if (!line.wrapped) {
+                nss_term_inc_line_pos(term, &vpos, 1);
+                break;
+            }
+            loc->n.y0--;
+        }
+    } else if (loc->snap == nss_ssnap_word) {
+        if ((line = nss_term_line_at(term, vpos)).line) {
+            loc->n.x0 = MAX(MIN(loc->n.x0, line.width - 1), 0);
+            _Bool cat = is_separator(line.cell[loc->n.x0].ch);
+            while (1) {
+                while (loc->n.x0 > 0) {
+                    if (cat != is_separator(line.cell[loc->n.x0 - 1].ch)) goto outer;
+                    loc->n.x0--;
+                }
+                if (cat == is_separator(line.cell[0].ch) && !nss_term_inc_line_pos(term, &vpos, -1)) {
+                    line = nss_term_line_at(term, vpos);
+                    if (!line.wrapped) {
+                        nss_term_inc_line_pos(term, &vpos, 1);
+                        break;
+                    }
+                    loc->n.y0--;
+                    loc->n.x0 = line.width - 1;
+                } else break;
+            }
+        }
+    }
+outer:
+
+    line = nss_term_line_at(term, vpos);
+    if (loc->n.x0 > 0 && loc->n.x0 < line.width)
+        loc->n.x0 -= !!(line.cell[loc->n.x0 - 1].attr & nss_attrib_wide);
+
+    vpos = nss_term_get_line_pos(term, loc->n.y1);
+    if (loc->snap == nss_ssnap_line) {
+        while ((line = nss_term_line_at(term, vpos)).wrapped) {
+            if (nss_term_inc_line_pos(term, &vpos, 1)) break;
+            loc->n.y1++;
+        }
+    } else if (loc->snap == nss_ssnap_word) {
+        if ((line = nss_term_line_at(term, vpos)).line) {
+            loc->n.x1 = MAX(MIN(loc->n.x1, line.width - 1), 0);
+            _Bool cat = is_separator(line.cell[loc->n.x1].ch);
+            while(1) {
+                while (loc->n.x1 < line.width - 1) {
+                    if (cat != is_separator(line.cell[loc->n.x1 + 1].ch)) goto outer2;
+                    loc->n.x1++;
+                }
+                if (line.wrapped && !nss_term_inc_line_pos(term, &vpos, 1)) {
+                    line = nss_term_line_at(term, vpos);
+                    if (cat != is_separator(line.cell[0].ch)) {
+                        nss_term_inc_line_pos(term, &vpos, -1);
+                        break;
+                    }
+                    loc->n.x1 = 0;
+                    loc->n.y1++;
+                } else break;
+            }
+        }
+    }
+outer2:
+
+    line = nss_term_line_at(term, vpos);
+    if (loc->n.x1 < line.width)
+        loc->n.x1 += !!(line.cell[loc->n.x1].attr & nss_attrib_wide);
 }
 
 _Bool nss_mouse_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
@@ -313,17 +336,16 @@ _Bool nss_mouse_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
 
     if (loc->state == nss_sstate_none || loc->state == nss_sstate_pressed) return 0;
 
-    y -= term_view_pos(term);
-
     if (loc->n.rect) {
         return (loc->n.x0 <= x && x <= loc->n.x1) &&
                 (loc->n.y0 <= y && y <= loc->n.y1);
     } else {
-        return (loc->n.y0 <= y && y <= loc->n.y1) &&
-                !(loc->n.y0 == y && x < loc->n.x0) &&
-                !(loc->n.y1 == y && x > loc->n.x1);
+        ssize_t w = term_width(term);
+        return loc->n.y0*w + loc->n.x0 <= y*w + x &&
+                y*w + x <= loc->n.y1*w + loc->n.x1;
     }
 }
+
 
 inline static _Bool sel_adjust_buf(size_t *pos, size_t *cap, uint8_t **res) {
     if (*pos + UTF8_MAX_LEN + 2 >= *cap) {
@@ -336,20 +358,34 @@ inline static _Bool sel_adjust_buf(size_t *pos, size_t *cap, uint8_t **res) {
     return 1;
 }
 
-static void append_line(size_t *pos, size_t *cap, uint8_t **res, nss_line_t *line, nss_coord_t x0, nss_coord_t x1) {
-    nss_coord_t max_x = MIN(x1, line_length(line));
+inline static nss_coord_t line_len(nss_line_view_t line) {
+    nss_coord_t max_x = line.width;
+    if (!line.wrapped)
+        while (max_x > 0 && !line.cell[max_x - 1].ch)
+            max_x--;
+    return max_x;
+}
+
+_Bool nss_mouse_is_selected_in_view(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
+    return nss_mouse_is_selected(term, x, y - term_view(term));
+}
+
+static void append_line(size_t *pos, size_t *cap, uint8_t **res, nss_line_view_t line, nss_coord_t x0, nss_coord_t x1) {
+    if (!line.cell) return;
+
+    nss_coord_t max_x = MIN(x1, line_len(line));
 
     for (nss_coord_t j = x0; j < max_x; j++) {
         uint8_t buf[UTF8_MAX_LEN];
-        if (line->cell[j].ch) {
-            size_t len = utf8_encode(line->cell[j].ch, buf, buf + UTF8_MAX_LEN);
+        if (line.cell[j].ch) {
+            size_t len = utf8_encode(line.cell[j].ch, buf, buf + UTF8_MAX_LEN);
             // 2 is space for '\n' and '\0'
             if (!sel_adjust_buf(pos, cap, res)) return;
             memcpy(*res + *pos, buf, len);
             *pos += len;
         }
     }
-    if (max_x != line->wrap_at) {
+    if (!line.wrapped) {
         if (!sel_adjust_buf(pos, cap, res)) return;
         (*res)[(*pos)++] = '\n';
     }
@@ -363,21 +399,27 @@ static uint8_t *selection_data(nss_term_t *term) {
         size_t pos = 0, cap = SEL_INIT_SIZE;
 
         ssize_t y = loc->n.y0;
+        nss_line_pos_t vpos = nss_term_get_line_pos(term, y);
         if (loc->n.rect || loc->n.y0 == loc->n.y1) {
-            while (y++ <= loc->n.y1)
-                append_line(&pos, &cap, &res, nss_term_line_at(term, y - 1), loc->n.x0, loc->n.x1 + 1);
-        } else {
             while (y++ <= loc->n.y1) {
-                nss_line_t *line = nss_term_line_at(term, y - 1);
-                if (y - 1 == loc->n.y0)
-                    append_line(&pos, &cap, &res, line, loc->n.x0, line->width);
-                else if (y - 1 == loc->n.y1)
+                append_line(&pos, &cap, &res, nss_term_line_at(term, vpos), loc->n.x0, loc->n.x1 + 1);
+                if (nss_term_inc_line_pos(term, &vpos, 1)) break;
+            }
+        } else {
+            while (y <= loc->n.y1) {
+                nss_line_view_t line = nss_term_line_at(term, vpos);
+                if (y == loc->n.y0)
+                    append_line(&pos, &cap, &res, line, loc->n.x0, line.width);
+                else if (y == loc->n.y1)
                     append_line(&pos, &cap, &res, line, 0, loc->n.x1 + 1);
                 else
-                    append_line(&pos, &cap, &res, line, 0, line->width);
+                    append_line(&pos, &cap, &res, line, 0, line.width);
+                if (!nss_term_inc_line_pos(term, &vpos, 1)) y++;
+                else break;
             }
         }
         res[pos -= !!pos] = '\0';
+        warn("S<%s>", res);
         return res;
     } else return NULL;
 }
@@ -389,7 +431,7 @@ static void change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss
 
     if (state == nss_sstate_pressed) {
         loc->r.x0 = x;
-        loc->r.y0 = y - term_view_pos(term);
+        loc->r.y0 = y - term_view(term);
 
         struct timespec now;
         clock_gettime(NSS_CLOCK, &now);
@@ -408,7 +450,7 @@ static void change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss
     loc->state = state;
     loc->r.rect = rectangular;
     loc->r.x1 = x;
-    loc->r.y1 = y - term_view_pos(term);
+    loc->r.y1 = y - term_view(term);
 
     snap_selection(term);
     update_selection(term, oldstate, old);
@@ -418,7 +460,7 @@ void nss_mouse_scroll_view(nss_term_t *term, ssize_t delta) {
     nss_locator_state_t *loc = term_locstate(term);
     if (loc->state == nss_sstate_progress) {
         change_selection(term, nss_sstate_progress,
-                loc->r.x1, loc->r.y1 + term_view_pos(term) - delta, loc->r.rect);
+                loc->r.x1, loc->r.y1 + term_view(term) - delta, loc->r.rect);
     }
 }
 
@@ -488,7 +530,7 @@ void nss_mouse_set_filter(nss_term_t *term, nss_sparam_t xs, nss_sparam_t xe, ns
 void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev) {
     nss_locator_state_t *loc = term_locstate(term);
     /* Report mouse */
-    if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & 0xFF) != nss_input_force_mouse_mask() &&
+    if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & nss_ms_modifer_mask) != nss_input_force_mouse_mask() &&
             !nss_term_inmode(term)->keyboad_vt52) {
         if (loc->locator_filter) {
             if (ev.x < loc->filter.x || ev.x >= loc->filter.x + loc->filter.width ||

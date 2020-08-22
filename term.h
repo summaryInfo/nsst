@@ -70,8 +70,8 @@ typedef struct nss_line_palette {
 typedef struct nss_line {
     nss_line_palette_t *pal;
     int16_t width;
-    int16_t wrap_at;
-    uint32_t force_damage : 1;
+    _Bool force_damage;
+    _Bool wrapped;
     nss_cell_t cell[];
 } nss_line_t;
 
@@ -80,13 +80,17 @@ typedef struct nss_udk {
     size_t len;
 } nss_udk_t;
 
-inline static nss_coord_t line_length(nss_line_t *line) {
-    nss_coord_t max_x = line->width;
-    if (!line->wrap_at)
-        while (max_x > 0 && !line->cell[max_x - 1].ch) max_x--;
-    else max_x = line->wrap_at;
-    return max_x;
-}
+typedef struct nss_line_view {
+    nss_line_t *line;
+    uint16_t width;
+    _Bool wrapped;
+    nss_cell_t *cell;
+} nss_line_view_t;
+
+typedef struct nss_line_pos {
+    ssize_t line;
+    ssize_t offset;
+} nss_line_pos_t;
 
 typedef struct nss_input_mode nss_input_mode_t;
 typedef struct nss_term nss_term_t;
@@ -116,9 +120,13 @@ void nss_term_damage(nss_term_t *term, nss_rect_t damage);
 void nss_term_reset(nss_term_t *term);
 void nss_term_set_invert(nss_term_t *term, _Bool set);
 _Bool nss_term_get_invert(nss_term_t *term);
-nss_line_iter_t nss_term_screen_iterator(nss_term_t *term, ssize_t ymin, ssize_t ymax);
 nss_window_t *nss_term_window(nss_term_t *term);
-nss_line_t *nss_term_line_at(nss_term_t *term, ssize_t y);
+
+nss_line_view_t nss_term_line_at(nss_term_t *term, nss_line_pos_t pos);
+nss_line_pos_t nss_term_get_view(nss_term_t *term);
+nss_line_pos_t nss_term_get_line_pos(nss_term_t *term, ssize_t y);
+ssize_t nss_term_inc_line_pos(nss_term_t *term, nss_line_pos_t *pos, ssize_t amount);
+_Bool nss_term_is_continuation_line(nss_line_view_t line);
 
 _Bool nss_term_paste_need_encode(nss_term_t *term);
 void nss_term_paste_begin(nss_term_t *term);
