@@ -1,8 +1,11 @@
 Until version 1.7:
     Rewrap lines
-        scrollback lines are long
-        virtual lines at rendering
-        wirting to/erasing line resets wrap_at
+        Recalculate non-rectangular selection position on resize
+        Option to disable rewrapping
+        Do something with multi-line shell prompt eating history lines
+        Make selection operate on physical lines?
+            allows to get rid of term->view (and its recalculation on resize)
+            allows to keep non-rectangular selections after resizing
     CSI ? 4 l / CSI ? 4 h -- DECSCLM
     Pointer
         CSI > Ps p -- XTSMPOINTER
