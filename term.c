@@ -1940,8 +1940,6 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
             for (nss_coord_t i = 0; i < rest; i++)
                 SWAP(nss_line_t *, term->screen[top + i], term->screen[top + amount + i]);
 
-            term->screen[bottom - amount - 1]->wrapped = 0;
-
             if (!term_view_is_reset(term) || !nss_window_shift(term->win,
                     0, top + amount, 0, top, term->width, bottom - top - amount, 1)) {
                 for (nss_coord_t i = top; i < bottom - amount; i++)
@@ -1955,8 +1953,6 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
 
             for (nss_coord_t i = 1; i <= rest; i++)
                 SWAP(nss_line_t *, term->screen[bottom - i], term->screen[bottom + amount - i]);
-
-            term->screen[bottom - 1]->wrapped = 0;
 
             if (!term_view_is_reset(term) || !nss_window_shift(term->win, 0, top,
                     0, top - amount, term->width, bottom - top + amount, 1)) {
