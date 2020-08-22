@@ -1086,7 +1086,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
     {  // Resize main screen
 
         nss_line_t **new_lines = term->screen;
-        ssize_t nnlines = term->height, old_y = term->c.y;
+        ssize_t nnlines = term->height, cursor_par = 0, new_cur_par = 0;
 
         if (term->width != width && term->width) {
             ssize_t lline = 0, loff = 0, y= 0;
@@ -1100,47 +1100,61 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
             }
 
             _Bool cset = 0, csset = 0, aset = 0;
-            ssize_t approx_y = 0;
+            ssize_t par_start = y, approx_cy = 0, dlta = 0;
 
             term->screen[term->height - 1]->wrapped = 0;
 
             for (ssize_t i = 0; i < term->height; i++) {
                 // Calculate new apporiximate cursor y
                 if (!aset && i == term->c.y) {
-                    approx_y = nnlines + (loff + term->c.x) / width,
+                    approx_cy = nnlines + (loff + term->c.x) / width,
+                    new_cur_par = nnlines;
+                    cursor_par = par_start;
                     aset = 1;
                 }
                 // Calculate new line number
                 if (!term->screen[i]->wrapped) {
-                    nnlines += (line_length(term->screen[i]) + loff + width - 1)/width;
+                    ssize_t len = line_length(term->screen[i]);
+                    term->screen[i]->width = len;
+                    if (y && !nnlines) {
+                        dlta = (len + loff + width - 1)/width -
+                                (len + loff - line_at(term, -1)->width + width - 1)/width;
+                    }
+                    nnlines += (len + loff + width - 1)/width;
                     lline++;
                     loff = 0;
-                } else loff += term->screen[i]->width;
+                    par_start = i + 1;
+                } else loff += term->width;
             }
 
+            new_cur_par -= dlta;
+
             // Pop lines from scrollback so cursor row won't be changed
-            while (y - 1 > -term->sb_limit && approx_y < old_y) {
+            while (y - 1 > -term->sb_limit && new_cur_par < cursor_par) {
                 nss_line_t *line = line_at(term, --y);
                 ssize_t delta = (line->width + width - 1) / width;
-                approx_y += delta;
+                new_cur_par += delta;
+                approx_cy += delta;
                 nnlines += delta;
             }
 
-            nnlines = MAX(nnlines * 2, MAX(approx_y * 2 - MIN(old_y, height - 1), 0) + height * 2);
+            nnlines = MAX(nnlines * 2, MAX(MAX(new_cur_par - cursor_par, approx_cy - height - 1), 0) + height * 2);
 
             new_lines = calloc(nnlines, sizeof(*new_lines));
             if (!new_lines || !(new_lines[0] = term_create_line(term, width)))
                 die("Can't allocate line");
 
             ssize_t y2 = y, dy = 0;
+            par_start = 0;
             for (ssize_t dx = 0; y < term->height; y++) {
                 nss_line_t *line = line_at(term, y);
-                ssize_t len = line_length(line);
+                ssize_t len = line->width;
                 if (!ll_translated && lower_left.line == y) {
                     lower_left.line = dy;
                     lower_left.offset = dx;
                     ll_translated = 1;
                 }
+                if (cursor_par == y) new_cur_par = dy;
                 for (ssize_t x = 0; x < len; x++) {
                     // If last character of line is wide, soft wrap
                     if (dx == width - 1 && line->cell[x].attr & nss_attrib_wide) {
@@ -1185,6 +1199,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
                 if (!line->wrapped) {
                     if (dy < nnlines - 1 && !(new_lines[++dy] = term_create_line(term, width)))
                         die("Can't allocate line");
+                    par_start = dy;
                     dx = 0;
                 }
 
@@ -1207,7 +1222,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
 
         // Push extra lines from top back to scrollback
         ssize_t start = 0;
-        while (term->c.y > MIN(height - 1, old_y)) {
+        while (term->c.y > height - 1 || new_cur_par > cursor_par) {
             if (term->sb_limit && line_at(term, -1)->wrapped) {
                 if (lower_left.line >= 0) {
                     if (!lower_left.line) lower_left.offset += line_at(term, -1)->width;
@@ -1216,6 +1231,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
             } else lower_left.line--;
 
             term_append_history(term, new_lines[start++], 1);
+            new_cur_par--;
             term->c.y--;
             term->cs.y--;
         }
