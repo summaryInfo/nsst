@@ -540,7 +540,7 @@ static int tty_open(nss_term_t *term, const char *cmd, const char **args) {
     }
 
     int fl = fcntl(master, F_GETFL);
-    if (fl >= 0) fcntl(master, F_SETFL, fl | O_NONBLOCK);
+    if (fl >= 0) fcntl(master, F_SETFL, fl | O_NONBLOCK | O_CLOEXEC);
 
     pid_t pid;
     switch ((pid = fork())) {
@@ -559,15 +559,10 @@ static int tty_open(nss_term_t *term, const char *cmd, const char **args) {
         dup2(slave, 1);
         dup2(slave, 2);
         close(slave);
-        close(master);
-
         exec_shell(cmd, args);
         break;
     default:
         close(slave);
-        int fl = fcntl(master, F_GETFD);
-        if (fl >= 0)
-            fcntl(master, F_SETFD, fl | FD_CLOEXEC);
         sigaction(SIGCHLD, &(struct sigaction){
                 .sa_handler = handle_chld, .sa_flags = SA_RESTART}, NULL);
     }
