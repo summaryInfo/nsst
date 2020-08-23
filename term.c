@@ -3632,6 +3632,14 @@ static void term_dispatch_tmode(struct term *term, bool set) {
     }
 }
 
+static void term_precompose_at_cursor(struct term *term, term_char_t ch) {
+    struct cell *cel = &term->screen[term->c.y]->cell[term->c.x];
+    if (term->c.x) cel--;
+    if (!cel->ch && term->c.x > 1 && cel[-1].attr & attr_wide) cel--;
+    ch = try_precompose(cel->ch, ch);
+    if (cel->ch != ch) *cel = MKCELLWITH(*cel, ch);
+}
+
 static void term_putchar(struct term *term, term_char_t ch) {
     // 'print' state
 
@@ -3641,11 +3649,7 @@ static void term_putchar(struct term *term, term_char_t ch) {
     if (width < 0) width = 1;
     else if (width > 1) width = 2;
     else if(!width) {
-        struct cell *cel = &term->screen[term->c.y]->cell[term->c.x];
-        if (term->c.x) cel--;
-        if (!cel->ch && term->c.x > 1 && cel[-1].attr & attr_wide) cel--;
-        ch = try_precompose(cel->ch, ch);
-        if (cel->ch != ch) *cel = MKCELLWITH(*cel, ch);
+        term_precompose_at_cursor(term, ch);
         return;
     }
 
@@ -5200,14 +5204,6 @@ static ssize_t term_refill(struct term *term) {
 
     term->fd_end += inc;
     return inc;
-}
-
-void term_precompose_at_cursor(struct term *term, term_char_t ch) {
-    struct cell *cel = &term->screen[term->c.y]->cell[term->c.x];
-    if (term->c.x) cel--;
-    if (!cel->ch && term->c.x > 1 && cel[-1].attr & attr_wide) cel--;
-    ch = try_precompose(cel->ch, ch);
-    if (cel->ch != ch) *cel = MKCELLWITH(*cel, ch);
 }
 
 void term_read(struct term *term) {
