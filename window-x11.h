@@ -28,10 +28,10 @@ struct nss_renderer {
 #if USE_X11SHM
     xcb_shm_seg_t shm_seg;
     xcb_pixmap_t shm_pixmap;
-    nss_image_t im;
+    struct image im;
 
     // It's size is 2*win->ch
-    nss_rect_t *bounds;
+    struct rect *bounds;
     size_t boundc;
 #else
     // Active IDs, actual X11 objects
@@ -153,10 +153,10 @@ inline static _Bool check_void_cookie(xcb_void_cookie_t ck) {
 void nss_init_render_context(void);
 void nss_free_render_context(void);
 void nss_renderer_free(nss_window_t *win);
-void nss_renderer_update(nss_window_t *win, nss_rect_t rect);
+void nss_renderer_update(nss_window_t *win, struct rect rect);
  _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free);
 void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch);
-void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy);
+void nss_renderer_copy(nss_window_t *win, struct rect dst, int16_t sx, int16_t sy);
 
 void nss_window_set_default_props(nss_window_t *win);
 void nss_window_handle_resize(nss_window_t *win, int16_t width, int16_t height);

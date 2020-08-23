@@ -709,8 +709,8 @@ inline static void term_put_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y,
     line->cell[x] = MKCELLWITH(fixup_color(line, &term->c), ch);
 }
 
-void nss_term_damage(nss_term_t *term, nss_rect_t damage) {
-    if (intersect_with(&damage, &(nss_rect_t) {0, 0, term->width, term->height})) {
+void nss_term_damage(nss_term_t *term, struct rect damage) {
+    if (intersect_with(&damage, &(struct rect) {0, 0, term->width, term->height})) {
         nss_line_pos_t vpos = nss_term_get_view(term);
         nss_term_inc_line_pos(term, &vpos, damage.y);
         for (ssize_t i = damage.y; i < damage.y + damage.height; i++) {
@@ -1522,7 +1522,7 @@ inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t
     }
 
     nss_window_delay(term->win);
-    mouse_selection_erase(term, (nss_rect_t){ *xs, *ys, *xe - *xs, *ye - *ys});
+    mouse_selection_erase(term, (struct rect){ *xs, *ys, *xe - *xs, *ye - *ys});
 }
 
 static uint16_t term_checksum(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {

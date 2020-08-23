@@ -7,8 +7,8 @@
 
 #include <stdint.h>
 
-void nss_image_draw_rect(nss_image_t im, nss_rect_t rect, color_t fg) {
-    if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height})) {
+void image_draw_rect(struct image im, struct rect rect, color_t fg) {
+    if (intersect_with(&rect, &(struct rect){0, 0, im.width, im.height})) {
         for (size_t j = 0; j < (size_t)rect.height; j++) {
             for (size_t i = 0; i < (size_t)rect.width; i++) {
                 im.data[(rect.y + j) * im.width + (rect.x + i)] = fg;
@@ -16,9 +16,9 @@ void nss_image_draw_rect(nss_image_t im, nss_rect_t rect, color_t fg) {
         }
     }
 }
-void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t *glyph, color_t fg, nss_rect_t clip) {
-    nss_rect_t rect = { dx - glyph->x, dy - glyph->y, glyph->width, glyph->height };
-    if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height}) &&
+void image_compose_glyph(struct image im, int16_t dx, int16_t dy, nss_glyph_t *glyph, color_t fg, struct rect clip) {
+    struct rect rect = { dx - glyph->x, dy - glyph->y, glyph->width, glyph->height };
+    if (intersect_with(&rect, &(struct rect){0, 0, im.width, im.height}) &&
             intersect_with(&rect, &clip)) {
         int16_t i0 = rect.x - dx + glyph->x, j0 = rect.y - dy + glyph->y;
         if (glyph->pixmode == nss_pm_mono) {
@@ -50,11 +50,11 @@ void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t
     }
 }
 
-void nss_image_copy(nss_image_t im, nss_rect_t rect, nss_image_t src, int16_t sx, int16_t sy) {
+void image_copy(struct image im, struct rect rect, struct image src, int16_t sx, int16_t sy) {
     rect.width = MAX(0, MIN(rect.width + sx, src.width) - sx);
     rect.height = MAX(0, MIN(rect.height + sy, src.height) - sy);
 
-    if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height})) {
+    if (intersect_with(&rect, &(struct rect){0, 0, im.width, im.height})) {
         if (rect.y < sy || (rect.y == sy && rect.x <= sx)) {
             for (size_t j = 0; j < (size_t)rect.height; j++) {
                 for (size_t i = 0; i < (size_t)rect.width; i++) {

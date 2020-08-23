@@ -27,43 +27,43 @@
 typedef int16_t nss_coord_t;
 typedef uint32_t color_t;
 typedef uint32_t term_char_t;
-typedef struct nss_rect {
+struct rect {
     int16_t x;
     int16_t y;
     uint16_t width;
     uint16_t height;
-} nss_rect_t;
+};
 
 void info(const char *fmt, ...);
 void warn(const char *fmt, ...);
 void fatal(const char *fmt, ...);
 _Noreturn void die(const char *fmt, ...);
 
-inline static nss_rect_t rect_scale_up(nss_rect_t rect, nss_coord_t x_factor, nss_coord_t y_factor) {
+inline static struct rect rect_scale_up(struct rect rect, nss_coord_t x_factor, nss_coord_t y_factor) {
     rect.x *= x_factor;
     rect.y *= y_factor;
     rect.width *= x_factor;
     rect.height *= y_factor;
     return rect;
 }
-inline static nss_rect_t rect_scale_down(nss_rect_t rect, nss_coord_t x_factor, nss_coord_t y_factor) {
+inline static struct rect rect_scale_down(struct rect rect, nss_coord_t x_factor, nss_coord_t y_factor) {
     rect.x /= x_factor;
     rect.y /= y_factor;
     rect.width /= x_factor;
     rect.height /= y_factor;
     return rect;
 }
-inline static nss_rect_t rect_shift(nss_rect_t rect, nss_coord_t x_off, nss_coord_t y_off) {
+inline static struct rect rect_shift(struct rect rect, nss_coord_t x_off, nss_coord_t y_off) {
     rect.x += x_off;
     rect.y += y_off;
     return rect;
 }
-inline static nss_rect_t rect_resize(nss_rect_t rect, nss_coord_t x_off, nss_coord_t y_off) {
+inline static struct rect rect_resize(struct rect rect, nss_coord_t x_off, nss_coord_t y_off) {
     rect.width += x_off;
     rect.height += y_off;
     return rect;
 }
-inline static nss_rect_t rect_union(nss_rect_t rect, nss_rect_t other) {
+inline static struct rect rect_union(struct rect rect, struct rect other) {
     rect.width = MAX(rect.width + rect.x, other.width + other.x);
     rect.height = MAX(rect.height + rect.y, other.height + other.y);
     rect.width -= rect.x = MIN(rect.x, other.x);
@@ -71,14 +71,14 @@ inline static nss_rect_t rect_union(nss_rect_t rect, nss_rect_t other) {
     return rect;
 }
 
-inline static _Bool intersect_with(nss_rect_t *src, nss_rect_t *dst) {
-        nss_rect_t inters = { .x = MAX(src->x, dst->x), .y = MAX(src->y, dst->y) };
+inline static _Bool intersect_with(struct rect *src, struct rect *dst) {
+        struct rect inters = { .x = MAX(src->x, dst->x), .y = MAX(src->y, dst->y) };
 
         int32_t x1 = MIN(src->x + (int32_t)src->width, dst->x + (int32_t)dst->width);
         int32_t y1 = MIN(src->y + (int32_t)src->height, dst->y + (int32_t)dst->height);
 
         if (x1 <= inters.x || y1 <= inters.y) {
-            *src = (nss_rect_t) {0, 0, 0, 0};
+            *src = (struct rect) {0, 0, 0, 0};
             return 0;
         } else {
             inters.width = x1 - inters.x;

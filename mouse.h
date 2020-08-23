@@ -50,7 +50,7 @@ struct mouse_state {
     uint32_t locator_report_press : 1;
     uint32_t locator_report_release : 1;
 
-    nss_rect_t filter;
+    struct rect filter;
 
     enum mouse_mode {
         mouse_mode_none,
@@ -75,7 +75,7 @@ _Bool mouse_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y);
 _Bool mouse_is_selected_in_view(nss_term_t *term, nss_coord_t x, nss_coord_t y);
 void mouse_clear_selection(nss_term_t *term);
 void mouse_damage_selection(nss_term_t *term);
-void mouse_selection_erase(nss_term_t *term, nss_rect_t rect);
+void mouse_selection_erase(nss_term_t *term, struct rect rect);
 void mouse_report_locator(nss_term_t *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask);
 void mouse_set_filter(nss_term_t *term, nss_sparam_t xs, nss_sparam_t xe, nss_sparam_t ys, nss_sparam_t ye);
 

@@ -556,18 +556,18 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
     }
 
     if (rctx.cbufpos)
-        nss_renderer_update(win, rect_scale_up((nss_rect_t){0, 0, win->cw, win->ch},
+        nss_renderer_update(win, rect_scale_up((struct rect){0, 0, win->cw, win->ch},
                 win->char_width, win->char_height + win->char_depth));
 
     return rctx.cbufpos;
 }
 
-void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
+void nss_renderer_update(nss_window_t *win, struct rect rect) {
     xcb_copy_area(con, win->ren.pid1, win->wid, win->gc, rect.x, rect.y,
             rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
 }
 
-void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy) {
+void nss_renderer_copy(nss_window_t *win, struct rect dst, int16_t sx, int16_t sy) {
     xcb_copy_area(con, win->ren.pid1, win->ren.pid1, win->gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
     /*
     xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, 0, win->ren.pic, sx, sy, 0, 0, dst.x, dst.y, dst.width, dst.height);
@@ -599,13 +599,13 @@ void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
     xcb_render_free_picture(con, win->ren.pic2);
     xcb_free_pixmap(con, win->ren.pid2);
 
-    nss_rect_t rectv[2];
+    struct rect rectv[2];
     size_t rectc= 0;
 
     if (delta_y > 0)
-        rectv[rectc++] = (nss_rect_t) { 0, win->ch - delta_y, MIN(win->cw, win->cw - delta_x), delta_y };
+        rectv[rectc++] = (struct rect) { 0, win->ch - delta_y, MIN(win->cw, win->cw - delta_x), delta_y };
     if (delta_x > 0)
-        rectv[rectc++] = (nss_rect_t) { win->cw - delta_x, 0, delta_x, MAX(win->ch, win->ch - delta_y) };
+        rectv[rectc++] = (struct rect) { win->cw - delta_x, 0, delta_x, MAX(win->ch, win->ch - delta_y) };
 
     for (size_t i = 0; i < rectc; i++)
         rectv[i] = rect_scale_up(rectv[i], win->char_width, win->char_height + win->char_depth);

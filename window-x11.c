@@ -1087,7 +1087,7 @@ _Bool nss_window_shift(nss_window_t *win, nss_coord_t xs, nss_coord_t ys, nss_co
     height *= win->char_depth + win->char_height;
     width *= win->char_width;
 
-    nss_renderer_copy(win, (nss_rect_t){xd, yd, width, height}, xs, ys);
+    nss_renderer_copy(win, (struct rect){xd, yd, width, height}, xs, ys);
 
     return 1;
 }
@@ -1173,12 +1173,12 @@ void nss_window_handle_resize(nss_window_t *win, int16_t width, int16_t height) 
         redraw_borders(win, 0, 1);
 }
 
-static void handle_expose(nss_window_t *win, nss_rect_t damage) {
+static void handle_expose(nss_window_t *win, struct rect damage) {
     int16_t width = win->cw * win->char_width + win->left_border;
     int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
 
     size_t num_damaged = 0;
-    nss_rect_t damaged[NUM_BORDERS], borders[NUM_BORDERS] = {
+    struct rect damaged[NUM_BORDERS], borders[NUM_BORDERS] = {
         {0, 0, win->left_border, height},
         {win->left_border, 0, width, win->top_border},
         {width, 0, win->width - width, win->height},
@@ -1189,7 +1189,7 @@ static void handle_expose(nss_window_t *win, nss_rect_t damage) {
                 damaged[num_damaged++] = borders[i];
     if (num_damaged) xcb_poly_fill_rectangle(con, win->wid, win->gc, num_damaged, (xcb_rectangle_t *)damaged);
 
-    nss_rect_t inters = { 0, 0, width - win->left_border, height - win->top_border};
+    struct rect inters = { 0, 0, width - win->left_border, height - win->top_border};
     damage = rect_shift(damage, -win->left_border, -win->top_border);
     if (intersect_with(&inters, &damage)) nss_renderer_update(win, inters);
 }
@@ -1404,7 +1404,7 @@ void nss_context_run(void) {
                         info("Event: event=Expose win=0x%x x=%x y=%d width=%d height=%d",
                                 ev->window, ev->x, ev->y, ev->width, ev->height);
                     }
-                    handle_expose(win, (nss_rect_t){ev->x, ev->y, ev->width, ev->height});
+                    handle_expose(win, (struct rect){ev->x, ev->y, ev->width, ev->height});
                     break;
                 }
                 case XCB_CONFIGURE_NOTIFY:{

@@ -36,26 +36,26 @@ static nss_render_context_t rctx;
 static void resize_bounds(nss_window_t *win, _Bool h_changed) {
     if (win->ren.bounds) {
         size_t j = 0;
-        nss_rect_t *r_dst = win->ren.bounds;
-        if (h_changed) r_dst = malloc(sizeof(nss_rect_t) * 2 * win->ch);
+        struct rect *r_dst = win->ren.bounds;
+        if (h_changed) r_dst = malloc(sizeof(struct rect) * 2 * win->ch);
         if (!r_dst) die("Can't allocate bounds");
         for (size_t i = 0; i < win->ren.boundc; i++)
-            if (intersect_with(&win->ren.bounds[i], &(nss_rect_t){0, 0, win->cw, win->ch}))
+            if (intersect_with(&win->ren.bounds[i], &(struct rect){0, 0, win->cw, win->ch}))
                 r_dst[j++] = win->ren.bounds[i];
         win->ren.boundc = j;
         if (h_changed) {
-            SWAP(nss_rect_t *, win->ren.bounds, r_dst);
+            SWAP(struct rect *, win->ren.bounds, r_dst);
             free(r_dst);
         }
     } else {
         win->ren.boundc = 0;
-        win->ren.bounds = malloc(sizeof(nss_rect_t) * 2 * win->ch);
+        win->ren.bounds = malloc(sizeof(struct rect) * 2 * win->ch);
         if (!win->ren.bounds) die("Can't allocate bounds");
     }
 }
 
-static nss_image_t nss_create_image_shm(nss_window_t *win, int16_t width, int16_t height) {
-    nss_image_t im = {
+static struct image nss_create_image_shm(nss_window_t *win, int16_t width, int16_t height) {
+    struct image im = {
         .width = width,
         .height = height,
         .shmid = -1,
@@ -135,7 +135,7 @@ static nss_image_t nss_create_image_shm(nss_window_t *win, int16_t width, int16_
     }
 }
 
-static void nss_free_image_shm(nss_image_t *im) {
+static void nss_free_image_shm(struct image *im) {
     if (rctx.has_shm) {
 #if USE_POSIX_SHM
         if (im->data) munmap(im->data, im->width * im->height * sizeof(color_t));
@@ -169,7 +169,7 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
             return 0;
         }
 
-        nss_image_draw_rect(win->ren.im, (nss_rect_t){0, 0, win->ren.im.width, win->ren.im.height}, win->bg);
+        image_draw_rect(win->ren.im, (struct rect){0, 0, win->ren.im.width, win->ren.im.height}, win->bg);
     }
 
     return 1;
@@ -217,16 +217,16 @@ void nss_init_render_context() {
 }
 
 static int rect_cmp(const void *a, const void *b) {
-    return ((nss_rect_t*)a)->y - ((nss_rect_t*)b)->y;
+    return ((struct rect*)a)->y - ((struct rect*)b)->y;
 }
 
-static void optimize_bounds(nss_rect_t *bounds, size_t *boundc, _Bool fine_grained) {
-    qsort(bounds, *boundc, sizeof(nss_rect_t), rect_cmp);
+static void optimize_bounds(struct rect *bounds, size_t *boundc, _Bool fine_grained) {
+    qsort(bounds, *boundc, sizeof(struct rect), rect_cmp);
     size_t j = 0;
     for (size_t i = 0; i < *boundc; ) {
         bounds[j] = bounds[i];
         while (++i < *boundc && (bounds[i].y <= bounds[j].y + bounds[j].height)) {
-            nss_rect_t uni = rect_union(bounds[j], bounds[i]);
+            struct rect uni = rect_union(bounds[j], bounds[i]);
             if (fine_grained && bounds[i].y >= bounds[j].y + bounds[j].height &&
                 3*(bounds[j].height*bounds[j].width + bounds[i].height*bounds[i].width)/2 < uni.width*uni.height) break;
             bounds[j] = uni;
@@ -247,7 +247,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
     for (ssize_t k = 0; k < win->ch; k++, nss_term_inc_line_pos(win->term, &vpos, 1)) {
         nss_line_view_t line = nss_term_line_at(win->term, vpos);
         _Bool next_dirty = 0;
-        nss_rect_t l_bound = {-1, k, 0, 1};
+        struct rect l_bound = {-1, k, 0, 1};
         for (nss_coord_t i =  MIN(win->cw, line.width) - 1; i >= 0; i--) {
             _Bool dirty = line.line->force_damage || !(line.cell[i].attr & nss_attrib_drawn) ||
                     (!win->blink_commited && (line.cell[i].attr & nss_attrib_blink)) ||
@@ -278,24 +278,24 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
                 int16_t ls = iconf(ICONF_LINE_SPACING)/2;
                 int16_t fs = iconf(ICONF_FONT_SPACING)/2;
 
-                nss_rect_t r_cell = { x, y, cw * (1 + spec.wide), ch + cd};
-                nss_rect_t r_under = { x + fs, y + ch + 1 + ls, cw, ul };
-                nss_rect_t r_strike = { x + fs, y + 2*ch/3 - ul/2 + ls, cw, ul };
+                struct rect r_cell = { x, y, cw * (1 + spec.wide), ch + cd};
+                struct rect r_under = { x + fs, y + ch + 1 + ls, cw, ul };
+                struct rect r_strike = { x + fs, y + 2*ch/3 - ul/2 + ls, cw, ul };
 
                 // Backround
-                nss_image_draw_rect(win->ren.im, r_cell, spec.bg);
+                image_draw_rect(win->ren.im, r_cell, spec.bg);
 
                 // Glyph
                 if (glyph) {
                     if (g_wide) r_cell.width = 2*cw;
-                    nss_image_compose_glyph(win->ren.im, x + fs, y + ch + ls, glyph, spec.fg, r_cell);
+                    image_compose_glyph(win->ren.im, x + fs, y + ch + ls, glyph, spec.fg, r_cell);
                 }
 
                 // Underline
-                if (spec.underlined) nss_image_draw_rect(win->ren.im, r_under, spec.fg);
+                if (spec.underlined) image_draw_rect(win->ren.im, r_under, spec.fg);
 
                 // Strikethough
-                if (spec.stroke) nss_image_draw_rect(win->ren.im, r_strike, spec.fg);
+                if (spec.stroke) image_draw_rect(win->ren.im, r_strike, spec.fg);
 
                 line.cell[i].attr |= nss_attrib_drawn;
 
@@ -312,7 +312,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
                     c = palette[NSS_SPECIAL_SELECTED_BG];
                     if (!c) c = palette[NSS_SPECIAL_FG];
                 }
-                nss_image_draw_rect(win->ren.im, (nss_rect_t){
+                image_draw_rect(win->ren.im, (struct rect){
                     .x = line.width * win->char_width,
                     .y = k * (win->char_height + win->char_depth),
                     .width = (win->cw - line.width) * win->char_width,
@@ -332,7 +332,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
     if (cursor) {
         cur_x *= win->char_width;
         cur_y *= win->char_depth + win->char_height;
-        nss_rect_t rects[4] = {
+        struct rect rects[4] = {
             {cur_x, cur_y, 1, win->char_height + win->char_depth},
             {cur_x, cur_y, win->char_width, 1},
             {cur_x + win->char_width - 1, cur_y, 1, win->char_height + win->char_depth},
@@ -358,7 +358,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
             }
         }
         for (size_t i = 0; i < count; i++)
-            nss_image_draw_rect(win->ren.im, rects[i + off], win->cursor_fg);
+            image_draw_rect(win->ren.im, rects[i + off], win->cursor_fg);
     }
 
     _Bool drawn_any = win->ren.boundc;
@@ -374,7 +374,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
     return drawn_any;
 }
 
-void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
+void nss_renderer_update(nss_window_t *win, struct rect rect) {
     if (rctx.has_shm_pixmaps) {
         xcb_copy_area(con, win->ren.shm_pixmap, win->wid, win->gc, rect.x, rect.y,
                 rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
@@ -389,8 +389,8 @@ void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
     }
 }
 
-void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy) {
-    nss_image_copy(win->ren.im, dst, win->ren.im, sx, sy);
+void nss_renderer_copy(nss_window_t *win, struct rect dst, int16_t sx, int16_t sy) {
+    image_copy(win->ren.im, dst, win->ren.im, sx, sy);
 
     int16_t w = win->char_width, h = win->char_depth + win->char_height;
 
@@ -422,16 +422,16 @@ void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
     int16_t common_w = MIN(width, width  - delta_x * win->char_width);
     int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth)) ;
 
-    nss_image_t new = nss_create_image_shm(win, width, height);
-    nss_image_copy(new, (nss_rect_t){0, 0, common_w, common_h}, win->ren.im, 0, 0);
-    SWAP(nss_image_t, win->ren.im, new);
+    struct image new = nss_create_image_shm(win, width, height);
+    image_copy(new, (struct rect){0, 0, common_w, common_h}, win->ren.im, 0, 0);
+    SWAP(struct image, win->ren.im, new);
     nss_free_image_shm(&new);
 
     resize_bounds(win, delta_y);
 
-    if (delta_y > 0) nss_image_draw_rect(win->ren.im,
-            (nss_rect_t) { 0, common_h, common_w, height - common_h }, win->bg);
-    if (delta_x > 0) nss_image_draw_rect(win->ren.im,
-            (nss_rect_t) { common_w, 0, width - common_w, height }, win->bg);
+    if (delta_y > 0) image_draw_rect(win->ren.im,
+            (struct rect) { 0, common_h, common_w, height - common_h }, win->bg);
+    if (delta_x > 0) image_draw_rect(win->ren.im,
+            (struct rect) { common_w, 0, width - common_w, height }, win->bg);
 
 }

@@ -26,18 +26,18 @@ nss_coord_t term_height(nss_term_t *term);
 ssize_t term_view(nss_term_t *term);
 struct mouse_state *nss_term_mouse_state(nss_term_t *term);
 
-inline static size_t descomose_selection(nss_rect_t dst[static 3], struct selected seld, nss_rect_t bound, ssize_t pos) {
+inline static size_t descomose_selection(struct rect dst[static 3], struct selected seld, struct rect bound, ssize_t pos) {
     size_t count = 0;
     nss_coord_t x0 = seld.x0, x1 = seld.x1 + 1;
     ssize_t y0 = seld.y0 + pos, y1 = seld.y1 + 1 + pos;
     if (seld.rect || y1 - y0 == 1) {
-        nss_rect_t r0 = {x0, y0, x1 - x0, y1 - y0};
+        struct rect r0 = {x0, y0, x1 - x0, y1 - y0};
         if (intersect_with(&r0, &bound))
             dst[count++] = r0;
     } else {
-        nss_rect_t r0 = {x0, y0, bound.width - x0, 1};
-        nss_rect_t r1 = {0, y0 + 1, bound.width, y1 - y0 - 1};
-        nss_rect_t r2 = {0, y1 - 1, x1, 1};
+        struct rect r0 = {x0, y0, bound.width - x0, 1};
+        struct rect r1 = {0, y0 + 1, bound.width, y1 - y0 - 1};
+        struct rect r2 = {0, y1 - 1, x1, 1};
         if (intersect_with(&r0, &bound))
             dst[count++] = r0;
         if (y1 - y0 > 2 && intersect_with(&r1, &bound))
@@ -48,16 +48,16 @@ inline static size_t descomose_selection(nss_rect_t dst[static 3], struct select
     return count;
 }
 
-inline static size_t xor_bands(nss_rect_t dst[static 2], nss_coord_t x00, nss_coord_t x01, nss_coord_t x10, nss_coord_t x11, nss_coord_t y0, nss_coord_t y1) {
+inline static size_t xor_bands(struct rect dst[static 2], nss_coord_t x00, nss_coord_t x01, nss_coord_t x10, nss_coord_t x11, nss_coord_t y0, nss_coord_t y1) {
     nss_coord_t x0_min = MIN(x00, x10), x0_max = MAX(x00, x10);
     nss_coord_t x1_min = MIN(x01, x11), x1_max = MAX(x01, x11);
     size_t count = 0;
     if (x0_max >= x1_min - 1) {
-        dst[count++] = (nss_rect_t) {x0_min, y0, x1_min - x0_min, y1 - y0};
-        dst[count++] = (nss_rect_t) {x0_max, y0, x1_max - x0_max, y1 - y0};
+        dst[count++] = (struct rect) {x0_min, y0, x1_min - x0_min, y1 - y0};
+        dst[count++] = (struct rect) {x0_max, y0, x1_max - x0_max, y1 - y0};
     } else {
-        if (x0_min != x0_max) dst[count++] = (nss_rect_t) {x0_min, y0, x0_max - x0_min + 1, y1 - y0};
-        if (x1_min != x1_max) dst[count++] = (nss_rect_t) {x1_min - 1, y0, x1_max - x1_min + 1, y1 - y0};
+        if (x0_min != x0_max) dst[count++] = (struct rect) {x0_min, y0, x0_max - x0_min + 1, y1 - y0};
+        if (x1_min != x1_max) dst[count++] = (struct rect) {x1_min - 1, y0, x1_max - x1_min + 1, y1 - y0};
     }
     return count;
 }
@@ -67,9 +67,9 @@ static void update_selection(nss_term_t *term, uint8_t oldstate, struct selected
 
     struct mouse_state *loc = nss_term_mouse_state(term);
 
-    nss_rect_t d_old[4] = {{0}}, d_new[4] = {{0}}, d_diff[16] = {{0}};
+    struct rect d_old[4] = {{0}}, d_new[4] = {{0}}, d_diff[16] = {{0}};
     size_t sz_old = 0, sz_new = 0, count = 0;
-    nss_rect_t *res = d_diff, bound = {0, 0, term_width(term), term_height(term)};
+    struct rect *res = d_diff, bound = {0, 0, term_width(term), term_height(term)};
 
     if (oldstate != state_sel_none && oldstate != state_sel_pressed)
         sz_old = descomose_selection(d_old, old, bound, term_view(term));
@@ -82,8 +82,8 @@ static void update_selection(nss_term_t *term, uint8_t oldstate, struct selected
         // Insert dummy rectangles to simplify code
         nss_coord_t max_yo = d_old[sz_old - 1].y + d_old[sz_old - 1].height;
         nss_coord_t max_yn = d_new[sz_new - 1].y + d_new[sz_new - 1].height;
-        d_old[sz_old] = (nss_rect_t) {0, max_yo, 0, 0};
-        d_new[sz_new] = (nss_rect_t) {0, max_yn, 0, 0};
+        d_old[sz_old] = (struct rect) {0, max_yo, 0, 0};
+        d_new[sz_new] = (struct rect) {0, max_yn, 0, 0};
 
         // Calculate y positions of bands
         nss_coord_t ys[8];
@@ -98,7 +98,7 @@ static void update_selection(nss_term_t *term, uint8_t oldstate, struct selected
             }
         }
 
-        nss_rect_t *ito = d_old, *itn = d_new;
+        struct rect *ito = d_old, *itn = d_new;
         nss_coord_t x00 = 0, x01 = 0, x10 = 0, x11 = 0;
         for (size_t i = 0; i < yp - 1; i++) {
             if (ys[i] >= max_yo) x00 = x01 = 0;
@@ -134,7 +134,7 @@ void mouse_clear_selection(nss_term_t* term) {
     }
 }
 
-void mouse_selection_erase(nss_term_t *term, nss_rect_t rect) {
+void mouse_selection_erase(nss_term_t *term, struct rect rect) {
     struct mouse_state *loc = nss_term_mouse_state(term);
 
 #define RECT_INTRS(x10, x11, y10, y11) \
@@ -521,7 +521,7 @@ void mouse_set_filter(nss_term_t *term, nss_sparam_t xs, nss_sparam_t xe, nss_sp
     ys = MIN(ys, bh + h - 1);
     ye = MIN(ye, bh + h);
 
-    loc->filter = (nss_rect_t) { xs, ys, xe - xs, ye - ys };
+    loc->filter = (struct rect) { xs, ys, xe - xs, ye - ys };
     loc->locator_filter = 1;
 
     nss_window_set_mouse(nss_term_window(term), 1);

@@ -105,7 +105,7 @@ static void parse_geometry(char *arg, char *argv0) {
     iconf_set(ICONF_WINDOW_NEGATIVE_Y, ysgn == '-');
 }
 
-static void nss_parse_options(char **argv) {
+static void parse_options(char **argv) {
     size_t ind = 1;
 
     char *arg, *opt;
@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
 
     (void)argc;
 
-    nss_parse_options(argv);
+    parse_options(argv);
     nss_setup_default_termios();
 
     nss_create_window();

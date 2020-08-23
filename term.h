@@ -110,7 +110,7 @@ _Bool nss_term_is_paste_nl_enabled(nss_term_t *term);
 _Bool nss_term_is_paste_quote_enabled(nss_term_t *term);
 _Bool nss_term_is_cursor_enabled(nss_term_t *term);
 void nss_term_damage_lines(nss_term_t *term, nss_coord_t ys, nss_coord_t yd);
-void nss_term_damage(nss_term_t *term, nss_rect_t damage);
+void nss_term_damage(nss_term_t *term, struct rect damage);
 void nss_term_reset(nss_term_t *term);
 void nss_term_set_reverse(nss_term_t *term, _Bool set);
 _Bool nss_term_get_reverse(nss_term_t *term);
