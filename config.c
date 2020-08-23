@@ -46,6 +46,7 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"bold-color", "\t\t(Special color of bold text)", "boldColor", CCONF_BOLD},
     {"cursor-background", "\t(Default cursor backround color)", "cursorBackground", CCONF_CURSOR_BG},
     {"cursor-foreground", "\t(Default cursor foreround color)", "cursorForeground", CCONF_CURSOR_FG},
+    {"cut-lines", "\t\t(Cut long lines on resize with rewrapping disabled)", "cutLines", ICONF_CUT_LINES},
     {"cursor-shape", "\t\t(Shape of cursor)", "cursorShape", ICONF_CURSOR_SHAPE},
     {"cursor-width", "\t\t(Width of lines that forms cursor)", "cursorWidth", ICONF_CURSOR_WIDTH},
     {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", "deleteIsDelete", ICONF_DELETE_IS_DELETE},
@@ -105,6 +106,7 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", ICONF_RESIZE_DELAY},
     {"reverse-video", "\t\t(Initial reverse video setting)", "enableReverseVideo", ICONF_REVERSE_VIDEO},
     {"reversed-color", "\t(Special color of reversed text)", "reversedColor", CCONF_REVERSE},
+    {"rewrap", "\t\t(Rewrap text on resize)", "rewrap", ICONF_REWRAP},
     {"scroll-amount", "\t\t(Number of lines scrolled in a time)", "scrollAmout", ICONF_SCROLL_AMOUNT},
     {"scroll-delay", "\t\t(Additional delay after scroll in microseconds)", "scrollDelay", ICONF_SCROLL_DELAY},
     {"scroll-on-input", "\t(Scroll view to bottom on key press)", "scrollOnInput", ICONF_SCROLL_ON_INPUT},
@@ -244,6 +246,8 @@ static struct {
     [ICONF_MALLOW_KEYPAD - ICONF_MIN] = {0, 0, 0, 1},
     [ICONF_MALLOW_MISC - ICONF_MIN] = {0, 0, 0, 1},
     [ICONF_NUMLOCK - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_REWRAP - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_CUT_LINES - ICONF_MIN] = {0, 0, 0, 1},
 };
 
 static struct {

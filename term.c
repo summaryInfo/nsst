@@ -777,35 +777,42 @@ struct line_view term_line_at(struct term *term, struct line_offset pos) {
 
 ssize_t term_line_next(struct term *term, struct line_offset *pos, ssize_t amount) {
     struct line *ln;
-    if (amount < 0) {
-        if (pos->line - 1 < -term->sb_limit) return amount;
-        ln = line_at(term, pos->line);
-        // TODO Litle optimization
-        amount += line_segments(ln, 0, term->width) - line_segments(ln, pos->offset, term->width);
-        pos->offset = 0;
-        while (amount < 0) {
+    if (iconf(ICONF_REWRAP)) {
+        // Rewrapping is enabled
+        if (amount < 0) {
             if (pos->line - 1 < -term->sb_limit) return amount;
-            ln = line_at(term, --pos->line);
-            amount += line_segments(ln, 0, term->width);
-        }
-    }
-    if (amount > 0) {
-        if (pos->line >= term->height) return amount;
-        ln = line_at(term, pos->line);
-        while (pos->line < term->height && amount) {
-            if ((pos->offset = line_wid(ln, pos->offset, term->width)) >= ln->width) {
-                pos->offset = 0;
-                if (pos->line + 1 >= term->height) break;
-                ln = line_at(term, ++pos->line);
+            ln = line_at(term, pos->line);
+            // TODO Litle optimization
+            amount += line_segments(ln, 0, term->width) - line_segments(ln, pos->offset, term->width);
+            pos->offset = 0;
+            while (amount < 0) {
+                if (pos->line - 1 < -term->sb_limit) return amount;
+                ln = line_at(term, --pos->line);
+                amount += line_segments(ln, 0, term->width);
             }
-            amount--;
         }
+        if (amount > 0) {
+            if (pos->line >= term->height) return amount;
+            ln = line_at(term, pos->line);
+            while (pos->line < term->height && amount) {
+                if ((pos->offset = line_wid(ln, pos->offset, term->width)) >= ln->width) {
+                    pos->offset = 0;
+                    if (pos->line + 1 >= term->height) break;
+                    ln = line_at(term, ++pos->line);
+                }
+                amount--;
+            }
+        }
+    } else {
+        ssize_t new = MAX(-term->sb_limit, MIN(amount + pos->line, term->height - 1));
+        amount -= new - pos->line;
+        *pos = (struct line_offset) { new, 0 };
     }
     return amount;
 }
 
 bool is_last_line(struct line_view line) {
-    return line.cell - line.line->cell + line.width < line.line->width;
+    return !iconf(ICONF_REWRAP) || !(line.cell - line.line->cell + line.width < line.line->width);
 }
 
 struct line_offset term_get_view(struct term *term) {
@@ -821,7 +828,7 @@ struct line_offset term_get_line_pos(struct term *term, ssize_t y) {
 static void term_reset_view(struct term *term, bool damage) {
     term->prev_c_view_changed |= !term->view_pos.line;
     ssize_t old_view = term->view;
-    term->view_pos = (struct line_offset){ 0 };
+    term->view_pos = (struct line_offset){0};
     term->view = 0;
     mouse_scroll_view(term, -old_view);
     if (damage) term_damage_lines(term, 0, term->height);
@@ -876,7 +883,8 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
         ssize_t llen = line_length(line);
 
         /* If last line in history is wrapped concat current line to it */
-        if (term->sb_limit && line_at(term, -1)->wrapped && llen + line_at(term, -1)->width < MAX_LINE_LEN) {
+        if (iconf(ICONF_REWRAP) && term->sb_limit &&
+                line_at(term, -1)->wrapped && llen + line_at(term, -1)->width < MAX_LINE_LEN) {
             struct line **ptop = &term->scrollback[term->sb_top];
             ssize_t oldw = (*ptop)->width;
             *ptop = term_realloc_line(term, *ptop, oldw + llen);
@@ -918,7 +926,10 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
             if (term->sb_limit == term->sb_max_caps) {
                 /* If view points to the line that is to be freed, scroll it down */
                 if (term->view_pos.line == -term->sb_limit) {
-                    res = line_segments(line_at(term, -term->sb_limit), term->view_pos.offset, term->width);
+                    if (iconf(ICONF_REWRAP))
+                        res = line_segments(line_at(term, -term->sb_limit), term->view_pos.offset, term->width);
+                    else
+                        res = 1;
                     term->view -= res;
                     term->view_pos.line++;
                     term->view_pos.offset = 0;
@@ -1038,14 +1049,14 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     term_line_next(term, &lower_left, term->height - 1);
     bool ll_translated = 0;
     bool to_top = term->view_pos.line <= -term->sb_limit;
-    bool top_bottom = !term->view_pos.line;
+    bool to_bottom = !term->view_pos.line;
 
     {  // Resize main screen
 
         struct line **new_lines = term->screen;
         ssize_t nnlines = term->height, cursor_par = 0, new_cur_par = 0;
 
-        if (term->width != width && term->width) {
+        if (term->width != width && term->width && iconf(ICONF_REWRAP)) {
             ssize_t lline = 0, loff = 0, y= 0;
             nnlines = 0;
 
@@ -1178,7 +1189,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         }
 
         // Push extra lines from top back to scrollback
-        ssize_t start = 0;
+        ssize_t start = 0, scrolled = 0;
         while (term->c.y > height - 1 || new_cur_par > cursor_par) {
             if (term->sb_limit && line_at(term, -1)->wrapped) {
                 if (lower_left.line >= 0) {
@@ -1187,13 +1198,28 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 }
             } else lower_left.line--;
 
-            term_append_history(term, new_lines[start++], 1);
+            scrolled = term_append_history(term, new_lines[start++], 1);
             new_cur_par--;
             term->c.y--;
             term->cs.y--;
         }
 
         ssize_t minh = MIN(nnlines - start, height);
+
+        // Resize lines if rewrapping is disabled
+        if (!iconf(ICONF_REWRAP)) {
+            if (scrolled) {
+                window_shift(term->win, 0, scrolled, 0, 0, term->width, term->height - scrolled, 0);
+                term_damage_lines(term, term->height - scrolled, term->height);
+            } else if (start && !term->view_pos.line) {
+                window_shift(term->win, 0, start, 0, 0, MIN(term->width, width), height - start, 0);
+            }
+            for (ssize_t i = 0; i < minh; i++) {
+                if (new_lines[i + start]->width < width || iconf(ICONF_CUT_LINES)) {
+                    new_lines[i + start] = term_realloc_line(term, new_lines[i + start], width);
+                }
+            }
+        }
 
         // Adjust cursor
         term->cs.y = MAX(MIN(term->cs.y, height - 1), 0);
@@ -1205,6 +1231,9 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         for (ssize_t i = start + height; i < nnlines; i++)
             term_free_line(new_lines[i]);
 
+        // Free old line buffer
+        if (new_lines != term->screen) free(term->screen);
+
         // Resize line buffer
         memmove(new_lines, new_lines + start, minh * sizeof(*new_lines));
         new_lines = realloc(new_lines, height * sizeof(*new_lines));
@@ -1215,58 +1244,69 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             if (!(new_lines[i] = term_create_line(term, width)))
                 die("Can't allocate lines");
 
-        // Change line buffer
-        if (term->width != width && term->width) free(term->screen);
         term->screen = new_lines;
     }
 
-    // Set state
+    int16_t minh = MIN(height, term->height);
+    int16_t minw = MIN(width, term->width);
+    int16_t dx = width - term->width;
+    int16_t dy = height - term->height;
 
+    // Set state
     term->width = width;
     term->height = height;
     term->left = term->top = 0;
     term->right = width - 1;
     term->bottom = height - 1;
 
-    { // Fixup view
+    {  // Fixup view
 
         // Reposition view
-        if (top_bottom) {
-            // Stick to bottom
-            term->view_pos.offset = 0;
-            term->view_pos.line = 0;
-        } else if (to_top) {
-            // Stick to top
-            term->view_pos.offset = 0;
-            term->view_pos.line = -term->sb_limit;
-        } else {
-            // Keep line of lower left view cell at the bottom
-            lower_left.offset -= lower_left.offset % width;
-            ssize_t hei = height;
-            if (lower_left.line >= term->height) {
-                hei = MAX(0, hei - (lower_left.line - term->height));
-                lower_left.line = height - 1;
-            }
-            term_line_next(term, &lower_left, 1 - hei);
-            term->view_pos = lower_left;
-            if (term->view_pos.line >= 0 || term->view_pos.line < -term->sb_limit)
+        if (iconf(ICONF_REWRAP)) {
+            if (to_bottom) {
+                // Stick to bottom
                 term->view_pos.offset = 0;
+                term->view_pos.line = 0;
+            } else if (to_top) {
+                // Stick to top
+                term->view_pos.offset = 0;
+                term->view_pos.line = -term->sb_limit;
+            } else {
+                // Keep line of lower left view cell at the bottom
+                lower_left.offset -= lower_left.offset % width;
+                ssize_t hei = height;
+                if (lower_left.line >= term->height) {
+                    hei = MAX(0, hei - (lower_left.line - term->height));
+                    lower_left.line = height - 1;
+                }
+                term_line_next(term, &lower_left, 1 - hei);
+                term->view_pos = lower_left;
+                if (term->view_pos.line >= 0 || term->view_pos.line < -term->sb_limit)
+                    term->view_pos.offset = 0;
+            }
+            term->view_pos.line = MAX(MIN(0, term->view_pos.line), -term->sb_limit);
+
+            // Restore view offset
+            term->view = 0;
+            ssize_t vline = term->view_pos.line;
+            while (vline++ < 0) term->view += line_segments(line_at(term, vline - 1), 0, term->width);
         }
-
-        term->view_pos.line = MAX(MIN(0, term->view_pos.line), -term->sb_limit);
-
-        // Restore view offset
-        term->view = 0;
-        ssize_t vline = term->view_pos.line;
-        while (vline++ < 0) term->view += line_segments(line_at(term, vline - 1), 0, term->width);
     }
 
     // Damage screen
-    if (!term->mode.altscreen) {
+    if (!term->mode.altscreen && iconf(ICONF_REWRAP)) {
+        // Just damage everything if rewrapping is enabled
         term_damage_lines(term, 0, term->height);
-    } else if (cur_moved){
-        term->back_screen[term->c.y]->cell[term->c.x].attr &= ~attr_drawn;
-        term->back_screen[term->c.y]->cell[MAX(term->c.x - 1, 0)].attr &= ~attr_drawn;
+    } else {
+        if (!term->mode.altscreen && !iconf(ICONF_REWRAP)) {
+            // Damage changed parts
+            if (dy > 0) term_damage(term, (struct rect) { 0, minh, minw, dy });
+            if (dx > 0) term_damage(term, (struct rect) { minw, 0, dx, height });
+        }
+        if (cur_moved){
+            term->back_screen[term->c.y]->cell[term->c.x].attr &= ~attr_drawn;
+            term->back_screen[term->c.y]->cell[MAX(term->c.x - 1, 0)].attr &= ~attr_drawn;
+        }
     }
 
     if (term->mode.altscreen) {

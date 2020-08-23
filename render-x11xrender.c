@@ -358,7 +358,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
             next_dirty = dirty;
         }
         // Only reset force flag for last part of the line
-        if (!is_last_line(line)) line.line->force_damage = 0;
+        if (is_last_line(line)) line.line->force_damage = 0;
     }
 
     if (rctx.bufpos) {
