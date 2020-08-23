@@ -154,6 +154,8 @@ struct term_mode {
     _Bool paste_quote : 1;
     _Bool paste_literal_nl : 1;
     _Bool margin_bell : 1;
+    _Bool bell_raise : 1;
+    _Bool bell_urgent : 1;
 };
 
 struct nss_term {
@@ -258,7 +260,7 @@ struct nss_term {
     uint16_t vt_version;
     uint16_t vt_level;
 
-    nss_window_t *win;
+    struct window *win;
     color_t *palette;
 
     pid_t child;
@@ -854,10 +856,10 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
     term->view += delta;
 
     if (delta > 0) /* View down, image up */ {
-        nss_window_shift(term->win, 0, 0, 0, delta, term->width, term->height - delta, 0);
+        window_shift(term->win, 0, 0, 0, delta, term->width, term->height - delta, 0);
         nss_term_damage_lines(term, 0, delta);
     } else if (delta < 0) /* View down, image up */ {
-        nss_window_shift(term->win, 0, -delta, 0, 0, term->width, term->height + delta, 0);
+        window_shift(term->win, 0, -delta, 0, 0, term->width, term->height + delta, 0);
         nss_term_damage_lines(term, term->height + delta, term->height);
     }
 
@@ -972,7 +974,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
     { // Notify application
 
         int16_t wwidth, wheight;
-        nss_window_get_dim(term->win, &wwidth, &wheight);
+        window_get_dim(term->win, &wwidth, &wheight);
 
         struct winsize wsz = {
             .ws_col = width,
@@ -1289,7 +1291,7 @@ _Bool nss_term_redraw_dirty(nss_term_t *term) {
 
     _Bool cursor = !term->prev_c_hidden && (!(cl->cell[term->c.x].attr & nss_attrib_drawn) || cl->force_damage);
 
-    return nss_window_submit_screen(term->win, term->palette, term->c.x, term->c.y, cursor, term->c.pending);
+    return window_submit_screen(term->win, term->palette, term->c.x, term->c.y, cursor, term->c.pending);
 }
 
 
@@ -1521,7 +1523,7 @@ inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t
         *ye = MAX(0, MIN(*ye, term->height));
     }
 
-    nss_window_delay(term->win);
+    window_delay(term->win);
     mouse_selection_erase(term, (struct rect){ *xs, *ys, *xe - *xs, *ye - *ys});
 }
 
@@ -1705,7 +1707,7 @@ static void term_copy(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coor
 
     if (xs >= xe || ys >= ye) return;
 
-    _Bool dmg = !!term->view_pos.line || !nss_window_shift(term->win, xs, ys, xd, yd, xe - xs, ye - ys, 1);
+    _Bool dmg = !!term->view_pos.line || !window_shift(term->win, xs, ys, xd, yd, xe - xs, ye - ys, 1);
 
     if (yd < ys || (yd == ys && xd < xs)) {
         for (; ys < ye; ys++, yd++) {
@@ -1901,7 +1903,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
 
                 if (scrolled < 0) /* View down, image up */ {
                     nss_term_damage_lines(term, term->height + scrolled, term->height);
-                    nss_window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled, 0);
+                    window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled, 0);
                     mouse_scroll_view(term, scrolled);
                 }
             } else term_erase(term, 0, top, term->width, top + amount, 0);
@@ -1909,7 +1911,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
             for (nss_coord_t i = 0; i < rest; i++)
                 SWAP(nss_line_t *, term->screen[top + i], term->screen[top + amount + i]);
 
-            if (term->view_pos.line || !nss_window_shift(term->win,
+            if (term->view_pos.line || !window_shift(term->win,
                     0, top + amount, 0, top, term->width, bottom - top - amount, 1)) {
                 for (nss_coord_t i = top; i < bottom - amount; i++)
                      term->screen[i]->force_damage = 1;
@@ -1923,7 +1925,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
             for (nss_coord_t i = 1; i <= rest; i++)
                 SWAP(nss_line_t *, term->screen[bottom - i], term->screen[bottom + amount - i]);
 
-            if (term->view_pos.line || !nss_window_shift(term->win, 0, top,
+            if (term->view_pos.line || !window_shift(term->win, 0, top,
                     0, top - amount, term->width, bottom - top + amount, 1)) {
                 for (nss_coord_t i = top - amount; i < bottom; i++)
                      term->screen[i]->force_damage = 1;
@@ -1955,7 +1957,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
                 }
                 if (scrolled < 0) /* View down, image up */ {
                     nss_term_damage_lines(term, term->height + scrolled, term->height);
-                    nss_window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled, 0);
+                    window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled, 0);
                     mouse_scroll_view(term, scrolled);
                 }
             }
@@ -2167,7 +2169,7 @@ void nss_term_set_reverse(nss_term_t *term, _Bool set) {
         SWAP(color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
         SWAP(color_t, term->palette[NSS_SPECIAL_SELECTED_BG], term->palette[NSS_SPECIAL_SELECTED_FG]);
         mouse_damage_selection(term);
-        nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
+        window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
     }
     term->mode.reverse_video = set;
 }
@@ -2216,6 +2218,8 @@ static void term_load_config(nss_term_t *term) {
         .keep_clipboard = iconf(ICONF_KEEP_CLIPBOARD),
         .keep_selection = iconf(ICONF_KEEP_SELECTION),
         .select_to_clipboard = iconf(ICONF_SELECT_TO_CLIPBOARD),
+        .bell_raise = iconf(ICONF_RAISE_ON_BELL),
+        .bell_urgent = iconf(ICONF_URGENT_ON_BELL),
     };
 
     for (size_t i = 0; i < PALETTE_SIZE; i++)
@@ -2279,13 +2283,13 @@ static void term_reset_tabs(nss_term_t *term) {
 
 static void term_request_resize(nss_term_t *term, int16_t w, int16_t h, _Bool in_cells) {
     int16_t cur_w, cur_h, scr_w, scr_h;
-    nss_window_get_dim(term->win, &cur_w, &cur_h);
-    nss_window_get_dim_ext(term->win, nss_dt_screen_size, &scr_w, &scr_h);
+    window_get_dim(term->win, &cur_w, &cur_h);
+    window_get_dim_ext(term->win, dim_screen_size, &scr_w, &scr_h);
 
     if (in_cells) {
         int16_t ce_w, ce_h, bo_w, bo_h;
-        nss_window_get_dim_ext(term->win, nss_dt_cell_size, &ce_w, &ce_h);
-        nss_window_get_dim_ext(term->win, nss_dt_border, &bo_w, &bo_h);
+        window_get_dim_ext(term->win, dim_cell_size, &ce_w, &ce_h);
+        window_get_dim_ext(term->win, dim_border, &bo_w, &bo_h);
         if (w > 0) w = w * ce_w + bo_w * 2;
         if (h > 0) h = h * ce_h + bo_h * 2;
     }
@@ -2293,7 +2297,7 @@ static void term_request_resize(nss_term_t *term, int16_t w, int16_t h, _Bool in
     w = !w ? scr_w : w < 0 ? cur_w : w;
     h = !h ? scr_h : h < 0 ? cur_h : h;
 
-    nss_window_resize(term->win, w, h);
+    window_resize(term->win, w, h);
 }
 
 static void term_set_132(nss_term_t *term, _Bool set) {
@@ -2318,11 +2322,9 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term_reset_tabs(term);
     keyboard_reset_udk(term);
 
-    nss_window_set_mouse(term->win, 0);
-    nss_window_set_cursor(term->win, iconf(ICONF_CURSOR_SHAPE));
-    nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
-    nss_window_set_bell_raise(term->win, iconf(ICONF_RAISE_ON_BELL));
-    nss_window_set_bell_urgent(term->win, iconf(ICONF_URGENT_ON_BELL));
+    window_set_mouse(term->win, 0);
+    window_set_cursor(term->win, iconf(ICONF_CURSOR_SHAPE));
+    window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
 
     if (hard) {
         term_cursor_mode(term, 1);
@@ -2333,7 +2335,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
 
         term->vt_level = term->vt_version / 100;
 
-        nss_window_set_title(term->win, nss_tt_icon_label | nss_tt_title, NULL, term->mode.title_set_utf8);
+        window_set_title(term->win, target_icon_label | target_title, NULL, term->mode.title_set_utf8);
     } else {
         term->c.x = cx;
         term->c.y = cy;
@@ -2347,7 +2349,7 @@ void nss_term_reset(nss_term_t *term) {
     term_reset(term, 1);
 }
 
-nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t height) {
+nss_term_t *nss_create_term(struct window *win, nss_coord_t width, nss_coord_t height) {
     nss_term_t *term = calloc(1, sizeof(nss_term_t));
 
     term->palette = malloc(PALETTE_SIZE * sizeof(color_t));
@@ -2631,10 +2633,10 @@ static void term_dispatch_dcs(nss_term_t *term) {
     case C('s') | P('='): /* iTerm2 syncronous updates */
         switch (PARAM(0,0)) {
         case 1: /* Begin syncronous update */
-            nss_window_set_sync(term->win, 1);
+            window_set_sync(term->win, 1);
             break;
         case 2: /* End syncronous update */
-            nss_window_set_sync(term->win, 0);
+            window_set_sync(term->win, 0);
             break;
         default:
             term_esc_dump(term, 0);
@@ -2671,7 +2673,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
                         term->c.cel.attr & nss_attrib_protected ? 1 : 2);
                 break;
             case 'q' << 8 | ' ': /* -> DECSCUSR */
-                nss_term_answerback(term, DCS"1$r%"PRIparam" q"ST, nss_window_get_cursor(term->win));
+                nss_term_answerback(term, DCS"1$r%"PRIparam" q"ST, window_get_cursor(term->win));
                 break;
             case '|' << 8 | '*': /* -> DECSLNS */
                 nss_term_answerback(term, DCS"1$r%"PRIparam"*|"ST, term->height);
@@ -2789,17 +2791,17 @@ static void term_colors_changed(nss_term_t *term, uint32_t sel, color_t col) {
     switch(sel) {
     case 10:
         if(term->mode.reverse_video)
-            nss_window_set_colors(term->win, col, 0);
+            window_set_colors(term->win, col, 0);
         break;
     case 11:
         if(!(term->mode.reverse_video))
-            nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_CURSOR_BG] = col, 0);
+            window_set_colors(term->win, term->palette[NSS_SPECIAL_CURSOR_BG] = col, 0);
         else
-            nss_window_set_colors(term->win, 0, term->palette[NSS_SPECIAL_CURSOR_FG] = col);
+            window_set_colors(term->win, 0, term->palette[NSS_SPECIAL_CURSOR_FG] = col);
         break;
     case 12:
         if(!(term->mode.reverse_video))
-            nss_window_set_colors(term->win, 0, col);
+            window_set_colors(term->win, 0, col);
         break;
     case 17: case 19:
         mouse_damage_selection(term);
@@ -2877,7 +2879,7 @@ static void term_dispatch_osc(nss_term_t *term) {
                 dstr = res;
             }
         }
-        nss_window_set_title(term->win, 3 - term->esc.selector, (char *)dstr, term->mode.utf8);
+        window_set_title(term->win, 3 - term->esc.selector, (char *)dstr, term->mode.utf8);
         free(res);
         break;
     }
@@ -2988,13 +2990,13 @@ static void term_dispatch_osc(nss_term_t *term) {
             if (!letter) ts[decode_target((letter = 's'), toclip)] = 1;
             if (!strcmp("?", (char*)parg)) {
                 term->paste_from = letter;
-                nss_window_paste_clip(term->win, decode_target(letter, toclip));
+                window_paste_clip(term->win, decode_target(letter, toclip));
             } else {
                 if (base64_decode(parg, parg, dend) != dend) parg = NULL;
                 for (size_t i = 0; i < clip_MAX; i++) {
                     if (ts[i]) {
                         if (i == term->mstate.targ) term->mstate.targ = -1;
-                        nss_window_set_clip(term->win, parg ? (uint8_t *)strdup((char *)parg) : parg, NSS_TIME_NOW, i);
+                        window_set_clip(term->win, parg ? (uint8_t *)strdup((char *)parg) : parg, NSS_TIME_NOW, i);
                     }
                 }
             }
@@ -3009,7 +3011,7 @@ static void term_dispatch_osc(nss_term_t *term) {
             break;
         }
         term->palette[NSS_SPECIAL_BG] = (term->palette[NSS_SPECIAL_BG] & 0x00FFFFFF) | res << 24;
-        nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], 0);
+        window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], 0);
         break;
     }
     //case 50: /* Set Font */ // TODO OSC 50
@@ -3064,14 +3066,14 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             // IGNORE
             break;
         case 9: /* X10 Mouse tracking */
-            nss_window_set_mouse(term->win, 0);
+            window_set_mouse(term->win, 0);
             term->mstate.mouse_mode = set ? mouse_mode_x10 : mouse_mode_none;
             break;
         case 10: /* Show toolbar */
             // IGNORE - There is no toolbar
             break;
         case 12: /* Start blinking cursor */
-            nss_window_set_cursor(term->win, ((nss_window_get_cursor(term->win) + 1) & ~1) - set);
+            window_set_cursor(term->win, ((window_get_cursor(term->win) + 1) & ~1) - set);
             break;
         case 13: /* Start blinking cursor (menu item) */
         case 14: /* Enable XOR of controll sequence and menu for blinking */
@@ -3132,18 +3134,18 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             term->mode.preserve_display_132 = set;
             break;
         case 1000: /* X11 Mouse tracking */
-            nss_window_set_mouse(term->win, 0);
+            window_set_mouse(term->win, 0);
             term->mstate.mouse_mode = set ? mouse_mode_button : mouse_mode_none;
             break;
         case 1001: /* Highlight mouse tracking */
             // IGNORE
             break;
         case 1002: /* Cell motion mouse tracking on keydown */
-            nss_window_set_mouse(term->win, 0);
+            window_set_mouse(term->win, 0);
             term->mstate.mouse_mode = set ? mouse_mode_drag : mouse_mode_none;
             break;
         case 1003: /* All motion mouse tracking */
-            nss_window_set_mouse(term->win, set);
+            window_set_mouse(term->win, set);
             term->mstate.mouse_mode = set ? mouse_mode_motion : mouse_mode_none;
             break;
         case 1004: /* Focus in/out events */
@@ -3187,10 +3189,10 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             term->mode.select_to_clipboard = set;
             break;
         case 1042: /* Urgency on bell */
-            nss_window_set_bell_urgent(term->win, set);
+            term->mode.bell_urgent = set;
             break;
         case 1043: /* Raise window on bell */
-            nss_window_set_bell_raise(term->win, set);
+            term->mode.bell_raise = set;
             break;
         case 1044: /* Don't clear X11 CLIPBOARD selection */
             term->mode.keep_clipboard = set;
@@ -3306,7 +3308,7 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
             val = nss_mb_aways_disabled;
             break;
         case 12: /* Start blinking cursor */
-            val = MODBIT(nss_window_get_cursor(term->win) & 1);
+            val = MODBIT(window_get_cursor(term->win) & 1);
             break;
         case 13: /* Start blinking cursor (menu item) */
         case 14: /* Enable XORG of control sequence and menu for blinking */
@@ -3412,10 +3414,10 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
             val = MODBIT(term->mode.select_to_clipboard);
             break;
         case 1042: /* Urgency on bell */
-            val = MODBIT(nss_window_get_bell_urgent(term->win));
+            val = MODBIT(term->mode.bell_urgent);
             break;
         case 1043: /* Raise window on bell */
-            val = MODBIT(nss_window_get_bell_raise(term->win));
+            val = MODBIT(term->mode.bell_raise);
             break;
         case 1044: /* Don't clear X11 CLIPBOARD */
             val = MODBIT(term->mode.keep_clipboard);
@@ -3617,7 +3619,7 @@ static void term_putchar(nss_term_t *term, term_char_t ch) {
     if (term->mode.margin_bell) {
         nss_coord_t bcol = term->right - iconf(ICONF_MARGIN_BELL_COLUMN);
         if (term->c.x < bcol && term->c.x + width >= bcol)
-            nss_window_bell(term->win, term->mbvol);
+            window_bell(term->win, term->mbvol);
     }
 
     term->c.pending = term->c.x + width == term_max_x(term);
@@ -3635,80 +3637,80 @@ static void term_dispatch_window_op(nss_term_t *term) {
 
     switch (pa) {
     case 1: /* Undo minimize */
-        nss_window_action(term->win, nss_wa_restore_minimized);
+        window_action(term->win, action_restore_minimized);
         break;
     case 2: /* Minimize */
-        nss_window_action(term->win, nss_wa_minimize);
+        window_action(term->win, action_minimize);
         break;
     case 3: /* Move */
-        nss_window_move(term->win, PARAM(1,0), PARAM(2,0));
+        window_move(term->win, PARAM(1,0), PARAM(2,0));
         break;
     case 4: /* Resize */
     case 8: /* Resize (in cell units) */
         term_request_resize(term, term->esc.param[2], term->esc.param[1], pa == 8);
         break;
     case 5: /* Raise */
-        nss_window_action(term->win, nss_wa_raise);
+        window_action(term->win, action_raise);
         break;
     case 6: /* Lower */
-        nss_window_action(term->win, nss_wa_lower);
+        window_action(term->win, action_lower);
         break;
     case 7: /* Refresh */
         nss_term_damage_lines(term, 0, term->height);
         break;
     case 9: /* Maximize operations */ {
-        nss_window_action_t act = -1;
+        enum window_action act = -1;
 
         switch(PARAM(1, 0)) {
         case 0: /* Undo maximize */
-            act = nss_wa_restore;
+            act = action_restore;
             break;
         case 1: /* Maximize */
-            act = nss_wa_maximize;
+            act = action_maximize;
             break;
         case 2: /* Maximize vertically */
-            act = nss_wa_maximize_height;
+            act = action_maximize_height;
             break;
         case 3: /* Maximize horizontally */
-            act = nss_wa_maximize_width;
+            act = action_maximize_width;
             break;
         default:
             term_esc_dump(term, 0);
         }
-        if (act >= 0) nss_window_action(term->win, act);
+        if (act >= 0) window_action(term->win, act);
         break;
     }
     case 10: /* Fullscreen operations */ {
-        nss_window_action_t act = -1;
+        enum window_action act = -1;
 
         switch(PARAM(1, 0)) {
         case 0: /* Undo fullscreen */
-            act = nss_wa_restore;
+            act = action_restore;
             break;
         case 1: /* Fullscreen */
-            act = nss_wa_fullscreen;
+            act = action_fullscreen;
             break;
         case 2: /* Toggle fullscreen */
-            act = nss_wa_toggle_fullscreen;
+            act = action_toggle_fullscreen;
             break;
         default:
             term_esc_dump(term, 0);
         }
-        if (act >= 0) nss_window_action(term->win, act);
+        if (act >= 0) window_action(term->win, act);
         break;
     }
     case 11: /* Report state */
-        nss_term_answerback(term, CSI"%"PRIparam"t", 1 + !nss_window_is_mapped(term->win));
+        nss_term_answerback(term, CSI"%"PRIparam"t", 1 + !window_is_mapped(term->win));
         break;
     case 13: /* Report position opetations */
         switch(PARAM(1,0)) {
             int16_t x, y;
         case 0: /* Report window position */
-            nss_window_get_dim_ext(term->win, nss_dt_window_position, &x, &y);
+            window_get_dim_ext(term->win, dim_window_position, &x, &y);
             nss_term_answerback(term, CSI"3;%"PRIparam";%"PRIparam"t", x, y);
             break;
         case 2: /* Report grid position */
-            nss_window_get_dim_ext(term->win, nss_dt_grid_position, &x, &y);
+            window_get_dim_ext(term->win, dim_grid_position, &x, &y);
             nss_term_answerback(term, CSI"3;%"PRIparam";%"PRIparam"t", x, y);
             break;
         default:
@@ -3719,11 +3721,11 @@ static void term_dispatch_window_op(nss_term_t *term) {
         switch(PARAM(1,0)) {
             int16_t x, y;
         case 0: /* Report grid size */
-            nss_window_get_dim_ext(term->win, nss_dt_grid_size, &x, &y);
+            window_get_dim_ext(term->win, dim_grid_size, &x, &y);
             nss_term_answerback(term, CSI"4;%"PRIparam";%"PRIparam"t", y, x);
             break;
         case 2: /* Report window size */
-            nss_window_get_dim(term->win, &x, &y);
+            window_get_dim(term->win, &x, &y);
             nss_term_answerback(term, CSI"4;%"PRIparam";%"PRIparam"t", y, x);
             break;
         default:
@@ -3732,13 +3734,13 @@ static void term_dispatch_window_op(nss_term_t *term) {
         break;
     case 15: /* Report screen size */ {
         int16_t x, y;
-        nss_window_get_dim_ext(term->win, nss_dt_screen_size, &x, &y);
+        window_get_dim_ext(term->win, dim_screen_size, &x, &y);
         nss_term_answerback(term, CSI"5;%"PRIparam";%"PRIparam"t", y, x);
         break;
     }
     case 16: /* Report cell size */ {
         int16_t x, y;
-        nss_window_get_dim_ext(term->win, nss_dt_cell_size, &x, &y);
+        window_get_dim_ext(term->win, dim_cell_size, &x, &y);
         nss_term_answerback(term, CSI"6;%"PRIparam";%"PRIparam"t", y, x);
         break;
     }
@@ -3747,9 +3749,9 @@ static void term_dispatch_window_op(nss_term_t *term) {
         break;
     case 19: /* Report screen size (in cell units) */ {
         int16_t s_w, s_h, c_w, c_h, b_w, b_h;
-        nss_window_get_dim_ext(term->win, nss_dt_screen_size, &s_w, &s_h);
-        nss_window_get_dim_ext(term->win, nss_dt_cell_size, &c_w, &c_h);
-        nss_window_get_dim_ext(term->win, nss_dt_border, &b_w, &b_h);
+        window_get_dim_ext(term->win, dim_screen_size, &s_w, &s_h);
+        window_get_dim_ext(term->win, dim_cell_size, &c_w, &c_h);
+        window_get_dim_ext(term->win, dim_border, &b_w, &b_h);
         nss_term_answerback(term, CSI"9;%"PRIparam";%"PRIparam"t", (s_h - 2*b_h)/c_h, (s_w - 2*b_w)/c_w);
         break;
     }
@@ -3757,7 +3759,7 @@ static void term_dispatch_window_op(nss_term_t *term) {
     case 21: /* Report title */ {
         _Bool tutf8;
         uint8_t *res = NULL, *res2 = NULL, *tit = NULL;
-        nss_window_get_title(term->win, pa == 20 ? nss_tt_icon_label : nss_tt_title, (char **)&tit, &tutf8);
+        window_get_title(term->win, pa == 20 ? target_icon_label : target_title, (char **)&tit, &tutf8);
         if (!tit) {
             warn("Can't get title");
             nss_term_answerback(term, OSC"%c"ST, pa == 20 ? 'L' : 'l');
@@ -3796,7 +3798,7 @@ static void term_dispatch_window_op(nss_term_t *term) {
         case 0: /* Title and icon label */
         case 1: /* Icon label */
         case 2: /* Title */
-            nss_window_push_title(term->win, 3 - PARAM(1, 0));
+            window_push_title(term->win, 3 - PARAM(1, 0));
             break;
         default:
             term_esc_dump(term, 0);
@@ -3807,7 +3809,7 @@ static void term_dispatch_window_op(nss_term_t *term) {
         case 0: /* Title and icon label */
         case 1: /* Icon label */
         case 2: /* Title */
-            nss_window_pop_title(term->win, 3 - PARAM(1, 0));
+            window_pop_title(term->win, 3 - PARAM(1, 0));
             break;
         default:
             term_esc_dump(term, 0);
@@ -4206,8 +4208,8 @@ static void term_dispatch_csi(nss_term_t *term) {
         }
         break;
     case C('q') | I0(' '): /* DECSCUSR */ {
-        nss_cursor_type_t csr = PARAM(0, 1);
-        if (csr < 7) nss_window_set_cursor(term->win, csr);
+        enum cursor_type csr = PARAM(0, 1);
+        if (csr < 7) window_set_cursor(term->win, csr);
         break;
     }
     case C('p') | I0('!'): /* DECSTR */
@@ -4379,7 +4381,7 @@ static void term_dispatch_csi(nss_term_t *term) {
             case 9: case 1000: case 1001:
             case 1002: case 1003:
                 term->mstate.mouse_mode = term->saved_mouse_mode;
-                nss_window_set_mouse(term->win, term->mstate.mouse_mode == mouse_mode_motion);
+                window_set_mouse(term->win, term->mstate.mouse_mode == mouse_mode_motion);
                 break;
             case 1050: case 1051: case 1052:
             case 1053: case 1060: case 1061:
@@ -4425,7 +4427,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         break;
     case C('w') | I0('\''): /* DECEFR */ {
         int16_t x, y;
-        nss_window_get_pointer(term->win, &x, &y, NULL);
+        window_get_pointer(term->win, &x, &y, NULL);
         mouse_set_filter(term, PARAM(1, y), PARAM(0, x), PARAM(3, y), PARAM(4, x));
         break;
     }
@@ -4479,7 +4481,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('|') | I0('\''): /* DECRQLP */ {
         int16_t x, y;
         uint32_t mask;
-        nss_window_get_pointer(term->win, &x, &y, &mask);
+        window_get_pointer(term->win, &x, &y, &mask);
         mouse_report_locator(term, 1, x, y, mask);
         break;
     }
@@ -4699,7 +4701,7 @@ static void term_dispatch_c0(nss_term_t *term, term_char_t ch) {
             term_dispatch_dcs(term);
         else if (is_osc_state(term->esc.state))
             term_dispatch_osc(term);
-        else nss_window_bell(term->win, term->bvol);
+        else window_bell(term->win, term->bvol);
         break;
     case 0x08: /* BS */
         term_move_left(term, 1);
@@ -5275,6 +5277,14 @@ _Bool nss_term_is_nrcs_enabled(nss_term_t *term) {
     return term->mode.enable_nrcs;
 }
 
+_Bool nss_term_bell_urgent(nss_term_t *term) {
+    return term->mode.bell_urgent;
+}
+
+_Bool nss_term_bell_raise(nss_term_t *term) {
+    return term->mode.bell_raise;
+}
+
 struct keyboard_state *nss_term_keyboard_state(nss_term_t *term) {
     return &term->kstate;
 }
@@ -5283,7 +5293,7 @@ struct mouse_state *nss_term_mouse_state(nss_term_t *term) {
     return &term->mstate;
 }
 
-nss_window_t *nss_term_window(nss_term_t *term) {
+struct window *nss_term_window(nss_term_t *term) {
     return term->win;
 }
 
@@ -5298,7 +5308,6 @@ _Bool nss_term_get_reverse(nss_term_t *term) {
 ssize_t term_view(nss_term_t *term) {
     return term->view;
 }
-
 
 void nss_term_focus(nss_term_t *term, _Bool set) {
     term->mode.focused = set;

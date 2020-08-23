@@ -55,7 +55,7 @@ static nss_render_context_t rctx;
 #define CA(c) ((((c) >> 24) & 0xff) * 0x101)
 #define MAKE_COLOR(c) {.red=CR(c), .green=CG(c), .blue=CB(c), .alpha=CA(c)}
 
-static void register_glyph(nss_window_t *win, uint32_t ch, nss_glyph_t * glyph) {
+static void register_glyph(struct window *win, uint32_t ch, nss_glyph_t * glyph) {
     xcb_render_glyphinfo_t spec = {
         .width = glyph->width, .height = glyph->height,
         .x = glyph->x - iconf(ICONF_FONT_SPACING)/2, .y = glyph->y - iconf(ICONF_LINE_SPACING)/2,
@@ -67,8 +67,8 @@ static void register_glyph(nss_window_t *win, uint32_t ch, nss_glyph_t * glyph) 
         warn("Can't add glyph");
 }
 
-_Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
-    nss_window_t *found = nss_find_shared_font(win, need_free);
+_Bool nss_renderer_reload_font(struct window *win, _Bool need_free) {
+    struct window *found = nss_find_shared_font(win, need_free);
 
     win->ren.pfglyph = iconf(ICONF_PIXEL_MODE) ? rctx.pfargb : rctx.pfalpha;
 
@@ -96,7 +96,7 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
 
     if (need_free) {
         nss_window_handle_resize(win, win->width, win->height);
-        nss_window_set_default_props(win);
+        window_set_default_props(win);
     } else {
         win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
         win->ch = MAX(1, (win->height - 2*win->top_border) / (win->char_height + win->char_depth));
@@ -131,7 +131,7 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
         c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, pid, win->wid, 1, 1);
         if (check_void_cookie(c)) {
             warn("Can't create pixmap");
-            nss_free_window(win);
+            free_window(win);
             return NULL;
         }
 
@@ -140,7 +140,7 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
         c = xcb_render_create_picture_checked(con, win->ren.pen, pid, rctx.pfargb, XCB_RENDER_CP_REPEAT, values4);
         if (check_void_cookie(c)) {
             warn("Can't create picture");
-            nss_free_window(win);
+            free_window(win);
             return NULL;
         }
         xcb_free_pixmap(con, pid);
@@ -149,7 +149,7 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     return 1;
 }
 
-void nss_renderer_free(nss_window_t *win) {
+void nss_renderer_free(struct window *win) {
     xcb_render_free_picture(con, win->ren.pen);
     xcb_render_free_picture(con, win->ren.pic1);
     xcb_free_pixmap(con, win->ren.pid1);
@@ -288,7 +288,7 @@ static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
         dst[i] = src[i];
 }
 
-_Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
+_Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
 
     rctx.cbufpos = 0;
     rctx.bufpos = 0;
@@ -315,7 +315,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
                     (!win->blink_commited && (line.cell[i].attr & nss_attrib_blink)) ||
                     (cond_cblink && k == cur_y && i == cur_x);
 
-            struct nss_cellspec spec;
+            struct cellspec spec;
             nss_cell_t cel;
             nss_glyph_t *glyph = NULL;
             _Bool g_wide = 0;
@@ -324,7 +324,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
                 cel = line.cell[i];
 
                 if (k == cur_y && i == cur_x && cursor &&
-                        win->focused && ((win->cursor_type + 1) & ~1) == nss_cursor_block)
+                        win->focused && ((win->cursor_type + 1) & ~1) == cusor_type_block)
                     cel.attr ^= nss_attrib_inverse;
 
                 spec = nss_describe_cell(cel, palette, line.line->pal->data,
@@ -532,7 +532,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
         };
         size_t off = 0, count = 4;
         if (win->focused) {
-            if (((win->cursor_type + 1) & ~1) == nss_cursor_bar) {
+            if (((win->cursor_type + 1) & ~1) == cusor_type_bar) {
                 if (marg) {
                     off = 2;
                     rects[2].width = win->cursor_width;
@@ -540,7 +540,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
                 } else
                     rects[0].width = win->cursor_width;
                 count = 1;
-            } else if (((win->cursor_type + 1) & ~1) == nss_cursor_underline) {
+            } else if (((win->cursor_type + 1) & ~1) == cusor_type_underline) {
                 count = 1;
                 off = 3;
                 rects[3].height = win->cursor_width;
@@ -562,19 +562,19 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
     return rctx.cbufpos;
 }
 
-void nss_renderer_update(nss_window_t *win, struct rect rect) {
+void nss_renderer_update(struct window *win, struct rect rect) {
     xcb_copy_area(con, win->ren.pid1, win->wid, win->gc, rect.x, rect.y,
             rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
 }
 
-void nss_renderer_copy(nss_window_t *win, struct rect dst, int16_t sx, int16_t sy) {
+void nss_renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
     xcb_copy_area(con, win->ren.pid1, win->ren.pid1, win->gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
     /*
     xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, 0, win->ren.pic, sx, sy, 0, 0, dst.x, dst.y, dst.width, dst.height);
     */
 }
 
-void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch) {
+void nss_renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
 

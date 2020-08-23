@@ -13,20 +13,20 @@
 #include <stdint.h>
 #include <unistd.h>
 
-typedef enum nss_cursor_type {
-    nss_cursor_block_blink = 1,
-    nss_cursor_block = 2,
-    nss_cursor_underline_blink = 3,
-    nss_cursor_underline = 4,
-    nss_cursor_bar_blink = 5,
-    nss_cursor_bar = 6,
-} nss_cursor_type_t;
+enum cursor_type {
+    cusor_type_block_blink = 1,
+    cusor_type_block = 2,
+    cusor_type_underline_blink = 3,
+    cusor_type_underline = 4,
+    cusor_type_bar_blink = 5,
+    cusor_type_bar = 6,
+};
 
 /* WARNING: Order is important */
 enum mouse_event_type {
-    nss_me_press,
-    nss_me_release,
-    nss_me_motion,
+    mouse_event_press,
+    mouse_event_release,
+    mouse_event_motion,
 };
 
 enum modifier_mask {
@@ -54,32 +54,32 @@ enum clip_target {
     clip_MAX,
 };
 
-typedef enum nss_title_target {
-    nss_tt_title = 1,
-    nss_tt_icon_label = 2,
-} nss_title_target_t;
+enum title_target {
+    target_title = 1,
+    target_icon_label = 2,
+};
 
-typedef enum nss_window_action {
-    nss_wa_minimize,
-    nss_wa_restore_minimized,
-    nss_wa_maximize,
-    nss_wa_maximize_width,
-    nss_wa_maximize_height,
-    nss_wa_fullscreen,
-    nss_wa_toggle_fullscreen,
-    nss_wa_restore,
-    nss_wa_lower,
-    nss_wa_raise,
-} nss_window_action_t;
+enum window_action {
+    action_minimize,
+    action_restore_minimized,
+    action_maximize,
+    action_maximize_width,
+    action_maximize_height,
+    action_fullscreen,
+    action_toggle_fullscreen,
+    action_restore,
+    action_lower,
+    action_raise,
+};
 
-typedef enum nss_window_dim_type {
-    nss_dt_window_position,
-    nss_dt_grid_position,
-    nss_dt_grid_size,
-    nss_dt_screen_size,
-    nss_dt_cell_size,
-    nss_dt_border,
-} nss_window_dim_type_t;
+enum window_dimension {
+    dim_window_position,
+    dim_grid_position,
+    dim_grid_size,
+    dim_screen_size,
+    dim_cell_size,
+    dim_border,
+};
 
 struct mouse_event {
     enum mouse_event_type event;
@@ -89,47 +89,41 @@ struct mouse_event {
     uint8_t button;
 };
 
-typedef struct nss_window nss_window_t;
-typedef struct nss_line_iter nss_line_iter_t;
 typedef uint32_t color_t;
 typedef int16_t nss_coord_t;
 
-void nss_init_context(void);
-void nss_free_context(void);
-void nss_context_run(void);
+void init_context(void);
+void free_context(void);
+void run(void);
 
-nss_window_t *nss_create_window();
-void nss_free_window(nss_window_t *win);
+struct window *create_window();
+void free_window(struct window *win);
 
-_Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg);
-_Bool nss_window_shift(nss_window_t *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, _Bool delay);
-void nss_window_paste_clip(nss_window_t *win, enum clip_target target);
-void nss_window_delay(nss_window_t *win);
-void nss_window_resize(nss_window_t *win, int16_t width, int16_t height);
-void nss_window_move(nss_window_t *win, int16_t x, int16_t y);
-void nss_window_action(nss_window_t *win, nss_window_action_t act);
-_Bool nss_window_is_mapped(nss_window_t *win);
-_Bool nss_window_get_bell_raise(nss_window_t *win);
-_Bool nss_window_get_bell_urgent(nss_window_t *win);
-void nss_window_set_bell_raise(nss_window_t *win, _Bool set);
-void nss_window_set_bell_urgent(nss_window_t *win, _Bool set);
-void nss_window_bell(nss_window_t *win, uint8_t vol);
+_Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg);
+_Bool window_shift(struct window *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, _Bool delay);
+void window_paste_clip(struct window *win, enum clip_target target);
+void window_delay(struct window *win);
+void window_resize(struct window *win, int16_t width, int16_t height);
+void window_move(struct window *win, int16_t x, int16_t y);
+void window_action(struct window *win, enum window_action act);
+_Bool window_is_mapped(struct window *win);
+void window_bell(struct window *win, uint8_t vol);
 
-void nss_window_set_title(nss_window_t *win, nss_title_target_t which, const char *name, _Bool utf8);
-void nss_window_push_title(nss_window_t *win, nss_title_target_t which);
-void nss_window_pop_title(nss_window_t *win, nss_title_target_t which);
+void window_set_title(struct window *win, enum title_target which, const char *name, _Bool utf8);
+void window_push_title(struct window *win, enum title_target which);
+void window_pop_title(struct window *win, enum title_target which);
 /* Both at the same time are not supported */
-void nss_window_get_title(nss_window_t *win, nss_title_target_t which, char **name, _Bool *utf8);
+void window_get_title(struct window *win, enum title_target which, char **name, _Bool *utf8);
 
-void nss_window_set_mouse(nss_window_t *win, _Bool enabled);
-void nss_window_set_colors(nss_window_t *win, color_t bg, color_t cursor_fg);
-void nss_window_set_cursor(nss_window_t *win, nss_cursor_type_t type);
-void nss_window_get_dim(nss_window_t *win, int16_t *width, int16_t *height);
-void nss_window_get_dim_ext(nss_window_t *win, nss_window_dim_type_t which, int16_t *width, int16_t *height);
-void nss_window_get_pointer(nss_window_t *win, int16_t *px, int16_t *py, uint32_t *pmask);
-nss_cursor_type_t nss_window_get_cursor(nss_window_t *win);
-void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, enum clip_target target);
-void nss_window_set_sync(nss_window_t *win, _Bool state);
+void window_set_mouse(struct window *win, _Bool enabled);
+void window_set_colors(struct window *win, color_t bg, color_t cursor_fg);
+void window_set_cursor(struct window *win, enum cursor_type type);
+void window_get_dim(struct window *win, int16_t *width, int16_t *height);
+void window_get_dim_ext(struct window *win, enum window_dimension which, int16_t *width, int16_t *height);
+void window_get_pointer(struct window *win, int16_t *px, int16_t *py, uint32_t *pmask);
+enum cursor_type window_get_cursor(struct window *win);
+void window_set_clip(struct window *win, uint8_t *data, uint32_t time, enum clip_target target);
+void window_set_sync(struct window *win, _Bool state);
 
 #define NSS_TIME_NOW 0
 

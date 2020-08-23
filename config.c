@@ -167,7 +167,7 @@ static struct {
     [ICONF_INIT_WRAP - ICONF_MIN] = {1, 1, 0, 1},
     [ICONF_SCROLL_ON_INPUT - ICONF_MIN] = {1, 1, 0, 1},
     [ICONF_SCROLL_ON_OUTPUT - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_CURSOR_SHAPE - ICONF_MIN] = {nss_cursor_bar, nss_cursor_bar, 1, 6},
+    [ICONF_CURSOR_SHAPE - ICONF_MIN] = {cusor_type_bar, cusor_type_bar, 1, 6},
     [ICONF_UNDERLINE_WIDTH - ICONF_MIN] = {1, 1, 0, 16},
     [ICONF_CURSOR_WIDTH - ICONF_MIN] = {2, 2, 0, 16},
     [ICONF_PIXEL_MODE - ICONF_MIN] = {0, 0, 0, 4},

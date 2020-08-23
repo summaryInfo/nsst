@@ -46,7 +46,7 @@ static _Noreturn void usage(char *argv0, int code) {
             "where 'yes', 'y', 'true', 'no', 'n' and 'false' are case independet\n"
         );
     }
-    nss_free_context();
+    free_context();
     exit(code);
 }
 
@@ -72,7 +72,7 @@ static _Noreturn void version(void) {
             (NSS_VERSION / 10000) % 100,
             (NSS_VERSION / 100) % 100,
             NSS_VERSION % 100);
-    nss_free_context();
+    free_context();
     exit(EXIT_SUCCESS);
 }
 
@@ -228,16 +228,16 @@ int main(int argc, char **argv) {
             iconf_set(ICONF_SKIP_CONFIG_FILE, 1);
 
     // Initialize graphical context
-    nss_init_context();
+    init_context();
 
     (void)argc;
 
     parse_options(argv);
     nss_setup_default_termios();
 
-    nss_create_window();
-    nss_context_run();
-    nss_free_context();
+    create_window();
+    run();
+    free_context();
 
     return EXIT_SUCCESS;
 }

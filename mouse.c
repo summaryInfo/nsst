@@ -129,7 +129,7 @@ void mouse_clear_selection(nss_term_t* term) {
     if (loc->targ != -1U) {
         if (nss_term_keep_selection(term)) return;
 
-        nss_window_set_clip(nss_term_window(term), NULL, NSS_TIME_NOW, loc->targ);
+        window_set_clip(nss_term_window(term), NULL, NSS_TIME_NOW, loc->targ);
         loc->targ = -1;
     }
 }
@@ -464,12 +464,12 @@ void mouse_scroll_view(nss_term_t *term, ssize_t delta) {
     }
 }
 
-inline static void adj_coords(nss_window_t *win, int16_t *x, int16_t *y) {
+inline static void adj_coords(struct window *win, int16_t *x, int16_t *y) {
     int16_t cw, ch, w, h, bw, bh;
 
-    nss_window_get_dim_ext(win, nss_dt_cell_size, &cw, &ch);
-    nss_window_get_dim_ext(win, nss_dt_border, &bw, &bh);
-    nss_window_get_dim_ext(win, nss_dt_grid_size, &w, &h);
+    window_get_dim_ext(win, dim_cell_size, &cw, &ch);
+    window_get_dim_ext(win, dim_border, &bw, &bh);
+    window_get_dim_ext(win, dim_grid_size, &w, &h);
 
     *x = MAX(0, MIN(w - 1, (*x - bw))) / cw;
     *y = MAX(0, MIN(h - 1, (*y - bh))) / ch;
@@ -484,8 +484,8 @@ void mouse_report_locator(nss_term_t *term, uint8_t evt, int16_t x, int16_t y, u
     if (mask & mask_button_4) lmask |= 8;
 
     int16_t w, h, bw, bh;
-    nss_window_get_dim_ext(nss_term_window(term), nss_dt_border, &bw, &bh);
-    nss_window_get_dim_ext(nss_term_window(term), nss_dt_grid_size, &w, &h);
+    window_get_dim_ext(nss_term_window(term), dim_border, &bw, &bh);
+    window_get_dim_ext(nss_term_window(term), dim_grid_size, &w, &h);
 
     if (x < bw || x >= w + bw || y < bh || y > h + bh) {
         if (evt == 1) nss_term_answerback(term, CSI"0&w");
@@ -505,9 +505,9 @@ void mouse_set_filter(nss_term_t *term, nss_sparam_t xs, nss_sparam_t xe, nss_sp
     struct mouse_state *loc = nss_term_mouse_state(term);
 
     int16_t cw, ch, bw, bh, w, h;
-    nss_window_get_dim_ext(nss_term_window(term), nss_dt_border, &bw, &bh);
-    nss_window_get_dim_ext(nss_term_window(term), nss_dt_cell_size, &cw, &ch);
-    nss_window_get_dim_ext(nss_term_window(term), nss_dt_grid_size, &w, &h);
+    window_get_dim_ext(nss_term_window(term), dim_border, &bw, &bh);
+    window_get_dim_ext(nss_term_window(term), dim_cell_size, &cw, &ch);
+    window_get_dim_ext(nss_term_window(term), dim_grid_size, &w, &h);
 
     if (!loc->locator_pixels) {
         xs = xs * cw + bw;
@@ -524,7 +524,7 @@ void mouse_set_filter(nss_term_t *term, nss_sparam_t xs, nss_sparam_t xe, nss_sp
     loc->filter = (struct rect) { xs, ys, xe - xs, ye - ys };
     loc->locator_filter = 1;
 
-    nss_window_set_mouse(nss_term_window(term), 1);
+    window_set_mouse(nss_term_window(term), 1);
 }
 
 void mouse_handle_input(nss_term_t *term, struct mouse_event ev) {
@@ -535,10 +535,10 @@ void mouse_handle_input(nss_term_t *term, struct mouse_event ev) {
         if (loc->locator_filter) {
             if (ev.x < loc->filter.x || ev.x >= loc->filter.x + loc->filter.width ||
                     ev.y < loc->filter.y || ev.y >= loc->filter.y + loc->filter.height) {
-                if (ev.event == nss_me_press) ev.mask |= 1 << (ev.button + 8);
+                if (ev.event == mouse_event_press) ev.mask |= 1 << (ev.button + 8);
                 mouse_report_locator(term, 10, ev.x, ev.y, ev.mask);
                 loc->locator_filter = 0;
-                nss_window_set_mouse(nss_term_window(term), loc->mouse_mode == mouse_mode_motion);
+                window_set_mouse(nss_term_window(term), loc->mouse_mode == mouse_mode_motion);
             }
         } else if (loc->locator_enabled) {
             if (loc->locator_oneshot) {
@@ -546,13 +546,13 @@ void mouse_handle_input(nss_term_t *term, struct mouse_event ev) {
                 loc->locator_oneshot = 0;
             }
 
-            if (ev.event == nss_me_motion) return;
-            else if (ev.event == nss_me_press && !loc->locator_report_press) return;
-            else if (ev.event == nss_me_release && !loc->locator_report_release) return;
+            if (ev.event == mouse_event_motion) return;
+            else if (ev.event == mouse_event_press && !loc->locator_report_press) return;
+            else if (ev.event == mouse_event_release && !loc->locator_report_release) return;
 
             if (ev.button < 3) {
-                if (ev.event == nss_me_press) ev.mask |= 1 << (ev.button + 8);
-                mouse_report_locator(term, 2 + ev.button * 2 + (ev.event == nss_me_release), ev.x, ev.y, ev.mask);
+                if (ev.event == mouse_event_press) ev.mask |= 1 << (ev.button + 8);
+                mouse_report_locator(term, 2 + ev.button * 2 + (ev.event == mouse_event_release), ev.x, ev.y, ev.mask);
             }
         }
     } else if (loc->mouse_mode != mouse_mode_none &&
@@ -563,7 +563,7 @@ void mouse_handle_input(nss_term_t *term, struct mouse_event ev) {
 
         if (md == mouse_mode_x10 && ev.button > 2) return;
 
-        if (ev.event == nss_me_motion) {
+        if (ev.event == mouse_event_motion) {
             if (md != mouse_mode_motion && md != mouse_mode_drag) return;
             if (md == mouse_mode_drag && loc->button == 3) return;
             if (ev.x == loc->x && ev.y == loc->y) return;
@@ -571,7 +571,7 @@ void mouse_handle_input(nss_term_t *term, struct mouse_event ev) {
         } else {
             if (ev.button > 6) ev.button += 128 - 7;
             else if (ev.button > 2) ev.button += 64 - 3;
-            if (ev.event == nss_me_release) {
+            if (ev.event == mouse_event_release) {
                 if (md == mouse_mode_x10) return;
                 /* Don't report wheel relese events */
                 if (ev.button == 64 || ev.button == 65) return;
@@ -589,7 +589,7 @@ void mouse_handle_input(nss_term_t *term, struct mouse_event ev) {
         switch (loc->mouse_format) {
         case mouse_format_sgr:
             nss_term_answerback(term, CSI"<%"PRIu8";%"PRIu16";%"PRIu16"%c",
-                    ev.button, ev.x + 1, ev.y + 1, ev.event == nss_me_release ? 'm' : 'M');
+                    ev.button, ev.x + 1, ev.y + 1, ev.event == mouse_event_release ? 'm' : 'M');
             break;
         case mouse_format_utf8:;
             size_t off = 0;
@@ -613,24 +613,24 @@ void mouse_handle_input(nss_term_t *term, struct mouse_event ev) {
         loc->x = ev.x;
         loc->y = ev.y;
     /* Scroll view */
-    } else if (ev.event == nss_me_press && (ev.button == 3 || ev.button == 4)) {
+    } else if (ev.event == mouse_event_press && (ev.button == 3 || ev.button == 4)) {
         nss_term_scroll_view(term, (2 *(ev.button == 3) - 1) * iconf(ICONF_SCROLL_AMOUNT));
     /* Select */
-    } else if ((ev.event == nss_me_press && ev.button == 0) ||
-               (ev.event == nss_me_motion && ev.mask & mask_button_1 &&
+    } else if ((ev.event == mouse_event_press && ev.button == 0) ||
+               (ev.event == mouse_event_motion && ev.mask & mask_button_1 &&
                     (loc->state == state_sel_progress || loc->state == state_sel_pressed)) ||
-               (ev.event == nss_me_release && ev.button == 0 &&
+               (ev.event == mouse_event_release && ev.button == 0 &&
                     (loc->state == state_sel_progress))) {
 
         adj_coords(nss_term_window(term), &ev.x, &ev.y);
         change_selection(term, ev.event + 1, ev.x, ev.y, ev.mask & mask_mod_1);
 
-        if (ev.event == nss_me_release) {
+        if (ev.event == mouse_event_release) {
             loc->targ = nss_term_select_to_clipboard(term) ? clip_clipboard : clip_primary;
-            nss_window_set_clip(nss_term_window(term), selection_data(term), NSS_TIME_NOW, loc->targ);
+            window_set_clip(nss_term_window(term), selection_data(term), NSS_TIME_NOW, loc->targ);
         }
     /* Paste */
-    } else if (ev.button == 1 && ev.event == nss_me_release) {
-        nss_window_paste_clip(nss_term_window(term), clip_primary);
+    } else if (ev.button == 1 && ev.event == mouse_event_release) {
+        window_paste_clip(nss_term_window(term), clip_primary);
     }
 }

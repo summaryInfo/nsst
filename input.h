@@ -97,7 +97,6 @@ struct key {
 };
 
 typedef struct nss_term nss_term_t;
-typedef struct nss_window nss_window_t;
 
 void keyboard_handle_input(struct key k, nss_term_t *term);
 struct key keyboard_describe_key(struct xkb_state *state, xkb_keycode_t keycode);

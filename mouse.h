@@ -29,9 +29,9 @@ struct mouse_state {
 
     enum {
         state_sel_none,
-        state_sel_pressed = nss_me_press + 1,
-        state_sel_released = nss_me_release + 1,
-        state_sel_progress = nss_me_motion + 1,
+        state_sel_pressed = mouse_event_press + 1,
+        state_sel_released = mouse_event_release + 1,
+        state_sel_progress = mouse_event_motion + 1,
     } state;
 
     struct timespec click0;

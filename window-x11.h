@@ -47,7 +47,7 @@ struct nss_renderer {
 #endif
 };
 
-struct nss_cellspec {
+struct cellspec {
     color_t fg;
     color_t bg;
     term_char_t ch;
@@ -57,38 +57,36 @@ struct nss_cellspec {
     _Bool wide;
 };
 
-typedef struct nss_title_stack_item {
-    struct nss_title_stack_item *next;
+struct title_stack_item {
+    struct title_stack_item *next;
     char *title_data;
     char *icon_data;
     _Bool title_utf8;
     _Bool icon_utf8;
     char data[];
-} nss_title_stack_item_t;
+};
 
-struct nss_window {
-    struct nss_window *prev, *next;
+struct window {
+    struct window *prev, *next;
 
     xcb_window_t wid;
     int32_t screen;
     xcb_gcontext_t gc;
     xcb_event_mask_t ev_mask;
 
-    unsigned focused : 1;
-    unsigned active : 1;
-    unsigned blink_state : 1;
-    unsigned mouse_events : 1;
-    unsigned force_redraw : 1;
-    unsigned blink_commited : 1;
-    unsigned scroll_delayed : 1;
-    unsigned resize_delayed : 1;
-    unsigned drawn_somthing : 1;
-    unsigned sync_active : 1;
-    unsigned slow_mode : 1;
-    unsigned bell_urgent : 1;
-    unsigned bell_raise : 1;
-    unsigned in_blink : 1;
-    unsigned init_invert : 1;
+    _Bool focused : 1;
+    _Bool active : 1;
+    _Bool blink_state : 1;
+    _Bool mouse_events : 1;
+    _Bool force_redraw : 1;
+    _Bool blink_commited : 1;
+    _Bool scroll_delayed : 1;
+    _Bool resize_delayed : 1;
+    _Bool drawn_somthing : 1;
+    _Bool sync_active : 1;
+    _Bool slow_mode : 1;
+    _Bool in_blink : 1;
+    _Bool init_invert : 1;
 
     int16_t width;
     int16_t height;
@@ -116,7 +114,7 @@ struct nss_window {
 
     color_t bg;
     color_t cursor_fg;
-    nss_cursor_type_t cursor_type;
+    enum cursor_type cursor_type;
 
     uint8_t *clipped[clip_MAX];
     uint8_t *clipboard;
@@ -132,13 +130,13 @@ struct nss_window {
     nss_term_t *term;
     size_t poll_index;
 
-    nss_title_stack_item_t *title_stack;
+    struct title_stack_item *title_stack;
 
     nss_renderer_t ren;
 };
 
 extern xcb_connection_t *con;
-extern nss_window_t *win_list_head;
+extern struct window *win_list_head;
 
 inline static _Bool check_void_cookie(xcb_void_cookie_t ck) {
     xcb_generic_error_t *err = xcb_request_check(con, ck);
@@ -152,16 +150,16 @@ inline static _Bool check_void_cookie(xcb_void_cookie_t ck) {
 
 void nss_init_render_context(void);
 void nss_free_render_context(void);
-void nss_renderer_free(nss_window_t *win);
-void nss_renderer_update(nss_window_t *win, struct rect rect);
- _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free);
-void nss_renderer_resize(nss_window_t *win, int16_t new_cw, int16_t new_ch);
-void nss_renderer_copy(nss_window_t *win, struct rect dst, int16_t sx, int16_t sy);
+void nss_renderer_free(struct window *win);
+void nss_renderer_update(struct window *win, struct rect rect);
+ _Bool nss_renderer_reload_font(struct window *win, _Bool need_free);
+void nss_renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch);
+void nss_renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 
-void nss_window_set_default_props(nss_window_t *win);
-void nss_window_handle_resize(nss_window_t *win, int16_t width, int16_t height);
-nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free);
-struct nss_cellspec nss_describe_cell(nss_cell_t cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected);
+void window_set_default_props(struct window *win);
+void nss_window_handle_resize(struct window *win, int16_t width, int16_t height);
+struct window *nss_find_shared_font(struct window *win, _Bool need_free);
+struct cellspec nss_describe_cell(nss_cell_t cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected);
 
 #endif
 

@@ -90,7 +90,7 @@ typedef struct nss_line_pos {
 
 typedef struct nss_term nss_term_t;
 
-nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t height);
+nss_term_t *nss_create_term(struct window *win, nss_coord_t width, nss_coord_t height);
 void nss_free_term(nss_term_t *term);
 _Bool nss_term_redraw_dirty(nss_term_t *term);
 void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height);
@@ -114,7 +114,7 @@ void nss_term_damage(nss_term_t *term, struct rect damage);
 void nss_term_reset(nss_term_t *term);
 void nss_term_set_reverse(nss_term_t *term, _Bool set);
 _Bool nss_term_get_reverse(nss_term_t *term);
-nss_window_t *nss_term_window(nss_term_t *term);
+struct window *nss_term_window(nss_term_t *term);
 
 nss_line_view_t nss_term_line_at(nss_term_t *term, nss_line_pos_t pos);
 nss_line_pos_t nss_term_get_view(nss_term_t *term);
@@ -128,6 +128,9 @@ void nss_term_paste_end(nss_term_t *term);
 _Bool nss_term_keep_clipboard(nss_term_t *term);
 _Bool nss_term_keep_selection(nss_term_t *term);
 _Bool nss_term_select_to_clipboard(nss_term_t *term);
+
+_Bool nss_term_bell_urgent(nss_term_t *term);
+_Bool nss_term_bell_raise(nss_term_t *term);
 
 void nss_setup_default_termios(void);
 

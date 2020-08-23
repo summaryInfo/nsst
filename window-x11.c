@@ -83,11 +83,11 @@ struct nss_context {
 
 struct nss_context ctx;
 xcb_connection_t *con = NULL;
-nss_window_t *win_list_head = NULL;
+struct window *win_list_head = NULL;
 volatile sig_atomic_t reload_config;
 
-static nss_window_t *window_for_xid(xcb_window_t xid) {
-    for (nss_window_t *win = win_list_head; win; win = win->next)
+static struct window *window_for_xid(xcb_window_t xid) {
+    for (struct window *win = win_list_head; win; win = win->next)
         if (win->wid == xid) return win;
     info("Window for xid not found");
     return NULL;
@@ -234,7 +234,7 @@ cleanup_context:
 }
 
 /* Initialize global state object */
-void nss_init_context(void) {
+void init_context(void) {
     ctx.daemon_mode = 0;
 
     ctx.pfds = calloc(INIT_PFD_NUM, sizeof(struct pollfd));
@@ -325,9 +325,9 @@ void nss_init_context(void) {
 }
 
 /* Free all resources */
-void nss_free_context(void) {
+void free_context(void) {
     while (win_list_head)
-        nss_free_window(win_list_head);
+        free_window(win_list_head);
     xkb_state_unref(ctx.xkb_state);
     xkb_keymap_unref(ctx.xkb_keymap);
     xkb_context_unref(ctx.xkb_ctx);
@@ -339,19 +339,19 @@ void nss_free_context(void) {
     memset(&con, 0, sizeof(con));
 }
 
-void nss_window_get_dim(nss_window_t *win, int16_t *width, int16_t *height) {
+void window_get_dim(struct window *win, int16_t *width, int16_t *height) {
     if (width) *width = win->width;
     if (height) *height = win->height;
 }
 
-void nss_window_set_cursor(nss_window_t *win, nss_cursor_type_t type) {
+void window_set_cursor(struct window *win, enum cursor_type type) {
     win->cursor_type = type;
 }
-nss_cursor_type_t nss_window_get_cursor(nss_window_t *win) {
+enum cursor_type window_get_cursor(struct window *win) {
     return win->cursor_type;
 }
 
-void nss_window_set_colors(nss_window_t *win, color_t bg, color_t cursor_fg) {
+void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
     color_t obg = win->bg, ofg = win->cursor_fg;
     if (bg) win->bg = bg;
     if (cursor_fg) win->cursor_fg = cursor_fg;
@@ -369,7 +369,7 @@ void nss_window_set_colors(nss_window_t *win, color_t bg, color_t cursor_fg) {
     }
 }
 
-void nss_window_set_mouse(nss_window_t *win, _Bool enabled) {
+void window_set_mouse(struct window *win, _Bool enabled) {
    if (enabled)
         win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
    else
@@ -377,16 +377,16 @@ void nss_window_set_mouse(nss_window_t *win, _Bool enabled) {
    xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
 }
 
-void nss_window_set_sync(nss_window_t *win, _Bool state) {
+void window_set_sync(struct window *win, _Bool state) {
     if (state) clock_gettime(NSS_CLOCK, &win->last_sync);
     win->sync_active = state;
 }
 
-void nss_window_delay(nss_window_t *win) {
+void window_delay(struct window *win) {
     clock_gettime(NSS_CLOCK, &win->last_scroll);
 }
 
-void nss_window_resize(nss_window_t *win, int16_t width, int16_t height) {
+void window_resize(struct window *win, int16_t width, int16_t height) {
     if (win->height != height || win->width != width) {
         uint32_t vals[] = {width, height};
         xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
@@ -394,7 +394,7 @@ void nss_window_resize(nss_window_t *win, int16_t width, int16_t height) {
     }
 }
 
-void nss_window_move(nss_window_t *win, int16_t x, int16_t y) {
+void window_move(struct window *win, int16_t x, int16_t y) {
     uint32_t vals[] = {x, y};
     xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
 }
@@ -425,15 +425,15 @@ static void send_wm_client_event(xcb_window_t win, uint32_t type, uint32_t data0
 #define _NET_WM_STATE_ADD 1
 #define _NET_WM_STATE_TOGGLE 2
 
-inline static void save_pos(nss_window_t *win) {
+inline static void save_pos(struct window *win) {
     if (!win->saved_geometry) {
-        nss_window_get_dim_ext(win, nss_dt_window_position, &win->saved_x, &win->saved_y);
-        nss_window_get_dim(win, &win->saved_width, &win->saved_height);
+        window_get_dim_ext(win, dim_window_position, &win->saved_x, &win->saved_y);
+        window_get_dim(win, &win->saved_width, &win->saved_height);
         win->saved_geometry = 1;
     }
 }
 
-inline static void restore_pos(nss_window_t *win) {
+inline static void restore_pos(struct window *win) {
     if (win->saved_geometry) {
         uint32_t vals[] = {win->saved_x, win->saved_y, win->saved_width, win->saved_height};
         xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH |
@@ -443,24 +443,24 @@ inline static void restore_pos(nss_window_t *win) {
     }
 }
 
-void nss_window_action(nss_window_t *win, nss_window_action_t act) {
+void window_action(struct window *win, enum window_action act) {
     switch(act) {
         uint32_t val;
-    case nss_wa_minimize:
+    case action_minimize:
         send_wm_client_event(win->wid, ctx.atom.WM_CHANGE_STATE, WM_STATE_ICONIC, 0);
         break;
-    case nss_wa_restore_minimized:
+    case action_restore_minimized:
         send_wm_client_event(win->wid, ctx.atom._NET_ACTIVE_WINDOW, 1, XCB_CURRENT_TIME);
         break;
-    case nss_wa_lower:
+    case action_lower:
         val = XCB_STACK_MODE_BELOW;
         xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_STACK_MODE, &val);
         break;
-    case nss_wa_raise:
+    case action_raise:
         val = XCB_STACK_MODE_ABOVE;
         xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_STACK_MODE, &val);
         break;
-    case nss_wa_maximize:
+    case action_maximize:
         save_pos(win);
         send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE,
                 _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
@@ -471,39 +471,39 @@ void nss_window_action(nss_window_t *win, nss_window_action_t act) {
                 XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
         nss_window_handle_resize(win, vals[2], vals[3]);
         break;
-    case nss_wa_maximize_width:
+    case action_maximize_width:
         save_pos(win);
         send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE,
                 _NET_WM_STATE_ADD,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
         break;
-    case nss_wa_maximize_height:
+    case action_maximize_height:
         save_pos(win);
         send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE,
                 _NET_WM_STATE_ADD,  ctx.atom._NET_WM_STATE_MAXIMIZED_VERT);
         break;
-    case nss_wa_fullscreen:
+    case action_fullscreen:
         save_pos(win);
         send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE,
                 _NET_WM_STATE_ADD,  ctx.atom._NET_WM_STATE_FULLSCREEN);
         break;
-    case nss_wa_restore:
+    case action_restore:
         send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
         send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
         send_wm_client_event(win->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_FULLSCREEN);
         restore_pos(win);
         break;
-    case nss_wa_toggle_fullscreen:
-        nss_window_action(win, win->saved_geometry ? nss_wa_restore : nss_wa_fullscreen);
+    case action_toggle_fullscreen:
+        window_action(win, win->saved_geometry ? action_restore : action_fullscreen);
         break;
     }
 }
 
-void nss_window_get_dim_ext(nss_window_t *win, nss_window_dim_type_t which, int16_t *width, int16_t *height) {
+void window_get_dim_ext(struct window *win, enum window_dimension which, int16_t *width, int16_t *height) {
     int16_t x = 0, y = 0;
     //TODO Handle reparenting
     switch (which) {
-    case nss_dt_window_position:
-    case nss_dt_grid_position:;
+    case dim_window_position:
+    case dim_grid_position:;
         xcb_get_geometry_cookie_t gc = xcb_get_geometry(con, win->wid);
         xcb_get_geometry_reply_t *rep = xcb_get_geometry_reply(con, gc, NULL);
         if (rep) {
@@ -511,24 +511,24 @@ void nss_window_get_dim_ext(nss_window_t *win, nss_window_dim_type_t which, int1
             y = rep->y;
             free(rep);
         }
-        if (which == nss_dt_grid_position) {
+        if (which == dim_grid_position) {
             x += win->left_border;
             y += win->top_border;
         }
         break;
-    case nss_dt_grid_size:
+    case dim_grid_size:
         x = win->char_width * win->cw;
         y = (win->char_height + win->char_depth) * win->ch;
         break;
-    case nss_dt_screen_size:
+    case dim_screen_size:
         x = ctx.screen->width_in_pixels;
         y = ctx.screen->height_in_pixels;
         break;
-    case nss_dt_cell_size:
+    case dim_cell_size:
         x = win->char_width;
         y = win->char_depth + win->char_height;
         break;
-    case nss_dt_border:
+    case dim_border:
         x = win->left_border;
         y = win->top_border;
         break;
@@ -538,7 +538,7 @@ void nss_window_get_dim_ext(nss_window_t *win, nss_window_dim_type_t which, int1
     if (height) *height = y;
 }
 
-void nss_window_get_pointer(nss_window_t *win, int16_t *px, int16_t *py, uint32_t *pmask) {
+void window_get_pointer(struct window *win, int16_t *px, int16_t *py, uint32_t *pmask) {
     int32_t x = 0, y = 0, mask = 0;
     xcb_query_pointer_cookie_t c = xcb_query_pointer(con, win->wid);
     xcb_query_pointer_reply_t *qre = xcb_query_pointer_reply(con, c, NULL);
@@ -551,22 +551,6 @@ void nss_window_get_pointer(nss_window_t *win, int16_t *px, int16_t *py, uint32_
     if (px) *px = x;
     if (py) *py = y;
     if (pmask) *pmask = mask;
-}
-
-_Bool nss_window_get_bell_raise(nss_window_t *win) {
-    return win->bell_raise;
-}
-
-_Bool nss_window_get_bell_urgent(nss_window_t *win) {
-    return win->bell_urgent;
-}
-
-void nss_window_set_bell_raise(nss_window_t *win, _Bool set) {
-    win->bell_raise = set;
-}
-
-void nss_window_set_bell_urgent(nss_window_t *win, _Bool set) {
-    win->bell_urgent = set;
 }
 
 #define WM_HINTS_LEN 8
@@ -583,10 +567,10 @@ static void set_urgency(xcb_window_t wid, _Bool set) {
 
 }
 
-void nss_window_bell(nss_window_t *win, uint8_t vol) {
+void window_bell(struct window *win, uint8_t vol) {
     if (!win->focused) {
-        if (win->bell_raise) nss_window_action(win, nss_wa_restore_minimized);
-        if (win->bell_urgent) set_urgency(win->wid, 1);
+        if (nss_term_bell_raise(win->term)) window_action(win, action_restore_minimized);
+        if (nss_term_bell_urgent(win->term)) set_urgency(win->wid, 1);
     }
     if (iconf(ICONF_VISUAL_BELL)) {
         if (!win->in_blink) {
@@ -602,23 +586,23 @@ void nss_window_bell(nss_window_t *win, uint8_t vol) {
     }
 }
 
-_Bool nss_window_is_mapped(nss_window_t *win) {
+_Bool window_is_mapped(struct window *win) {
     return win->active;
 }
 
-static int32_t nss_window_get_font_size(nss_window_t *win) {
+static int32_t window_get_font_size(struct window *win) {
     return win->font_size;
 }
 
 static void reload_all_fonts(void) {
-    for (nss_window_t *win = win_list_head; win; win = win->next) {
+    for (struct window *win = win_list_head; win; win = win->next) {
         nss_renderer_reload_font(win, 1);
         nss_term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
 }
 
-static void nss_window_set_font(nss_window_t *win, const char * name, int32_t size) {
+static void window_set_font(struct window *win, const char * name, int32_t size) {
     _Bool reload = name || size != win->font_size;
     if (name) {
         free(win->font_name);
@@ -646,12 +630,12 @@ static void set_icon_label(xcb_window_t wid, const char *title, _Bool utf8) {
         utf8 ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
-void nss_window_set_title(nss_window_t *win, nss_title_target_t which, const char *title, _Bool utf8) {
+void window_set_title(struct window *win, enum title_target which, const char *title, _Bool utf8) {
     if (!title) title = sconf(SCONF_TITLE);
 
-    if (which & nss_tt_title) set_title(win->wid, title, utf8);
+    if (which & target_title) set_title(win->wid, title, utf8);
 
-    if (which & nss_tt_icon_label) set_icon_label(win->wid, title, utf8);
+    if (which & target_icon_label) set_icon_label(win->wid, title, utf8);
 }
 
 char *get_full_property(xcb_window_t wid, xcb_atom_t prop, xcb_atom_t *type, size_t *psize) {
@@ -690,13 +674,13 @@ char *get_full_property(xcb_window_t wid, xcb_atom_t prop, xcb_atom_t *type, siz
     return data;
 }
 
-void nss_window_get_title(nss_window_t *win, nss_title_target_t which, char **name, _Bool *utf8) {
+void window_get_title(struct window *win, enum title_target which, char **name, _Bool *utf8) {
     xcb_atom_t type = XCB_ATOM_ANY;
     char *data = NULL;
-    if (which & nss_tt_title) {
+    if (which & target_title) {
         data = get_full_property(win->wid, ctx.atom._NET_WM_NAME, &type, NULL);
         if (!data) data = get_full_property(win->wid, XCB_ATOM_WM_NAME, &type, NULL);
-    } else if (which & nss_tt_icon_label) {
+    } else if (which & target_icon_label) {
         data = get_full_property(win->wid, ctx.atom._NET_WM_ICON_NAME, &type, NULL);
         if (!data) data = get_full_property(win->wid, XCB_ATOM_WM_ICON_NAME, &type, NULL);
     }
@@ -705,17 +689,17 @@ void nss_window_get_title(nss_window_t *win, nss_title_target_t which, char **na
     else free(data);
 }
 
-void nss_window_push_title(nss_window_t *win, nss_title_target_t which) {
+void window_push_title(struct window *win, enum title_target which) {
     char *title = NULL, *icon = NULL;
     _Bool tutf8 = 0, iutf8 = 0;
-    if (which & nss_tt_title) nss_window_get_title(win, nss_tt_title, &title, &tutf8);
-    if (which & nss_tt_icon_label) nss_window_get_title(win, nss_tt_icon_label, &icon, &iutf8);
+    if (which & target_title) window_get_title(win, target_title, &title, &tutf8);
+    if (which & target_icon_label) window_get_title(win, target_icon_label, &icon, &iutf8);
 
-    size_t len = sizeof(nss_title_stack_item_t), tlen = 0, ilen = 0;
+    size_t len = sizeof(struct title_stack_item), tlen = 0, ilen = 0;
     if (title) len += tlen = strlen(title) + 1;
     if (icon) len += ilen = strlen(icon) + 1;
 
-    nss_title_stack_item_t *new = malloc(len);
+    struct title_stack_item *new = malloc(len);
     if (!new) {
         free(title);
         free(icon);
@@ -737,14 +721,14 @@ void nss_window_push_title(nss_window_t *win, nss_title_target_t which) {
     free(icon);
 }
 
-void nss_window_pop_title(nss_window_t *win, nss_title_target_t which) {
-    nss_title_stack_item_t *top = win->title_stack, *it;
+void window_pop_title(struct window *win, enum title_target which) {
+    struct title_stack_item *top = win->title_stack, *it;
     if (top) {
-        if (which & nss_tt_title) {
+        if (which & target_title) {
             for (it = top; it && !it->title_data; it = it->next);
             if (it) set_title(win->wid, it->title_data, it->title_utf8);
         }
-        if (which & nss_tt_icon_label) {
+        if (which & target_icon_label) {
             for (it = top; it && !it->icon_data; it = it->next);
             if (it) set_icon_label(win->wid, it->icon_data, it->icon_utf8);
         }
@@ -765,8 +749,8 @@ uint32_t get_win_gravity_from_config() {
     }
 };
 
-struct nss_cellspec nss_describe_cell(nss_cell_t cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected) {
-    struct nss_cellspec res;
+struct cellspec nss_describe_cell(nss_cell_t cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected) {
+    struct cellspec res;
 
     // Check special colors
     if (__builtin_expect(iconf(ICONF_SPEICAL_BOLD), 0) &&
@@ -826,13 +810,13 @@ struct nss_cellspec nss_describe_cell(nss_cell_t cell, color_t *palette, color_t
     return res;
 }
 
-nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free) {
+struct window *nss_find_shared_font(struct window *win, _Bool need_free) {
     _Bool found_font = 0, found_cache = 0;
-    nss_window_t *found = 0;
+    struct window *found = 0;
 
     win->font_pixmode = iconf(ICONF_PIXEL_MODE);
 
-    for (nss_window_t *src = win_list_head; src; src = src->next) {
+    for (struct window *src = win_list_head; src; src = src->next) {
         if ((src->font_size == win->font_size || (!win->font_size &&
                 src->font_size == iconf(ICONF_FONT_SIZE))) &&
                 !strcmp(win->font_name, src->font_name) && src != win) {
@@ -873,7 +857,7 @@ nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free) {
     return found;
 }
 
-void nss_window_set_default_props(nss_window_t *win) {
+void window_set_default_props(struct window *win) {
     uint32_t pid = getpid();
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom._NET_WM_PID, XCB_ATOM_CARDINAL, 32, 1, &pid);
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom.WM_PROTOCOLS, XCB_ATOM_ATOM, 32, 1, &ctx.atom.WM_DELETE_WINDOW);
@@ -918,8 +902,8 @@ void nss_window_set_default_props(nss_window_t *win) {
 }
 
 /* Create new window */
-nss_window_t *nss_create_window(void) {
-    nss_window_t *win = calloc(1, sizeof(nss_window_t));
+struct window *create_window(void) {
+    struct window *win = calloc(1, sizeof(struct window));
     win->cursor_width = iconf(ICONF_CURSOR_WIDTH);
     win->underline_width = iconf(ICONF_UNDERLINE_WIDTH);
     win->left_border = iconf(ICONF_LEFT_BORDER);
@@ -932,15 +916,13 @@ nss_window_t *nss_create_window(void) {
     win->font_size = iconf(ICONF_FONT_SIZE);
     win->width = iconf(ICONF_WINDOW_WIDTH);
     win->height = iconf(ICONF_WINDOW_HEIGHT);
-    win->bell_raise = iconf(ICONF_RAISE_ON_BELL);
-    win->bell_urgent = iconf(ICONF_URGENT_ON_BELL);
 
     win->active = 1;
     win->focused = 1;
 
     win->font_name = strdup(sconf(SCONF_FONT_NAME));
     if (!win->font_name) {
-        nss_free_window(win);
+        free_window(win);
         return NULL;
     }
 
@@ -980,8 +962,8 @@ nss_window_t *nss_create_window(void) {
     win->term = nss_create_term(win, win->cw, win->ch);
     if (!win->term) goto error;
 
-    nss_window_set_default_props(win);
-    nss_window_set_title(win, nss_tt_title | nss_tt_icon_label, NULL, iconf(ICONF_UTF8));
+    window_set_default_props(win);
+    window_set_title(win, target_title | target_icon_label, NULL, iconf(ICONF_UTF8));
 
     win->next = win_list_head;
     win->prev = NULL;
@@ -1013,12 +995,12 @@ nss_window_t *nss_create_window(void) {
 
 error:
     warn("Can't create window");
-    nss_free_window(win);
+    free_window(win);
     return NULL;
 }
 
 /* Free previously created windows */
-void nss_free_window(nss_window_t *win) {
+void free_window(struct window *win) {
     if (win->wid) {
         xcb_unmap_window(con, win->wid);
         nss_renderer_free(win);
@@ -1050,7 +1032,7 @@ void nss_free_window(nss_window_t *win) {
     for (size_t i = 0; i < clip_MAX; i++)
         free(win->clipped[i]);
 
-    nss_title_stack_item_t *tmp;
+    struct title_stack_item *tmp;
     while (win->title_stack) {
         tmp = win->title_stack->next;
         free(win->title_stack);
@@ -1061,7 +1043,7 @@ void nss_free_window(nss_window_t *win) {
     free(win);
 };
 
-_Bool nss_window_shift(nss_window_t *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, _Bool delay) {
+_Bool window_shift(struct window *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, _Bool delay) {
     struct timespec cur;
     clock_gettime(NSS_CLOCK, &cur);
 
@@ -1100,7 +1082,7 @@ inline static xcb_atom_t target_to_atom(enum clip_target target) {
     }
 }
 
-void nss_window_clip_copy(nss_window_t *win) {
+void nss_window_clip_copy(struct window *win) {
     if (win->clipped[clip_primary]) {
         uint8_t *dup = (uint8_t*)strdup((char *)win->clipped[clip_primary]);
         if (dup) {
@@ -1109,12 +1091,12 @@ void nss_window_clip_copy(nss_window_t *win) {
                 free(win->clipboard);
                 win->clipboard = dup2;
             }
-            nss_window_set_clip(win, dup, NSS_TIME_NOW, clip_clipboard);
+            window_set_clip(win, dup, NSS_TIME_NOW, clip_clipboard);
         }
     }
 }
 
-void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, enum clip_target target) {
+void window_set_clip(struct window *win, uint8_t *data, uint32_t time, enum clip_target target) {
     if (data) {
         xcb_set_selection_owner(con, win->wid, target_to_atom(target), time);
         xcb_get_selection_owner_cookie_t so = xcb_get_selection_owner_unchecked(con, target_to_atom(target));
@@ -1131,12 +1113,12 @@ void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, enum c
     win->clipped[target] = data;
 }
 
-void nss_window_paste_clip(nss_window_t *win, enum clip_target target) {
+void window_paste_clip(struct window *win, enum clip_target target) {
     xcb_convert_selection(con, win->wid, target_to_atom(target),
           nss_term_is_utf8(win->term) ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
 }
 
-static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right) {
+static void redraw_borders(struct window *win, _Bool top_left, _Bool bottom_right) {
         int16_t width = win->cw * win->char_width + win->left_border;
         int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
         xcb_rectangle_t borders[NUM_BORDERS] = {
@@ -1152,7 +1134,7 @@ static void redraw_borders(nss_window_t *win, _Bool top_left, _Bool bottom_right
         if (count) xcb_poly_fill_rectangle(con, win->wid, win->gc, count, borders + offset);
 }
 
-void nss_window_handle_resize(nss_window_t *win, int16_t width, int16_t height) {
+void nss_window_handle_resize(struct window *win, int16_t width, int16_t height) {
     //Handle resize
 
     win->width = width;
@@ -1173,7 +1155,7 @@ void nss_window_handle_resize(nss_window_t *win, int16_t width, int16_t height) 
         redraw_borders(win, 0, 1);
 }
 
-static void handle_expose(nss_window_t *win, struct rect damage) {
+static void handle_expose(struct window *win, struct rect damage) {
     int16_t width = win->cw * win->char_width + win->left_border;
     int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
 
@@ -1194,12 +1176,12 @@ static void handle_expose(nss_window_t *win, struct rect damage) {
     if (intersect_with(&inters, &damage)) nss_renderer_update(win, inters);
 }
 
-static void handle_focus(nss_window_t *win, _Bool focused) {
+static void handle_focus(struct window *win, _Bool focused) {
     win->focused = focused;
     nss_term_focus(win->term, focused);
 }
 
-static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
+static void handle_keydown(struct window *win, xkb_keycode_t keycode) {
     struct key key = keyboard_describe_key(ctx.xkb_state, keycode);
 
     if (key.sym == XKB_KEY_NoSymbol) return;
@@ -1222,23 +1204,23 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     case shortcut_font_up:
     case shortcut_font_down:
     case shortcut_font_default:;
-        int32_t size = nss_window_get_font_size(win);
+        int32_t size = window_get_font_size(win);
         if (action == shortcut_font_up)
             size += iconf(ICONF_FONT_SIZE_STEP);
         else if (action == shortcut_font_down)
             size -= iconf(ICONF_FONT_SIZE_STEP);
         else if (action == shortcut_font_default)
             size = iconf(ICONF_FONT_SIZE);
-        nss_window_set_font(win, NULL, size);
+        window_set_font(win, NULL, size);
         return;
     case shortcut_new_window:
-        nss_create_window();
+        create_window();
         return;
     case shortcut_copy:
         nss_window_clip_copy(win);
         return;
     case shortcut_paste:
-        nss_window_paste_clip(win, clip_clipboard);
+        window_paste_clip(win, clip_clipboard);
         return;
     case shortcut_reload_config:
         reload_config = 1;
@@ -1253,7 +1235,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
     keyboard_handle_input(key, win->term);
 }
 
-static void send_selection_data(nss_window_t *win, xcb_window_t req, xcb_atom_t sel, xcb_atom_t target, xcb_atom_t prop, xcb_timestamp_t time) {
+static void send_selection_data(struct window *win, xcb_window_t req, xcb_atom_t sel, xcb_atom_t target, xcb_atom_t prop, xcb_timestamp_t time) {
     xcb_selection_notify_event_t ev;
     ev.property = XCB_NONE;
     ev.requestor = req;
@@ -1284,7 +1266,7 @@ static void send_selection_data(nss_window_t *win, xcb_window_t req, xcb_atom_t 
     xcb_send_event(con, 1, req, 0, (const char *)&ev);
 }
 
-static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pnotify) {
+static void receive_selection_data(struct window *win, xcb_atom_t prop, _Bool pnotify) {
     if (prop == XCB_NONE) return;
 
     size_t left, offset = 0;
@@ -1385,7 +1367,7 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
 }
 
 /* Start window logic, handling all windows in context */
-void nss_context_run(void) {
+void run(void) {
     for (int64_t next_timeout = SEC/iconf(ICONF_FPS);;) {
 #if USE_PPOLL
         if (ppoll(ctx.pfds, ctx.pfdcap, &(struct timespec){next_timeout / SEC, next_timeout % SEC}, NULL) < 0 && errno != EINTR)
@@ -1396,7 +1378,7 @@ void nss_context_run(void) {
         if (ctx.pfds[0].revents & POLLIN) {
             for (xcb_generic_event_t *event; (event = xcb_poll_for_event(con)); free(event)) {
                 switch (event->response_type &= 0x7f) {
-                    nss_window_t *win;
+                    struct window *win;
                 case XCB_EXPOSE:{
                     xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
@@ -1453,9 +1435,9 @@ void nss_context_run(void) {
                     }
 
                     mouse_handle_input(win->term, (struct mouse_event) {
-                        /* XCB_BUTTON_PRESS -> nss_me_press
-                         * XCB_BUTTON_RELEASE -> nss_me_release
-                         * XCB_MOTION_NOTIFY -> nss_me_motion */
+                        /* XCB_BUTTON_PRESS -> mouse_event_press
+                         * XCB_BUTTON_RELEASE -> mouse_event_release
+                         * XCB_MOTION_NOTIFY -> mouse_event_motion */
                         .event = (ev->response_type & 0xF7) - 4,
                         .mask = ev->state & mask_state_mask,
                         .x = ev->event_x,
@@ -1515,7 +1497,7 @@ void nss_context_run(void) {
                             ev->data.data32[2], ev->data.data32[3], ev->data.data32[4]);
                     }
                     if (ev->format == 32 && ev->data.data32[0] == ctx.atom.WM_DELETE_WINDOW) {
-                        nss_free_window(win);
+                        free_window(win);
                         if (!win_list_head && !ctx.daemon_mode)
                             return free(event);
                     }
@@ -1580,19 +1562,19 @@ void nss_context_run(void) {
             }
         }
 
-        for (nss_window_t *win = win_list_head, *next; win; win = next) {
+        for (struct window *win = win_list_head, *next; win; win = next) {
             next = win->next;
             if (ctx.pfds[win->poll_index].revents & POLLIN)
                 nss_term_read(win->term);
             else if (ctx.pfds[win->poll_index].revents & (POLLERR | POLLNVAL | POLLHUP))
-                nss_free_window(win);
+                free_window(win);
         }
 
         next_timeout = iconf(ctx.vbell_count ? ICONF_VISUAL_BELL_TIME : ICONF_BLINK_TIME)*1000LL;
         struct timespec cur;
         clock_gettime(NSS_CLOCK, &cur);
 
-        for (nss_window_t *win = win_list_head; win; win = win->next) {
+        for (struct window *win = win_list_head; win; win = win->next) {
             if (TIMEDIFF(win->last_sync, cur) > iconf(ICONF_SYNC_TIME)*1000LL && win->sync_active)
                 win->sync_active = 0;
             if (win->in_blink && TIMEDIFF(win->vbell_start, cur) > iconf(ICONF_VISUAL_BELL_TIME)*1000LL) {
