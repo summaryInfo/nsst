@@ -3178,6 +3178,9 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
         case 1015: /* Urxvt mouse format */
             term->mstate.mouse_format = set ? mouse_format_uxvt : mouse_format_default;
             break;
+        case 1016: /* SGR mouse format with pixel coordinates */
+            term->mstate.mouse_format = set ? mouse_format_pixel : mouse_format_default;
+            break;
         case 1034: /* Interpret meta */
             term->kstate.has_meta = set;
             break;
@@ -3402,6 +3405,9 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             break;
         case 1015: /* Urxvt mouse tracking */
             val = MODSTATE(term->mstate.mouse_format == mouse_format_uxvt);
+            break;
+        case 1016: /* SGR with pixels, XTerm */
+            val = MODSTATE(term->mstate.mouse_format == mouse_format_pixel);
             break;
         case 1034: /* Interpret meta */
             val = MODSTATE(term->kstate.has_meta);
@@ -4365,7 +4371,7 @@ static void term_dispatch_csi(struct term *term) {
             enum mode_status val = term_get_mode(term, 1, mode);
             if (val == modstate_enabled || val == modstate_disabled) {
                 switch(mode) {
-                case 1005: case 1006: case 1015:
+                case 1005: case 1006: case 1015: case 1016:
                     term->saved_mouse_format = term->mstate.mouse_format;
                     break;
                 case 9: case 1000: case 1001:
@@ -4391,7 +4397,7 @@ static void term_dispatch_csi(struct term *term) {
         for (size_t i = 0; i < term->esc.i; i++) {
             uparam_t mode = PARAM(i, 0);
             switch(mode) {
-            case 1005: case 1006: case 1015:
+            case 1005: case 1006: case 1015: case 1016:
                 term->mstate.mouse_format = term->saved_mouse_format;
                 break;
             case 9: case 1000: case 1001:

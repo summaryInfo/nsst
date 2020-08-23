@@ -64,7 +64,8 @@ struct mouse_state {
         mouse_format_default,
         mouse_format_sgr,
         mouse_format_utf8,
-        mouse_format_uxvt
+        mouse_format_uxvt,
+        mouse_format_pixel
     } mouse_format;
 };
 

@@ -558,7 +558,8 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
             (ev.mask & 0xFF) != keyboard_force_select_mask() && !term_get_kstate(term)->keyboad_vt52) {
         enum mouse_mode md = loc->mouse_mode;
 
-        adj_coords(term_window(term), &ev.x, &ev.y);
+        if (loc->mouse_format != mouse_format_pixel)
+            adj_coords(term_window(term), &ev.x, &ev.y);
 
         if (md == mouse_mode_x10 && ev.button > 2) return;
 
@@ -587,6 +588,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
 
         switch (loc->mouse_format) {
         case mouse_format_sgr:
+        case mouse_format_pixel:
             term_answerback(term, CSI"<%"PRIu8";%"PRIu16";%"PRIu16"%c",
                     ev.button, ev.x + 1, ev.y + 1, ev.event == mouse_event_release ? 'm' : 'M');
             break;
