@@ -1047,7 +1047,7 @@ void nss_free_window(nss_window_t *win) {
     if (win->font)
         nss_free_font(win->font);
 
-    for (size_t i = 0; i < nss_ct_MAX; i++)
+    for (size_t i = 0; i < clip_MAX; i++)
         free(win->clipped[i]);
 
     nss_title_stack_item_t *tmp;
@@ -1092,29 +1092,29 @@ _Bool nss_window_shift(nss_window_t *win, nss_coord_t xs, nss_coord_t ys, nss_co
     return 1;
 }
 
-inline static xcb_atom_t target_to_atom(nss_clipboard_target_t target) {
+inline static xcb_atom_t target_to_atom(enum clip_target target) {
     switch (target) {
-    case nss_ct_secondary: return XCB_ATOM_SECONDARY;
-    case nss_ct_primary: return XCB_ATOM_PRIMARY;
+    case clip_secondary: return XCB_ATOM_SECONDARY;
+    case clip_primary: return XCB_ATOM_PRIMARY;
     default: return ctx.atom.CLIPBOARD;
     }
 }
 
 void nss_window_clip_copy(nss_window_t *win) {
-    if (win->clipped[nss_ct_primary]) {
-        uint8_t *dup = (uint8_t*)strdup((char *)win->clipped[nss_ct_primary]);
+    if (win->clipped[clip_primary]) {
+        uint8_t *dup = (uint8_t*)strdup((char *)win->clipped[clip_primary]);
         if (dup) {
             if (nss_term_keep_clipboard(win->term)) {
                 uint8_t *dup2 = (uint8_t *)strdup((char *)dup);
                 free(win->clipboard);
                 win->clipboard = dup2;
             }
-            nss_window_set_clip(win, dup, NSS_TIME_NOW, nss_ct_clipboard);
+            nss_window_set_clip(win, dup, NSS_TIME_NOW, clip_clipboard);
         }
     }
 }
 
-void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, nss_clipboard_target_t target) {
+void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, enum clip_target target) {
     if (data) {
         xcb_set_selection_owner(con, win->wid, target_to_atom(target), time);
         xcb_get_selection_owner_cookie_t so = xcb_get_selection_owner_unchecked(con, target_to_atom(target));
@@ -1131,7 +1131,7 @@ void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, nss_cl
     win->clipped[target] = data;
 }
 
-void nss_window_paste_clip(nss_window_t *win, nss_clipboard_target_t target) {
+void nss_window_paste_clip(nss_window_t *win, enum clip_target target) {
     xcb_convert_selection(con, win->wid, target_to_atom(target),
           nss_term_is_utf8(win->term) ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
 }
@@ -1238,7 +1238,7 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         nss_window_clip_copy(win);
         return;
     case shortcut_paste:
-        nss_window_paste_clip(win, nss_ct_clipboard);
+        nss_window_paste_clip(win, clip_clipboard);
         return;
     case shortcut_reload_config:
         reload_config = 1;
@@ -1270,10 +1270,10 @@ static void send_selection_data(nss_window_t *win, xcb_window_t req, xcb_atom_t 
     } else if (target == ctx.atom.UTF8_STRING || target == XCB_ATOM_STRING) {
         uint8_t *data = NULL;
 
-        if (sel == XCB_ATOM_PRIMARY) data = win->clipped[nss_ct_primary];
-        else if (sel == XCB_ATOM_SECONDARY) data = win->clipped[nss_ct_secondary];
+        if (sel == XCB_ATOM_PRIMARY) data = win->clipped[clip_primary];
+        else if (sel == XCB_ATOM_SECONDARY) data = win->clipped[clip_secondary];
         else if (sel == ctx.atom.CLIPBOARD) data = nss_term_keep_clipboard(win->term) ?
-                win->clipboard : win->clipped[nss_ct_clipboard];
+                win->clipboard : win->clipped[clip_clipboard];
 
         if (data) {
             xcb_change_property(con, XCB_PROP_MODE_REPLACE, req, prop, target, 8, strlen((char *)data), data);
@@ -1452,12 +1452,12 @@ void nss_context_run(void) {
                                 ev->state, ev->detail, ev->event_x, ev->event_y);
                     }
 
-                    nss_handle_mouse(win->term, (nss_mouse_event_t) {
+                    mouse_handle_input(win->term, (struct mouse_event) {
                         /* XCB_BUTTON_PRESS -> nss_me_press
                          * XCB_BUTTON_RELEASE -> nss_me_release
                          * XCB_MOTION_NOTIFY -> nss_me_motion */
                         .event = (ev->response_type & 0xF7) - 4,
-                        .mask = ev->state & nss_ms_state_mask,
+                        .mask = ev->state & mask_state_mask,
                         .x = ev->event_x,
                         .y = ev->event_y,
                         .button = ev->detail - XCB_BUTTON_INDEX_1,
@@ -1471,7 +1471,7 @@ void nss_context_run(void) {
                         info("Event: event=SelectionClear owner=0x%x selection=0x%x", ev->owner, ev->selection);
                     }
                     // Clear even if set keep?
-                    nss_mouse_clear_selection(win->term);
+                    mouse_clear_selection(win->term);
                     break;
                 }
                 case XCB_PROPERTY_NOTIFY: {

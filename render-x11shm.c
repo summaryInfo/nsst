@@ -265,7 +265,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
                     cel.attr ^= nss_attrib_inverse;
 
                 spec = nss_describe_cell(cel, palette, line.line->pal ? line.line->pal->data : NULL,
-                        win->blink_state, nss_mouse_is_selected_in_view(win->term, i, k));
+                        win->blink_state, mouse_is_selected_in_view(win->term, i, k));
 
                 if (spec.ch) glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
                 g_wide = glyph && glyph->x_off > win->char_width - iconf(ICONF_FONT_SPACING);
@@ -308,7 +308,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
         if (l_bound.x >= 0 || (scrolled && win->cw > line.width)) {
             if (win->cw > line.width) {
                 color_t c = win->bg;
-                if (nss_mouse_is_selected_in_view(win->term, win->cw - 1, k)) {
+                if (mouse_is_selected_in_view(win->term, win->cw - 1, k)) {
                     c = palette[NSS_SPECIAL_SELECTED_BG];
                     if (!c) c = palette[NSS_SPECIAL_FG];
                 }

@@ -118,7 +118,7 @@ struct nss_window {
     color_t cursor_fg;
     nss_cursor_type_t cursor_type;
 
-    uint8_t *clipped[nss_ct_MAX];
+    uint8_t *clipped[clip_MAX];
     uint8_t *clipboard;
 
     int16_t char_width;

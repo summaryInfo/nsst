@@ -9,21 +9,6 @@
 
 #define UDK_MAX 37
 
-/* mod1 is alt
- * mod2 is numlock
- * mod4 is super
- */
-enum mode_mask {
-    mask_shift = 1 << 0,
-    mask_lock = 1 << 1,
-    mask_control = 1 << 2,
-    mask_mod1 = 1 << 3,
-    mask_mod2 = 1 << 4,
-    mask_mod3 = 1 << 5,
-    mask_mod4 = 1 << 6,
-    mask_mod5 = 1 << 7,
-};
-
 enum shortcut_action {
     shortcut_none,
     shortcut_break,

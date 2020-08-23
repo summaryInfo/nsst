@@ -121,7 +121,7 @@ static inline _Bool is_modify_allowed(struct key *k, struct keyboard_state *mode
 }
 
 static term_char_t filter_modifiers(struct key *k, struct keyboard_state *mode) {
-    term_char_t res = k->mask & (mask_control | mask_shift | mask_mod1);
+    term_char_t res = k->mask & (mask_control | mask_shift | mask_mod_1);
 
     if (mode->modkey_other <= 1) {
         if (is_ctrl_letter(k->sym) && !(res & ~mask_control)) {
@@ -129,16 +129,16 @@ static term_char_t filter_modifiers(struct key *k, struct keyboard_state *mode) 
         } else if (k->sym == XKB_KEY_Return || k->sym == XKB_KEY_Tab) {
             /* do nothing */;
         } else if (is_xkb_ctrl(k)) {
-            if (!(res & mask_mod1)) res = 0;
+            if (!(res & mask_mod_1)) res = 0;
         } else if (!is_ctrl(k->sym) || !is_special(k->sym)) {
             if (!(res & mask_control)) res &= ~mask_shift;
         }
-        if (res & mask_mod1) {
-            if (!(res & ~mask_mod1) && (mode->meta_escape || k->utf32 < 0x80)) res &= ~mask_mod1;
+        if (res & mask_mod_1) {
+            if (!(res & ~mask_mod_1) && (mode->meta_escape || k->utf32 < 0x80)) res &= ~mask_mod_1;
             if (((is_ctrl_letter(k->sym) || is_ctrl(k->sym)) && (res & mask_control)))
-                res &= ~(mask_mod1 | mask_control);
+                res &= ~(mask_mod_1 | mask_control);
             if (k->sym == XKB_KEY_Return || k->sym == XKB_KEY_Tab)
-                res &= ~(mask_mod1 | mask_control);
+                res &= ~(mask_mod_1 | mask_control);
         }
     }
     return res;
@@ -148,13 +148,13 @@ static inline term_char_t mask_to_param(term_char_t mask) {
     term_char_t res = 0;
     if (mask & mask_shift) res |= 1;
     if (mask & mask_control) res |= 4;
-    if (mask & mask_mod1) res |= 2;
+    if (mask & mask_mod_1) res |= 2;
     return res + !!res;
 }
 
 static _Bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode) {
     if (!mode->modkey_other || is_private(k->sym)) return 0;
-    if (!(k->mask & (mask_control | mask_shift | mask_mod1))) return 0;
+    if (!(k->mask & (mask_control | mask_shift | mask_mod_1))) return 0;
 
     if (mode->modkey_other == 1) {
         _Bool res = 0;
@@ -163,7 +163,7 @@ static _Bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode
         case XKB_KEY_Delete:
             break;
         case XKB_KEY_ISO_Left_Tab:
-            res =  k->mask & (mask_mod1 | mask_control);
+            res =  k->mask & (mask_mod_1 | mask_control);
             break;
         case XKB_KEY_Return:
         case XKB_KEY_Tab:
@@ -173,7 +173,7 @@ static _Bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode
             if (is_ctrl_letter(k->sym))
                 res = k->mask != mask_shift && k->mask != mask_control;
             else if (is_xkb_ctrl(k))
-                res = k->mask != mask_shift && (k->mask & (mask_shift | mask_mod1));
+                res = k->mask != mask_shift && (k->mask & (mask_shift | mask_mod_1));
             else res = 1;
         }
         if (res) {
@@ -185,11 +185,11 @@ static _Bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode
     } else {
         switch (k->sym) {
         case XKB_KEY_BackSpace:
-            return k->mask & (mask_mod1 | mask_shift);
+            return k->mask & (mask_mod_1 | mask_shift);
         case XKB_KEY_Delete:
-            return k->mask & (mask_mod1 | mask_shift | mask_control);
+            return k->mask & (mask_mod_1 | mask_shift | mask_control);
         case XKB_KEY_ISO_Left_Tab:
-            return k->mask & (mask_mod1 | mask_control);
+            return k->mask & (mask_mod_1 | mask_control);
         case XKB_KEY_Return:
         case XKB_KEY_Tab:
             return 1;
@@ -198,7 +198,7 @@ static _Bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode
                 return 1;
             else if (k->mask == mask_shift)
                 return k->sym == XKB_KEY_space || k->sym == XKB_KEY_Return;
-            else if (k->mask & (mask_mod1 | mask_control))
+            else if (k->mask & (mask_mod_1 | mask_control))
                 return 1;
             return 0;
         }
@@ -426,7 +426,7 @@ static void translate_adjust(struct key *k, struct keyboard_state *mode) {
             k->sym = translate_keypad(k->sym);
     }
 
-    mode->appkey &= (k->utf8len == 1 && mode->allow_numlock && (k->mask & mask_mod2));
+    mode->appkey &= (k->utf8len == 1 && mode->allow_numlock && (k->mask & mask_mod_2));
 
     if (k->sym == XKB_KEY_Tab || k->sym == XKB_KEY_ISO_Left_Tab) {
         if (mode->modkey_other > 1) {
@@ -546,7 +546,7 @@ void keyboard_handle_input(struct key k, nss_term_t *term) {
         } else {
             reply.init = '\233';
             if (k.sym == XKB_KEY_ISO_Left_Tab) {
-                if (mode->modkey_other >= 2 && (k.mask & (mask_control | mask_mod1)))
+                if (mode->modkey_other >= 2 && (k.mask & (mask_control | mask_mod_1)))
                     modify_others('\t', param, mode->modkey_other_fmt, &reply);
             } else {
                 if (k.is_fkey) modify_cursor(param, mode->modkey_fn, &reply);
@@ -589,7 +589,7 @@ void keyboard_handle_input(struct key k, nss_term_t *term) {
             dump_reply(term, &reply);
         } else {
             if (nss_term_is_utf8(term)) {
-                if ((k.mask & mask_mod1) && mode->has_meta) {
+                if ((k.mask & mask_mod_1) && mode->has_meta) {
                     if (!mode->meta_escape) {
                         if (k.utf32 < 0x80)
                             k.utf8len = utf8_encode(k.utf32 | 0x80, k.utf8data,
@@ -611,7 +611,7 @@ void keyboard_handle_input(struct key k, nss_term_t *term) {
 
                 k.utf8len = 1;
                 k.utf8data[0] = k.utf32;
-                if (k.mask & mask_mod1 && mode->has_meta) {
+                if (k.mask & mask_mod_1 && mode->has_meta) {
                     if (!mode->meta_escape) {
                         k.utf8data[0] |= 0x80;
                     } else {
@@ -701,11 +701,11 @@ again:
         break;
     case 'M': case 'A':
     case '1':
-        mask |= mask_mod1;
+        mask |= mask_mod_1;
         break;
     case '2': case '3':
     case '4': case '5':
-        mask |= mask_mod1 + c[-1] - '1';
+        mask |= mask_mod_1 + c[-1] - '1';
         break;
     }
 

@@ -225,8 +225,8 @@ struct nss_term {
      * [1000-1063] : 8 bytes;
      * [2000-2007] : 1 byte */
     uint8_t saved_modbits[21];
-    enum nss_mouse_mode saved_mouse_mode;
-    enum nss_mouse_format saved_mouse_format;
+    enum mouse_mode saved_mouse_mode;
+    enum mouse_format saved_mouse_format;
     uint8_t saved_keyboard_type;
 
     struct nss_escape {
@@ -818,7 +818,7 @@ static void term_reset_view(nss_term_t *term, _Bool damage) {
     ssize_t old_view = term->view;
     term->view_pos = (nss_line_pos_t){ 0 };
     term->view = 0;
-    nss_mouse_scroll_view(term, -old_view);
+    mouse_scroll_view(term, -old_view);
     if (damage) nss_term_damage_lines(term, 0, term->height);
 }
 
@@ -861,7 +861,7 @@ void nss_term_scroll_view(nss_term_t *term, nss_coord_t amount) {
         nss_term_damage_lines(term, term->height + delta, term->height);
     }
 
-    nss_mouse_scroll_view(term, delta);
+    mouse_scroll_view(term, delta);
     term->prev_c_view_changed |= old_viewr != !term->view_pos.line;
 }
 
@@ -1026,7 +1026,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
 
     // Clear mouse selection
     // TODO Keep non-rectangular selection
-    nss_mouse_clear_selection(term);
+    mouse_clear_selection(term);
 
     // Find line of bottom left cell
     nss_line_pos_t lower_left = term->view_pos;
@@ -1522,7 +1522,7 @@ inline static void term_erase_pre(nss_term_t *term, nss_coord_t *xs, nss_coord_t
     }
 
     nss_window_delay(term->win);
-    nss_mouse_selection_erase(term, (nss_rect_t){ *xs, *ys, *xe - *xs, *ye - *ys});
+    mouse_selection_erase(term, (nss_rect_t){ *xs, *ys, *xe - *xs, *ye - *ys});
 }
 
 static uint16_t term_checksum(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
@@ -1850,7 +1850,7 @@ static void term_swap_screen(nss_term_t *term, _Bool damage) {
     SWAP(struct cursor, term->back_cs, term->cs);
     SWAP(nss_line_t **, term->back_screen, term->screen);
     term_reset_view(term, damage);
-    if (damage) nss_mouse_clear_selection(term);
+    if (damage) mouse_clear_selection(term);
 }
 
 static void term_scroll_horizontal(nss_term_t *term, nss_coord_t left, nss_coord_t amount) {
@@ -1902,7 +1902,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
                 if (scrolled < 0) /* View down, image up */ {
                     nss_term_damage_lines(term, term->height + scrolled, term->height);
                     nss_window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled, 0);
-                    nss_mouse_scroll_view(term, scrolled);
+                    mouse_scroll_view(term, scrolled);
                 }
             } else term_erase(term, 0, top, term->width, top + amount, 0);
 
@@ -1956,7 +1956,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
                 if (scrolled < 0) /* View down, image up */ {
                     nss_term_damage_lines(term, term->height + scrolled, term->height);
                     nss_window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled, 0);
-                    nss_mouse_scroll_view(term, scrolled);
+                    mouse_scroll_view(term, scrolled);
                 }
             }
 
@@ -1968,7 +1968,7 @@ static void term_scroll(nss_term_t *term, nss_coord_t top, nss_coord_t amount, _
             term_erase(term, left, top, right, top + amount, 0);
         }
     }
-    nss_mouse_scroll_selection(term, amount, save);
+    mouse_scroll_selection(term, amount, save);
 }
 
 static void term_set_tb_margins(nss_term_t *term, nss_coord_t top, nss_coord_t bottom) {
@@ -2166,7 +2166,7 @@ void nss_term_set_reverse(nss_term_t *term, _Bool set) {
         SWAP(color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
         SWAP(color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
         SWAP(color_t, term->palette[NSS_SPECIAL_SELECTED_BG], term->palette[NSS_SPECIAL_SELECTED_FG]);
-        nss_mouse_damage_selection(term);
+        mouse_damage_selection(term);
         nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
     }
     term->mode.reverse_video = set;
@@ -2762,12 +2762,12 @@ static void term_dispatch_dcs(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static nss_clipboard_target_t decode_target(uint8_t targ, _Bool mode) {
+static enum clip_target decode_target(uint8_t targ, _Bool mode) {
     switch (targ) {
-    case 'p': return nss_ct_primary;
-    case 'q': return nss_ct_secondary;
-    case 'c': return nss_ct_clipboard;
-    case 's': return mode ? nss_ct_clipboard : nss_ct_primary;
+    case 'p': return clip_primary;
+    case 'q': return clip_secondary;
+    case 'c': return clip_clipboard;
+    case 's': return mode ? clip_clipboard : clip_primary;
     default:
         return -1;
     }
@@ -2802,7 +2802,7 @@ static void term_colors_changed(nss_term_t *term, uint32_t sel, color_t col) {
             nss_window_set_colors(term->win, 0, col);
         break;
     case 17: case 19:
-        nss_mouse_damage_selection(term);
+        mouse_damage_selection(term);
     }
 }
 
@@ -2975,7 +2975,7 @@ static void term_dispatch_osc(nss_term_t *term) {
     case 52: /* Manipulate selecion data */ {
         if (!iconf(ICONF_ALLOW_WINDOW_OPS)) break;
 
-        nss_clipboard_target_t ts[nss_ct_MAX] = {0};
+        enum clip_target ts[clip_MAX] = {0};
         _Bool toclip = term->mode.select_to_clipboard;
         uint8_t *parg = dstr, letter = 0;
         for (; parg < dend && *parg !=  ';'; parg++) {
@@ -2991,7 +2991,7 @@ static void term_dispatch_osc(nss_term_t *term) {
                 nss_window_paste_clip(term->win, decode_target(letter, toclip));
             } else {
                 if (base64_decode(parg, parg, dend) != dend) parg = NULL;
-                for (size_t i = 0; i < nss_ct_MAX; i++) {
+                for (size_t i = 0; i < clip_MAX; i++) {
                     if (ts[i]) {
                         if (i == term->mstate.targ) term->mstate.targ = -1;
                         nss_window_set_clip(term->win, parg ? (uint8_t *)strdup((char *)parg) : parg, NSS_TIME_NOW, i);
@@ -3065,7 +3065,7 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             break;
         case 9: /* X10 Mouse tracking */
             nss_window_set_mouse(term->win, 0);
-            term->mstate.mouse_mode = set ? nss_mouse_mode_x10 : nss_mouse_mode_none;
+            term->mstate.mouse_mode = set ? mouse_mode_x10 : mouse_mode_none;
             break;
         case 10: /* Show toolbar */
             // IGNORE - There is no toolbar
@@ -3133,28 +3133,28 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             break;
         case 1000: /* X11 Mouse tracking */
             nss_window_set_mouse(term->win, 0);
-            term->mstate.mouse_mode = set ? nss_mouse_mode_button : nss_mouse_mode_none;
+            term->mstate.mouse_mode = set ? mouse_mode_button : mouse_mode_none;
             break;
         case 1001: /* Highlight mouse tracking */
             // IGNORE
             break;
         case 1002: /* Cell motion mouse tracking on keydown */
             nss_window_set_mouse(term->win, 0);
-            term->mstate.mouse_mode = set ? nss_mouse_mode_drag : nss_mouse_mode_none;
+            term->mstate.mouse_mode = set ? mouse_mode_drag : mouse_mode_none;
             break;
         case 1003: /* All motion mouse tracking */
             nss_window_set_mouse(term->win, set);
-            term->mstate.mouse_mode = set ? nss_mouse_mode_motion : nss_mouse_mode_none;
+            term->mstate.mouse_mode = set ? mouse_mode_motion : mouse_mode_none;
             break;
         case 1004: /* Focus in/out events */
             term->mode.track_focus = set;
             if (set) nss_term_answerback(term, term->mode.focused ? CSI"I" : CSI"O");
             break;
         case 1005: /* UTF-8 mouse format */
-            term->mstate.mouse_format = set ? nss_mouse_format_utf8 : nss_mouse_format_default;
+            term->mstate.mouse_format = set ? mouse_format_utf8 : mouse_format_default;
             break;
         case 1006: /* SGR mouse format */
-            term->mstate.mouse_format = set ? nss_mouse_format_sgr : nss_mouse_format_default;
+            term->mstate.mouse_format = set ? mouse_format_sgr : mouse_format_default;
             break;
         case 1007: /* Alternate scroll */
             term->mode.altscreen_scroll = set;
@@ -3166,7 +3166,7 @@ static _Bool term_srm(nss_term_t *term, _Bool private, nss_param_t mode, _Bool s
             term->mode.no_scroll_on_input = !set;
             break;
         case 1015: /* Urxvt mouse format */
-            term->mstate.mouse_format = set ? nss_mouse_format_uxvt : nss_mouse_format_default;
+            term->mstate.mouse_format = set ? mouse_format_uxvt : mouse_format_default;
             break;
         case 1034: /* Interpret meta */
             term->kstate.has_meta = set;
@@ -3300,7 +3300,7 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
             val = nss_mb_aways_disabled;
             break;
         case 9: /* X10 Mouse */
-            val = MODBIT(term->mstate.mouse_mode == nss_mouse_mode_x10);
+            val = MODBIT(term->mstate.mouse_mode == mouse_mode_x10);
             break;
         case 10: /* Show toolbar */
             val = nss_mb_aways_disabled;
@@ -3361,25 +3361,25 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
             val = MODBIT(term->mode.preserve_display_132);
             break;
         case 1000: /* X11 Mouse tracking */
-            val = MODBIT(term->mstate.mouse_mode == nss_mouse_mode_x10);
+            val = MODBIT(term->mstate.mouse_mode == mouse_mode_x10);
             break;
         case 1001: /* Highlight mouse tracking */
             val = nss_mb_aways_disabled;
             break;
         case 1002: /* Cell motion tracking on keydown */
-            val = MODBIT(term->mstate.mouse_mode == nss_mouse_mode_drag);
+            val = MODBIT(term->mstate.mouse_mode == mouse_mode_drag);
             break;
         case 1003: /* All motion mouse tracking */
-            val = MODBIT(term->mstate.mouse_mode == nss_mouse_mode_motion);
+            val = MODBIT(term->mstate.mouse_mode == mouse_mode_motion);
             break;
         case 1004: /* Focus in/out events */
             val = MODBIT(term->mode.track_focus);
             break;
         case 1005: /* UTF-8 mouse tracking */
-            val = MODBIT(term->mstate.mouse_format == nss_mouse_format_utf8);
+            val = MODBIT(term->mstate.mouse_format == mouse_format_utf8);
             break;
         case 1006: /* SGR Mouse tracking */
-            val = MODBIT(term->mstate.mouse_format == nss_mouse_format_sgr);
+            val = MODBIT(term->mstate.mouse_format == mouse_format_sgr);
             break;
         case 1007: /* Alternate scroll */
             val = MODBIT(term->mode.altscreen_scroll);
@@ -3391,7 +3391,7 @@ static nss_modbit_t term_get_mode(nss_term_t *term, _Bool private, nss_param_t m
             val = MODBIT(!term->mode.no_scroll_on_input);
             break;
         case 1015: /* Urxvt mouse tracking */
-            val = MODBIT(term->mstate.mouse_format == nss_mouse_format_uxvt);
+            val = MODBIT(term->mstate.mouse_format == mouse_format_uxvt);
             break;
         case 1034: /* Interpret meta */
             val = MODBIT(term->kstate.has_meta);
@@ -3600,8 +3600,8 @@ static void term_putchar(nss_term_t *term, term_char_t ch) {
     term_adjust_wide_right(term, term->c.x + width - 1, term->c.y);
 
     // Clear selection when selected cell is overwritten
-    if (nss_mouse_is_selected(term, term->c.x, term->c.y))
-        nss_mouse_clear_selection(term);
+    if (mouse_is_selected(term, term->c.x, term->c.y))
+        mouse_clear_selection(term);
 
     // Put character itself
     term_put_cell(term, term->c.x, term->c.y, ch);
@@ -4379,7 +4379,7 @@ static void term_dispatch_csi(nss_term_t *term) {
             case 9: case 1000: case 1001:
             case 1002: case 1003:
                 term->mstate.mouse_mode = term->saved_mouse_mode;
-                nss_window_set_mouse(term->win, term->mstate.mouse_mode == nss_mouse_mode_motion);
+                nss_window_set_mouse(term->win, term->mstate.mouse_mode == mouse_mode_motion);
                 break;
             case 1050: case 1051: case 1052:
             case 1053: case 1060: case 1061:
@@ -4426,7 +4426,7 @@ static void term_dispatch_csi(nss_term_t *term) {
     case C('w') | I0('\''): /* DECEFR */ {
         int16_t x, y;
         nss_window_get_pointer(term->win, &x, &y, NULL);
-        nss_mouse_set_filter(term, PARAM(1, y), PARAM(0, x), PARAM(3, y), PARAM(4, x));
+        mouse_set_filter(term, PARAM(1, y), PARAM(0, x), PARAM(3, y), PARAM(4, x));
         break;
     }
     case C('z') | I0('\''): /* DECELR */
@@ -4480,7 +4480,7 @@ static void term_dispatch_csi(nss_term_t *term) {
         int16_t x, y;
         uint32_t mask;
         nss_window_get_pointer(term->win, &x, &y, &mask);
-        nss_mouse_report_locator(term, 1, x, y, mask);
+        mouse_report_locator(term, 1, x, y, mask);
         break;
     }
     //case C('p') | P('>'): /* XTSMPOINTER */ // TODO Pointer
@@ -4634,7 +4634,7 @@ static void term_dispatch_esc(nss_term_t *term) {
     //    break;
     case E('8') | I0('#'): /* DECALN*/
         term_reset_margins(term);
-        nss_mouse_clear_selection(term);
+        mouse_clear_selection(term);
         term_move_to(term, 0, 0);
         for (nss_coord_t i = 0; i < term->height; i++)
             for (nss_coord_t j = 0; j < term->width; j++)
@@ -4738,8 +4738,8 @@ static void term_dispatch_c0(nss_term_t *term, term_char_t ch) {
     case 0x1a: /* SUB */
         term_reset_pending(term);
         // Clear selection when selected cell is overwritten
-        if (nss_mouse_is_selected(term, term->c.x, term->c.y))
-            nss_mouse_clear_selection(term);
+        if (mouse_is_selected(term, term->c.x, term->c.y))
+            mouse_clear_selection(term);
         term_put_cell(term, term->c.x, term->c.y, '?');
     case 0x18: /* CAN */
         term_esc_finish_string(term);

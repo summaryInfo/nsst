@@ -13,7 +13,6 @@
 #include <stdint.h>
 #include <unistd.h>
 
-/* WARNING: Order is important */
 typedef enum nss_cursor_type {
     nss_cursor_block_blink = 1,
     nss_cursor_block = 2,
@@ -24,37 +23,36 @@ typedef enum nss_cursor_type {
 } nss_cursor_type_t;
 
 /* WARNING: Order is important */
-typedef enum nss_mouse_event_type {
+enum mouse_event_type {
     nss_me_press,
     nss_me_release,
     nss_me_motion,
-} nss_mouse_event_type_t;
+};
 
-/* WARNING: Order is important */
-typedef enum nss_mouse_mask {
-    nss_ms_shift = 1 << 0,
-    nss_ms_lock = 1 << 1,
-    nss_ms_control = 1 << 2,
-    nss_ms_mod_1 = 1 << 3,
-    nss_ms_mod_2 = 1 << 4,
-    nss_ms_mod_3 = 1 << 5,
-    nss_ms_mod_4 = 1 << 6,
-    nss_ms_mod_5 = 1 << 7,
-    nss_ms_button_1 = 1 << 8,
-    nss_ms_button_2 = 1 << 9,
-    nss_ms_button_3 = 1 << 10,
-    nss_ms_button_4 = 1 << 11,
-    nss_ms_button_5 = 1 << 12,
-    nss_ms_state_mask = 0x1FFF,
-    nss_ms_modifer_mask = 0xFF,
-} nss_mouse_mask_t;
+enum modifier_mask {
+    mask_shift = 1 << 0,
+    mask_lock = 1 << 1,
+    mask_control = 1 << 2,
+    mask_mod_1 = 1 << 3, /* Alt */ 
+    mask_mod_2 = 1 << 4, /* Numlock */
+    mask_mod_3 = 1 << 5,
+    mask_mod_4 = 1 << 6, /* Super */
+    mask_mod_5 = 1 << 7,
+    mask_button_1 = 1 << 8,
+    mask_button_2 = 1 << 9,
+    mask_button_3 = 1 << 10,
+    mask_button_4 = 1 << 11,
+    mask_button_5 = 1 << 12,
+    mask_state_mask = 0x1FFF,
+    mask_mod_mask = 0xFF,
+};
 
-typedef enum nss_clipboard_target {
-    nss_ct_primary,
-    nss_ct_clipboard,
-    nss_ct_secondary,
-    nss_ct_MAX,
-} nss_clipboard_target_t;
+enum clip_target {
+    clip_primary,
+    clip_clipboard,
+    clip_secondary,
+    clip_MAX,
+};
 
 typedef enum nss_title_target {
     nss_tt_title = 1,
@@ -83,13 +81,13 @@ typedef enum nss_window_dim_type {
     nss_dt_border,
 } nss_window_dim_type_t;
 
-typedef struct nss_mouse_event {
-    nss_mouse_event_type_t event;
-    nss_mouse_mask_t mask;
+struct mouse_event {
+    enum mouse_event_type event;
+    enum modifier_mask mask;
     nss_coord_t x;
     nss_coord_t y;
     uint8_t button;
-} nss_mouse_event_t;
+};
 
 typedef struct nss_window nss_window_t;
 typedef struct nss_line_iter nss_line_iter_t;
@@ -105,7 +103,7 @@ void nss_free_window(nss_window_t *win);
 
 _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg);
 _Bool nss_window_shift(nss_window_t *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, _Bool delay);
-void nss_window_paste_clip(nss_window_t *win, nss_clipboard_target_t target);
+void nss_window_paste_clip(nss_window_t *win, enum clip_target target);
 void nss_window_delay(nss_window_t *win);
 void nss_window_resize(nss_window_t *win, int16_t width, int16_t height);
 void nss_window_move(nss_window_t *win, int16_t x, int16_t y);
@@ -130,7 +128,7 @@ void nss_window_get_dim(nss_window_t *win, int16_t *width, int16_t *height);
 void nss_window_get_dim_ext(nss_window_t *win, nss_window_dim_type_t which, int16_t *width, int16_t *height);
 void nss_window_get_pointer(nss_window_t *win, int16_t *px, int16_t *py, uint32_t *pmask);
 nss_cursor_type_t nss_window_get_cursor(nss_window_t *win);
-void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, nss_clipboard_target_t target);
+void nss_window_set_clip(nss_window_t *win, uint8_t *data, uint32_t time, enum clip_target target);
 void nss_window_set_sync(nss_window_t *win, _Bool state);
 
 #define NSS_TIME_NOW 0
