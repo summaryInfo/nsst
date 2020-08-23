@@ -90,9 +90,9 @@ struct cursor {
     color_t fg;
     color_t bg;
     // Shift state
-    uint8_t gl : 2;
-    uint8_t gr : 2;
-    uint8_t gl_ss : 2;
+    uint32_t gl;
+    uint32_t gr;
+    uint32_t gl_ss;
     enum charset upcs;
     enum charset gn[4];
 
@@ -3641,6 +3641,7 @@ static void term_precompose_at_cursor(struct term *term, term_char_t ch) {
 }
 
 static void term_putchar(struct term *term, term_char_t ch) {
+    // TODO Remove this
     // 'print' state
 
     term->prev_ch = ch; // For REP CSI
@@ -3718,11 +3719,12 @@ inline static _Bool term_dispatch_print(struct term *term) {
 
     uint8_t *blk_start = term->fd_start;
 
-    do {
-        uint32_t ch = *term->fd_start;
+    uint32_t ch, prev = -1U;
+	do {
+        ch = *term->fd_start;
 
         // If we have encountered control character, break
-        if (ch < 0x20 || (ch > 0x7F && ch < 0xA0)) break;
+        if ((ch & 0x7F) < 0x20) break;
 
         uint8_t *char_start = term->fd_start;
         if (term->mode.utf8 && ch >= 0xA0) {
@@ -3750,6 +3752,8 @@ inline static _Bool term_dispatch_print(struct term *term) {
             ch = nrcs_decode(glv, term->c.gn[term->c.gr], term->c.upcs, ch, term->mode.enable_nrcs);
         term->c.gl_ss = term->c.gl; // Reset single shift
 
+        prev = ch;
+
         int16_t wid = wcwidth(ch);
         if(!wid) {
             // Don't put zero-width charactes
@@ -3775,6 +3779,7 @@ inline static _Bool term_dispatch_print(struct term *term) {
     } while(totalwidth < maxw && count < FD_BUF_SIZE && term->fd_start < term->fd_end);
 
 done:
+    if (prev != -1U) term->prev_ch = prev; // For REP CSI
 
     if (term->mode.print_enabled)
         term_print_string(term, blk_start, term->fd_start - blk_start);
@@ -3837,7 +3842,6 @@ done:
 
     term->c.pending = term->c.x == term_max_x(term);
     term->c.x -= term->c.pending;
-    term->prev_ch = term->predec_buf[count - 1]; // For REP CSI
 
     return complete;
 }
@@ -5070,7 +5074,7 @@ static void term_dispatch_vt52_cup(struct term *term) {
 }
 
 inline static _Bool term_dispatch(struct term *term, term_char_t ch) {
-    if (term->esc.state == esc_ground && (ch < 0x80 || ch > 0xA0 || term->vt_level < 2)) {
+    if (term->esc.state == esc_ground && (__builtin_expect(!IS_C1(ch), 1) || term->vt_level < 2)) {
         if (ch < 0x1F) {
             if (term->mode.print_enabled)
                 term_print_char(term, ch);
