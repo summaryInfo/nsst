@@ -346,6 +346,21 @@ bool mouse_is_selected(struct term *term, int16_t x, ssize_t y) {
     }
 }
 
+bool mouse_is_selected_2(struct term *term, int16_t x0, int16_t x1, ssize_t y) {
+    struct mouse_state *loc = term_get_mstate(term);
+
+    if (loc->state == state_sel_none || loc->state == state_sel_pressed) return 0;
+
+    if (loc->n.rect) {
+        return (loc->n.x0 <= x1 && x0 <= loc->n.x1) &&
+                (loc->n.y0 <= y && y <= loc->n.y1);
+    } else {
+        ssize_t w = term_width(term);
+        return loc->n.y0*w + loc->n.x0 <= y*w + x1 &&
+                y*w + x0 <= loc->n.y1*w + loc->n.x1;
+    }
+}
+
 
 inline static bool sel_adjust_buf(size_t *pos, size_t *cap, uint8_t **res) {
     if (*pos + UTF8_MAX_LEN + 2 >= *cap) {

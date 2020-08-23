@@ -73,6 +73,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev);
 void mouse_scroll_selection(struct term *term, ssize_t amount, bool save);
 void mouse_scroll_view(struct term *term, ssize_t delta);
 bool mouse_is_selected(struct term *term, int16_t x, ssize_t y);
+bool mouse_is_selected_2(struct term *term, int16_t x0, int16_t x1, ssize_t y);
 bool mouse_is_selected_in_view(struct term *term, int16_t x, ssize_t y);
 void mouse_clear_selection(struct term *term);
 void mouse_damage_selection(struct term *term);

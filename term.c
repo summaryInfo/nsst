@@ -84,8 +84,8 @@
 #define I1_MASK (0x1F << 14)
 
 struct cursor {
-    int16_t x;
-    int16_t y;
+    ssize_t x;
+    ssize_t y;
     struct cell cel;
     color_t fg;
     color_t bg;
@@ -188,12 +188,12 @@ struct term {
     struct cursor back_cs;
     struct cursor vt52c;
 
-    int16_t width;
-    int16_t height;
-    int16_t top;
-    int16_t bottom;
-    int16_t left;
-    int16_t right;
+    ssize_t width;
+    ssize_t height;
+    ssize_t top;
+    ssize_t bottom;
+    ssize_t left;
+    ssize_t right;
     bool *tabs;
 
     /* Last written character
@@ -210,8 +210,8 @@ struct term {
 
     /* Previous cursor state
      * Used for effective cursor invalidation */
-    int16_t prev_c_x;
-    int16_t prev_c_y;
+    ssize_t prev_c_x;
+    ssize_t prev_c_y;
     bool prev_c_hidden;
     bool prev_c_view_changed;
 
@@ -273,6 +273,8 @@ struct term {
     uint8_t *fd_start;
     uint8_t *fd_end;
     uint8_t fd_buf[FD_BUF_SIZE];
+
+    int32_t predec_buf[FD_BUF_SIZE];
 };
 
 /* Default termios, initialized from main */
@@ -3643,12 +3645,14 @@ static void term_putchar(struct term *term, term_char_t ch) {
 
     struct line *line = term->screen[term->c.y];
     struct cell *cell = &line->cell[term->c.x];
+    int16_t maxsx = term->c.x + width;
 
     // Shift characters to the left if insert mode is enabled
     if (term->mode.insert && term->c.x + width < term_max_x(term)) {
         for (struct cell *c = cell + width; c - line->cell < term_max_x(term); c++)
             c->attr &= ~attr_drawn;
         memmove(cell + width, cell, (term_max_x(term) - term->c.x - width)*sizeof(*cell));
+        maxsx = MAX(maxsx, term_max_x(term));
     }
 
     // Erase overwritten parts of wide characters
@@ -3656,7 +3660,7 @@ static void term_putchar(struct term *term, term_char_t ch) {
     term_adjust_wide_right(term, term->c.x + width - 1, term->c.y);
 
     // Clear selection when selected cell is overwritten
-    if (mouse_is_selected(term, term->c.x, term->c.y))
+    if (mouse_is_selected_2(term, term->c.x, maxsx, term->c.y))
         mouse_clear_selection(term);
 
     // Put character itself
@@ -3679,8 +3683,68 @@ static void term_putchar(struct term *term, term_char_t ch) {
     term->c.pending = term->c.x + width == term_max_x(term);
     term->c.x += width - term->c.pending;
 
-
     term->c.gl_ss = term->c.gl; // Reset single shift
+}
+
+static void term_putstr(struct term *term, ssize_t count, ssize_t totalwidth) {
+
+    if (term->c.pending || (term->c.x == term_max_x(term) - 1 && term->predec_buf[0] < 0))
+        term_do_wrap(term);
+
+    struct line *line = term->screen[term->c.y];
+    struct cell *cell = &line->cell[term->c.x];
+    int16_t maxsx = term->c.x + totalwidth;
+
+    // Shift characters to the left if insert mode is enabled
+    if (term->mode.insert && term->c.x + totalwidth < term_max_x(term)) {
+        for (struct cell *c = cell + totalwidth; c - line->cell < term_max_x(term); c++)
+            c->attr &= ~attr_drawn;
+        memmove(cell + totalwidth, cell, (term_max_x(term) - term->c.x - totalwidth)*sizeof(*cell));
+        maxsx = MAX(maxsx, term_max_x(term));
+    }
+
+    // Clear selection if writing over it
+    if (mouse_is_selected_2(term, term->c.x, maxsx, term->c.y))
+        mouse_clear_selection(term);
+
+    // Erase overwritten parts of wide characters
+    term_adjust_wide_left(term, term->c.x, term->c.y);
+    term_adjust_wide_right(term, term->c.x + totalwidth - 1, term->c.y);
+
+    if (term->mode.margin_bell) {
+        int16_t bcol = term->right - iconf(ICONF_MARGIN_BELL_COLUMN);
+        if (term->c.x < bcol && term->c.x + totalwidth >= bcol)
+            window_bell(term->win, term->mbvol);
+    }
+
+    if (iconf(ICONF_TRACE_CHARACTERS)) {
+        for (ssize_t i = 0; i < count; i++)
+            info("Char: (%x) '%lc' ", term->predec_buf[i], term->predec_buf[i]);
+    }
+
+    // Writing to the line resets its wrapping state
+    line->wrapped = 0;
+
+    // Allocate color for cell
+    struct cell cur = fixup_color(line, &term->c);
+
+    // Put charaters
+    for (ssize_t i = 0; i < count; i++) {
+        cur.ch = abs(term->predec_buf[i]);
+        line->cell[term->c.x] = cur;
+
+        // Put dummy character to the left of wide
+        if (__builtin_expect(term->predec_buf[i] < 0, 0)) {
+            line->cell[term->c.x].attr |= attr_wide;
+            line->cell[++term->c.x] = term->c.cel;
+        }
+
+        term->c.x++;
+    }
+
+    term->c.pending = term->c.x == term_max_x(term);
+    term->c.x -= term->c.pending;
+    term->prev_ch = term->predec_buf[count - 1]; // For REP CSI
 }
 
 static void term_dispatch_window_op(struct term *term) {
@@ -4729,9 +4793,6 @@ static void term_dispatch_esc(struct term *term) {
                 term->c.gn[1 + (((term->esc.selector & I0_MASK) - I0('-')) >> 9)] = set;
             break;
         default:
-            // If we got unknown C1
-            if (term->esc.state == esc_ground)
-                term->esc.state = esc_esc_entry;
             term_esc_dump(term, 0);
         }
     }
@@ -4915,6 +4976,7 @@ static void term_dispatch(struct term *term, term_char_t ch) {
     if (term->mode.print_enabled)
         term_print_char(term, ch);
 
+    // C1 controls are interpreted in all states, try them before others
     if (IS_C1(ch) && term->vt_level > 1) {
         term->esc.old_selector = term->esc.selector;
         term->esc.old_state = term->esc.state;
@@ -5083,6 +5145,7 @@ static void term_dispatch(struct term *term, term_char_t ch) {
                 (glv == cs96_latin_1 || glv == cs94_british))) // TODO Why???
             /* ignore */;
         else  {
+            // TODO Remove this codepath (and term_putchar)
             // Decode nrcs
 
             // In theory this should be disabled while in UTF-8 mode, but
@@ -5097,28 +5160,6 @@ static void term_dispatch(struct term *term, term_char_t ch) {
         }
     }
 }
-
-static void term_write(struct term *term, const uint8_t **start, const uint8_t **end, bool show_ctl) {
-    while (*start < *end) {
-        term_char_t ch;
-        // Try to handle unencoded C1 bytes even if UTF-8 is enabled
-        if (!term->mode.utf8 || IS_C1(**start)) ch = *(*start)++;
-        else if (!utf8_decode(&ch, (const uint8_t **)start, *end)) break;
-
-        if (show_ctl) {
-            if (IS_C1(ch)) {
-                term_dispatch(term, '^');
-                term_dispatch(term, '[');
-                ch ^= 0xc0;
-            } else if ((IS_C0(ch) || IS_DEL(ch)) && ch != '\n' && ch != '\t' && ch != '\r') {
-                term_dispatch(term, '^');
-                ch ^= 0x40;
-            }
-        }
-        term_dispatch(term, ch);
-    }
-}
-
 
 static ssize_t term_refill(struct term *term) {
     if (term->fd == -1) return -1;
@@ -5144,14 +5185,96 @@ static ssize_t term_refill(struct term *term) {
     return inc;
 }
 
+void term_precompose_at_cursor(struct term *term, term_char_t ch) {
+    struct cell *cel = &term->screen[term->c.y]->cell[term->c.x];
+    if (term->c.x) cel--;
+    if (!cel->ch && term->c.x > 1 && cel[-1].attr & attr_wide) cel--;
+    ch = try_precompose(cel->ch, ch);
+    if (cel->ch != ch) *cel = MKCELLWITH(*cel, ch);
+}
+
 void term_read(struct term *term) {
     if (term_refill(term) <= 0) return;
 
     if (term->mode.scroll_on_output && term->view_pos.line)
         term_reset_view(term, 1);
 
-    term_write(term, (const uint8_t **)&term->fd_start,
-            (const uint8_t **)&term->fd_end, 0);
+    while (term->fd_start < term->fd_end) {
+        term_char_t ch = *term->fd_start;
+
+        // If we are in ground state try to print all
+        // sequential graphical charactes at once
+        // TODO Allow fast printing with term_mode.print_enabled and without term->mode.wrap
+        if (term->esc.state == esc_ground && term->mode.wrap &&
+                !term->mode.print_enabled && ((ch > 0x1F && ch < 0x80) || ch >= 0xA0)) {
+
+            // Count maximal with to be printed at once
+            ssize_t buf = 0, totw = 0, maxw = term_max_x(term) - term_min_x(term);
+            if (!term->c.pending) {
+                if (term->c.x >= term_max_x(term)) maxw = term->width - term->c.x;
+                else maxw = term_max_x(term) - term->c.x;
+            }
+
+            do {
+                ch = *term->fd_start;
+
+                // If we have encountered control character, break
+                if (ch < 0x20 || (ch > 0x7F && ch < 0xA0)) break;
+
+                if (term->mode.utf8 && ch >= 0xA0) {
+                    if (!utf8_decode(&ch, (const uint8_t **)&term->fd_start, term->fd_end)) {
+                        // If we encountered partial UTF-8,
+                        // print all we have and return
+                        term_putstr(term, buf, totw);
+                        return;
+                    }
+                } else term->fd_start++;
+
+                uint8_t glv = term->c.gn[term->c.gl_ss];
+
+                // Skip DEL char if not 96 set
+                if (ch == 0x7F && (glv > cs96_latin_1 || (!term->mode.enable_nrcs &&
+                        (glv == cs96_latin_1 || glv == cs94_british)))) continue;
+
+                // Decode nrcs
+                // In theory this should be disabled while in UTF-8 mode, but
+                // in practive applications use these symbols, so keep translating.
+                // But decode only allow only DEC Graph in GL, unless configured otherwise
+                if (term->mode.utf8 && !iconf(ICONF_FORCE_UTF8_NRCS))
+                    ch = nrcs_decode_fast(glv, ch);
+                else
+                    ch = nrcs_decode(glv, term->c.gn[term->c.gr], term->c.upcs, ch, term->mode.enable_nrcs);
+                term->c.gl_ss = term->c.gl; // Reset single shift
+
+                int16_t wid = wcwidth(ch);
+                if(!wid) {
+                    // Don't put zero-width charactes
+                    // to predecode buffer
+                    if (!buf) term_precompose_at_cursor(term, ch);
+                    else term->predec_buf[buf - 1] = try_precompose(term->predec_buf[buf - 1], ch);
+                } else {
+                    // Wide cells are indicated as
+                    // negative in predecode buffer
+                    if (wid >= 2) {
+                        ch = -ch;
+                        totw++;
+                    }
+
+                    totw++;
+                    term->predec_buf[buf++] = ch;
+                }
+            } while(totw < maxw && buf < FD_BUF_SIZE && term->fd_start < term->fd_end);
+
+            term_putstr(term, buf, totw);
+        } else {
+            // Slow path, all controls
+            // are processed here
+            if (term->mode.utf8 && ch >= 0xA0) {
+                if (!utf8_decode(&ch, (const uint8_t **)&term->fd_start, term->fd_end)) break;
+            } else term->fd_start++;
+            term_dispatch(term, ch);
+        }
+    }
 }
 
 inline static void tty_write_raw(struct term *term, const uint8_t *buf, ssize_t len) {
@@ -5252,9 +5375,26 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
     bool encode = !len;
     if (!len) len = strlen((char *)str);
 
-    const uint8_t *end = len + str;
-    if (term->mode.echo)
-        term_write(term, (const uint8_t **)&str, &end, 1);
+    const uint8_t *end = len + str, *start = str;
+    if (term->mode.echo) {
+        while (*start < *end) {
+            term_char_t ch = *start;
+            // Try to handle unencoded C1 bytes even if UTF-8 is enabled
+            if (term->mode.utf8 && ch >= 0xA0 && term->esc.state == esc_ground) {
+                if (!utf8_decode(&ch, &start, end)) break;
+            } else term->fd_start++;
+
+            if (IS_C1(ch)) {
+                term_dispatch(term, '^');
+                term_dispatch(term, '[');
+                ch ^= 0xC0;
+            } else if ((IS_C0(ch) || IS_DEL(ch)) && ch != '\n' && ch != '\t' && ch != '\r') {
+                term_dispatch(term, '^');
+                ch ^= 0x40;
+            }
+            term_dispatch(term, ch);
+        }
+    }
 
     if (!(term->mode.no_scroll_on_input) && term->view_pos.line)
         term_reset_view(term, 1);
