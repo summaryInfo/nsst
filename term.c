@@ -2155,16 +2155,27 @@ static void term_cr(struct term *term) {
             term_min_ox(term) : term_min_x(term), term->c.y);
 }
 
+static void term_print_string(struct term *term, uint8_t *str, ssize_t size) {
+    ssize_t wri = 0, res;
+    do {
+        res = write(term->printerfd, str, size);
+        if (res < 0) {
+            warn("Printer error");
+            if (term->printerfd != STDOUT_FILENO)
+                close(term->printerfd);
+            term->printerfd = -1;
+            break;
+        }
+        wri += res;
+    } while(wri < size);
+}
+
 static void term_print_char(struct term *term, term_char_t ch) {
     uint8_t buf[5] = {ch};
     size_t sz = 1;
-    if (term->mode.utf8) sz = utf8_encode(ch, buf, buf + 5);
-    if (write(term->printerfd, buf, sz) < 0) {
-        warn("Printer error");
-        if (term->printerfd != STDOUT_FILENO)
-            close(term->printerfd);
-        term->printerfd = -1;
-    }
+    if (term->mode.utf8)
+        sz = utf8_encode(ch, buf, buf + 5);
+    term_print_string(term, buf, sz);
 }
 
 static void term_print_line(struct term *term, struct line *line) {
@@ -3688,6 +3699,8 @@ static void term_putchar(struct term *term, term_char_t ch) {
 
 static void term_putstr(struct term *term, ssize_t count, ssize_t totalwidth) {
 
+    // TODO Only handles enabled term->mode.wrap
+
     if (term->c.pending || (term->c.x == term_max_x(term) - 1 && term->predec_buf[0] < 0))
         term_do_wrap(term);
 
@@ -5204,9 +5217,8 @@ void term_read(struct term *term) {
 
         // If we are in ground state try to print all
         // sequential graphical charactes at once
-        // TODO Allow fast printing with term_mode.print_enabled and without term->mode.wrap
-        if (term->esc.state == esc_ground && term->mode.wrap &&
-                !term->mode.print_enabled && ((ch > 0x1F && ch < 0x80) || ch >= 0xA0)) {
+        // TODO Allow fast printing without term->mode.wrap
+        if (term->esc.state == esc_ground && term->mode.wrap && ((ch > 0x1F && ch < 0x80) || ch >= 0xA0)) {
 
             // Count maximal with to be printed at once
             ssize_t buf = 0, totw = 0, maxw = term_max_x(term) - term_min_x(term);
@@ -5214,6 +5226,8 @@ void term_read(struct term *term) {
                 if (term->c.x >= term_max_x(term)) maxw = term->width - term->c.x;
                 else maxw = term_max_x(term) - term->c.x;
             }
+
+            uint8_t *blk_start = term->fd_start;
 
             do {
                 ch = *term->fd_start;
@@ -5264,6 +5278,9 @@ void term_read(struct term *term) {
                     term->predec_buf[buf++] = ch;
                 }
             } while(totw < maxw && buf < FD_BUF_SIZE && term->fd_start < term->fd_end);
+
+            if (term->mode.print_enabled)
+                term_print_string(term, blk_start, term->fd_start - blk_start);
 
             term_putstr(term, buf, totw);
         } else {
