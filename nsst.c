@@ -69,9 +69,9 @@ static _Noreturn void version(void) {
             "+precompose"
 #endif
             "\n",
-            (NSS_VERSION / 10000) % 100,
-            (NSS_VERSION / 100) % 100,
-            NSS_VERSION % 100);
+            (NSST_VERSION / 10000) % 100,
+            (NSST_VERSION / 100) % 100,
+            NSST_VERSION % 100);
     free_context();
     exit(EXIT_SUCCESS);
 }

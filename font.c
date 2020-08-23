@@ -29,34 +29,34 @@
 #define HASH_INIT_CAP 167
 #define HASH_CAP_INC(x) (8*(x)/5)
 
-struct nss_font_state {
+struct font_context {
     size_t fonts;
     FT_Library library;
-} global = { 0 };
+} global;
 
-typedef struct nss_face_list {
+struct face_list {
         size_t length;
         size_t caps;
         FT_Face *faces;
-} nss_face_list_t;
+};
 
-struct nss_font {
+struct font {
     size_t refs;
     uint16_t dpi;
     double pixel_size;
     double size;
-    nss_face_list_t face_types[nss_font_attrib_max];
+    struct face_list face_types[face_MAX];
 };
 
-typedef struct nss_paterns_holder {
+struct patern_holder {
     size_t length;
     size_t caps;
     FcPattern **pats;
-} nss_paterns_holder_t;
+};
 
-void nss_free_font(nss_font_t *font) {
+void free_font(struct font *font) {
     if (--font->refs == 0) {
-        for (size_t i = 0; i < nss_font_attrib_max; i++) {
+        for (size_t i = 0; i < face_MAX; i++) {
             for (size_t j = 0; j < font->face_types[i].length; j++)
                 FT_Done_Face(font->face_types[i].faces[j]);
             free(font->face_types[i].faces);
@@ -69,7 +69,7 @@ void nss_free_font(nss_font_t *font) {
     }
 }
 
-static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_paterns_holder_t pats) {
+static void load_append_fonts(struct font *font, struct face_list *faces, struct patern_holder pats) {
     size_t new_size = faces->length + pats.length;
     if (new_size > faces->caps) {
         FT_Face *new = realloc(faces->faces, (faces->length + pats.length)*sizeof(FT_Face));
@@ -135,9 +135,9 @@ static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_pate
     }
 }
 
-static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char *str, nss_font_attrib_t attr, double size) {
+static void load_face_list(struct font *font, struct face_list* faces, const char *str, enum face_name attr, double size) {
     char *tmp = strdup(str);
-    nss_paterns_holder_t pats = {
+    struct patern_holder pats = {
         .length = 0,
         .caps = CAPS_STEP,
         .pats = calloc(CAPS_STEP, sizeof(*pats.pats))
@@ -153,22 +153,22 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
         FcPatternDel(pat, FC_SLANT);
 
         switch (attr) {
-        case nss_font_attrib_normal:
+        case face_normal:
             FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Regular");
             FcPatternAddInteger(pat, FC_WEIGHT, FC_WEIGHT_REGULAR);
             FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ROMAN);
             break;
-        case nss_font_attrib_normal | nss_font_attrib_italic:
+        case face_normal | face_italic:
             FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Italic");
             FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ITALIC);
             FcPatternAddInteger(pat, FC_WEIGHT, FC_WEIGHT_REGULAR);
             break;
-        case nss_font_attrib_bold:
+        case face_bold:
             FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Bold");
             FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ROMAN);
             FcPatternAddInteger(pat, FC_WEIGHT, FC_WEIGHT_BOLD);
             break;
-        case nss_font_attrib_bold | nss_font_attrib_italic:
+        case face_bold | face_italic:
             FcPatternAddString(pat, FC_STYLE, (FcChar8*) "Bold Italic");
             FcPatternAddString(pat, FC_STYLE, (FcChar8*) "BoldItalic");
             FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ITALIC);
@@ -233,7 +233,7 @@ static void load_face_list(nss_font_t *font, nss_face_list_t* faces, const char 
     free(tmp);
 }
 
-nss_font_t *nss_create_font(const char* descr, double size) {
+struct font *create_font(const char* descr, double size) {
     if (global.fonts++ == 0) {
         if (FcInit() == FcFalse)
             die("Can't initialize fontconfig");
@@ -243,7 +243,7 @@ nss_font_t *nss_create_font(const char* descr, double size) {
         FT_Library_SetLcdFilter(global.library, FT_LCD_FILTER_DEFAULT);
     }
 
-    nss_font_t *font = calloc(1, sizeof(*font));
+    struct font *font = calloc(1, sizeof(*font));
     if (!font) {
         warn("Can't allocate font");
         return NULL;
@@ -255,7 +255,7 @@ nss_font_t *nss_create_font(const char* descr, double size) {
     font->size = size;
 
 
-    for (size_t i = 0; i < nss_font_attrib_max; i++)
+    for (size_t i = 0; i < face_MAX; i++)
         load_face_list(font, &font->face_types[i], descr, i, size);
 
     // If can't find suitable, use 13 by default
@@ -265,13 +265,13 @@ nss_font_t *nss_create_font(const char* descr, double size) {
     return font;
 }
 
-nss_font_t *nss_font_reference(nss_font_t *font) {
+struct font *font_ref(struct font *font) {
     font->refs++;
     return font;
 }
 
-nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attrib_t attr) {
-    nss_face_list_t *faces = &font->face_types[attr];
+struct glyph *font_render_glyph(struct font *font, uint32_t ch, enum face_name attr) {
+    struct face_list *faces = &font->face_types[attr];
     int glyph_index = 0;
     FT_Face face = faces->faces[0];
     for (size_t i = 0; glyph_index == 0 && i < faces->length; i++)
@@ -281,10 +281,10 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
 
     FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT);
 
-    nss_pixel_mode_t ord = iconf(ICONF_PIXEL_MODE);
-    _Bool ordv = ord == nss_pm_bgrv || ord == nss_pm_rgbv;
-    _Bool ordrev = ord == nss_pm_bgr || ord == nss_pm_bgrv;
-    _Bool lcd = ord != nss_pm_mono;
+    enum pixel_mode ord = iconf(ICONF_PIXEL_MODE);
+    _Bool ordv = ord == pixmode_bgrv || ord == pixmode_rgbv;
+    _Bool ordrev = ord == pixmode_bgr || ord == pixmode_bgrv;
+    _Bool lcd = ord != pixmode_mono;
 
     size_t stride;
     if (lcd && !ordv) {
@@ -298,7 +298,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
         stride = (face->glyph->bitmap.width + 3) & ~3;
     }
 
-    nss_glyph_t *glyph = malloc(sizeof(*glyph) + stride * face->glyph->bitmap.rows);
+    struct glyph *glyph = malloc(sizeof(*glyph) + stride * face->glyph->bitmap.rows);
     glyph->x = -face->glyph->bitmap_left;
     glyph->y = face->glyph->bitmap_top;
 
@@ -307,7 +307,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     glyph->x_off = face->glyph->advance.x/64.;
     glyph->y_off = face->glyph->advance.y/64.;
     glyph->stride = stride;
-    glyph->pixmode = nss_pm_mono;
+    glyph->pixmode = pixmode_mono;
 
     int pitch = face->glyph->bitmap.pitch;
     uint8_t *src = face->glyph->bitmap.buffer;
@@ -368,7 +368,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     case FT_PIXEL_MODE_BGRA:
         warn("Colored glyph encountered");
         free(glyph);
-        return nss_font_render_glyph(font, 0, attr);
+        return font_render_glyph(font, 0, attr);
     }
 
     if (iconf(ICONF_LOG_LEVEL) == 4 && iconf(ICONF_TRACE_FONTS)) {
@@ -388,17 +388,17 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     return glyph;
 }
 
-int16_t nss_font_get_size(nss_font_t *font) {
+int16_t font_get_size(struct font *font) {
     return font->size;
 }
 
-struct nss_glyph_cache {
-    nss_font_t *font;
+struct glyph_cache {
+    struct font *font;
     int16_t char_width;
     int16_t char_height;
     int16_t char_depth;
     size_t refc;
-    nss_glyph_t **tab;
+    struct glyph **tab;
     size_t size;
     size_t caps;
 };
@@ -415,8 +415,8 @@ uint64_t hash(uint64_t v) {
     return v ^ v >> 28;
 }
 
-nss_glyph_cache_t *nss_create_cache(nss_font_t *font) {
-    nss_glyph_cache_t *cache = calloc(1, sizeof(nss_glyph_cache_t));
+struct glyph_cache *create_glyph_cache(struct font *font) {
+    struct glyph_cache *cache = calloc(1, sizeof(struct glyph_cache));
     if (!cache) {
         warn("Can't allocate glyph cache");
         return NULL;
@@ -434,7 +434,7 @@ nss_glyph_cache_t *nss_create_cache(nss_font_t *font) {
 
     int16_t total = 0, maxd = 0, maxh = 0;
     for (uint32_t i = ' '; i <= '~'; i++) {
-        nss_glyph_t *g = nss_cache_fetch(cache, i, nss_font_attrib_normal);
+        struct glyph *g = glyph_cache_fetch(cache, i, face_normal);
 
         total += g->x_off;
         maxd = MAX(maxd, g->height - g->y);
@@ -453,51 +453,51 @@ nss_glyph_cache_t *nss_create_cache(nss_font_t *font) {
     return cache;
 }
 
-nss_glyph_cache_t *nss_cache_reference(nss_glyph_cache_t *ref) {
+struct glyph_cache *glyph_cache_ref(struct glyph_cache *ref) {
     ref->refc++;
     return ref;
 }
 
-void nss_cache_font_dim(nss_glyph_cache_t *cache, int16_t *w, int16_t *h, int16_t *d) {
+void glyph_cache_get_dim(struct glyph_cache *cache, int16_t *w, int16_t *h, int16_t *d) {
     if (w) *w = cache->char_width;
     if (h) *h = cache->char_height;
     if (d) *d = cache->char_depth;
 }
 
-void nss_free_cache(nss_glyph_cache_t *cache) {
+void free_glyph_cache(struct glyph_cache *cache) {
     if (!--cache->refc) {
         for (size_t i = 0; i < cache->caps; i++)
-            for (nss_glyph_t *next = NULL, *it = cache->tab[i]; it; it = next)
+            for (struct glyph *next = NULL, *it = cache->tab[i]; it; it = next)
                 next = it->next, free(it);
         free(cache->tab);
         free(cache);
     }
 }
 
-nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, term_char_t ch, nss_font_attrib_t face) {
+struct glyph *glyph_cache_fetch(struct glyph_cache *cache, term_char_t ch, enum face_name face) {
     uint32_t g = ch | (face << 24);
     size_t h = hash(g);
 
-    nss_glyph_t *res = cache->tab[h % cache->caps];
+    struct glyph *res = cache->tab[h % cache->caps];
     for (; res; res = res->next)
         if (g == res->g) return res;
 
-    nss_glyph_t *new;
+    struct glyph *new;
 #if USE_BOXDRAWING
     if (is_boxdraw(ch) && iconf(ICONF_OVERRIDE_BOXDRAW))
-        new = nss_make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth);
+        new = make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth);
     else
 #endif
-        new = nss_font_render_glyph(cache->font, ch, face);
+        new = font_render_glyph(cache->font, ch, face);
 
     if (!new) return NULL;
 
     if (3*(cache->size + 1)/2 > cache->caps) {
         size_t newc = HASH_CAP_INC(cache->caps);
-        nss_glyph_t **newt = calloc(newc, sizeof(*newt));
+        struct glyph **newt = calloc(newc, sizeof(*newt));
         if (!newt) return NULL;
         for (size_t i = 0; i < cache->caps; i++) {
-            for (nss_glyph_t *next = NULL, *it = cache->tab[i]; it; it = next) {
+            for (struct glyph *next = NULL, *it = cache->tab[i]; it; it = next) {
                 next = it->next;
                 size_t ha = hash(it->g);
                 it->next = newt[ha % newc];
@@ -517,9 +517,9 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, term_char_t ch, nss_font_
     return new;
 }
 
-_Bool nss_cache_is_fetched(nss_glyph_cache_t *cache, term_char_t ch) {
+_Bool glyph_cache_is_fetched(struct glyph_cache *cache, term_char_t ch) {
     size_t h = hash(ch);
-    nss_glyph_t *res = cache->tab[h % cache->caps];
+    struct glyph *res = cache->tab[h % cache->caps];
     for (; res; res = res->next)
         if (ch == res->g) return 1;
     return 0;

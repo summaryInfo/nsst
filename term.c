@@ -2409,7 +2409,7 @@ static void term_dispatch_da(nss_term_t *term, nss_param_t mode) {
         case 520: ver = 64; break;
         case 525: ver = 65; break;
         }
-        nss_term_answerback(term, CSI">%"PRIparam";%d;0c", ver, NSS_VERSION);
+        nss_term_answerback(term, CSI">%"PRIparam";%d;0c", ver, NSST_VERSION);
         break;
     }
     default: /* Primary DA */

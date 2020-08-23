@@ -18,7 +18,7 @@ struct image {
 };
 
 void image_draw_rect(struct image im, struct rect rect, color_t fg);
-void image_compose_glyph(struct image im, int16_t dx, int16_t dy, nss_glyph_t *glyph, color_t fg, struct rect clip);
+void image_compose_glyph(struct image im, int16_t dx, int16_t dy, struct glyph *glyph, color_t fg, struct rect clip);
 void image_copy(struct image im, struct rect rect, struct image src, int16_t sx, int16_t sy);
 
 #endif

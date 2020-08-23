@@ -251,7 +251,7 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
 
             struct cellspec spec;
             nss_cell_t cel;
-            nss_glyph_t *glyph = NULL;
+            struct glyph *glyph = NULL;
             _Bool g_wide = 0;
             if (dirty || next_dirty) {
                 cel = line.cell[i];
@@ -263,7 +263,7 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
                 spec = describe_cell(cel, palette, line.line->pal ? line.line->pal->data : NULL,
                         win->blink_state, mouse_is_selected_in_view(win->term, i, k));
 
-                if (spec.ch) glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
+                if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face);
                 g_wide = glyph && glyph->x_off > win->char_width - iconf(ICONF_FONT_SPACING);
             }
 

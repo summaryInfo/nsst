@@ -121,9 +121,9 @@ struct window {
     int16_t char_depth;
     int16_t char_height;
     char *font_name;
-    nss_font_t *font;
-    nss_glyph_cache_t *font_cache;
-    nss_pixel_mode_t font_pixmode;
+    struct font *font;
+    struct glyph_cache *font_cache;
+    enum pixel_mode font_pixmode;
 
     nss_term_t *term;
     size_t poll_index;

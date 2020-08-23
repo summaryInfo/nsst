@@ -16,12 +16,12 @@ void image_draw_rect(struct image im, struct rect rect, color_t fg) {
         }
     }
 }
-void image_compose_glyph(struct image im, int16_t dx, int16_t dy, nss_glyph_t *glyph, color_t fg, struct rect clip) {
+void image_compose_glyph(struct image im, int16_t dx, int16_t dy, struct glyph *glyph, color_t fg, struct rect clip) {
     struct rect rect = { dx - glyph->x, dy - glyph->y, glyph->width, glyph->height };
     if (intersect_with(&rect, &(struct rect){0, 0, im.width, im.height}) &&
             intersect_with(&rect, &clip)) {
         int16_t i0 = rect.x - dx + glyph->x, j0 = rect.y - dy + glyph->y;
-        if (glyph->pixmode == nss_pm_mono) {
+        if (glyph->pixmode == pixmode_mono) {
             for (size_t j = 0; j < (size_t)rect.height; j++) {
                 for (size_t i = 0; i < (size_t)rect.width; i++) {
                     uint8_t alpha = glyph->data[(j0 + j) * glyph->stride + i0 + i];

@@ -51,7 +51,7 @@ struct render_context {
 #define CA(c) ((((c) >> 24) & 0xff) * 0x101)
 #define MAKE_COLOR(c) {.red=CR(c), .green=CG(c), .blue=CB(c), .alpha=CA(c)}
 
-static void register_glyph(struct window *win, uint32_t ch, nss_glyph_t * glyph) {
+static void register_glyph(struct window *win, uint32_t ch, struct glyph * glyph) {
     xcb_render_glyphinfo_t spec = {
         .width = glyph->width, .height = glyph->height,
         .x = glyph->x - iconf(ICONF_FONT_SPACING)/2, .y = glyph->y - iconf(ICONF_LINE_SPACING)/2,
@@ -84,7 +84,7 @@ _Bool renderer_reload_font(struct window *win, _Bool need_free) {
         if (check_void_cookie(c)) warn("Can't create glyph set");
 
         for (term_char_t i = ' '; i <= '~'; i++) {
-            nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, i, nss_font_attrib_normal);
+            struct glyph *glyph = glyph_cache_fetch(win->font_cache, i, face_normal);
             glyph->x_off = win->char_width;
             register_glyph(win, i, glyph);
         }
@@ -313,7 +313,7 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
 
             struct cellspec spec;
             nss_cell_t cel;
-            nss_glyph_t *glyph = NULL;
+            struct glyph *glyph = NULL;
             _Bool g_wide = 0;
             term_char_t g = 0;
             if (dirty || next_dirty) {
@@ -327,8 +327,8 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
                         win->blink_state, mouse_is_selected_in_view(win->term, i, k));
                 g =  spec.ch | (spec.face << 24);
 
-                _Bool fetched = nss_cache_is_fetched(win->font_cache, g);
-                if (spec.ch) glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
+                _Bool fetched = glyph_cache_is_fetched(win->font_cache, g);
+                if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face);
 
                 if (!fetched && glyph) register_glyph(win, g, glyph);
 

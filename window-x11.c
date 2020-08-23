@@ -802,7 +802,7 @@ struct cellspec describe_cell(nss_cell_t cell, color_t *palette, color_t *extra,
     // Calculate attributes
 
     res.ch = cell.ch;
-    res.face = cell.ch ? (cell.attr & nss_font_attrib_mask) : 0;
+    res.face = cell.ch ? (cell.attr & face_mask) : 0;
     res.wide = !!(cell.attr & nss_attrib_wide);
     res.underlined = !!(cell.attr & nss_attrib_underlined) && (res.fg != res.bg);
     res.stroke = !!(cell.attr & nss_attrib_strikethrough) && (res.fg != res.bg);
@@ -829,30 +829,30 @@ struct window *find_shared_font(struct window *win, _Bool need_free) {
         }
     }
 
-    nss_font_t *newf = found_font ? nss_font_reference(found->font) :
-            nss_create_font(win->font_name, win->font_size);
+    struct font *newf = found_font ? font_ref(found->font) :
+            create_font(win->font_name, win->font_size);
     if (!newf) {
         warn("Can't create new font: %s", win->font_name);
         return NULL;
     }
 
-    nss_glyph_cache_t *newc = found_cache ? nss_cache_reference(found->font_cache) :
-            nss_create_cache(newf);
+    struct glyph_cache *newc = found_cache ? glyph_cache_ref(found->font_cache) :
+            create_glyph_cache(newf);
 
     if (need_free) {
-        nss_free_cache(win->font_cache);
-        nss_free_font(win->font);
+        free_glyph_cache(win->font_cache);
+        free_font(win->font);
     }
 
     win->font = newf;
     win->font_cache = newc;
-    win->font_size = nss_font_get_size(newf);
+    win->font_size = font_get_size(newf);
 
     //Initialize default font size
     if (!iconf(ICONF_FONT_SIZE))
         iconf_set(ICONF_FONT_SIZE, win->font_size);
 
-    nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
+    glyph_cache_get_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
 
     return found;
 }
@@ -1025,9 +1025,9 @@ void free_window(struct window *win) {
     if (win->term)
         nss_free_term(win->term);
     if (win->font_cache)
-        nss_free_cache(win->font_cache);
+        free_glyph_cache(win->font_cache);
     if (win->font)
-        nss_free_font(win->font);
+        free_font(win->font);
 
     for (size_t i = 0; i < clip_MAX; i++)
         free(win->clipped[i]);
