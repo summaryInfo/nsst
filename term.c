@@ -812,7 +812,7 @@ ssize_t term_line_next(struct term *term, struct line_offset *pos, ssize_t amoun
 }
 
 bool is_last_line(struct line_view line) {
-    return !iconf(ICONF_REWRAP) || !(line.cell - line.line->cell + line.width < line.line->width);
+    return !iconf(ICONF_REWRAP) || line.cell - line.line->cell + line.width >= line.line->width;
 }
 
 struct line_offset term_get_view(struct term *term) {
@@ -880,7 +880,7 @@ void term_scroll_view(struct term *term, int16_t amount) {
 static ssize_t term_append_history(struct term *term, struct line *line, bool opt) {
     ssize_t res = 0;
     if (term->sb_max_caps > 0) {
-        ssize_t llen = line_length(line);
+        ssize_t llen = MAX(line_length(line), 1);
 
         /* If last line in history is wrapped concat current line to it */
         if (iconf(ICONF_REWRAP) && term->sb_limit &&
