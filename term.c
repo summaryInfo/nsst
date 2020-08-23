@@ -1242,7 +1242,12 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         } else {
             // Keep line of lower left view cell at the bottom
             lower_left.offset -= lower_left.offset % width;
-            term_line_next(term, &lower_left, 1 - height);
+            ssize_t hei = height;
+            if (lower_left.line >= term->height) {
+                hei = MAX(0, hei - (lower_left.line - term->height));
+                lower_left.line = height - 1;
+            }
+            term_line_next(term, &lower_left, 1 - hei);
             term->view_pos = lower_left;
             if (term->view_pos.line >= 0 || term->view_pos.line < -term->sb_limit)
                 term->view_pos.offset = 0;
