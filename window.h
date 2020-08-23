@@ -125,6 +125,6 @@ enum cursor_type window_get_cursor(struct window *win);
 void window_set_clip(struct window *win, uint8_t *data, uint32_t time, enum clip_target target);
 void window_set_sync(struct window *win, _Bool state);
 
-#define NSS_TIME_NOW 0
+#define CLIP_TIME_NOW 0
 
 #endif

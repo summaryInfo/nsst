@@ -377,7 +377,7 @@ inline static uint32_t translate_keypad(uint32_t in) {
     return in;
 }
 
-static void dump_reply(nss_term_t *term, struct reply *reply) {
+static void dump_reply(struct term *term, struct reply *reply) {
     uint8_t str[128] = { 0 };
     size_t strp = 0;
     if (!reply->init || !reply->final) {
@@ -396,7 +396,7 @@ static void dump_reply(nss_term_t *term, struct reply *reply) {
     }
     str[strp++] = reply->final;
     str[strp] = '\0';
-    nss_term_sendkey(term, str, 0);
+    term_sendkey(term, str, 0);
 
     if (iconf(ICONF_TRACE_INPUT)) {
         char pre[4] = {'^'};
@@ -463,8 +463,8 @@ static void translate_adjust(struct key *k, struct keyboard_state *mode) {
     }
 }
 
-void keyboard_reset_udk(nss_term_t *term) {
-    struct keyboard_state *mode = nss_term_keyboard_state(term);
+void keyboard_reset_udk(struct term *term) {
+    struct keyboard_state *mode = term_get_kstate(term);
     for (size_t i = 0; i < UDK_MAX;  i++) {
         free(mode->udk[i].val);
         mode->udk[i].val = NULL;
@@ -472,13 +472,13 @@ void keyboard_reset_udk(nss_term_t *term) {
     }
 }
 
-_Bool keyboard_set_udk(nss_term_t *term, const uint8_t *str, const uint8_t *end, _Bool reset, _Bool lock) {
-    struct keyboard_state *mode = nss_term_keyboard_state(term);
+_Bool keyboard_set_udk(struct term *term, const uint8_t *str, const uint8_t *end, _Bool reset, _Bool lock) {
+    struct keyboard_state *mode = term_get_kstate(term);
     if (!mode->udk_locked) {
         if (reset) keyboard_reset_udk(term);
         mode->udk_locked = lock;
         for (; str < end; str++) {
-            nss_param_t k = 0;
+            uparam_t k = 0;
             while (isdigit(*str) && *str != '/')
                 k = 10 * k + *str - '0', str++;
             if (*str++ != '/' || k >= UDK_MAX) return 0;
@@ -498,8 +498,8 @@ _Bool keyboard_set_udk(nss_term_t *term, const uint8_t *str, const uint8_t *end,
     return 1;
 }
 
-void keyboard_handle_input(struct key k, nss_term_t *term) {
-    struct keyboard_state *mode = nss_term_keyboard_state(term);
+void keyboard_handle_input(struct key k, struct term *term) {
+    struct keyboard_state *mode = term_get_kstate(term);
 
     if (iconf(ICONF_TRACE_INPUT)) {
         info("Key: sym=0x%X mask=0x%X ascii=0x%X utf32=0x%X",
@@ -535,7 +535,7 @@ void keyboard_handle_input(struct key k, nss_term_t *term) {
             if (udk.val) {
                 if (iconf(ICONF_TRACE_INPUT))
                     info("Key str: '%s' ", udk.val);
-                nss_term_sendkey(term, udk.val, udk.len);
+                term_sendkey(term, udk.val, udk.len);
             }
         } else if (mode->keyboard_mapping != keymap_legacy && deccode - 11 <= 3) {
             reply.init = mode->keyboad_vt52 ? '\033' : '\217';
@@ -572,7 +572,7 @@ void keyboard_handle_input(struct key k, nss_term_t *term) {
                     "XXXXXXXXXXX*+,-./0123456789XXX=" [k.sym - XKB_KEY_KP_Space];
             if (iconf(ICONF_TRACE_INPUT))
                 info("Key char: (%x) '%c' ", ch, ch);
-            nss_term_sendkey(term, &ch, 1);
+            term_sendkey(term, &ch, 1);
         }
     } else if (is_cursor(k.sym)) {
         reply.init = mode->keyboad_vt52 ? '\033' : mode->appcursor ? '\217' : '\233';
@@ -588,7 +588,7 @@ void keyboard_handle_input(struct key k, nss_term_t *term) {
             modify_others(val, mask_to_param(k.mask), mode->modkey_other_fmt, &reply);
             dump_reply(term, &reply);
         } else {
-            if (nss_term_is_utf8(term)) {
+            if (term_is_utf8_enabled(term)) {
                 if ((k.mask & mask_mod_1) && mode->has_meta) {
                     if (!mode->meta_escape) {
                         if (k.utf32 < 0x80)
@@ -601,7 +601,7 @@ void keyboard_handle_input(struct key k, nss_term_t *term) {
                     }
                 }
             } else {
-                if (nss_term_is_nrcs_enabled(term))
+                if (term_is_nrcs_enabled(term))
                     nrcs_encode(iconf(ICONF_KEYBOARD_NRCS), &k.utf32, 1);
 
                 if (k.utf32 > 0xFF) {
@@ -623,7 +623,7 @@ void keyboard_handle_input(struct key k, nss_term_t *term) {
             k.utf8data[k.utf8len] = '\0';
             if (iconf(ICONF_TRACE_INPUT))
                 info("Key char: (%x) '%s' ", k.utf32, k.utf8data);
-            nss_term_sendkey(term, k.utf8data, k.utf8len);
+            term_sendkey(term, k.utf8data, k.utf8len);
         }
     }
 

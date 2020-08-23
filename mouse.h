@@ -68,16 +68,16 @@ struct mouse_state {
     } mouse_format;
 };
 
-void mouse_handle_input(nss_term_t *term, struct mouse_event ev);
-void mouse_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save);
-void mouse_scroll_view(nss_term_t *term, ssize_t delta);
-_Bool mouse_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y);
-_Bool mouse_is_selected_in_view(nss_term_t *term, nss_coord_t x, nss_coord_t y);
-void mouse_clear_selection(nss_term_t *term);
-void mouse_damage_selection(nss_term_t *term);
-void mouse_selection_erase(nss_term_t *term, struct rect rect);
-void mouse_report_locator(nss_term_t *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask);
-void mouse_set_filter(nss_term_t *term, nss_sparam_t xs, nss_sparam_t xe, nss_sparam_t ys, nss_sparam_t ye);
+void mouse_handle_input(struct term *term, struct mouse_event ev);
+void mouse_scroll_selection(struct term *term, nss_coord_t amount, _Bool save);
+void mouse_scroll_view(struct term *term, ssize_t delta);
+_Bool mouse_is_selected(struct term *term, nss_coord_t x, nss_coord_t y);
+_Bool mouse_is_selected_in_view(struct term *term, nss_coord_t x, nss_coord_t y);
+void mouse_clear_selection(struct term *term);
+void mouse_damage_selection(struct term *term);
+void mouse_selection_erase(struct term *term, struct rect rect);
+void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask);
+void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, iparam_t ye);
 
 #endif
 

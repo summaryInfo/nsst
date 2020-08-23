@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 // IMPORTANT: Order should be the same as
-// in nss_attrs_t
+// in enum cell_attr
 enum face_name {
     face_normal = 0,
     face_italic = 1 << 0,

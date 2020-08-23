@@ -125,7 +125,7 @@ struct window {
     struct glyph_cache *font_cache;
     enum pixel_mode font_pixmode;
 
-    nss_term_t *term;
+    struct term *term;
     size_t poll_index;
 
     struct title_stack_item *title_stack;
@@ -157,7 +157,7 @@ void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 void window_set_default_props(struct window *win);
 void handle_resize(struct window *win, int16_t width, int16_t height);
 struct window *find_shared_font(struct window *win, _Bool need_free);
-struct cellspec describe_cell(nss_cell_t cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected);
+struct cellspec describe_cell(struct cell cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected);
 
 #endif
 

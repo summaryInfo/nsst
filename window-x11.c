@@ -34,12 +34,12 @@
 
 #define INIT_PFD_NUM 16
 #define NUM_BORDERS 4
-#define NSS_CLASS "Nsst"
+#define NSST_CLASS "Nsst"
 #define OPT_NAME_MAX 32
 /* Need to be multiple of 4 */
 #define PASTE_BLOCK_SIZE 1024
 
-struct nss_context {
+struct context {
     _Bool daemon_mode;
     xcb_screen_t *screen;
     xcb_colormap_t mid;
@@ -81,7 +81,7 @@ struct nss_context {
     size_t vbell_count;
 };
 
-struct nss_context ctx;
+struct context ctx;
 xcb_connection_t *con = NULL;
 struct window *win_list_head = NULL;
 volatile sig_atomic_t reload_config;
@@ -97,7 +97,7 @@ static void load_config(void) {
     xcb_xrm_database_t *xrmdb = xcb_xrm_database_from_default(con);
     if (!xrmdb) return;
 
-    char *res, name[OPT_NAME_MAX] = NSS_CLASS".color";
+    char *res, name[OPT_NAME_MAX] = NSST_CLASS".color";
     const size_t n_pos = strlen(name);
 
     // .color0 -- .color255
@@ -111,7 +111,7 @@ static void load_config(void) {
 
     //optmap is defined in config.c
     for (size_t i = 0; i < OPT_MAP_SIZE; i++) {
-        snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", optmap[i].name);
+        snprintf(name, OPT_NAME_MAX, NSST_CLASS".%s", optmap[i].name);
         char *res = NULL;
         if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res))
             sconf_set(optmap[i].opt, res);
@@ -364,7 +364,7 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
     }
 
     if ((bg && bg != obg) || (cursor_fg && cursor_fg != ofg)) {
-        nss_term_damage_lines(win->term, 0, win->ch);
+        term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
 }
@@ -378,12 +378,12 @@ void window_set_mouse(struct window *win, _Bool enabled) {
 }
 
 void window_set_sync(struct window *win, _Bool state) {
-    if (state) clock_gettime(NSS_CLOCK, &win->last_sync);
+    if (state) clock_gettime(CLOCK_TYPE, &win->last_sync);
     win->sync_active = state;
 }
 
 void window_delay(struct window *win) {
-    clock_gettime(NSS_CLOCK, &win->last_scroll);
+    clock_gettime(CLOCK_TYPE, &win->last_scroll);
 }
 
 void window_resize(struct window *win, int16_t width, int16_t height) {
@@ -569,16 +569,16 @@ static void set_urgency(xcb_window_t wid, _Bool set) {
 
 void window_bell(struct window *win, uint8_t vol) {
     if (!win->focused) {
-        if (nss_term_bell_raise(win->term)) window_action(win, action_restore_minimized);
-        if (nss_term_bell_urgent(win->term)) set_urgency(win->wid, 1);
+        if (term_is_bell_raise_enabled(win->term)) window_action(win, action_restore_minimized);
+        if (term_is_bell_urgent_enabled(win->term)) set_urgency(win->wid, 1);
     }
     if (iconf(ICONF_VISUAL_BELL)) {
         if (!win->in_blink) {
-            win->init_invert = nss_term_get_reverse(win->term);
+            win->init_invert = term_is_reverse(win->term);
             win->in_blink = 1;
             ctx.vbell_count++;
-            clock_gettime(NSS_CLOCK, &win->vbell_start);
-            nss_term_set_reverse(win->term, !win->init_invert);
+            clock_gettime(CLOCK_TYPE, &win->vbell_start);
+            term_set_reverse(win->term, !win->init_invert);
         }
     } else if (vol) {
         xcb_xkb_bell(con, XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_ID_DFLT_XI_CLASS,
@@ -597,7 +597,7 @@ static int32_t window_get_font_size(struct window *win) {
 static void reload_all_fonts(void) {
     for (struct window *win = win_list_head; win; win = win->next) {
         renderer_reload_font(win, 1);
-        nss_term_damage_lines(win->term, 0, win->ch);
+        term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
 }
@@ -613,7 +613,7 @@ static void window_set_font(struct window *win, const char * name, int32_t size)
 
     if (reload) {
         renderer_reload_font(win, 1);
-        nss_term_damage_lines(win->term, 0, win->ch);
+        term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
 }
@@ -749,50 +749,50 @@ uint32_t get_win_gravity_from_config() {
     }
 };
 
-struct cellspec describe_cell(nss_cell_t cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected) {
+struct cellspec describe_cell(struct cell cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected) {
     struct cellspec res;
 
     // Check special colors
     if (__builtin_expect(iconf(ICONF_SPEICAL_BOLD), 0) &&
-            palette[NSS_SPECIAL_BOLD] && cell.attr & nss_attrib_bold) {
-        cell.fg = NSS_SPECIAL_BOLD;
-        cell.attr &= ~nss_attrib_bold;
+            palette[SPECIAL_BOLD] && cell.attr & attr_bold) {
+        cell.fg = SPECIAL_BOLD;
+        cell.attr &= ~attr_bold;
     }
     if (__builtin_expect(iconf(ICONF_SPEICAL_UNDERLINE), 0) &&
-            palette[NSS_SPECIAL_UNDERLINE] && cell.attr & nss_attrib_underlined) {
-        cell.fg = NSS_SPECIAL_UNDERLINE;
-        cell.attr &= ~nss_attrib_underlined;
+            palette[SPECIAL_UNDERLINE] && cell.attr & attr_underlined) {
+        cell.fg = SPECIAL_UNDERLINE;
+        cell.attr &= ~attr_underlined;
     }
     if (__builtin_expect(iconf(ICONF_SPEICAL_BLINK), 0) &&
-            palette[NSS_SPECIAL_BLINK] && cell.attr & nss_attrib_blink) {
-        cell.fg = NSS_SPECIAL_BLINK;
-        cell.attr &= ~nss_attrib_blink;
+            palette[SPECIAL_BLINK] && cell.attr & attr_blink) {
+        cell.fg = SPECIAL_BLINK;
+        cell.attr &= ~attr_blink;
     }
     if (__builtin_expect(iconf(ICONF_SPEICAL_REVERSE), 0) &&
-            palette[NSS_SPECIAL_REVERSE] && cell.attr & nss_attrib_inverse) {
-        cell.fg = NSS_SPECIAL_REVERSE;
-        cell.attr &= ~nss_attrib_inverse;
+            palette[SPECIAL_REVERSE] && cell.attr & attr_inverse) {
+        cell.fg = SPECIAL_REVERSE;
+        cell.attr &= ~attr_inverse;
     }
     if (__builtin_expect(iconf(ICONF_SPEICAL_ITALIC), 0) &&
-            palette[NSS_SPECIAL_ITALIC] && cell.attr & nss_attrib_italic) {
-        cell.fg = NSS_SPECIAL_ITALIC;
-        cell.attr &= ~nss_attrib_italic;
+            palette[SPECIAL_ITALIC] && cell.attr & attr_italic) {
+        cell.fg = SPECIAL_ITALIC;
+        cell.attr &= ~attr_italic;
     }
 
     // Calculate colors
 
-    if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && cell.fg < 8) cell.fg += 8;
+    if ((cell.attr & (attr_bold | attr_faint)) == attr_bold && cell.fg < 8) cell.fg += 8;
     res.bg = cell.bg < PALETTE_SIZE ? palette[cell.bg] : extra[cell.bg - PALETTE_SIZE];
     res.fg = cell.fg < PALETTE_SIZE ? palette[cell.fg] : extra[cell.fg - PALETTE_SIZE];
-    if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint)
+    if ((cell.attr & (attr_bold | attr_faint)) == attr_faint)
         res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
-    if ((cell.attr & nss_attrib_inverse) ^ selected) SWAP(color_t, res.fg, res.bg);
-    if ((!selected && cell.attr & nss_attrib_invisible) || (cell.attr & nss_attrib_blink && blink)) res.fg = res.bg;
+    if ((cell.attr & attr_inverse) ^ selected) SWAP(color_t, res.fg, res.bg);
+    if ((!selected && cell.attr & attr_invisible) || (cell.attr & attr_blink && blink)) res.fg = res.bg;
 
     // If selected colors are set use them
 
-    if (palette[NSS_SPECIAL_SELECTED_BG] && selected) res.bg = palette[NSS_SPECIAL_SELECTED_BG];
-    if (palette[NSS_SPECIAL_SELECTED_FG] && selected) res.fg = palette[NSS_SPECIAL_SELECTED_FG];
+    if (palette[SPECIAL_SELECTED_BG] && selected) res.bg = palette[SPECIAL_SELECTED_BG];
+    if (palette[SPECIAL_SELECTED_FG] && selected) res.fg = palette[SPECIAL_SELECTED_FG];
 
     // Optimize rendering of U+2588 FULL BLOCK
 
@@ -803,9 +803,9 @@ struct cellspec describe_cell(nss_cell_t cell, color_t *palette, color_t *extra,
 
     res.ch = cell.ch;
     res.face = cell.ch ? (cell.attr & face_mask) : 0;
-    res.wide = !!(cell.attr & nss_attrib_wide);
-    res.underlined = !!(cell.attr & nss_attrib_underlined) && (res.fg != res.bg);
-    res.stroke = !!(cell.attr & nss_attrib_strikethrough) && (res.fg != res.bg);
+    res.wide = !!(cell.attr & attr_wide);
+    res.underlined = !!(cell.attr & attr_underlined) && (res.fg != res.bg);
+    res.stroke = !!(cell.attr & attr_strikethrough) && (res.fg != res.bg);
 
     return res;
 }
@@ -862,7 +862,7 @@ void window_set_default_props(struct window *win) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom._NET_WM_PID, XCB_ATOM_CARDINAL, 32, 1, &pid);
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom.WM_PROTOCOLS, XCB_ATOM_ATOM, 32, 1, &ctx.atom.WM_DELETE_WINDOW);
     const char *extra;
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(NSS_CLASS), NSS_CLASS);
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(NSST_CLASS), NSST_CLASS);
     if ((extra = sconf(SCONF_TERM_CLASS)))
         xcb_change_property(con, XCB_PROP_MODE_APPEND, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, strlen(extra), extra);
     uint32_t nhints[] = {
@@ -959,7 +959,7 @@ struct window *create_window(void) {
 
     if (!renderer_reload_font(win, 0)) goto error;
 
-    win->term = nss_create_term(win, win->cw, win->ch);
+    win->term = create_term(win, win->cw, win->ch);
     if (!win->term) goto error;
 
     window_set_default_props(win);
@@ -986,7 +986,7 @@ struct window *create_window(void) {
     size_t i = 1;
     while (ctx.pfds[i].fd >= 0) i++;
     ctx.pfds[i].events = POLLIN | POLLHUP;
-    ctx.pfds[i].fd = nss_term_fd(win->term);
+    ctx.pfds[i].fd = term_fd(win->term);
     win->poll_index = i;
 
     xcb_map_window(con, win->wid);
@@ -1023,7 +1023,7 @@ void free_window(struct window *win) {
     }
 
     if (win->term)
-        nss_free_term(win->term);
+        free_term(win->term);
     if (win->font_cache)
         free_glyph_cache(win->font_cache);
     if (win->font)
@@ -1045,7 +1045,7 @@ void free_window(struct window *win) {
 
 _Bool window_shift(struct window *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, _Bool delay) {
     struct timespec cur;
-    clock_gettime(NSS_CLOCK, &cur);
+    clock_gettime(CLOCK_TYPE, &cur);
 
     _Bool scrolled_recently = TIMEDIFF(win->last_scroll, cur) <  SEC/2/iconf(ICONF_FPS);
 
@@ -1086,12 +1086,12 @@ static void clip_copy(struct window *win) {
     if (win->clipped[clip_primary]) {
         uint8_t *dup = (uint8_t*)strdup((char *)win->clipped[clip_primary]);
         if (dup) {
-            if (nss_term_keep_clipboard(win->term)) {
+            if (term_is_keep_clipboard_enabled(win->term)) {
                 uint8_t *dup2 = (uint8_t *)strdup((char *)dup);
                 free(win->clipboard);
                 win->clipboard = dup2;
             }
-            window_set_clip(win, dup, NSS_TIME_NOW, clip_clipboard);
+            window_set_clip(win, dup, CLIP_TIME_NOW, clip_clipboard);
         }
     }
 }
@@ -1115,7 +1115,7 @@ void window_set_clip(struct window *win, uint8_t *data, uint32_t time, enum clip
 
 void window_paste_clip(struct window *win, enum clip_target target) {
     xcb_convert_selection(con, win->wid, target_to_atom(target),
-          nss_term_is_utf8(win->term) ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
+          term_is_utf8_enabled(win->term) ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
 }
 
 static void redraw_borders(struct window *win, _Bool top_left, _Bool bottom_right) {
@@ -1146,9 +1146,9 @@ void handle_resize(struct window *win, int16_t width, int16_t height) {
     nss_coord_t delta_y = new_ch - win->ch;
 
     if (delta_x || delta_y) {
-        nss_term_resize(win->term, new_cw, new_ch);
+        term_resize(win->term, new_cw, new_ch);
         renderer_resize(win, new_cw, new_ch);
-        clock_gettime(NSS_CLOCK, &win->last_resize);
+        clock_gettime(CLOCK_TYPE, &win->last_resize);
     }
 
     if (delta_x < 0 || delta_y < 0)
@@ -1178,7 +1178,7 @@ static void handle_expose(struct window *win, struct rect damage) {
 
 static void handle_focus(struct window *win, _Bool focused) {
     win->focused = focused;
-    nss_term_focus(win->term, focused);
+    term_handle_focus(win->term, focused);
 }
 
 static void handle_keydown(struct window *win, xkb_keycode_t keycode) {
@@ -1190,16 +1190,16 @@ static void handle_keydown(struct window *win, xkb_keycode_t keycode) {
 
     switch (action) {
     case shortcut_break:
-        nss_term_sendbreak(win->term);
+        term_break(win->term);
         return;
     case shortcut_numlock:
-        nss_term_toggle_numlock(win->term);
+        term_toggle_numlock(win->term);
         return;
     case shortcut_scroll_up:
-        nss_term_scroll_view(win->term, -iconf(ICONF_SCROLL_AMOUNT));
+        term_scroll_view(win->term, -iconf(ICONF_SCROLL_AMOUNT));
         return;
     case shortcut_scroll_down:
-        nss_term_scroll_view(win->term, iconf(ICONF_SCROLL_AMOUNT));
+        term_scroll_view(win->term, iconf(ICONF_SCROLL_AMOUNT));
         return;
     case shortcut_font_up:
     case shortcut_font_down:
@@ -1226,7 +1226,7 @@ static void handle_keydown(struct window *win, xkb_keycode_t keycode) {
         reload_config = 1;
         return;
     case shortcut_reset:
-        nss_term_reset(win->term);
+        term_reset(win->term);
         return;
     case shortcut_MAX:
     case shortcut_none:;
@@ -1254,7 +1254,7 @@ static void send_selection_data(struct window *win, xcb_window_t req, xcb_atom_t
 
         if (sel == XCB_ATOM_PRIMARY) data = win->clipped[clip_primary];
         else if (sel == XCB_ATOM_SECONDARY) data = win->clipped[clip_secondary];
-        else if (sel == ctx.atom.CLIPBOARD) data = nss_term_keep_clipboard(win->term) ?
+        else if (sel == ctx.atom.CLIPBOARD) data = term_is_keep_clipboard_enabled(win->term) ?
                 win->clipboard : win->clipped[clip_clipboard];
 
         if (data) {
@@ -1300,16 +1300,16 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, _Bool pn
         uint8_t *data = xcb_get_property_value(rep);
         uint8_t *pos = data, *end = data + size;
 
-        if (!nss_term_is_paste_nl_enabled(win->term))
+        if (!term_is_paste_nl_enabled(win->term))
             while ((pos = memchr(pos, '\n', end - pos))) *pos++ = '\r';
 
         if (size) {
-            if (!offset) nss_term_paste_begin(win->term);
+            if (!offset) term_paste_begin(win->term);
 
             static uint8_t buf1[2*PASTE_BLOCK_SIZE];
             static uint8_t buf2[4*PASTE_BLOCK_SIZE];
 
-            if ((rep->type == ctx.atom.UTF8_STRING) ^ nss_term_is_utf8(win->term)) {
+            if ((rep->type == ctx.atom.UTF8_STRING) ^ term_is_utf8_enabled(win->term)) {
                 pos = data;
                 size = 0;
                 if (rep->type == ctx.atom.UTF8_STRING) {
@@ -1325,7 +1325,7 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, _Bool pn
                 data = buf1;
             }
 
-            if (nss_term_paste_need_encode(win->term)) {
+            if (term_is_paste_requested(win->term)) {
                 while (leftover_len < 3 && size) leftover[leftover_len++] = *data++, size--;
                 size_t pre = base64_encode(buf2, leftover, leftover + leftover_len) - buf2;
 
@@ -1339,8 +1339,8 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, _Bool pn
                     size = base64_encode(buf2 + pre, data, data + size) - buf2;
                 }
                 data = buf2;
-            } else if (nss_term_is_paste_quote_enabled(win->term)) {
-                _Bool quote_c1 = !nss_term_is_utf8(win->term);
+            } else if (term_is_paste_quote_enabled(win->term)) {
+                _Bool quote_c1 = !term_is_utf8_enabled(win->term);
                 ssize_t i = 0, j = 0;
                 while (i < size) {
                     // Prefix control symbols with Ctrl-V
@@ -1353,9 +1353,9 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, _Bool pn
                 data = buf2;
             }
 
-            nss_term_sendkey(win->term, data, size);
+            term_sendkey(win->term, data, size);
 
-            if (!left) nss_term_paste_end(win->term);
+            if (!left) term_paste_end(win->term);
         }
 
         free(rep);
@@ -1565,20 +1565,20 @@ void run(void) {
         for (struct window *win = win_list_head, *next; win; win = next) {
             next = win->next;
             if (ctx.pfds[win->poll_index].revents & POLLIN)
-                nss_term_read(win->term);
+                term_read(win->term);
             else if (ctx.pfds[win->poll_index].revents & (POLLERR | POLLNVAL | POLLHUP))
                 free_window(win);
         }
 
         next_timeout = iconf(ctx.vbell_count ? ICONF_VISUAL_BELL_TIME : ICONF_BLINK_TIME)*1000LL;
         struct timespec cur;
-        clock_gettime(NSS_CLOCK, &cur);
+        clock_gettime(CLOCK_TYPE, &cur);
 
         for (struct window *win = win_list_head; win; win = win->next) {
             if (TIMEDIFF(win->last_sync, cur) > iconf(ICONF_SYNC_TIME)*1000LL && win->sync_active)
                 win->sync_active = 0;
             if (win->in_blink && TIMEDIFF(win->vbell_start, cur) > iconf(ICONF_VISUAL_BELL_TIME)*1000LL) {
-                nss_term_set_reverse(win->term, win->init_invert);
+                term_set_reverse(win->term, win->init_invert);
                 win->in_blink = 0;
                 ctx.vbell_count--;
             }
@@ -1614,7 +1614,7 @@ void run(void) {
 
                 remains = frame_time;
                 _Bool old_drawn = win->drawn_somthing;
-                win->drawn_somthing = nss_term_redraw_dirty(win->term);
+                win->drawn_somthing = term_redraw(win->term);
 
                 if (iconf(ICONF_TRACE_MISC) && win->drawn_somthing) info("Redraw");
 

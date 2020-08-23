@@ -289,13 +289,13 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
     rctx.cbufpos = 0;
     rctx.bufpos = 0;
 
-    _Bool cond_cblink = !win->blink_commited && (win->cursor_type & 1) && nss_term_is_cursor_enabled(win->term);
+    _Bool cond_cblink = !win->blink_commited && (win->cursor_type & 1) && term_is_cursor_enabled(win->term);
 
     if (cond_cblink) cursor |= win->blink_state;
 
-    nss_line_pos_t vpos = nss_term_get_view(win->term);
-    for (ssize_t k = 0; k < win->ch; k++, nss_term_inc_line_pos(win->term, &vpos, 1)) {
-        nss_line_view_t line = nss_term_line_at(win->term, vpos);
+    struct line_offset vpos = term_get_view(win->term);
+    for (ssize_t k = 0; k < win->ch; k++, term_line_next(win->term, &vpos, 1)) {
+        struct line_view line = term_line_at(win->term, vpos);
         _Bool next_dirty = 0;
         if (win->cw > line.width) {
             push_rect(&(xcb_rectangle_t){
@@ -307,12 +307,12 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
             next_dirty = 1;
         }
         for (nss_coord_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
-            _Bool dirty = line.line->force_damage || !(line.cell[i].attr & nss_attrib_drawn) ||
-                    (!win->blink_commited && (line.cell[i].attr & nss_attrib_blink)) ||
+            _Bool dirty = line.line->force_damage || !(line.cell[i].attr & attr_drawn) ||
+                    (!win->blink_commited && (line.cell[i].attr & attr_blink)) ||
                     (cond_cblink && k == cur_y && i == cur_x);
 
             struct cellspec spec;
-            nss_cell_t cel;
+            struct cell cel;
             struct glyph *glyph = NULL;
             _Bool g_wide = 0;
             term_char_t g = 0;
@@ -321,7 +321,7 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
 
                 if (k == cur_y && i == cur_x && cursor &&
                         win->focused && ((win->cursor_type + 1) & ~1) == cusor_type_block)
-                    cel.attr ^= nss_attrib_inverse;
+                    cel.attr ^= attr_inverse;
 
                 spec = describe_cell(cel, palette, line.line->pal->data,
                         win->blink_state, mouse_is_selected_in_view(win->term, i, k));
@@ -353,12 +353,12 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
                     .strikethrough = spec.stroke
                 };
 
-                line.cell[i].attr |= nss_attrib_drawn;
+                line.cell[i].attr |= attr_drawn;
             }
             next_dirty = dirty;
         }
         // Only reset force flag for last part of the line
-        if (!nss_term_is_continuation_line(line)) line.line->force_damage = 0;
+        if (!is_last_line(line)) line.line->force_damage = 0;
     }
 
     if (rctx.bufpos) {

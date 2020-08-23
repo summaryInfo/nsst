@@ -233,7 +233,7 @@ int main(int argc, char **argv) {
     (void)argc;
 
     parse_options(argv);
-    nss_setup_default_termios();
+    init_default_termios();
 
     create_window();
     run();
