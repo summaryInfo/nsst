@@ -84,13 +84,12 @@ enum window_dimension {
 struct mouse_event {
     enum mouse_event_type event;
     enum modifier_mask mask;
-    nss_coord_t x;
-    nss_coord_t y;
+    int16_t x;
+    int16_t y;
     uint8_t button;
 };
 
 typedef uint32_t color_t;
-typedef int16_t nss_coord_t;
 
 void init_context(void);
 void free_context(void);
@@ -99,8 +98,8 @@ void run(void);
 struct window *create_window();
 void free_window(struct window *win);
 
-bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, bool cursor, bool marg);
-bool window_shift(struct window *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, bool delay);
+bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
+bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_t yd, int16_t width, int16_t height, bool delay);
 void window_paste_clip(struct window *win, enum clip_target target);
 void window_delay(struct window *win);
 void window_resize(struct window *win, int16_t width, int16_t height);

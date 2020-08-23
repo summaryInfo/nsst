@@ -284,7 +284,7 @@ static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
         dst[i] = src[i];
 }
 
-bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, bool cursor, bool marg) {
+bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
 
     rctx.cbufpos = 0;
     rctx.bufpos = 0;
@@ -306,7 +306,7 @@ bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_
             });
             next_dirty = 1;
         }
-        for (nss_coord_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
+        for (int16_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
             bool dirty = line.line->force_damage || !(line.cell[i].attr & attr_drawn) ||
                     (!win->blink_commited && (line.cell[i].attr & attr_blink)) ||
                     (cond_cblink && k == cur_y && i == cur_x);

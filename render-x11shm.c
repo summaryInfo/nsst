@@ -232,7 +232,7 @@ static void optimize_bounds(struct rect *bounds, size_t *boundc, bool fine_grain
     *boundc = j;
 }
 
-bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, bool cursor, bool marg) {
+bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
 
     bool scrolled = win->ren.boundc;
     bool cond_cblink = !win->blink_commited && (win->cursor_type & 1) && term_is_cursor_enabled(win->term);
@@ -244,7 +244,7 @@ bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_
         struct line_view line = term_line_at(win->term, vpos);
         bool next_dirty = 0;
         struct rect l_bound = {-1, k, 0, 1};
-        for (nss_coord_t i =  MIN(win->cw, line.width) - 1; i >= 0; i--) {
+        for (int16_t i =  MIN(win->cw, line.width) - 1; i >= 0; i--) {
             bool dirty = line.line->force_damage || !(line.cell[i].attr & attr_drawn) ||
                     (!win->blink_commited && (line.cell[i].attr & attr_blink)) ||
                     (cond_cblink && k == cur_y && i == cur_x);

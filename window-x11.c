@@ -1043,7 +1043,7 @@ void free_window(struct window *win) {
     free(win);
 };
 
-bool window_shift(struct window *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, bool delay) {
+bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_t yd, int16_t width, int16_t height, bool delay) {
     struct timespec cur;
     clock_gettime(CLOCK_TYPE, &cur);
 
@@ -1140,10 +1140,10 @@ void handle_resize(struct window *win, int16_t width, int16_t height) {
     win->width = width;
     win->height = height;
 
-    nss_coord_t new_cw = MAX(2, (win->width - 2*win->left_border)/win->char_width);
-    nss_coord_t new_ch = MAX(1, (win->height - 2*win->top_border)/(win->char_height+win->char_depth));
-    nss_coord_t delta_x = new_cw - win->cw;
-    nss_coord_t delta_y = new_ch - win->ch;
+    int16_t new_cw = MAX(2, (win->width - 2*win->left_border)/win->char_width);
+    int16_t new_ch = MAX(1, (win->height - 2*win->top_border)/(win->char_height+win->char_depth));
+    int16_t delta_x = new_cw - win->cw;
+    int16_t delta_y = new_ch - win->ch;
 
     if (delta_x || delta_y) {
         term_resize(win->term, new_cw, new_ch);

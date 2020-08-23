@@ -88,7 +88,8 @@ struct window {
 
     int16_t width;
     int16_t height;
-    nss_coord_t cw, ch;
+    int16_t cw;
+    int16_t ch;
     int16_t cursor_width;
     int16_t underline_width;
     int16_t left_border;
@@ -100,8 +101,8 @@ struct window {
     struct timespec last_sync;
     struct timespec next_draw;
     struct timespec vbell_start;
-    nss_coord_t damaged_y0;
-    nss_coord_t damaged_y1;
+    int16_t damaged_y0;
+    int16_t damaged_y1;
 
     // Used to restore maximized window
     bool saved_geometry;

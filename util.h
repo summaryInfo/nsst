@@ -24,7 +24,6 @@
 #   define CLOCK_TYPE CLOCK_MONOTONIC
 #endif
 
-typedef int16_t nss_coord_t;
 typedef uint32_t color_t;
 typedef uint32_t term_char_t;
 struct rect {
@@ -39,26 +38,26 @@ void warn(const char *fmt, ...);
 void fatal(const char *fmt, ...);
 _Noreturn void die(const char *fmt, ...);
 
-inline static struct rect rect_scale_up(struct rect rect, nss_coord_t x_factor, nss_coord_t y_factor) {
+inline static struct rect rect_scale_up(struct rect rect, int16_t x_factor, int16_t y_factor) {
     rect.x *= x_factor;
     rect.y *= y_factor;
     rect.width *= x_factor;
     rect.height *= y_factor;
     return rect;
 }
-inline static struct rect rect_scale_down(struct rect rect, nss_coord_t x_factor, nss_coord_t y_factor) {
+inline static struct rect rect_scale_down(struct rect rect, int16_t x_factor, int16_t y_factor) {
     rect.x /= x_factor;
     rect.y /= y_factor;
     rect.width /= x_factor;
     rect.height /= y_factor;
     return rect;
 }
-inline static struct rect rect_shift(struct rect rect, nss_coord_t x_off, nss_coord_t y_off) {
+inline static struct rect rect_shift(struct rect rect, int16_t x_off, int16_t y_off) {
     rect.x += x_off;
     rect.y += y_off;
     return rect;
 }
-inline static struct rect rect_resize(struct rect rect, nss_coord_t x_off, nss_coord_t y_off) {
+inline static struct rect rect_resize(struct rect rect, int16_t x_off, int16_t y_off) {
     rect.width += x_off;
     rect.height += y_off;
     return rect;

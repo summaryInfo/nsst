@@ -16,12 +16,10 @@
 typedef uint16_t color_id_t;
 typedef uint32_t color_t;
 typedef uint32_t term_char_t;
-typedef int16_t nss_coord_t;
 typedef uint32_t uparam_t;
 typedef int32_t iparam_t;
 
-#define PRIparam PRId32
-#define SCNparam SCNd32
+#define SCNparam SCNu32
 
 #define SPECIAL_PALETTE_SIZE 11
 #define PALETTE_SIZE (256 + SPECIAL_PALETTE_SIZE)
@@ -88,21 +86,22 @@ struct line_offset {
     ssize_t offset;
 };
 
-struct term *create_term(struct window *win, nss_coord_t width, nss_coord_t height);
+struct term *create_term(struct window *win, int16_t width, int16_t height);
 void free_term(struct term *term);
 bool term_redraw(struct term *term);
-void term_resize(struct term *term, nss_coord_t width, nss_coord_t height);
+void term_resize(struct term *term, int16_t width, int16_t height);
 void term_handle_focus(struct term *term, bool focused);
 void term_sendkey(struct term *term, const uint8_t *data, size_t size);
 void term_answerback(struct term *term, const char *str, ...);
 void term_break(struct term *term);
-void term_scroll_view(struct term *term, nss_coord_t amount);
+void term_scroll_view(struct term *term, int16_t amount);
 void term_read(struct term *term);
 int term_fd(struct term *term);
 void term_hang(struct term *term);
 void term_toggle_numlock(struct term *term);
 struct keyboard_state *term_get_kstate(struct term *term);
-void term_damage_lines(struct term *term, nss_coord_t ys, nss_coord_t yd);
+struct mouse_state *term_get_mstate(struct term *term);
+void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd);
 void term_damage(struct term *term, struct rect damage);
 void term_reset(struct term *term);
 void term_set_reverse(struct term *term, bool set);

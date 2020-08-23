@@ -17,18 +17,17 @@
 #define CSI "\233"
 
 // From term.c
-nss_coord_t term_max_y(struct term *term);
-nss_coord_t term_max_x(struct term *term);
-nss_coord_t term_min_y(struct term *term);
-nss_coord_t term_min_x(struct term *term);
-nss_coord_t term_width(struct term *term);
-nss_coord_t term_height(struct term *term);
+int16_t term_max_y(struct term *term);
+int16_t term_max_x(struct term *term);
+int16_t term_min_y(struct term *term);
+int16_t term_min_x(struct term *term);
+int16_t term_width(struct term *term);
+int16_t term_height(struct term *term);
 ssize_t term_view(struct term *term);
-struct mouse_state *term_get_mstate(struct term *term);
 
 inline static size_t descomose_selection(struct rect dst[static 3], struct selected seld, struct rect bound, ssize_t pos) {
     size_t count = 0;
-    nss_coord_t x0 = seld.x0, x1 = seld.x1 + 1;
+    int16_t x0 = seld.x0, x1 = seld.x1 + 1;
     ssize_t y0 = seld.y0 + pos, y1 = seld.y1 + 1 + pos;
     if (seld.rect || y1 - y0 == 1) {
         struct rect r0 = {x0, y0, x1 - x0, y1 - y0};
@@ -48,9 +47,9 @@ inline static size_t descomose_selection(struct rect dst[static 3], struct selec
     return count;
 }
 
-inline static size_t xor_bands(struct rect dst[static 2], nss_coord_t x00, nss_coord_t x01, nss_coord_t x10, nss_coord_t x11, nss_coord_t y0, nss_coord_t y1) {
-    nss_coord_t x0_min = MIN(x00, x10), x0_max = MAX(x00, x10);
-    nss_coord_t x1_min = MIN(x01, x11), x1_max = MAX(x01, x11);
+inline static size_t xor_bands(struct rect dst[static 2], int16_t x00, int16_t x01, int16_t x10, int16_t x11, int16_t y0, int16_t y1) {
+    int16_t x0_min = MIN(x00, x10), x0_max = MAX(x00, x10);
+    int16_t x1_min = MIN(x01, x11), x1_max = MAX(x01, x11);
     size_t count = 0;
     if (x0_max >= x1_min - 1) {
         dst[count++] = (struct rect) {x0_min, y0, x1_min - x0_min, y1 - y0};
@@ -80,13 +79,13 @@ static void update_selection(struct term *term, uint8_t oldstate, struct selecte
     else if (!sz_new) res = d_old, count = sz_old;
     else {
         // Insert dummy rectangles to simplify code
-        nss_coord_t max_yo = d_old[sz_old - 1].y + d_old[sz_old - 1].height;
-        nss_coord_t max_yn = d_new[sz_new - 1].y + d_new[sz_new - 1].height;
+        int16_t max_yo = d_old[sz_old - 1].y + d_old[sz_old - 1].height;
+        int16_t max_yn = d_new[sz_new - 1].y + d_new[sz_new - 1].height;
         d_old[sz_old] = (struct rect) {0, max_yo, 0, 0};
         d_new[sz_new] = (struct rect) {0, max_yn, 0, 0};
 
         // Calculate y positions of bands
-        nss_coord_t ys[8];
+        int16_t ys[8];
         size_t yp = 0;
         for (size_t i_old = 0, i_new = 0; i_old <= sz_old || i_new <= sz_new; ) {
             if (i_old > sz_old) ys[yp++] = d_new[i_new++].y;
@@ -99,7 +98,7 @@ static void update_selection(struct term *term, uint8_t oldstate, struct selecte
         }
 
         struct rect *ito = d_old, *itn = d_new;
-        nss_coord_t x00 = 0, x01 = 0, x10 = 0, x11 = 0;
+        int16_t x00 = 0, x01 = 0, x10 = 0, x11 = 0;
         for (size_t i = 0; i < yp - 1; i++) {
             if (ys[i] >= max_yo) x00 = x01 = 0;
             else if (ys[i] == ito->y) x00 = ito->x, x01 = ito->x + ito->width, ito++;
@@ -158,7 +157,7 @@ void mouse_selection_erase(struct term *term, struct rect rect) {
 }
 
 
-void mouse_scroll_selection(struct term *term, nss_coord_t amount, bool save) {
+void mouse_scroll_selection(struct term *term, ssize_t amount, bool save) {
     struct mouse_state *loc = term_get_mstate(term);
 
     if (loc->state == state_sel_none) return;
@@ -240,14 +239,14 @@ static void snap_selection(struct term *term) {
     loc->n.rect = loc->r.rect;
     if (loc->n.y1 <= loc->n.y0) {
         if (loc->n.y1 < loc->n.y0) {
-            SWAP(nss_coord_t, loc->n.y0, loc->n.y1);
-            SWAP(nss_coord_t, loc->n.x0, loc->n.x1);
+            SWAP(ssize_t, loc->n.y0, loc->n.y1);
+            SWAP(int16_t, loc->n.x0, loc->n.x1);
         } else if (loc->n.x1 < loc->n.x0) {
-            SWAP(nss_coord_t, loc->n.x0, loc->n.x1);
+            SWAP(int16_t, loc->n.x0, loc->n.x1);
         }
     }
     if (loc->n.rect && loc->n.x1 < loc->n.x0)
-            SWAP(nss_coord_t, loc->n.x0, loc->n.x1);
+            SWAP(int16_t, loc->n.x0, loc->n.x1);
 
     if (loc->snap != snap_none && loc->state == state_sel_pressed)
         loc->state = state_sel_progress;
@@ -332,7 +331,7 @@ outer2:
         loc->n.x1 += !!(line.cell[loc->n.x1].attr & attr_wide);
 }
 
-bool mouse_is_selected(struct term *term, nss_coord_t x, nss_coord_t y) {
+bool mouse_is_selected(struct term *term, int16_t x, ssize_t y) {
     struct mouse_state *loc = term_get_mstate(term);
 
     if (loc->state == state_sel_none || loc->state == state_sel_pressed) return 0;
@@ -359,24 +358,24 @@ inline static bool sel_adjust_buf(size_t *pos, size_t *cap, uint8_t **res) {
     return 1;
 }
 
-inline static nss_coord_t line_len(struct line_view line) {
-    nss_coord_t max_x = line.width;
+inline static int16_t line_len(struct line_view line) {
+    int16_t max_x = line.width;
     if (!line.wrapped)
         while (max_x > 0 && !line.cell[max_x - 1].ch)
             max_x--;
     return max_x;
 }
 
-bool mouse_is_selected_in_view(struct term *term, nss_coord_t x, nss_coord_t y) {
+bool mouse_is_selected_in_view(struct term *term, int16_t x, ssize_t y) {
     return mouse_is_selected(term, x, y - term_view(term));
 }
 
-static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line_view line, nss_coord_t x0, nss_coord_t x1) {
+static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line_view line, ssize_t x0, ssize_t x1) {
     if (!line.cell) return;
 
-    nss_coord_t max_x = MIN(x1, line_len(line));
+    ssize_t max_x = MIN(x1, line_len(line));
 
-    for (nss_coord_t j = x0; j < max_x; j++) {
+    for (ssize_t j = x0; j < max_x; j++) {
         uint8_t buf[UTF8_MAX_LEN];
         if (line.cell[j].ch) {
             size_t len = utf8_encode(line.cell[j].ch, buf, buf + UTF8_MAX_LEN);
@@ -424,7 +423,7 @@ static uint8_t *selection_data(struct term *term) {
     } else return NULL;
 }
 
-static void change_selection(struct term *term, uint8_t state, nss_coord_t x, color_t y, bool rectangular) {
+static void change_selection(struct term *term, uint8_t state, int16_t x, ssize_t y, bool rectangular) {
     struct mouse_state *loc = term_get_mstate(term);
     struct selected old = loc->n;
     uint8_t oldstate = loc->state;
