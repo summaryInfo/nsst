@@ -5,6 +5,7 @@
 
 #include "feature.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -40,7 +41,7 @@ typedef struct nss_glyph {
     uint8_t data[];
 } nss_glyph_t;
 
-typedef uint32_t nss_char_t;
+typedef uint32_t term_char_t;
 typedef struct nss_font nss_font_t;
 
 nss_font_t *nss_create_font(const char* descr, double size);
@@ -56,7 +57,7 @@ nss_glyph_cache_t *nss_cache_reference(nss_glyph_cache_t *ref);
 void nss_free_cache(nss_glyph_cache_t *cache);
 nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, uint32_t ch, nss_font_attrib_t face);
 void nss_cache_font_dim(nss_glyph_cache_t *cache, int16_t *w, int16_t *h, int16_t *d);
-_Bool nss_cache_is_fetched(nss_glyph_cache_t *cache, nss_char_t ch);
+_Bool nss_cache_is_fetched(nss_glyph_cache_t *cache, term_char_t ch);
 
 #endif
 

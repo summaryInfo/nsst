@@ -12,6 +12,7 @@
 #endif
 
 #include <inttypes.h>
+#include <stdbool.h>
 #include <xcb/xcb.h>
 #if USE_X11SHM
 #   include <xcb/shm.h>
@@ -49,7 +50,7 @@ struct nss_renderer {
 struct nss_cellspec {
     color_t fg;
     color_t bg;
-    nss_char_t ch;
+    term_char_t ch;
     uint8_t face;
     _Bool underlined;
     _Bool stroke;

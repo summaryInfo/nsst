@@ -19,6 +19,7 @@
 #   include <sys/ipc.h>
 #   include <sys/shm.h>
 #endif
+#include <stdbool.h>
 #include <string.h>
 #include <xcb/shm.h>
 #include <xcb/xcb.h>

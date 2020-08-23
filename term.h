@@ -8,13 +8,14 @@
 #include "util.h"
 #include "window.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <sys/types.h>
 
 typedef uint16_t nss_cid_t;
 typedef uint32_t color_t;
-typedef uint32_t nss_char_t;
+typedef uint32_t term_char_t;
 typedef int16_t nss_coord_t;
 typedef uint32_t nss_param_t;
 typedef int32_t nss_sparam_t;

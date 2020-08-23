@@ -11,6 +11,7 @@
 #include "window.h"
 
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -373,8 +374,8 @@ void sconf_set(uint32_t opt, const char *val) {
             else warn("Unknown string option %d", opt);
         } else warn("Unknown string option %d", opt);
     } else if (KCONF_MIN <= opt && opt < KCONF_MAX) {
-        enum nss_shortcut_action sa = opt - KCONF_MIN + 1;
-        if (val) nss_input_set_hotkey(sa, val);
+        enum shortcut_action sa = opt - KCONF_MIN + 1;
+        if (val) keyboard_set_shortcut(sa, val);
     } else if (CCONF_MIN <= opt && opt < CCONF_MAX) {
             color_t col;
             if (val) col = parse_color((uint8_t*)val, (uint8_t*)val + strlen(val));

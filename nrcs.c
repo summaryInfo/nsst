@@ -4,6 +4,7 @@
 
 #include "nrcs.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -44,7 +45,7 @@ static const unsigned short tech_tr[] = {
     0x03BE, 0x03C5, 0x03B6, 0x2190, 0x2191, 0x2192, 0x2193,
 };
 
-_Bool nrcs_encode(enum charset set, nss_char_t *ch, _Bool nrcs) {
+_Bool nrcs_encode(enum charset set, term_char_t *ch, _Bool nrcs) {
     _Bool done = 0;
     switch (set) {
     case cs94_ascii:
@@ -147,7 +148,7 @@ _Bool nrcs_encode(enum charset set, nss_char_t *ch, _Bool nrcs) {
     return done;
 }
 
-nss_char_t nrcs_decode_fast(enum charset gl, nss_char_t ch) {
+term_char_t nrcs_decode_fast(enum charset gl, term_char_t ch) {
     if (gl == cs94_dec_graph) {
         if (0x5F <= ch && ch <= 0x7E)
             ch = graph_tr[ch - 0x5F];
@@ -155,7 +156,7 @@ nss_char_t nrcs_decode_fast(enum charset gl, nss_char_t ch) {
     return ch;
 }
 
-nss_char_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, nss_char_t ch, _Bool nrcs) {
+term_char_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, term_char_t ch, _Bool nrcs) {
     if (ch > 0xFF) return ch;
     if (ch == 0x7F) return U' ';
 

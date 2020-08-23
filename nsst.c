@@ -12,6 +12,7 @@
 #include <inttypes.h>
 #include <langinfo.h>
 #include <locale.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>

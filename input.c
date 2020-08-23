@@ -8,37 +8,38 @@
 #include "term.h"
 
 #include <ctype.h>
+#include <stdbool.h>
 #include <string.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 
-typedef struct nss_esc_reply {
+struct reply {
     uint8_t idx;
     uint8_t final;
     uint8_t priv;
-    nss_char_t init;
-    nss_char_t param[3];
-} nss_reply_t;
-
-struct nss_shortcut {
-    uint32_t ksym;
-    uint32_t mask;
-} cshorts[nss_sa_MAX] = {
-    [nss_sa_scroll_down] = {XKB_KEY_Up, nss_mm_shift | nss_mm_control},
-    [nss_sa_scroll_up] = {XKB_KEY_Down, nss_mm_shift | nss_mm_control},
-    [nss_sa_font_up] = {XKB_KEY_Page_Up, nss_mm_shift | nss_mm_control},
-    [nss_sa_font_down] = {XKB_KEY_Page_Down, nss_mm_shift | nss_mm_control},
-    [nss_sa_font_default] = {XKB_KEY_Home, nss_mm_shift | nss_mm_control},
-    [nss_sa_new_window] = {XKB_KEY_N, nss_mm_shift | nss_mm_control},
-    [nss_sa_numlock] = {XKB_KEY_Num_Lock, nss_mm_shift | nss_mm_control},
-    [nss_sa_copy] = {XKB_KEY_C, nss_mm_shift | nss_mm_control},
-    [nss_sa_paste] = {XKB_KEY_V, nss_mm_shift | nss_mm_control},
-    [nss_sa_break] = {XKB_KEY_Break, 0},
-    [nss_sa_reset] = {XKB_KEY_R, nss_mm_shift | nss_mm_control},
-    [nss_sa_reload_config] = {XKB_KEY_X, nss_mm_shift | nss_mm_control},
+    term_char_t init;
+    term_char_t param[3];
 };
 
-static inline _Bool is_edit_keypad(nss_char_t ks, _Bool deldel) {
+struct shortcut {
+    uint32_t ksym;
+    uint32_t mask;
+} cshorts[shortcut_MAX] = {
+    [shortcut_scroll_down] = {XKB_KEY_Up, mask_shift | mask_control},
+    [shortcut_scroll_up] = {XKB_KEY_Down, mask_shift | mask_control},
+    [shortcut_font_up] = {XKB_KEY_Page_Up, mask_shift | mask_control},
+    [shortcut_font_down] = {XKB_KEY_Page_Down, mask_shift | mask_control},
+    [shortcut_font_default] = {XKB_KEY_Home, mask_shift | mask_control},
+    [shortcut_new_window] = {XKB_KEY_N, mask_shift | mask_control},
+    [shortcut_numlock] = {XKB_KEY_Num_Lock, mask_shift | mask_control},
+    [shortcut_copy] = {XKB_KEY_C, mask_shift | mask_control},
+    [shortcut_paste] = {XKB_KEY_V, mask_shift | mask_control},
+    [shortcut_break] = {XKB_KEY_Break, 0},
+    [shortcut_reset] = {XKB_KEY_R, mask_shift | mask_control},
+    [shortcut_reload_config] = {XKB_KEY_X, mask_shift | mask_control},
+};
+
+static inline _Bool is_edit_keypad(term_char_t ks, _Bool deldel) {
     switch (ks) {
     case XKB_KEY_Delete:
         return !deldel;
@@ -53,7 +54,7 @@ static inline _Bool is_edit_keypad(nss_char_t ks, _Bool deldel) {
     return 0;
 }
 
-static inline _Bool is_edit_function(nss_char_t ks, _Bool deldel) {
+static inline _Bool is_edit_function(term_char_t ks, _Bool deldel) {
     switch (ks) {
     case XKB_KEY_KP_Insert:
     case XKB_KEY_KP_Delete:
@@ -63,39 +64,39 @@ static inline _Bool is_edit_function(nss_char_t ks, _Bool deldel) {
     return is_edit_keypad(ks, deldel);
 }
 
-static inline _Bool is_cursor(nss_char_t ks) {
+static inline _Bool is_cursor(term_char_t ks) {
     return XKB_KEY_Home <= ks && ks <= XKB_KEY_Select;
 }
 
-static inline _Bool is_keypad(nss_char_t ks) {
+static inline _Bool is_keypad(term_char_t ks) {
     return XKB_KEY_KP_Space <= ks && ks <= XKB_KEY_KP_Equal;
 }
 
-static inline _Bool is_keypad_function(nss_char_t ks) {
+static inline _Bool is_keypad_function(term_char_t ks) {
     return XKB_KEY_KP_F1 <= ks && ks <= XKB_KEY_KP_F4;
 }
 
-static inline _Bool is_function(nss_char_t ks) {
+static inline _Bool is_function(term_char_t ks) {
     return XKB_KEY_F1 <= ks && ks <= XKB_KEY_F35;
 }
 
-static inline _Bool is_misc_function(nss_char_t ks) {
+static inline _Bool is_misc_function(term_char_t ks) {
     return XKB_KEY_Select <= ks && ks <= XKB_KEY_Break;
 }
 
-static inline _Bool is_special(nss_char_t ks) {
+static inline _Bool is_special(term_char_t ks) {
     return XKB_KEY_ISO_Lock <= ks && ks <= XKB_KEY_Delete;
 }
 
-static inline _Bool is_private(nss_char_t ks) {
+static inline _Bool is_private(term_char_t ks) {
     return 0x11000000 <= ks && ks <= 0x1100FFFF;
 }
 
-static inline _Bool is_ctrl_letter(nss_char_t ks) {
+static inline _Bool is_ctrl_letter(term_char_t ks) {
     return ks >= 0x40 && ks <= 0x7F;
 }
 
-static inline _Bool is_ctrl(nss_char_t ks) {
+static inline _Bool is_ctrl(term_char_t ks) {
     return ks < 0x20 || (ks >= 0x7F && ks < 0x100);
 }
 
@@ -119,41 +120,41 @@ static inline _Bool is_modify_allowed(struct key *k, struct keyboard_state *mode
     else return mode->modkey_other;
 }
 
-static nss_char_t filter_modifiers(struct key *k, struct keyboard_state *mode) {
-    nss_char_t res = k->mask & (nss_mm_control | nss_mm_shift | nss_mm_mod1);
+static term_char_t filter_modifiers(struct key *k, struct keyboard_state *mode) {
+    term_char_t res = k->mask & (mask_control | mask_shift | mask_mod1);
 
     if (mode->modkey_other <= 1) {
-        if (is_ctrl_letter(k->sym) && !(res & ~nss_mm_control)) {
-            if (!mode->modkey_other) res &= ~nss_mm_control;
+        if (is_ctrl_letter(k->sym) && !(res & ~mask_control)) {
+            if (!mode->modkey_other) res &= ~mask_control;
         } else if (k->sym == XKB_KEY_Return || k->sym == XKB_KEY_Tab) {
             /* do nothing */;
         } else if (is_xkb_ctrl(k)) {
-            if (!(res & nss_mm_mod1)) res = 0;
+            if (!(res & mask_mod1)) res = 0;
         } else if (!is_ctrl(k->sym) || !is_special(k->sym)) {
-            if (!(res & nss_mm_control)) res &= ~nss_mm_shift;
+            if (!(res & mask_control)) res &= ~mask_shift;
         }
-        if (res & nss_mm_mod1) {
-            if (!(res & ~nss_mm_mod1) && (mode->meta_escape || k->utf32 < 0x80)) res &= ~nss_mm_mod1;
-            if (((is_ctrl_letter(k->sym) || is_ctrl(k->sym)) && (res & nss_mm_control)))
-                res &= ~(nss_mm_mod1 | nss_mm_control);
+        if (res & mask_mod1) {
+            if (!(res & ~mask_mod1) && (mode->meta_escape || k->utf32 < 0x80)) res &= ~mask_mod1;
+            if (((is_ctrl_letter(k->sym) || is_ctrl(k->sym)) && (res & mask_control)))
+                res &= ~(mask_mod1 | mask_control);
             if (k->sym == XKB_KEY_Return || k->sym == XKB_KEY_Tab)
-                res &= ~(nss_mm_mod1 | nss_mm_control);
+                res &= ~(mask_mod1 | mask_control);
         }
     }
     return res;
 }
 
-static inline nss_char_t mask_to_param(nss_char_t mask) {
-    nss_char_t res = 0;
-    if (mask & nss_mm_shift) res |= 1;
-    if (mask & nss_mm_control) res |= 4;
-    if (mask & nss_mm_mod1) res |= 2;
+static inline term_char_t mask_to_param(term_char_t mask) {
+    term_char_t res = 0;
+    if (mask & mask_shift) res |= 1;
+    if (mask & mask_control) res |= 4;
+    if (mask & mask_mod1) res |= 2;
     return res + !!res;
 }
 
 static _Bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode) {
     if (!mode->modkey_other || is_private(k->sym)) return 0;
-    if (!(k->mask & (nss_mm_control | nss_mm_shift | nss_mm_mod1))) return 0;
+    if (!(k->mask & (mask_control | mask_shift | mask_mod1))) return 0;
 
     if (mode->modkey_other == 1) {
         _Bool res = 0;
@@ -162,7 +163,7 @@ static _Bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode
         case XKB_KEY_Delete:
             break;
         case XKB_KEY_ISO_Left_Tab:
-            res =  k->mask & (nss_mm_mod1 | nss_mm_control);
+            res =  k->mask & (mask_mod1 | mask_control);
             break;
         case XKB_KEY_Return:
         case XKB_KEY_Tab:
@@ -170,13 +171,13 @@ static _Bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode
             break;
         default:
             if (is_ctrl_letter(k->sym))
-                res = k->mask != nss_mm_shift && k->mask != nss_mm_control;
+                res = k->mask != mask_shift && k->mask != mask_control;
             else if (is_xkb_ctrl(k))
-                res = k->mask != nss_mm_shift && (k->mask & (nss_mm_shift | nss_mm_mod1));
+                res = k->mask != mask_shift && (k->mask & (mask_shift | mask_mod1));
             else res = 1;
         }
         if (res) {
-            nss_char_t new_mods = filter_modifiers(k, mode);
+            term_char_t new_mods = filter_modifiers(k, mode);
             if (new_mods) k->mask = new_mods;
             else return 0;
         }
@@ -184,34 +185,34 @@ static _Bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode
     } else {
         switch (k->sym) {
         case XKB_KEY_BackSpace:
-            return k->mask & (nss_mm_mod1 | nss_mm_shift);
+            return k->mask & (mask_mod1 | mask_shift);
         case XKB_KEY_Delete:
-            return k->mask & (nss_mm_mod1 | nss_mm_shift | nss_mm_control);
+            return k->mask & (mask_mod1 | mask_shift | mask_control);
         case XKB_KEY_ISO_Left_Tab:
-            return k->mask & (nss_mm_mod1 | nss_mm_control);
+            return k->mask & (mask_mod1 | mask_control);
         case XKB_KEY_Return:
         case XKB_KEY_Tab:
             return 1;
         default:
             if (is_ctrl_letter(k->sym))
                 return 1;
-            else if (k->mask == nss_mm_shift)
+            else if (k->mask == mask_shift)
                 return k->sym == XKB_KEY_space || k->sym == XKB_KEY_Return;
-            else if (k->mask & (nss_mm_mod1 | nss_mm_control))
+            else if (k->mask & (mask_mod1 | mask_control))
                 return 1;
             return 0;
         }
     }
 }
 
-static void modify_others(nss_char_t ch, nss_char_t param, _Bool fmt, nss_reply_t *reply) {
+static void modify_others(term_char_t ch, term_char_t param, _Bool fmt, struct reply *reply) {
     if (!param) return;
 
-    if (fmt) *reply = (nss_reply_t) { 2, 'u', 0, '\233', {ch, param} };
-    else *reply = (nss_reply_t) { 3, '~', 0, '\233', {27, param, ch} };
+    if (fmt) *reply = (struct reply) { 2, 'u', 0, '\233', {ch, param} };
+    else *reply = (struct reply) { 3, '~', 0, '\233', {27, param, ch} };
 }
 
-static void modify_cursor(nss_char_t param, uint8_t level, nss_reply_t *reply) {
+static void modify_cursor(term_char_t param, uint8_t level, struct reply *reply) {
     if (param) switch (level) {
     case 4: reply->priv = '>';
     case 3: if (!reply->idx)
@@ -221,7 +222,7 @@ static void modify_cursor(nss_char_t param, uint8_t level, nss_reply_t *reply) {
     }
 }
 
-static nss_char_t fnkey_dec(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
+static term_char_t fnkey_dec(term_char_t ks, _Bool is_fkey, struct reply *reply) {
     if (is_fkey) {
         reply->final = '~';
         uint8_t values[] = {
@@ -232,7 +233,7 @@ static nss_char_t fnkey_dec(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
                 (XKB_KEY_F1 <= ks && ks <= XKB_KEY_F20) ?
                 values[ks - XKB_KEY_F1] : 42 + ks - XKB_KEY_F21;
     } else {
-        nss_char_t p;
+        term_char_t p;
         switch (ks) {
         case XKB_KEY_Find: p = 1; break;
         case XKB_KEY_Insert:
@@ -256,8 +257,8 @@ static nss_char_t fnkey_dec(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
     }
 }
 
-static _Bool fnkey_hp(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
-    nss_char_t res;
+static _Bool fnkey_hp(term_char_t ks, _Bool is_fkey, struct reply *reply) {
+    term_char_t res;
     if (is_fkey) {
         if (XKB_KEY_F1 <= ks && ks <= XKB_KEY_F8)
             res = "pqrstuvw"[ks - XKB_KEY_F1];
@@ -289,8 +290,8 @@ static _Bool fnkey_hp(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
     return 1;
 }
 
-static _Bool fnkey_sco(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
-    nss_char_t res;
+static _Bool fnkey_sco(term_char_t ks, _Bool is_fkey, struct reply *reply) {
+    term_char_t res;
     if (is_fkey) {
         if (ks - XKB_KEY_F1 < 48)
             res = "MNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@[\\]^_`{"[ks - XKB_KEY_F1];
@@ -317,8 +318,8 @@ static _Bool fnkey_sco(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
     return 1;
 }
 
-static _Bool fnkey_sun(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
-    nss_char_t arg = 0, fin = 0;
+static _Bool fnkey_sun(term_char_t ks, _Bool is_fkey, struct reply *reply) {
+    term_char_t arg = 0, fin = 0;
     if (is_fkey) {
         if (ks - XKB_KEY_F1 < 37) {
             arg = (uint8_t[]) {
@@ -355,7 +356,7 @@ static _Bool fnkey_sun(nss_char_t ks, _Bool is_fkey, nss_reply_t *reply) {
 }
 
 inline static uint32_t translate_keypad(uint32_t in) {
-    struct { nss_char_t from, to; } tab[] = {
+    struct { term_char_t from, to; } tab[] = {
         { XKB_KEY_Delete, XKB_KEY_DRemove },
         { XKB_KEY_Home, XKB_KEY_Find },
         { XKB_KEY_End, XKB_KEY_Select },
@@ -376,7 +377,7 @@ inline static uint32_t translate_keypad(uint32_t in) {
     return in;
 }
 
-static void dump_reply(nss_term_t *term, nss_reply_t *reply) {
+static void dump_reply(nss_term_t *term, struct reply *reply) {
     uint8_t str[128] = { 0 };
     size_t strp = 0;
     if (!reply->init || !reply->final) {
@@ -413,24 +414,24 @@ static void translate_adjust(struct key *k, struct keyboard_state *mode) {
     k->is_fkey = is_function(k->sym);
 
     if (mode->keyboard_mapping == keymap_vt220) {
-        if (!(k->mask & nss_mm_shift)) {
+        if (!(k->mask & mask_shift)) {
             if (k->sym == XKB_KEY_KP_Add) {
                 k->sym = XKB_KEY_KP_Separator;
-            } else if (k->sym == XKB_KEY_KP_Separator && k->mask & nss_mm_control) {
+            } else if (k->sym == XKB_KEY_KP_Separator && k->mask & mask_control) {
                 k->sym = XKB_KEY_KP_Subtract;
-                k->mask &= ~nss_mm_control;
+                k->mask &= ~mask_control;
             }
         }
         if (k->sym != XKB_KEY_Delete || !mode->delete_is_del)
             k->sym = translate_keypad(k->sym);
     }
 
-    mode->appkey &= (k->utf8len == 1 && mode->allow_numlock && (k->mask & nss_mm_mod2));
+    mode->appkey &= (k->utf8len == 1 && mode->allow_numlock && (k->mask & mask_mod2));
 
     if (k->sym == XKB_KEY_Tab || k->sym == XKB_KEY_ISO_Left_Tab) {
         if (mode->modkey_other > 1) {
             if (!k->utf8len) k->utf8data[k->utf8len++] = '\t';
-        } else if (k->utf8len < 2 && k->mask == nss_mm_shift) {
+        } else if (k->utf8len < 2 && k->mask == mask_shift) {
             k->sym = XKB_KEY_ISO_Left_Tab;
         }
     } else if (XKB_KEY_KP_Home <= k->sym && k->sym <= XKB_KEY_KP_Begin) {
@@ -440,29 +441,29 @@ static void translate_adjust(struct key *k, struct keyboard_state *mode) {
     } else if (k->sym == XKB_KEY_SunF37) {
         k->is_fkey = 1, k->sym = XKB_KEY_F1 + 37 - 1;
     } else if (k->sym == XKB_KEY_BackSpace) {
-        if (k->utf8len == 1 && (mode->backspace_is_del ^ !!(k->mask & nss_mm_control))) {
+        if (k->utf8len == 1 && (mode->backspace_is_del ^ !!(k->mask & mask_control))) {
             k->utf8data[0] = '\177';
-            k->mask &= ~nss_mm_control;
+            k->mask &= ~mask_control;
             // k->sym = XKB_KEY_Delete;
         }
     }
 
-    if (k->is_fkey && k->mask & (nss_mm_control | nss_mm_shift)) {
+    if (k->is_fkey && k->mask & (mask_control | mask_shift)) {
         if (mode->keyboard_mapping == keymap_vt220 || mode->keyboard_mapping == keymap_legacy) {
-            if (k->mask & nss_mm_control)
+            if (k->mask & mask_control)
                 k->sym += mode->fkey_inc_step;
-            k->mask &= ~nss_mm_control;
+            k->mask &= ~mask_control;
         } else if (!mode->modkey_fn) {
-            if (k->mask & nss_mm_control)
+            if (k->mask & mask_control)
                 k->sym += mode->fkey_inc_step * 2;
-            if (k->mask & nss_mm_shift)
+            if (k->mask & mask_shift)
                 k->sym += mode->fkey_inc_step;
-            k->mask &= ~(nss_mm_control | nss_mm_shift);
+            k->mask &= ~(mask_control | mask_shift);
         }
     }
 }
 
-void nss_input_reset_udk(nss_term_t *term) {
+void keyboard_reset_udk(nss_term_t *term) {
     struct keyboard_state *mode = nss_term_keyboard_state(term);
     for (size_t i = 0; i < UDK_MAX;  i++) {
         free(mode->udk[i].val);
@@ -471,10 +472,10 @@ void nss_input_reset_udk(nss_term_t *term) {
     }
 }
 
-_Bool nss_input_set_udk(nss_term_t *term, const uint8_t *str, const uint8_t *end, _Bool reset, _Bool lock) {
+_Bool keyboard_set_udk(nss_term_t *term, const uint8_t *str, const uint8_t *end, _Bool reset, _Bool lock) {
     struct keyboard_state *mode = nss_term_keyboard_state(term);
     if (!mode->udk_locked) {
-        if (reset) nss_input_reset_udk(term);
+        if (reset) keyboard_reset_udk(term);
         mode->udk_locked = lock;
         for (; str < end; str++) {
             nss_param_t k = 0;
@@ -497,7 +498,7 @@ _Bool nss_input_set_udk(nss_term_t *term, const uint8_t *str, const uint8_t *end
     return 1;
 }
 
-void nss_handle_input(struct key k, nss_term_t *term) {
+void keyboard_handle_input(struct key k, nss_term_t *term) {
     struct keyboard_state *mode = nss_term_keyboard_state(term);
 
     if (iconf(ICONF_TRACE_INPUT)) {
@@ -512,11 +513,11 @@ void nss_handle_input(struct key k, nss_term_t *term) {
 
     translate_adjust(&k, mode);
 
-    nss_reply_t reply = { 0 };
-    nss_char_t param = k.mask && is_modify_allowed(&k, mode) ? mask_to_param(k.mask) : 0;
+    struct reply reply = {0};
+    term_char_t param = k.mask && is_modify_allowed(&k, mode) ? mask_to_param(k.mask) : 0;
 
 
-    _Bool (*kfn[keymap_MAX])(nss_char_t, _Bool, nss_reply_t *) = {
+    _Bool (*kfn[keymap_MAX])(term_char_t, _Bool, struct reply *) = {
         [keymap_hp] = fnkey_hp,
         [keymap_sun] = fnkey_sun,
         [keymap_sco] = fnkey_sco
@@ -528,8 +529,8 @@ void nss_handle_input(struct key k, nss_term_t *term) {
                 mode->modkey_fn : mode->modkey_cursor, &reply);
         dump_reply(term, &reply);
     } else if (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode->delete_is_del)) {
-        nss_char_t deccode = fnkey_dec(k.sym, k.is_fkey, &reply);
-        if (k.is_fkey && k.mask & nss_mm_shift && mode->keyboard_mapping == keymap_vt220) {
+        term_char_t deccode = fnkey_dec(k.sym, k.is_fkey, &reply);
+        if (k.is_fkey && k.mask & mask_shift && mode->keyboard_mapping == keymap_vt220) {
             struct udk udk = reply.param[0] < UDK_MAX ? mode->udk[reply.param[0]] : (struct udk){0};
             if (udk.val) {
                 if (iconf(ICONF_TRACE_INPUT))
@@ -545,7 +546,7 @@ void nss_handle_input(struct key k, nss_term_t *term) {
         } else {
             reply.init = '\233';
             if (k.sym == XKB_KEY_ISO_Left_Tab) {
-                if (mode->modkey_other >= 2 && (k.mask & (nss_mm_control | nss_mm_mod1)))
+                if (mode->modkey_other >= 2 && (k.mask & (mask_control | mask_mod1)))
                     modify_others('\t', param, mode->modkey_other_fmt, &reply);
             } else {
                 if (k.is_fkey) modify_cursor(param, mode->modkey_fn, &reply);
@@ -582,13 +583,13 @@ void nss_handle_input(struct key k, nss_term_t *term) {
         if (is_modify_others_allowed(&k, mode)) {
             /* Is it OK to use k.ascii here?
              * It allows to identify key in layout independent fasion
-             * nss_char_t val = k.ascii ? k.ascii : k.sym; */
-            nss_char_t val = k.sym < 0x100 ? k.sym : k.utf32;
+             * term_char_t val = k.ascii ? k.ascii : k.sym; */
+            term_char_t val = k.sym < 0x100 ? k.sym : k.utf32;
             modify_others(val, mask_to_param(k.mask), mode->modkey_other_fmt, &reply);
             dump_reply(term, &reply);
         } else {
             if (nss_term_is_utf8(term)) {
-                if ((k.mask & nss_mm_mod1) && mode->has_meta) {
+                if ((k.mask & mask_mod1) && mode->has_meta) {
                     if (!mode->meta_escape) {
                         if (k.utf32 < 0x80)
                             k.utf8len = utf8_encode(k.utf32 | 0x80, k.utf8data,
@@ -610,7 +611,7 @@ void nss_handle_input(struct key k, nss_term_t *term) {
 
                 k.utf8len = 1;
                 k.utf8data[0] = k.utf32;
-                if (k.mask & nss_mm_mod1 && mode->has_meta) {
+                if (k.mask & mask_mod1 && mode->has_meta) {
                     if (!mode->meta_escape) {
                         k.utf8data[0] |= 0x80;
                     } else {
@@ -642,7 +643,7 @@ static char to_control(char ch) {
     return ch;
 }
 
-struct key nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode) {
+struct key keyboard_describe_key(struct xkb_state *state, xkb_keycode_t keycode) {
     struct key k = { .sym = XKB_KEY_NoSymbol };
 
     k.mask = xkb_state_serialize_mods(state, XKB_STATE_MODS_EFFECTIVE);
@@ -668,10 +669,10 @@ struct key nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode) {
                     k.ascii = syms[0];
     } else k.ascii = k.sym;
 
-    if (k.mask & ~consumed & nss_mm_lock) k.sym = xkb_keysym_to_upper(k.sym);
+    if (k.mask & ~consumed & mask_lock) k.sym = xkb_keysym_to_upper(k.sym);
 
     if ((k.utf32 = xkb_keysym_to_utf32(k.sym))) {
-        if ((k.mask & ~consumed & nss_mm_control) && k.ascii) k.utf32 = to_control(k.ascii);
+        if ((k.mask & ~consumed & mask_control) && k.ascii) k.utf32 = to_control(k.ascii);
         k.utf8len = utf8_encode(k.utf32, k.utf8data, k.utf8data + sizeof(k.utf8data));
         k.utf8data[k.utf8len] = '\0';
     }
@@ -686,25 +687,25 @@ static uint32_t decode_mask(const char *c, const char *end) {
 again:
     while (c < end) switch (*c++) {
     case 'T':
-        if (recur) mask |= nss_mm_shift | nss_mm_control;
+        if (recur) mask |= mask_shift | mask_control;
         else has_t = 1;
         break;
     case 'S':
-        mask |= nss_mm_shift;
+        mask |= mask_shift;
         break;
     case 'C':
-        mask |= nss_mm_control;
+        mask |= mask_control;
         break;
     case 'L':
-        mask |= nss_mm_lock;
+        mask |= mask_lock;
         break;
     case 'M': case 'A':
     case '1':
-        mask |= nss_mm_mod1;
+        mask |= mask_mod1;
         break;
     case '2': case '3':
     case '4': case '5':
-        mask |= nss_mm_mod1 + c[-1] - '1';
+        mask |= mask_mod1 + c[-1] - '1';
         break;
     }
 
@@ -718,17 +719,17 @@ again:
     return mask;
 }
 
-uint32_t nss_input_force_mouse_mask(void) {
+uint32_t keyboard_force_select_mask(void) {
     const char *tmodstr = sconf(SCONF_FORCE_MOUSE_MOD);
     return decode_mask(tmodstr, tmodstr + strlen(tmodstr));
 }
 
-void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *c) {
+void keyboard_set_shortcut(enum shortcut_action sa, const char *c) {
     uint32_t sym, mask = 0;
     char *dash = strchr(c, '-');
 
     if (iconf(ICONF_TRACE_INPUT))
-        info("Set hotkey: %d = '%s'", sa, c);
+        info("Set shortcut: %d = '%s'", sa, c);
 
     if (dash) {
         mask = decode_mask(c, dash);
@@ -740,16 +741,16 @@ void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *c) {
     if (sym == XKB_KEY_NoSymbol) warn("Wrong key name: '%s'", dash);
 
 
-    cshorts[sa] = (struct nss_shortcut) { sym, mask };
+    cshorts[sa] = (struct shortcut) { sym, mask };
 }
 
-enum nss_shortcut_action nss_input_lookup_hotkey(struct key k) {
-    enum nss_shortcut_action action = nss_sa_none + 1;
-    for (; action < nss_sa_MAX; action++)
+enum shortcut_action keyboard_find_shortcut(struct key k) {
+    enum shortcut_action action = shortcut_none + 1;
+    for (; action < shortcut_MAX; action++)
         if (cshorts[action].ksym == k.sym && (k.mask & 0xFF) == cshorts[action].mask)
             break;
 
-    if (action == nss_sa_MAX) return nss_sa_none;
+    if (action == shortcut_MAX) return shortcut_none;
 
     return action;
 }

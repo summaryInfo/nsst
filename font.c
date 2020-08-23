@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <math.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -473,7 +474,7 @@ void nss_free_cache(nss_glyph_cache_t *cache) {
     }
 }
 
-nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, nss_char_t ch, nss_font_attrib_t face) {
+nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, term_char_t ch, nss_font_attrib_t face) {
     uint32_t g = ch | (face << 24);
     size_t h = hash(g);
 
@@ -516,7 +517,7 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, nss_char_t ch, nss_font_a
     return new;
 }
 
-_Bool nss_cache_is_fetched(nss_glyph_cache_t *cache, nss_char_t ch) {
+_Bool nss_cache_is_fetched(nss_glyph_cache_t *cache, term_char_t ch) {
     size_t h = hash(ch);
     nss_glyph_t *res = cache->tab[h % cache->caps];
     for (; res; res = res->next)

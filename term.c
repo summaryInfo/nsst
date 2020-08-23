@@ -20,6 +20,7 @@
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -186,7 +187,7 @@ struct nss_term {
 
     /* Last written character
      * Used for REP */
-    nss_char_t prev_ch;
+    term_char_t prev_ch;
 
     /* OSC 52 character description
      * of selection being pasted from */
@@ -699,7 +700,7 @@ inline static nss_coord_t line_length(nss_line_t *line) {
     return max_x;
 }
 
-inline static void term_put_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y, nss_char_t ch) {
+inline static void term_put_cell(nss_term_t *term, nss_coord_t x, nss_coord_t y, term_char_t ch) {
     nss_line_t *line = term->screen[y];
 
     // Writing to the line resets its wrapping state
@@ -1536,7 +1537,7 @@ static uint16_t term_checksum(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
         for (nss_coord_t i = xs; i < xe; i++) {
-            nss_char_t ch = line->cell[i].ch;
+            term_char_t ch = line->cell[i].ch;
             uint32_t attr = line->cell[i].attr;
             if (!(term->checksum_mode & nss_cksm_no_implicit) && !ch) ch = ' ';
 
@@ -1725,7 +1726,7 @@ static void term_copy(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coor
     }
 }
 
-static void term_fill(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, _Bool origin, nss_char_t ch) {
+static void term_fill(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, _Bool origin, term_char_t ch) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, origin);
 
     for (; ys < ye; ys++) {
@@ -2102,7 +2103,7 @@ static void term_cr(nss_term_t *term) {
             term_min_ox(term) : term_min_x(term), term->c.y);
 }
 
-static void term_print_char(nss_term_t *term, nss_char_t ch) {
+static void term_print_char(nss_term_t *term, term_char_t ch) {
     uint8_t buf[5] = {ch};
     size_t sz = 1;
     if (term->mode.utf8) sz = utf8_encode(ch, buf, buf + 5);
@@ -2315,7 +2316,7 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     term_load_config(term);
     term_reset_margins(term);
     term_reset_tabs(term);
-    nss_input_reset_udk(term);
+    keyboard_reset_udk(term);
 
     nss_window_set_mouse(term->win, 0);
     nss_window_set_cursor(term->win, iconf(ICONF_CURSOR_SHAPE));
@@ -2718,7 +2719,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
         }
         break;
     case C('|'): /* DECUDK */
-        nss_input_set_udk(term, dstr, dend, !PARAM(0, 0), !PARAM(1, 0));
+        keyboard_set_udk(term, dstr, dend, !PARAM(0, 0), !PARAM(1, 0));
         break;
     case C('u') | I0('!'): /* DECAUPSS */ {
         uint32_t sel = 0;
@@ -2863,7 +2864,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         if (!(term->mode.title_set_utf8) && term->mode.utf8) {
             uint8_t *dst = dstr;
             const uint8_t *ptr = dst;
-            nss_char_t val = 0;
+            term_char_t val = 0;
             while (*ptr && utf8_decode(&val, &ptr, dend))
                 *dst++ = val;
             *dst = '\0';
@@ -3558,7 +3559,7 @@ static void term_dispatch_tmode(nss_term_t *term, _Bool set) {
     }
 }
 
-static void term_putchar(nss_term_t *term, nss_char_t ch) {
+static void term_putchar(nss_term_t *term, term_char_t ch) {
     // 'print' state
 
     term->prev_ch = ch; // For REP CSI
@@ -4677,7 +4678,7 @@ static void term_dispatch_esc(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
+static void term_dispatch_c0(nss_term_t *term, term_char_t ch) {
     if (iconf(ICONF_TRACE_CONTROLS) && ch != 0x1B)
         info("Seq: ^%c", ch ^ 0x40);
 
@@ -4759,7 +4760,7 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
     }
 }
 
-static void term_dispatch_vt52(nss_term_t *term, nss_char_t ch) {
+static void term_dispatch_vt52(nss_term_t *term, term_char_t ch) {
     switch (ch) {
     case '<':
         if (term->vt_version >= 100)
@@ -4846,7 +4847,7 @@ static void term_dispatch_vt52_cup(nss_term_t *term) {
     term->esc.state = esc_ground;
 }
 
-static void term_dispatch(nss_term_t *term, nss_char_t ch) {
+static void term_dispatch(nss_term_t *term, term_char_t ch) {
     if (term->mode.print_enabled)
         term_print_char(term, ch);
 
@@ -5035,7 +5036,7 @@ static void term_dispatch(nss_term_t *term, nss_char_t ch) {
 
 static void term_write(nss_term_t *term, const uint8_t **start, const uint8_t **end, _Bool show_ctl) {
     while (*start < *end) {
-        nss_char_t ch;
+        term_char_t ch;
         // Try to handle unencoded C1 bytes even if UTF-8 is enabled
         if (!term->mode.utf8 || IS_C1(**start)) ch = *(*start)++;
         else if (!utf8_decode(&ch, (const uint8_t **)start, *end)) break;

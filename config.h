@@ -3,6 +3,7 @@
 #ifndef CONFIG_H_
 #define CONFIG_H_ 1
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "feature.h"

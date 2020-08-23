@@ -7,6 +7,7 @@
 #include "mouse.h"
 #include "window-x11.h"
 
+#include <stdbool.h>
 #include <string.h>
 #include <xcb/xcb.h>
 #include <xcb/render.h>
@@ -86,7 +87,7 @@ _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
         c = xcb_render_create_glyph_set_checked(con, win->ren.gsid, win->ren.pfglyph);
         if (check_void_cookie(c)) warn("Can't create glyph set");
 
-        for (nss_char_t i = ' '; i <= '~'; i++) {
+        for (term_char_t i = ' '; i <= '~'; i++) {
             nss_glyph_t *glyph = nss_cache_fetch(win->font_cache, i, nss_font_attrib_normal);
             glyph->x_off = win->char_width;
             register_glyph(win, i, glyph);
@@ -318,7 +319,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t 
             nss_cell_t cel;
             nss_glyph_t *glyph = NULL;
             _Bool g_wide = 0;
-            nss_char_t g = 0;
+            term_char_t g = 0;
             if (dirty || next_dirty) {
                 cel = line.cell[i];
 

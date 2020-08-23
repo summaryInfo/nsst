@@ -10,6 +10,7 @@
 #include "window.h"
 #include "time.h"
 
+#include <stdbool.h>
 #include <string.h>
 
 #define SEL_INIT_SIZE 32
@@ -225,7 +226,7 @@ void nss_mouse_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save
     }
  }
 
-inline static _Bool is_separator(nss_char_t ch) {
+inline static _Bool is_separator(term_char_t ch) {
         if (!ch) return 1;
         uint8_t cbuf[UTF8_MAX_LEN + 1];
         cbuf[utf8_encode(ch, cbuf, cbuf + UTF8_MAX_LEN)] = '\0';
@@ -529,7 +530,7 @@ void nss_mouse_set_filter(nss_term_t *term, nss_sparam_t xs, nss_sparam_t xe, ns
 void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev) {
     struct mouse_state *loc = nss_term_mouse_state(term);
     /* Report mouse */
-    if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & nss_ms_modifer_mask) != nss_input_force_mouse_mask() &&
+    if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & nss_ms_modifer_mask) != keyboard_force_select_mask() &&
             !nss_term_keyboard_state(term)->keyboad_vt52) {
         if (loc->locator_filter) {
             if (ev.x < loc->filter.x || ev.x >= loc->filter.x + loc->filter.width ||
@@ -555,7 +556,7 @@ void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev) {
             }
         }
     } else if (loc->mouse_mode != nss_mouse_mode_none &&
-            (ev.mask & 0xFF) != nss_input_force_mouse_mask() && !nss_term_keyboard_state(term)->keyboad_vt52) {
+            (ev.mask & 0xFF) != keyboard_force_select_mask() && !nss_term_keyboard_state(term)->keyboad_vt52) {
         enum nss_mouse_mode md = loc->mouse_mode;
 
         adj_coords(nss_term_window(term), &ev.x, &ev.y);
@@ -622,7 +623,7 @@ void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev) {
                     (loc->state == nss_sstate_progress))) {
 
         adj_coords(nss_term_window(term), &ev.x, &ev.y);
-        change_selection(term, ev.event + 1, ev.x, ev.y, ev.mask & nss_mm_mod1);
+        change_selection(term, ev.event + 1, ev.x, ev.y, ev.mask & mask_mod1);
 
         if (ev.event == nss_me_release) {
             loc->targ = nss_term_select_to_clipboard(term) ? nss_ct_clipboard : nss_ct_primary;

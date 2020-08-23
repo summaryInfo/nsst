@@ -20,6 +20,7 @@
 #include <inttypes.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -1199,57 +1200,57 @@ static void handle_focus(nss_window_t *win, _Bool focused) {
 }
 
 static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
-    struct key key = nss_describe_key(ctx.xkb_state, keycode);
+    struct key key = keyboard_describe_key(ctx.xkb_state, keycode);
 
     if (key.sym == XKB_KEY_NoSymbol) return;
 
-    enum nss_shortcut_action action = nss_input_lookup_hotkey(key);
+    enum shortcut_action action = keyboard_find_shortcut(key);
 
     switch (action) {
-    case nss_sa_break:
+    case shortcut_break:
         nss_term_sendbreak(win->term);
         return;
-    case nss_sa_numlock:
+    case shortcut_numlock:
         nss_term_toggle_numlock(win->term);
         return;
-    case nss_sa_scroll_up:
+    case shortcut_scroll_up:
         nss_term_scroll_view(win->term, -iconf(ICONF_SCROLL_AMOUNT));
         return;
-    case nss_sa_scroll_down:
+    case shortcut_scroll_down:
         nss_term_scroll_view(win->term, iconf(ICONF_SCROLL_AMOUNT));
         return;
-    case nss_sa_font_up:
-    case nss_sa_font_down:
-    case nss_sa_font_default:;
+    case shortcut_font_up:
+    case shortcut_font_down:
+    case shortcut_font_default:;
         int32_t size = nss_window_get_font_size(win);
-        if (action == nss_sa_font_up)
+        if (action == shortcut_font_up)
             size += iconf(ICONF_FONT_SIZE_STEP);
-        else if (action == nss_sa_font_down)
+        else if (action == shortcut_font_down)
             size -= iconf(ICONF_FONT_SIZE_STEP);
-        else if (action == nss_sa_font_default)
+        else if (action == shortcut_font_default)
             size = iconf(ICONF_FONT_SIZE);
         nss_window_set_font(win, NULL, size);
         return;
-    case nss_sa_new_window:
+    case shortcut_new_window:
         nss_create_window();
         return;
-    case nss_sa_copy:
+    case shortcut_copy:
         nss_window_clip_copy(win);
         return;
-    case nss_sa_paste:
+    case shortcut_paste:
         nss_window_paste_clip(win, nss_ct_clipboard);
         return;
-    case nss_sa_reload_config:
+    case shortcut_reload_config:
         reload_config = 1;
         return;
-    case nss_sa_reset:
+    case shortcut_reset:
         nss_term_reset(win->term);
         return;
-    case nss_sa_MAX:
-    case nss_sa_none:;
+    case shortcut_MAX:
+    case shortcut_none:;
     }
 
-    nss_handle_input(key, win->term);
+    keyboard_handle_input(key, win->term);
 }
 
 static void send_selection_data(nss_window_t *win, xcb_window_t req, xcb_atom_t sel, xcb_atom_t target, xcb_atom_t prop, xcb_timestamp_t time) {
@@ -1330,7 +1331,7 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
                 pos = data;
                 size = 0;
                 if (rep->type == ctx.atom.UTF8_STRING) {
-                    nss_char_t ch;
+                    term_char_t ch;
                     while (pos < end)
                         if (utf8_decode(&ch, (const uint8_t **)&pos, end))
                             buf1[size++] = ch;

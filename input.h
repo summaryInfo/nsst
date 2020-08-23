@@ -3,6 +3,7 @@
 #ifndef INPUT_H_
 #define INPUT_H_ 1
 
+#include <stdbool.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -13,31 +14,31 @@
  * mod4 is super
  */
 enum mode_mask {
-    nss_mm_shift = 1 << 0,
-    nss_mm_lock = 1 << 1,
-    nss_mm_control = 1 << 2,
-    nss_mm_mod1 = 1 << 3,
-    nss_mm_mod2 = 1 << 4,
-    nss_mm_mod3 = 1 << 5,
-    nss_mm_mod4 = 1 << 6,
-    nss_mm_mod5 = 1 << 7,
+    mask_shift = 1 << 0,
+    mask_lock = 1 << 1,
+    mask_control = 1 << 2,
+    mask_mod1 = 1 << 3,
+    mask_mod2 = 1 << 4,
+    mask_mod3 = 1 << 5,
+    mask_mod4 = 1 << 6,
+    mask_mod5 = 1 << 7,
 };
 
-enum nss_shortcut_action {
-    nss_sa_none,
-    nss_sa_break,
-    nss_sa_numlock,
-    nss_sa_scroll_up,
-    nss_sa_scroll_down,
-    nss_sa_font_up,
-    nss_sa_font_down,
-    nss_sa_font_default,
-    nss_sa_new_window,
-    nss_sa_reset,
-    nss_sa_reload_config,
-    nss_sa_copy,
-    nss_sa_paste,
-    nss_sa_MAX = nss_sa_paste + 1
+enum shortcut_action {
+    shortcut_none,
+    shortcut_break,
+    shortcut_numlock,
+    shortcut_scroll_up,
+    shortcut_scroll_down,
+    shortcut_font_up,
+    shortcut_font_down,
+    shortcut_font_default,
+    shortcut_new_window,
+    shortcut_reset,
+    shortcut_reload_config,
+    shortcut_copy,
+    shortcut_paste,
+    shortcut_MAX = shortcut_paste + 1
 };
 
 struct keyboard_state {
@@ -96,12 +97,12 @@ struct keyboard_state {
         size_t len;
     } udk[UDK_MAX];
 
-} nss_keyboard_state_t;
+};
 
-typedef uint32_t nss_char_t;
+typedef uint32_t term_char_t;
 
 struct key {
-    nss_char_t utf32;
+    term_char_t utf32;
     uint32_t sym;
     uint32_t mask;
     uint8_t utf8data[6]; // zero terminated
@@ -113,12 +114,12 @@ struct key {
 typedef struct nss_term nss_term_t;
 typedef struct nss_window nss_window_t;
 
-void nss_handle_input(struct key k, nss_term_t *term);
-struct key nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode);
-uint32_t nss_input_force_mouse_mask(void);
-void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *val);
-enum nss_shortcut_action nss_input_lookup_hotkey(struct key k);
-void nss_input_reset_udk(nss_term_t *term);
-_Bool nss_input_set_udk(nss_term_t *term, const uint8_t *str, const uint8_t *end, _Bool reset, _Bool lock);
+void keyboard_handle_input(struct key k, nss_term_t *term);
+struct key keyboard_describe_key(struct xkb_state *state, xkb_keycode_t keycode);
+uint32_t keyboard_force_select_mask(void);
+void keyboard_set_shortcut(enum shortcut_action sa, const char *val);
+enum shortcut_action keyboard_find_shortcut(struct key k);
+void keyboard_reset_udk(nss_term_t *term);
+bool keyboard_set_udk(nss_term_t *term, const uint8_t *str, const uint8_t *end, bool reset, bool lock);
 
 #endif
