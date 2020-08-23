@@ -3720,7 +3720,7 @@ inline static _Bool term_dispatch_print(struct term *term) {
     uint8_t *blk_start = term->fd_start;
 
     uint32_t ch, prev = -1U;
-	do {
+    do {
         ch = *term->fd_start;
 
         // If we have encountered control character, break
@@ -3776,7 +3776,8 @@ inline static _Bool term_dispatch_print(struct term *term) {
             totalwidth++;
             term->predec_buf[count++] = ch;
         }
-    } while(totalwidth < maxw && count < FD_BUF_SIZE && term->fd_start < term->fd_end);
+        // Since UCS-4 chars takes not more units than UTF-8, don't check other buffer length
+    } while(totalwidth < maxw && /* count < FD_BUF_SIZE && */ term->fd_start < term->fd_end);
 
 done:
     if (prev != -1U) term->prev_ch = prev; // For REP CSI
