@@ -1399,6 +1399,10 @@ inline static void term_esc_start_seq(struct term *term) {
     term->esc.selector = 0;
 }
 
+inline static uint8_t *term_esc_str(struct term *term) {
+    return term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
+}
+
 inline static void term_esc_start_string(struct term *term) {
     term->esc.str_len = 0;
     term->esc.str_data[0] = 0;
@@ -1446,10 +1450,10 @@ static void term_esc_dump(struct term *term, bool use_info) {
             if (term->esc.state != esc_dcs_string) break;
 
             buf[pos] = 0;
-            (use_info ? info : warn)("%s%s%s^[\\", pref, buf, term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data);
+            (use_info ? info : warn)("%s%s%s^[\\", pref, buf, term_esc_str(term));
             return;
         case esc_osc_string:
-            (use_info ? info : warn)("%s^[]%u;%s^[\\", pref, term->esc.selector, term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data);
+            (use_info ? info : warn)("%s^[]%u;%s^[\\", pref, term->esc.selector, term_esc_str(term));
         default:
             return;
     }
@@ -2569,7 +2573,7 @@ static void term_dispatch_dsr(struct term *term) {
 }
 
 inline static void term_parse_cursor_report(struct term *term) {
-    char *dstr = (char *)(term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data);
+    char *dstr = (char *)term_esc_str(term);
 
     // Cursor Y
     ssize_t y = strtoul(dstr, &dstr, 10);
@@ -2661,7 +2665,7 @@ err:
 
 inline static void term_parse_tabs_report(struct term *term) {
     memset(term->tabs, 0, term->width*sizeof(*term->tabs));
-    uint8_t *dstr = term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
+    uint8_t *dstr = term_esc_str(term);
     uint8_t *dend = dstr + term->esc.str_len;
     for (ssize_t tab = 0; dstr <= dend; dstr++) {
         if (*dstr == '/' || dstr == dend) {
@@ -2687,7 +2691,7 @@ static void term_dispatch_dcs(struct term *term) {
     // Only SGR is allowed to have subparams
     if (term->esc.subpar_mask) return;
 
-    uint8_t *dstr = term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
+    uint8_t *dstr = term_esc_str(term);
     uint8_t *dend = dstr + term->esc.str_len;
 
     switch (term->esc.selector) {
@@ -2908,7 +2912,7 @@ static void term_dispatch_osc(struct term *term) {
     }
     term_esc_dump(term, 1);
 
-    uint8_t *dstr = term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
+    uint8_t *dstr = term_esc_str(term);
     uint8_t *dend = dstr + term->esc.str_len;
 
     switch (term->esc.selector) {
@@ -5128,7 +5132,7 @@ static void term_dispatch(struct term *term, term_char_t ch) {
                 term->esc.str_cap = new_cap;
             }
 
-            memcpy((term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data) + term->esc.str_len, buf, char_len + 1);
+            memcpy(term_esc_str(term) + term->esc.str_len, buf, char_len + 1);
             term->esc.str_len += char_len;
         }
         break;
