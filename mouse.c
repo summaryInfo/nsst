@@ -23,9 +23,9 @@ nss_coord_t term_min_x(nss_term_t *term);
 nss_coord_t term_width(nss_term_t *term);
 nss_coord_t term_height(nss_term_t *term);
 ssize_t term_view(nss_term_t *term);
-nss_locator_state_t *term_locstate(nss_term_t *term);
+struct mouse_state *nss_term_mouse_state(nss_term_t *term);
 
-inline static size_t descomose_selection(nss_rect_t dst[static 3], nss_selected_t seld, nss_rect_t bound, ssize_t pos) {
+inline static size_t descomose_selection(nss_rect_t dst[static 3], struct selected seld, nss_rect_t bound, ssize_t pos) {
     size_t count = 0;
     nss_coord_t x0 = seld.x0, x1 = seld.x1 + 1;
     ssize_t y0 = seld.y0 + pos, y1 = seld.y1 + 1 + pos;
@@ -61,10 +61,10 @@ inline static size_t xor_bands(nss_rect_t dst[static 2], nss_coord_t x00, nss_co
     return count;
 }
 
-static void update_selection(nss_term_t *term, uint8_t oldstate, nss_selected_t old) {
+static void update_selection(nss_term_t *term, uint8_t oldstate, struct selected old) {
     // There could be at most 6 difference rectangles
 
-    nss_locator_state_t *loc = term_locstate(term);
+    struct mouse_state *loc = nss_term_mouse_state(term);
 
     nss_rect_t d_old[4] = {{0}}, d_new[4] = {{0}}, d_diff[16] = {{0}};
     size_t sz_old = 0, sz_new = 0, count = 0;
@@ -113,12 +113,12 @@ static void update_selection(nss_term_t *term, uint8_t oldstate, nss_selected_t 
 }
 
 void nss_mouse_damage_selection(nss_term_t *term) {
-    update_selection(term, nss_sstate_none, (nss_selected_t){0});
+    update_selection(term, nss_sstate_none, (struct selected){0});
 }
 
 void nss_mouse_clear_selection(nss_term_t* term) {
-    nss_locator_state_t *loc = term_locstate(term);
-    nss_selected_t old = loc->n;
+    struct mouse_state *loc = nss_term_mouse_state(term);
+    struct selected old = loc->n;
     uint8_t oldstate = loc->state;
 
     loc->state = nss_sstate_none;
@@ -134,7 +134,7 @@ void nss_mouse_clear_selection(nss_term_t* term) {
 }
 
 void nss_mouse_selection_erase(nss_term_t *term, nss_rect_t rect) {
-    nss_locator_state_t *loc = term_locstate(term);
+    struct mouse_state *loc = nss_term_mouse_state(term);
 
 #define RECT_INTRS(x10, x11, y10, y11) \
     ((MAX(rect.x, x10) <= MIN(rect.x + rect.width - 1, x11)) && (MAX(rect.y, y10) <= MIN(rect.y + rect.height - 1, y11)))
@@ -158,7 +158,7 @@ void nss_mouse_selection_erase(nss_term_t *term, nss_rect_t rect) {
 
 
 void nss_mouse_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save) {
-    nss_locator_state_t *loc = term_locstate(term);
+    struct mouse_state *loc = nss_term_mouse_state(term);
 
     if (loc->state == nss_sstate_none) return;
 
@@ -233,7 +233,7 @@ inline static _Bool is_separator(nss_char_t ch) {
 }
 
 static void snap_selection(nss_term_t *term) {
-    nss_locator_state_t *loc = term_locstate(term);
+    struct mouse_state *loc = nss_term_mouse_state(term);
     loc->n.x0 = loc->r.x0, loc->n.y0 = loc->r.y0;
     loc->n.x1 = loc->r.x1, loc->n.y1 = loc->r.y1;
     loc->n.rect = loc->r.rect;
@@ -332,7 +332,7 @@ outer2:
 }
 
 _Bool nss_mouse_is_selected(nss_term_t *term, nss_coord_t x, nss_coord_t y) {
-    nss_locator_state_t *loc = term_locstate(term);
+    struct mouse_state *loc = nss_term_mouse_state(term);
 
     if (loc->state == nss_sstate_none || loc->state == nss_sstate_pressed) return 0;
 
@@ -392,7 +392,7 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, nss_line_view_t
 }
 
 static uint8_t *selection_data(nss_term_t *term) {
-    nss_locator_state_t *loc = term_locstate(term);
+    struct mouse_state *loc = nss_term_mouse_state(term);
     if (loc->state == nss_sstate_released) {
         uint8_t *res = malloc(SEL_INIT_SIZE * sizeof(*res));
         if (!res) return NULL;
@@ -424,8 +424,8 @@ static uint8_t *selection_data(nss_term_t *term) {
 }
 
 static void change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss_color_t y, _Bool rectangular) {
-    nss_locator_state_t *loc = term_locstate(term);
-    nss_selected_t old = loc->n;
+    struct mouse_state *loc = nss_term_mouse_state(term);
+    struct selected old = loc->n;
     uint8_t oldstate = loc->state;
 
     if (state == nss_sstate_pressed) {
@@ -456,7 +456,7 @@ static void change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss
 }
 
 void nss_mouse_scroll_view(nss_term_t *term, ssize_t delta) {
-    nss_locator_state_t *loc = term_locstate(term);
+    struct mouse_state *loc = nss_term_mouse_state(term);
     if (loc->state == nss_sstate_progress) {
         change_selection(term, nss_sstate_progress,
                 loc->r.x1, loc->r.y1 + term_view(term) - delta, loc->r.rect);
@@ -489,7 +489,7 @@ void nss_mouse_report_locator(nss_term_t *term, uint8_t evt, int16_t x, int16_t 
     if (x < bw || x >= w + bw || y < bh || y > h + bh) {
         if (evt == 1) nss_term_answerback(term, CSI"0&w");
     } else {
-        if (!term_locstate(term)->locator_pixels)
+        if (!nss_term_mouse_state(term)->locator_pixels)
             adj_coords(nss_term_window(term), &x, &y);
         nss_term_answerback(term, CSI"%d;%d;%d;%d;1&w", evt, mask, y + 1, x + 1);
     }
@@ -501,7 +501,7 @@ void nss_mouse_set_filter(nss_term_t *term, nss_sparam_t xs, nss_sparam_t xe, ns
 
     xe++, ye++;
 
-    nss_locator_state_t *loc = term_locstate(term);
+    struct mouse_state *loc = nss_term_mouse_state(term);
 
     int16_t cw, ch, bw, bh, w, h;
     nss_window_get_dim_ext(nss_term_window(term), nss_dt_border, &bw, &bh);
@@ -527,10 +527,10 @@ void nss_mouse_set_filter(nss_term_t *term, nss_sparam_t xs, nss_sparam_t xe, ns
 }
 
 void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev) {
-    nss_locator_state_t *loc = term_locstate(term);
+    struct mouse_state *loc = nss_term_mouse_state(term);
     /* Report mouse */
     if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & nss_ms_modifer_mask) != nss_input_force_mouse_mask() &&
-            !nss_term_inmode(term)->keyboad_vt52) {
+            !nss_term_keyboard_state(term)->keyboad_vt52) {
         if (loc->locator_filter) {
             if (ev.x < loc->filter.x || ev.x >= loc->filter.x + loc->filter.width ||
                     ev.y < loc->filter.y || ev.y >= loc->filter.y + loc->filter.height) {
@@ -555,7 +555,7 @@ void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev) {
             }
         }
     } else if (loc->mouse_mode != nss_mouse_mode_none &&
-            (ev.mask & 0xFF) != nss_input_force_mouse_mask() && !nss_term_inmode(term)->keyboad_vt52) {
+            (ev.mask & 0xFF) != nss_input_force_mouse_mask() && !nss_term_keyboard_state(term)->keyboad_vt52) {
         enum nss_mouse_mode md = loc->mouse_mode;
 
         adj_coords(nss_term_window(term), &ev.x, &ev.y);
@@ -597,7 +597,7 @@ void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev) {
             off += utf8_encode(ev.x + ' ', buf + off, buf + sizeof buf);
             off += utf8_encode(ev.y + ' ', buf + off, buf + sizeof buf);
             nss_term_answerback(term, CSI"%s%s",
-                    nss_term_inmode(term)->keyboard_mapping == nss_km_sco ? ">M" : "M", buf);
+                    nss_term_keyboard_state(term)->keyboard_mapping == keymap_sco ? ">M" : "M", buf);
             break;
         case nss_mouse_format_uxvt:
             nss_term_answerback(term, CSI"%"PRIu8";%"PRIu16";%"PRIu16"M", ev.button + ' ', ev.x + 1, ev.y + 1);
@@ -605,7 +605,7 @@ void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev) {
         case nss_mouse_format_default:
             if (ev.x > 222 || ev.y > 222) return;
             nss_term_answerback(term, CSI"%s%c%c%c",
-                    nss_term_inmode(term)->keyboard_mapping == nss_km_sco ? ">M" : "M",
+                    nss_term_keyboard_state(term)->keyboard_mapping == keymap_sco ? ">M" : "M",
                     ev.button + ' ', ev.x + 1 + ' ', ev.y + 1 + ' ');
         }
 

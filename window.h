@@ -30,7 +30,7 @@ typedef enum nss_mouse_event_type {
 } nss_mouse_event_type_t;
 
 /* WARNING: Order is important */
-typedef enum nss_mouse_state {
+typedef enum nss_mouse_mask {
     nss_ms_shift = 1 << 0,
     nss_ms_lock = 1 << 1,
     nss_ms_control = 1 << 2,
@@ -46,7 +46,7 @@ typedef enum nss_mouse_state {
     nss_ms_button_5 = 1 << 12,
     nss_ms_state_mask = 0x1FFF,
     nss_ms_modifer_mask = 0xFF,
-} nss_mouse_state_t;
+} nss_mouse_mask_t;
 
 typedef enum nss_clipboard_target {
     nss_ct_primary,
@@ -84,7 +84,7 @@ typedef enum nss_window_dim_type {
 
 typedef struct nss_mouse_event {
     nss_mouse_event_type_t event;
-    nss_mouse_state_t mask;
+    nss_mouse_mask_t mask;
     nss_coord_t x;
     nss_coord_t y;
     uint8_t button;

@@ -22,7 +22,7 @@
 #define CN_GRAY (NSS_PALETTE_SIZE - CN_BASE - CN_EXT)
 #define SD28B(x) ((x) ? 0x37 + 0x28 * (x) : 0)
 
-nss_optmap_item_t optmap[OPT_MAP_SIZE] = {
+struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"allow-alternate", "\t(Enable alternate screen)", "allowAlternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
     {"allow-blinking", "\t(Allow blinking text and cursor)", "allowBlinking", NSS_ICONFIG_ALLOW_BLINKING},
     {"allow-modify-edit-keypad", " (Allow modifing edit keypad keys)", "modkeyAllowEditKeypad", NSS_ICONFIG_INPUT_MALLOW_EDIT},
@@ -181,7 +181,7 @@ static struct {
     [NSS_ICONFIG_LINE_SPACING - NSS_ICONFIG_MIN] = {0, 0, -100, 100},
     [NSS_ICONFIG_GAMMA - NSS_ICONFIG_MIN] = {10000, 10000, 2000, 200000},
     [NSS_ICONFIG_DPI - NSS_ICONFIG_MIN] = {96, 96, 10, 10000},
-    [NSS_ICONFIG_KEYBOARD_NRCS - NSS_ICONFIG_MIN] = {nss_94cs_ascii, nss_94cs_ascii, 0, nss_nrcs_MAX},
+    [NSS_ICONFIG_KEYBOARD_NRCS - NSS_ICONFIG_MIN] = {cs94_ascii, cs94_ascii, 0, nrcs_MAX},
     [NSS_ICONFIG_SKIP_CONFIG_FILE - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
     [NSS_ICONFIG_ALLOW_NRCS - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
     [NSS_ICONFIG_ALLOW_WINDOW_OPS - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
@@ -224,6 +224,25 @@ static struct {
     [NSS_ICONFIG_TRACE_FONTS - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
     [NSS_ICONFIG_TRACE_INPUT - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
     [NSS_ICONFIG_TRACE_MISC - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_INPUT_APPCURSOR - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_INPUT_APPKEY - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
+    [NSS_ICONFIG_INPUT_DELETE_IS_DELETE - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_INPUT_FKEY_INCREMENT - NSS_ICONFIG_MIN] = {10, 10, 0, 48},
+    [NSS_ICONFIG_INPUT_HAS_META - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
+    [NSS_ICONFIG_INPUT_MAPPING - NSS_ICONFIG_MIN] = {keymap_default, keymap_default, 0, keymap_MAX},
+    [NSS_ICONFIG_INPUT_LOCK - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_INPUT_META_IS_ESC - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
+    [NSS_ICONFIG_INPUT_MODIFY_CURSOR - NSS_ICONFIG_MIN] = {3, 3, 0, 3},
+    [NSS_ICONFIG_INPUT_MODIFY_FUNCTION - NSS_ICONFIG_MIN] = {3, 3, 0, 3},
+    [NSS_ICONFIG_INPUT_MODIFY_KEYPAD - NSS_ICONFIG_MIN] = {3, 3, 0, 3},
+    [NSS_ICONFIG_INPUT_MODIFY_OTHER - NSS_ICONFIG_MIN] = {0, 0, 0, 4},
+    [NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_INPUT_MALLOW_EDIT - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_INPUT_MALLOW_FUNCTION - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_INPUT_MALLOW_KEYPAD - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_INPUT_MALLOW_MISC - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [NSS_ICONFIG_INPUT_NUMLOCK - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
 };
 
 static struct {
@@ -240,29 +259,6 @@ static struct {
     [NSS_SCONFIG_FORCE_MOUSE_MOD - NSS_SCONFIG_MIN] = { "T", NULL },
     [NSS_SCONFIG_TERM_MOD - NSS_SCONFIG_MIN] = {"SC", NULL },
     [NSS_SCONFIG_WORD_SEPARATORS - NSS_SCONFIG_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`", NULL },
-};
-
-static nss_input_mode_t input_mode = {
-    .modkey_fn = 3,
-    .modkey_cursor = 3,
-    .modkey_keypad = 3,
-    .modkey_other = 0,
-    .modkey_other_fmt = 0,
-    .modkey_legacy_allow_keypad = 0,
-    .modkey_legacy_allow_edit_keypad = 0,
-    .modkey_legacy_allow_function = 0,
-    .modkey_legacy_allow_misc = 0,
-    .appkey = 0,
-    .appcursor = 0,
-    .allow_numlock = 1,
-    .keylock = 0,
-    .has_meta = 1,
-    .meta_escape = 1,
-    .backspace_is_del = 1,
-    .delete_is_del = 0,
-    .fkey_inc_step = 10,
-    .keyboad_vt52 = 0,
-    .keyboard_mapping = nss_km_default
 };
 
 static nss_color_t coptions[NSS_PALETTE_SIZE];
@@ -328,7 +324,7 @@ static nss_color_t color(uint32_t opt) {
 }
 
 int32_t nss_config_integer(uint32_t opt) {
-    if (opt >= NSS_ICONFIG_INPUT_MIN) {
+    if (opt >= NSS_ICONFIG_ALPHA) {
         warn("Unknown integer config option %d", opt);
         return 0;
     }
@@ -336,37 +332,15 @@ int32_t nss_config_integer(uint32_t opt) {
 }
 
 void nss_config_set_integer(uint32_t opt, int32_t val) {
-    if (opt < NSS_ICONFIG_INPUT_MIN) {
+    if (opt < NSS_ICONFIG_ALPHA) {
+        if (opt == NSS_ICONFIG_INPUT_MAPPING && val >= keymap_MAX)
+            val = keymap_default;
         if (val > ioptions[opt].max) val = ioptions[opt].max;
         else if (val < ioptions[opt].min) val = ioptions[opt].min;
         ioptions[opt].val = val;
-    } else if (opt < NSS_ICONFIG_MAX) {
-        switch (opt) {
-        case NSS_ICONFIG_INPUT_APPCURSOR: input_mode.appcursor = !!val; break;
-        case NSS_ICONFIG_INPUT_APPKEY: input_mode.appkey = !!val; break;
-        case NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE: input_mode.backspace_is_del = !!val; break;
-        case NSS_ICONFIG_INPUT_DELETE_IS_DELETE: input_mode.delete_is_del = !!val; break;
-        case NSS_ICONFIG_INPUT_FKEY_INCREMENT: input_mode.fkey_inc_step = val; break;
-        case NSS_ICONFIG_INPUT_HAS_META: input_mode.has_meta = !!val; break;
-        case NSS_ICONFIG_INPUT_MAPPING: input_mode.keyboard_mapping = val < nss_km_MAX ? val : nss_km_default; break;
-        case NSS_ICONFIG_INPUT_LOCK: input_mode.keylock = !!val; break;
-        case NSS_ICONFIG_INPUT_META_IS_ESC: input_mode.meta_escape = !!val; break;
-        case NSS_ICONFIG_INPUT_MODIFY_CURSOR: input_mode.modkey_cursor = MIN(val, 4); break;
-        case NSS_ICONFIG_INPUT_MODIFY_FUNCTION: input_mode.modkey_fn = MIN(val, 4); break;
-        case NSS_ICONFIG_INPUT_MODIFY_KEYPAD: input_mode.modkey_keypad = MIN(val, 4); break;
-        case NSS_ICONFIG_INPUT_MODIFY_OTHER: input_mode.modkey_other = MIN(val, 4); break;
-        case NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT: input_mode.modkey_other_fmt = !!val; break;
-        case NSS_ICONFIG_INPUT_MALLOW_EDIT: input_mode.modkey_legacy_allow_edit_keypad = !!val; break;
-        case NSS_ICONFIG_INPUT_MALLOW_FUNCTION: input_mode.modkey_legacy_allow_function = !!val; break;
-        case NSS_ICONFIG_INPUT_MALLOW_KEYPAD: input_mode.modkey_legacy_allow_keypad = !!val; break;
-        case NSS_ICONFIG_INPUT_MALLOW_MISC: input_mode.modkey_legacy_allow_misc = !!val; break;
-        case NSS_ICONFIG_INPUT_NUMLOCK: input_mode.allow_numlock = !!val; break;
-        case NSS_ICONFIG_ALPHA: {
-            nss_color_t bg = nss_config_color(NSS_CCONFIG_BG);
-            nss_config_set_color(NSS_CCONFIG_BG, (bg & 0xFFFFFF) | (MAX(0, MIN(val, 255)) << 24));
-            break;
-        }
-        }
+    } else if (opt == NSS_ICONFIG_ALPHA) {
+        nss_color_t bg = nss_config_color(NSS_CCONFIG_BG);
+        nss_config_set_color(NSS_CCONFIG_BG, (bg & 0xFFFFFF) | (MAX(0, MIN(val, 255)) << 24));
     } else {
         warn("Unknown integer option %d", opt);
     }
@@ -420,26 +394,8 @@ void nss_config_set_string(uint32_t opt, const char *val) {
 }
 
 _Bool nss_config_bool(uint32_t opt, _Bool val) {
-    if (opt < NSS_ICONFIG_INPUT_MIN && ioptions[opt].min == 0 && ioptions[opt].max == 1) {
+    if (opt < NSS_ICONFIG_ALPHA && ioptions[opt].min == 0 && ioptions[opt].max == 1) {
         ioptions[opt].val = val;
-        return 1;
-    } else if (opt < NSS_ICONFIG_MAX) {
-        switch (opt) {
-        case NSS_ICONFIG_INPUT_APPCURSOR: input_mode.appcursor = val; break;
-        case NSS_ICONFIG_INPUT_APPKEY: input_mode.appkey = val; break;
-        case NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE: input_mode.backspace_is_del = val; break;
-        case NSS_ICONFIG_INPUT_DELETE_IS_DELETE: input_mode.delete_is_del = val; break;
-        case NSS_ICONFIG_INPUT_HAS_META: input_mode.has_meta = val; break;
-        case NSS_ICONFIG_INPUT_LOCK: input_mode.keylock = val; break;
-        case NSS_ICONFIG_INPUT_META_IS_ESC: input_mode.meta_escape = val; break;
-        case NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT: input_mode.modkey_other_fmt = val; break;
-        case NSS_ICONFIG_INPUT_MALLOW_EDIT: input_mode.modkey_legacy_allow_edit_keypad = val; break;
-        case NSS_ICONFIG_INPUT_MALLOW_FUNCTION: input_mode.modkey_legacy_allow_function = val; break;
-        case NSS_ICONFIG_INPUT_MALLOW_KEYPAD: input_mode.modkey_legacy_allow_keypad = val; break;
-        case NSS_ICONFIG_INPUT_MALLOW_MISC: input_mode.modkey_legacy_allow_misc = val; break;
-        case NSS_ICONFIG_INPUT_NUMLOCK: input_mode.allow_numlock = val; break;
-        default: return 0;
-        }
         return 1;
     }
     return 0;
@@ -470,10 +426,6 @@ nss_color_t nss_config_color(uint32_t opt) {
     }
     nss_color_t val = coptions[opt - NSS_CCONFIG_COLOR_0];
     return val ? val : color(opt);
-}
-
-nss_input_mode_t nss_config_input_mode(void) {
-    return input_mode;
 }
 
 const char **nss_config_argv(void) {

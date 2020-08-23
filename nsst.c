@@ -18,8 +18,8 @@
 #include <stdio.h>
 
 static int optmap_cmp(const void *a, const void *b) {
-    const char *a_arg_name = ((const struct nss_optmap_item *)a)->arg_name;
-    const char *b_arg_name = ((const struct nss_optmap_item *)b)->arg_name;
+    const char *a_arg_name = ((const struct optmap_item *)a)->arg_name;
+    const char *b_arg_name = ((const struct optmap_item *)b)->arg_name;
     return strcmp(a_arg_name, b_arg_name);
 }
 
@@ -125,7 +125,7 @@ static void nss_parse_options(char **argv) {
                 *arg++ = '\0';
                 if (!*arg) arg = argv[++ind];
 
-                nss_optmap_item_t *res = bsearch(&(nss_optmap_item_t){opt, NULL, NULL, 0},
+                struct optmap_item *res = bsearch(&(struct optmap_item){opt, NULL, NULL, 0},
                         optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
                 if (res && arg)
                     nss_config_set_string(res->opt, arg);
@@ -148,7 +148,7 @@ static void nss_parse_options(char **argv) {
                     else if (!strncmp(opt, "disable-", 8)) opt += 8, val = 0;
                     else if (!strncmp(opt, "with-", 5)) opt += 5, val = 1;
                     else if (!strncmp(opt, "without-", 8)) opt += 8, val = 0;
-                    nss_optmap_item_t *res = bsearch(&(nss_optmap_item_t){opt, NULL, NULL, 0},
+                    struct optmap_item *res = bsearch(&(struct optmap_item){opt, NULL, NULL, 0},
                             optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
                     if (!res || !nss_config_bool(res->opt, val))
                         usage(argv[0], EXIT_FAILURE);

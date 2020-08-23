@@ -589,11 +589,11 @@ void nss_window_bell(nss_window_t *win, uint8_t vol) {
     }
     if (nss_config_integer(NSS_ICONFIG_VISUAL_BELL)) {
         if (!win->in_blink) {
-            win->init_invert = nss_term_get_invert(win->term);
+            win->init_invert = nss_term_get_reverse(win->term);
             win->in_blink = 1;
             ctx.vbell_count++;
             clock_gettime(NSS_CLOCK, &win->vbell_start);
-            nss_term_set_invert(win->term, !win->init_invert);
+            nss_term_set_reverse(win->term, !win->init_invert);
         }
     } else if (vol) {
         xcb_xkb_bell(con, XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_ID_DFLT_XI_CLASS,
@@ -1199,7 +1199,7 @@ static void handle_focus(nss_window_t *win, _Bool focused) {
 }
 
 static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
-    nss_key_t key = nss_describe_key(ctx.xkb_state, keycode);
+    struct key key = nss_describe_key(ctx.xkb_state, keycode);
 
     if (key.sym == XKB_KEY_NoSymbol) return;
 
@@ -1595,7 +1595,7 @@ void nss_context_run(void) {
             if (TIMEDIFF(win->last_sync, cur) > nss_config_integer(NSS_ICONFIG_SYNC_TIME)*1000LL && win->sync_active)
                 win->sync_active = 0;
             if (win->in_blink && TIMEDIFF(win->vbell_start, cur) > nss_config_integer(NSS_ICONFIG_VISUAL_BELL_TIME)*1000LL) {
-                nss_term_set_invert(win->term, win->init_invert);
+                nss_term_set_reverse(win->term, win->init_invert);
                 win->in_blink = 0;
                 ctx.vbell_count--;
             }

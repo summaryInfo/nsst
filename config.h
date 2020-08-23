@@ -101,11 +101,8 @@ enum nss_config_opt {
     NSS_ICONFIG_TRACE_EVENTS,
     NSS_ICONFIG_TRACE_INPUT,
     NSS_ICONFIG_TRACE_MISC,
-
-    // These can't be read with nss_config_integer
-    // Use nss_config_input_mode to get the copy of the whole structure
-    NSS_ICONFIG_INPUT_MIN,
-    NSS_ICONFIG_INPUT_APPCURSOR = NSS_ICONFIG_INPUT_MIN,
+    NSS_ICONFIG_ALTERNATE_SCROLL,
+    NSS_ICONFIG_INPUT_APPCURSOR,
     NSS_ICONFIG_INPUT_APPKEY,
     NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE,
     NSS_ICONFIG_INPUT_DELETE_IS_DELETE,
@@ -125,9 +122,8 @@ enum nss_config_opt {
     NSS_ICONFIG_INPUT_MALLOW_MISC,
     NSS_ICONFIG_INPUT_NUMLOCK,
     // Backround opacity
-    // (not input, but should also be treated specially)
+    // These can't be read with nss_config_integer
     NSS_ICONFIG_ALPHA,
-    NSS_ICONFIG_ALTERNATE_SCROLL,
     NSS_ICONFIG_MAX,
 
     NSS_KCONFIG_MIN = NSS_ICONFIG_MAX,
@@ -178,12 +174,12 @@ enum nss_config_opt {
     NSS_CONFIG_MAX = NSS_CCONFIG_MAX,
 };
 
-typedef struct nss_optmap_item {
+struct optmap_item {
     const char *arg_name;
     const char *arg_desc;
     const char *name;
     enum nss_config_opt opt;
-} nss_optmap_item_t;
+};
 
 #if USE_BOXDRAWING
 #    define OPT_MAP_SIZE 116
@@ -191,7 +187,7 @@ typedef struct nss_optmap_item {
 #    define OPT_MAP_SIZE 117
 #endif
 
-extern nss_optmap_item_t optmap[OPT_MAP_SIZE];
+extern struct optmap_item optmap[OPT_MAP_SIZE];
 
 /* Getters for options */
 nss_color_t nss_config_color(uint32_t opt);
@@ -203,8 +199,6 @@ void nss_config_set_color(uint32_t opt, nss_color_t val);
 void nss_config_set_integer(uint32_t opt, int32_t val);
 void nss_config_set_string(uint32_t opt, const char *val);
 _Bool nss_config_bool(uint32_t opt, _Bool val);
-
-nss_input_mode_t nss_config_input_mode(void);
 
 /* Get argv from -e flag
  * Resets to NULL when called */

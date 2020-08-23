@@ -6,6 +6,8 @@
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 
+#define UDK_MAX 37
+
 /* mod1 is alt
  * mod2 is numlock
  * mod4 is super
@@ -38,57 +40,67 @@ enum nss_shortcut_action {
     nss_sa_MAX = nss_sa_paste + 1
 };
 
-typedef struct nss_input_mode {
-    uint32_t modkey_fn : 3;
-    uint32_t modkey_cursor : 3;
-    uint32_t modkey_keypad : 3;
+struct keyboard_state {
+    _Bool keyboad_vt52 : 1;
+
+    _Bool modkey_legacy_allow_keypad : 1;
+    _Bool modkey_legacy_allow_edit_keypad : 1;
+    _Bool modkey_legacy_allow_function : 1;
+    _Bool modkey_legacy_allow_misc : 1;
+
+    _Bool appkey : 1;
+    _Bool appcursor : 1;
+    _Bool allow_numlock : 1;
+    _Bool keylock : 1;
+
+    _Bool has_meta : 1;
+    _Bool meta_escape : 1;
+    _Bool backspace_is_del : 1;
+    _Bool delete_is_del : 1;
+
+    _Bool udk_locked : 1;
+
+    _Bool modkey_other_fmt : 1;
+        // 0 -> CSI 27 ; M ; K ~
+        // 1 -> CSI K ; M u
+
+    uint16_t modkey_fn : 3;
+    uint16_t modkey_cursor : 3;
+    uint16_t modkey_keypad : 3;
         // 0 ->
         // 1 -> SS3 ...
         // 2 -> CSI ...
         // 3 -> CSI 1 ; ...
         // 4 -> CSI > 1 ; ...
         // 5,6,7 reserved
-    uint32_t modkey_other : 2;
+    uint16_t modkey_other : 2;
         // 0 -> nothing
         // 1 -> all, but common
         // 2 -> all
         // 3 reserved
-    uint32_t modkey_other_fmt : 1;
-        // 0 -> CSI 27 ; M ; K ~
-        // 1 -> CSI K ; M u
-    uint32_t modkey_legacy_allow_keypad : 1;
-    uint32_t modkey_legacy_allow_edit_keypad : 1;
-    uint32_t modkey_legacy_allow_function : 1;
-    uint32_t modkey_legacy_allow_misc : 1;
 
-    uint32_t appkey : 1;
-    uint32_t appcursor : 1;
-    uint32_t allow_numlock : 1;
-    uint32_t keylock : 1;
+    uint16_t fkey_inc_step : 5;
 
-    uint32_t has_meta : 1;
-    uint32_t meta_escape : 1;
-    uint32_t backspace_is_del : 1;
-    uint32_t delete_is_del : 1;
+    enum keyboad_mapping {
+        keymap_default,
+        keymap_legacy,
+        keymap_vt220,
+        keymap_hp,
+        keymap_sun,
+        keymap_sco,
+        keymap_MAX
+    } keyboard_mapping;
 
-    uint32_t fkey_inc_step : 4;
+    struct udk {
+        uint8_t *val;
+        size_t len;
+    } udk[UDK_MAX];
 
-    uint32_t keyboad_vt52 : 1;
-    enum nss_keyboad_mapping {
-        nss_km_default,
-        nss_km_legacy,
-        nss_km_vt220,
-        nss_km_hp,
-        nss_km_sun,
-        nss_km_sco,
-        nss_km_MAX
-    } keyboard_mapping : 3;
-    // 32 bits total
-} nss_input_mode_t;
+} nss_keyboard_state_t;
 
 typedef uint32_t nss_char_t;
 
-typedef struct nss_key {
+struct key {
     nss_char_t utf32;
     uint32_t sym;
     uint32_t mask;
@@ -96,14 +108,17 @@ typedef struct nss_key {
     uint8_t utf8len;
     uint8_t ascii : 7;
     uint8_t is_fkey : 1;
-} nss_key_t;
+};
 
 typedef struct nss_term nss_term_t;
 typedef struct nss_window nss_window_t;
-void nss_handle_input(nss_key_t k, nss_term_t *term);
-nss_key_t nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode);
+
+void nss_handle_input(struct key k, nss_term_t *term);
+struct key nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode);
 uint32_t nss_input_force_mouse_mask(void);
 void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *val);
-enum nss_shortcut_action nss_input_lookup_hotkey(nss_key_t k);
+enum nss_shortcut_action nss_input_lookup_hotkey(struct key k);
+void nss_input_reset_udk(nss_term_t *term);
+_Bool nss_input_set_udk(nss_term_t *term, const uint8_t *str, const uint8_t *end, _Bool reset, _Bool lock);
 
 #endif

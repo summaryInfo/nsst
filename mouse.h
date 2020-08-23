@@ -8,17 +8,17 @@
 #include <stdint.h>
 #include <time.h>
 
-typedef struct nss_selected {
+struct selected {
     nss_coord_t x0;
     ssize_t y0;
     nss_coord_t x1;
     ssize_t y1;
     _Bool rect;
-} nss_selected_t;
+};
 
-typedef struct nss_locator_state {
-    nss_selected_t r;
-    nss_selected_t n;
+struct mouse_state {
+    struct selected r;
+    struct selected n;
 
     enum {
         nss_ssnap_none,
@@ -65,7 +65,7 @@ typedef struct nss_locator_state {
         nss_mouse_format_utf8,
         nss_mouse_format_uxvt
     } mouse_format;
-} nss_locator_state_t;
+} nss_mouse_state_t;
 
 void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev);
 void nss_mouse_scroll_selection(nss_term_t *term, nss_coord_t amount, _Bool save);

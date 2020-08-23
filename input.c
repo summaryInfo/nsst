@@ -7,9 +7,10 @@
 #include "nrcs.h"
 #include "term.h"
 
+#include <ctype.h>
+#include <string.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
-#include <string.h>
 
 typedef struct nss_esc_reply {
     uint8_t idx;
@@ -98,32 +99,32 @@ static inline _Bool is_ctrl(nss_char_t ks) {
     return ks < 0x20 || (ks >= 0x7F && ks < 0x100);
 }
 
-static inline _Bool is_xkb_ctrl(nss_key_t *k) {
+static inline _Bool is_xkb_ctrl(struct key *k) {
     // Detect if thats something like Ctrl-3
     // which gets translated to ESC by XKB
     return is_ctrl(k->utf32);
 }
 
-static inline _Bool is_modify_allowed(nss_key_t *k, nss_input_mode_t mode) {
-    if (mode.keyboad_vt52) return 0;
-    _Bool legacy = mode.keyboard_mapping > 0;
-    if (is_cursor(k->sym) || is_edit_function(k->sym, mode.delete_is_del))
-        return !legacy || mode.modkey_legacy_allow_edit_keypad;
+static inline _Bool is_modify_allowed(struct key *k, struct keyboard_state *mode) {
+    if (mode->keyboad_vt52) return 0;
+    _Bool legacy = mode->keyboard_mapping > 0;
+    if (is_cursor(k->sym) || is_edit_function(k->sym, mode->delete_is_del))
+        return !legacy || mode->modkey_legacy_allow_edit_keypad;
     else if (is_keypad(k->sym))
-        return !legacy || mode.modkey_legacy_allow_keypad;
+        return !legacy || mode->modkey_legacy_allow_keypad;
     else if (is_function(k->sym))
-        return !legacy || mode.modkey_legacy_allow_function;
+        return !legacy || mode->modkey_legacy_allow_function;
     else if (is_misc_function(k->sym))
-        return !legacy || mode.modkey_legacy_allow_misc;
-    else return mode.modkey_other;
+        return !legacy || mode->modkey_legacy_allow_misc;
+    else return mode->modkey_other;
 }
 
-static nss_char_t filter_modifiers(nss_key_t *k, nss_input_mode_t mode) {
+static nss_char_t filter_modifiers(struct key *k, struct keyboard_state *mode) {
     nss_char_t res = k->mask & (nss_mm_control | nss_mm_shift | nss_mm_mod1);
 
-    if (mode.modkey_other <= 1) {
+    if (mode->modkey_other <= 1) {
         if (is_ctrl_letter(k->sym) && !(res & ~nss_mm_control)) {
-            if (!mode.modkey_other) res &= ~nss_mm_control;
+            if (!mode->modkey_other) res &= ~nss_mm_control;
         } else if (k->sym == XKB_KEY_Return || k->sym == XKB_KEY_Tab) {
             /* do nothing */;
         } else if (is_xkb_ctrl(k)) {
@@ -132,7 +133,7 @@ static nss_char_t filter_modifiers(nss_key_t *k, nss_input_mode_t mode) {
             if (!(res & nss_mm_control)) res &= ~nss_mm_shift;
         }
         if (res & nss_mm_mod1) {
-            if (!(res & ~nss_mm_mod1) && (mode.meta_escape || k->utf32 < 0x80)) res &= ~nss_mm_mod1;
+            if (!(res & ~nss_mm_mod1) && (mode->meta_escape || k->utf32 < 0x80)) res &= ~nss_mm_mod1;
             if (((is_ctrl_letter(k->sym) || is_ctrl(k->sym)) && (res & nss_mm_control)))
                 res &= ~(nss_mm_mod1 | nss_mm_control);
             if (k->sym == XKB_KEY_Return || k->sym == XKB_KEY_Tab)
@@ -150,11 +151,11 @@ static inline nss_char_t mask_to_param(nss_char_t mask) {
     return res + !!res;
 }
 
-static _Bool is_modify_others_allowed(nss_key_t *k, nss_input_mode_t mode) {
-    if (!mode.modkey_other || is_private(k->sym)) return 0;
+static _Bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode) {
+    if (!mode->modkey_other || is_private(k->sym)) return 0;
     if (!(k->mask & (nss_mm_control | nss_mm_shift | nss_mm_mod1))) return 0;
 
-    if (mode.modkey_other == 1) {
+    if (mode->modkey_other == 1) {
         _Bool res = 0;
         switch (k->sym) {
         case XKB_KEY_BackSpace:
@@ -210,7 +211,7 @@ static void modify_others(nss_char_t ch, nss_char_t param, _Bool fmt, nss_reply_
     else *reply = (nss_reply_t) { 3, '~', 0, '\233', {27, param, ch} };
 }
 
-static void modify_cursor(nss_char_t param, nss_char_t level, nss_reply_t *reply) {
+static void modify_cursor(nss_char_t param, uint8_t level, nss_reply_t *reply) {
     if (param) switch (level) {
     case 4: reply->priv = '>';
     case 3: if (!reply->idx)
@@ -405,13 +406,13 @@ static void dump_reply(nss_term_t *term, nss_reply_t *reply) {
 }
 
 
-static void translate_adjust(nss_key_t *k, nss_input_mode_t *mode) {
+static void translate_adjust(struct key *k, struct keyboard_state *mode) {
     if (k->utf8len <= 1 && !is_special(k->sym) && mode->modkey_other > 1 && !is_ctrl_letter(k->sym))
         k->utf8len = 1, k->utf8data[0] = (uint8_t)k->sym;
 
     k->is_fkey = is_function(k->sym);
 
-    if (mode->keyboard_mapping == nss_km_vt220) {
+    if (mode->keyboard_mapping == keymap_vt220) {
         if (!(k->mask & nss_mm_shift)) {
             if (k->sym == XKB_KEY_KP_Add) {
                 k->sym = XKB_KEY_KP_Separator;
@@ -447,7 +448,7 @@ static void translate_adjust(nss_key_t *k, nss_input_mode_t *mode) {
     }
 
     if (k->is_fkey && k->mask & (nss_mm_control | nss_mm_shift)) {
-        if (mode->keyboard_mapping == nss_km_vt220 || mode->keyboard_mapping == nss_km_legacy) {
+        if (mode->keyboard_mapping == keymap_vt220 || mode->keyboard_mapping == keymap_legacy) {
             if (k->mask & nss_mm_control)
                 k->sym += mode->fkey_inc_step;
             k->mask &= ~nss_mm_control;
@@ -461,71 +462,109 @@ static void translate_adjust(nss_key_t *k, nss_input_mode_t *mode) {
     }
 }
 
-void nss_handle_input(nss_key_t k, nss_term_t *term) {
-    nss_input_mode_t mode = *nss_term_inmode(term);
+void nss_input_reset_udk(nss_term_t *term) {
+    struct keyboard_state *mode = nss_term_keyboard_state(term);
+    for (size_t i = 0; i < UDK_MAX;  i++) {
+        free(mode->udk[i].val);
+        mode->udk[i].val = NULL;
+        mode->udk[i].len = 0;
+    }
+}
+
+_Bool nss_input_set_udk(nss_term_t *term, const uint8_t *str, const uint8_t *end, _Bool reset, _Bool lock) {
+    struct keyboard_state *mode = nss_term_keyboard_state(term);
+    if (!mode->udk_locked) {
+        if (reset) nss_input_reset_udk(term);
+        mode->udk_locked = lock;
+        for (; str < end; str++) {
+            nss_param_t k = 0;
+            while (isdigit(*str) && *str != '/')
+                k = 10 * k + *str - '0', str++;
+            if (*str++ != '/' || k >= UDK_MAX) return 0;
+            const uint8_t *sem = memchr(str, ';', end - str);
+            if (!sem) sem = end;
+            uint8_t *udk = malloc((sem - str + 1)/2 + 1);
+            if (!udk || (hex_decode(udk, str, sem) != sem)) {
+                free(udk);
+                return 0;
+            }
+            free(mode->udk[k].val);
+            mode->udk[k].len = (sem - str)/2;
+            mode->udk[k].val = udk;
+            str = sem;
+        }
+    }
+    return 1;
+}
+
+void nss_handle_input(struct key k, nss_term_t *term) {
+    struct keyboard_state *mode = nss_term_keyboard_state(term);
 
     if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT)) {
         info("Key: sym=0x%X mask=0x%X ascii=0x%X utf32=0x%X",
                 k.sym, k.mask, k.ascii, k.utf32);
     }
 
-    if (mode.keylock) return;
+    if (mode->keylock) return;
 
-    translate_adjust(&k, &mode);
+    // Appkey can be modified during adjustment
+    _Bool saved_appkey = mode->appkey;
+
+    translate_adjust(&k, mode);
 
     nss_reply_t reply = { 0 };
     nss_char_t param = k.mask && is_modify_allowed(&k, mode) ? mask_to_param(k.mask) : 0;
 
 
-    _Bool (*kfn[nss_km_MAX])(nss_char_t, _Bool, nss_reply_t *) = {
-        [nss_km_hp] = fnkey_hp,
-        [nss_km_sun] = fnkey_sun,
-        [nss_km_sco] = fnkey_sco
+    _Bool (*kfn[keymap_MAX])(nss_char_t, _Bool, nss_reply_t *) = {
+        [keymap_hp] = fnkey_hp,
+        [keymap_sun] = fnkey_sun,
+        [keymap_sco] = fnkey_sco
     };
-    if (kfn[mode.keyboard_mapping]) kfn[mode.keyboard_mapping](k.sym, k.is_fkey, &reply);
+    if (kfn[mode->keyboard_mapping]) kfn[mode->keyboard_mapping](k.sym, k.is_fkey, &reply);
 
     if (reply.final) { // Applied in one of fnkey_* functions
-        modify_cursor(param, (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode.delete_is_del)) ?
-                mode.modkey_fn : mode.modkey_cursor, &reply);
+        modify_cursor(param, (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode->delete_is_del)) ?
+                mode->modkey_fn : mode->modkey_cursor, &reply);
         dump_reply(term, &reply);
-    } else if (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode.delete_is_del)) {
+    } else if (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode->delete_is_del)) {
         nss_char_t deccode = fnkey_dec(k.sym, k.is_fkey, &reply);
-        if (k.is_fkey && k.mask & nss_mm_shift && mode.keyboard_mapping == nss_km_vt220) {
-            nss_udk_t udk = nss_term_lookup_udk(term, reply.param[0]);
+        if (k.is_fkey && k.mask & nss_mm_shift && mode->keyboard_mapping == keymap_vt220) {
+            struct udk udk = reply.param[0] < UDK_MAX ? mode->udk[reply.param[0]] : (struct udk){0};
             if (udk.val) {
                 if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT))
                     info("Key str: '%s' ", udk.val);
                 nss_term_sendkey(term, udk.val, udk.len);
             }
-            return;
-        } else if (mode.keyboard_mapping != nss_km_legacy && deccode - 11 <= 3) {
-            reply.init = mode.keyboad_vt52 ? '\033' : '\217';
+        } else if (mode->keyboard_mapping != keymap_legacy && deccode - 11 <= 3) {
+            reply.init = mode->keyboad_vt52 ? '\033' : '\217';
             reply.final = deccode - 11 + 'P';
             reply.idx = 0;
-            modify_cursor(param, mode.modkey_cursor, &reply);
+            modify_cursor(param, mode->modkey_cursor, &reply);
+            dump_reply(term, &reply);
         } else {
             reply.init = '\233';
             if (k.sym == XKB_KEY_ISO_Left_Tab) {
-                if (mode.modkey_other >= 2 && (k.mask & (nss_mm_control | nss_mm_mod1)))
-                    modify_others('\t', param, mode.modkey_other_fmt, &reply);
+                if (mode->modkey_other >= 2 && (k.mask & (nss_mm_control | nss_mm_mod1)))
+                    modify_others('\t', param, mode->modkey_other_fmt, &reply);
             } else {
-                if (k.is_fkey) modify_cursor(param, mode.modkey_fn, &reply);
+                if (k.is_fkey) modify_cursor(param, mode->modkey_fn, &reply);
                 else if (param) reply.param[reply.idx++] = param;
             }
+            dump_reply(term, &reply);
         }
-        dump_reply(term, &reply);
     } else if (is_keypad_function(k.sym)) {
-        reply.init = mode.keyboad_vt52 ? '\033' : '\217';
+        reply.init = mode->keyboad_vt52 ? '\033' : '\217';
         reply.final = k.sym - XKB_KEY_KP_F1 + 'P';
-        modify_cursor(param, mode.modkey_keypad, &reply);
+        modify_cursor(param, mode->modkey_keypad, &reply);
         dump_reply(term, &reply);
     } else if (is_keypad(k.sym)) {
-        if (mode.appkey) {
-            reply.init = mode.keyboad_vt52 ? '\033' : '\217';
+        if (mode->appkey) {
+            reply.init = mode->keyboad_vt52 ? '\033' : '\217';
             reply.final = " ABCDEFGHIJKLMNOPQRSTUVWXYZ??????"
                     "abcdefghijklmnopqrstuvwxyzXXX" [k.sym - XKB_KEY_KP_Space];
-            modify_cursor(param, mode.modkey_keypad, &reply);
-            if (mode.keyboad_vt52) reply.priv = '?';
+            modify_cursor(param, mode->modkey_keypad, &reply);
+            if (mode->keyboad_vt52) reply.priv = '?';
             dump_reply(term, &reply);
         } else {
             uint8_t ch = " XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXX"
@@ -535,9 +574,9 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
             nss_term_sendkey(term, &ch, 1);
         }
     } else if (is_cursor(k.sym)) {
-        reply.init = mode.keyboad_vt52 ? '\033' : mode.appcursor ? '\217' : '\233';
+        reply.init = mode->keyboad_vt52 ? '\033' : mode->appcursor ? '\217' : '\233';
         reply.final = "HDACB  FE"[k.sym - XKB_KEY_Home];
-        modify_cursor(param, mode.modkey_cursor, &reply);
+        modify_cursor(param, mode->modkey_cursor, &reply);
         dump_reply(term, &reply);
     } else if (k.utf8len > 0) {
         if (is_modify_others_allowed(&k, mode)) {
@@ -545,12 +584,12 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
              * It allows to identify key in layout independent fasion
              * nss_char_t val = k.ascii ? k.ascii : k.sym; */
             nss_char_t val = k.sym < 0x100 ? k.sym : k.utf32;
-            modify_others(val, mask_to_param(k.mask), mode.modkey_other_fmt, &reply);
+            modify_others(val, mask_to_param(k.mask), mode->modkey_other_fmt, &reply);
             dump_reply(term, &reply);
         } else {
             if (nss_term_is_utf8(term)) {
-                if ((k.mask & nss_mm_mod1) && mode.has_meta) {
-                    if (!mode.meta_escape) {
+                if ((k.mask & nss_mm_mod1) && mode->has_meta) {
+                    if (!mode->meta_escape) {
                         if (k.utf32 < 0x80)
                             k.utf8len = utf8_encode(k.utf32 | 0x80, k.utf8data,
                                     k.utf8data + sizeof(k.utf8data)/sizeof(k.utf8data[0]));
@@ -564,12 +603,15 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
                 if (nss_term_is_nrcs_enabled(term))
                     nrcs_encode(nss_config_integer(NSS_ICONFIG_KEYBOARD_NRCS), &k.utf32, 1);
 
-                if (k.utf32 > 0xFF) return;
+                if (k.utf32 > 0xFF) {
+                    mode->appkey = saved_appkey;
+                    return;
+                }
 
                 k.utf8len = 1;
                 k.utf8data[0] = k.utf32;
-                if (k.mask & nss_mm_mod1 && mode.has_meta) {
-                    if (!mode.meta_escape) {
+                if (k.mask & nss_mm_mod1 && mode->has_meta) {
+                    if (!mode->meta_escape) {
                         k.utf8data[0] |= 0x80;
                     } else {
                         k.utf8data[0] = '\033';
@@ -583,6 +625,8 @@ void nss_handle_input(nss_key_t k, nss_term_t *term) {
             nss_term_sendkey(term, k.utf8data, k.utf8len);
         }
     }
+
+    mode->appkey = saved_appkey;
 }
 
 /* And now I should duplicate some code of xkbcommon
@@ -598,8 +642,8 @@ static char to_control(char ch) {
     return ch;
 }
 
-nss_key_t nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode) {
-    nss_key_t k = { .sym = XKB_KEY_NoSymbol };
+struct key nss_describe_key(struct xkb_state *state, xkb_keycode_t keycode) {
+    struct key k = { .sym = XKB_KEY_NoSymbol };
 
     k.mask = xkb_state_serialize_mods(state, XKB_STATE_MODS_EFFECTIVE);
     uint32_t consumed = xkb_state_key_get_consumed_mods(state, keycode);
@@ -699,7 +743,7 @@ void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *c) {
     cshorts[sa] = (struct nss_shortcut) { sym, mask };
 }
 
-enum nss_shortcut_action nss_input_lookup_hotkey(nss_key_t k) {
+enum nss_shortcut_action nss_input_lookup_hotkey(struct key k) {
     enum nss_shortcut_action action = nss_sa_none + 1;
     for (; action < nss_sa_MAX; action++)
         if (cshorts[action].ksym == k.sym && (k.mask & 0xFF) == cshorts[action].mask)

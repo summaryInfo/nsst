@@ -75,11 +75,6 @@ typedef struct nss_line {
     nss_cell_t cell[];
 } nss_line_t;
 
-typedef struct nss_udk {
-    uint8_t *val;
-    size_t len;
-} nss_udk_t;
-
 typedef struct nss_line_view {
     nss_line_t *line;
     uint16_t width;
@@ -92,7 +87,6 @@ typedef struct nss_line_pos {
     ssize_t offset;
 } nss_line_pos_t;
 
-typedef struct nss_input_mode nss_input_mode_t;
 typedef struct nss_term nss_term_t;
 
 nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t height);
@@ -108,18 +102,17 @@ void nss_term_read(nss_term_t *term);
 int nss_term_fd(nss_term_t *term);
 void nss_term_hang(nss_term_t *term);
 void nss_term_toggle_numlock(nss_term_t *term);
-nss_input_mode_t *nss_term_inmode(nss_term_t *term);
+struct keyboard_state *nss_term_keyboard_state(nss_term_t *term);
 _Bool nss_term_is_utf8(nss_term_t *term);
 _Bool nss_term_is_nrcs_enabled(nss_term_t *term);
 _Bool nss_term_is_paste_nl_enabled(nss_term_t *term);
 _Bool nss_term_is_paste_quote_enabled(nss_term_t *term);
 _Bool nss_term_is_cursor_enabled(nss_term_t *term);
-nss_udk_t nss_term_lookup_udk(nss_term_t *term, nss_param_t n);
 void nss_term_damage_lines(nss_term_t *term, nss_coord_t ys, nss_coord_t yd);
 void nss_term_damage(nss_term_t *term, nss_rect_t damage);
 void nss_term_reset(nss_term_t *term);
-void nss_term_set_invert(nss_term_t *term, _Bool set);
-_Bool nss_term_get_invert(nss_term_t *term);
+void nss_term_set_reverse(nss_term_t *term, _Bool set);
+_Bool nss_term_get_reverse(nss_term_t *term);
 nss_window_t *nss_term_window(nss_term_t *term);
 
 nss_line_view_t nss_term_line_at(nss_term_t *term, nss_line_pos_t pos);

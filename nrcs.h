@@ -7,54 +7,60 @@
 
 #include <stdint.h>
 
-enum nss_char_set {
-    nss_nrcs_french_canadian,
-    nss_nrcs_finnish,
-    nss_nrcs_german,
-    nss_nrcs_dutch,
-    nss_nrcs_itallian,
-    nss_nrcs_swiss,
-    nss_nrcs_swedish,
-    nss_nrcs_norwegian_dannish,
-    nss_nrcs_french,
-    nss_nrcs_spannish,
-    nss_nrcs_portuguese,
-    nss_nrcs_turkish,
-    nss_nrcs_hebrew, // Not implemented
-    nss_nrcs_greek, // Not implemented
-    nss_nrcs_cyrillic, // Not implemented
-    nss_nrcs_french_canadian2,
-    nss_nrcs_finnish2,
-    nss_nrcs_swedish2,
-    nss_nrcs_norwegian_dannish2,
-    nss_nrcs_norwegian_dannish3,
-    nss_nrcs_french2,
+enum charset {
+    nrcs_french_canadian,
+    nrcs_finnish,
+    nrcs_german,
+    nrcs_dutch,
+    nrcs_itallian,
+    nrcs_swiss,
+    nrcs_swedish,
+    nrcs_norwegian_dannish,
+    nrcs_french,
+    nrcs_spannish,
+    nrcs_portuguese,
+    nrcs_turkish,
+    nrcs_hebrew, // Not implemented
+    nrcs_greek, // Not implemented
+    nrcs_cyrillic, // Not implemented
+    nrcs_french_canadian2,
+    nrcs_finnish2,
+    nrcs_swedish2,
+    nrcs_norwegian_dannish2,
+    nrcs_norwegian_dannish3,
+    nrcs_french2,
 
-    nss_94cs_ascii,
-    nss_94cs_dec_altchars,
-    nss_94cs_dec_altgraph,
-    nss_94cs_british, // Same as latin-1
-    nss_94cs_dec_sup, // User prefered
-    nss_94cs_dec_sup_graph,
-    nss_94cs_dec_graph,
-    nss_94cs_dec_tech,
-    nss_94cs_dec_greek, // Not implemented
-    nss_94cs_dec_hebrew, // Not implemented
-    nss_94cs_dec_turkish, // Not implemented
+    cs94_ascii,
+    cs94_dec_altchars,
+    cs94_dec_altgraph,
+    cs94_british, // Same as latin-1
+    cs94_dec_sup, // User prefered
+    cs94_dec_sup_graph,
+    cs94_dec_graph,
+    cs94_dec_tech,
+    cs94_dec_greek, // Not implemented
+    cs94_dec_hebrew, // Not implemented
+    cs94_dec_turkish, // Not implemented
 
-    nss_96cs_latin_1,
-    nss_96cs_greek, // Not implemented
-    nss_96cs_hebrew, // Not implemented
-    nss_96cs_latin_cyrillic, // Not implemented
-    nss_96cs_latin_5,
-    nss_nrcs_MAX = nss_96cs_latin_5,
+    cs96_latin_1,
+    cs96_greek, // Not implemented
+    cs96_hebrew, // Not implemented
+    cs96_latin_cyrillic, // Not implemented
+    cs96_latin_5,
+    nrcs_MAX = cs96_latin_5,
 };
 
 typedef uint32_t nss_char_t;
 
-_Bool nrcs_encode(nss_char_t set, enum nss_char_set *ch, _Bool nrcs);
-nss_char_t nrcs_decode(enum nss_char_set gl, enum nss_char_set gr, enum nss_char_set ups, nss_char_t ch, _Bool nrcs);
-nss_char_t nrcs_decode_fast(enum nss_char_set gl, nss_char_t ch);
+inline static _Bool nrcs_is_96(enum charset cs) {
+    return cs >= cs96_latin_1;
+}
+
+_Bool nrcs_encode(nss_char_t set, enum charset *ch, _Bool nrcs);
+nss_char_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, nss_char_t ch, _Bool nrcs);
+nss_char_t nrcs_decode_fast(enum charset gl, nss_char_t ch);
+enum charset nrcs_parse(uint32_t selector, _Bool is96, uint16_t vt_level, _Bool nrcs);
+const char *nrcs_unparse(enum charset cs);
 
 #endif
 
