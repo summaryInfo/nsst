@@ -22,9 +22,7 @@
 
 #define TRUE_COLOR_ALPHA_DEPTH 32
 
-typedef struct nss_renderer nss_renderer_t;
-
-struct nss_renderer {
+struct renderer {
 #if USE_X11SHM
     xcb_shm_seg_t shm_seg;
     xcb_pixmap_t shm_pixmap;
@@ -132,7 +130,7 @@ struct window {
 
     struct title_stack_item *title_stack;
 
-    nss_renderer_t ren;
+    struct renderer ren;
 };
 
 extern xcb_connection_t *con;
@@ -148,18 +146,18 @@ inline static _Bool check_void_cookie(xcb_void_cookie_t ck) {
     return 0;
 }
 
-void nss_init_render_context(void);
-void nss_free_render_context(void);
-void nss_renderer_free(struct window *win);
-void nss_renderer_update(struct window *win, struct rect rect);
- _Bool nss_renderer_reload_font(struct window *win, _Bool need_free);
-void nss_renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch);
-void nss_renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
+void init_render_context(void);
+void free_render_context(void);
+void renderer_free(struct window *win);
+void renderer_update(struct window *win, struct rect rect);
+ _Bool renderer_reload_font(struct window *win, _Bool need_free);
+void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch);
+void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 
 void window_set_default_props(struct window *win);
-void nss_window_handle_resize(struct window *win, int16_t width, int16_t height);
-struct window *nss_find_shared_font(struct window *win, _Bool need_free);
-struct cellspec nss_describe_cell(nss_cell_t cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected);
+void handle_resize(struct window *win, int16_t width, int16_t height);
+struct window *find_shared_font(struct window *win, _Bool need_free);
+struct cellspec describe_cell(nss_cell_t cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected);
 
 #endif
 

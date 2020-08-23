@@ -12,9 +12,14 @@
 #include <xcb/xcb.h>
 #include <xcb/render.h>
 
-typedef struct nss_render_context nss_render_context_t;
+struct glyph_msg {
+    uint8_t len;
+    uint8_t pad[3];
+    int16_t dx, dy;
+    uint8_t data[];
+};
 
-struct nss_render_context {
+struct render_context {
     xcb_render_pictformat_t pfargb;
     xcb_render_pictformat_t pfalpha;
 
@@ -34,19 +39,10 @@ struct nss_render_context {
     uint8_t *buffer;
     size_t bufsize;
     size_t bufpos;
-};
-
-typedef struct nss_glyph_mesg {
-    uint8_t len;
-    uint8_t pad[3];
-    int16_t dx, dy;
-    uint8_t data[];
-} nss_glyph_mesg_t;
-
-static nss_render_context_t rctx;
+} rctx;
 
 #define WORDS_IN_MESSAGE 256
-#define HEADER_WORDS ((sizeof(nss_glyph_mesg_t)+sizeof(uint32_t))/sizeof(uint32_t))
+#define HEADER_WORDS ((sizeof(struct glyph_msg)+sizeof(uint32_t))/sizeof(uint32_t))
 #define CHARS_PER_MESG (WORDS_IN_MESSAGE - HEADER_WORDS)
 
 #define CB(c) (((c) & 0xff) * 0x101)
@@ -67,8 +63,8 @@ static void register_glyph(struct window *win, uint32_t ch, nss_glyph_t * glyph)
         warn("Can't add glyph");
 }
 
-_Bool nss_renderer_reload_font(struct window *win, _Bool need_free) {
-    struct window *found = nss_find_shared_font(win, need_free);
+_Bool renderer_reload_font(struct window *win, _Bool need_free) {
+    struct window *found = find_shared_font(win, need_free);
 
     win->ren.pfglyph = iconf(ICONF_PIXEL_MODE) ? rctx.pfargb : rctx.pfalpha;
 
@@ -95,7 +91,7 @@ _Bool nss_renderer_reload_font(struct window *win, _Bool need_free) {
     }
 
     if (need_free) {
-        nss_window_handle_resize(win, win->width, win->height);
+        handle_resize(win, win->width, win->height);
         window_set_default_props(win);
     } else {
         win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
@@ -149,19 +145,19 @@ _Bool nss_renderer_reload_font(struct window *win, _Bool need_free) {
     return 1;
 }
 
-void nss_renderer_free(struct window *win) {
+void renderer_free(struct window *win) {
     xcb_render_free_picture(con, win->ren.pen);
     xcb_render_free_picture(con, win->ren.pic1);
     xcb_free_pixmap(con, win->ren.pid1);
     xcb_render_free_glyph_set(con, win->ren.gsid);
 }
 
-void nss_free_render_context() {
+void free_render_context() {
     free(rctx.buffer);
     free(rctx.cbuffer);
 }
 
-void nss_init_render_context() {
+void init_render_context() {
     rctx.buffer = malloc(WORDS_IN_MESSAGE * sizeof(uint32_t));
     if (!rctx.buffer) {
         xcb_disconnect(con);
@@ -327,7 +323,7 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
                         win->focused && ((win->cursor_type + 1) & ~1) == cusor_type_block)
                     cel.attr ^= nss_attrib_inverse;
 
-                spec = nss_describe_cell(cel, palette, line.line->pal->data,
+                spec = describe_cell(cel, palette, line.line->pal->data,
                         win->blink_state, mouse_is_selected_in_view(win->term, i, k));
                 g =  spec.ch | (spec.face << 24);
 
@@ -444,10 +440,10 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
                 rctx.buffer = new;
                 rctx.bufsize += WORDS_IN_MESSAGE * sizeof(uint32_t);
             }
-            nss_glyph_mesg_t *head = (nss_glyph_mesg_t *)(rctx.buffer + rctx.bufpos);
+            struct glyph_msg *head = (struct glyph_msg *)(rctx.buffer + rctx.bufpos);
             rctx.bufpos += sizeof(*head);
             size_t k = i;
-            *head = (nss_glyph_mesg_t){
+            *head = (struct glyph_msg){
                 .dx = rctx.cbuffer[k].x - ox,
                 .dy = rctx.cbuffer[k].y + win->char_height - oy
             };
@@ -556,25 +552,25 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
     }
 
     if (rctx.cbufpos)
-        nss_renderer_update(win, rect_scale_up((struct rect){0, 0, win->cw, win->ch},
+        renderer_update(win, rect_scale_up((struct rect){0, 0, win->cw, win->ch},
                 win->char_width, win->char_height + win->char_depth));
 
     return rctx.cbufpos;
 }
 
-void nss_renderer_update(struct window *win, struct rect rect) {
+void renderer_update(struct window *win, struct rect rect) {
     xcb_copy_area(con, win->ren.pid1, win->wid, win->gc, rect.x, rect.y,
             rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
 }
 
-void nss_renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
+void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
     xcb_copy_area(con, win->ren.pid1, win->ren.pid1, win->gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
     /*
     xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, 0, win->ren.pic, sx, sy, 0, 0, dst.x, dst.y, dst.width, dst.height);
     */
 }
 
-void nss_renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
+void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
 

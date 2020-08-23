@@ -24,14 +24,10 @@
 #include <xcb/shm.h>
 #include <xcb/xcb.h>
 
-typedef struct nss_render_context nss_render_context_t;
-
-struct nss_render_context {
+struct render_context {
     _Bool has_shm;
     _Bool has_shm_pixmaps;
-};
-
-static nss_render_context_t rctx;
+} rctx;
 
 static void resize_bounds(struct window *win, _Bool h_changed) {
     if (win->ren.bounds) {
@@ -54,7 +50,7 @@ static void resize_bounds(struct window *win, _Bool h_changed) {
     }
 }
 
-static struct image nss_create_image_shm(struct window *win, int16_t width, int16_t height) {
+static struct image create_shm_image(struct window *win, int16_t width, int16_t height) {
     struct image im = {
         .width = width,
         .height = height,
@@ -135,7 +131,7 @@ static struct image nss_create_image_shm(struct window *win, int16_t width, int1
     }
 }
 
-static void nss_free_image_shm(struct image *im) {
+static void free_shm_image(struct image *im) {
     if (rctx.has_shm) {
 #if USE_POSIX_SHM
         if (im->data) munmap(im->data, im->width * im->height * sizeof(color_t));
@@ -151,11 +147,11 @@ static void nss_free_image_shm(struct image *im) {
     im->data = NULL;
 }
 
-_Bool nss_renderer_reload_font(struct window *win, _Bool need_free) {
-    nss_find_shared_font(win, need_free);
+_Bool renderer_reload_font(struct window *win, _Bool need_free) {
+    find_shared_font(win, need_free);
 
     if (need_free) {
-        nss_window_handle_resize(win, win->width, win->height);
+        handle_resize(win, win->width, win->height);
         window_set_default_props(win);
     } else {
         win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
@@ -163,7 +159,7 @@ _Bool nss_renderer_reload_font(struct window *win, _Bool need_free) {
 
         resize_bounds(win, 1);
 
-        win->ren.im = nss_create_image_shm(win, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height));
+        win->ren.im = create_shm_image(win, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height));
         if (!win->ren.im.data) {
             warn("Can't allocate image");
             return 0;
@@ -175,21 +171,21 @@ _Bool nss_renderer_reload_font(struct window *win, _Bool need_free) {
     return 1;
 }
 
-void nss_renderer_free(struct window *win) {
+void renderer_free(struct window *win) {
     if (rctx.has_shm)
         xcb_shm_detach(con, win->ren.shm_seg);
     if (rctx.has_shm_pixmaps)
         xcb_free_pixmap(con, win->ren.shm_pixmap);
     if (win->ren.im.data)
-        nss_free_image_shm(&win->ren.im);
+        free_shm_image(&win->ren.im);
     free(win->ren.bounds);
 }
 
-void nss_free_render_context() {
+void free_render_context() {
     /* nothing */
 }
 
-void nss_init_render_context() {
+void init_render_context() {
     // That's kind of hack
     // Try guessing if DISPLAY refers to localhost
 
@@ -264,7 +260,7 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
                         win->focused && ((win->cursor_type + 1) & ~1) == cusor_type_block)
                     cel.attr ^= nss_attrib_inverse;
 
-                spec = nss_describe_cell(cel, palette, line.line->pal ? line.line->pal->data : NULL,
+                spec = describe_cell(cel, palette, line.line->pal ? line.line->pal->data : NULL,
                         win->blink_state, mouse_is_selected_in_view(win->term, i, k));
 
                 if (spec.ch) glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
@@ -366,7 +362,7 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
     if (win->ren.boundc) {
         optimize_bounds(win->ren.bounds, &win->ren.boundc, rctx.has_shm);
         for (size_t k = 0; k < win->ren.boundc; k++) {
-            nss_renderer_update(win, rect_scale_up(win->ren.bounds[k], win->char_width, win->char_depth + win->char_height));
+            renderer_update(win, rect_scale_up(win->ren.bounds[k], win->char_width, win->char_depth + win->char_height));
         }
         win->ren.boundc = 0;
     }
@@ -374,7 +370,7 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
     return drawn_any;
 }
 
-void nss_renderer_update(struct window *win, struct rect rect) {
+void renderer_update(struct window *win, struct rect rect) {
     if (rctx.has_shm_pixmaps) {
         xcb_copy_area(con, win->ren.shm_pixmap, win->wid, win->gc, rect.x, rect.y,
                 rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
@@ -389,7 +385,7 @@ void nss_renderer_update(struct window *win, struct rect rect) {
     }
 }
 
-void nss_renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
+void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
     image_copy(win->ren.im, dst, win->ren.im, sx, sy);
 
     int16_t w = win->char_width, h = win->char_depth + win->char_height;
@@ -409,7 +405,7 @@ void nss_renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t 
     win->ren.bounds[win->ren.boundc++] = dst;
 }
 
-void nss_renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
+void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
 
@@ -422,10 +418,10 @@ void nss_renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t common_w = MIN(width, width  - delta_x * win->char_width);
     int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth)) ;
 
-    struct image new = nss_create_image_shm(win, width, height);
+    struct image new = create_shm_image(win, width, height);
     image_copy(new, (struct rect){0, 0, common_w, common_h}, win->ren.im, 0, 0);
     SWAP(struct image, win->ren.im, new);
-    nss_free_image_shm(&new);
+    free_shm_image(&new);
 
     resize_bounds(win, delta_y);
 

@@ -285,7 +285,7 @@ void init_context(void) {
         die("Can't create colormap");
     }
 
-    nss_init_render_context();
+    init_render_context();
 
     if (!configure_xkb()) {
         xcb_disconnect(con);
@@ -332,7 +332,7 @@ void free_context(void) {
     xkb_keymap_unref(ctx.xkb_keymap);
     xkb_context_unref(ctx.xkb_ctx);
 
-    nss_free_render_context();
+    free_render_context();
     free(ctx.pfds);
 
     xcb_disconnect(con);
@@ -390,7 +390,7 @@ void window_resize(struct window *win, int16_t width, int16_t height) {
     if (win->height != height || win->width != width) {
         uint32_t vals[] = {width, height};
         xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
-        nss_window_handle_resize(win, width, height);
+        handle_resize(win, width, height);
     }
 }
 
@@ -438,7 +438,7 @@ inline static void restore_pos(struct window *win) {
         uint32_t vals[] = {win->saved_x, win->saved_y, win->saved_width, win->saved_height};
         xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH |
                 XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
-        nss_window_handle_resize(win, vals[2], vals[3]);
+        handle_resize(win, vals[2], vals[3]);
         win->saved_geometry = 0;
     }
 }
@@ -469,7 +469,7 @@ void window_action(struct window *win, enum window_action act) {
         uint32_t vals[] = {0, 0, ctx.screen->width_in_pixels, ctx.screen->height_in_pixels};
         xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH |
                 XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
-        nss_window_handle_resize(win, vals[2], vals[3]);
+        handle_resize(win, vals[2], vals[3]);
         break;
     case action_maximize_width:
         save_pos(win);
@@ -596,7 +596,7 @@ static int32_t window_get_font_size(struct window *win) {
 
 static void reload_all_fonts(void) {
     for (struct window *win = win_list_head; win; win = win->next) {
-        nss_renderer_reload_font(win, 1);
+        renderer_reload_font(win, 1);
         nss_term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
@@ -612,7 +612,7 @@ static void window_set_font(struct window *win, const char * name, int32_t size)
     if (size >= 0) win->font_size = size;
 
     if (reload) {
-        nss_renderer_reload_font(win, 1);
+        renderer_reload_font(win, 1);
         nss_term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
@@ -749,7 +749,7 @@ uint32_t get_win_gravity_from_config() {
     }
 };
 
-struct cellspec nss_describe_cell(nss_cell_t cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected) {
+struct cellspec describe_cell(nss_cell_t cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected) {
     struct cellspec res;
 
     // Check special colors
@@ -810,7 +810,7 @@ struct cellspec nss_describe_cell(nss_cell_t cell, color_t *palette, color_t *ex
     return res;
 }
 
-struct window *nss_find_shared_font(struct window *win, _Bool need_free) {
+struct window *find_shared_font(struct window *win, _Bool need_free) {
     _Bool found_font = 0, found_cache = 0;
     struct window *found = 0;
 
@@ -957,7 +957,7 @@ struct window *create_window(void) {
     c = xcb_create_gc_checked(con, win->gc, win->wid, mask2, values2);
     if (check_void_cookie(c)) goto error;
 
-    if (!nss_renderer_reload_font(win, 0)) goto error;
+    if (!renderer_reload_font(win, 0)) goto error;
 
     win->term = nss_create_term(win, win->cw, win->ch);
     if (!win->term) goto error;
@@ -1003,7 +1003,7 @@ error:
 void free_window(struct window *win) {
     if (win->wid) {
         xcb_unmap_window(con, win->wid);
-        nss_renderer_free(win);
+        renderer_free(win);
         xcb_free_gc(con, win->gc);
         xcb_destroy_window(con, win->wid);
         xcb_flush(con);
@@ -1069,7 +1069,7 @@ _Bool window_shift(struct window *win, nss_coord_t xs, nss_coord_t ys, nss_coord
     height *= win->char_depth + win->char_height;
     width *= win->char_width;
 
-    nss_renderer_copy(win, (struct rect){xd, yd, width, height}, xs, ys);
+    renderer_copy(win, (struct rect){xd, yd, width, height}, xs, ys);
 
     return 1;
 }
@@ -1082,7 +1082,7 @@ inline static xcb_atom_t target_to_atom(enum clip_target target) {
     }
 }
 
-void nss_window_clip_copy(struct window *win) {
+static void clip_copy(struct window *win) {
     if (win->clipped[clip_primary]) {
         uint8_t *dup = (uint8_t*)strdup((char *)win->clipped[clip_primary]);
         if (dup) {
@@ -1134,7 +1134,7 @@ static void redraw_borders(struct window *win, _Bool top_left, _Bool bottom_righ
         if (count) xcb_poly_fill_rectangle(con, win->wid, win->gc, count, borders + offset);
 }
 
-void nss_window_handle_resize(struct window *win, int16_t width, int16_t height) {
+void handle_resize(struct window *win, int16_t width, int16_t height) {
     //Handle resize
 
     win->width = width;
@@ -1147,7 +1147,7 @@ void nss_window_handle_resize(struct window *win, int16_t width, int16_t height)
 
     if (delta_x || delta_y) {
         nss_term_resize(win->term, new_cw, new_ch);
-        nss_renderer_resize(win, new_cw, new_ch);
+        renderer_resize(win, new_cw, new_ch);
         clock_gettime(NSS_CLOCK, &win->last_resize);
     }
 
@@ -1173,7 +1173,7 @@ static void handle_expose(struct window *win, struct rect damage) {
 
     struct rect inters = { 0, 0, width - win->left_border, height - win->top_border};
     damage = rect_shift(damage, -win->left_border, -win->top_border);
-    if (intersect_with(&inters, &damage)) nss_renderer_update(win, inters);
+    if (intersect_with(&inters, &damage)) renderer_update(win, inters);
 }
 
 static void handle_focus(struct window *win, _Bool focused) {
@@ -1217,7 +1217,7 @@ static void handle_keydown(struct window *win, xkb_keycode_t keycode) {
         create_window();
         return;
     case shortcut_copy:
-        nss_window_clip_copy(win);
+        clip_copy(win);
         return;
     case shortcut_paste:
         window_paste_clip(win, clip_clipboard);
@@ -1399,7 +1399,7 @@ void run(void) {
                                 ev->override_redirect, ev->above_sibling, ev->event);
                     }
                     if (ev->width != win->width || ev->height != win->height)
-                        nss_window_handle_resize(win, ev->width, ev->height);
+                        handle_resize(win, ev->width, ev->height);
                     break;
                 }
                 case XCB_KEY_PRESS:{
