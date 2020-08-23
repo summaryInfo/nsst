@@ -2177,7 +2177,7 @@ static void term_print_string(struct term *term, uint8_t *str, ssize_t size) {
 static void term_print_char(struct term *term, term_char_t ch) {
     uint8_t buf[5] = {ch};
     size_t sz = 1;
-    if (term->mode.utf8)
+    if (term->mode.utf8 && ch >= 0xA0 && term->esc.state == esc_ground)
         sz = utf8_encode(ch, buf, buf + 5);
     term_print_string(term, buf, sz);
 }
@@ -3685,6 +3685,8 @@ static void term_putchar(struct term *term, term_char_t ch) {
     // Put character itself
     term_put_cell(term, term->c.x, term->c.y, ch);
 
+    // TODO Print multiple lines
+
     // Put dummy character to the left of wide
     if (__builtin_expect(width > 1, 0)) {
         // Don't need to call fixup_color,
@@ -3701,8 +3703,6 @@ static void term_putchar(struct term *term, term_char_t ch) {
 
     term->c.pending = term->c.x + width == term_max_x(term);
     term->c.x += width - term->c.pending;
-
-    term->c.gl_ss = term->c.gl; // Reset single shift
 }
 
 static void term_putstr(struct term *term, ssize_t count, ssize_t totalwidth) {
@@ -4993,7 +4993,7 @@ static void term_dispatch_vt52_cup(struct term *term) {
     term->esc.state = esc_ground;
 }
 
-static void term_dispatch(struct term *term, term_char_t ch) {
+static _Bool term_dispatch(struct term *term, term_char_t ch) {
     if (term->mode.print_enabled)
         term_print_char(term, ch);
 
@@ -5004,7 +5004,7 @@ static void term_dispatch(struct term *term, term_char_t ch) {
         term->esc.state = esc_esc_entry;
         term->esc.selector = E(ch ^ 0xC0);
         term_dispatch_esc(term);
-        return;
+        return 1;
     }
 
     if ((term->esc.state != esc_ground || !term->vt_level) && term->esc.state !=
@@ -5122,11 +5122,8 @@ static void term_dispatch(struct term *term, term_char_t ch) {
         else if (ch == 0x1b || ch == 0x1a || ch == 0x18 || ch == 0x07)
             term_dispatch_c0(term, ch);
         else {
-            uint8_t buf[UTF8_MAX_LEN + 1];
-            size_t char_len = utf8_encode(ch, buf, buf + UTF8_MAX_LEN);
-            buf[char_len] = '\0';
-
-            if (term->esc.str_len + char_len + 1 > term->esc.str_cap) {
+            // Don't encode UTF-8 back, now we operate on bytes
+            if (term->esc.str_len + 1 >= term->esc.str_cap) {
                 size_t new_cap = STR_CAP_STEP(term->esc.str_cap);
                 if (new_cap > ESC_MAX_LONG_STR) break;
                 uint8_t *new = realloc(term->esc.str_ptr, new_cap + 1);
@@ -5136,8 +5133,8 @@ static void term_dispatch(struct term *term, term_char_t ch) {
                 term->esc.str_cap = new_cap;
             }
 
-            memcpy(term_esc_str(term) + term->esc.str_len, buf, char_len + 1);
-            term->esc.str_len += char_len;
+            term_esc_str(term)[term->esc.str_len++] = ch;
+            term_esc_str(term)[term->esc.str_len] = '\0';
         }
         break;
     case esc_vt52_entry:
@@ -5166,6 +5163,12 @@ static void term_dispatch(struct term *term, term_char_t ch) {
                 (glv == cs96_latin_1 || glv == cs94_british))) // TODO Why???
             /* ignore */;
         else  {
+            // Decode UTF-8 only in ground state
+            if (term->mode.utf8 && ch >= 0xA0) {
+                term->fd_start--;
+                if (!utf8_decode(&ch, (const uint8_t **)&term->fd_start, term->fd_end)) return 0;
+            }
+
             // TODO Remove this codepath (and term_putchar)
             // Decode nrcs
 
@@ -5178,8 +5181,11 @@ static void term_dispatch(struct term *term, term_char_t ch) {
                 ch = nrcs_decode(glv, term->c.gn[term->c.gr], term->c.upcs, ch, term->mode.enable_nrcs);
 
             term_putchar(term, ch);
+
+            term->c.gl_ss = term->c.gl; // Reset single shift
         }
     }
+    return 1;
 }
 
 static ssize_t term_refill(struct term *term) {
@@ -5235,6 +5241,7 @@ void term_read(struct term *term) {
                 // If we have encountered control character, break
                 if (ch < 0x20 || (ch > 0x7F && ch < 0xA0)) break;
 
+                uint8_t *char_start = term->fd_start;
                 if (term->mode.utf8 && ch >= 0xA0) {
                     if (!utf8_decode(&ch, (const uint8_t **)&term->fd_start, term->fd_end)) {
                         // If we encountered partial UTF-8,
@@ -5267,6 +5274,11 @@ void term_read(struct term *term) {
                     if (!buf) term_precompose_at_cursor(term, ch);
                     else term->predec_buf[buf - 1] = try_precompose(term->predec_buf[buf - 1], ch);
                 } else {
+                    // Don't include char if its too wide
+                    if (totw + wid > maxw && !(term->c.x == term_max_x(term) - 1 && !totw)) {
+                        term->fd_start = char_start;
+                        break;
+                    }
                     // Wide cells are indicated as
                     // negative in predecode buffer
                     if (wid >= 2) {
@@ -5286,10 +5298,7 @@ void term_read(struct term *term) {
         } else {
             // Slow path, all controls
             // are processed here
-            if (term->mode.utf8 && ch >= 0xA0) {
-                if (!utf8_decode(&ch, (const uint8_t **)&term->fd_start, term->fd_end)) break;
-            } else term->fd_start++;
-            term_dispatch(term, ch);
+            if (!term_dispatch(term, *term->fd_start++)) break;
         }
     }
 }
