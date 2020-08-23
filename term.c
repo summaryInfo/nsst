@@ -40,7 +40,7 @@
 #endif
 
 #define TTY_MAX_WRITE 256
-#define NSS_FD_BUF_SZ 4096
+#define FD_BUF_SIZE 4096
 #define ESC_MAX_PARAM 32
 #define ESC_MAX_STR 256
 #define ESC_MAX_LONG_STR 0x10000000
@@ -272,7 +272,7 @@ struct term {
 
     uint8_t *fd_start;
     uint8_t *fd_end;
-    uint8_t fd_buf[NSS_FD_BUF_SZ];
+    uint8_t fd_buf[FD_BUF_SIZE];
 };
 
 /* Default termios, initialized from main */
