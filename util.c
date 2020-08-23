@@ -16,7 +16,7 @@
 #include <strings.h>
 
 _Noreturn void die(const char *fmt, ...) {
-    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0) {
+    if (iconf(ICONF_LOG_LEVEL) > 0) {
         va_list args;
         va_start(args, fmt);
         fputs("[\033[31;1mFATAL\033[m] ", stderr);
@@ -28,7 +28,7 @@ _Noreturn void die(const char *fmt, ...) {
 }
 
 void fatal(const char *fmt, ...) {
-    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0) {
+    if (iconf(ICONF_LOG_LEVEL) > 0) {
         va_list args;
         va_start(args, fmt);
         fputs("[\033[31;1mFATAL\033[m] ", stderr);
@@ -39,7 +39,7 @@ void fatal(const char *fmt, ...) {
 }
 
 void warn(const char *fmt, ...) {
-    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 1) {
+    if (iconf(ICONF_LOG_LEVEL) > 1) {
         va_list args;
         va_start(args, fmt);
         fputs("[\033[33;1mWARN\033[m] ", stderr);
@@ -50,7 +50,7 @@ void warn(const char *fmt, ...) {
 }
 
 void info(const char *fmt, ...) {
-    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 2) {
+    if (iconf(ICONF_LOG_LEVEL) > 2) {
         va_list args;
         va_start(args, fmt);
         fputs("[\033[32;1mINFO\033[m] ", stderr);
@@ -137,7 +137,7 @@ inline static int32_t frombase64digit(uint8_t b) {
 
 
 
-nss_color_t parse_color(const uint8_t *str, const uint8_t *end) {
+color_t parse_color(const uint8_t *str, const uint8_t *end) {
     if (*str == '#') {
         // Format #RGB
 
@@ -149,7 +149,7 @@ nss_color_t parse_color(const uint8_t *str, const uint8_t *end) {
             val = (val << 4) + fromhexdigit(*str);
         }
 
-        nss_color_t col = 0xFF000000;
+        color_t col = 0xFF000000;
 
         switch (sz) {
         case 4:

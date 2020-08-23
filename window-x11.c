@@ -100,10 +100,10 @@ static void load_config(void) {
     const size_t n_pos = strlen(name);
 
     // .color0 -- .color255
-    for (unsigned j = 0; j < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS; j++) {
+    for (unsigned j = 0; j < PALETTE_SIZE - SPECIAL_PALETTE_SIZE; j++) {
         snprintf(name + n_pos, OPT_NAME_MAX, "%u", j);
         if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
-            nss_config_set_string(NSS_CCONFIG_COLOR_0 + j, res);
+            sconf_set(CCONF_COLOR_0 + j, res);
             free(res);
         }
     }
@@ -113,7 +113,7 @@ static void load_config(void) {
         snprintf(name, OPT_NAME_MAX, NSS_CLASS".%s", optmap[i].name);
         char *res = NULL;
         if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res))
-            nss_config_set_string(optmap[i].opt, res);
+            sconf_set(optmap[i].opt, res);
         if (res) free(res);
     }
 
@@ -315,10 +315,10 @@ void nss_init_context(void) {
     xcb_screen_iterator_t it = xcb_setup_roots_iterator(xcb_get_setup(con));
     for (; it.rem; xcb_screen_next(&it))
         if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
-    if (dpi > 0) nss_config_set_integer(NSS_ICONFIG_DPI, dpi);
+    if (dpi > 0) iconf_set(ICONF_DPI, dpi);
 
-    if (!nss_config_integer(NSS_ICONFIG_SKIP_CONFIG_FILE)) load_config();
-    else nss_config_set_integer(NSS_ICONFIG_SKIP_CONFIG_FILE, 0);
+    if (!iconf(ICONF_SKIP_CONFIG_FILE)) load_config();
+    else iconf_set(ICONF_SKIP_CONFIG_FILE, 0);
 
     sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART}, NULL);
 }
@@ -350,8 +350,8 @@ nss_cursor_type_t nss_window_get_cursor(nss_window_t *win) {
     return win->cursor_type;
 }
 
-void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor_fg) {
-    nss_color_t obg = win->bg, ofg = win->cursor_fg;
+void nss_window_set_colors(nss_window_t *win, color_t bg, color_t cursor_fg) {
+    color_t obg = win->bg, ofg = win->cursor_fg;
     if (bg) win->bg = bg;
     if (cursor_fg) win->cursor_fg = cursor_fg;
 
@@ -587,7 +587,7 @@ void nss_window_bell(nss_window_t *win, uint8_t vol) {
         if (win->bell_raise) nss_window_action(win, nss_wa_restore_minimized);
         if (win->bell_urgent) set_urgency(win->wid, 1);
     }
-    if (nss_config_integer(NSS_ICONFIG_VISUAL_BELL)) {
+    if (iconf(ICONF_VISUAL_BELL)) {
         if (!win->in_blink) {
             win->init_invert = nss_term_get_reverse(win->term);
             win->in_blink = 1;
@@ -646,7 +646,7 @@ static void set_icon_label(xcb_window_t wid, const char *title, _Bool utf8) {
 }
 
 void nss_window_set_title(nss_window_t *win, nss_title_target_t which, const char *title, _Bool utf8) {
-    if (!title) title = nss_config_string(NSS_SCONFIG_TITLE);
+    if (!title) title = sconf(SCONF_TITLE);
 
     if (which & nss_tt_title) set_title(win->wid, title, utf8);
 
@@ -754,8 +754,8 @@ void nss_window_pop_title(nss_window_t *win, nss_title_target_t which) {
 
 
 uint32_t get_win_gravity_from_config() {
-    _Bool nx = nss_config_integer(NSS_ICONFIG_WINDOW_NEGATIVE_X);
-    _Bool ny = nss_config_integer(NSS_ICONFIG_WINDOW_NEGATIVE_Y);
+    _Bool nx = iconf(ICONF_WINDOW_NEGATIVE_X);
+    _Bool ny = iconf(ICONF_WINDOW_NEGATIVE_Y);
     switch (nx + 2 * ny) {
     case 0: return XCB_GRAVITY_NORTH_WEST;
     case 1: return XCB_GRAVITY_NORTH_EAST;
@@ -764,31 +764,31 @@ uint32_t get_win_gravity_from_config() {
     }
 };
 
-struct nss_cellspec nss_describe_cell(nss_cell_t cell, nss_color_t *palette, nss_color_t *extra, _Bool blink, _Bool selected) {
+struct nss_cellspec nss_describe_cell(nss_cell_t cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected) {
     struct nss_cellspec res;
 
     // Check special colors
-    if (__builtin_expect(nss_config_integer(NSS_ICONFIG_SPEICAL_BOLD), 0) &&
+    if (__builtin_expect(iconf(ICONF_SPEICAL_BOLD), 0) &&
             palette[NSS_SPECIAL_BOLD] && cell.attr & nss_attrib_bold) {
         cell.fg = NSS_SPECIAL_BOLD;
         cell.attr &= ~nss_attrib_bold;
     }
-    if (__builtin_expect(nss_config_integer(NSS_ICONFIG_SPEICAL_UNDERLINE), 0) &&
+    if (__builtin_expect(iconf(ICONF_SPEICAL_UNDERLINE), 0) &&
             palette[NSS_SPECIAL_UNDERLINE] && cell.attr & nss_attrib_underlined) {
         cell.fg = NSS_SPECIAL_UNDERLINE;
         cell.attr &= ~nss_attrib_underlined;
     }
-    if (__builtin_expect(nss_config_integer(NSS_ICONFIG_SPEICAL_BLINK), 0) &&
+    if (__builtin_expect(iconf(ICONF_SPEICAL_BLINK), 0) &&
             palette[NSS_SPECIAL_BLINK] && cell.attr & nss_attrib_blink) {
         cell.fg = NSS_SPECIAL_BLINK;
         cell.attr &= ~nss_attrib_blink;
     }
-    if (__builtin_expect(nss_config_integer(NSS_ICONFIG_SPEICAL_REVERSE), 0) &&
+    if (__builtin_expect(iconf(ICONF_SPEICAL_REVERSE), 0) &&
             palette[NSS_SPECIAL_REVERSE] && cell.attr & nss_attrib_inverse) {
         cell.fg = NSS_SPECIAL_REVERSE;
         cell.attr &= ~nss_attrib_inverse;
     }
-    if (__builtin_expect(nss_config_integer(NSS_ICONFIG_SPEICAL_ITALIC), 0) &&
+    if (__builtin_expect(iconf(ICONF_SPEICAL_ITALIC), 0) &&
             palette[NSS_SPECIAL_ITALIC] && cell.attr & nss_attrib_italic) {
         cell.fg = NSS_SPECIAL_ITALIC;
         cell.attr &= ~nss_attrib_italic;
@@ -797,11 +797,11 @@ struct nss_cellspec nss_describe_cell(nss_cell_t cell, nss_color_t *palette, nss
     // Calculate colors
 
     if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_bold && cell.fg < 8) cell.fg += 8;
-    res.bg = cell.bg < NSS_PALETTE_SIZE ? palette[cell.bg] : extra[cell.bg - NSS_PALETTE_SIZE];
-    res.fg = cell.fg < NSS_PALETTE_SIZE ? palette[cell.fg] : extra[cell.fg - NSS_PALETTE_SIZE];
+    res.bg = cell.bg < PALETTE_SIZE ? palette[cell.bg] : extra[cell.bg - PALETTE_SIZE];
+    res.fg = cell.fg < PALETTE_SIZE ? palette[cell.fg] : extra[cell.fg - PALETTE_SIZE];
     if ((cell.attr & (nss_attrib_bold | nss_attrib_faint)) == nss_attrib_faint)
         res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
-    if ((cell.attr & nss_attrib_inverse) ^ selected) SWAP(nss_color_t, res.fg, res.bg);
+    if ((cell.attr & nss_attrib_inverse) ^ selected) SWAP(color_t, res.fg, res.bg);
     if ((!selected && cell.attr & nss_attrib_invisible) || (cell.attr & nss_attrib_blink && blink)) res.fg = res.bg;
 
     // If selected colors are set use them
@@ -829,11 +829,11 @@ nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free) {
     _Bool found_font = 0, found_cache = 0;
     nss_window_t *found = 0;
 
-    win->font_pixmode = nss_config_integer(NSS_ICONFIG_PIXEL_MODE);
+    win->font_pixmode = iconf(ICONF_PIXEL_MODE);
 
     for (nss_window_t *src = win_list_head; src; src = src->next) {
         if ((src->font_size == win->font_size || (!win->font_size &&
-                src->font_size == nss_config_integer(NSS_ICONFIG_FONT_SIZE))) &&
+                src->font_size == iconf(ICONF_FONT_SIZE))) &&
                 !strcmp(win->font_name, src->font_name) && src != win) {
             found_font = 1;
             found = src;
@@ -864,8 +864,8 @@ nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free) {
     win->font_size = nss_font_get_size(newf);
 
     //Initialize default font size
-    if (!nss_config_integer(NSS_ICONFIG_FONT_SIZE))
-        nss_config_set_integer(NSS_ICONFIG_FONT_SIZE, win->font_size);
+    if (!iconf(ICONF_FONT_SIZE))
+        iconf_set(ICONF_FONT_SIZE, win->font_size);
 
     nss_cache_font_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
 
@@ -878,11 +878,11 @@ void nss_window_set_default_props(nss_window_t *win) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom.WM_PROTOCOLS, XCB_ATOM_ATOM, 32, 1, &ctx.atom.WM_DELETE_WINDOW);
     const char *extra;
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(NSS_CLASS), NSS_CLASS);
-    if ((extra = nss_config_string(NSS_SCONFIG_TERM_CLASS)))
+    if ((extra = sconf(SCONF_TERM_CLASS)))
         xcb_change_property(con, XCB_PROP_MODE_APPEND, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, strlen(extra), extra);
     uint32_t nhints[] = {
         64 | 256, //PResizeInc, PBaseSize
-        nss_config_integer(NSS_ICONFIG_WINDOW_X), nss_config_integer(NSS_ICONFIG_WINDOW_Y), // Position
+        iconf(ICONF_WINDOW_X), iconf(ICONF_WINDOW_Y), // Position
         win->width, win->height, // Size
         win->left_border * 2 + win->char_width, win->left_border * 2 + win->char_depth + win->char_height, // Min size
         0, 0, //Max size
@@ -891,11 +891,11 @@ void nss_window_set_default_props(nss_window_t *win) {
         win->left_border * 2 + win->char_width, win->left_border * 2 + win->char_depth + win->char_height, // Base size
         get_win_gravity_from_config(), // Gravity
     };
-    if (nss_config_integer(NSS_ICONFIG_HAS_GEOMETRY))
+    if (iconf(ICONF_HAS_GEOMETRY))
         nhints[0] |= 1 | 2 | 512; // USPosition, USSize, PWinGravity
     else
         nhints[0] |= 4 | 8; // PPosition, PSize
-    if (nss_config_integer(NSS_ICONFIG_FIXED_SIZE)) {
+    if (iconf(ICONF_FIXED_SIZE)) {
         nhints[7] = nhints[5] = nhints[3];
         nhints[8] = nhints[6] = nhints[4];
         nhints[0] |= 16 | 32; // PMinSize, PMaxSize
@@ -919,25 +919,25 @@ void nss_window_set_default_props(nss_window_t *win) {
 /* Create new window */
 nss_window_t *nss_create_window(void) {
     nss_window_t *win = calloc(1, sizeof(nss_window_t));
-    win->cursor_width = nss_config_integer(NSS_ICONFIG_CURSOR_WIDTH);
-    win->underline_width = nss_config_integer(NSS_ICONFIG_UNDERLINE_WIDTH);
-    win->left_border = nss_config_integer(NSS_ICONFIG_LEFT_BORDER);
-    win->top_border = nss_config_integer(NSS_ICONFIG_TOP_BORDER);
-    win->bg = nss_config_color(NSS_CCONFIG_BG);
-    win->cursor_fg = nss_config_color(NSS_CCONFIG_CURSOR_FG);
-    if (nss_config_integer(NSS_ICONFIG_REVERSE_VIDEO))
-        SWAP(nss_color_t, win->bg, win->cursor_fg);
-    win->cursor_type = nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE);
-    win->font_size = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
-    win->width = nss_config_integer(NSS_ICONFIG_WINDOW_WIDTH);
-    win->height = nss_config_integer(NSS_ICONFIG_WINDOW_HEIGHT);
-    win->bell_raise = nss_config_integer(NSS_ICONFIG_RAISE_ON_BELL);
-    win->bell_urgent = nss_config_integer(NSS_ICONFIG_URGENT_ON_BELL);
+    win->cursor_width = iconf(ICONF_CURSOR_WIDTH);
+    win->underline_width = iconf(ICONF_UNDERLINE_WIDTH);
+    win->left_border = iconf(ICONF_LEFT_BORDER);
+    win->top_border = iconf(ICONF_TOP_BORDER);
+    win->bg = cconf(CCONF_BG);
+    win->cursor_fg = cconf(CCONF_CURSOR_FG);
+    if (iconf(ICONF_REVERSE_VIDEO))
+        SWAP(color_t, win->bg, win->cursor_fg);
+    win->cursor_type = iconf(ICONF_CURSOR_SHAPE);
+    win->font_size = iconf(ICONF_FONT_SIZE);
+    win->width = iconf(ICONF_WINDOW_WIDTH);
+    win->height = iconf(ICONF_WINDOW_HEIGHT);
+    win->bell_raise = iconf(ICONF_RAISE_ON_BELL);
+    win->bell_urgent = iconf(ICONF_URGENT_ON_BELL);
 
     win->active = 1;
     win->focused = 1;
 
-    win->font_name = strdup(nss_config_string(NSS_SCONFIG_FONT_NAME));
+    win->font_name = strdup(sconf(SCONF_FONT_NAME));
     if (!win->font_name) {
         nss_free_window(win);
         return NULL;
@@ -951,13 +951,13 @@ nss_window_t *nss_create_window(void) {
     uint32_t mask1 =  XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
         XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
     uint32_t values1[5] = { win->bg, win->bg, XCB_GRAVITY_NORTH_WEST, win->ev_mask, ctx.mid };
-    int16_t x = nss_config_integer(NSS_ICONFIG_WINDOW_X);
-    int16_t y = nss_config_integer(NSS_ICONFIG_WINDOW_Y);
+    int16_t x = iconf(ICONF_WINDOW_X);
+    int16_t y = iconf(ICONF_WINDOW_Y);
 
     // Adjust geometry
-    if (nss_config_integer(NSS_ICONFIG_WINDOW_NEGATIVE_X))
+    if (iconf(ICONF_WINDOW_NEGATIVE_X))
         x += ctx.screen->width_in_pixels - win->width - 2;
-    if (nss_config_integer(NSS_ICONFIG_WINDOW_NEGATIVE_Y))
+    if (iconf(ICONF_WINDOW_NEGATIVE_Y))
         y += ctx.screen->height_in_pixels - win->height - 2;
 
     win->wid = xcb_generate_id(con);
@@ -980,7 +980,7 @@ nss_window_t *nss_create_window(void) {
     if (!win->term) goto error;
 
     nss_window_set_default_props(win);
-    nss_window_set_title(win, nss_tt_title | nss_tt_icon_label, NULL, nss_config_integer(NSS_ICONFIG_UTF8));
+    nss_window_set_title(win, nss_tt_title | nss_tt_icon_label, NULL, iconf(ICONF_UTF8));
 
     win->next = win_list_head;
     win->prev = NULL;
@@ -1064,7 +1064,7 @@ _Bool nss_window_shift(nss_window_t *win, nss_coord_t xs, nss_coord_t ys, nss_co
     struct timespec cur;
     clock_gettime(NSS_CLOCK, &cur);
 
-    _Bool scrolled_recently = TIMEDIFF(win->last_scroll, cur) <  SEC/2/nss_config_integer(NSS_ICONFIG_FPS);
+    _Bool scrolled_recently = TIMEDIFF(win->last_scroll, cur) <  SEC/2/iconf(ICONF_FPS);
 
     win->last_scroll = cur;
 
@@ -1213,21 +1213,21 @@ static void handle_keydown(nss_window_t *win, xkb_keycode_t keycode) {
         nss_term_toggle_numlock(win->term);
         return;
     case nss_sa_scroll_up:
-        nss_term_scroll_view(win->term, -nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));
+        nss_term_scroll_view(win->term, -iconf(ICONF_SCROLL_AMOUNT));
         return;
     case nss_sa_scroll_down:
-        nss_term_scroll_view(win->term, nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));
+        nss_term_scroll_view(win->term, iconf(ICONF_SCROLL_AMOUNT));
         return;
     case nss_sa_font_up:
     case nss_sa_font_down:
     case nss_sa_font_default:;
         int32_t size = nss_window_get_font_size(win);
         if (action == nss_sa_font_up)
-            size += nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
+            size += iconf(ICONF_FONT_SIZE_STEP);
         else if (action == nss_sa_font_down)
-            size -= nss_config_integer(NSS_ICONFIG_FONT_SIZE_STEP);
+            size -= iconf(ICONF_FONT_SIZE_STEP);
         else if (action == nss_sa_font_default)
-            size = nss_config_integer(NSS_ICONFIG_FONT_SIZE);
+            size = iconf(ICONF_FONT_SIZE);
         nss_window_set_font(win, NULL, size);
         return;
     case nss_sa_new_window:
@@ -1385,7 +1385,7 @@ static void receive_selection_data(nss_window_t *win, xcb_atom_t prop, _Bool pno
 
 /* Start window logic, handling all windows in context */
 void nss_context_run(void) {
-    for (int64_t next_timeout = SEC/nss_config_integer(NSS_ICONFIG_FPS);;) {
+    for (int64_t next_timeout = SEC/iconf(ICONF_FPS);;) {
 #if USE_PPOLL
         if (ppoll(ctx.pfds, ctx.pfdcap, &(struct timespec){next_timeout / SEC, next_timeout % SEC}, NULL) < 0 && errno != EINTR)
 #else
@@ -1399,7 +1399,7 @@ void nss_context_run(void) {
                 case XCB_EXPOSE:{
                     xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
-                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                    if (iconf(ICONF_TRACE_EVENTS)) {
                         info("Event: event=Expose win=0x%x x=%x y=%d width=%d height=%d",
                                 ev->window, ev->x, ev->y, ev->width, ev->height);
                     }
@@ -1409,7 +1409,7 @@ void nss_context_run(void) {
                 case XCB_CONFIGURE_NOTIFY:{
                     xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
-                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                    if (iconf(ICONF_TRACE_EVENTS)) {
                         info("Event: event=ConfigureWindow win=0x%x x=%x y=%d width=%d"
                                 " height=%d border=%d redir=%d above_win=0x%x event_win=0x%x",
                                 ev->window, ev->x, ev->y, ev->width, ev->height, ev->border_width,
@@ -1422,7 +1422,7 @@ void nss_context_run(void) {
                 case XCB_KEY_PRESS:{
                     xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
                     if (!(win = window_for_xid(ev->event))) break;
-                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                    if (iconf(ICONF_TRACE_EVENTS)) {
                         info("Event: event=KeyPress win=0x%x keycode=0x%x", ev->event, ev->detail);
                     }
                     handle_keydown(win, ev->detail);
@@ -1432,7 +1432,7 @@ void nss_context_run(void) {
                 case XCB_FOCUS_OUT:{
                     xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
                     if (!(win = window_for_xid(ev->event))) break;
-                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                    if (iconf(ICONF_TRACE_EVENTS)) {
                         info("Event: event=%s win=0x%x", ev->response_type == XCB_FOCUS_IN ?
                                 "FocusIn" : "FocusOut", ev->event);
                     }
@@ -1444,7 +1444,7 @@ void nss_context_run(void) {
                 case XCB_MOTION_NOTIFY: {
                     xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->event))) break;
-                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                    if (iconf(ICONF_TRACE_EVENTS)) {
                         info("Event: event=%s mask=%d button=%d x=%d y=%d",
                                 ev->response_type == XCB_BUTTON_PRESS ? "ButtonPress" :
                                 ev->response_type == XCB_BUTTON_RELEASE ? "ButtonRelease" : "MotionNotify",
@@ -1466,7 +1466,7 @@ void nss_context_run(void) {
                 case XCB_SELECTION_CLEAR: {
                     xcb_selection_clear_event_t *ev = (xcb_selection_clear_event_t*)event;
                     if (!(win = window_for_xid(ev->owner))) break;
-                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                    if (iconf(ICONF_TRACE_EVENTS)) {
                         info("Event: event=SelectionClear owner=0x%x selection=0x%x", ev->owner, ev->selection);
                     }
                     // Clear even if set keep?
@@ -1476,7 +1476,7 @@ void nss_context_run(void) {
                 case XCB_PROPERTY_NOTIFY: {
                     xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
-                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                    if (iconf(ICONF_TRACE_EVENTS)) {
                         info("Event: event=PropertyNotify window=0x%x property=0x%x state=%d",
                                 ev->window, ev->atom, ev->state);
                     }
@@ -1488,7 +1488,7 @@ void nss_context_run(void) {
                 case XCB_SELECTION_NOTIFY: {
                     xcb_selection_notify_event_t *ev = (xcb_selection_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->requestor))) break;
-                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                    if (iconf(ICONF_TRACE_EVENTS)) {
                         info("Event: event=SelectionNotify owner=0x%x target=0x%x property=0x%x selection=0x%x",
                                 ev->requestor, ev->target, ev->property, ev->selection);
                     }
@@ -1498,7 +1498,7 @@ void nss_context_run(void) {
                 case XCB_SELECTION_REQUEST: {
                     xcb_selection_request_event_t *ev = (xcb_selection_request_event_t*)event;
                     if (!(win = window_for_xid(ev->owner))) break;
-                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                    if (iconf(ICONF_TRACE_EVENTS)) {
                         info("Event: event=SelectionRequest owner=0x%x requestor=0x%x target=0x%x property=0x%x selection=0x%x",
                                 ev->owner, ev->requestor, ev->target, ev->property, ev->selection);
                     }
@@ -1508,7 +1508,7 @@ void nss_context_run(void) {
                 case XCB_CLIENT_MESSAGE: {
                     xcb_client_message_event_t *ev = (xcb_client_message_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
-                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                    if (iconf(ICONF_TRACE_EVENTS)) {
                         info("Event: event=ClientMessage window=0x%x type=0x%x data=[0x%08x,0x%08x,0x%08x,0x%08x,0x%08x]",
                             ev->window, ev->type, ev->data.data32[0], ev->data.data32[1],
                             ev->data.data32[2], ev->data.data32[3], ev->data.data32[4]);
@@ -1523,7 +1523,7 @@ void nss_context_run(void) {
                 case XCB_VISIBILITY_NOTIFY: {
                     xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
                     if (!(win = window_for_xid(ev->window))) break;
-                    if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                    if (iconf(ICONF_TRACE_EVENTS)) {
                         info("Event: event=ClientMessage window=0x%x state=%d", ev->window, ev->state);
                     }
                     win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
@@ -1551,7 +1551,7 @@ void nss_context_run(void) {
                             uint8_t device_id;
                         } *xkb_ev = (struct _xkb_any_event*)event;
 
-                        if (nss_config_integer(NSS_ICONFIG_TRACE_EVENTS)) {
+                        if (iconf(ICONF_TRACE_EVENTS)) {
                             info("Event: XKB Event %d", xkb_ev->xkb_type);
                         }
 
@@ -1587,28 +1587,28 @@ void nss_context_run(void) {
                 nss_free_window(win);
         }
 
-        next_timeout = nss_config_integer(ctx.vbell_count ? NSS_ICONFIG_VISUAL_BELL_TIME : NSS_ICONFIG_BLINK_TIME)*1000LL;
+        next_timeout = iconf(ctx.vbell_count ? ICONF_VISUAL_BELL_TIME : ICONF_BLINK_TIME)*1000LL;
         struct timespec cur;
         clock_gettime(NSS_CLOCK, &cur);
 
         for (nss_window_t *win = win_list_head; win; win = win->next) {
-            if (TIMEDIFF(win->last_sync, cur) > nss_config_integer(NSS_ICONFIG_SYNC_TIME)*1000LL && win->sync_active)
+            if (TIMEDIFF(win->last_sync, cur) > iconf(ICONF_SYNC_TIME)*1000LL && win->sync_active)
                 win->sync_active = 0;
-            if (win->in_blink && TIMEDIFF(win->vbell_start, cur) > nss_config_integer(NSS_ICONFIG_VISUAL_BELL_TIME)*1000LL) {
+            if (win->in_blink && TIMEDIFF(win->vbell_start, cur) > iconf(ICONF_VISUAL_BELL_TIME)*1000LL) {
                 nss_term_set_reverse(win->term, win->init_invert);
                 win->in_blink = 0;
                 ctx.vbell_count--;
             }
-            if (TIMEDIFF(win->last_blink, cur) > nss_config_integer(NSS_ICONFIG_BLINK_TIME)*1000LL &&
-                    win->active && nss_config_integer(NSS_ICONFIG_ALLOW_BLINKING)) {
+            if (TIMEDIFF(win->last_blink, cur) > iconf(ICONF_BLINK_TIME)*1000LL &&
+                    win->active && iconf(ICONF_ALLOW_BLINKING)) {
                 win->blink_state = !win->blink_state;
                 win->blink_commited = 0;
                 win->last_blink = cur;
             }
 
-            int64_t scroll_delay = 1000LL * nss_config_integer(NSS_ICONFIG_SCROLL_DELAY);
-            int64_t resize_delay = 1000LL * nss_config_integer(NSS_ICONFIG_RESIZE_DELAY);
-            int64_t frame_time = SEC / nss_config_integer(NSS_ICONFIG_FPS);
+            int64_t scroll_delay = 1000LL * iconf(ICONF_SCROLL_DELAY);
+            int64_t resize_delay = 1000LL * iconf(ICONF_RESIZE_DELAY);
+            int64_t frame_time = SEC / iconf(ICONF_FPS);
 
             if (!win->resize_delayed && TIMEDIFF(win->last_resize, cur) < frame_time) {
                 if (win->slow_mode) win->next_draw = cur, win->slow_mode = 0;
@@ -1633,7 +1633,7 @@ void nss_context_run(void) {
                 _Bool old_drawn = win->drawn_somthing;
                 win->drawn_somthing = nss_term_redraw_dirty(win->term);
 
-                if (nss_config_integer(NSS_ICONFIG_TRACE_MISC) && win->drawn_somthing) info("Redraw");
+                if (iconf(ICONF_TRACE_MISC) && win->drawn_somthing) info("Redraw");
 
                 if (win->drawn_somthing || old_drawn) {
                     win->next_draw = cur;

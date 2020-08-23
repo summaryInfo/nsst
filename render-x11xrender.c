@@ -20,8 +20,8 @@ struct nss_render_context {
     struct cell_desc {
         int16_t x;
         int16_t y;
-        nss_color_t bg;
-        nss_color_t fg;
+        color_t bg;
+        color_t fg;
         uint32_t glyph : 29;
         uint32_t wide : 1;
         uint32_t underlined : 1;
@@ -57,7 +57,7 @@ static nss_render_context_t rctx;
 static void register_glyph(nss_window_t *win, uint32_t ch, nss_glyph_t * glyph) {
     xcb_render_glyphinfo_t spec = {
         .width = glyph->width, .height = glyph->height,
-        .x = glyph->x - nss_config_integer(NSS_ICONFIG_FONT_SPACING)/2, .y = glyph->y - nss_config_integer(NSS_ICONFIG_LINE_SPACING)/2,
+        .x = glyph->x - iconf(ICONF_FONT_SPACING)/2, .y = glyph->y - iconf(ICONF_LINE_SPACING)/2,
         .x_off = win->char_width, .y_off = glyph->y_off
     };
     xcb_void_cookie_t c;
@@ -69,7 +69,7 @@ static void register_glyph(nss_window_t *win, uint32_t ch, nss_glyph_t * glyph) 
 _Bool nss_renderer_reload_font(nss_window_t *win, _Bool need_free) {
     nss_window_t *found = nss_find_shared_font(win, need_free);
 
-    win->ren.pfglyph = nss_config_integer(NSS_ICONFIG_PIXEL_MODE) ? rctx.pfargb : rctx.pfalpha;
+    win->ren.pfglyph = iconf(ICONF_PIXEL_MODE) ? rctx.pfargb : rctx.pfalpha;
 
     xcb_void_cookie_t c;
 
@@ -287,7 +287,7 @@ static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
         dst[i] = src[i];
 }
 
-_Bool nss_window_submit_screen(nss_window_t *win, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
+_Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
 
     rctx.cbufpos = 0;
     rctx.bufpos = 0;
@@ -335,7 +335,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_color_t *palette, nss_coor
 
                 if (!fetched && glyph) register_glyph(win, g, glyph);
 
-                g_wide = glyph && glyph->x_off > win->char_width - nss_config_integer(NSS_ICONFIG_FONT_SPACING);
+                g_wide = glyph && glyph->x_off > win->char_width - iconf(ICONF_FONT_SPACING);
             }
             if (dirty || (g_wide && next_dirty)) {
                 if (2*(rctx.cbufpos + 1) >= rctx.cbufsize) {
@@ -492,7 +492,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_color_t *palette, nss_coor
                     rctx.cbuffer[k].fg == rctx.cbuffer[i].fg && rctx.cbuffer[i].underlined);
             push_rect(&(xcb_rectangle_t) {
                 .x = rctx.cbuffer[k].x,
-                .y = rctx.cbuffer[k].y + win->char_height + 1 + nss_config_integer(NSS_ICONFIG_LINE_SPACING)/2,
+                .y = rctx.cbuffer[k].y + win->char_height + 1 + iconf(ICONF_LINE_SPACING)/2,
                 .width = rctx.cbuffer[i - 1].x + win->char_width - rctx.cbuffer[k].x,
                 .height = win->underline_width
             });
@@ -508,7 +508,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_color_t *palette, nss_coor
                     rctx.cbuffer[k].fg == rctx.cbuffer[i].fg && rctx.cbuffer[i].strikethrough);
             push_rect(&(xcb_rectangle_t) {
                 .x = rctx.cbuffer[k].x,
-                .y = rctx.cbuffer[k].y + 2*win->char_height/3 - win->underline_width/2 + nss_config_integer(NSS_ICONFIG_LINE_SPACING)/2,
+                .y = rctx.cbuffer[k].y + 2*win->char_height/3 - win->underline_width/2 + iconf(ICONF_LINE_SPACING)/2,
                 .width = rctx.cbuffer[i - 1].x + win->char_width - rctx.cbuffer[k].x,
                 .height = win->underline_width
             });

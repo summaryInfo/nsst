@@ -24,7 +24,7 @@ static int optmap_cmp(const void *a, const void *b) {
 }
 
 static _Noreturn void usage(char *argv0, int code) {
-    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) > 0 || code == EXIT_SUCCESS) {
+    if (iconf(ICONF_LOG_LEVEL) > 0 || code == EXIT_SUCCESS) {
         printf("%s%s", argv0, " [-options] [-e] [command [args]]\n"
             "Where options are:\n"
                 "\t--help, -h\t\t\t(Print this message and exit)\n"
@@ -94,14 +94,14 @@ static void parse_geometry(char *arg, char *argv0) {
             if (xsgn == '-') x = -x;
             if (ysgn == '-') y = -y;
         } else if (res != 2) usage(argv0, EXIT_FAILURE);
-        nss_config_set_integer(NSS_ICONFIG_WINDOW_WIDTH, w);
-        nss_config_set_integer(NSS_ICONFIG_WINDOW_HEIGHT, h);
+        iconf_set(ICONF_WINDOW_WIDTH, w);
+        iconf_set(ICONF_WINDOW_HEIGHT, h);
     }
-    nss_config_set_integer(NSS_ICONFIG_HAS_GEOMETRY, 1);
-    nss_config_set_integer(NSS_ICONFIG_WINDOW_X, x);
-    nss_config_set_integer(NSS_ICONFIG_WINDOW_Y, y);
-    nss_config_set_integer(NSS_ICONFIG_WINDOW_NEGATIVE_X, xsgn == '-');
-    nss_config_set_integer(NSS_ICONFIG_WINDOW_NEGATIVE_Y, ysgn == '-');
+    iconf_set(ICONF_HAS_GEOMETRY, 1);
+    iconf_set(ICONF_WINDOW_X, x);
+    iconf_set(ICONF_WINDOW_Y, y);
+    iconf_set(ICONF_WINDOW_NEGATIVE_X, xsgn == '-');
+    iconf_set(ICONF_WINDOW_NEGATIVE_Y, ysgn == '-');
 }
 
 static void nss_parse_options(char **argv) {
@@ -128,12 +128,12 @@ static void nss_parse_options(char **argv) {
                 struct optmap_item *res = bsearch(&(struct optmap_item){opt, NULL, NULL, 0},
                         optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
                 if (res && arg)
-                    nss_config_set_string(res->opt, arg);
+                    sconf_set(res->opt, arg);
                 else if (arg && !strcmp(opt, "geometry"))
                     parse_geometry(arg, argv[0]);
                 else if (arg && !strncmp(opt, "color", 5) &&
                         sscanf(opt, "color%zu", &n) == 1)
-                    nss_config_set_string(NSS_CCONFIG_COLOR_0 + n, arg);
+                    sconf_set(CCONF_COLOR_0 + n, arg);
                 else  usage(argv[0], EXIT_FAILURE);
             } else {
                 if (!strcmp(opt, "help"))
@@ -150,7 +150,7 @@ static void nss_parse_options(char **argv) {
                     else if (!strncmp(opt, "without-", 8)) opt += 8, val = 0;
                     struct optmap_item *res = bsearch(&(struct optmap_item){opt, NULL, NULL, 0},
                             optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
-                    if (!res || !nss_config_bool(res->opt, val))
+                    if (!res || !bconf_set(res->opt, val))
                         usage(argv[0], EXIT_FAILURE);
                 }
             }
@@ -160,7 +160,7 @@ static void nss_parse_options(char **argv) {
             switch (letter) {
             case 'e':
                 if (!argv[++ind]) usage(argv[0], EXIT_FAILURE);
-                nss_config_set_argv((const char**)&argv[ind]);
+                sconf_set_argv((const char**)&argv[ind]);
                 return;
             case 'h':
                 usage(argv[0], EXIT_FAILURE);
@@ -173,19 +173,19 @@ static void nss_parse_options(char **argv) {
                 if (!argv[ind]) usage(argv[0], EXIT_FAILURE);
                 arg = argv[ind] + cind;
 
-                enum nss_config_opt opt = 0;
+                enum config_option opt = 0;
                 switch (letter) {
-                case 'f': opt = NSS_SCONFIG_FONT_NAME; break;
-                case 's': opt = NSS_SCONFIG_SHELL; break;
-                case 'D': opt = NSS_SCONFIG_TERM_NAME; break;
-                case 'o': opt = NSS_SCONFIG_PRINTER; break;
-                case 'c': opt = NSS_SCONFIG_TERM_CLASS; break;
+                case 'f': opt = SCONF_FONT_NAME; break;
+                case 's': opt = SCONF_SHELL; break;
+                case 'D': opt = SCONF_TERM_NAME; break;
+                case 'o': opt = SCONF_PRINTER; break;
+                case 'c': opt = SCONF_TERM_CLASS; break;
                 case 't':
-                case 'T': opt = NSS_SCONFIG_TITLE; break;
-                case 'V': opt = NSS_ICONFIG_VT_VERION; break;
-                case 'H': opt = NSS_ICONFIG_HISTORY_LINES; break;
+                case 'T': opt = SCONF_TITLE; break;
+                case 'V': opt = ICONF_VT_VERION; break;
+                case 'H': opt = ICONF_HISTORY_LINES; break;
                 }
-                if (opt) nss_config_set_string(opt, arg);
+                if (opt) sconf_set(opt, arg);
                 else if (letter == 'g') {
                     // Still need to parse geometry
                     parse_geometry(arg, argv[0]);
@@ -204,7 +204,7 @@ static void nss_parse_options(char **argv) {
         if (argv[ind]) ind++;
     }
 
-    if (argv[ind]) nss_config_set_argv((const char**)&argv[ind]);
+    if (argv[ind]) sconf_set_argv((const char**)&argv[ind]);
 }
 
 int main(int argc, char **argv) {
@@ -217,14 +217,14 @@ int main(int argc, char **argv) {
             (charset[3] == '8' || charset[4] == '8');
 
     // And enable UTF-8 support if locale encoding is UTF-8
-    nss_config_set_integer(NSS_ICONFIG_UTF8, bset);
+    iconf_set(ICONF_UTF8, bset);
 
     // This option should be process before everything else
     // since config loading happens during context initialization
     // which is performed before argv parsing
     for (char **opt = argv; *opt; opt++)
         if (!strcmp("--no-config-file", *opt))
-            nss_config_set_integer(NSS_ICONFIG_SKIP_CONFIG_FILE, 1);
+            iconf_set(ICONF_SKIP_CONFIG_FILE, 1);
 
     // Initialize graphical context
     nss_init_context();

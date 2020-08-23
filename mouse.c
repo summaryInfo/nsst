@@ -229,7 +229,7 @@ inline static _Bool is_separator(nss_char_t ch) {
         if (!ch) return 1;
         uint8_t cbuf[UTF8_MAX_LEN + 1];
         cbuf[utf8_encode(ch, cbuf, cbuf + UTF8_MAX_LEN)] = '\0';
-        return strstr(nss_config_string(NSS_SCONFIG_WORD_SEPARATORS), (char *)cbuf);
+        return strstr(sconf(SCONF_WORD_SEPARATORS), (char *)cbuf);
 }
 
 static void snap_selection(nss_term_t *term) {
@@ -423,7 +423,7 @@ static uint8_t *selection_data(nss_term_t *term) {
     } else return NULL;
 }
 
-static void change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss_color_t y, _Bool rectangular) {
+static void change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, color_t y, _Bool rectangular) {
     struct mouse_state *loc = nss_term_mouse_state(term);
     struct selected old = loc->n;
     uint8_t oldstate = loc->state;
@@ -435,9 +435,9 @@ static void change_selection(nss_term_t *term, uint8_t state, nss_coord_t x, nss
         struct timespec now;
         clock_gettime(NSS_CLOCK, &now);
 
-        if (TIMEDIFF(loc->click1, now) < nss_config_integer(NSS_ICONFIG_TRIPLE_CLICK_TIME)*(SEC/1000))
+        if (TIMEDIFF(loc->click1, now) < iconf(ICONF_TRIPLE_CLICK_TIME)*(SEC/1000))
             loc->snap = nss_ssnap_line;
-        else if (TIMEDIFF(loc->click0, now) < nss_config_integer(NSS_ICONFIG_DOUBLE_CLICK_TIME)*(SEC/1000))
+        else if (TIMEDIFF(loc->click0, now) < iconf(ICONF_DOUBLE_CLICK_TIME)*(SEC/1000))
             loc->snap = nss_ssnap_word;
         else
             loc->snap = nss_ssnap_none;
@@ -613,7 +613,7 @@ void nss_handle_mouse(nss_term_t *term, nss_mouse_event_t ev) {
         loc->y = ev.y;
     /* Scroll view */
     } else if (ev.event == nss_me_press && (ev.button == 3 || ev.button == 4)) {
-        nss_term_scroll_view(term, (2 *(ev.button == 3) - 1) * nss_config_integer(NSS_ICONFIG_SCROLL_AMOUNT));
+        nss_term_scroll_view(term, (2 *(ev.button == 3) - 1) * iconf(ICONF_SCROLL_AMOUNT));
     /* Select */
     } else if ((ev.event == nss_me_press && ev.button == 0) ||
                (ev.event == nss_me_motion && ev.mask & nss_ms_button_1 &&

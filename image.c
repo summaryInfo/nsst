@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-void nss_image_draw_rect(nss_image_t im, nss_rect_t rect, nss_color_t fg) {
+void nss_image_draw_rect(nss_image_t im, nss_rect_t rect, color_t fg) {
     if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height})) {
         for (size_t j = 0; j < (size_t)rect.height; j++) {
             for (size_t i = 0; i < (size_t)rect.width; i++) {
@@ -16,7 +16,7 @@ void nss_image_draw_rect(nss_image_t im, nss_rect_t rect, nss_color_t fg) {
         }
     }
 }
-void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t *glyph, nss_color_t fg, nss_rect_t clip) {
+void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t *glyph, color_t fg, nss_rect_t clip) {
     nss_rect_t rect = { dx - glyph->x, dy - glyph->y, glyph->width, glyph->height };
     if (intersect_with(&rect, &(nss_rect_t){0, 0, im.width, im.height}) &&
             intersect_with(&rect, &clip)) {
@@ -25,7 +25,7 @@ void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t
             for (size_t j = 0; j < (size_t)rect.height; j++) {
                 for (size_t i = 0; i < (size_t)rect.width; i++) {
                     uint8_t alpha = glyph->data[(j0 + j) * glyph->stride + i0 + i];
-                    nss_color_t *bg = &im.data[(rect.y + j) * im.width + (rect.x + i)];
+                    color_t *bg = &im.data[(rect.y + j) * im.width + (rect.x + i)];
                     *bg =
                         (((*bg >>  0) & 0xFF) * (255 - alpha) + ((fg >>  0) & 0xFF) * alpha) / 255 << 0 |
                         (((*bg >>  8) & 0xFF) * (255 - alpha) + ((fg >>  8) & 0xFF) * alpha) / 255 << 8 |
@@ -37,7 +37,7 @@ void nss_image_compose_glyph(nss_image_t im, int16_t dx, int16_t dy, nss_glyph_t
             for (size_t j = 0; j < (size_t)rect.height; j++) {
                 for (size_t i = 0; i < (size_t)rect.width; i++) {
                     uint8_t *alpha = &glyph->data[(j0 + j) * glyph->stride + 4 * (i0 + i)];
-                    nss_color_t *bg = &im.data[(rect.y + j) * im.width + (rect.x + i)];
+                    color_t *bg = &im.data[(rect.y + j) * im.width + (rect.x + i)];
                     *bg =
                         (((*bg >>  0) & 0xFF) * (255 - alpha[0]) + ((fg >>  0) & 0xFF) * alpha[0]) / 255 << 0 |
                         (((*bg >>  8) & 0xFF) * (255 - alpha[1]) + ((fg >>  8) & 0xFF) * alpha[1]) / 255 << 8 |

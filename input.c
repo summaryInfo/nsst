@@ -397,7 +397,7 @@ static void dump_reply(nss_term_t *term, nss_reply_t *reply) {
     str[strp] = '\0';
     nss_term_sendkey(term, str, 0);
 
-    if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT)) {
+    if (iconf(ICONF_TRACE_INPUT)) {
         char pre[4] = {'^'};
         if (reply->init < 0x80) pre[1] = reply->init ^ 0x40;
         else pre[1] = '[', pre[2] = reply->init ^ 0xC0;
@@ -500,7 +500,7 @@ _Bool nss_input_set_udk(nss_term_t *term, const uint8_t *str, const uint8_t *end
 void nss_handle_input(struct key k, nss_term_t *term) {
     struct keyboard_state *mode = nss_term_keyboard_state(term);
 
-    if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT)) {
+    if (iconf(ICONF_TRACE_INPUT)) {
         info("Key: sym=0x%X mask=0x%X ascii=0x%X utf32=0x%X",
                 k.sym, k.mask, k.ascii, k.utf32);
     }
@@ -532,7 +532,7 @@ void nss_handle_input(struct key k, nss_term_t *term) {
         if (k.is_fkey && k.mask & nss_mm_shift && mode->keyboard_mapping == keymap_vt220) {
             struct udk udk = reply.param[0] < UDK_MAX ? mode->udk[reply.param[0]] : (struct udk){0};
             if (udk.val) {
-                if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT))
+                if (iconf(ICONF_TRACE_INPUT))
                     info("Key str: '%s' ", udk.val);
                 nss_term_sendkey(term, udk.val, udk.len);
             }
@@ -569,7 +569,7 @@ void nss_handle_input(struct key k, nss_term_t *term) {
         } else {
             uint8_t ch = " XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXX"
                     "XXXXXXXXXXX*+,-./0123456789XXX=" [k.sym - XKB_KEY_KP_Space];
-            if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT))
+            if (iconf(ICONF_TRACE_INPUT))
                 info("Key char: (%x) '%c' ", ch, ch);
             nss_term_sendkey(term, &ch, 1);
         }
@@ -601,7 +601,7 @@ void nss_handle_input(struct key k, nss_term_t *term) {
                 }
             } else {
                 if (nss_term_is_nrcs_enabled(term))
-                    nrcs_encode(nss_config_integer(NSS_ICONFIG_KEYBOARD_NRCS), &k.utf32, 1);
+                    nrcs_encode(iconf(ICONF_KEYBOARD_NRCS), &k.utf32, 1);
 
                 if (k.utf32 > 0xFF) {
                     mode->appkey = saved_appkey;
@@ -620,7 +620,7 @@ void nss_handle_input(struct key k, nss_term_t *term) {
                 }
             }
             k.utf8data[k.utf8len] = '\0';
-            if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT))
+            if (iconf(ICONF_TRACE_INPUT))
                 info("Key char: (%x) '%s' ", k.utf32, k.utf8data);
             nss_term_sendkey(term, k.utf8data, k.utf8len);
         }
@@ -709,7 +709,7 @@ again:
     }
 
     if (has_t && !recur) {
-        c = nss_config_string(NSS_SCONFIG_TERM_MOD);
+        c = sconf(SCONF_TERM_MOD);
         end = c + strlen(c);
         recur = 1;
         goto again;
@@ -719,7 +719,7 @@ again:
 }
 
 uint32_t nss_input_force_mouse_mask(void) {
-    const char *tmodstr = nss_config_string(NSS_SCONFIG_FORCE_MOUSE_MOD);
+    const char *tmodstr = sconf(SCONF_FORCE_MOUSE_MOD);
     return decode_mask(tmodstr, tmodstr + strlen(tmodstr));
 }
 
@@ -727,7 +727,7 @@ void nss_input_set_hotkey(enum nss_shortcut_action sa, const char *c) {
     uint32_t sym, mask = 0;
     char *dash = strchr(c, '-');
 
-    if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT))
+    if (iconf(ICONF_TRACE_INPUT))
         info("Set hotkey: %d = '%s'", sa, c);
 
     if (dash) {

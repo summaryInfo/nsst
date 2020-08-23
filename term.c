@@ -64,7 +64,7 @@
 #define TABSR_CAP_STEP(x) (4*(x)/3)
 #define TABSR_MAX_ENTRY 6
 
-#define MAX_EXTRA_PALETTE (0x10000 - NSS_PALETTE_SIZE)
+#define MAX_EXTRA_PALETTE (0x10000 - PALETTE_SIZE)
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
 #define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
 #define STR_CAP_STEP(x) (4*(x)/3)
@@ -86,8 +86,8 @@ struct cursor {
     nss_coord_t x;
     nss_coord_t y;
     nss_cell_t cel;
-    nss_color_t fg;
-    nss_color_t bg;
+    color_t fg;
+    color_t bg;
     // Shift state
     uint8_t gl : 2;
     uint8_t gr : 2;
@@ -258,7 +258,7 @@ struct nss_term {
     uint16_t vt_level;
 
     nss_window_t *win;
-    nss_color_t *palette;
+    color_t *palette;
 
     pid_t child;
     int fd;
@@ -278,7 +278,7 @@ static void handle_chld(int arg) {
     ssize_t len = 0;
 
     pid_t pid = waitpid(-1, &status, WNOHANG);
-    uint32_t loglevel = nss_config_integer(NSS_ICONFIG_LOG_LEVEL);
+    uint32_t loglevel = iconf(ICONF_LOG_LEVEL);
 
     if (pid < 0) {
         if (loglevel > 1) len = snprintf(str, sizeof str,
@@ -323,7 +323,7 @@ static void exec_shell(const char *cmd, const char **args) {
     setenv("USER", pw->pw_name, 1);
     setenv("SHELL", sh, 1);
     setenv("HOME", pw->pw_dir, 1);
-    setenv("TERM", nss_config_string(NSS_SCONFIG_TERM_NAME), 1);
+    setenv("TERM", sconf(SCONF_TERM_NAME), 1);
 
     signal(SIGCHLD, SIG_DFL);
     signal(SIGHUP, SIG_DFL);
@@ -520,12 +520,12 @@ static int tty_open(nss_term_t *term, const char *cmd, const char **args) {
 
     struct termios tio = dtio;
 
-    tio.c_cc[VERASE] = nss_config_integer(NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE) ? '\177' : '\010';
+    tio.c_cc[VERASE] = iconf(ICONF_BACKSPACE_IS_DELETE) ? '\177' : '\010';
 
     /* If IUTF8 is defined, enable it by default,
      * when terminal itself is in UTF-8 mode */
 #ifdef IUTF8
-    if (nss_config_integer(NSS_ICONFIG_UTF8))
+    if (iconf(ICONF_UTF8))
         tio.c_iflag |= IUTF8;
 #endif
 
@@ -586,39 +586,39 @@ static _Bool optimize_line_palette(nss_line_t *line) {
             memset(new + buf_len, 0xFF, (line->pal->size - buf_len) * sizeof(nss_cid_t));
             buf_len = line->pal->size, buf = new;
         }
-        nss_cid_t k = NSS_PALETTE_SIZE, *pbuf = buf - NSS_PALETTE_SIZE;
+        nss_cid_t k = PALETTE_SIZE, *pbuf = buf - PALETTE_SIZE;
         for (nss_coord_t i = 0; i < line->width; i++) {
             nss_cell_t *cel = &line->cell[i];
-            if (cel->fg >= NSS_PALETTE_SIZE) pbuf[cel->fg] = 0;
-            if (cel->bg >= NSS_PALETTE_SIZE) pbuf[cel->bg] = 0;
+            if (cel->fg >= PALETTE_SIZE) pbuf[cel->fg] = 0;
+            if (cel->bg >= PALETTE_SIZE) pbuf[cel->bg] = 0;
         }
-        nss_color_t *pal = line->pal->data - NSS_PALETTE_SIZE;
-        for (nss_cid_t i = NSS_PALETTE_SIZE; i < line->pal->size + NSS_PALETTE_SIZE; i++) {
+        color_t *pal = line->pal->data - PALETTE_SIZE;
+        for (nss_cid_t i = PALETTE_SIZE; i < line->pal->size + PALETTE_SIZE; i++) {
             if (!pbuf[i]) {
                 pal[k] = pal[i];
-                for (nss_cid_t j = i + 1; j < line->pal->size + NSS_PALETTE_SIZE; j++)
+                for (nss_cid_t j = i + 1; j < line->pal->size + PALETTE_SIZE; j++)
                     if (pal[k] == pal[j]) pbuf[j] = k;
                 pbuf[i] = k++;
             }
         }
-        line->pal->size = k - NSS_PALETTE_SIZE;
+        line->pal->size = k - PALETTE_SIZE;
 
         for (nss_coord_t i = 0; i < line->width; i++) {
             nss_cell_t *cel = &line->cell[i];
-            if (cel->fg >= NSS_PALETTE_SIZE) cel->fg = pbuf[cel->fg];
-            if (cel->bg >= NSS_PALETTE_SIZE) cel->bg = pbuf[cel->bg];
+            if (cel->fg >= PALETTE_SIZE) cel->fg = pbuf[cel->fg];
+            if (cel->bg >= PALETTE_SIZE) cel->bg = pbuf[cel->bg];
         }
     }
 
     return 1;
 }
 
-static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
+static nss_cid_t alloc_color(nss_line_t *line, color_t col) {
     if (line->pal) {
         if (line->pal->size > 0 && line->pal->data[line->pal->size - 1] == col)
-            return NSS_PALETTE_SIZE + line->pal->size - 1;
+            return PALETTE_SIZE + line->pal->size - 1;
         if (line->pal->size > 1 && line->pal->data[line->pal->size - 2] == col)
-            return NSS_PALETTE_SIZE + line->pal->size - 2;
+            return PALETTE_SIZE + line->pal->size - 2;
     }
 
     if (!line->pal || line->pal->size + 1 > line->pal->caps) {
@@ -626,7 +626,7 @@ static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
         if (!line->pal || line->pal->size + 1 >= line->pal->caps) {
             if (line->pal && line->pal->caps == MAX_EXTRA_PALETTE) return NSS_SPECIAL_BG;
             size_t newc = CAPS_INC_STEP(line->pal ? line->pal->caps : 0);
-            nss_line_palette_t *new = realloc(line->pal, sizeof(nss_line_palette_t) + newc * sizeof(nss_color_t));
+            nss_line_palette_t *new = realloc(line->pal, sizeof(nss_line_palette_t) + newc * sizeof(color_t));
             if (!new) return NSS_SPECIAL_BG;
             if (!line->pal) new->size = 0;
             new->caps = newc;
@@ -635,24 +635,24 @@ static nss_cid_t alloc_color(nss_line_t *line, nss_color_t col) {
     }
 
     line->pal->data[line->pal->size++] = col;
-    return NSS_PALETTE_SIZE + line->pal->size - 1;
+    return PALETTE_SIZE + line->pal->size - 1;
 }
 
 inline static nss_cell_t fixup_color(nss_line_t *line, struct cursor *cur) {
     nss_cell_t cel = cur->cel;
-    if (__builtin_expect(cel.bg >= NSS_PALETTE_SIZE, 0))
+    if (__builtin_expect(cel.bg >= PALETTE_SIZE, 0))
         cel.bg = alloc_color(line, cur->bg);
-    if (__builtin_expect(cel.fg >= NSS_PALETTE_SIZE, 0))
+    if (__builtin_expect(cel.fg >= PALETTE_SIZE, 0))
         cel.fg = alloc_color(line, cur->fg);
     return cel;
 }
 
 inline static void copy_cell(nss_line_t *dst, ssize_t dx, nss_line_t *src, ssize_t sx, _Bool dmg) {
     nss_cell_t cel = src->cell[sx];
-    if (cel.fg >= NSS_PALETTE_SIZE) cel.fg = alloc_color(dst,
-            src->pal->data[cel.fg - NSS_PALETTE_SIZE]);
-    if (cel.bg >= NSS_PALETTE_SIZE) cel.bg = alloc_color(dst,
-            src->pal->data[cel.bg - NSS_PALETTE_SIZE]);
+    if (cel.fg >= PALETTE_SIZE) cel.fg = alloc_color(dst,
+            src->pal->data[cel.fg - PALETTE_SIZE]);
+    if (cel.bg >= PALETTE_SIZE) cel.bg = alloc_color(dst,
+            src->pal->data[cel.bg - PALETTE_SIZE]);
     if (dmg) cel.attr &= ~nss_attrib_drawn;
     dst->cell[dx] = cel;
 }
@@ -882,7 +882,7 @@ static ssize_t term_append_history(nss_term_t *term, nss_line_t *line, _Bool opt
             /* Minimize line size to save memory */
             if (opt && (*ptop)->pal) {
                 optimize_line_palette((*ptop));
-                nss_line_palette_t *pal = realloc((*ptop)->pal, sizeof(nss_line_palette_t) + sizeof(nss_color_t)*((*ptop)->pal->size));
+                nss_line_palette_t *pal = realloc((*ptop)->pal, sizeof(nss_line_palette_t) + sizeof(color_t)*((*ptop)->pal->size));
                 if (pal) {
                     (*ptop)->pal = pal;
                     pal->caps = pal->size;
@@ -901,7 +901,7 @@ static ssize_t term_append_history(nss_term_t *term, nss_line_t *line, _Bool opt
                     line = term_realloc_line(term, line, llen);
                 if (line->pal) {
                     optimize_line_palette(line);
-                    nss_line_palette_t *pal = realloc(line->pal, sizeof(nss_line_palette_t) + sizeof(nss_color_t)*(line->pal->size));
+                    nss_line_palette_t *pal = realloc(line->pal, sizeof(nss_line_palette_t) + sizeof(color_t)*(line->pal->size));
                     if (pal) {
                         line->pal = pal;
                         pal->caps = pal->size;
@@ -994,7 +994,7 @@ void nss_term_resize(nss_term_t *term, nss_coord_t width, nss_coord_t height) {
 
         if (width > term->width) {
             memset(new_tabs + term->width, 0, (width - term->width) * sizeof(new_tabs[0]));
-            nss_coord_t tab = term->width ? term->width - 1: 0, tabw = nss_config_integer(NSS_ICONFIG_TAB_WIDTH);
+            nss_coord_t tab = term->width ? term->width - 1: 0, tabw = iconf(ICONF_TAB_WIDTH);
             while (tab > 0 && !new_tabs[tab]) tab--;
             while ((tab += tabw) < width) new_tabs[tab] = 1;
         }
@@ -1359,7 +1359,7 @@ inline static void term_esc_finish_string(nss_term_t *term) {
 }
 
 static void term_esc_dump(nss_term_t *term, _Bool use_info) {
-    if (use_info && !nss_config_integer(NSS_ICONFIG_TRACE_CONTROLS)) return;
+    if (use_info && !iconf(ICONF_TRACE_CONTROLS)) return;
 
     char *pref = use_info ? "Seq: " : "Unrecognized ";
 
@@ -1404,7 +1404,7 @@ static void term_esc_dump(nss_term_t *term, _Bool use_info) {
     (use_info ? info : warn)("%s%s", pref, buf);
 }
 
-static size_t term_decode_color(nss_term_t *term, size_t arg, nss_color_t *rcol, nss_cid_t *rcid, nss_cid_t *valid) {
+static size_t term_decode_color(nss_term_t *term, size_t arg, color_t *rcol, nss_cid_t *rcid, nss_cid_t *valid) {
     *valid = 0;
     size_t argc = arg + 1 < ESC_MAX_PARAM;
     _Bool subpars = arg && (term->esc.subpar_mask >> (arg + 1)) & 1;
@@ -1412,7 +1412,7 @@ static size_t term_decode_color(nss_term_t *term, size_t arg, nss_color_t *rcol,
         !subpars ^ ((term->esc.subpar_mask >> i) & 1); i++) argc++;
     if (argc > 0) {
         if (term->esc.param[arg] == 2 && argc > 3) {
-            nss_color_t col = 0xFF;
+            color_t col = 0xFF;
             _Bool wrong = 0, space = subpars && argc > 4;
             for (size_t i = 1 + space; i < 4U + space; i++) {
                 wrong |= term->esc.param[arg + i] > 255;
@@ -1424,7 +1424,7 @@ static size_t term_decode_color(nss_term_t *term, size_t arg, nss_color_t *rcol,
             *valid = 1;
             if (!subpars) argc = MIN(argc, 4);
         } else if (term->esc.param[arg] == 5 && argc > 1) {
-            if (term->esc.param[arg + 1] < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS && term->esc.param[arg + 1] >= 0) {
+            if (term->esc.param[arg + 1] < PALETTE_SIZE - SPECIAL_PALETTE_SIZE && term->esc.param[arg + 1] >= 0) {
                 *rcid = term->esc.param[arg + 1];
                 *valid = 1;
             } else term_esc_dump(term, 0);
@@ -1437,7 +1437,7 @@ static size_t term_decode_color(nss_term_t *term, size_t arg, nss_color_t *rcol,
     return argc;
 }
 
-static void term_decode_sgr(nss_term_t *term, size_t i, nss_cell_t *mask, nss_cell_t *val, nss_color_t *fg, nss_color_t *bg) {
+static void term_decode_sgr(nss_term_t *term, size_t i, nss_cell_t *mask, nss_cell_t *val, color_t *fg, color_t *bg) {
 #define SET(f) (mask->attr |= (f), val->attr |= (f))
 #define RESET(f) (mask->attr |= (f), val->attr &= ~(f))
 #define SETFG(f) (mask->fg = 1, val->fg = (f))
@@ -1573,7 +1573,7 @@ static uint16_t term_checksum(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, 
 
 static void term_reverse_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
-    nss_color_t fg = 0, bg = 0;
+    color_t fg = 0, bg = 0;
     nss_cell_t mask = {0}, val = {0};
     term_decode_sgr(term, 4, &mask, &val, &fg, &bg);
 
@@ -1588,7 +1588,7 @@ static void term_reverse_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, n
     }
 }
 
-static void term_encode_sgr(char *dst, char *end, nss_cell_t cel, nss_color_t fg, nss_color_t bg) {
+static void term_encode_sgr(char *dst, char *end, nss_cell_t cel, color_t fg, color_t bg) {
     // Maximal sequence is 0;1;2;3;4;6;7;8;9;38:2:255:255:255;48:2:255:255:255
     // 64 byte buffer is enough
 #define FMT(...) dst += snprintf(dst, end - dst, __VA_ARGS__)
@@ -1608,14 +1608,14 @@ static void term_encode_sgr(char *dst, char *end, nss_cell_t cel, nss_color_t fg
     // Encode foreground color
     if (cel.fg < 8) FMT(";%d", 30 + cel.fg);
     else if (cel.fg < 16) FMT(";%d", 90 + cel.fg - 8);
-    else if (cel.fg < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) FMT(";38:5:%d", cel.fg);
+    else if (cel.fg < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";38:5:%d", cel.fg);
     else if (cel.fg == NSS_SPECIAL_FG) /* FMT(";39") -- default, skip */;
     else FMT(";38:2:%d:%d:%d", fg >> 16 & 0xFF, fg >>  8 & 0xFF, fg >>  0 & 0xFF);
 
     // Encode background color
     if (cel.bg < 8) FMT(";%d", 40 + cel.bg);
     else if (cel.bg < 16) FMT(";%d", 100 + cel.bg - 8);
-    else if (cel.bg < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS) FMT(";48:5:%d", cel.bg);
+    else if (cel.bg < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";48:5:%d", cel.bg);
     else if (cel.bg == NSS_SPECIAL_BG) /* FMT(";49") -- default, skip */;
     else FMT(";48:2:%d:%d:%d", bg >> 16 & 0xFF, bg >>  8 & 0xFF, bg >>  0 & 0xFF);
 #undef FMT
@@ -1631,22 +1631,22 @@ static void term_report_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, ns
     }
 
     nss_cell_t common = term->screen[ys]->cell[xs];
-    nss_color_t common_fg = 0, common_bg = 0;
+    color_t common_fg = 0, common_bg = 0;
     _Bool has_common_fg = 1, has_common_bg = 1;
     _Bool true_fg = 0, true_bg = 0;
 
-    if (common.fg >= NSS_PALETTE_SIZE && term->screen[ys]->pal)
-        common_fg = term->screen[ys]->pal->data[common.fg - NSS_PALETTE_SIZE], true_fg = 1;
-    if (common.bg >= NSS_PALETTE_SIZE && term->screen[ys]->pal)
-        common_bg = term->screen[ys]->pal->data[common.bg - NSS_PALETTE_SIZE], true_bg = 1;
+    if (common.fg >= PALETTE_SIZE && term->screen[ys]->pal)
+        common_fg = term->screen[ys]->pal->data[common.fg - PALETTE_SIZE], true_fg = 1;
+    if (common.bg >= PALETTE_SIZE && term->screen[ys]->pal)
+        common_bg = term->screen[ys]->pal->data[common.bg - PALETTE_SIZE], true_bg = 1;
 
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
         for (nss_coord_t i = xs; i < xe; i++) {
-            has_common_fg &= (common.fg == line->cell[i].fg || (true_fg && line->cell[i].fg >= NSS_PALETTE_SIZE &&
-                    common_fg == line->pal->data[line->cell[i].fg - NSS_PALETTE_SIZE]));
-            has_common_bg &= (common.bg == line->cell[i].bg || (true_bg && line->cell[i].bg >= NSS_PALETTE_SIZE &&
-                    common_bg == line->pal->data[line->cell[i].bg - NSS_PALETTE_SIZE]));
+            has_common_fg &= (common.fg == line->cell[i].fg || (true_fg && line->cell[i].fg >= PALETTE_SIZE &&
+                    common_fg == line->pal->data[line->cell[i].fg - PALETTE_SIZE]));
+            has_common_bg &= (common.bg == line->cell[i].bg || (true_bg && line->cell[i].bg >= PALETTE_SIZE &&
+                    common_bg == line->pal->data[line->cell[i].bg - PALETTE_SIZE]));
             common.attr &= line->cell[i].attr;
         }
     }
@@ -1661,7 +1661,7 @@ static void term_report_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, ns
 
 static void term_apply_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
-    nss_color_t fg = 0, bg = 0;
+    color_t fg = 0, bg = 0;
     nss_cell_t mask = {0}, val = {0};
     term_decode_sgr(term, 4, &mask, &val, &fg, &bg);
 
@@ -1670,8 +1670,8 @@ static void term_apply_sgr(nss_term_t *term, nss_coord_t xs, nss_coord_t ys, nss
     _Bool rect = term->mode.attr_ext_rectangle;
     for (; ys < ye; ys++) {
         nss_line_t *line = term->screen[ys];
-        if (val.fg >= NSS_PALETTE_SIZE) val.fg = alloc_color(line, fg);
-        if (val.bg >= NSS_PALETTE_SIZE) val.bg = alloc_color(line, bg);
+        if (val.fg >= PALETTE_SIZE) val.fg = alloc_color(line, fg);
+        if (val.bg >= PALETTE_SIZE) val.bg = alloc_color(line, bg);
         for (nss_coord_t i = xs; i < (rect || ys == ye - 1 ? xe : term_max_ox(term)); i++) {
             nss_cell_t *cel = &line->cell[i];
             cel->attr = (cel->attr & ~mask.attr) | (val.attr & mask.attr);
@@ -2162,9 +2162,9 @@ static void term_tabs(nss_term_t *term, nss_coord_t n) {
 
 void nss_term_set_reverse(nss_term_t *term, _Bool set) {
     if (set ^ term->mode.reverse_video) {
-        SWAP(nss_color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
-        SWAP(nss_color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
-        SWAP(nss_color_t, term->palette[NSS_SPECIAL_SELECTED_BG], term->palette[NSS_SPECIAL_SELECTED_FG]);
+        SWAP(color_t, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_FG]);
+        SWAP(color_t, term->palette[NSS_SPECIAL_CURSOR_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
+        SWAP(color_t, term->palette[NSS_SPECIAL_SELECTED_BG], term->palette[NSS_SPECIAL_SELECTED_FG]);
         nss_mouse_damage_selection(term);
         nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
     }
@@ -2204,49 +2204,49 @@ static void term_load_config(nss_term_t *term) {
 
     term->mode = (struct term_mode) {
         .focused = term->mode.focused,
-        .utf8 = nss_config_integer(NSS_ICONFIG_UTF8),
-        .title_query_utf8 = nss_config_integer(NSS_ICONFIG_UTF8),
-        .title_set_utf8 = nss_config_integer(NSS_ICONFIG_UTF8),
-        .disable_altscreen = !nss_config_integer(NSS_ICONFIG_ALLOW_ALTSCREEN),
-        .wrap = nss_config_integer(NSS_ICONFIG_INIT_WRAP),
-        .no_scroll_on_input = !nss_config_integer(NSS_ICONFIG_SCROLL_ON_INPUT),
-        .scroll_on_output = nss_config_integer(NSS_ICONFIG_SCROLL_ON_OUTPUT),
-        .enable_nrcs = nss_config_integer(NSS_ICONFIG_ALLOW_NRCS),
-        .keep_clipboard = nss_config_integer(NSS_ICONFIG_KEEP_CLIPBOARD),
-        .keep_selection = nss_config_integer(NSS_ICONFIG_KEEP_SELECTION),
-        .select_to_clipboard = nss_config_integer(NSS_ICONFIG_SELECT_TO_CLIPBOARD),
+        .utf8 = iconf(ICONF_UTF8),
+        .title_query_utf8 = iconf(ICONF_UTF8),
+        .title_set_utf8 = iconf(ICONF_UTF8),
+        .disable_altscreen = !iconf(ICONF_ALLOW_ALTSCREEN),
+        .wrap = iconf(ICONF_INIT_WRAP),
+        .no_scroll_on_input = !iconf(ICONF_SCROLL_ON_INPUT),
+        .scroll_on_output = iconf(ICONF_SCROLL_ON_OUTPUT),
+        .enable_nrcs = iconf(ICONF_ALLOW_NRCS),
+        .keep_clipboard = iconf(ICONF_KEEP_CLIPBOARD),
+        .keep_selection = iconf(ICONF_KEEP_SELECTION),
+        .select_to_clipboard = iconf(ICONF_SELECT_TO_CLIPBOARD),
     };
 
-    for (size_t i = 0; i < NSS_PALETTE_SIZE; i++)
-        term->palette[i] = nss_config_color(NSS_CCONFIG_COLOR_0 + i);
-    nss_term_set_reverse(term, nss_config_integer(NSS_ICONFIG_REVERSE_VIDEO));
+    for (size_t i = 0; i < PALETTE_SIZE; i++)
+        term->palette[i] = cconf(CCONF_COLOR_0 + i);
+    nss_term_set_reverse(term, iconf(ICONF_REVERSE_VIDEO));
 
     term->kstate = (struct keyboard_state) {
-        .appcursor = nss_config_integer(NSS_ICONFIG_INPUT_APPCURSOR),
-        .appkey = nss_config_integer(NSS_ICONFIG_INPUT_APPKEY),
-        .backspace_is_del = nss_config_integer(NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE),
-        .delete_is_del = nss_config_integer(NSS_ICONFIG_INPUT_DELETE_IS_DELETE),
-        .fkey_inc_step = nss_config_integer(NSS_ICONFIG_INPUT_FKEY_INCREMENT),
-        .has_meta = nss_config_integer(NSS_ICONFIG_INPUT_HAS_META),
-        .keyboard_mapping = nss_config_integer(NSS_ICONFIG_INPUT_MAPPING),
-        .keylock = nss_config_integer(NSS_ICONFIG_INPUT_LOCK),
-        .meta_escape = nss_config_integer(NSS_ICONFIG_INPUT_META_IS_ESC),
-        .modkey_cursor = nss_config_integer(NSS_ICONFIG_INPUT_MODIFY_CURSOR),
-        .modkey_fn = nss_config_integer(NSS_ICONFIG_INPUT_MODIFY_FUNCTION),
-        .modkey_keypad = nss_config_integer(NSS_ICONFIG_INPUT_MODIFY_KEYPAD),
-        .modkey_other = nss_config_integer(NSS_ICONFIG_INPUT_MODIFY_OTHER),
-        .modkey_other_fmt = nss_config_integer(NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT),
-        .modkey_legacy_allow_edit_keypad = nss_config_integer(NSS_ICONFIG_INPUT_MALLOW_EDIT),
-        .modkey_legacy_allow_function = nss_config_integer(NSS_ICONFIG_INPUT_MALLOW_FUNCTION),
-        .modkey_legacy_allow_keypad = nss_config_integer(NSS_ICONFIG_INPUT_MALLOW_KEYPAD),
-        .modkey_legacy_allow_misc = nss_config_integer(NSS_ICONFIG_INPUT_MALLOW_MISC),
-        .allow_numlock = nss_config_integer(NSS_ICONFIG_INPUT_NUMLOCK),
+        .appcursor = iconf(ICONF_APPCURSOR),
+        .appkey = iconf(ICONF_APPKEY),
+        .backspace_is_del = iconf(ICONF_BACKSPACE_IS_DELETE),
+        .delete_is_del = iconf(ICONF_DELETE_IS_DELETE),
+        .fkey_inc_step = iconf(ICONF_FKEY_INCREMENT),
+        .has_meta = iconf(ICONF_HAS_META),
+        .keyboard_mapping = iconf(ICONF_MAPPING),
+        .keylock = iconf(ICONF_LOCK),
+        .meta_escape = iconf(ICONF_META_IS_ESC),
+        .modkey_cursor = iconf(ICONF_MODIFY_CURSOR),
+        .modkey_fn = iconf(ICONF_MODIFY_FUNCTION),
+        .modkey_keypad = iconf(ICONF_MODIFY_KEYPAD),
+        .modkey_other = iconf(ICONF_MODIFY_OTHER),
+        .modkey_other_fmt = iconf(ICONF_MODIFY_OTHER_FMT),
+        .modkey_legacy_allow_edit_keypad = iconf(ICONF_MALLOW_EDIT),
+        .modkey_legacy_allow_function = iconf(ICONF_MALLOW_FUNCTION),
+        .modkey_legacy_allow_keypad = iconf(ICONF_MALLOW_KEYPAD),
+        .modkey_legacy_allow_misc = iconf(ICONF_MALLOW_MISC),
+        .allow_numlock = iconf(ICONF_NUMLOCK),
     };
 
     term->c = term->back_cs = term->cs = (struct cursor) {
         .cel = MKCELL(NSS_SPECIAL_FG, NSS_SPECIAL_BG, 0, 0),
-        .fg = nss_config_color(NSS_CCONFIG_FG),
-        .bg = nss_config_color(NSS_CCONFIG_BG),
+        .fg = cconf(CCONF_FG),
+        .bg = cconf(CCONF_BG),
         .gl = 0, .gl_ss = 0, .gr = 2,
         .upcs = cs94_dec_sup,
         .gn = {cs94_ascii, cs94_ascii, cs94_ascii, cs94_ascii}
@@ -2255,23 +2255,23 @@ static void term_load_config(nss_term_t *term) {
     term->vt_level = term->vt_version / 100;
     if (!term->vt_level) term_set_vt52(term, 1);
 
-    switch(nss_config_integer(NSS_ICONFIG_BELL_VOLUME)) {
+    switch(iconf(ICONF_BELL_VOLUME)) {
     case 0: term->bvol = 0; break;
-    case 1: term->bvol = nss_config_integer(NSS_ICONFIG_BELL_LOW_VOLUME); break;
-    case 2: term->bvol = nss_config_integer(NSS_ICONFIG_BELL_HIGH_VOLUME);
+    case 1: term->bvol = iconf(ICONF_BELL_LOW_VOLUME); break;
+    case 2: term->bvol = iconf(ICONF_BELL_HIGH_VOLUME);
     }
 
-    switch(nss_config_integer(NSS_ICONFIG_MARGIN_BELL_VOLUME)) {
+    switch(iconf(ICONF_MARGIN_BELL_VOLUME)) {
     case 0: term->mbvol = 0; break;
-    case 1: term->mbvol = nss_config_integer(NSS_ICONFIG_MARGIN_BELL_LOW_VOLUME); break;
-    case 2: term->mbvol = nss_config_integer(NSS_ICONFIG_MARGIN_BELL_HIGH_VOLUME);
+    case 1: term->mbvol = iconf(ICONF_MARGIN_BELL_LOW_VOLUME); break;
+    case 2: term->mbvol = iconf(ICONF_MARGIN_BELL_HIGH_VOLUME);
     }
 
 }
 
 static void term_reset_tabs(nss_term_t *term) {
     memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
-    nss_coord_t tabw = nss_config_integer(NSS_ICONFIG_TAB_WIDTH);
+    nss_coord_t tabw = iconf(ICONF_TAB_WIDTH);
     for (nss_coord_t i = tabw; i < term->width; i += tabw)
         term->tabs[i] = 1;
 }
@@ -2300,7 +2300,7 @@ static void term_set_132(nss_term_t *term, _Bool set) {
     term_move_to(term, term_min_ox(term), term_min_oy(term));
     if (!(term->mode.preserve_display_132))
         term_erase(term, 0, 0, term->width, term->height, 0);
-    if (nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS))
+    if (iconf(ICONF_ALLOW_WINDOW_OPS))
         term_request_resize(term, set ? 132 : 80, 24, 1);
     term->mode.columns_132 = set;
 }
@@ -2318,10 +2318,10 @@ static void term_reset(nss_term_t *term, _Bool hard) {
     nss_input_reset_udk(term);
 
     nss_window_set_mouse(term->win, 0);
-    nss_window_set_cursor(term->win, nss_config_integer(NSS_ICONFIG_CURSOR_SHAPE));
+    nss_window_set_cursor(term->win, iconf(ICONF_CURSOR_SHAPE));
     nss_window_set_colors(term->win, term->palette[NSS_SPECIAL_BG], term->palette[NSS_SPECIAL_CURSOR_FG]);
-    nss_window_set_bell_raise(term->win, nss_config_integer(NSS_ICONFIG_RAISE_ON_BELL));
-    nss_window_set_bell_urgent(term->win, nss_config_integer(NSS_ICONFIG_URGENT_ON_BELL));
+    nss_window_set_bell_raise(term->win, iconf(ICONF_RAISE_ON_BELL));
+    nss_window_set_bell_urgent(term->win, iconf(ICONF_URGENT_ON_BELL));
 
     if (hard) {
         term_cursor_mode(term, 1);
@@ -2349,12 +2349,12 @@ void nss_term_reset(nss_term_t *term) {
 nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t height) {
     nss_term_t *term = calloc(1, sizeof(nss_term_t));
 
-    term->palette = malloc(NSS_PALETTE_SIZE * sizeof(nss_color_t));
+    term->palette = malloc(PALETTE_SIZE * sizeof(color_t));
     term->win = win;
 
     term->printerfd = -1;
-    term->sb_max_caps = nss_config_integer(NSS_ICONFIG_HISTORY_LINES);
-    term->vt_version = nss_config_integer(NSS_ICONFIG_VT_VERION);
+    term->sb_max_caps = iconf(ICONF_HISTORY_LINES);
+    term->vt_version = iconf(ICONF_VT_VERION);
     term->fd_start = term->fd_end = term->fd_buf;
     term->sb_top = -1;
 
@@ -2366,7 +2366,7 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t he
         term_swap_screen(term, 0);
     }
 
-    if (tty_open(term, nss_config_string(NSS_SCONFIG_SHELL), nss_config_argv()) < 0) {
+    if (tty_open(term, sconf(SCONF_SHELL), sconf_argv()) < 0) {
         warn("Can't create tty");
         nss_free_term(term);
         return NULL;
@@ -2374,7 +2374,7 @@ nss_term_t *nss_create_term(nss_window_t *win, nss_coord_t width, nss_coord_t he
 
     nss_term_resize(term, width, height);
 
-    const char *printer_path = nss_config_string(NSS_SCONFIG_PRINTER);
+    const char *printer_path = sconf(SCONF_PRINTER);
     if (printer_path) {
         if (printer_path[0] == '-' && !printer_path[1])
             term->printerfd = STDOUT_FILENO;
@@ -2685,14 +2685,14 @@ static void term_dispatch_dcs(nss_term_t *term) {
                 break;
             case 't' << 8 | ' ': /* -> DECSWBV */ {
                 nss_param_t val = 8;
-                if (term->bvol == nss_config_integer(NSS_ICONFIG_BELL_LOW_VOLUME)) val = 4;
+                if (term->bvol == iconf(ICONF_BELL_LOW_VOLUME)) val = 4;
                 else if (!term->bvol) val = 0;
                 nss_term_answerback(term, DCS"1$r%"PRIparam" t"ST, val);
                 break;
             }
             case 'u' << 8 | ' ': /* -> DECSMBV */ {
                 nss_param_t val = 8;
-                if (term->mbvol == nss_config_integer(NSS_ICONFIG_MARGIN_BELL_LOW_VOLUME)) val = 4;
+                if (term->mbvol == iconf(ICONF_MARGIN_BELL_LOW_VOLUME)) val = 4;
                 else if (!term->mbvol) val = 0;
                 nss_term_answerback(term, DCS"1$r%"PRIparam" u"ST, val);
                 break;
@@ -2742,7 +2742,7 @@ static void term_dispatch_dcs(nss_term_t *term) {
         if (!strcmp((char *)dstr, "436F") || // "Co"
                 !strcmp((char *)dstr, "636F6C6F7266")) { // "colors"
             uint8_t tmp[16];
-            int len = snprintf((char *)tmp, sizeof tmp, "%d", NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS);
+            int len = snprintf((char *)tmp, sizeof tmp, "%d", PALETTE_SIZE - SPECIAL_PALETTE_SIZE);
             *dend = '=';
             hex_encode(dend + 1, tmp, tmp + len);
             valid = 1;
@@ -2784,7 +2784,7 @@ static uint32_t selector_to_cid(uint32_t sel, _Bool rev) {
     return 0;
 }
 
-static void term_colors_changed(nss_term_t *term, uint32_t sel, nss_color_t col) {
+static void term_colors_changed(nss_term_t *term, uint32_t sel, color_t col) {
     switch(sel) {
     case 10:
         if(term->mode.reverse_video)
@@ -2806,7 +2806,7 @@ static void term_colors_changed(nss_term_t *term, uint32_t sel, nss_color_t col)
 }
 
 static void term_do_set_color(nss_term_t *term, uint32_t sel, uint8_t *dstr, uint8_t *dend) {
-    nss_color_t col;
+    color_t col;
     nss_cid_t cid = selector_to_cid(sel, term->mode.reverse_video);
 
     if (!strcmp((char *)dstr, "?")) {
@@ -2827,10 +2827,10 @@ static void term_do_set_color(nss_term_t *term, uint32_t sel, uint8_t *dstr, uin
 static void term_do_reset_color(nss_term_t *term) {
     nss_cid_t cid = selector_to_cid(term->esc.selector - 100, term->mode.reverse_video);
 
-    term->palette[cid] = nss_config_color(NSS_CCONFIG_COLOR_0 + selector_to_cid(term->esc.selector - 100, 0));
+    term->palette[cid] = cconf(CCONF_COLOR_0 + selector_to_cid(term->esc.selector - 100, 0));
 
     term_colors_changed(term, term->esc.selector - 100, term->esc.selector == 111 ?
-            nss_config_color(NSS_CCONFIG_CURSOR_BG) : term->palette[cid]);
+            cconf(CCONF_CURSOR_BG) : term->palette[cid]);
 }
 
 inline static _Bool is_osc_state(uint32_t state) {
@@ -2848,7 +2848,7 @@ static void term_dispatch_osc(nss_term_t *term) {
     uint8_t *dend = dstr + term->esc.str_len;
 
     switch (term->esc.selector) {
-        nss_color_t col;
+        color_t col;
     case 0: /* Change window icon name and title */
     case 1: /* Change window icon name */
     case 2: /* Change window title */ {
@@ -2894,7 +2894,7 @@ static void term_dispatch_osc(nss_term_t *term) {
             if ((pnext = memchr(parg, ';', dend - parg))) *pnext = '\0';
             else pnext = dend;
 
-            if (!errno && s_end == parg - 1 && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS + 5) {
+            if (!errno && s_end == parg - 1 && idx < PALETTE_SIZE - SPECIAL_PALETTE_SIZE + 5) {
                 if (parg[0] == '?' && parg[1] == '\0')
                     nss_term_answerback(term, OSC"%"PRIparam";%"PRIparam";rgb:%04x/%04x/%04x"ST,
                             term->esc.selector, idx - (term->esc.selector == 5) * NSS_SPECIAL_BOLD,
@@ -2925,15 +2925,15 @@ static void term_dispatch_osc(nss_term_t *term) {
                 errno = 0;
                 unsigned long idx = strtoul((char *)dstr, (char **)&s_end, 10);
                 if (term->esc.selector == 105) idx += NSS_SPECIAL_BOLD;
-                if (!errno && !*s_end && s_end != dstr && idx < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS + 5)
-                    term->palette[idx] = nss_config_color(NSS_CCONFIG_COLOR_0 + idx);
+                if (!errno && !*s_end && s_end != dstr && idx < PALETTE_SIZE - SPECIAL_PALETTE_SIZE + 5)
+                    term->palette[idx] = cconf(CCONF_COLOR_0 + idx);
                 else term_esc_dump(term, 0);
                 if (pnext != dend) *pnext = ';';
                 dstr = pnext + 1;
             } while (pnext != dend);
         } else {
-            for (size_t i = 0; i < NSS_PALETTE_SIZE - NSS_SPECIAL_COLORS + 5; i++)
-                term->palette[i] = nss_config_color(NSS_CCONFIG_COLOR_0 + i);
+            for (size_t i = 0; i < PALETTE_SIZE - SPECIAL_PALETTE_SIZE + 5; i++)
+                term->palette[i] = cconf(CCONF_COLOR_0 + i);
         }
         break;
     }
@@ -2943,7 +2943,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         ssize_t n;
         nss_param_t idx, val;
         if (sscanf((char *)dstr, "%"SCNparam";%"SCNparam"%zn", &idx, &val, &n) == 2 && n == dend - dstr && idx < 5)
-            nss_config_set_integer(NSS_ICONFIG_SPEICAL_BOLD + idx, !!val);
+            iconf_set(ICONF_SPEICAL_BOLD + idx, !!val);
         else term_esc_dump(term, 0);
         break;
     }
@@ -2972,7 +2972,7 @@ static void term_dispatch_osc(nss_term_t *term) {
         term_do_reset_color(term);
         break;
     case 52: /* Manipulate selecion data */ {
-        if (!nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS)) break;
+        if (!iconf(ICONF_ALLOW_WINDOW_OPS)) break;
 
         nss_clipboard_target_t ts[nss_ct_MAX] = {0};
         _Bool toclip = term->mode.select_to_clipboard;
@@ -3575,7 +3575,7 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
         return;
     }
 
-    if (nss_config_integer(NSS_ICONFIG_TRACE_CHARACTERS))
+    if (iconf(ICONF_TRACE_CHARACTERS))
         info("Char: (%x) '%lc' ", ch, ch);
 
     // Wrap line if needed
@@ -3614,7 +3614,7 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
     }
 
     if (term->mode.margin_bell) {
-        nss_coord_t bcol = term->right - nss_config_integer(NSS_ICONFIG_MARGIN_BELL_COLUMN);
+        nss_coord_t bcol = term->right - iconf(ICONF_MARGIN_BELL_COLUMN);
         if (term->c.x < bcol && term->c.x + width >= bcol)
             nss_window_bell(term->win, term->mbvol);
     }
@@ -3629,7 +3629,7 @@ static void term_putchar(nss_term_t *term, nss_char_t ch) {
 static void term_dispatch_window_op(nss_term_t *term) {
     nss_param_t pa = PARAM(0, 24);
     // Only title operations allowed by default
-    if (!nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS) &&
+    if (!iconf(ICONF_ALLOW_WINDOW_OPS) &&
             (pa < 20 || pa > 23)) return;
 
     switch (pa) {
@@ -3829,7 +3829,7 @@ static void term_report_cursor(nss_term_t *term) {
     if (term->c.cel.attr & nss_attrib_blink) csgr[0] |= 4;
     if (term->c.cel.attr & nss_attrib_inverse) csgr[0] |= 8;
 
-    if (nss_config_integer(NSS_ICONFIG_EXTENDED_CIR)) {
+    if (iconf(ICONF_EXTENDED_CIR)) {
         csgr[0] |= 0x20;
         csgr[1] |= 0x40;
         // Extended byte
@@ -3997,7 +3997,7 @@ static void term_dispatch_csi(nss_term_t *term) {
             erase(term, 0, 0, term->width, term->height, 0);
             break;
         case 3: /* Scrollback */
-            if (nss_config_integer(NSS_ICONFIG_ALLOW_ERASE_SCROLLBACK) && !term->mode.altscreen) {
+            if (iconf(ICONF_ALLOW_ERASE_SCROLLBACK) && !term->mode.altscreen) {
                 term_free_scrollback(term);
                 break;
             }
@@ -4128,15 +4128,15 @@ static void term_dispatch_csi(nss_term_t *term) {
             }
         } else {
             if (inone || p == 0) {
-                term->kstate.modkey_legacy_allow_keypad = nss_config_integer(NSS_ICONFIG_INPUT_MALLOW_KEYPAD);
-                term->kstate.modkey_legacy_allow_edit_keypad = nss_config_integer(NSS_ICONFIG_INPUT_MALLOW_EDIT);
-                term->kstate.modkey_legacy_allow_function = nss_config_integer(NSS_ICONFIG_INPUT_MALLOW_FUNCTION);
-                term->kstate.modkey_legacy_allow_misc = nss_config_integer(NSS_ICONFIG_INPUT_MALLOW_MISC);
+                term->kstate.modkey_legacy_allow_keypad = iconf(ICONF_MALLOW_KEYPAD);
+                term->kstate.modkey_legacy_allow_edit_keypad = iconf(ICONF_MALLOW_EDIT);
+                term->kstate.modkey_legacy_allow_function = iconf(ICONF_MALLOW_FUNCTION);
+                term->kstate.modkey_legacy_allow_misc = iconf(ICONF_MALLOW_MISC);
             }
-            if (inone || p == 1) term->kstate.modkey_cursor = nss_config_integer(NSS_ICONFIG_INPUT_MODIFY_CURSOR);
-            if (inone || p == 2) term->kstate.modkey_fn = nss_config_integer(NSS_ICONFIG_INPUT_MODIFY_FUNCTION);
-            if (inone || p == 3) term->kstate.modkey_keypad = nss_config_integer(NSS_ICONFIG_INPUT_MODIFY_KEYPAD);
-            if (inone || p == 4) term->kstate.modkey_other = nss_config_integer(NSS_ICONFIG_INPUT_MODIFY_OTHER);
+            if (inone || p == 1) term->kstate.modkey_cursor = iconf(ICONF_MODIFY_CURSOR);
+            if (inone || p == 2) term->kstate.modkey_fn = iconf(ICONF_MODIFY_FUNCTION);
+            if (inone || p == 3) term->kstate.modkey_keypad = iconf(ICONF_MODIFY_KEYPAD);
+            if (inone || p == 4) term->kstate.modkey_other = iconf(ICONF_MODIFY_OTHER);
         }
         break;
     }
@@ -4330,11 +4330,11 @@ static void term_dispatch_csi(nss_term_t *term) {
         }
         break;
     case C('|') | I0('$'): /* DECSCPP */
-        if (nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS))
+        if (iconf(ICONF_ALLOW_WINDOW_OPS))
             term_request_resize(term, PARAM(0, 80), -1, 1);
         break;
     case C('|') | I0('*'): /* DECSNLS */
-        if (nss_config_integer(NSS_ICONFIG_ALLOW_WINDOW_OPS))
+        if (iconf(ICONF_ALLOW_WINDOW_OPS))
             term_request_resize(term, -1, PARAM(0, 24), 1);
     case C('W') | P('?'): /* DECST8C */
         if (PARAM(0, 5) == 5) term_reset_tabs(term);
@@ -4404,10 +4404,10 @@ static void term_dispatch_csi(nss_term_t *term) {
             term->bvol = 0;
             break;
         case 2: case 3: case 4:
-            term->bvol = nss_config_integer(NSS_ICONFIG_BELL_LOW_VOLUME);
+            term->bvol = iconf(ICONF_BELL_LOW_VOLUME);
             break;
         default:
-            term->bvol = nss_config_integer(NSS_ICONFIG_BELL_HIGH_VOLUME);
+            term->bvol = iconf(ICONF_BELL_HIGH_VOLUME);
         }
         break;
     case C('u') | I0(' '): /* DECSMBV */
@@ -4416,10 +4416,10 @@ static void term_dispatch_csi(nss_term_t *term) {
             term->mbvol = 0;
             break;
         case 2: case 3: case 4:
-            term->mbvol = nss_config_integer(NSS_ICONFIG_MARGIN_BELL_LOW_VOLUME);
+            term->mbvol = iconf(ICONF_MARGIN_BELL_LOW_VOLUME);
             break;
         default:
-            term->mbvol = nss_config_integer(NSS_ICONFIG_MARGIN_BELL_HIGH_VOLUME);
+            term->mbvol = iconf(ICONF_MARGIN_BELL_HIGH_VOLUME);
         }
         break;
     case C('w') | I0('\''): /* DECEFR */ {
@@ -4496,7 +4496,7 @@ static void term_dispatch_csi(nss_term_t *term) {
 }
 
 static void term_dispatch_esc(nss_term_t *term) {
-    if (nss_config_integer(NSS_ICONFIG_TRACE_CONTROLS)) {
+    if (iconf(ICONF_TRACE_CONTROLS)) {
         if (term->esc.selector != E('[') && term->esc.selector != E('P') &&
                 term->esc.selector != E(']'))
             term_esc_dump(term, 1);
@@ -4678,7 +4678,7 @@ static void term_dispatch_esc(nss_term_t *term) {
 }
 
 static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
-    if (nss_config_integer(NSS_ICONFIG_TRACE_CONTROLS) && ch != 0x1B)
+    if (iconf(ICONF_TRACE_CONTROLS) && ch != 0x1B)
         info("Seq: ^%c", ch ^ 0x40);
 
     switch (ch) {
@@ -4689,7 +4689,7 @@ static void term_dispatch_c0(nss_term_t *term, nss_char_t ch) {
     case 0x04: /* EOT (IGNORE) */
         break;
     case 0x05: /* ENQ */
-        nss_term_answerback(term, "%s", nss_config_string(NSS_SCONFIG_ANSWERBACK_STRING));
+        nss_term_answerback(term, "%s", sconf(SCONF_ANSWERBACK_STRING));
         break;
     case 0x06: /* ACK (IGNORE) */
         break;
@@ -5023,7 +5023,7 @@ static void term_dispatch(nss_term_t *term, nss_char_t ch) {
             // In theory this should be disabled while in UTF-8 mode, but
             // in practive applications use these symbols, so keep translating.
             // But decode only allow only DEC Graph in GL, unless configured otherwise
-            if (term->mode.utf8 && !nss_config_integer(NSS_ICONFIG_FORCE_UTF8_NRCS))
+            if (term->mode.utf8 && !iconf(ICONF_FORCE_UTF8_NRCS))
                 ch = nrcs_decode_fast(glv, ch);
             else
                 ch = nrcs_decode(glv, term->c.gn[term->c.gr], term->c.upcs, ch, term->mode.enable_nrcs);
@@ -5168,7 +5168,7 @@ void nss_term_answerback(nss_term_t *term, const char *str, ...) {
     va_end(vl);
     term_tty_write(term, csi, res);
 
-    if (nss_config_integer(NSS_ICONFIG_TRACE_INPUT)) {
+    if (iconf(ICONF_TRACE_INPUT)) {
         ssize_t j = MAX_REPORT;
         for (size_t i = res; i; i--) {
             if (IS_C0(csi[i - 1]) || IS_DEL(csi[i - 1]))

@@ -24,7 +24,7 @@
 #endif
 
 typedef int16_t nss_coord_t;
-typedef uint32_t nss_color_t;
+typedef uint32_t color_t;
 typedef uint32_t nss_char_t;
 typedef struct nss_rect {
     int16_t x;
@@ -101,7 +101,7 @@ const uint8_t *hex_decode(uint8_t *dst, const uint8_t *hex, const uint8_t *end);
 uint8_t *base64_encode(uint8_t *dst, const uint8_t *buf, const uint8_t *end);
 const uint8_t *base64_decode(uint8_t *dst, const uint8_t *buf, const uint8_t *end);
 
-nss_color_t parse_color(const uint8_t *str, const uint8_t *end);
+color_t parse_color(const uint8_t *str, const uint8_t *end);
 
 /* Unicode precomposition */
 nss_char_t try_precompose(nss_char_t ch, nss_char_t comb);

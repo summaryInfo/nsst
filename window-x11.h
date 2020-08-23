@@ -47,8 +47,8 @@ struct nss_renderer {
 };
 
 struct nss_cellspec {
-    nss_color_t fg;
-    nss_color_t bg;
+    color_t fg;
+    color_t bg;
     nss_char_t ch;
     uint8_t face;
     _Bool underlined;
@@ -113,8 +113,8 @@ struct nss_window {
     int16_t saved_width;
     int16_t saved_height;
 
-    nss_color_t bg;
-    nss_color_t cursor_fg;
+    color_t bg;
+    color_t cursor_fg;
     nss_cursor_type_t cursor_type;
 
     uint8_t *clipped[nss_ct_MAX];
@@ -160,7 +160,7 @@ void nss_renderer_copy(nss_window_t *win, nss_rect_t dst, int16_t sx, int16_t sy
 void nss_window_set_default_props(nss_window_t *win);
 void nss_window_handle_resize(nss_window_t *win, int16_t width, int16_t height);
 nss_window_t *nss_find_shared_font(nss_window_t *win, _Bool need_free);
-struct nss_cellspec nss_describe_cell(nss_cell_t cell, nss_color_t *palette, nss_color_t *extra, _Bool blink, _Bool selected);
+struct nss_cellspec nss_describe_cell(nss_cell_t cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected);
 
 #endif
 

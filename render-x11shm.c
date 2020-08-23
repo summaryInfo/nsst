@@ -59,7 +59,7 @@ static nss_image_t nss_create_image_shm(nss_window_t *win, int16_t width, int16_
         .height = height,
         .shmid = -1,
     };
-    size_t size = width * height * sizeof(nss_color_t);
+    size_t size = width * height * sizeof(color_t);
 
     if (rctx.has_shm) {
 #if USE_POSIX_SHM
@@ -137,7 +137,7 @@ static nss_image_t nss_create_image_shm(nss_window_t *win, int16_t width, int16_
 static void nss_free_image_shm(nss_image_t *im) {
     if (rctx.has_shm) {
 #if USE_POSIX_SHM
-        if (im->data) munmap(im->data, im->width * im->height * sizeof(nss_color_t));
+        if (im->data) munmap(im->data, im->width * im->height * sizeof(color_t));
         if (im->shmid >= 0) close(im->shmid);
 #else
         if (im->data) shmdt(im->data);
@@ -235,7 +235,7 @@ static void optimize_bounds(nss_rect_t *bounds, size_t *boundc, _Bool fine_grain
     *boundc = j;
 }
 
-_Bool nss_window_submit_screen(nss_window_t *win, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
+_Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
 
     _Bool scrolled = win->ren.boundc;
     _Bool cond_cblink = !win->blink_commited && (win->cursor_type & 1) && nss_term_is_cursor_enabled(win->term);
@@ -267,15 +267,15 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_color_t *palette, nss_coor
                         win->blink_state, nss_mouse_is_selected_in_view(win->term, i, k));
 
                 if (spec.ch) glyph = nss_cache_fetch(win->font_cache, spec.ch, spec.face);
-                g_wide = glyph && glyph->x_off > win->char_width - nss_config_integer(NSS_ICONFIG_FONT_SPACING);
+                g_wide = glyph && glyph->x_off > win->char_width - iconf(ICONF_FONT_SPACING);
             }
 
             if (dirty || (g_wide && next_dirty)) {
                 int16_t cw = win->char_width, ch = win->char_height;
                 int16_t cd = win->char_depth, ul = win->underline_width;
                 int16_t x = i * cw, y = k * (ch + cd);
-                int16_t ls = nss_config_integer(NSS_ICONFIG_LINE_SPACING)/2;
-                int16_t fs = nss_config_integer(NSS_ICONFIG_FONT_SPACING)/2;
+                int16_t ls = iconf(ICONF_LINE_SPACING)/2;
+                int16_t fs = iconf(ICONF_FONT_SPACING)/2;
 
                 nss_rect_t r_cell = { x, y, cw * (1 + spec.wide), ch + cd};
                 nss_rect_t r_under = { x + fs, y + ch + 1 + ls, cw, ul };
@@ -306,7 +306,7 @@ _Bool nss_window_submit_screen(nss_window_t *win, nss_color_t *palette, nss_coor
         }
         if (l_bound.x >= 0 || (scrolled && win->cw > line.width)) {
             if (win->cw > line.width) {
-                nss_color_t c = win->bg;
+                color_t c = win->bg;
                 if (nss_mouse_is_selected_in_view(win->term, win->cw - 1, k)) {
                     c = palette[NSS_SPECIAL_SELECTED_BG];
                     if (!c) c = palette[NSS_SPECIAL_FG];
@@ -383,7 +383,7 @@ void nss_renderer_update(nss_window_t *win, nss_rect_t rect) {
     } else {
         xcb_put_image(con, XCB_IMAGE_FORMAT_Z_PIXMAP, win->wid, win->gc,
                 win->ren.im.width, rect.height, win->left_border,
-                win->top_border + rect.y, 0, 32, rect.height * win->ren.im.width * sizeof(nss_color_t),
+                win->top_border + rect.y, 0, 32, rect.height * win->ren.im.width * sizeof(color_t),
                 (const uint8_t *)(win->ren.im.data+rect.y*win->ren.im.width));
     }
 }

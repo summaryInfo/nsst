@@ -92,7 +92,7 @@ typedef struct nss_mouse_event {
 
 typedef struct nss_window nss_window_t;
 typedef struct nss_line_iter nss_line_iter_t;
-typedef uint32_t nss_color_t;
+typedef uint32_t color_t;
 typedef int16_t nss_coord_t;
 
 void nss_init_context(void);
@@ -102,7 +102,7 @@ void nss_context_run(void);
 nss_window_t *nss_create_window();
 void nss_free_window(nss_window_t *win);
 
-_Bool nss_window_submit_screen(nss_window_t *win, nss_color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg);
+_Bool nss_window_submit_screen(nss_window_t *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg);
 _Bool nss_window_shift(nss_window_t *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, _Bool delay);
 void nss_window_paste_clip(nss_window_t *win, nss_clipboard_target_t target);
 void nss_window_delay(nss_window_t *win);
@@ -123,7 +123,7 @@ void nss_window_pop_title(nss_window_t *win, nss_title_target_t which);
 void nss_window_get_title(nss_window_t *win, nss_title_target_t which, char **name, _Bool *utf8);
 
 void nss_window_set_mouse(nss_window_t *win, _Bool enabled);
-void nss_window_set_colors(nss_window_t *win, nss_color_t bg, nss_color_t cursor_fg);
+void nss_window_set_colors(nss_window_t *win, color_t bg, color_t cursor_fg);
 void nss_window_set_cursor(nss_window_t *win, nss_cursor_type_t type);
 void nss_window_get_dim(nss_window_t *win, int16_t *width, int16_t *height);
 void nss_window_get_dim_ext(nss_window_t *win, nss_window_dim_type_t which, int16_t *width, int16_t *height);

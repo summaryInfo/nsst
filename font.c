@@ -92,7 +92,7 @@ static void load_append_fonts(nss_font_t *font, nss_face_list_t *faces, nss_pate
             index.u.i = 0;
         }
 
-        if (nss_config_integer(NSS_ICONFIG_TRACE_FONTS))
+        if (iconf(ICONF_TRACE_FONTS))
             info("Font file: %s:%d", file.u.s, index.u.i);
         FT_Error err = FT_New_Face(global.library, (const char*)file.u.s, index.u.i, &faces->faces[faces->length]);
         if (err != FT_Err_Ok) {
@@ -250,7 +250,7 @@ nss_font_t *nss_create_font(const char* descr, double size) {
 
     font->refs = 1;
     font->pixel_size = 0;
-    font->dpi = nss_config_integer(NSS_ICONFIG_DPI);
+    font->dpi = iconf(ICONF_DPI);
     font->size = size;
 
 
@@ -280,7 +280,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
 
     FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT);
 
-    nss_pixel_mode_t ord = nss_config_integer(NSS_ICONFIG_PIXEL_MODE);
+    nss_pixel_mode_t ord = iconf(ICONF_PIXEL_MODE);
     _Bool ordv = ord == nss_pm_bgrv || ord == nss_pm_rgbv;
     _Bool ordrev = ord == nss_pm_bgr || ord == nss_pm_bgrv;
     _Bool lcd = ord != nss_pm_mono;
@@ -315,7 +315,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
     if (pitch < 0)
         src -= pitch*(face->glyph->bitmap.rows - 1);
 
-    double gamma = nss_config_integer(NSS_ICONFIG_GAMMA) / 10000.0;
+    double gamma = iconf(ICONF_GAMMA) / 10000.0;
 
     switch (face->glyph->bitmap.pixel_mode) {
     case FT_PIXEL_MODE_MONO:
@@ -370,7 +370,7 @@ nss_glyph_t *nss_font_render_glyph(nss_font_t *font, uint32_t ch, nss_font_attri
         return nss_font_render_glyph(font, 0, attr);
     }
 
-    if (nss_config_integer(NSS_ICONFIG_LOG_LEVEL) == 4 && nss_config_integer(NSS_ICONFIG_TRACE_FONTS)) {
+    if (iconf(ICONF_LOG_LEVEL) == 4 && iconf(ICONF_TRACE_FONTS)) {
         info("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
         info("Num grays: %d", face->glyph->bitmap.num_grays);
         info("Glyph: %d %d", glyph->width, glyph->height);
@@ -440,11 +440,11 @@ nss_glyph_cache_t *nss_create_cache(nss_font_t *font) {
         maxh = MAX(maxh, g->y);
     }
 
-    cache->char_width = total / ('~' - ' ' + 1) + nss_config_integer(NSS_ICONFIG_FONT_SPACING);
+    cache->char_width = total / ('~' - ' ' + 1) + iconf(ICONF_FONT_SPACING);
     cache->char_height = maxh;
-    cache->char_depth = maxd + nss_config_integer(NSS_ICONFIG_LINE_SPACING);
+    cache->char_depth = maxd + iconf(ICONF_LINE_SPACING);
 
-    if (nss_config_integer(NSS_ICONFIG_TRACE_FONTS)) {
+    if (iconf(ICONF_TRACE_FONTS)) {
         info("Font dim: width=%"PRId16", height=%"PRId16", depth=%"PRId16,
                 cache->char_width, cache->char_height, cache->char_depth);
     }
@@ -483,7 +483,7 @@ nss_glyph_t *nss_cache_fetch(nss_glyph_cache_t *cache, nss_char_t ch, nss_font_a
 
     nss_glyph_t *new;
 #if USE_BOXDRAWING
-    if (is_boxdraw(ch) && nss_config_integer(NSS_ICONFIG_OVERRIDE_BOXDRAW))
+    if (is_boxdraw(ch) && iconf(ICONF_OVERRIDE_BOXDRAW))
         new = nss_make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth);
     else
 #endif

@@ -13,7 +13,7 @@
 #include <sys/types.h>
 
 typedef uint16_t nss_cid_t;
-typedef uint32_t nss_color_t;
+typedef uint32_t color_t;
 typedef uint32_t nss_char_t;
 typedef int16_t nss_coord_t;
 typedef uint32_t nss_param_t;
@@ -22,8 +22,8 @@ typedef int32_t nss_sparam_t;
 #define PRIparam PRId32
 #define SCNparam SCNd32
 
-#define NSS_SPECIAL_COLORS 11
-#define NSS_PALETTE_SIZE (256 + NSS_SPECIAL_COLORS)
+#define SPECIAL_PALETTE_SIZE 11
+#define PALETTE_SIZE (256 + SPECIAL_PALETTE_SIZE)
 #define NSS_SPECIAL_BOLD 256
 #define NSS_SPECIAL_UNDERLINE 257
 #define NSS_SPECIAL_BLINK 258
@@ -64,7 +64,7 @@ typedef struct nss_cell {
 typedef struct nss_line_palette {
     uint16_t size;
     uint16_t caps;
-    nss_color_t data[];
+    color_t data[];
 } nss_line_palette_t;
 
 typedef struct nss_line {

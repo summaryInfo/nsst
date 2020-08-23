@@ -19,128 +19,128 @@
 
 #define CN_BASE 16
 #define CN_EXT (6*6*6)
-#define CN_GRAY (NSS_PALETTE_SIZE - CN_BASE - CN_EXT)
+#define CN_GRAY (PALETTE_SIZE - CN_BASE - CN_EXT)
 #define SD28B(x) ((x) ? 0x37 + 0x28 * (x) : 0)
 
 struct optmap_item optmap[OPT_MAP_SIZE] = {
-    {"allow-alternate", "\t(Enable alternate screen)", "allowAlternate", NSS_ICONFIG_ALLOW_ALTSCREEN},
-    {"allow-blinking", "\t(Allow blinking text and cursor)", "allowBlinking", NSS_ICONFIG_ALLOW_BLINKING},
-    {"allow-modify-edit-keypad", " (Allow modifing edit keypad keys)", "modkeyAllowEditKeypad", NSS_ICONFIG_INPUT_MALLOW_EDIT},
-    {"allow-modify-function", "\t(Allow modifing function keys)", "modkeyAllowFunction", NSS_ICONFIG_INPUT_MALLOW_FUNCTION},
-    {"allow-modify-keypad", "\t(Allow modifing keypad keys)", "modkeyAllowKeypad", NSS_ICONFIG_INPUT_MALLOW_KEYPAD},
-    {"allow-modify-misc", "\t(Allow modifing miscelleneous keys)", "modkeyAllowMisc", NSS_ICONFIG_INPUT_MALLOW_MISC},
-    {"alpha", "\t\t\t(Backround opacity, requires compositor to be running)", "alpha", NSS_ICONFIG_ALPHA},
-    {"alternate-scroll", "\t(Scrolling sends arrow keys escapes in alternate screen)", "alternateScroll", NSS_ICONFIG_ALTERNATE_SCROLL},
-    {"answerback-string", "\t(ENQ report)", "answerbackString", NSS_SCONFIG_ANSWERBACK_STRING},
-    {"appcursor", "\t\t(Initial application cursor mode value)", "appcursor", NSS_ICONFIG_INPUT_APPCURSOR},
-    {"appkey", "\t\t(Initial application keypad mode value)", "appkey", NSS_ICONFIG_INPUT_APPKEY},
-    {"autowrap", "\t\t(Initial autowrap setting)", "enableAutowrap", NSS_ICONFIG_INIT_WRAP},
-    {"background", "\t\t(Default backround color)", "background", NSS_CCONFIG_BG},
-    {"backspace-is-del", "\t(Backspace sends DEL instead of BS)", "backspaceIsDelete", NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE},
-    {"bell", "\t\t\t(Bell setting)", "bell", NSS_ICONFIG_BELL_VOLUME},
-    {"bell-high-volume", "\t(High volume value for DECSWBV)", "bellHighVolume", NSS_ICONFIG_BELL_HIGH_VOLUME},
-    {"bell-low-volume", "\t(Low volume value for DECSWBV)", "bellLowVolume", NSS_ICONFIG_BELL_LOW_VOLUME},
-    {"blink-color", "\t\t(Special color of blinking text)", "blinkColor", NSS_CCONFIG_BLINK},
-    {"blink-time", "\t\t(Text blink interval in microseconds)","blinkTime", NSS_ICONFIG_BLINK_TIME},
-    {"bold-color", "\t\t(Special color of bold text)", "boldColor", NSS_CCONFIG_BOLD},
-    {"cursor-background", "\t(Default cursor backround color)", "cursorBackground", NSS_CCONFIG_CURSOR_BG},
-    {"cursor-foreground", "\t(Default cursor foreround color)", "cursorForeground", NSS_CCONFIG_CURSOR_FG},
-    {"cursor-shape", "\t\t(Shape of cursor)", "cursorShape", NSS_ICONFIG_CURSOR_SHAPE},
-    {"cursor-width", "\t\t(Width of lines that forms cursor)", "cursorWidth", NSS_ICONFIG_CURSOR_WIDTH},
-    {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", "deleteIsDelete", NSS_ICONFIG_INPUT_DELETE_IS_DELETE},
-    {"double-click-time", "\t(Time gap in milliseconds in witch two mouse presses will be considered double)", "doubleClickTime", NSS_ICONFIG_DOUBLE_CLICK_TIME},
-    {"erase-scrollback", "\t(Allow ED 3 to clear scrollback buffer)", "eraseScrollback", NSS_ICONFIG_ALLOW_ERASE_SCROLLBACK},
-    {"extended-cir", "\t\t(Report all SGR attributes in DECCIR)", "extendedCir", NSS_ICONFIG_EXTENDED_CIR},
-    {"fixed", "\t\t\t(Don't allow to change window size, if supported)", "fixed", NSS_ICONFIG_FIXED_SIZE},
-    {"fkey-increment", "\t(Step in numbering function keys)", "fkeyIncrement", NSS_ICONFIG_INPUT_FKEY_INCREMENT},
-    {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)", "font", NSS_SCONFIG_FONT_NAME},
-    {"font-gamma", "\t\t(Factor of sharpenning\t(king of hack))", "fontGamma",NSS_ICONFIG_GAMMA},
-    {"font-size", "\t\t(Font size in points)", "fontSize", NSS_ICONFIG_FONT_SIZE},
-    {"font-size-step", "\t(Font size step in points)", "fontSizeStep", NSS_ICONFIG_FONT_SIZE_STEP},
-    {"font-spacing", "\t\t(Additional spacing for individual symbols)", "fontSpacing", NSS_ICONFIG_FONT_SPACING},
-    {"force-dpi", "\t\t(DPI value for fonts)", "dpi", NSS_ICONFIG_DPI},
-    {"force-mouse-mod", "\t(Modifer to force mouse action)", "forceMouseMod", NSS_SCONFIG_FORCE_MOUSE_MOD},
-    {"force-nrcs", "\t\t(Enable NRCS translation when UTF-8 mode is enabled)", "forceNrcs", NSS_ICONFIG_FORCE_UTF8_NRCS},
-    {"foreground", "\t\t(Default foreground color)", "foreground", NSS_CCONFIG_FG},
-    {"fps", "\t\t\t(Window refresh rate)", "fps", NSS_ICONFIG_FPS},
-    {"has-meta", "\t\t(Handle meta/alt)", "hasMeta", NSS_ICONFIG_INPUT_HAS_META},
-    {"horizontal-border", "\t(Top and bottom botders)", "horizontalBorder", NSS_ICONFIG_TOP_BORDER},
-    {"italic-color", "\t\t(Special color of italic text)", "italicColor", NSS_CCONFIG_ITALIC},
-    {"keep-clipboard", "\t(Reuse copied clipboard content instead of current selection data)", "keepClipboard", NSS_ICONFIG_KEEP_CLIPBOARD},
-    {"keep-selection", "\t(Don't clear X11 selection when unhighlighted)", "keepSelection", NSS_ICONFIG_KEEP_SELECTION},
-    {"key-break", "\t\t(Send break hotkey", "key.break)", NSS_KCONFIG_BREAK},
-    {"key-dec-font", "\t\t(Decrement font size hotkey)", "key.decFontSize", NSS_KCONFIG_FONT_DEC},
-    {"key-inc-font", "\t\t(Increment font size hotkey)", "key.incFontSize", NSS_KCONFIG_FONT_INC},
-    {"key-new-window", "\t(Create new window hotkey)", "key.newWindow", NSS_KCONFIG_NEW_WINDOW},
-    {"key-numlock", "\t\t('appkey' mode allow toggle hotkey)", "key.numlock", NSS_KCONFIG_NUMLOCK},
-    {"key-reload-config", "\t(Reload config hotkey)", "key.reloadConfig", NSS_KCONFIG_RELOAD_CONFIG},
-    {"key-reset", "\t\t(Terminal reset hotkey)", "key.reset", NSS_KCONFIG_RESET},
-    {"key-reset-font", "\t(Reset font size hotkey)", "key.resetFontSize", NSS_KCONFIG_FONT_RESET},
-    {"key-scroll-down", "\t(Scroll down hotkey)", "key.scrollDown", NSS_KCONFIG_SCROLL_DOWN},
-    {"key-scroll-up", "\t\t(Scroll up hotkey)", "key.scrollUp", NSS_KCONFIG_SCROLL_UP},
-    {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", "keyboardDialect", NSS_ICONFIG_KEYBOARD_NRCS},
-    {"keyboard-mapping", "\t(Initial keyboad mapping)", "keyboardMapping", NSS_ICONFIG_INPUT_MAPPING},
-    {"line-spacing", "\t\t(Additional lines vertical spacing)", "lineSpacing", NSS_ICONFIG_LINE_SPACING},
-    {"lock-keyboard", "\t\t(Disable keyboad input)", "lockKeyboard", NSS_ICONFIG_INPUT_LOCK},
-    {"log-level","\t\t(Filering level of logged information)", "logLevel", NSS_ICONFIG_LOG_LEVEL},
-    {"margin-bell", "\t\t(Margin bell setting)", "marginBell", NSS_ICONFIG_MARGIN_BELL_VOLUME},
-    {"margin-bell-column", "\t(Columnt at which margin bell rings when armed)", "marginBellColumn", NSS_ICONFIG_MARGIN_BELL_COLUMN},
-    {"margin-bell-high-volume", " (High volume value for DECSMBV)", "marginBellHighVolume", NSS_ICONFIG_MARGIN_BELL_HIGH_VOLUME},
-    {"margin-bell-low-volume", "(Low volume value for DECSMBV)", "marginBellLowVolume", NSS_ICONFIG_MARGIN_BELL_LOW_VOLUME},
-    {"meta-sends-escape", "\t(Alt/Meta sends escape prefix instead of setting 8-th bit)", "metaSendsEscape", NSS_ICONFIG_INPUT_META_IS_ESC},
-    {"modify-cursor", "\t\t(Enable encoding modifiers for cursor keys)", "modifyCursor", NSS_ICONFIG_INPUT_MODIFY_CURSOR},
-    {"modify-function", "\t(Enable encoding modifiers for function keys)", "modifyFunction", NSS_ICONFIG_INPUT_MODIFY_FUNCTION},
-    {"modify-keypad", "\t\t(Enable encoding modifiers keypad keys)", "modifyKeypad", NSS_ICONFIG_INPUT_MODIFY_KEYPAD},
-    {"modify-other", "\t\t(Enable encoding modifiers for other keys)", "modifyOther", NSS_ICONFIG_INPUT_MODIFY_OTHER},
-    {"modify-other-fmt", "\t(Format of encoding modifers)", "modifyOtherFmt", NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT},
-    {"nrcs", "\t\t\t(Enable NRCSs support)", "allowNrcs", NSS_ICONFIG_ALLOW_NRCS},
-    {"numlock", "\t\t(Initial numlock state)", "numlock", NSS_ICONFIG_INPUT_NUMLOCK},
+    {"allow-alternate", "\t(Enable alternate screen)", "allowAlternate", ICONF_ALLOW_ALTSCREEN},
+    {"allow-blinking", "\t(Allow blinking text and cursor)", "allowBlinking", ICONF_ALLOW_BLINKING},
+    {"allow-modify-edit-keypad", " (Allow modifing edit keypad keys)", "modkeyAllowEditKeypad", ICONF_MALLOW_EDIT},
+    {"allow-modify-function", "\t(Allow modifing function keys)", "modkeyAllowFunction", ICONF_MALLOW_FUNCTION},
+    {"allow-modify-keypad", "\t(Allow modifing keypad keys)", "modkeyAllowKeypad", ICONF_MALLOW_KEYPAD},
+    {"allow-modify-misc", "\t(Allow modifing miscelleneous keys)", "modkeyAllowMisc", ICONF_MALLOW_MISC},
+    {"alpha", "\t\t\t(Backround opacity, requires compositor to be running)", "alpha", ICONF_ALPHA},
+    {"alternate-scroll", "\t(Scrolling sends arrow keys escapes in alternate screen)", "alternateScroll", ICONF_ALTERNATE_SCROLL},
+    {"answerback-string", "\t(ENQ report)", "answerbackString", SCONF_ANSWERBACK_STRING},
+    {"appcursor", "\t\t(Initial application cursor mode value)", "appcursor", ICONF_APPCURSOR},
+    {"appkey", "\t\t(Initial application keypad mode value)", "appkey", ICONF_APPKEY},
+    {"autowrap", "\t\t(Initial autowrap setting)", "enableAutowrap", ICONF_INIT_WRAP},
+    {"background", "\t\t(Default backround color)", "background", CCONF_BG},
+    {"backspace-is-del", "\t(Backspace sends DEL instead of BS)", "backspaceIsDelete", ICONF_BACKSPACE_IS_DELETE},
+    {"bell", "\t\t\t(Bell setting)", "bell", ICONF_BELL_VOLUME},
+    {"bell-high-volume", "\t(High volume value for DECSWBV)", "bellHighVolume", ICONF_BELL_HIGH_VOLUME},
+    {"bell-low-volume", "\t(Low volume value for DECSWBV)", "bellLowVolume", ICONF_BELL_LOW_VOLUME},
+    {"blink-color", "\t\t(Special color of blinking text)", "blinkColor", CCONF_BLINK},
+    {"blink-time", "\t\t(Text blink interval in microseconds)","blinkTime", ICONF_BLINK_TIME},
+    {"bold-color", "\t\t(Special color of bold text)", "boldColor", CCONF_BOLD},
+    {"cursor-background", "\t(Default cursor backround color)", "cursorBackground", CCONF_CURSOR_BG},
+    {"cursor-foreground", "\t(Default cursor foreround color)", "cursorForeground", CCONF_CURSOR_FG},
+    {"cursor-shape", "\t\t(Shape of cursor)", "cursorShape", ICONF_CURSOR_SHAPE},
+    {"cursor-width", "\t\t(Width of lines that forms cursor)", "cursorWidth", ICONF_CURSOR_WIDTH},
+    {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", "deleteIsDelete", ICONF_DELETE_IS_DELETE},
+    {"double-click-time", "\t(Time gap in milliseconds in witch two mouse presses will be considered double)", "doubleClickTime", ICONF_DOUBLE_CLICK_TIME},
+    {"erase-scrollback", "\t(Allow ED 3 to clear scrollback buffer)", "eraseScrollback", ICONF_ALLOW_ERASE_SCROLLBACK},
+    {"extended-cir", "\t\t(Report all SGR attributes in DECCIR)", "extendedCir", ICONF_EXTENDED_CIR},
+    {"fixed", "\t\t\t(Don't allow to change window size, if supported)", "fixed", ICONF_FIXED_SIZE},
+    {"fkey-increment", "\t(Step in numbering function keys)", "fkeyIncrement", ICONF_FKEY_INCREMENT},
+    {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)", "font", SCONF_FONT_NAME},
+    {"font-gamma", "\t\t(Factor of sharpenning\t(king of hack))", "fontGamma",ICONF_GAMMA},
+    {"font-size", "\t\t(Font size in points)", "fontSize", ICONF_FONT_SIZE},
+    {"font-size-step", "\t(Font size step in points)", "fontSizeStep", ICONF_FONT_SIZE_STEP},
+    {"font-spacing", "\t\t(Additional spacing for individual symbols)", "fontSpacing", ICONF_FONT_SPACING},
+    {"force-dpi", "\t\t(DPI value for fonts)", "dpi", ICONF_DPI},
+    {"force-mouse-mod", "\t(Modifer to force mouse action)", "forceMouseMod", SCONF_FORCE_MOUSE_MOD},
+    {"force-nrcs", "\t\t(Enable NRCS translation when UTF-8 mode is enabled)", "forceNrcs", ICONF_FORCE_UTF8_NRCS},
+    {"foreground", "\t\t(Default foreground color)", "foreground", CCONF_FG},
+    {"fps", "\t\t\t(Window refresh rate)", "fps", ICONF_FPS},
+    {"has-meta", "\t\t(Handle meta/alt)", "hasMeta", ICONF_HAS_META},
+    {"horizontal-border", "\t(Top and bottom botders)", "horizontalBorder", ICONF_TOP_BORDER},
+    {"italic-color", "\t\t(Special color of italic text)", "italicColor", CCONF_ITALIC},
+    {"keep-clipboard", "\t(Reuse copied clipboard content instead of current selection data)", "keepClipboard", ICONF_KEEP_CLIPBOARD},
+    {"keep-selection", "\t(Don't clear X11 selection when unhighlighted)", "keepSelection", ICONF_KEEP_SELECTION},
+    {"key-break", "\t\t(Send break hotkey", "key.break)", KCONF_BREAK},
+    {"key-dec-font", "\t\t(Decrement font size hotkey)", "key.decFontSize", KCONF_FONT_DEC},
+    {"key-inc-font", "\t\t(Increment font size hotkey)", "key.incFontSize", KCONF_FONT_INC},
+    {"key-new-window", "\t(Create new window hotkey)", "key.newWindow", KCONF_NEW_WINDOW},
+    {"key-numlock", "\t\t('appkey' mode allow toggle hotkey)", "key.numlock", KCONF_NUMLOCK},
+    {"key-reload-config", "\t(Reload config hotkey)", "key.reloadConfig", KCONF_RELOAD_CONFIG},
+    {"key-reset", "\t\t(Terminal reset hotkey)", "key.reset", KCONF_RESET},
+    {"key-reset-font", "\t(Reset font size hotkey)", "key.resetFontSize", KCONF_FONT_RESET},
+    {"key-scroll-down", "\t(Scroll down hotkey)", "key.scrollDown", KCONF_SCROLL_DOWN},
+    {"key-scroll-up", "\t\t(Scroll up hotkey)", "key.scrollUp", KCONF_SCROLL_UP},
+    {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", "keyboardDialect", ICONF_KEYBOARD_NRCS},
+    {"keyboard-mapping", "\t(Initial keyboad mapping)", "keyboardMapping", ICONF_MAPPING},
+    {"line-spacing", "\t\t(Additional lines vertical spacing)", "lineSpacing", ICONF_LINE_SPACING},
+    {"lock-keyboard", "\t\t(Disable keyboad input)", "lockKeyboard", ICONF_LOCK},
+    {"log-level","\t\t(Filering level of logged information)", "logLevel", ICONF_LOG_LEVEL},
+    {"margin-bell", "\t\t(Margin bell setting)", "marginBell", ICONF_MARGIN_BELL_VOLUME},
+    {"margin-bell-column", "\t(Columnt at which margin bell rings when armed)", "marginBellColumn", ICONF_MARGIN_BELL_COLUMN},
+    {"margin-bell-high-volume", " (High volume value for DECSMBV)", "marginBellHighVolume", ICONF_MARGIN_BELL_HIGH_VOLUME},
+    {"margin-bell-low-volume", "(Low volume value for DECSMBV)", "marginBellLowVolume", ICONF_MARGIN_BELL_LOW_VOLUME},
+    {"meta-sends-escape", "\t(Alt/Meta sends escape prefix instead of setting 8-th bit)", "metaSendsEscape", ICONF_META_IS_ESC},
+    {"modify-cursor", "\t\t(Enable encoding modifiers for cursor keys)", "modifyCursor", ICONF_MODIFY_CURSOR},
+    {"modify-function", "\t(Enable encoding modifiers for function keys)", "modifyFunction", ICONF_MODIFY_FUNCTION},
+    {"modify-keypad", "\t\t(Enable encoding modifiers keypad keys)", "modifyKeypad", ICONF_MODIFY_KEYPAD},
+    {"modify-other", "\t\t(Enable encoding modifiers for other keys)", "modifyOther", ICONF_MODIFY_OTHER},
+    {"modify-other-fmt", "\t(Format of encoding modifers)", "modifyOtherFmt", ICONF_MODIFY_OTHER_FMT},
+    {"nrcs", "\t\t\t(Enable NRCSs support)", "allowNrcs", ICONF_ALLOW_NRCS},
+    {"numlock", "\t\t(Initial numlock state)", "numlock", ICONF_NUMLOCK},
 #if USE_BOXDRAWING
-    {"override-boxdrawing", "\t(Use built-in box drawing characters)", "overrideBoxdrawing", NSS_ICONFIG_OVERRIDE_BOXDRAW},
+    {"override-boxdrawing", "\t(Use built-in box drawing characters)", "overrideBoxdrawing", ICONF_OVERRIDE_BOXDRAW},
 #endif
-    {"pixel-mode", "\t\t(Subpixel rendering config: 0 - mono, 1 - BGR, 2 - RGB, 3 - BGRV, 4 - RGBV)", "pixelMode", NSS_ICONFIG_PIXEL_MODE},
-    {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", "printer", NSS_SCONFIG_PRINTER},
-    {"raise-on-bell", "\t\t(Raise terminal window on bell)", "raiseOnBell", NSS_ICONFIG_RAISE_ON_BELL},
-    {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", NSS_ICONFIG_RESIZE_DELAY},
-    {"reverse-video", "\t\t(Initial reverse video setting)", "enableReverseVideo", NSS_ICONFIG_REVERSE_VIDEO},
-    {"reversed-color", "\t(Special color of reversed text)", "reversedColor", NSS_CCONFIG_REVERSE},
-    {"scroll-amount", "\t\t(Number of lines scrolled in a time)", "scrollAmout", NSS_ICONFIG_SCROLL_AMOUNT},
-    {"scroll-delay", "\t\t(Additional delay after scroll in microseconds)", "scrollDelay", NSS_ICONFIG_SCROLL_DELAY},
-    {"scroll-on-input", "\t(Scroll view to bottom on key press)", "scrollOnInput", NSS_ICONFIG_SCROLL_ON_INPUT},
-    {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", "scrollOnOutput", NSS_ICONFIG_SCROLL_ON_OUTPUT},
-    {"scrollback-size", ", -H<value> (Number of saved lines)", "scrollbackSize", NSS_ICONFIG_HISTORY_LINES},
-    {"select-to-clipboard", "\t(Use CLIPBOARD selection to store hightlighted data)", "selectToClipboard", NSS_ICONFIG_SELECT_TO_CLIPBOARD},
-    {"selected-background", "\t(Color of selected background)", "selectedBackground", NSS_CCONFIG_SELECTED_BG},
-    {"selected-foreground", "\t(Color of selected text)", "selectedForeground", NSS_CCONFIG_SELECTED_FG},
-    {"shell", ", -s<value>\t(Shell to start in new instance)", "shell", NSS_SCONFIG_SHELL},
-    {"special-blink", "\t\t(If special color should be used for blinking text)", "specialBlink", NSS_ICONFIG_SPEICAL_BLINK},
-    {"special-bold", "\t\t(If special color should be used for bold text)", "specialBold", NSS_ICONFIG_SPEICAL_BOLD},
-    {"special-italic", "\t(If special color should be used for italic text)", "specialItalic", NSS_ICONFIG_SPEICAL_ITALIC},
-    {"special-reverse", "\t(If special color should be used for reverse text)", "specialReverse", NSS_ICONFIG_SPEICAL_REVERSE},
-    {"special-underlined", "\t(If special color should be used for underlined text)", "specialUnderlined", NSS_ICONFIG_SPEICAL_UNDERLINE},
-    {"sync-timeout", "\t\t(Syncronous update timeout)", "syncTimeout", NSS_ICONFIG_SYNC_TIME},
-    {"tab-width", "\t\t(Initial width of tab character)", "tabWidth", NSS_ICONFIG_TAB_WIDTH},
-    {"term-mod", "\t\t(Meaning of 'T' modifer)", "termMod", NSS_SCONFIG_TERM_MOD},
-    {"term-name", ", -D<value>\t(TERM value)", "termName", NSS_SCONFIG_TERM_NAME},
-    {"title", ", -T<value>, -t<value> (Initial window title)", "title", NSS_SCONFIG_TITLE},
-    {"trace-characters", "\t(Trace interpreted characters)", "traceCharacters", NSS_ICONFIG_TRACE_CHARACTERS},
-    {"trace-controls", "\t(Trace interpreted control characters and sequences)", "traceControls", NSS_ICONFIG_TRACE_CONTROLS},
-    {"trace-events", "\t\t(Trace recieved events)", "traceEvents", NSS_ICONFIG_TRACE_EVENTS},
-    {"trace-fonts", "\t\t(Log font related information)", "traceFonts", NSS_ICONFIG_TRACE_FONTS},
-    {"trace-input", "\t\t(Trace user input)", "traceInput", NSS_ICONFIG_TRACE_INPUT},
-    {"trace-misc", "\t\t(Trace miscelleneous information)", "traceMisc", NSS_ICONFIG_TRACE_MISC},
-    {"triple-click-time", "\t(Time gap in milliseconds in witch tree mouse presses will be considered triple)", "trippleClickTime", NSS_ICONFIG_TRIPLE_CLICK_TIME},
-    {"underline-width", "\t(Text underline width)", "underlineWidth", NSS_ICONFIG_UNDERLINE_WIDTH},
-    {"underlined-color", "\t(Special color of underlined text)", "underlinedColor", NSS_CCONFIG_UNDERLINE},
-    {"urgent-on-bell", "\t(Set window urgency on bell)", "urgentOnBell", NSS_ICONFIG_URGENT_ON_BELL},
-    {"use-utf8", "\t\t(Enable UTF-8 I/O)", "useUtf8", NSS_ICONFIG_UTF8},
-    {"vertical-border", "\t(Left and right borders)", "verticalBorder", NSS_ICONFIG_LEFT_BORDER},
-    {"visual-bell", "\t\t(Whether bell should be visual or normal)", "visualBell", NSS_ICONFIG_VISUAL_BELL},
-    {"visual-bell-time", "\t(Length of visual bell)", "visualBellTime", NSS_ICONFIG_VISUAL_BELL_TIME},
-    {"vt-version", ", -V<value>\t(Emulated VT version)", "vtVersion", NSS_ICONFIG_VT_VERION},
-    {"window-class", ", -c<value> (X11 Window class)", "windowClass", NSS_SCONFIG_TERM_CLASS},
-    {"window-ops", "\t\t(Allow window manipulation with escape sequences)", "allowWindowOps", NSS_ICONFIG_ALLOW_WINDOW_OPS},
-    {"word-break", "\t\t(Symbols treated as word separators when snapping mouse selection)", "wordBreak", NSS_SCONFIG_WORD_SEPARATORS},
+    {"pixel-mode", "\t\t(Subpixel rendering config: 0 - mono, 1 - BGR, 2 - RGB, 3 - BGRV, 4 - RGBV)", "pixelMode", ICONF_PIXEL_MODE},
+    {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", "printer", SCONF_PRINTER},
+    {"raise-on-bell", "\t\t(Raise terminal window on bell)", "raiseOnBell", ICONF_RAISE_ON_BELL},
+    {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", ICONF_RESIZE_DELAY},
+    {"reverse-video", "\t\t(Initial reverse video setting)", "enableReverseVideo", ICONF_REVERSE_VIDEO},
+    {"reversed-color", "\t(Special color of reversed text)", "reversedColor", CCONF_REVERSE},
+    {"scroll-amount", "\t\t(Number of lines scrolled in a time)", "scrollAmout", ICONF_SCROLL_AMOUNT},
+    {"scroll-delay", "\t\t(Additional delay after scroll in microseconds)", "scrollDelay", ICONF_SCROLL_DELAY},
+    {"scroll-on-input", "\t(Scroll view to bottom on key press)", "scrollOnInput", ICONF_SCROLL_ON_INPUT},
+    {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", "scrollOnOutput", ICONF_SCROLL_ON_OUTPUT},
+    {"scrollback-size", ", -H<value> (Number of saved lines)", "scrollbackSize", ICONF_HISTORY_LINES},
+    {"select-to-clipboard", "\t(Use CLIPBOARD selection to store hightlighted data)", "selectToClipboard", ICONF_SELECT_TO_CLIPBOARD},
+    {"selected-background", "\t(Color of selected background)", "selectedBackground", CCONF_SELECTED_BG},
+    {"selected-foreground", "\t(Color of selected text)", "selectedForeground", CCONF_SELECTED_FG},
+    {"shell", ", -s<value>\t(Shell to start in new instance)", "shell", SCONF_SHELL},
+    {"special-blink", "\t\t(If special color should be used for blinking text)", "specialBlink", ICONF_SPEICAL_BLINK},
+    {"special-bold", "\t\t(If special color should be used for bold text)", "specialBold", ICONF_SPEICAL_BOLD},
+    {"special-italic", "\t(If special color should be used for italic text)", "specialItalic", ICONF_SPEICAL_ITALIC},
+    {"special-reverse", "\t(If special color should be used for reverse text)", "specialReverse", ICONF_SPEICAL_REVERSE},
+    {"special-underlined", "\t(If special color should be used for underlined text)", "specialUnderlined", ICONF_SPEICAL_UNDERLINE},
+    {"sync-timeout", "\t\t(Syncronous update timeout)", "syncTimeout", ICONF_SYNC_TIME},
+    {"tab-width", "\t\t(Initial width of tab character)", "tabWidth", ICONF_TAB_WIDTH},
+    {"term-mod", "\t\t(Meaning of 'T' modifer)", "termMod", SCONF_TERM_MOD},
+    {"term-name", ", -D<value>\t(TERM value)", "termName", SCONF_TERM_NAME},
+    {"title", ", -T<value>, -t<value> (Initial window title)", "title", SCONF_TITLE},
+    {"trace-characters", "\t(Trace interpreted characters)", "traceCharacters", ICONF_TRACE_CHARACTERS},
+    {"trace-controls", "\t(Trace interpreted control characters and sequences)", "traceControls", ICONF_TRACE_CONTROLS},
+    {"trace-events", "\t\t(Trace recieved events)", "traceEvents", ICONF_TRACE_EVENTS},
+    {"trace-fonts", "\t\t(Log font related information)", "traceFonts", ICONF_TRACE_FONTS},
+    {"trace-input", "\t\t(Trace user input)", "traceInput", ICONF_TRACE_INPUT},
+    {"trace-misc", "\t\t(Trace miscelleneous information)", "traceMisc", ICONF_TRACE_MISC},
+    {"triple-click-time", "\t(Time gap in milliseconds in witch tree mouse presses will be considered triple)", "trippleClickTime", ICONF_TRIPLE_CLICK_TIME},
+    {"underline-width", "\t(Text underline width)", "underlineWidth", ICONF_UNDERLINE_WIDTH},
+    {"underlined-color", "\t(Special color of underlined text)", "underlinedColor", CCONF_UNDERLINE},
+    {"urgent-on-bell", "\t(Set window urgency on bell)", "urgentOnBell", ICONF_URGENT_ON_BELL},
+    {"use-utf8", "\t\t(Enable UTF-8 I/O)", "useUtf8", ICONF_UTF8},
+    {"vertical-border", "\t(Left and right borders)", "verticalBorder", ICONF_LEFT_BORDER},
+    {"visual-bell", "\t\t(Whether bell should be visual or normal)", "visualBell", ICONF_VISUAL_BELL},
+    {"visual-bell-time", "\t(Length of visual bell)", "visualBellTime", ICONF_VISUAL_BELL_TIME},
+    {"vt-version", ", -V<value>\t(Emulated VT version)", "vtVersion", ICONF_VT_VERION},
+    {"window-class", ", -c<value> (X11 Window class)", "windowClass", SCONF_TERM_CLASS},
+    {"window-ops", "\t\t(Allow window manipulation with escape sequences)", "allowWindowOps", ICONF_ALLOW_WINDOW_OPS},
+    {"word-break", "\t\t(Symbols treated as word separators when snapping mouse selection)", "wordBreak", SCONF_WORD_SEPARATORS},
 };
 
 static struct {
@@ -149,119 +149,119 @@ static struct {
     int32_t min;
     int32_t max;
 } ioptions[] = {
-    [NSS_ICONFIG_LOG_LEVEL - NSS_ICONFIG_MIN] = {2, 2, 0, 3},
-    [NSS_ICONFIG_WINDOW_X - NSS_ICONFIG_MIN] = {200, 200, -32768, 32767 },
-    [NSS_ICONFIG_WINDOW_Y - NSS_ICONFIG_MIN] = {200, 200, -32768, 32767 },
-    [NSS_ICONFIG_WINDOW_NEGATIVE_X - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_WINDOW_NEGATIVE_Y - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_WINDOW_WIDTH - NSS_ICONFIG_MIN] = {800, 800, 1, 32767},
-    [NSS_ICONFIG_WINDOW_HEIGHT - NSS_ICONFIG_MIN] = {600, 600, 1, 32767},
-    [NSS_ICONFIG_FIXED_SIZE - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_HAS_GEOMETRY - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_HISTORY_LINES - NSS_ICONFIG_MIN] = {1024, 1024, -1, 100000},
-    [NSS_ICONFIG_UTF8 - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_VT_VERION - NSS_ICONFIG_MIN] = {420, 420, 0, 999},
-    [NSS_ICONFIG_FORCE_UTF8_NRCS - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_TAB_WIDTH - NSS_ICONFIG_MIN] = {8, 8, 1, 100},
-    [NSS_ICONFIG_INIT_WRAP - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_SCROLL_ON_INPUT - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_SCROLL_ON_OUTPUT - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_CURSOR_SHAPE - NSS_ICONFIG_MIN] = {nss_cursor_bar, nss_cursor_bar, 1, 6},
-    [NSS_ICONFIG_UNDERLINE_WIDTH - NSS_ICONFIG_MIN] = {1, 1, 0, 16},
-    [NSS_ICONFIG_CURSOR_WIDTH - NSS_ICONFIG_MIN] = {2, 2, 0, 16},
-    [NSS_ICONFIG_PIXEL_MODE - NSS_ICONFIG_MIN] = {0, 0, 0, 4},
-    [NSS_ICONFIG_REVERSE_VIDEO - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_ALLOW_ALTSCREEN - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_LEFT_BORDER - NSS_ICONFIG_MIN] = {8, 8, 0, 100},
-    [NSS_ICONFIG_TOP_BORDER - NSS_ICONFIG_MIN] = {8, 8, 0 , 100},
-    [NSS_ICONFIG_BLINK_TIME - NSS_ICONFIG_MIN] = {800000, 800000, 0, 10000000},
-    [NSS_ICONFIG_VISUAL_BELL_TIME - NSS_ICONFIG_MIN] = {200000, 200000, 0, 10000000},
-    [NSS_ICONFIG_FONT_SIZE - NSS_ICONFIG_MIN] = {0, 0, 1, 200},
-    [NSS_ICONFIG_FONT_SPACING - NSS_ICONFIG_MIN] = {0, 0, -100, 100},
-    [NSS_ICONFIG_LINE_SPACING - NSS_ICONFIG_MIN] = {0, 0, -100, 100},
-    [NSS_ICONFIG_GAMMA - NSS_ICONFIG_MIN] = {10000, 10000, 2000, 200000},
-    [NSS_ICONFIG_DPI - NSS_ICONFIG_MIN] = {96, 96, 10, 10000},
-    [NSS_ICONFIG_KEYBOARD_NRCS - NSS_ICONFIG_MIN] = {cs94_ascii, cs94_ascii, 0, nrcs_MAX},
-    [NSS_ICONFIG_SKIP_CONFIG_FILE - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_ALLOW_NRCS - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_ALLOW_WINDOW_OPS - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
+    [ICONF_LOG_LEVEL - ICONF_MIN] = {2, 2, 0, 3},
+    [ICONF_WINDOW_X - ICONF_MIN] = {200, 200, -32768, 32767 },
+    [ICONF_WINDOW_Y - ICONF_MIN] = {200, 200, -32768, 32767 },
+    [ICONF_WINDOW_NEGATIVE_X - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_WINDOW_NEGATIVE_Y - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_WINDOW_WIDTH - ICONF_MIN] = {800, 800, 1, 32767},
+    [ICONF_WINDOW_HEIGHT - ICONF_MIN] = {600, 600, 1, 32767},
+    [ICONF_FIXED_SIZE - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_HAS_GEOMETRY - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_HISTORY_LINES - ICONF_MIN] = {1024, 1024, -1, 100000},
+    [ICONF_UTF8 - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_VT_VERION - ICONF_MIN] = {420, 420, 0, 999},
+    [ICONF_FORCE_UTF8_NRCS - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_TAB_WIDTH - ICONF_MIN] = {8, 8, 1, 100},
+    [ICONF_INIT_WRAP - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_SCROLL_ON_INPUT - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_SCROLL_ON_OUTPUT - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_CURSOR_SHAPE - ICONF_MIN] = {nss_cursor_bar, nss_cursor_bar, 1, 6},
+    [ICONF_UNDERLINE_WIDTH - ICONF_MIN] = {1, 1, 0, 16},
+    [ICONF_CURSOR_WIDTH - ICONF_MIN] = {2, 2, 0, 16},
+    [ICONF_PIXEL_MODE - ICONF_MIN] = {0, 0, 0, 4},
+    [ICONF_REVERSE_VIDEO - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_ALLOW_ALTSCREEN - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_LEFT_BORDER - ICONF_MIN] = {8, 8, 0, 100},
+    [ICONF_TOP_BORDER - ICONF_MIN] = {8, 8, 0 , 100},
+    [ICONF_BLINK_TIME - ICONF_MIN] = {800000, 800000, 0, 10000000},
+    [ICONF_VISUAL_BELL_TIME - ICONF_MIN] = {200000, 200000, 0, 10000000},
+    [ICONF_FONT_SIZE - ICONF_MIN] = {0, 0, 1, 200},
+    [ICONF_FONT_SPACING - ICONF_MIN] = {0, 0, -100, 100},
+    [ICONF_LINE_SPACING - ICONF_MIN] = {0, 0, -100, 100},
+    [ICONF_GAMMA - ICONF_MIN] = {10000, 10000, 2000, 200000},
+    [ICONF_DPI - ICONF_MIN] = {96, 96, 10, 10000},
+    [ICONF_KEYBOARD_NRCS - ICONF_MIN] = {cs94_ascii, cs94_ascii, 0, nrcs_MAX},
+    [ICONF_SKIP_CONFIG_FILE - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_ALLOW_NRCS - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_ALLOW_WINDOW_OPS - ICONF_MIN] = {1, 1, 0, 1},
 #if USE_BOXDRAWING
-    [NSS_ICONFIG_OVERRIDE_BOXDRAW - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
+    [ICONF_OVERRIDE_BOXDRAW - ICONF_MIN] = {0, 0, 0, 1},
 #endif
-    [NSS_ICONFIG_FPS - NSS_ICONFIG_MIN] = {60, 60, 2, 1000},
-    [NSS_ICONFIG_SCROLL_DELAY - NSS_ICONFIG_MIN] = {SEC/180000, SEC/180000, 0, 10*SEC/1000},
-    [NSS_ICONFIG_RESIZE_DELAY - NSS_ICONFIG_MIN] = {SEC/60000, SEC/60000, 0, 10*SEC/1000},
-    [NSS_ICONFIG_SYNC_TIME - NSS_ICONFIG_MIN] = {SEC/2000, SEC/2000, 0, 10*SEC/1000},
-    [NSS_ICONFIG_SCROLL_AMOUNT - NSS_ICONFIG_MIN] = {2, 2, 1, 100},
-    [NSS_ICONFIG_FONT_SIZE_STEP - NSS_ICONFIG_MIN] = {1, 1, 1, 250},
-    [NSS_ICONFIG_ALTERNATE_SCROLL - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_DOUBLE_CLICK_TIME - NSS_ICONFIG_MIN] = {300, 300, 10, 1000000},
-    [NSS_ICONFIG_TRIPLE_CLICK_TIME - NSS_ICONFIG_MIN] = {600, 600, 10, 1000000},
-    [NSS_ICONFIG_KEEP_CLIPBOARD - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_KEEP_SELECTION - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_SELECT_TO_CLIPBOARD - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_ALLOW_BLINKING - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_EXTENDED_CIR - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_SPEICAL_BOLD - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_SPEICAL_BLINK - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_SPEICAL_UNDERLINE - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_SPEICAL_ITALIC - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_SPEICAL_REVERSE - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_MARGIN_BELL_COLUMN - NSS_ICONFIG_MIN] = {10, 10, 0, 100},
-    [NSS_ICONFIG_MARGIN_BELL_VOLUME - NSS_ICONFIG_MIN] = {0, 0, 0, 2},
-    [NSS_ICONFIG_BELL_VOLUME - NSS_ICONFIG_MIN] = {2, 2, 0, 2},
-    [NSS_ICONFIG_BELL_LOW_VOLUME - NSS_ICONFIG_MIN] = {50, 50, 0, 100},
-    [NSS_ICONFIG_MARGIN_BELL_LOW_VOLUME - NSS_ICONFIG_MIN] = {50, 50, 0, 100},
-    [NSS_ICONFIG_MARGIN_BELL_HIGH_VOLUME - NSS_ICONFIG_MIN] = {100, 100, 0, 100},
-    [NSS_ICONFIG_BELL_HIGH_VOLUME - NSS_ICONFIG_MIN] = {100, 100, 0, 100},
-    [NSS_ICONFIG_VISUAL_BELL - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_RAISE_ON_BELL - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_URGENT_ON_BELL - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_ALLOW_ERASE_SCROLLBACK - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_TRACE_CHARACTERS - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_TRACE_CONTROLS - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_TRACE_EVENTS - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_TRACE_FONTS - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_TRACE_INPUT - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_TRACE_MISC - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_INPUT_APPCURSOR - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_INPUT_APPKEY - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_INPUT_BACKSPACE_IS_DELETE - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_INPUT_DELETE_IS_DELETE - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_INPUT_FKEY_INCREMENT - NSS_ICONFIG_MIN] = {10, 10, 0, 48},
-    [NSS_ICONFIG_INPUT_HAS_META - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_INPUT_MAPPING - NSS_ICONFIG_MIN] = {keymap_default, keymap_default, 0, keymap_MAX},
-    [NSS_ICONFIG_INPUT_LOCK - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_INPUT_META_IS_ESC - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
-    [NSS_ICONFIG_INPUT_MODIFY_CURSOR - NSS_ICONFIG_MIN] = {3, 3, 0, 3},
-    [NSS_ICONFIG_INPUT_MODIFY_FUNCTION - NSS_ICONFIG_MIN] = {3, 3, 0, 3},
-    [NSS_ICONFIG_INPUT_MODIFY_KEYPAD - NSS_ICONFIG_MIN] = {3, 3, 0, 3},
-    [NSS_ICONFIG_INPUT_MODIFY_OTHER - NSS_ICONFIG_MIN] = {0, 0, 0, 4},
-    [NSS_ICONFIG_INPUT_MODIFY_OTHER_FMT - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_INPUT_MALLOW_EDIT - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_INPUT_MALLOW_FUNCTION - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_INPUT_MALLOW_KEYPAD - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_INPUT_MALLOW_MISC - NSS_ICONFIG_MIN] = {0, 0, 0, 1},
-    [NSS_ICONFIG_INPUT_NUMLOCK - NSS_ICONFIG_MIN] = {1, 1, 0, 1},
+    [ICONF_FPS - ICONF_MIN] = {60, 60, 2, 1000},
+    [ICONF_SCROLL_DELAY - ICONF_MIN] = {SEC/180000, SEC/180000, 0, 10*SEC/1000},
+    [ICONF_RESIZE_DELAY - ICONF_MIN] = {SEC/60000, SEC/60000, 0, 10*SEC/1000},
+    [ICONF_SYNC_TIME - ICONF_MIN] = {SEC/2000, SEC/2000, 0, 10*SEC/1000},
+    [ICONF_SCROLL_AMOUNT - ICONF_MIN] = {2, 2, 1, 100},
+    [ICONF_FONT_SIZE_STEP - ICONF_MIN] = {1, 1, 1, 250},
+    [ICONF_ALTERNATE_SCROLL - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_DOUBLE_CLICK_TIME - ICONF_MIN] = {300, 300, 10, 1000000},
+    [ICONF_TRIPLE_CLICK_TIME - ICONF_MIN] = {600, 600, 10, 1000000},
+    [ICONF_KEEP_CLIPBOARD - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_KEEP_SELECTION - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_SELECT_TO_CLIPBOARD - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_ALLOW_BLINKING - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_EXTENDED_CIR - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_SPEICAL_BOLD - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_SPEICAL_BLINK - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_SPEICAL_UNDERLINE - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_SPEICAL_ITALIC - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_SPEICAL_REVERSE - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_MARGIN_BELL_COLUMN - ICONF_MIN] = {10, 10, 0, 100},
+    [ICONF_MARGIN_BELL_VOLUME - ICONF_MIN] = {0, 0, 0, 2},
+    [ICONF_BELL_VOLUME - ICONF_MIN] = {2, 2, 0, 2},
+    [ICONF_BELL_LOW_VOLUME - ICONF_MIN] = {50, 50, 0, 100},
+    [ICONF_MARGIN_BELL_LOW_VOLUME - ICONF_MIN] = {50, 50, 0, 100},
+    [ICONF_MARGIN_BELL_HIGH_VOLUME - ICONF_MIN] = {100, 100, 0, 100},
+    [ICONF_BELL_HIGH_VOLUME - ICONF_MIN] = {100, 100, 0, 100},
+    [ICONF_VISUAL_BELL - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_RAISE_ON_BELL - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_URGENT_ON_BELL - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_ALLOW_ERASE_SCROLLBACK - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_TRACE_CHARACTERS - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_TRACE_CONTROLS - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_TRACE_EVENTS - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_TRACE_FONTS - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_TRACE_INPUT - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_TRACE_MISC - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_APPCURSOR - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_APPKEY - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_BACKSPACE_IS_DELETE - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_DELETE_IS_DELETE - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_FKEY_INCREMENT - ICONF_MIN] = {10, 10, 0, 48},
+    [ICONF_HAS_META - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_MAPPING - ICONF_MIN] = {keymap_default, keymap_default, 0, keymap_MAX},
+    [ICONF_LOCK - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_META_IS_ESC - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_MODIFY_CURSOR - ICONF_MIN] = {3, 3, 0, 3},
+    [ICONF_MODIFY_FUNCTION - ICONF_MIN] = {3, 3, 0, 3},
+    [ICONF_MODIFY_KEYPAD - ICONF_MIN] = {3, 3, 0, 3},
+    [ICONF_MODIFY_OTHER - ICONF_MIN] = {0, 0, 0, 4},
+    [ICONF_MODIFY_OTHER_FMT - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_MALLOW_EDIT - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_MALLOW_FUNCTION - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_MALLOW_KEYPAD - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_MALLOW_MISC - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_NUMLOCK - ICONF_MIN] = {1, 1, 0, 1},
 };
 
 static struct {
     const char *dflt;
     char *val;
 } soptions[] = {
-    [NSS_SCONFIG_FONT_NAME - NSS_SCONFIG_MIN] = { "mono", NULL },
-    [NSS_SCONFIG_ANSWERBACK_STRING - NSS_SCONFIG_MIN] = { "", NULL },
-    [NSS_SCONFIG_SHELL - NSS_SCONFIG_MIN] = { "/bin/sh", NULL },
-    [NSS_SCONFIG_TERM_NAME - NSS_SCONFIG_MIN] = { "xterm", NULL },
-    [NSS_SCONFIG_TITLE - NSS_SCONFIG_MIN] = { "Not So Simple Terminal", NULL },
-    [NSS_SCONFIG_PRINTER - NSS_SCONFIG_MIN] = { NULL, NULL },
-    [NSS_SCONFIG_TERM_CLASS - NSS_SCONFIG_MIN] = { NULL, NULL },
-    [NSS_SCONFIG_FORCE_MOUSE_MOD - NSS_SCONFIG_MIN] = { "T", NULL },
-    [NSS_SCONFIG_TERM_MOD - NSS_SCONFIG_MIN] = {"SC", NULL },
-    [NSS_SCONFIG_WORD_SEPARATORS - NSS_SCONFIG_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`", NULL },
+    [SCONF_FONT_NAME - SCONF_MIN] = { "mono", NULL },
+    [SCONF_ANSWERBACK_STRING - SCONF_MIN] = { "", NULL },
+    [SCONF_SHELL - SCONF_MIN] = { "/bin/sh", NULL },
+    [SCONF_TERM_NAME - SCONF_MIN] = { "xterm", NULL },
+    [SCONF_TITLE - SCONF_MIN] = { "Not So Simple Terminal", NULL },
+    [SCONF_PRINTER - SCONF_MIN] = { NULL, NULL },
+    [SCONF_TERM_CLASS - SCONF_MIN] = { NULL, NULL },
+    [SCONF_FORCE_MOUSE_MOD - SCONF_MIN] = { "T", NULL },
+    [SCONF_TERM_MOD - SCONF_MIN] = {"SC", NULL },
+    [SCONF_WORD_SEPARATORS - SCONF_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`", NULL },
 };
 
-static nss_color_t coptions[NSS_PALETTE_SIZE];
+static color_t coptions[PALETTE_SIZE];
 static _Bool color_init;
 static const char **argv = NULL;
 
@@ -275,8 +275,8 @@ static const char **argv = NULL;
  * default background and cursor background is color 0
  * default foreground and cursor foreground is color 15
  */
-static nss_color_t color(uint32_t opt) {
-    static nss_color_t base[CN_BASE] = {
+static color_t color(uint32_t opt) {
+    static color_t base[CN_BASE] = {
     // That's gruvbox colors
             0xFF222222, 0xFFFF4433, 0xFFBBBB22, 0xFFFFBB22,
             0xFF88AA99, 0xFFDD8899, 0xFF88CC77, 0xFFDDCCAA,
@@ -291,25 +291,25 @@ static nss_color_t color(uint32_t opt) {
     };
 
     switch (opt) {
-    case NSS_CCONFIG_BG:
-    case NSS_CCONFIG_CURSOR_BG:
+    case CCONF_BG:
+    case CCONF_CURSOR_BG:
         return base[0];
-    case NSS_CCONFIG_FG:
-    case NSS_CCONFIG_CURSOR_FG:
-    case NSS_CCONFIG_BOLD:
-    case NSS_CCONFIG_UNDERLINE:
-    case NSS_CCONFIG_BLINK:
-    case NSS_CCONFIG_REVERSE:
-    case NSS_CCONFIG_ITALIC:
+    case CCONF_FG:
+    case CCONF_CURSOR_FG:
+    case CCONF_BOLD:
+    case CCONF_UNDERLINE:
+    case CCONF_BLINK:
+    case CCONF_REVERSE:
+    case CCONF_ITALIC:
         return base[15];
         /* Invert text by default */
-    case NSS_CCONFIG_SELECTED_BG:
-    case NSS_CCONFIG_SELECTED_FG:
+    case CCONF_SELECTED_BG:
+    case CCONF_SELECTED_FG:
         /* No default special colors */
         return 0;
     }
 
-    opt -= NSS_CCONFIG_COLOR_0;
+    opt -= CCONF_COLOR_0;
 
     if (opt < CN_BASE) return base[opt];
     else if (opt < CN_EXT + CN_BASE) {
@@ -323,69 +323,69 @@ static nss_color_t color(uint32_t opt) {
     return base[0];
 }
 
-int32_t nss_config_integer(uint32_t opt) {
-    if (opt >= NSS_ICONFIG_ALPHA) {
+int32_t iconf(uint32_t opt) {
+    if (opt >= ICONF_ALPHA) {
         warn("Unknown integer config option %d", opt);
         return 0;
     }
     return ioptions[opt].val;
 }
 
-void nss_config_set_integer(uint32_t opt, int32_t val) {
-    if (opt < NSS_ICONFIG_ALPHA) {
-        if (opt == NSS_ICONFIG_INPUT_MAPPING && val >= keymap_MAX)
+void iconf_set(uint32_t opt, int32_t val) {
+    if (opt < ICONF_ALPHA) {
+        if (opt == ICONF_MAPPING && val >= keymap_MAX)
             val = keymap_default;
         if (val > ioptions[opt].max) val = ioptions[opt].max;
         else if (val < ioptions[opt].min) val = ioptions[opt].min;
         ioptions[opt].val = val;
-    } else if (opt == NSS_ICONFIG_ALPHA) {
-        nss_color_t bg = nss_config_color(NSS_CCONFIG_BG);
-        nss_config_set_color(NSS_CCONFIG_BG, (bg & 0xFFFFFF) | (MAX(0, MIN(val, 255)) << 24));
+    } else if (opt == ICONF_ALPHA) {
+        color_t bg = cconf(CCONF_BG);
+        cconf_set(CCONF_BG, (bg & 0xFFFFFF) | (MAX(0, MIN(val, 255)) << 24));
     } else {
         warn("Unknown integer option %d", opt);
     }
 }
 
-const char *nss_config_string(uint32_t opt) {
-    if (NSS_SCONFIG_MIN > opt || opt >= NSS_SCONFIG_MAX) {
+const char *sconf(uint32_t opt) {
+    if (SCONF_MIN > opt || opt >= SCONF_MAX) {
         warn("Unknown string option %d", opt);
         return NULL;
     }
-    opt -= NSS_SCONFIG_MIN;
+    opt -= SCONF_MIN;
     return soptions[opt].val ? soptions[opt].val : soptions[opt].dflt;
 }
 
-void nss_config_set_string(uint32_t opt, const char *val) {
-    if (NSS_SCONFIG_MIN <= opt && opt < NSS_SCONFIG_MAX) {
-        opt -= NSS_SCONFIG_MIN;
+void sconf_set(uint32_t opt, const char *val) {
+    if (SCONF_MIN <= opt && opt < SCONF_MAX) {
+        opt -= SCONF_MIN;
         if (soptions[opt].val) free(soptions[opt].val);
         soptions[opt].val = val ? strdup(val) : NULL;
-    } else if (opt < NSS_ICONFIG_MAX) {
-        int32_t ival = ioptions[opt - NSS_ICONFIG_MIN].dflt;
+    } else if (opt < ICONF_MAX) {
+        int32_t ival = ioptions[opt - ICONF_MIN].dflt;
         if (!val || sscanf(val, "%"SCNd32, &ival) == 1)
-            nss_config_set_integer(opt, ival);
+            iconf_set(opt, ival);
         // Boolean option
         else if (ioptions[opt].min == 0 && ioptions[opt].max == 1) {
             ival = -1;
             if (!strcasecmp(val, "yes") || !strcasecmp(val, "y") || !strcasecmp(val, "true")) ival = 1;
             else if (!strcasecmp(val, "no") || !strcasecmp(val, "n") || !strcasecmp(val, "false")) ival = 0;
-            if (ival >= 0) nss_config_set_integer(opt, ival);
+            if (ival >= 0) iconf_set(opt, ival);
             else warn("Unknown string option %d", opt);
         } else warn("Unknown string option %d", opt);
-    } else if (NSS_KCONFIG_MIN <= opt && opt < NSS_KCONFIG_MAX) {
-        enum nss_shortcut_action sa = opt - NSS_KCONFIG_MIN + 1;
+    } else if (KCONF_MIN <= opt && opt < KCONF_MAX) {
+        enum nss_shortcut_action sa = opt - KCONF_MIN + 1;
         if (val) nss_input_set_hotkey(sa, val);
-    } else if (NSS_CCONFIG_MIN <= opt && opt < NSS_CCONFIG_MAX) {
-            nss_color_t col;
+    } else if (CCONF_MIN <= opt && opt < CCONF_MAX) {
+            color_t col;
             if (val) col = parse_color((uint8_t*)val, (uint8_t*)val + strlen(val));
             else col = color(opt);
             if (col || !val) {
-                nss_color_t old = nss_config_color(opt);
+                color_t old = cconf(opt);
                 if (val) {
-                    if ((opt >= NSS_CCONFIG_SELECTED_BG) && !old) old = 0xFF000000;
+                    if ((opt >= CCONF_SELECTED_BG) && !old) old = 0xFF000000;
                     col = (col & 0xFFFFFF) | (old & 0xFF000000);
                 }
-                nss_config_set_color(opt, col);
+                cconf_set(opt, col);
             } else warn("Wrong color format: '%s'", val);
     } else {
         warn("Unknown string option %d", opt);
@@ -393,47 +393,47 @@ void nss_config_set_string(uint32_t opt, const char *val) {
     }
 }
 
-_Bool nss_config_bool(uint32_t opt, _Bool val) {
-    if (opt < NSS_ICONFIG_ALPHA && ioptions[opt].min == 0 && ioptions[opt].max == 1) {
+_Bool bconf_set(uint32_t opt, _Bool val) {
+    if (opt < ICONF_ALPHA && ioptions[opt].min == 0 && ioptions[opt].max == 1) {
         ioptions[opt].val = val;
         return 1;
     }
     return 0;
 }
 
-void nss_config_set_color(uint32_t opt, nss_color_t val) {
+void cconf_set(uint32_t opt, color_t val) {
     if (!color_init) {
-        for (size_t i = 0; i < NSS_PALETTE_SIZE; i++)
-            coptions[i] = color(i + NSS_CCONFIG_COLOR_0);
+        for (size_t i = 0; i < PALETTE_SIZE; i++)
+            coptions[i] = color(i + CCONF_COLOR_0);
         color_init = 1;
     }
-    if (opt < NSS_CCONFIG_MIN || opt >= NSS_CCONFIG_MAX) {
+    if (opt < CCONF_MIN || opt >= CCONF_MAX) {
         warn("Unknown color option");
         return;
     }
-    coptions[opt - NSS_CCONFIG_COLOR_0] = val ? val : color(opt);
+    coptions[opt - CCONF_COLOR_0] = val ? val : color(opt);
 }
 
-nss_color_t nss_config_color(uint32_t opt) {
+color_t cconf(uint32_t opt) {
     if (!color_init) {
-        for (size_t i = 0; i < NSS_PALETTE_SIZE; i++)
-            coptions[i] = color(i + NSS_CCONFIG_COLOR_0);
+        for (size_t i = 0; i < PALETTE_SIZE; i++)
+            coptions[i] = color(i + CCONF_COLOR_0);
         color_init = 1;
     }
-    if (NSS_CCONFIG_MIN > opt || opt >= NSS_CCONFIG_MAX) {
+    if (CCONF_MIN > opt || opt >= CCONF_MAX) {
         warn("Unknown option");
         return 0;
     }
-    nss_color_t val = coptions[opt - NSS_CCONFIG_COLOR_0];
+    color_t val = coptions[opt - CCONF_COLOR_0];
     return val ? val : color(opt);
 }
 
-const char **nss_config_argv(void) {
+const char **sconf_argv(void) {
     const char **res = argv;
     argv = NULL;
     return res;
 }
 
-void nss_config_set_argv(const char **val) {
+void sconf_set_argv(const char **val) {
     argv = val;
 }
