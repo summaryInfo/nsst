@@ -45,8 +45,8 @@ static const unsigned short tech_tr[] = {
     0x03BE, 0x03C5, 0x03B6, 0x2190, 0x2191, 0x2192, 0x2193,
 };
 
-_Bool nrcs_encode(enum charset set, term_char_t *ch, _Bool nrcs) {
-    _Bool done = 0;
+bool nrcs_encode(enum charset set, term_char_t *ch, bool nrcs) {
+    bool done = 0;
     switch (set) {
     case cs94_ascii:
     case cs94_dec_altchars:
@@ -156,7 +156,7 @@ term_char_t nrcs_decode_fast(enum charset gl, term_char_t ch) {
     return ch;
 }
 
-term_char_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, term_char_t ch, _Bool nrcs) {
+term_char_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, term_char_t ch, bool nrcs) {
     if (ch > 0xFF) return ch;
     if (ch == 0x7F) return U' ';
 
@@ -278,7 +278,7 @@ const char *nrcs_unparse(enum charset cs) {
 }
 
 
-enum charset nrcs_parse(uint32_t selector, _Bool is96, uint16_t vt_level, _Bool nrcs) {
+enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nrcs) {
 #define E(c) ((c) & 0x7F)
 #define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
 #define I1(i) (I0(i) << 5)

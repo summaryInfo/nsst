@@ -27,26 +27,26 @@ enum shortcut_action {
 };
 
 struct keyboard_state {
-    _Bool keyboad_vt52 : 1;
+    bool keyboad_vt52 : 1;
 
-    _Bool modkey_legacy_allow_keypad : 1;
-    _Bool modkey_legacy_allow_edit_keypad : 1;
-    _Bool modkey_legacy_allow_function : 1;
-    _Bool modkey_legacy_allow_misc : 1;
+    bool modkey_legacy_allow_keypad : 1;
+    bool modkey_legacy_allow_edit_keypad : 1;
+    bool modkey_legacy_allow_function : 1;
+    bool modkey_legacy_allow_misc : 1;
 
-    _Bool appkey : 1;
-    _Bool appcursor : 1;
-    _Bool allow_numlock : 1;
-    _Bool keylock : 1;
+    bool appkey : 1;
+    bool appcursor : 1;
+    bool allow_numlock : 1;
+    bool keylock : 1;
 
-    _Bool has_meta : 1;
-    _Bool meta_escape : 1;
-    _Bool backspace_is_del : 1;
-    _Bool delete_is_del : 1;
+    bool has_meta : 1;
+    bool meta_escape : 1;
+    bool backspace_is_del : 1;
+    bool delete_is_del : 1;
 
-    _Bool udk_locked : 1;
+    bool udk_locked : 1;
 
-    _Bool modkey_other_fmt : 1;
+    bool modkey_other_fmt : 1;
         // 0 -> CSI 27 ; M ; K ~
         // 1 -> CSI K ; M u
 

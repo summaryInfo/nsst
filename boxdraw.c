@@ -12,7 +12,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-static void draw_rect(struct glyph * glyph, _Bool lcd, int16_t xs, int16_t ys, int16_t xe, int16_t ye, uint8_t val) {
+static void draw_rect(struct glyph * glyph, bool lcd, int16_t xs, int16_t ys, int16_t xe, int16_t ye, uint8_t val) {
     if (xs < xe && ys < ye) {
         xs = MAX(0, xs);
         xe = MIN(xe, glyph->width);
@@ -26,7 +26,7 @@ static void draw_rect(struct glyph * glyph, _Bool lcd, int16_t xs, int16_t ys, i
     }
 }
 
-static void put(struct glyph *glyph, _Bool lcd, int16_t x, int16_t y, uint8_t val) {
+static void put(struct glyph *glyph, bool lcd, int16_t x, int16_t y, uint8_t val) {
     if (!lcd) glyph->data[glyph->stride * y + x] = val;
     else for (size_t i = 0; i < 4; i++)
         glyph->data[glyph->stride*y + 4*x + i] = val;
@@ -36,7 +36,7 @@ struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t de
     if (!is_boxdraw(c)) return NULL;
 
     enum pixel_mode pixmode = iconf(ICONF_PIXEL_MODE);
-    _Bool lcd = pixmode != pixmode_mono;
+    bool lcd = pixmode != pixmode_mono;
     size_t stride = lcd ? 4*width : (width + 3) & ~3;
     struct glyph *glyph = calloc(1, sizeof(struct glyph) + stride * (height + depth) * sizeof(uint8_t));
     if (!glyph) return NULL;
@@ -109,9 +109,9 @@ struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t de
     int16_t ch = h/2, cw = w/2;
     int16_t lw = MAX(w/8, 1), lw2 = MAX(lw/2, 1);
     int16_t mod, x0 = cw-lw+lw2, y0 = ch-lw+lw2;
-    _Bool dt1 = desc & DT1, dt2 = desc & DT2, noc = desc & NOC, cur = desc & CUR;
-    _Bool td = desc & TD, bd = desc & BD, ld = desc & LD, rd = desc & RD;
-    _Bool tl = desc & TL, bl = desc & BL, ll = desc & LL, rl = desc & RL;
+    bool dt1 = desc & DT1, dt2 = desc & DT2, noc = desc & NOC, cur = desc & CUR;
+    bool td = desc & TD, bd = desc & BD, ld = desc & LD, rd = desc & RD;
+    bool tl = desc & TL, bl = desc & BL, ll = desc & LL, rl = desc & RL;
 
     if (desc & BLK) {
         desc &= ~BLK;

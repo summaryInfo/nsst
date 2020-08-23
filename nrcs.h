@@ -53,14 +53,14 @@ enum charset {
 
 typedef uint32_t term_char_t;
 
-inline static _Bool nrcs_is_96(enum charset cs) {
+inline static bool nrcs_is_96(enum charset cs) {
     return cs >= cs96_latin_1;
 }
 
-_Bool nrcs_encode(term_char_t set, enum charset *ch, _Bool nrcs);
-term_char_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, term_char_t ch, _Bool nrcs);
+bool nrcs_encode(term_char_t set, enum charset *ch, bool nrcs);
+term_char_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, term_char_t ch, bool nrcs);
 term_char_t nrcs_decode_fast(enum charset gl, term_char_t ch);
-enum charset nrcs_parse(uint32_t selector, _Bool is96, uint16_t vt_level, _Bool nrcs);
+enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nrcs);
 const char *nrcs_unparse(enum charset cs);
 
 #endif

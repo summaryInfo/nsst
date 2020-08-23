@@ -282,9 +282,9 @@ struct glyph *font_render_glyph(struct font *font, uint32_t ch, enum face_name a
     FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT);
 
     enum pixel_mode ord = iconf(ICONF_PIXEL_MODE);
-    _Bool ordv = ord == pixmode_bgrv || ord == pixmode_rgbv;
-    _Bool ordrev = ord == pixmode_bgr || ord == pixmode_bgrv;
-    _Bool lcd = ord != pixmode_mono;
+    bool ordv = ord == pixmode_bgrv || ord == pixmode_rgbv;
+    bool ordrev = ord == pixmode_bgr || ord == pixmode_bgrv;
+    bool lcd = ord != pixmode_mono;
 
     size_t stride;
     if (lcd && !ordv) {
@@ -517,7 +517,7 @@ struct glyph *glyph_cache_fetch(struct glyph_cache *cache, term_char_t ch, enum 
     return new;
 }
 
-_Bool glyph_cache_is_fetched(struct glyph_cache *cache, term_char_t ch) {
+bool glyph_cache_is_fetched(struct glyph_cache *cache, term_char_t ch) {
     size_t h = hash(ch);
     struct glyph *res = cache->tab[h % cache->caps];
     for (; res; res = res->next)

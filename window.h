@@ -99,23 +99,23 @@ void run(void);
 struct window *create_window();
 void free_window(struct window *win);
 
-_Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg);
-_Bool window_shift(struct window *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, _Bool delay);
+bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, bool cursor, bool marg);
+bool window_shift(struct window *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, bool delay);
 void window_paste_clip(struct window *win, enum clip_target target);
 void window_delay(struct window *win);
 void window_resize(struct window *win, int16_t width, int16_t height);
 void window_move(struct window *win, int16_t x, int16_t y);
 void window_action(struct window *win, enum window_action act);
-_Bool window_is_mapped(struct window *win);
+bool window_is_mapped(struct window *win);
 void window_bell(struct window *win, uint8_t vol);
 
-void window_set_title(struct window *win, enum title_target which, const char *name, _Bool utf8);
+void window_set_title(struct window *win, enum title_target which, const char *name, bool utf8);
 void window_push_title(struct window *win, enum title_target which);
 void window_pop_title(struct window *win, enum title_target which);
 /* Both at the same time are not supported */
-void window_get_title(struct window *win, enum title_target which, char **name, _Bool *utf8);
+void window_get_title(struct window *win, enum title_target which, char **name, bool *utf8);
 
-void window_set_mouse(struct window *win, _Bool enabled);
+void window_set_mouse(struct window *win, bool enabled);
 void window_set_colors(struct window *win, color_t bg, color_t cursor_fg);
 void window_set_cursor(struct window *win, enum cursor_type type);
 void window_get_dim(struct window *win, int16_t *width, int16_t *height);
@@ -123,7 +123,7 @@ void window_get_dim_ext(struct window *win, enum window_dimension which, int16_t
 void window_get_pointer(struct window *win, int16_t *px, int16_t *py, uint32_t *pmask);
 enum cursor_type window_get_cursor(struct window *win);
 void window_set_clip(struct window *win, uint8_t *data, uint32_t time, enum clip_target target);
-void window_set_sync(struct window *win, _Bool state);
+void window_set_sync(struct window *win, bool state);
 
 #define CLIP_TIME_NOW 0
 

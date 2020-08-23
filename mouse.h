@@ -14,7 +14,7 @@ struct selected {
     ssize_t y0;
     nss_coord_t x1;
     ssize_t y1;
-    _Bool rect;
+    bool rect;
 };
 
 struct mouse_state {
@@ -69,10 +69,10 @@ struct mouse_state {
 };
 
 void mouse_handle_input(struct term *term, struct mouse_event ev);
-void mouse_scroll_selection(struct term *term, nss_coord_t amount, _Bool save);
+void mouse_scroll_selection(struct term *term, nss_coord_t amount, bool save);
 void mouse_scroll_view(struct term *term, ssize_t delta);
-_Bool mouse_is_selected(struct term *term, nss_coord_t x, nss_coord_t y);
-_Bool mouse_is_selected_in_view(struct term *term, nss_coord_t x, nss_coord_t y);
+bool mouse_is_selected(struct term *term, nss_coord_t x, nss_coord_t y);
+bool mouse_is_selected_in_view(struct term *term, nss_coord_t x, nss_coord_t y);
 void mouse_clear_selection(struct term *term);
 void mouse_damage_selection(struct term *term);
 void mouse_selection_erase(struct term *term, struct rect rect);

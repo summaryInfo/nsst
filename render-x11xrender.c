@@ -63,7 +63,7 @@ static void register_glyph(struct window *win, uint32_t ch, struct glyph * glyph
         warn("Can't add glyph");
 }
 
-_Bool renderer_reload_font(struct window *win, _Bool need_free) {
+bool renderer_reload_font(struct window *win, bool need_free) {
     struct window *found = find_shared_font(win, need_free);
 
     win->ren.pfglyph = iconf(ICONF_PIXEL_MODE) ? rctx.pfargb : rctx.pfalpha;
@@ -232,7 +232,7 @@ static void push_rect(xcb_rectangle_t *rect) {
 
 // Use custom shell sort implementation, sice it works faster
 
-static inline _Bool cmp_bg(const struct cell_desc *ad, const struct cell_desc *bd) {
+static inline bool cmp_bg(const struct cell_desc *ad, const struct cell_desc *bd) {
     if (ad->bg < bd->bg) return 1;
     if (ad->bg > bd->bg) return 0;
     if (ad->y < bd->y) return 1;
@@ -241,7 +241,7 @@ static inline _Bool cmp_bg(const struct cell_desc *ad, const struct cell_desc *b
     return 0;
 }
 
-static inline _Bool cmp_fg(const struct cell_desc *ad, const struct cell_desc *bd) {
+static inline bool cmp_fg(const struct cell_desc *ad, const struct cell_desc *bd) {
     if (ad->fg < bd->fg) return 1;
     if (ad->fg > bd->fg) return 0;
     if (ad->y < bd->y) return 1;
@@ -284,19 +284,19 @@ static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
         dst[i] = src[i];
 }
 
-_Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
+bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, bool cursor, bool marg) {
 
     rctx.cbufpos = 0;
     rctx.bufpos = 0;
 
-    _Bool cond_cblink = !win->blink_commited && (win->cursor_type & 1) && term_is_cursor_enabled(win->term);
+    bool cond_cblink = !win->blink_commited && (win->cursor_type & 1) && term_is_cursor_enabled(win->term);
 
     if (cond_cblink) cursor |= win->blink_state;
 
     struct line_offset vpos = term_get_view(win->term);
     for (ssize_t k = 0; k < win->ch; k++, term_line_next(win->term, &vpos, 1)) {
         struct line_view line = term_line_at(win->term, vpos);
-        _Bool next_dirty = 0;
+        bool next_dirty = 0;
         if (win->cw > line.width) {
             push_rect(&(xcb_rectangle_t){
                 .x = line.width * win->char_width,
@@ -307,14 +307,14 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
             next_dirty = 1;
         }
         for (nss_coord_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
-            _Bool dirty = line.line->force_damage || !(line.cell[i].attr & attr_drawn) ||
+            bool dirty = line.line->force_damage || !(line.cell[i].attr & attr_drawn) ||
                     (!win->blink_commited && (line.cell[i].attr & attr_blink)) ||
                     (cond_cblink && k == cur_y && i == cur_x);
 
             struct cellspec spec;
             struct cell cel;
             struct glyph *glyph = NULL;
-            _Bool g_wide = 0;
+            bool g_wide = 0;
             term_char_t g = 0;
             if (dirty || next_dirty) {
                 cel = line.cell[i];
@@ -327,7 +327,7 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
                         win->blink_state, mouse_is_selected_in_view(win->term, i, k));
                 g =  spec.ch | (spec.face << 24);
 
-                _Bool fetched = glyph_cache_is_fetched(win->font_cache, g);
+                bool fetched = glyph_cache_is_fetched(win->font_cache, g);
                 if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face);
 
                 if (!fetched && glyph) register_glyph(win, g, glyph);

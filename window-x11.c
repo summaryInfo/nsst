@@ -40,7 +40,7 @@
 #define PASTE_BLOCK_SIZE 1024
 
 struct context {
-    _Bool daemon_mode;
+    bool daemon_mode;
     xcb_screen_t *screen;
     xcb_colormap_t mid;
     xcb_visualtype_t *vis;
@@ -142,7 +142,7 @@ static xcb_atom_t intern_atom(const char *atom) {
     return at;
 }
 
-static _Bool update_keymap(void) {
+static bool update_keymap(void) {
     struct xkb_keymap *new_keymap = xkb_x11_keymap_new_from_device(ctx.xkb_ctx, con, ctx.xkb_core_kbd, XKB_KEYMAP_COMPILE_NO_FLAGS);
     if (!new_keymap) {
         warn("Can't create XKB keymap");
@@ -162,7 +162,7 @@ static _Bool update_keymap(void) {
     return 1;
 }
 
-static _Bool configure_xkb(void) {
+static bool configure_xkb(void) {
     uint16_t xkb_min = 0, xkb_maj = 0;
     int res = xkb_x11_setup_xkb_extension(con, XKB_X11_MIN_MAJOR_XKB_VERSION,
                                           XKB_X11_MIN_MINOR_XKB_VERSION, XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
@@ -369,7 +369,7 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
     }
 }
 
-void window_set_mouse(struct window *win, _Bool enabled) {
+void window_set_mouse(struct window *win, bool enabled) {
    if (enabled)
         win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
    else
@@ -377,7 +377,7 @@ void window_set_mouse(struct window *win, _Bool enabled) {
    xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
 }
 
-void window_set_sync(struct window *win, _Bool state) {
+void window_set_sync(struct window *win, bool state) {
     if (state) clock_gettime(CLOCK_TYPE, &win->last_sync);
     win->sync_active = state;
 }
@@ -554,7 +554,7 @@ void window_get_pointer(struct window *win, int16_t *px, int16_t *py, uint32_t *
 }
 
 #define WM_HINTS_LEN 8
-static void set_urgency(xcb_window_t wid, _Bool set) {
+static void set_urgency(xcb_window_t wid, bool set) {
     xcb_get_property_cookie_t c = xcb_get_property(con, 0, wid, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 0, WM_HINTS_LEN);
     xcb_get_property_reply_t *rep = xcb_get_property_reply(con, c, NULL);
     if (rep) {
@@ -586,7 +586,7 @@ void window_bell(struct window *win, uint8_t vol) {
     }
 }
 
-_Bool window_is_mapped(struct window *win) {
+bool window_is_mapped(struct window *win) {
     return win->active;
 }
 
@@ -603,7 +603,7 @@ static void reload_all_fonts(void) {
 }
 
 static void window_set_font(struct window *win, const char * name, int32_t size) {
-    _Bool reload = name || size != win->font_size;
+    bool reload = name || size != win->font_size;
     if (name) {
         free(win->font_name);
         win->font_name = strdup(name);
@@ -618,19 +618,19 @@ static void window_set_font(struct window *win, const char * name, int32_t size)
     }
 }
 
-static void set_title(xcb_window_t wid, const char *title, _Bool utf8) {
+static void set_title(xcb_window_t wid, const char *title, bool utf8) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, wid,
         utf8 ? ctx.atom._NET_WM_NAME : XCB_ATOM_WM_NAME,
         utf8 ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
-static void set_icon_label(xcb_window_t wid, const char *title, _Bool utf8) {
+static void set_icon_label(xcb_window_t wid, const char *title, bool utf8) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, wid,
         utf8 ? ctx.atom._NET_WM_ICON_NAME : XCB_ATOM_WM_ICON_NAME,
         utf8 ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
-void window_set_title(struct window *win, enum title_target which, const char *title, _Bool utf8) {
+void window_set_title(struct window *win, enum title_target which, const char *title, bool utf8) {
     if (!title) title = sconf(SCONF_TITLE);
 
     if (which & target_title) set_title(win->wid, title, utf8);
@@ -674,7 +674,7 @@ char *get_full_property(xcb_window_t wid, xcb_atom_t prop, xcb_atom_t *type, siz
     return data;
 }
 
-void window_get_title(struct window *win, enum title_target which, char **name, _Bool *utf8) {
+void window_get_title(struct window *win, enum title_target which, char **name, bool *utf8) {
     xcb_atom_t type = XCB_ATOM_ANY;
     char *data = NULL;
     if (which & target_title) {
@@ -691,7 +691,7 @@ void window_get_title(struct window *win, enum title_target which, char **name, 
 
 void window_push_title(struct window *win, enum title_target which) {
     char *title = NULL, *icon = NULL;
-    _Bool tutf8 = 0, iutf8 = 0;
+    bool tutf8 = 0, iutf8 = 0;
     if (which & target_title) window_get_title(win, target_title, &title, &tutf8);
     if (which & target_icon_label) window_get_title(win, target_icon_label, &icon, &iutf8);
 
@@ -739,8 +739,8 @@ void window_pop_title(struct window *win, enum title_target which) {
 
 
 uint32_t get_win_gravity_from_config() {
-    _Bool nx = iconf(ICONF_WINDOW_NEGATIVE_X);
-    _Bool ny = iconf(ICONF_WINDOW_NEGATIVE_Y);
+    bool nx = iconf(ICONF_WINDOW_NEGATIVE_X);
+    bool ny = iconf(ICONF_WINDOW_NEGATIVE_Y);
     switch (nx + 2 * ny) {
     case 0: return XCB_GRAVITY_NORTH_WEST;
     case 1: return XCB_GRAVITY_NORTH_EAST;
@@ -749,7 +749,7 @@ uint32_t get_win_gravity_from_config() {
     }
 };
 
-struct cellspec describe_cell(struct cell cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected) {
+struct cellspec describe_cell(struct cell cell, color_t *palette, color_t *extra, bool blink, bool selected) {
     struct cellspec res;
 
     // Check special colors
@@ -810,8 +810,8 @@ struct cellspec describe_cell(struct cell cell, color_t *palette, color_t *extra
     return res;
 }
 
-struct window *find_shared_font(struct window *win, _Bool need_free) {
-    _Bool found_font = 0, found_cache = 0;
+struct window *find_shared_font(struct window *win, bool need_free) {
+    bool found_font = 0, found_cache = 0;
     struct window *found = 0;
 
     win->font_pixmode = iconf(ICONF_PIXEL_MODE);
@@ -1043,11 +1043,11 @@ void free_window(struct window *win) {
     free(win);
 };
 
-_Bool window_shift(struct window *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, _Bool delay) {
+bool window_shift(struct window *win, nss_coord_t xs, nss_coord_t ys, nss_coord_t xd, nss_coord_t yd, nss_coord_t width, nss_coord_t height, bool delay) {
     struct timespec cur;
     clock_gettime(CLOCK_TYPE, &cur);
 
-    _Bool scrolled_recently = TIMEDIFF(win->last_scroll, cur) <  SEC/2/iconf(ICONF_FPS);
+    bool scrolled_recently = TIMEDIFF(win->last_scroll, cur) <  SEC/2/iconf(ICONF_FPS);
 
     win->last_scroll = cur;
 
@@ -1118,7 +1118,7 @@ void window_paste_clip(struct window *win, enum clip_target target) {
           term_is_utf8_enabled(win->term) ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
 }
 
-static void redraw_borders(struct window *win, _Bool top_left, _Bool bottom_right) {
+static void redraw_borders(struct window *win, bool top_left, bool bottom_right) {
         int16_t width = win->cw * win->char_width + win->left_border;
         int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
         xcb_rectangle_t borders[NUM_BORDERS] = {
@@ -1176,7 +1176,7 @@ static void handle_expose(struct window *win, struct rect damage) {
     if (intersect_with(&inters, &damage)) renderer_update(win, inters);
 }
 
-static void handle_focus(struct window *win, _Bool focused) {
+static void handle_focus(struct window *win, bool focused) {
     win->focused = focused;
     term_handle_focus(win->term, focused);
 }
@@ -1266,7 +1266,7 @@ static void send_selection_data(struct window *win, xcb_window_t req, xcb_atom_t
     xcb_send_event(con, 1, req, 0, (const char *)&ev);
 }
 
-static void receive_selection_data(struct window *win, xcb_atom_t prop, _Bool pnotify) {
+static void receive_selection_data(struct window *win, xcb_atom_t prop, bool pnotify) {
     if (prop == XCB_NONE) return;
 
     size_t left, offset = 0;
@@ -1340,7 +1340,7 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, _Bool pn
                 }
                 data = buf2;
             } else if (term_is_paste_quote_enabled(win->term)) {
-                _Bool quote_c1 = !term_is_utf8_enabled(win->term);
+                bool quote_c1 = !term_is_utf8_enabled(win->term);
                 ssize_t i = 0, j = 0;
                 while (i < size) {
                     // Prefix control symbols with Ctrl-V
@@ -1613,7 +1613,7 @@ void run(void) {
                     redraw_borders(win, 1, 1);
 
                 remains = frame_time;
-                _Bool old_drawn = win->drawn_somthing;
+                bool old_drawn = win->drawn_somthing;
                 win->drawn_somthing = term_redraw(win->term);
 
                 if (iconf(ICONF_TRACE_MISC) && win->drawn_somthing) info("Redraw");

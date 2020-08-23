@@ -71,7 +71,7 @@ inline static struct rect rect_union(struct rect rect, struct rect other) {
     return rect;
 }
 
-inline static _Bool intersect_with(struct rect *src, struct rect *dst) {
+inline static bool intersect_with(struct rect *src, struct rect *dst) {
         struct rect inters = { .x = MAX(src->x, dst->x), .y = MAX(src->y, dst->y) };
 
         int32_t x1 = MIN(src->x + (int32_t)src->width, dst->x + (int32_t)dst->width);
@@ -93,7 +93,7 @@ inline static _Bool intersect_with(struct rect *src, struct rect *dst) {
 #define UTF_INVAL 0xfffd
 
 size_t utf8_encode(term_char_t u, uint8_t *buf, uint8_t *end);
-_Bool utf8_decode(term_char_t *res, const uint8_t **buf, const uint8_t *end);
+bool utf8_decode(term_char_t *res, const uint8_t **buf, const uint8_t *end);
 
 /* *_decode returns source buffer end */
 /* *_encode returns destination buffer end */

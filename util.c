@@ -76,7 +76,7 @@ size_t utf8_encode(uint32_t u, uint8_t *buf, uint8_t *end) {
     return i;
 }
 
-_Bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end) {
+bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end) {
     if (*buf >= end) return 0;
     uint32_t part = *(*buf)++;
     uint8_t len = 0, i = 0x80;
@@ -222,7 +222,7 @@ color_t parse_color(const uint8_t *str, const uint8_t *end) {
 
 const uint8_t *hex_decode(uint8_t *dst, const uint8_t *hex, const uint8_t *end) {
     uint8_t val = 0;
-    _Bool state = 0;
+    bool state = 0;
     while (hex  < end) {
         if (!isxdigit(*hex)) break;
         val = (val << 4) | fromhexdigit(*hex++);

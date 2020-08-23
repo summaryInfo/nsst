@@ -198,7 +198,7 @@ const char *sconf(uint32_t opt);
 void cconf_set(uint32_t opt, color_t val);
 void iconf_set(uint32_t opt, int32_t val);
 void sconf_set(uint32_t opt, const char *val);
-_Bool bconf_set(uint32_t opt, _Bool val);
+bool bconf_set(uint32_t opt, bool val);
 
 /* Get argv from -e flag
  * Resets to NULL when called */

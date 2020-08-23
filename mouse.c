@@ -158,7 +158,7 @@ void mouse_selection_erase(struct term *term, struct rect rect) {
 }
 
 
-void mouse_scroll_selection(struct term *term, nss_coord_t amount, _Bool save) {
+void mouse_scroll_selection(struct term *term, nss_coord_t amount, bool save) {
     struct mouse_state *loc = term_get_mstate(term);
 
     if (loc->state == state_sel_none) return;
@@ -171,11 +171,11 @@ void mouse_scroll_selection(struct term *term, nss_coord_t amount, _Bool save) {
 
     ssize_t top = term_min_y(term);
 
-    _Bool yins = (save || top <= y0) && y1 < term_max_y(term);
-    _Bool youts = (save || top > y1) || y0 >= term_max_y(term);
-    _Bool xins = term_min_x(term) <= x0 && x1 < term_max_x(term);
-    _Bool xouts = term_min_x(term) > x1 || x0 >= term_max_x(term);
-    _Bool damaged = term_min_y(term) && save && term_min_y(term) < y1 && y0 - amount < 0;
+    bool yins = (save || top <= y0) && y1 < term_max_y(term);
+    bool youts = (save || top > y1) || y0 >= term_max_y(term);
+    bool xins = term_min_x(term) <= x0 && x1 < term_max_x(term);
+    bool xouts = term_min_x(term) > x1 || x0 >= term_max_x(term);
+    bool damaged = term_min_y(term) && save && term_min_y(term) < y1 && y0 - amount < 0;
 
     save &= amount >= 0;
 
@@ -189,7 +189,7 @@ void mouse_scroll_selection(struct term *term, nss_coord_t amount, _Bool save) {
         loc->r.y1 -= amount;
         loc->n.y1 -= amount;
 
-        _Bool swapped = loc->r.y0 > loc->r.y1;
+        bool swapped = loc->r.y0 > loc->r.y1;
         if (swapped) {
             SWAP(ssize_t, loc->r.y0, loc->r.y1);
             SWAP(ssize_t, loc->r.x0, loc->r.x1);
@@ -226,7 +226,7 @@ void mouse_scroll_selection(struct term *term, nss_coord_t amount, _Bool save) {
     }
  }
 
-inline static _Bool is_separator(term_char_t ch) {
+inline static bool is_separator(term_char_t ch) {
         if (!ch) return 1;
         uint8_t cbuf[UTF8_MAX_LEN + 1];
         cbuf[utf8_encode(ch, cbuf, cbuf + UTF8_MAX_LEN)] = '\0';
@@ -274,7 +274,7 @@ static void snap_selection(struct term *term) {
     } else if (loc->snap == snap_word) {
         if ((line = term_line_at(term, vpos)).line) {
             loc->n.x0 = MAX(MIN(loc->n.x0, line.width - 1), 0);
-            _Bool cat = is_separator(line.cell[loc->n.x0].ch);
+            bool cat = is_separator(line.cell[loc->n.x0].ch);
             while (1) {
                 while (loc->n.x0 > 0) {
                     if (cat != is_separator(line.cell[loc->n.x0 - 1].ch)) goto outer;
@@ -307,7 +307,7 @@ outer:
     } else if (loc->snap == snap_word) {
         if ((line = term_line_at(term, vpos)).line) {
             loc->n.x1 = MAX(MIN(loc->n.x1, line.width - 1), 0);
-            _Bool cat = is_separator(line.cell[loc->n.x1].ch);
+            bool cat = is_separator(line.cell[loc->n.x1].ch);
             while(1) {
                 while (loc->n.x1 < line.width - 1) {
                     if (cat != is_separator(line.cell[loc->n.x1 + 1].ch)) goto outer2;
@@ -332,7 +332,7 @@ outer2:
         loc->n.x1 += !!(line.cell[loc->n.x1].attr & attr_wide);
 }
 
-_Bool mouse_is_selected(struct term *term, nss_coord_t x, nss_coord_t y) {
+bool mouse_is_selected(struct term *term, nss_coord_t x, nss_coord_t y) {
     struct mouse_state *loc = term_get_mstate(term);
 
     if (loc->state == state_sel_none || loc->state == state_sel_pressed) return 0;
@@ -348,7 +348,7 @@ _Bool mouse_is_selected(struct term *term, nss_coord_t x, nss_coord_t y) {
 }
 
 
-inline static _Bool sel_adjust_buf(size_t *pos, size_t *cap, uint8_t **res) {
+inline static bool sel_adjust_buf(size_t *pos, size_t *cap, uint8_t **res) {
     if (*pos + UTF8_MAX_LEN + 2 >= *cap) {
         size_t new_cap = *cap * 3 / 2;
         uint8_t *tmp = realloc(*res, new_cap);
@@ -367,7 +367,7 @@ inline static nss_coord_t line_len(struct line_view line) {
     return max_x;
 }
 
-_Bool mouse_is_selected_in_view(struct term *term, nss_coord_t x, nss_coord_t y) {
+bool mouse_is_selected_in_view(struct term *term, nss_coord_t x, nss_coord_t y) {
     return mouse_is_selected(term, x, y - term_view(term));
 }
 
@@ -424,7 +424,7 @@ static uint8_t *selection_data(struct term *term) {
     } else return NULL;
 }
 
-static void change_selection(struct term *term, uint8_t state, nss_coord_t x, color_t y, _Bool rectangular) {
+static void change_selection(struct term *term, uint8_t state, nss_coord_t x, color_t y, bool rectangular) {
     struct mouse_state *loc = term_get_mstate(term);
     struct selected old = loc->n;
     uint8_t oldstate = loc->state;

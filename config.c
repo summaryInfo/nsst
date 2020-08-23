@@ -263,7 +263,7 @@ static struct {
 };
 
 static color_t coptions[PALETTE_SIZE];
-static _Bool color_init;
+static bool color_init;
 static const char **argv = NULL;
 
 
@@ -394,7 +394,7 @@ void sconf_set(uint32_t opt, const char *val) {
     }
 }
 
-_Bool bconf_set(uint32_t opt, _Bool val) {
+bool bconf_set(uint32_t opt, bool val) {
     if (opt < ICONF_ALPHA && ioptions[opt].min == 0 && ioptions[opt].max == 1) {
         ioptions[opt].val = val;
         return 1;

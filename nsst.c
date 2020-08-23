@@ -81,7 +81,7 @@ static void parse_geometry(char *arg, char *argv0) {
     char xsgn = '+', ysgn = '+';
     if (arg[0] == '=') arg++;
     if (arg[0] == '+' || arg[0] == '-') {
-        _Bool scanned = sscanf(arg, "%c%"SCNd16"%c%"SCNd16, &xsgn, &x, &ysgn, &y) == 4;
+        bool scanned = sscanf(arg, "%c%"SCNd16"%c%"SCNd16, &xsgn, &x, &ysgn, &y) == 4;
         if (!scanned || (xsgn != '+' && xsgn != '-') || (ysgn != '+' && ysgn != '-'))
             usage(argv0, EXIT_FAILURE);
         if (xsgn == '-') x = -x;
@@ -143,7 +143,7 @@ static void parse_options(char **argv) {
                     version();
                 else if (!strcmp(opt, "no-config-file")) /* NOTHING */;
                 else {
-                    _Bool val = 1;
+                    bool val = 1;
                     if (!strncmp(opt, "no-", 3)) opt += 3, val = 0;
                     else if (!strncmp(opt, "enable-", 7)) opt += 7, val = 1;
                     else if (!strncmp(opt, "disable-", 8)) opt += 8, val = 0;
@@ -213,7 +213,7 @@ int main(int argc, char **argv) {
     // Load locale
     setlocale(LC_ALL, "");
     char *charset = nl_langinfo(CODESET);
-    _Bool bset = charset && (charset[0] & ~0x20) == 'U' &&
+    bool bset = charset && (charset[0] & ~0x20) == 'U' &&
             (charset[1] & ~0x20) == 'T' && (charset[2] & ~0x20) == 'F' &&
             (charset[3] == '8' || charset[4] == '8');
 

@@ -50,17 +50,17 @@ struct cellspec {
     color_t bg;
     term_char_t ch;
     uint8_t face;
-    _Bool underlined;
-    _Bool stroke;
-    _Bool wide;
+    bool underlined;
+    bool stroke;
+    bool wide;
 };
 
 struct title_stack_item {
     struct title_stack_item *next;
     char *title_data;
     char *icon_data;
-    _Bool title_utf8;
-    _Bool icon_utf8;
+    bool title_utf8;
+    bool icon_utf8;
     char data[];
 };
 
@@ -72,19 +72,19 @@ struct window {
     xcb_gcontext_t gc;
     xcb_event_mask_t ev_mask;
 
-    _Bool focused : 1;
-    _Bool active : 1;
-    _Bool blink_state : 1;
-    _Bool mouse_events : 1;
-    _Bool force_redraw : 1;
-    _Bool blink_commited : 1;
-    _Bool scroll_delayed : 1;
-    _Bool resize_delayed : 1;
-    _Bool drawn_somthing : 1;
-    _Bool sync_active : 1;
-    _Bool slow_mode : 1;
-    _Bool in_blink : 1;
-    _Bool init_invert : 1;
+    bool focused : 1;
+    bool active : 1;
+    bool blink_state : 1;
+    bool mouse_events : 1;
+    bool force_redraw : 1;
+    bool blink_commited : 1;
+    bool scroll_delayed : 1;
+    bool resize_delayed : 1;
+    bool drawn_somthing : 1;
+    bool sync_active : 1;
+    bool slow_mode : 1;
+    bool in_blink : 1;
+    bool init_invert : 1;
 
     int16_t width;
     int16_t height;
@@ -104,7 +104,7 @@ struct window {
     nss_coord_t damaged_y1;
 
     // Used to restore maximized window
-    _Bool saved_geometry;
+    bool saved_geometry;
     int16_t saved_x;
     int16_t saved_y;
     int16_t saved_width;
@@ -136,7 +136,7 @@ struct window {
 extern xcb_connection_t *con;
 extern struct window *win_list_head;
 
-inline static _Bool check_void_cookie(xcb_void_cookie_t ck) {
+inline static bool check_void_cookie(xcb_void_cookie_t ck) {
     xcb_generic_error_t *err = xcb_request_check(con, ck);
     if (err) {
         warn("[X11 Error] major=%"PRIu8", minor=%"PRIu16", error=%"PRIu8, err->major_code, err->minor_code, err->error_code);
@@ -150,14 +150,14 @@ void init_render_context(void);
 void free_render_context(void);
 void renderer_free(struct window *win);
 void renderer_update(struct window *win, struct rect rect);
- _Bool renderer_reload_font(struct window *win, _Bool need_free);
+ bool renderer_reload_font(struct window *win, bool need_free);
 void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch);
 void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 
 void window_set_default_props(struct window *win);
 void handle_resize(struct window *win, int16_t width, int16_t height);
-struct window *find_shared_font(struct window *win, _Bool need_free);
-struct cellspec describe_cell(struct cell cell, color_t *palette, color_t *extra, _Bool blink, _Bool selected);
+struct window *find_shared_font(struct window *win, bool need_free);
+struct cellspec describe_cell(struct cell cell, color_t *palette, color_t *extra, bool blink, bool selected);
 
 #endif
 

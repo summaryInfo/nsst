@@ -96,8 +96,8 @@ struct cursor {
     enum charset upcs;
     enum charset gn[4];
 
-    _Bool origin : 1;
-    _Bool pending : 1;
+    bool origin : 1;
+    bool pending : 1;
 };
 
 enum mode_status {
@@ -109,62 +109,62 @@ enum mode_status {
 };
 
 struct term_mode {
-    _Bool echo : 1;
-    _Bool crlf : 1;
-    _Bool wrap : 1;
-    _Bool focused : 1;
-    _Bool altscreen : 1;
-    _Bool altscreen_scroll : 1;
-    _Bool disable_altscreen : 1;
-    _Bool utf8 : 1;
-    _Bool reverse_video : 1;
-    _Bool insert : 1;
-    _Bool sixel : 1;
-    _Bool eight_bit : 1;
-    _Bool protected : 1;
-    _Bool track_focus : 1;
-    _Bool hide_cursor : 1;
-    _Bool enable_nrcs : 1;
-    _Bool scroll_on_output : 1;
-    _Bool no_scroll_on_input : 1;
-    _Bool columns_132 : 1;
-    _Bool preserve_display_132 : 1;
-    _Bool disable_columns_132 : 1;
-    _Bool print_extend : 1;
-    _Bool print_form_feed : 1;
-    _Bool print_enabled : 1;
-    _Bool print_auto : 1;
-    _Bool title_set_utf8 : 1;
-    _Bool title_query_utf8 : 1;
-    _Bool title_set_hex : 1;
-    _Bool title_query_hex : 1;
-    _Bool bracketed_paste : 1;
-    _Bool keep_selection : 1;
-    _Bool keep_clipboard : 1;
-    _Bool select_to_clipboard : 1;
-    _Bool reverse_wrap : 1;
-    _Bool led_num_lock : 1;
-    _Bool led_caps_lock : 1;
-    _Bool led_scroll_lock : 1;
-    _Bool attr_ext_rectangle : 1;
-    _Bool lr_margins : 1;
-    _Bool smooth_scroll : 1;
-    _Bool xterm_more_hack : 1;
-    _Bool allow_change_font : 1;
-    _Bool paste_quote : 1;
-    _Bool paste_literal_nl : 1;
-    _Bool margin_bell : 1;
-    _Bool bell_raise : 1;
-    _Bool bell_urgent : 1;
+    bool echo : 1;
+    bool crlf : 1;
+    bool wrap : 1;
+    bool focused : 1;
+    bool altscreen : 1;
+    bool altscreen_scroll : 1;
+    bool disable_altscreen : 1;
+    bool utf8 : 1;
+    bool reverse_video : 1;
+    bool insert : 1;
+    bool sixel : 1;
+    bool eight_bit : 1;
+    bool protected : 1;
+    bool track_focus : 1;
+    bool hide_cursor : 1;
+    bool enable_nrcs : 1;
+    bool scroll_on_output : 1;
+    bool no_scroll_on_input : 1;
+    bool columns_132 : 1;
+    bool preserve_display_132 : 1;
+    bool disable_columns_132 : 1;
+    bool print_extend : 1;
+    bool print_form_feed : 1;
+    bool print_enabled : 1;
+    bool print_auto : 1;
+    bool title_set_utf8 : 1;
+    bool title_query_utf8 : 1;
+    bool title_set_hex : 1;
+    bool title_query_hex : 1;
+    bool bracketed_paste : 1;
+    bool keep_selection : 1;
+    bool keep_clipboard : 1;
+    bool select_to_clipboard : 1;
+    bool reverse_wrap : 1;
+    bool led_num_lock : 1;
+    bool led_caps_lock : 1;
+    bool led_scroll_lock : 1;
+    bool attr_ext_rectangle : 1;
+    bool lr_margins : 1;
+    bool smooth_scroll : 1;
+    bool xterm_more_hack : 1;
+    bool allow_change_font : 1;
+    bool paste_quote : 1;
+    bool paste_literal_nl : 1;
+    bool margin_bell : 1;
+    bool bell_raise : 1;
+    bool bell_urgent : 1;
 };
 
 struct checksum_mode {
-    _Bool positive : 1;
-    _Bool no_attr : 1;
-    _Bool no_trim : 1;
-    _Bool no_implicit : 1;
-    _Bool wide : 1;
-    _Bool eight_bit : 1;
+    bool positive : 1;
+    bool no_attr : 1;
+    bool no_trim : 1;
+    bool no_implicit : 1;
+    bool wide : 1;
+    bool eight_bit : 1;
 };
 
 struct term {
@@ -194,7 +194,7 @@ struct term {
     nss_coord_t bottom;
     nss_coord_t left;
     nss_coord_t right;
-    _Bool *tabs;
+    bool *tabs;
 
     /* Last written character
      * Used for REP */
@@ -212,8 +212,8 @@ struct term {
      * Used for effective cursor invalidation */
     nss_coord_t prev_c_x;
     nss_coord_t prev_c_y;
-    _Bool prev_c_hidden;
-    _Bool prev_c_view_changed;
+    bool prev_c_hidden;
+    bool prev_c_view_changed;
 
     struct term_mode mode;
     struct term_mode vt52mode;
@@ -575,7 +575,7 @@ static int tty_open(struct term *term, const char *cmd, const char **args) {
     return master;
 }
 
-static _Bool optimize_line_palette(struct line *line) {
+static bool optimize_line_palette(struct line *line) {
     // Buffer here causes a leak in theory
     static color_id_t *buf = NULL, buf_len = 0, *new;
 
@@ -653,7 +653,7 @@ inline static struct cell fixup_color(struct line *line, struct cursor *cur) {
     return cel;
 }
 
-inline static void copy_cell(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, _Bool dmg) {
+inline static void copy_cell(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, bool dmg) {
     struct cell cel = src->cell[sx];
     if (cel.fg >= PALETTE_SIZE) cel.fg = alloc_color(dst,
             src->pal->data[cel.fg - PALETTE_SIZE]);
@@ -743,7 +743,7 @@ inline static struct line *line_at(struct term *term, ssize_t y) {
             term->scrollback[(term->sb_top + term->sb_caps + y + 1) % term->sb_caps];
 }
 
-inline static _Bool is_wide(struct line *ln, ssize_t x) {
+inline static bool is_wide(struct line *ln, ssize_t x) {
     return ln->cell[x].attr & attr_wide;
 }
 
@@ -804,7 +804,7 @@ ssize_t term_line_next(struct term *term, struct line_offset *pos, ssize_t amoun
     return amount;
 }
 
-_Bool is_last_line(struct line_view line) {
+bool is_last_line(struct line_view line) {
     return line.cell - line.line->cell + line.width < line.line->width;
 }
 
@@ -818,7 +818,7 @@ struct line_offset term_get_line_pos(struct term *term, ssize_t y) {
     return pos;
 }
 
-static void term_do_reset_view(struct term *term, _Bool damage) {
+static void term_do_reset_view(struct term *term, bool damage) {
     term->prev_c_view_changed |= !term->view_pos.line;
     ssize_t old_view = term->view;
     term->view_pos = (struct line_offset){ 0 };
@@ -848,7 +848,7 @@ void term_scroll_view(struct term *term, nss_coord_t amount) {
         return;
     }
 
-    _Bool old_viewr = !term->view_pos.line;
+    bool old_viewr = !term->view_pos.line;
 
     ssize_t delta = term_line_next(term, &term->view_pos, -amount) + amount;
     if (term->view_pos.line > 0) {
@@ -870,7 +870,7 @@ void term_scroll_view(struct term *term, nss_coord_t amount) {
     term->prev_c_view_changed |= old_viewr != !term->view_pos.line;
 }
 
-static ssize_t term_append_history(struct term *term, struct line *line, _Bool opt) {
+static ssize_t term_append_history(struct term *term, struct line *line, bool opt) {
     ssize_t res = 0;
     if (term->sb_max_caps > 0) {
         ssize_t llen = line_length(line);
@@ -966,7 +966,7 @@ void term_resize(struct term *term, nss_coord_t width, nss_coord_t height) {
     // since this is input from program not yet aware about resize
     term_read(term);
 
-    _Bool cur_moved = term->c.x == term->width - 1 && term->c.pending;
+    bool cur_moved = term->c.x == term->width - 1 && term->c.pending;
 
     // Ensure that term->back_screen is altscreen
     if (term->mode.altscreen) {
@@ -994,7 +994,7 @@ void term_resize(struct term *term, nss_coord_t width, nss_coord_t height) {
 
     { // Resize tabs
 
-        _Bool *new_tabs = realloc(term->tabs, width * sizeof(*term->tabs));
+        bool *new_tabs = realloc(term->tabs, width * sizeof(*term->tabs));
         if (!new_tabs) die("Can't alloc tabs");
         term->tabs = new_tabs;
 
@@ -1036,9 +1036,9 @@ void term_resize(struct term *term, nss_coord_t width, nss_coord_t height) {
     // Find line of bottom left cell
     struct line_offset lower_left = term->view_pos;
     term_line_next(term, &lower_left, term->height - 1);
-    _Bool ll_translated = 0;
-    _Bool to_top = term->view_pos.line <= -term->sb_limit;
-    _Bool top_bottom = !term->view_pos.line;
+    bool ll_translated = 0;
+    bool to_top = term->view_pos.line <= -term->sb_limit;
+    bool top_bottom = !term->view_pos.line;
 
     {  // Resize main screen
 
@@ -1056,7 +1056,7 @@ void term_resize(struct term *term, nss_coord_t width, nss_coord_t height) {
                 y = -1;
             }
 
-            _Bool cset = 0, csset = 0, aset = 0;
+            bool cset = 0, csset = 0, aset = 0;
             ssize_t par_start = y, approx_cy = 0, dlta = 0;
 
             term->screen[term->height - 1]->wrapped = 0;
@@ -1271,12 +1271,12 @@ void term_resize(struct term *term, nss_coord_t width, nss_coord_t height) {
 
 }
 
-_Bool term_is_cursor_enabled(struct term *term) {
+bool term_is_cursor_enabled(struct term *term) {
     return !term->mode.hide_cursor && !term->view_pos.line;
 }
 
-_Bool term_redraw(struct term *term) {
-    _Bool c_hidden = !term_is_cursor_enabled(term);
+bool term_redraw(struct term *term) {
+    bool c_hidden = !term_is_cursor_enabled(term);
 
     if (term->c.x != term->prev_c_x || term->c.y != term->prev_c_y ||
             term->prev_c_hidden != c_hidden || term->prev_c_view_changed) {
@@ -1292,7 +1292,7 @@ _Bool term_redraw(struct term *term) {
 
     struct line *cl = term->screen[term->c.y];
 
-    _Bool cursor = !term->prev_c_hidden && (!(cl->cell[term->c.x].attr & attr_drawn) || cl->force_damage);
+    bool cursor = !term->prev_c_hidden && (!(cl->cell[term->c.x].attr & attr_drawn) || cl->force_damage);
 
     return window_submit_screen(term->win, term->palette, term->c.x, term->c.y, cursor, term->c.pending);
 }
@@ -1364,7 +1364,7 @@ inline static void term_esc_finish_string(struct term *term) {
     term->esc.str_ptr = NULL;
 }
 
-static void term_esc_dump(struct term *term, _Bool use_info) {
+static void term_esc_dump(struct term *term, bool use_info) {
     if (use_info && !iconf(ICONF_TRACE_CONTROLS)) return;
 
     char *pref = use_info ? "Seq: " : "Unrecognized ";
@@ -1413,13 +1413,13 @@ static void term_esc_dump(struct term *term, _Bool use_info) {
 static size_t term_decode_color(struct term *term, size_t arg, color_t *rcol, color_id_t *rcid, color_id_t *valid) {
     *valid = 0;
     size_t argc = arg + 1 < ESC_MAX_PARAM;
-    _Bool subpars = arg && (term->esc.subpar_mask >> (arg + 1)) & 1;
+    bool subpars = arg && (term->esc.subpar_mask >> (arg + 1)) & 1;
     for (size_t i = arg + 1; i < ESC_MAX_PARAM &&
         !subpars ^ ((term->esc.subpar_mask >> i) & 1); i++) argc++;
     if (argc > 0) {
         if (term->esc.param[arg] == 2 && argc > 3) {
             color_t col = 0xFF;
-            _Bool wrong = 0, space = subpars && argc > 4;
+            bool wrong = 0, space = subpars && argc > 4;
             for (size_t i = 1 + space; i < 4U + space; i++) {
                 wrong |= term->esc.param[arg + i] > 255;
                 col = (col << 8) + MIN(MAX(0, term->esc.param[arg + i]), 0xFF);
@@ -1517,7 +1517,7 @@ inline static void term_rect_pre(struct term *term, nss_coord_t *xs, nss_coord_t
     *ye = MAX(term_min_oy(term), MIN(*ye, term_max_oy(term)));
 }
 
-inline static void term_erase_pre(struct term *term, nss_coord_t *xs, nss_coord_t *ys, nss_coord_t *xe, nss_coord_t *ye, _Bool origin) {
+inline static void term_erase_pre(struct term *term, nss_coord_t *xs, nss_coord_t *ys, nss_coord_t *xe, nss_coord_t *ye, bool origin) {
     if (origin) term_rect_pre(term, xs, ys, xe, ye);
     else {
         *xs = MAX(0, MIN(*xs, term->width - 1));
@@ -1537,7 +1537,7 @@ static uint16_t term_checksum(struct term *term, nss_coord_t xs, nss_coord_t ys,
 
     uint32_t res = 0, spc = 0, trm = 0;
     enum charset gr = term->c.gn[term->c.gr];
-    _Bool first = 1, notrim = term->checksum_mode.no_trim;
+    bool first = 1, notrim = term->checksum_mode.no_trim;
 
     for (; ys < ye; ys++) {
         struct line *line = term->screen[ys];
@@ -1583,7 +1583,7 @@ static void term_reverse_sgr(struct term *term, nss_coord_t xs, nss_coord_t ys, 
     struct cell mask = {0}, val = {0};
     term_decode_sgr(term, 4, &mask, &val, &fg, &bg);
 
-    _Bool rect = term->mode.attr_ext_rectangle;
+    bool rect = term->mode.attr_ext_rectangle;
     for (; ys < ye; ys++) {
         struct line *line = term->screen[ys];
         for (nss_coord_t i = xs; i < (rect || ys == ye - 1 ? xe : term_max_ox(term)); i++) {
@@ -1638,8 +1638,8 @@ static void term_report_sgr(struct term *term, nss_coord_t xs, nss_coord_t ys, n
 
     struct cell common = term->screen[ys]->cell[xs];
     color_t common_fg = 0, common_bg = 0;
-    _Bool has_common_fg = 1, has_common_bg = 1;
-    _Bool true_fg = 0, true_bg = 0;
+    bool has_common_fg = 1, has_common_bg = 1;
+    bool true_fg = 0, true_bg = 0;
 
     if (common.fg >= PALETTE_SIZE && term->screen[ys]->pal)
         common_fg = term->screen[ys]->pal->data[common.fg - PALETTE_SIZE], true_fg = 1;
@@ -1673,7 +1673,7 @@ static void term_apply_sgr(struct term *term, nss_coord_t xs, nss_coord_t ys, ns
 
     mask.attr |= attr_drawn;
     val.attr &= ~attr_drawn;
-    _Bool rect = term->mode.attr_ext_rectangle;
+    bool rect = term->mode.attr_ext_rectangle;
     for (; ys < ye; ys++) {
         struct line *line = term->screen[ys];
         if (val.fg >= PALETTE_SIZE) val.fg = alloc_color(line, fg);
@@ -1688,7 +1688,7 @@ static void term_apply_sgr(struct term *term, nss_coord_t xs, nss_coord_t ys, ns
     }
 }
 
-static void term_copy(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, nss_coord_t xd, nss_coord_t yd, _Bool origin) {
+static void term_copy(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, nss_coord_t xd, nss_coord_t yd, bool origin) {
     if (ye < ys) SWAP(nss_coord_t, ye, ys);
     if (xe < xs) SWAP(nss_coord_t, xe, xs);
 
@@ -1710,7 +1710,7 @@ static void term_copy(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coo
 
     if (xs >= xe || ys >= ye) return;
 
-    _Bool dmg = !!term->view_pos.line || !window_shift(term->win, xs, ys, xd, yd, xe - xs, ye - ys, 1);
+    bool dmg = !!term->view_pos.line || !window_shift(term->win, xs, ys, xd, yd, xe - xs, ye - ys, 1);
 
     if (yd < ys || (yd == ys && xd < xs)) {
         for (; ys < ye; ys++, yd++) {
@@ -1731,7 +1731,7 @@ static void term_copy(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coo
     }
 }
 
-static void term_fill(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, _Bool origin, term_char_t ch) {
+static void term_fill(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, bool origin, term_char_t ch) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, origin);
 
     for (; ys < ye; ys++) {
@@ -1746,11 +1746,11 @@ static void term_fill(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coo
     }
 }
 
-static void term_erase(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, _Bool origin) {
+static void term_erase(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, bool origin) {
     term_fill(term, xs, ys, xe, ye, origin, 0);
 }
 
-static void term_protective_erase(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, _Bool origin) {
+static void term_protective_erase(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, bool origin) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, origin);
 
     for (; ys < ye; ys++) {
@@ -1765,7 +1765,7 @@ static void term_protective_erase(struct term *term, nss_coord_t xs, nss_coord_t
     }
 }
 
-static void term_selective_erase(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, _Bool origin) {
+static void term_selective_erase(struct term *term, nss_coord_t xs, nss_coord_t ys, nss_coord_t xe, nss_coord_t ye, bool origin) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, origin);
 
     for (; ys < ye; ys++) {
@@ -1824,7 +1824,7 @@ static void term_move_left(struct term *term, nss_coord_t amount) {
     if (term->mode.reverse_wrap) x += term->c.pending;
 
     if (amount > x - first_left && term->mode.wrap && term->mode.reverse_wrap) {
-        _Bool in_tbm = term_min_y(term) <= term->c.y && term->c.y < term_max_y(term);
+        bool in_tbm = term_min_y(term) <= term->c.y && term->c.y < term_max_y(term);
         nss_coord_t height = in_tbm ? term_max_y(term) - term_min_y(term) : term->height;
         nss_coord_t top = in_tbm ? term_min_y(term) : 0;
 
@@ -1840,7 +1840,7 @@ static void term_move_left(struct term *term, nss_coord_t amount) {
     (term->c.x >= term_min_x(term) ? term_bounded_move_to : term_move_to)(term, x - amount, y);
 }
 
-static void term_cursor_mode(struct term *term, _Bool mode) {
+static void term_cursor_mode(struct term *term, bool mode) {
     if (mode) /* save */ {
         term->cs = term->c;
     } else /* restore */ {
@@ -1850,7 +1850,7 @@ static void term_cursor_mode(struct term *term, _Bool mode) {
     }
 }
 
-static void term_swap_screen(struct term *term, _Bool damage) {
+static void term_swap_screen(struct term *term, bool damage) {
     term->mode.altscreen ^= 1;
     SWAP(struct cursor, term->back_cs, term->cs);
     SWAP(struct line **, term->back_screen, term->screen);
@@ -1883,7 +1883,7 @@ static void term_scroll_horizontal(struct term *term, nss_coord_t left, nss_coor
     }
 }
 
-static void term_scroll(struct term *term, nss_coord_t top, nss_coord_t amount, _Bool save) {
+static void term_scroll(struct term *term, nss_coord_t top, nss_coord_t amount, bool save) {
     nss_coord_t left = term_min_x(term), right = term_max_x(term), bottom = term_max_y(term);
 
     if (left == 0 && right == term->width) { // Fast scrolling without margins
@@ -2003,7 +2003,7 @@ static void term_do_reset_margins(struct term *term) {
     term->right = term->width - 1;
 }
 
-inline static _Bool term_cursor_in_region(struct term *term) {
+inline static bool term_cursor_in_region(struct term *term) {
     return term->c.x >= term_min_x(term) && term->c.x < term_max_x(term) &&
             term->c.y >= term_min_y(term) && term->c.y < term_max_y(term);
 }
@@ -2129,7 +2129,7 @@ static void term_print_line(struct term *term, struct line *line) {
     term_print_char(term, '\n');
 }
 
-static void term_print_screen(struct term *term, _Bool ext) {
+static void term_print_screen(struct term *term, bool ext) {
     if (term->printerfd < 0) return;
 
     nss_coord_t top = ext ? 0 : term->top;
@@ -2166,7 +2166,7 @@ static void term_tabs(struct term *term, nss_coord_t n) {
     }
 }
 
-void term_set_reverse(struct term *term, _Bool set) {
+void term_set_reverse(struct term *term, bool set) {
     if (set ^ term->mode.reverse_video) {
         SWAP(color_t, term->palette[SPECIAL_BG], term->palette[SPECIAL_FG]);
         SWAP(color_t, term->palette[SPECIAL_CURSOR_BG], term->palette[SPECIAL_CURSOR_FG]);
@@ -2177,7 +2177,7 @@ void term_set_reverse(struct term *term, _Bool set) {
     term->mode.reverse_video = set;
 }
 
-static void term_set_vt52(struct term *term, _Bool set) {
+static void term_set_vt52(struct term *term, bool set) {
     if (set) {
         term->kstate.keyboad_vt52 = 1;
         term->vt_level = 0;
@@ -2284,7 +2284,7 @@ static void term_do_reset_tabs(struct term *term) {
         term->tabs[i] = 1;
 }
 
-static void term_request_resize(struct term *term, int16_t w, int16_t h, _Bool in_cells) {
+static void term_request_resize(struct term *term, int16_t w, int16_t h, bool in_cells) {
     int16_t cur_w, cur_h, scr_w, scr_h;
     window_get_dim(term->win, &cur_w, &cur_h);
     window_get_dim_ext(term->win, dim_screen_size, &scr_w, &scr_h);
@@ -2303,7 +2303,7 @@ static void term_request_resize(struct term *term, int16_t w, int16_t h, _Bool i
     window_resize(term->win, w, h);
 }
 
-static void term_set_132(struct term *term, _Bool set) {
+static void term_set_132(struct term *term, bool set) {
     term_do_reset_margins(term);
     term_move_to(term, term_min_ox(term), term_min_oy(term));
     if (!(term->mode.preserve_display_132))
@@ -2313,12 +2313,12 @@ static void term_set_132(struct term *term, _Bool set) {
     term->mode.columns_132 = set;
 }
 
-static void term_do_reset(struct term *term, _Bool hard) {
+static void term_do_reset(struct term *term, bool hard) {
     if (term->mode.columns_132) term_set_132(term, 0);
     if (term->mode.altscreen) term_swap_screen(term, 1);
 
     nss_coord_t cx = term->c.x, cy = term->c.y;
-    _Bool cpending = term->c.pending;
+    bool cpending = term->c.pending;
 
     term_load_config(term);
     term_do_reset_margins(term);
@@ -2744,7 +2744,7 @@ static void term_dispatch_dcs(struct term *term) {
     case C('q') | I0('+'): /* XTGETTCAP */ {
         // TODO Termcap: Support proper tcap db
         // for now, just implement Co/colors
-        _Bool valid = 0;
+        bool valid = 0;
         if (!strcmp((char *)dstr, "436F") || // "Co"
                 !strcmp((char *)dstr, "636F6C6F7266")) { // "colors"
             uint8_t tmp[16];
@@ -2767,7 +2767,7 @@ static void term_dispatch_dcs(struct term *term) {
     term->esc.state = esc_ground;
 }
 
-static enum clip_target decode_target(uint8_t targ, _Bool mode) {
+static enum clip_target decode_target(uint8_t targ, bool mode) {
     switch (targ) {
     case 'p': return clip_primary;
     case 'q': return clip_secondary;
@@ -2778,7 +2778,7 @@ static enum clip_target decode_target(uint8_t targ, _Bool mode) {
     }
 }
 
-static uint32_t selector_to_cid(uint32_t sel, _Bool rev) {
+static uint32_t selector_to_cid(uint32_t sel, bool rev) {
     switch(sel) {
     case 10: return rev ? SPECIAL_BG : SPECIAL_FG; break;
     case 11: return rev ? SPECIAL_FG : SPECIAL_BG; break;
@@ -2839,7 +2839,7 @@ static void term_do_reset_color(struct term *term) {
             cconf(CCONF_CURSOR_BG) : term->palette[cid]);
 }
 
-inline static _Bool is_osc_state(uint32_t state) {
+inline static bool is_osc_state(uint32_t state) {
     return state == esc_osc_string || state == esc_osc_1 || state == esc_osc_2;
 }
 
@@ -2981,7 +2981,7 @@ static void term_dispatch_osc(struct term *term) {
         if (!iconf(ICONF_ALLOW_WINDOW_OPS)) break;
 
         enum clip_target ts[clip_MAX] = {0};
-        _Bool toclip = term->mode.select_to_clipboard;
+        bool toclip = term->mode.select_to_clipboard;
         uint8_t *parg = dstr, letter = 0;
         for (; parg < dend && *parg !=  ';'; parg++) {
             if (strchr("pqsc", *parg)) {
@@ -3036,7 +3036,7 @@ static void term_dispatch_osc(struct term *term) {
     term->esc.state = esc_ground;
 }
 
-static _Bool term_srm(struct term *term, _Bool private, uparam_t mode, _Bool set) {
+static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
     if (private) {
         switch (mode) {
         case 0: /* Default - nothing */
@@ -3275,7 +3275,7 @@ static _Bool term_srm(struct term *term, _Bool private, uparam_t mode, _Bool set
     return 1;
 }
 
-static enum mode_status term_get_mode(struct term *term, _Bool private, uparam_t mode) {
+static enum mode_status term_get_mode(struct term *term, bool private, uparam_t mode) {
     enum mode_status val = modstate_unrecognized;
 #define MODSTATE(x) (modstate_enabled + !(x))
     if (private) {
@@ -3543,7 +3543,7 @@ static void term_dispatch_mc(struct term *term) {
     }
 }
 
-static void term_dispatch_tmode(struct term *term, _Bool set) {
+static void term_dispatch_tmode(struct term *term, bool set) {
     for (size_t i = 0; i < term->esc.i; i++) {
         switch (term->esc.param[i]) {
         case 0:
@@ -3760,7 +3760,7 @@ static void term_dispatch_window_op(struct term *term) {
     }
     case 20: /* Report icon label */
     case 21: /* Report title */ {
-        _Bool tutf8;
+        bool tutf8;
         uint8_t *res = NULL, *res2 = NULL, *tit = NULL;
         window_get_title(term->win, pa == 20 ? target_icon_label : target_title, (char **)&tit, &tutf8);
         if (!tit) {
@@ -3897,7 +3897,7 @@ static void term_report_tabs(struct term *term) {
 
 // Utility functions for XTSAVE/XTRESTORE
 
-inline static void store_mode(uint8_t modbits[], uparam_t mode, _Bool val) {
+inline static void store_mode(uint8_t modbits[], uparam_t mode, bool val) {
     if (mode < 96) modbits += mode / 8;
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
     else if (2000 <= mode && mode < 2007) modbits += 20;
@@ -3909,7 +3909,7 @@ inline static void store_mode(uint8_t modbits[], uparam_t mode, _Bool val) {
     else *modbits &= ~(1 << (mode % 8));
 }
 
-inline static _Bool load_mode(uint8_t modbits[], uparam_t mode) {
+inline static bool load_mode(uint8_t modbits[], uparam_t mode) {
     if (mode < 96) modbits += mode / 8;
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
     else if (2000 <= mode && mode < 2007) modbits += 20;
@@ -3985,7 +3985,7 @@ static void term_dispatch_csi(struct term *term) {
         break;
     case C('J') | P('?'): /* DECSED */
     case C('J'): /* ED */ {
-        void (*erase)(struct term *, nss_coord_t, nss_coord_t, nss_coord_t, nss_coord_t, _Bool) =
+        void (*erase)(struct term *, nss_coord_t, nss_coord_t, nss_coord_t, nss_coord_t, bool) =
                 term->esc.selector & P_MASK ? (term->mode.protected ? term_erase : term_selective_erase) :
                 term->mode.protected ? term_protective_erase : term_erase;
         switch (PARAM(0, 0)) {
@@ -4015,7 +4015,7 @@ static void term_dispatch_csi(struct term *term) {
     }
     case C('K') | P('?'): /* DECSEL */
     case C('K'): /* EL */ {
-        void (*erase)(struct term *, nss_coord_t, nss_coord_t, nss_coord_t, nss_coord_t, _Bool) =
+        void (*erase)(struct term *, nss_coord_t, nss_coord_t, nss_coord_t, nss_coord_t, bool) =
                 term->esc.selector & P_MASK ? (term->mode.protected ? term_erase : term_selective_erase) :
                 term->mode.protected ? term_protective_erase : term_erase;
         switch (PARAM(0, 0)) {
@@ -5047,7 +5047,7 @@ static void term_dispatch(struct term *term, term_char_t ch) {
     }
 }
 
-static void term_write(struct term *term, const uint8_t **start, const uint8_t **end, _Bool show_ctl) {
+static void term_write(struct term *term, const uint8_t **start, const uint8_t **end, bool show_ctl) {
     while (*start < *end) {
         term_char_t ch;
         // Try to handle unencoded C1 bytes even if UTF-8 is enabled
@@ -5198,7 +5198,7 @@ void term_answerback(struct term *term, const char *str, ...) {
 
 /* If len == 0 encodes C1 controls and determines length by NUL character */
 void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
-    _Bool encode = !len;
+    bool encode = !len;
     if (!len) len = strlen((char *)str);
 
     const uint8_t *end = len + str;
@@ -5224,7 +5224,7 @@ void term_toggle_numlock(struct term *term) {
     term->kstate.allow_numlock = !term->kstate.allow_numlock;
 }
 
-_Bool term_is_paste_requested(struct term *term) {
+bool term_is_paste_requested(struct term *term) {
     return term->paste_from;
 }
 
@@ -5260,39 +5260,39 @@ void term_paste_end(struct term *term) {
         term_answerback(term, CSI"201~");
 }
 
-_Bool term_is_keep_clipboard_enabled(struct term *term) {
+bool term_is_keep_clipboard_enabled(struct term *term) {
     return term->mode.keep_clipboard;
 }
 
-_Bool term_is_keep_selection_enabled(struct term *term) {
+bool term_is_keep_selection_enabled(struct term *term) {
     return term->mode.keep_selection;
 }
 
-_Bool term_is_select_to_clipboard_enabled(struct term *term) {
+bool term_is_select_to_clipboard_enabled(struct term *term) {
     return term->mode.select_to_clipboard;
 }
 
-_Bool term_is_utf8_enabled(struct term *term) {
+bool term_is_utf8_enabled(struct term *term) {
     return term->mode.utf8;
 }
 
-_Bool term_is_paste_nl_enabled(struct term *term) {
+bool term_is_paste_nl_enabled(struct term *term) {
     return term->mode.paste_literal_nl;
 }
 
-_Bool term_is_paste_quote_enabled(struct term *term) {
+bool term_is_paste_quote_enabled(struct term *term) {
     return term->mode.paste_quote;
 }
 
-_Bool term_is_nrcs_enabled(struct term *term) {
+bool term_is_nrcs_enabled(struct term *term) {
     return term->mode.enable_nrcs;
 }
 
-_Bool term_is_bell_urgent_enabled(struct term *term) {
+bool term_is_bell_urgent_enabled(struct term *term) {
     return term->mode.bell_urgent;
 }
 
-_Bool term_is_bell_raise_enabled(struct term *term) {
+bool term_is_bell_raise_enabled(struct term *term) {
     return term->mode.bell_raise;
 }
 
@@ -5312,7 +5312,7 @@ int term_fd(struct term *term) {
     return term->fd;
 }
 
-_Bool term_is_reverse(struct term *term) {
+bool term_is_reverse(struct term *term) {
     return term->mode.reverse_video;
 }
 
@@ -5320,7 +5320,7 @@ ssize_t term_view(struct term *term) {
     return term->view;
 }
 
-void term_handle_focus(struct term *term, _Bool set) {
+void term_handle_focus(struct term *term, bool set) {
     term->mode.focused = set;
     if (term->mode.track_focus)
         term_answerback(term, set ? CSI"I" : CSI"O");

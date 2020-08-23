@@ -25,11 +25,11 @@
 #include <xcb/xcb.h>
 
 struct render_context {
-    _Bool has_shm;
-    _Bool has_shm_pixmaps;
+    bool has_shm;
+    bool has_shm_pixmaps;
 } rctx;
 
-static void resize_bounds(struct window *win, _Bool h_changed) {
+static void resize_bounds(struct window *win, bool h_changed) {
     if (win->ren.bounds) {
         size_t j = 0;
         struct rect *r_dst = win->ren.bounds;
@@ -147,7 +147,7 @@ static void free_shm_image(struct image *im) {
     im->data = NULL;
 }
 
-_Bool renderer_reload_font(struct window *win, _Bool need_free) {
+bool renderer_reload_font(struct window *win, bool need_free) {
     find_shared_font(win, need_free);
 
     if (need_free) {
@@ -191,7 +191,7 @@ void init_render_context() {
 
     char *display = getenv("DISPLAY");
     char *local[] = { "localhost:", "127.0.0.1:", "unix:", };
-    _Bool localhost = display[0] == ':';
+    bool localhost = display[0] == ':';
     for (size_t i = 0; !localhost && i < sizeof(local)/sizeof(*local); i++)
         localhost = local[i] == strstr(display, local[i]);
 
@@ -216,7 +216,7 @@ static int rect_cmp(const void *a, const void *b) {
     return ((struct rect*)a)->y - ((struct rect*)b)->y;
 }
 
-static void optimize_bounds(struct rect *bounds, size_t *boundc, _Bool fine_grained) {
+static void optimize_bounds(struct rect *bounds, size_t *boundc, bool fine_grained) {
     qsort(bounds, *boundc, sizeof(struct rect), rect_cmp);
     size_t j = 0;
     for (size_t i = 0; i < *boundc; ) {
@@ -232,27 +232,27 @@ static void optimize_bounds(struct rect *bounds, size_t *boundc, _Bool fine_grai
     *boundc = j;
 }
 
-_Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, _Bool cursor, _Bool marg) {
+bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur_x, nss_coord_t cur_y, bool cursor, bool marg) {
 
-    _Bool scrolled = win->ren.boundc;
-    _Bool cond_cblink = !win->blink_commited && (win->cursor_type & 1) && term_is_cursor_enabled(win->term);
+    bool scrolled = win->ren.boundc;
+    bool cond_cblink = !win->blink_commited && (win->cursor_type & 1) && term_is_cursor_enabled(win->term);
 
     if (cond_cblink) cursor |= win->blink_state;
 
     struct line_offset vpos = term_get_view(win->term);
     for (ssize_t k = 0; k < win->ch; k++, term_line_next(win->term, &vpos, 1)) {
         struct line_view line = term_line_at(win->term, vpos);
-        _Bool next_dirty = 0;
+        bool next_dirty = 0;
         struct rect l_bound = {-1, k, 0, 1};
         for (nss_coord_t i =  MIN(win->cw, line.width) - 1; i >= 0; i--) {
-            _Bool dirty = line.line->force_damage || !(line.cell[i].attr & attr_drawn) ||
+            bool dirty = line.line->force_damage || !(line.cell[i].attr & attr_drawn) ||
                     (!win->blink_commited && (line.cell[i].attr & attr_blink)) ||
                     (cond_cblink && k == cur_y && i == cur_x);
 
             struct cellspec spec;
             struct cell cel;
             struct glyph *glyph = NULL;
-            _Bool g_wide = 0;
+            bool g_wide = 0;
             if (dirty || next_dirty) {
                 cel = line.cell[i];
 
@@ -357,7 +357,7 @@ _Bool window_submit_screen(struct window *win, color_t *palette, nss_coord_t cur
             image_draw_rect(win->ren.im, rects[i + off], win->cursor_fg);
     }
 
-    _Bool drawn_any = win->ren.boundc;
+    bool drawn_any = win->ren.boundc;
 
     if (win->ren.boundc) {
         optimize_bounds(win->ren.bounds, &win->ren.boundc, rctx.has_shm);
