@@ -1,14 +1,13 @@
 Not So Simple Terminal
 ======================
-This is an implementation of VT220-compatible X11 terminal emulator.
-Inspired by [Simple Terminal](https://st.suckless.org/)
+This is an implementation of VT220-like X11 terminal emulator.
 
 ## Features
 * Quite fast rendering
     * Almost same latency as `XTerm`, which is a lot faster than other modern terminals
     * Scrolling performance is higher than most other terminals measured on my system
 * Small size and almost no dependencies
-* Uses xcb as X11 library
+* Uses xcb as X11 interface library
     * So it is faster and more lightweight
     * `size` including all loaded shared libs is only 80% of `st` on my system
 * Most escape sequences are already implemented
@@ -41,7 +40,7 @@ See TODO file for things that are to be implemented.
 
 ## Notes
 
-Use `TERM=xterm` for now. Almost every escape sequence from `ctlseqs.ms` is implemented.
+Use `TERM=xterm` for now (via `-D`/`termName` option). Almost every escape sequence from `ctlseqs.ms` is implemented.
 See Emulation section of TODO for not yet implemented escape sequences.
 
 Works well with [Iosevka](https://github.com/be5invis/Iosevka) font. (Set font spacing to -1 it it feels to wide.)
@@ -49,9 +48,13 @@ Multiple fonts could be loaded by enumerating them in parameter:
 
     Nsst.font: Iosevka-13:style=Thin,MaterialDesignIcons-13
 
-Wide glyphs are now just clipped (but `wide` cell property is respecteed), later I will add option to avoid that.
+Set `--override-boxdrawing`/`overrideBoxdrawing` to `true` if box drawing characters of font you use does not align.
 
-All options are now available though Xrmdb and command line arguments.
+If font looks to blurry try setting `--font-gamma`/`fontGamma` to value greater than `10000`.
+
+Set pixelMode to your monitor's pixel alignment to enable subpixel rendering.
+
+All options are now available through Xrmdb and command line arguments.
 No documentation yet for Xrmdb names, see `optmap[]` function in `config.c`.
 
 For command line arguments see `nsst --help`.
@@ -152,8 +155,8 @@ if you want to use it the machine you compile it on.
 These more aggressive optimization options works fine.
 It's more relevant for MIT-SHM backend (default one).
 
-XRender backend is slightly faster on more powerfull machines,
-but a lot slower on some corner cases (small font and a lot of true color cells).
+XRender backend is slightly faster in general,
+but a lot slower in some corner cases (e.g. small font and a lot of true color cells).
 Use `--backend=x11xrender` configure option to enable it.
 
 See `./configure --help` for more.
