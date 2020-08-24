@@ -89,7 +89,6 @@ struct cursor {
     bool pending : 1;
 };
 
-
 struct term_mode {
     bool echo : 1;
     bool crlf : 1;
@@ -254,15 +253,6 @@ struct term {
 
     int32_t *predec_buf;
 };
-
-inline static void term_put_cell(struct term *term, int16_t x, int16_t y, term_char_t ch) {
-    struct line *line = term->screen[y];
-
-    // Writing to the line resets its wrapping state
-    line->wrapped = 0;
-
-    line->cell[x] = MKCELLWITH(fixup_color(line, term->c.sgr), ch);
-}
 
 void term_damage(struct term *term, struct rect damage) {
     if (intersect_with(&damage, &(struct rect) {0, 0, term->width, term->height})) {
@@ -814,10 +804,6 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
 }
 
-bool term_is_cursor_enabled(struct term *term) {
-    return !term->mode.hide_cursor && !term->view_pos.line;
-}
-
 bool term_redraw(struct term *term) {
     bool c_hidden = !term_is_cursor_enabled(term);
 
@@ -839,7 +825,6 @@ bool term_redraw(struct term *term) {
 
     return window_submit_screen(term->win, term->palette, term->c.x, term->c.y, cursor, term->c.pending);
 }
-
 
 /* Get min/max column/row */
 int16_t term_max_y(struct term *term) {
@@ -866,6 +851,10 @@ int16_t term_height(struct term *term) {
     return term->height;
 }
 
+bool term_is_cursor_enabled(struct term *term) {
+    return !term->mode.hide_cursor && !term->view_pos.line;
+}
+
 /* Get min/max column/row WRT origin */
 inline static int16_t term_max_ox(struct term *term) {
     return (term->mode.lr_margins && term->c.origin) ? term->right + 1: term->width;
@@ -882,180 +871,6 @@ inline static int16_t term_max_oy(struct term *term) {
 inline static int16_t term_min_oy(struct term *term) {
     return term->c.origin ? term->top : 0;
 }
-
-inline static void term_esc_start(struct term *term) {
-    term->esc.selector = 0;
-}
-
-inline static void term_esc_start_seq(struct term *term) {
-    for (size_t i = 0; i <= term->esc.i; i++)
-        term->esc.param[i] = -1;
-    term->esc.i = 0;
-    term->esc.subpar_mask = 0;
-    term->esc.selector = 0;
-}
-
-inline static uint8_t *term_esc_str(struct term *term) {
-    return term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
-}
-
-inline static void term_esc_start_string(struct term *term) {
-    term->esc.str_len = 0;
-    term->esc.str_data[0] = 0;
-    term->esc.str_cap = ESC_MAX_STR;
-    term->esc.selector = 0;
-}
-
-inline static void term_esc_finish_string(struct term *term) {
-    free(term->esc.str_ptr);
-    term->esc.str_ptr = NULL;
-}
-
-static void term_esc_dump(struct term *term, bool use_info) {
-    if (use_info && !iconf(ICONF_TRACE_CONTROLS)) return;
-
-    char *pref = use_info ? "Seq: " : "Unrecognized ";
-
-    char buf[ESC_DUMP_MAX] = "^[";
-    size_t pos = 2;
-    switch (term->esc.state) {
-        case esc_esc_entry:
-        case esc_esc_1:
-            buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
-        case esc_esc_2:
-            buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
-            buf[pos++] = E_MASK & term->esc.selector;
-            break;
-        case esc_csi_entry:
-        case esc_csi_0:
-        case esc_csi_1:
-        case esc_csi_2:
-        case esc_dcs_string:
-            buf[pos++] = term->esc.state == esc_dcs_string ? 'P' :'[';
-            if (term->esc.selector & P_MASK)
-                buf[pos++] = '<' + ((term->esc.selector & P_MASK) >> 6) - 1;
-            for (size_t i = 0; i < term->esc.i; i++) {
-                pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%d", term->esc.param[i]);
-                if (i < term->esc.i - 1) buf[pos++] = term->esc.subpar_mask & (1 << (i + 1)) ? ':' : ';' ;
-            }
-            if (term->esc.selector & I0_MASK)
-                buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
-            if (term->esc.selector & I1_MASK)
-                buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
-            buf[pos++] = (C_MASK & term->esc.selector) + 0x40;
-            if (term->esc.state != esc_dcs_string) break;
-
-            buf[pos] = 0;
-            (use_info ? info : warn)("%s%s%s^[\\", pref, buf, term_esc_str(term));
-            return;
-        case esc_osc_string:
-            (use_info ? info : warn)("%s^[]%u;%s^[\\", pref, term->esc.selector, term_esc_str(term));
-        default:
-            return;
-    }
-    buf[pos] = 0;
-    (use_info ? info : warn)("%s%s", pref, buf);
-}
-
-static size_t term_decode_color(struct term *term, size_t arg, color_t *rcol, color_id_t *rcid, color_id_t *valid) {
-    *valid = 0;
-    size_t argc = arg + 1 < ESC_MAX_PARAM;
-    bool subpars = arg && (term->esc.subpar_mask >> (arg + 1)) & 1;
-    for (size_t i = arg + 1; i < ESC_MAX_PARAM &&
-        !subpars ^ ((term->esc.subpar_mask >> i) & 1); i++) argc++;
-    if (argc > 0) {
-        if (term->esc.param[arg] == 2 && argc > 3) {
-            color_t col = 0xFF;
-            bool wrong = 0, space = subpars && argc > 4;
-            for (size_t i = 1 + space; i < 4U + space; i++) {
-                wrong |= term->esc.param[arg + i] > 255;
-                col = (col << 8) + MIN(MAX(0, term->esc.param[arg + i]), 0xFF);
-            }
-            if (wrong) term_esc_dump(term, 1);
-            *rcol = col;
-            *rcid = 0xFFFF;
-            *valid = 1;
-            if (!subpars) argc = MIN(argc, 4);
-        } else if (term->esc.param[arg] == 5 && argc > 1) {
-            if (term->esc.param[arg + 1] < PALETTE_SIZE - SPECIAL_PALETTE_SIZE && term->esc.param[arg + 1] >= 0) {
-                *rcid = term->esc.param[arg + 1];
-                *valid = 1;
-            } else term_esc_dump(term, 0);
-            if (!subpars) argc = MIN(argc, 2);
-        } else {
-            if (!subpars) argc = MIN(argc, 1);
-             term_esc_dump(term, 0);
-         }
-    } else term_esc_dump(term, 0);
-    return argc;
-}
-
-static void term_decode_sgr(struct term *term, size_t i, struct cell *mask, struct sgr *sgr) {
-#define SET(f) (mask->attr |= (f), sgr->cel.attr |= (f))
-#define RESET(f) (mask->attr |= (f), sgr->cel.attr &= ~(f))
-#define SETFG(f) (mask->fg = 1, sgr->cel.fg = (f))
-#define SETBG(f) (mask->bg = 1, sgr->cel.bg = (f))
-    do {
-        uparam_t par = PARAM(i, 0);
-        if ((term->esc.subpar_mask >> i) & 1) return;
-        switch (par) {
-        case 0:
-            RESET(0xFF);
-            SETFG(SPECIAL_FG);
-            SETBG(SPECIAL_BG);
-            break;
-        case 1:  SET(attr_bold); break;
-        case 2:  SET(attr_faint); break;
-        case 3:  SET(attr_italic); break;
-        case 21: /* <- should be double underlind */
-        case 4:
-            if (i < term->esc.i && (term->esc.subpar_mask >> (i + 1)) & 1 &&
-                term->esc.param[++i] <= 0) RESET(attr_underlined);
-            else SET(attr_underlined);
-            break;
-        case 5:  /* <- should be slow blink */
-        case 6:  SET(attr_blink); break;
-        case 7:  SET(attr_inverse); break;
-        case 8:  SET(attr_invisible); break;
-        case 9:  SET(attr_strikethrough); break;
-        case 22: RESET(attr_faint | attr_bold); break;
-        case 23: RESET(attr_italic); break;
-        case 24: RESET(attr_underlined); break;
-        case 25: /* <- should be slow blink reset */
-        case 26: RESET(attr_blink); break;
-        case 27: RESET(attr_inverse); break;
-        case 28: RESET(attr_invisible); break;
-        case 29: RESET(attr_strikethrough); break;
-        case 30: case 31: case 32: case 33:
-        case 34: case 35: case 36: case 37:
-            SETFG(par - 30); break;
-        case 38:
-            i += term_decode_color(term, i + 1, &sgr->fg, &sgr->cel.fg, &mask->fg);
-            break;
-        case 39: SETFG(SPECIAL_FG); break;
-        case 40: case 41: case 42: case 43:
-        case 44: case 45: case 46: case 47:
-            SETBG(par - 40); break;
-        case 48:
-            i += term_decode_color(term, i + 1, &sgr->bg, &sgr->cel.bg, &mask->bg);
-            break;
-        case 49: SETBG(SPECIAL_BG); break;
-        case 90: case 91: case 92: case 93:
-        case 94: case 95: case 96: case 97:
-            SETFG(par - 90); break;
-        case 100: case 101: case 102: case 103:
-        case 104: case 105: case 106: case 107:
-            SETBG(par - 100); break;
-        default:
-            term_esc_dump(term, 0);
-        }
-    } while (++i < term->esc.i);
-#undef SET
-#undef RESET
-#undef SETFG
-#undef SETBG
-}
-
 
 inline static void term_rect_pre(struct term *term, int16_t *xs, int16_t *ys, int16_t *xe, int16_t *ye) {
     *xs = MAX(term_min_oy(term), MIN(*xs, term_max_ox(term) - 1));
@@ -1077,30 +892,30 @@ inline static void term_erase_pre(struct term *term, int16_t *xs, int16_t *ys, i
     mouse_selection_erase(term, (struct rect){ *xs, *ys, *xe - *xs, *ye - *ys});
 }
 
-static uint16_t term_checksum(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
+static uint16_t term_checksum(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct checksum_mode mode) {
     term_rect_pre(term, &xs, &ys, &xe, &ye);
 
     // TODO Test this thing
 
     uint32_t res = 0, spc = 0, trm = 0;
     enum charset gr = term->c.gn[term->c.gr];
-    bool first = 1, notrim = term->checksum_mode.no_trim;
+    bool first = 1, notrim = mode.no_trim;
 
     for (; ys < ye; ys++) {
         struct line *line = term->screen[ys];
         for (int16_t i = xs; i < xe; i++) {
             term_char_t ch = line->cell[i].ch;
             uint32_t attr = line->cell[i].attr;
-            if (!(term->checksum_mode.no_implicit) && !ch) ch = ' ';
+            if (!(mode.no_implicit) && !ch) ch = ' ';
 
-            if (!(term->checksum_mode.wide)) {
+            if (!(mode.wide)) {
                 if (ch > 0x7F && gr != cs94_ascii) {
                     nrcs_encode(gr, &ch, term->mode.enable_nrcs);
-                    if (!(term->checksum_mode.eight_bit) && ch < 0x80) ch |= 0x80;
+                    if (!mode.eight_bit && ch < 0x80) ch |= 0x80;
                 }
                 ch &= 0xFF;
             }
-            if (!(term->checksum_mode.no_attr)) {
+            if (!(mode.no_attr)) {
                 if (attr & attr_underlined) ch += 0x10;
                 if (attr & attr_inverse) ch += 0x20;
                 if (attr & attr_blink) ch += 0x40;
@@ -1121,14 +936,11 @@ static uint16_t term_checksum(struct term *term, int16_t xs, int16_t ys, int16_t
     }
 
     if (!notrim) res = trm;
-    return term->checksum_mode.positive ? res : -res;
+    return mode.positive ? res : -res;
 }
 
-static void term_reverse_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
+static void term_reverse_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct cell mask) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
-    struct sgr sgr = {0};
-    struct cell mask = {0};
-    term_decode_sgr(term, 4, &mask, &sgr);
 
     bool rect = term->mode.attr_ext_rectangle;
     for (; ys < ye; ys++) {
@@ -1174,14 +986,8 @@ static void term_encode_sgr(char *dst, char *end, struct sgr sgr) {
 #undef FMT
 }
 
-static void term_report_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
+static struct sgr term_common_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
     term_rect_pre(term, &xs, &ys, &xe, &ye);
-
-    if (ys >= ye || xs >= xe) {
-        // Invalid rectangle
-        term_answerback(term, CSI"0m");
-        return;
-    }
 
     struct sgr common = { .cel = term->screen[ys]->cell[xs] };
     bool has_common_fg = 1, has_common_bg = 1;
@@ -1206,16 +1012,11 @@ static void term_report_sgr(struct term *term, int16_t xs, int16_t ys, int16_t x
     if (!has_common_bg) common.cel.bg = SPECIAL_BG;
     if (!has_common_fg) common.cel.fg = SPECIAL_FG;
 
-    char str[SGR_BUFSIZ];
-    term_encode_sgr(str, str + sizeof str, common);
-    term_answerback(term, CSI"%sm", str);
+    return common;
 }
 
-static void term_apply_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
+static void term_apply_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct cell mask, struct sgr sgr) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
-    struct sgr sgr = {0};
-    struct cell mask = {0};
-    term_decode_sgr(term, 4, &mask, &sgr);
 
     mask.attr |= attr_drawn;
     sgr.cel.attr &= ~attr_drawn;
@@ -1323,6 +1124,14 @@ static void term_selective_erase(struct term *term, int16_t xs, int16_t ys, int1
     }
 }
 
+inline static void term_put_cell(struct term *term, int16_t x, int16_t y, term_char_t ch) {
+    struct line *line = term->screen[y];
+
+    // Writing to the line resets its wrapping state
+    line->wrapped = 0;
+
+    line->cell[x] = MKCELLWITH(fixup_color(line, term->c.sgr), ch);
+}
 
 inline static void term_adjust_wide_left(struct term *term, int16_t x, int16_t y) {
     if (x < 1) return;
@@ -1707,16 +1516,75 @@ static void term_tabs(struct term *term, int16_t n) {
     }
 }
 
-void term_set_reverse(struct term *term, bool set) {
-    if (set ^ term->mode.reverse_video) {
-        SWAP(color_t, term->palette[SPECIAL_BG], term->palette[SPECIAL_FG]);
-        SWAP(color_t, term->palette[SPECIAL_CURSOR_BG], term->palette[SPECIAL_CURSOR_FG]);
-        SWAP(color_t, term->palette[SPECIAL_SELECTED_BG], term->palette[SPECIAL_SELECTED_FG]);
-        mouse_damage_selection(term);
-        window_set_colors(term->win, term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
-    }
-    term->mode.reverse_video = set;
+static void term_reset_tabs(struct term *term) {
+    memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
+    int16_t tabw = iconf(ICONF_TAB_WIDTH);
+    for (int16_t i = tabw; i < term->width; i += tabw)
+        term->tabs[i] = 1;
 }
+
+
+
+
+inline static void term_esc_start(struct term *term) {
+    term->esc.selector = 0;
+}
+
+inline static void term_esc_start_seq(struct term *term) {
+    for (size_t i = 0; i <= term->esc.i; i++)
+        term->esc.param[i] = -1;
+    term->esc.i = 0;
+    term->esc.subpar_mask = 0;
+    term->esc.selector = 0;
+}
+
+inline static uint8_t *term_esc_str(struct term *term) {
+    return term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
+}
+
+inline static void term_esc_start_string(struct term *term) {
+    term->esc.str_len = 0;
+    term->esc.str_data[0] = 0;
+    term->esc.str_cap = ESC_MAX_STR;
+    term->esc.selector = 0;
+}
+
+inline static void term_esc_finish_string(struct term *term) {
+    free(term->esc.str_ptr);
+    term->esc.str_ptr = NULL;
+}
+
+static void term_request_resize(struct term *term, int16_t w, int16_t h, bool in_cells) {
+    int16_t cur_w, cur_h, scr_w, scr_h;
+    window_get_dim(term->win, &cur_w, &cur_h);
+    window_get_dim_ext(term->win, dim_screen_size, &scr_w, &scr_h);
+
+    if (in_cells) {
+        int16_t ce_w, ce_h, bo_w, bo_h;
+        window_get_dim_ext(term->win, dim_cell_size, &ce_w, &ce_h);
+        window_get_dim_ext(term->win, dim_border, &bo_w, &bo_h);
+        if (w > 0) w = w * ce_w + bo_w * 2;
+        if (h > 0) h = h * ce_h + bo_h * 2;
+    }
+
+    w = !w ? scr_w : w < 0 ? cur_w : w;
+    h = !h ? scr_h : h < 0 ? cur_h : h;
+
+    term->requested_resize = 1;
+
+    window_resize(term->win, w, h);
+}
+
+static void term_set_132(struct term *term, bool set) {
+    term_reset_margins(term);
+    term_move_to(term, term_min_ox(term), term_min_oy(term));
+    if (!(term->mode.preserve_display_132))
+        term_erase(term, 0, 0, term->width, term->height, 0);
+    if (iconf(ICONF_ALLOW_WINDOW_OPS))
+        term_request_resize(term, set ? 132 : 80, 24, 1);
+    term->mode.columns_132 = set;
+}
+
 
 static void term_set_vt52(struct term *term, bool set) {
     if (set) {
@@ -1744,6 +1612,18 @@ static void term_set_vt52(struct term *term, bool set) {
         term->c = term->vt52c;
     }
 }
+
+void term_set_reverse(struct term *term, bool set) {
+    if (set ^ term->mode.reverse_video) {
+        SWAP(color_t, term->palette[SPECIAL_BG], term->palette[SPECIAL_FG]);
+        SWAP(color_t, term->palette[SPECIAL_CURSOR_BG], term->palette[SPECIAL_CURSOR_FG]);
+        SWAP(color_t, term->palette[SPECIAL_SELECTED_BG], term->palette[SPECIAL_SELECTED_FG]);
+        mouse_damage_selection(term);
+        window_set_colors(term->win, term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
+    }
+    term->mode.reverse_video = set;
+}
+
 
 static void term_load_config(struct term *term) {
 
@@ -1820,44 +1700,6 @@ static void term_load_config(struct term *term) {
 
 }
 
-static void term_reset_tabs(struct term *term) {
-    memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
-    int16_t tabw = iconf(ICONF_TAB_WIDTH);
-    for (int16_t i = tabw; i < term->width; i += tabw)
-        term->tabs[i] = 1;
-}
-
-static void term_request_resize(struct term *term, int16_t w, int16_t h, bool in_cells) {
-    int16_t cur_w, cur_h, scr_w, scr_h;
-    window_get_dim(term->win, &cur_w, &cur_h);
-    window_get_dim_ext(term->win, dim_screen_size, &scr_w, &scr_h);
-
-    if (in_cells) {
-        int16_t ce_w, ce_h, bo_w, bo_h;
-        window_get_dim_ext(term->win, dim_cell_size, &ce_w, &ce_h);
-        window_get_dim_ext(term->win, dim_border, &bo_w, &bo_h);
-        if (w > 0) w = w * ce_w + bo_w * 2;
-        if (h > 0) h = h * ce_h + bo_h * 2;
-    }
-
-    w = !w ? scr_w : w < 0 ? cur_w : w;
-    h = !h ? scr_h : h < 0 ? cur_h : h;
-
-    term->requested_resize = 1;
-
-    window_resize(term->win, w, h);
-}
-
-static void term_set_132(struct term *term, bool set) {
-    term_reset_margins(term);
-    term_move_to(term, term_min_ox(term), term_min_oy(term));
-    if (!(term->mode.preserve_display_132))
-        term_erase(term, 0, 0, term->width, term->height, 0);
-    if (iconf(ICONF_ALLOW_WINDOW_OPS))
-        term_request_resize(term, set ? 132 : 80, 24, 1);
-    term->mode.columns_132 = set;
-}
-
 static void term_do_reset(struct term *term, bool hard) {
     if (term->mode.columns_132) term_set_132(term, 0);
     if (term->mode.altscreen) term_swap_screen(term, 1);
@@ -1890,40 +1732,87 @@ static void term_do_reset(struct term *term, bool hard) {
         term->c.pending = cpending;
     }
 
+    term_esc_start_seq(term);
     term->esc.state = esc_ground;
 }
 
-void term_reset(struct term *term) {
-    term_do_reset(term, 1);
+static void term_esc_dump(struct term *term, bool use_info) {
+    if (use_info && !iconf(ICONF_TRACE_CONTROLS)) return;
+
+    char *pref = use_info ? "Seq: " : "Unrecognized ";
+
+    char buf[ESC_DUMP_MAX] = "^[";
+    size_t pos = 2;
+    switch (term->esc.state) {
+        case esc_esc_entry:
+        case esc_esc_1:
+            buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
+        case esc_esc_2:
+            buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
+            buf[pos++] = E_MASK & term->esc.selector;
+            break;
+        case esc_csi_entry:
+        case esc_csi_0:
+        case esc_csi_1:
+        case esc_csi_2:
+        case esc_dcs_string:
+            buf[pos++] = term->esc.state == esc_dcs_string ? 'P' :'[';
+            if (term->esc.selector & P_MASK)
+                buf[pos++] = '<' + ((term->esc.selector & P_MASK) >> 6) - 1;
+            for (size_t i = 0; i < term->esc.i; i++) {
+                pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%d", term->esc.param[i]);
+                if (i < term->esc.i - 1) buf[pos++] = term->esc.subpar_mask & (1 << (i + 1)) ? ':' : ';' ;
+            }
+            if (term->esc.selector & I0_MASK)
+                buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
+            if (term->esc.selector & I1_MASK)
+                buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
+            buf[pos++] = (C_MASK & term->esc.selector) + 0x40;
+            if (term->esc.state != esc_dcs_string) break;
+
+            buf[pos] = 0;
+            (use_info ? info : warn)("%s%s%s^[\\", pref, buf, term_esc_str(term));
+            return;
+        case esc_osc_string:
+            (use_info ? info : warn)("%s^[]%u;%s^[\\", pref, term->esc.selector, term_esc_str(term));
+        default:
+            return;
+    }
+    buf[pos] = 0;
+    (use_info ? info : warn)("%s%s", pref, buf);
 }
 
-struct term *create_term(struct window *win, int16_t width, int16_t height) {
-    struct term *term = calloc(1, sizeof(struct term));
-
-    term->palette = malloc(PALETTE_SIZE * sizeof(color_t));
-    term->win = win;
-
-    term->sb_max_caps = iconf(ICONF_HISTORY_LINES);
-    term->vt_version = iconf(ICONF_VT_VERION);
-    term->sb_top = -1;
-
-    term_load_config(term);
-
-    for (size_t i = 0; i < 2; i++) {
-        term_cursor_mode(term, 1);
-        term_erase(term, 0, 0, term->width, term->height, 0);
-        term_swap_screen(term, 0);
-    }
-
-    if (tty_open(&term->tty, sconf(SCONF_SHELL), sconf_argv()) < 0) {
-        warn("Can't create tty");
-        free_term(term);
-        return NULL;
-    }
-
-    term_resize(term, width, height);
-
-    return term;
+static size_t term_decode_color(struct term *term, size_t arg, color_t *rcol, color_id_t *rcid, color_id_t *valid) {
+    *valid = 0;
+    size_t argc = arg + 1 < ESC_MAX_PARAM;
+    bool subpars = arg && (term->esc.subpar_mask >> (arg + 1)) & 1;
+    for (size_t i = arg + 1; i < ESC_MAX_PARAM &&
+        !subpars ^ ((term->esc.subpar_mask >> i) & 1); i++) argc++;
+    if (argc > 0) {
+        if (term->esc.param[arg] == 2 && argc > 3) {
+            color_t col = 0xFF;
+            bool wrong = 0, space = subpars && argc > 4;
+            for (size_t i = 1 + space; i < 4U + space; i++) {
+                wrong |= term->esc.param[arg + i] > 255;
+                col = (col << 8) + MIN(MAX(0, term->esc.param[arg + i]), 0xFF);
+            }
+            if (wrong) term_esc_dump(term, 1);
+            *rcol = col;
+            *rcid = 0xFFFF;
+            *valid = 1;
+            if (!subpars) argc = MIN(argc, 4);
+        } else if (term->esc.param[arg] == 5 && argc > 1) {
+            if (term->esc.param[arg + 1] < PALETTE_SIZE - SPECIAL_PALETTE_SIZE && term->esc.param[arg + 1] >= 0) {
+                *rcid = term->esc.param[arg + 1];
+                *valid = 1;
+            } else term_esc_dump(term, 0);
+            if (!subpars) argc = MIN(argc, 2);
+        } else {
+            if (!subpars) argc = MIN(argc, 1);
+             term_esc_dump(term, 0);
+         }
+    } else term_esc_dump(term, 0);
+    return argc;
 }
 
 static void term_dispatch_da(struct term *term, uparam_t mode) {
@@ -2045,47 +1934,45 @@ static void term_dispatch_dsr(struct term *term) {
     }
 }
 
-inline static void term_parse_cursor_report(struct term *term) {
-    char *dstr = (char *)term_esc_str(term);
-
+inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
     // Cursor Y
     ssize_t y = strtoul(dstr, &dstr, 10);
-    if (!dstr || *dstr++ != ';') goto err;
+    if (!dstr || *dstr++ != ';') return 0;
 
     // Cursor X
     ssize_t x = strtoul(dstr, &dstr, 10);
-    if (!dstr || *dstr++ != ';') goto err;
+    if (!dstr || *dstr++ != ';') return 0;
 
     // Page, always '1'
-    if (*dstr++ != '1' || *dstr++ != ';') goto err;
+    if (*dstr++ != '1' || *dstr++ != ';') return 0;
 
     // SGR
     char sgr0 = *dstr++, sgr1 = 0x40;
-    if ((sgr0 & 0xD0) != 0x40) goto err;
+    if ((sgr0 & 0xD0) != 0x40) return 0;
 
     // Optional extended byte
     if (sgr0 & 0x20) sgr1 = *dstr++;
-    if ((sgr1 & 0xF0) != 0x40 || *dstr++ != ';') goto err;
+    if ((sgr1 & 0xF0) != 0x40 || *dstr++ != ';') return 0;
 
     // Protection
     char prot = *dstr++;
-    if ((prot & 0xFE) != 0x40 || *dstr++ != ';') goto err;
+    if ((prot & 0xFE) != 0x40 || *dstr++ != ';') return 0;
 
     // Flags
     char flags = *dstr++;
-    if ((flags & 0xF0) != 0x40 || *dstr++ != ';') goto err;
+    if ((flags & 0xF0) != 0x40 || *dstr++ != ';') return 0;
 
     // GL
     unsigned long gl = strtoul(dstr, &dstr, 10);
-    if (!dstr || *dstr++ != ';'|| gl > 3) goto err;
+    if (!dstr || *dstr++ != ';'|| gl > 3) return 0;
 
     // GR
     unsigned long gr = strtoul(dstr, &dstr, 10);
-    if (!dstr || *dstr++ != ';' || gr > 3) goto err;
+    if (!dstr || *dstr++ != ';' || gr > 3) return 0;
 
     // G0 - G3 sizes
     char c96 = *dstr++;
-    if ((flags & 0xF0) != 0x40 || *dstr++ != ';') goto err;
+    if ((flags & 0xF0) != 0x40 || *dstr++ != ';') return 0;
 
     // G0 - G3
     enum charset gn[4];
@@ -2094,11 +1981,11 @@ inline static void term_parse_cursor_report(struct term *term) {
         char c;
         if ((c = *dstr++) < 0x30) {
             sel |= I1(c);
-            if ((c = *dstr++) < 0x30) goto err;
+            if ((c = *dstr++) < 0x30) return 0;
         }
         sel |= E(c);
         if ((gn[i] = nrcs_parse(sel, (c96 >> i) & 1,
-                term->vt_level, term->mode.enable_nrcs)) == -1U) goto err;
+                term->vt_level, term->mode.enable_nrcs)) == -1U) return 0;
     }
 
     // Everything is OK, load
@@ -2121,23 +2008,20 @@ inline static void term_parse_cursor_report(struct term *term) {
             (sgr0 & 4 ? attr_blink : 0) | (sgr0 & 8 ? attr_inverse : 0) |
             (sgr1 & 1 ? attr_italic : 0) | (sgr1 & 2 ? attr_faint : 0) |
             (sgr1 & 4 ? attr_strikethrough : 0) | (sgr1 & 8 ? attr_invisible : 0);
-    return;
-err:
-    term_esc_dump(term, 0);
+    return 1;
 }
 
-inline static void term_parse_tabs_report(struct term *term) {
+inline static bool term_parse_tabs_report(struct term *term, const uint8_t *dstr, const uint8_t *dend) {
     memset(term->tabs, 0, term->width*sizeof(*term->tabs));
-    uint8_t *dstr = term_esc_str(term);
-    uint8_t *dend = dstr + term->esc.str_len;
     for (ssize_t tab = 0; dstr <= dend; dstr++) {
         if (*dstr == '/' || dstr == dend) {
             if (tab - 1 < term->width) term->tabs[tab - 1] = 1;
             tab = 0;
         } else if (isdigit(*dstr)) {
             tab = 10 * tab + *dstr - '0';
-        } else  term_esc_dump(term, 0);
+        } else return 0;
     }
+    return 1;
 }
 
 static void term_dispatch_dcs(struct term *term) {
@@ -2239,11 +2123,14 @@ static void term_dispatch_dcs(struct term *term) {
     case C('t') | I0('$'): /* DECRSPS */
         switch(PARAM(0, 0)) {
         case 1: /* <- DECCIR */
-            term_parse_cursor_report(term);
+            if (!term_parse_cursor_report(term, (char *)term_esc_str(term)))
+                term_esc_dump(term, 0);
             break;
         case 2: /* <- DECTABSR */
-            term_parse_tabs_report(term);
-            break;
+            if (!term_parse_tabs_report(term, term_esc_str(term),
+                    term_esc_str(term) + term->esc.str_len))
+                 term_esc_dump(term, 0);
+             break;
         default:
             term_esc_dump(term, 0);
         }
@@ -3540,6 +3427,72 @@ static void term_report_tabs(struct term *term) {
     term_answerback(term, DCS"2$u%s"ST, tabs);
 }
 
+static void term_decode_sgr(struct term *term, size_t i, struct cell *mask, struct sgr *sgr) {
+#define SET(f) (mask->attr |= (f), sgr->cel.attr |= (f))
+#define RESET(f) (mask->attr |= (f), sgr->cel.attr &= ~(f))
+#define SETFG(f) (mask->fg = 1, sgr->cel.fg = (f))
+#define SETBG(f) (mask->bg = 1, sgr->cel.bg = (f))
+    do {
+        uparam_t par = PARAM(i, 0);
+        if ((term->esc.subpar_mask >> i) & 1) return;
+        switch (par) {
+        case 0:
+            RESET(0xFF);
+            SETFG(SPECIAL_FG);
+            SETBG(SPECIAL_BG);
+            break;
+        case 1:  SET(attr_bold); break;
+        case 2:  SET(attr_faint); break;
+        case 3:  SET(attr_italic); break;
+        case 21: /* <- should be double underlind */
+        case 4:
+            if (i < term->esc.i && (term->esc.subpar_mask >> (i + 1)) & 1 &&
+                term->esc.param[++i] <= 0) RESET(attr_underlined);
+            else SET(attr_underlined);
+            break;
+        case 5:  /* <- should be slow blink */
+        case 6:  SET(attr_blink); break;
+        case 7:  SET(attr_inverse); break;
+        case 8:  SET(attr_invisible); break;
+        case 9:  SET(attr_strikethrough); break;
+        case 22: RESET(attr_faint | attr_bold); break;
+        case 23: RESET(attr_italic); break;
+        case 24: RESET(attr_underlined); break;
+        case 25: /* <- should be slow blink reset */
+        case 26: RESET(attr_blink); break;
+        case 27: RESET(attr_inverse); break;
+        case 28: RESET(attr_invisible); break;
+        case 29: RESET(attr_strikethrough); break;
+        case 30: case 31: case 32: case 33:
+        case 34: case 35: case 36: case 37:
+            SETFG(par - 30); break;
+        case 38:
+            i += term_decode_color(term, i + 1, &sgr->fg, &sgr->cel.fg, &mask->fg);
+            break;
+        case 39: SETFG(SPECIAL_FG); break;
+        case 40: case 41: case 42: case 43:
+        case 44: case 45: case 46: case 47:
+            SETBG(par - 40); break;
+        case 48:
+            i += term_decode_color(term, i + 1, &sgr->bg, &sgr->cel.bg, &mask->bg);
+            break;
+        case 49: SETBG(SPECIAL_BG); break;
+        case 90: case 91: case 92: case 93:
+        case 94: case 95: case 96: case 97:
+            SETFG(par - 90); break;
+        case 100: case 101: case 102: case 103:
+        case 104: case 105: case 106: case 107:
+            SETBG(par - 100); break;
+        default:
+            term_esc_dump(term, 0);
+        }
+    } while (++i < term->esc.i);
+#undef SET
+#undef RESET
+#undef SETFG
+#undef SETBG
+}
+
 // Utility functions for XTSAVE/XTRESTORE
 
 inline static void store_mode(uint8_t modbits[], uparam_t mode, bool val) {
@@ -3896,18 +3849,26 @@ static void term_dispatch_csi(struct term *term) {
         CHK_VT(3);
         term_answerback(term, CSI"?%d;%d$y", PARAM(0, 0), term_get_mode(term, 1, PARAM(0, 0)));
         break;
-    case C('r') | I0('$'): /* DECCARA */
+    case C('r') | I0('$'): /* DECCARA */ {
         CHK_VT(4);
+        struct cell mask = {0};
+        struct sgr sgr = {0};
+        term_decode_sgr(term, 4, &mask, &sgr);
         term_apply_sgr(term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
                 term_min_ox(term) + PARAM(3, term_max_ox(term) - term_min_ox(term)),
-                term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)));
+                term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)), mask, sgr);
         break;
-    case C('t') | I0('$'): /* DECRARA */
+    }
+    case C('t') | I0('$'): /* DECRARA */ {
         CHK_VT(4);
+        struct sgr sgr = {0};
+        struct cell mask = {0};
+        term_decode_sgr(term, 4, &mask, &sgr);
         term_reverse_sgr(term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
                 term_min_ox(term) + PARAM(3, term_max_ox(term) - term_min_ox(term)),
-                term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)));
+                term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)), mask);
         break;
+    }
     case C('v') | I0('$'): /* DECCRA */
         CHK_VT(4);
         term_copy(term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
@@ -3915,12 +3876,16 @@ static void term_dispatch_csi(struct term *term) {
                 term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)),
                 term_min_ox(term) + PARAM(6, 1) - 1, term_min_oy(term) + PARAM(5, 1) - 1, 1);
         break;
-    case C('|') | I0('#'): /* XTREPORTSGR */
+    case C('|') | I0('#'): /* XTREPORTSGR */ {
         CHK_VT(4);
-        term_report_sgr(term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
+        struct sgr sgr = term_common_sgr(term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
                 term_min_ox(term) + PARAM(3, term_max_ox(term) - term_min_ox(term)),
                 term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)));
+        char str[SGR_BUFSIZ];
+        term_encode_sgr(str, str + sizeof str, sgr);
+        term_answerback(term, CSI"%sm", str);
         break;
+    }
     case C('w') | I0('$'): /* DECRQPSR */
         switch(PARAM(0, 0)) {
         case 1: /* -> DECCIR */
@@ -3957,7 +3922,7 @@ static void term_dispatch_csi(struct term *term) {
         CHK_VT(4);
         uint16_t sum = term_checksum(term, term_min_ox(term) + PARAM(3, 1) - 1, term_min_oy(term) + PARAM(2, 1) - 1,
                 term_min_ox(term) + PARAM(5, term_max_ox(term) - term_min_ox(term)),
-                term_min_oy(term) + PARAM(4, term_max_oy(term) - term_min_oy(term)));
+                term_min_oy(term) + PARAM(4, term_max_oy(term) - term_min_oy(term)), term->checksum_mode);
         // DECRPCRA
         term_answerback(term, DCS"%d!~%04X"ST, PARAM(0, 0), sum);
         break;
@@ -4798,6 +4763,10 @@ void term_break(struct term *term) {
     return tty_break(&term->tty);
 }
 
+void term_reset(struct term *term) {
+    term_do_reset(term, 1);
+}
+
 void term_handle_focus(struct term *term, bool set) {
     term->mode.focused = set;
     if (term->mode.track_focus)
@@ -4882,6 +4851,35 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
     if (encode) len = encode_c1(rep, str, has_8bit(term));
 
     tty_write(&term->tty, encode ? rep : str, len, term->mode.crlf);
+}
+
+struct term *create_term(struct window *win, int16_t width, int16_t height) {
+    struct term *term = calloc(1, sizeof(struct term));
+
+    term->palette = malloc(PALETTE_SIZE * sizeof(color_t));
+    term->win = win;
+
+    term->sb_max_caps = iconf(ICONF_HISTORY_LINES);
+    term->vt_version = iconf(ICONF_VT_VERION);
+    term->sb_top = -1;
+
+    term_load_config(term);
+
+    for (size_t i = 0; i < 2; i++) {
+        term_cursor_mode(term, 1);
+        term_erase(term, 0, 0, term->width, term->height, 0);
+        term_swap_screen(term, 0);
+    }
+
+    if (tty_open(&term->tty, sconf(SCONF_SHELL), sconf_argv()) < 0) {
+        warn("Can't create tty");
+        free_term(term);
+        return NULL;
+    }
+
+    term_resize(term, width, height);
+
+    return term;
 }
 
 void free_term(struct term *term) {
