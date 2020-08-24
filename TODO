@@ -1,6 +1,4 @@
 Until version 1.7:
-    Sequences operate on bytes, not characters
-    Optimize decoding: decode adjacent letters and write them at once
     Split term.c to screen.c/misc.c/parse.c/term.c
     Rewrap lines
         Allow disable rewrapping only for screen/part below cursor, while keep rewrapping scrollback
