@@ -8,7 +8,7 @@
 
 #include "feature.h"
 #include "input.h"
-#include "term.h"
+#include "line.h"
 
 /* Configuration options
  *

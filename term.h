@@ -13,66 +13,10 @@
 #include <inttypes.h>
 #include <sys/types.h>
 
-typedef uint16_t color_id_t;
-typedef uint32_t color_t;
-typedef uint32_t term_char_t;
 typedef uint32_t uparam_t;
 typedef int32_t iparam_t;
 
 #define SCNparam SCNu32
-
-#define SPECIAL_PALETTE_SIZE 11
-#define PALETTE_SIZE (256 + SPECIAL_PALETTE_SIZE)
-#define SPECIAL_BOLD 256
-#define SPECIAL_UNDERLINE 257
-#define SPECIAL_BLINK 258
-#define SPECIAL_REVERSE 259
-#define SPECIAL_ITALIC 260
-#define SPECIAL_BG 261
-#define SPECIAL_FG 262
-#define SPECIAL_CURSOR_BG 263
-#define SPECIAL_CURSOR_FG 264
-#define SPECIAL_SELECTED_BG 265
-#define SPECIAL_SELECTED_FG 266
-
-enum cell_attr {
-    attr_italic = 1 << 0,
-    attr_bold = 1 << 1,
-    attr_faint = 1 << 2,
-    attr_underlined = 1 << 3,
-    attr_strikethrough = 1 << 4,
-    attr_invisible = 1 << 5,
-    attr_inverse = 1 << 6,
-    attr_blink = 1 << 7,
-    attr_wide = 1 << 8,
-    attr_protected = 1 << 9,
-    attr_drawn = 1 << 10
-    // 11 bits total, sice unicode codepoint is 21 bit
-};
-
-#define MKCELLWITH(s, c) MKCELL((s).fg, (s).bg, (s).attr, (c))
-#define MKCELL(f, b, l, c) ((struct cell) { .bg = (b), .fg = (f), .ch = (c), .attr = (l) & ~attr_drawn})
-
-struct cell {
-    uint32_t ch : 21;
-    uint32_t attr : 11;
-    color_id_t fg;
-    color_id_t bg;
-};
-
-struct line_palette {
-    color_id_t size;
-    color_id_t caps;
-    color_t data[];
-};
-
-struct line {
-    struct line_palette *pal;
-    int16_t width;
-    bool force_damage;
-    bool wrapped;
-    struct cell cell[];
-};
 
 struct line_view {
     struct line *line;

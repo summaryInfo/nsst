@@ -7,6 +7,7 @@
 
 #include "config.h"
 #include "input.h"
+#include "line.h"
 #include "mouse.h"
 #include "nrcs.h"
 #include "term.h"
@@ -31,7 +32,6 @@
 #define ESC_DUMP_MAX 768
 #define SGR_BUFSIZ 64
 #define UDK_MAX 37
-#define MAX_LINE_LEN 16384
 #define MAX_REPORT 1024
 
 #define CSI "\x9B"
@@ -49,8 +49,6 @@
 #define TABSR_MAX_ENTRY 6
 
 #define IS_STREND(c) (IS_C1(c) || (c) == 0x1b || (c) == 0x1a || (c) == 0x18 || (c) == 0x07)
-#define MAX_EXTRA_PALETTE (0x10000 - PALETTE_SIZE)
-#define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
 #define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
 #define STR_CAP_STEP(x) (4*(x)/3)
 #define PARAM(i, d) (term->esc.param[i] > 0 ? (uparam_t)term->esc.param[i] : (uparam_t)(d))
@@ -67,12 +65,19 @@
 #define I0_MASK (0x1F << 9)
 #define I1_MASK (0x1F << 14)
 
+enum mode_status {
+    modstate_unrecognized,
+    modstate_enabled,
+    modstate_disabled,
+    modstate_aways_enabled,
+    modstate_aways_disabled,
+};
+
 struct cursor {
     ssize_t x;
     ssize_t y;
-    struct cell cel;
-    color_t fg;
-    color_t bg;
+
+    struct sgr sgr;
     // Shift state
     uint32_t gl;
     uint32_t gr;
@@ -84,13 +89,6 @@ struct cursor {
     bool pending : 1;
 };
 
-enum mode_status {
-    modstate_unrecognized,
-    modstate_enabled,
-    modstate_disabled,
-    modstate_aways_enabled,
-    modstate_aways_disabled,
-};
 
 struct term_mode {
     bool echo : 1;
@@ -257,143 +255,13 @@ struct term {
     int32_t *predec_buf;
 };
 
-static bool optimize_line_palette(struct line *line) {
-    // Buffer here causes a leak in theory
-    static color_id_t *buf = NULL, buf_len = 0, *new;
-
-    if (!line) {
-        free(buf);
-        buf = NULL;
-        buf_len = 0;
-        return 0;
-    }
-
-    if (line->pal) {
-        if (buf_len < line->pal->size) {
-            if (!(new = realloc(buf, line->pal->size * sizeof(color_id_t)))) return 0;
-            memset(new + buf_len, 0xFF, (line->pal->size - buf_len) * sizeof(color_id_t));
-            buf_len = line->pal->size, buf = new;
-        }
-        color_id_t k = PALETTE_SIZE, *pbuf = buf - PALETTE_SIZE;
-        for (ssize_t i = 0; i < line->width; i++) {
-            struct cell *cel = &line->cell[i];
-            if (cel->fg >= PALETTE_SIZE) pbuf[cel->fg] = 0;
-            if (cel->bg >= PALETTE_SIZE) pbuf[cel->bg] = 0;
-        }
-        color_t *pal = line->pal->data - PALETTE_SIZE;
-        for (color_id_t i = PALETTE_SIZE; i < line->pal->size + PALETTE_SIZE; i++) {
-            if (!pbuf[i]) {
-                pal[k] = pal[i];
-                for (color_id_t j = i + 1; j < line->pal->size + PALETTE_SIZE; j++)
-                    if (pal[k] == pal[j]) pbuf[j] = k;
-                pbuf[i] = k++;
-            }
-        }
-        line->pal->size = k - PALETTE_SIZE;
-
-        for (ssize_t i = 0; i < line->width; i++) {
-            struct cell *cel = &line->cell[i];
-            if (cel->fg >= PALETTE_SIZE) cel->fg = pbuf[cel->fg];
-            if (cel->bg >= PALETTE_SIZE) cel->bg = pbuf[cel->bg];
-        }
-    }
-
-    return 1;
-}
-
-static color_id_t alloc_color(struct line *line, color_t col) {
-    if (line->pal) {
-        if (line->pal->size > 0 && line->pal->data[line->pal->size - 1] == col)
-            return PALETTE_SIZE + line->pal->size - 1;
-        if (line->pal->size > 1 && line->pal->data[line->pal->size - 2] == col)
-            return PALETTE_SIZE + line->pal->size - 2;
-    }
-
-    if (!line->pal || line->pal->size + 1 > line->pal->caps) {
-        if (!optimize_line_palette(line)) return SPECIAL_BG;
-        if (!line->pal || line->pal->size + 1 >= line->pal->caps) {
-            if (line->pal && line->pal->caps == MAX_EXTRA_PALETTE) return SPECIAL_BG;
-            size_t newc = CAPS_INC_STEP(line->pal ? line->pal->caps : 0);
-            struct line_palette *new = realloc(line->pal, sizeof(struct line_palette) + newc * sizeof(color_t));
-            if (!new) return SPECIAL_BG;
-            if (!line->pal) new->size = 0;
-            new->caps = newc;
-            line->pal = new;
-        }
-    }
-
-    line->pal->data[line->pal->size++] = col;
-    return PALETTE_SIZE + line->pal->size - 1;
-}
-
-inline static struct cell fixup_color(struct line *line, struct cursor *cur) {
-    struct cell cel = cur->cel;
-    if (__builtin_expect(cel.bg >= PALETTE_SIZE, 0))
-        cel.bg = alloc_color(line, cur->bg);
-    if (__builtin_expect(cel.fg >= PALETTE_SIZE, 0))
-        cel.fg = alloc_color(line, cur->fg);
-    return cel;
-}
-
-inline static void copy_cell(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, bool dmg) {
-    struct cell cel = src->cell[sx];
-    if (cel.fg >= PALETTE_SIZE) cel.fg = alloc_color(dst,
-            src->pal->data[cel.fg - PALETTE_SIZE]);
-    if (cel.bg >= PALETTE_SIZE) cel.bg = alloc_color(dst,
-            src->pal->data[cel.bg - PALETTE_SIZE]);
-    if (dmg) cel.attr &= ~attr_drawn;
-    dst->cell[dx] = cel;
-}
-
-static struct line *term_create_line(struct term *term, int16_t width) {
-    struct line *line = malloc(sizeof(*line) + (size_t)width * sizeof(line->cell[0]));
-    if (line) {
-        line->width = width;
-        line->pal = NULL;
-        line->wrapped = 0;
-        line->force_damage = 0;
-        struct cell cel = fixup_color(line, &term->c);
-        for (ssize_t i = 0; i < width; i++)
-            line->cell[i] = cel;
-    } else warn("Can't allocate line");
-    return line;
-}
-
-static struct line *term_realloc_line(struct term *term, struct line *line, int16_t width) {
-    struct line *new = realloc(line, sizeof(*new) + (size_t)width * sizeof(new->cell[0]));
-    if (!new) die("Can't create lines");
-
-    if (width > new->width) {
-        struct cell cell = fixup_color(new, &term->c);
-        cell.attr = 0;
-
-        for (ssize_t i = new->width; i < width; i++)
-            new->cell[i] = cell;
-    }
-
-    new->width = width;
-    return new;
-}
-
-static void term_free_line(struct line *line) {
-    if (line) free(line->pal);
-    free(line);
-}
-
-inline static int16_t line_length(struct line *line) {
-    int16_t max_x = line->width;
-    if (!line->wrapped)
-        while (max_x > 0 && !line->cell[max_x - 1].ch) max_x--;
-    return max_x;
-}
-
 inline static void term_put_cell(struct term *term, int16_t x, int16_t y, term_char_t ch) {
     struct line *line = term->screen[y];
 
     // Writing to the line resets its wrapping state
     line->wrapped = 0;
 
-    line->cell[x] = MKCELLWITH(fixup_color(line, &term->c), ch);
+    line->cell[x] = MKCELLWITH(fixup_color(line, term->c.sgr), ch);
 }
 
 void term_damage(struct term *term, struct rect damage) {
@@ -420,33 +288,19 @@ void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd) {
         term_line_at(term, vpos).line->force_damage = 1;
 }
 
+bool is_last_line(struct line_view line) {
+    return !iconf(ICONF_REWRAP) || line.cell - line.line->cell + line.width >= line.line->width;
+}
+
 inline static struct line *line_at(struct term *term, ssize_t y) {
     return y >= 0 ? term->screen[y] :
             term->scrollback[(term->sb_top + term->sb_caps + y + 1) % term->sb_caps];
 }
 
-inline static bool is_wide(struct line *ln, ssize_t x) {
-    return ln->cell[x].attr & attr_wide;
-}
-
-inline static ssize_t line_wid(struct line *ln, ssize_t off, ssize_t w) {
-    off += w;
-    if (off - 1 < ln->width)
-        off -= is_wide(ln, off - 1);
-    return MIN(off, ln->width);
-
-}
-
-inline static ssize_t line_segments(struct line *ln, ssize_t off, ssize_t w) {
-    ssize_t n = off < ln->width || (!ln->width && !off);
-    while ((off = line_wid(ln, off, w)) < ln->width) n++;
-    return n;
-}
-
 struct line_view term_line_at(struct term *term, struct line_offset pos) {
     if (pos.line >= -term->sb_limit && pos.line < term->height) {
         struct line *ln = line_at(term, pos.line);
-        ssize_t wid = line_wid(ln, pos.offset, term->width);
+        ssize_t wid = line_width(ln, pos.offset, term->width);
         return (struct line_view) {
             .width = wid - pos.offset,
             .wrapped = ln->wrapped || wid < ln->width,
@@ -455,7 +309,6 @@ struct line_view term_line_at(struct term *term, struct line_offset pos) {
         };
     } else return (struct line_view){0};
 }
-
 
 ssize_t term_line_next(struct term *term, struct line_offset *pos, ssize_t amount) {
     struct line *ln;
@@ -477,7 +330,7 @@ ssize_t term_line_next(struct term *term, struct line_offset *pos, ssize_t amoun
             if (pos->line >= term->height) return amount;
             ln = line_at(term, pos->line);
             while (pos->line < term->height && amount) {
-                if ((pos->offset = line_wid(ln, pos->offset, term->width)) >= ln->width) {
+                if ((pos->offset = line_width(ln, pos->offset, term->width)) >= ln->width) {
                     pos->offset = 0;
                     if (pos->line + 1 >= term->height) break;
                     ln = line_at(term, ++pos->line);
@@ -491,10 +344,6 @@ ssize_t term_line_next(struct term *term, struct line_offset *pos, ssize_t amoun
         *pos = (struct line_offset) { new, 0 };
     }
     return amount;
-}
-
-bool is_last_line(struct line_view line) {
-    return !iconf(ICONF_REWRAP) || line.cell - line.line->cell + line.width >= line.line->width;
 }
 
 struct line_offset term_get_view(struct term *term) {
@@ -521,7 +370,7 @@ static void term_free_scrollback(struct term *term) {
 
     term_reset_view(term, 0);
     for (ssize_t i = 1; i <= (term->sb_caps == term->sb_max_caps ? term->sb_caps : term->sb_limit); i++)
-        term_free_line(line_at(term, -i));
+        free_line(line_at(term, -i));
     free(term->scrollback);
 
     term->scrollback = NULL;
@@ -562,48 +411,17 @@ void term_scroll_view(struct term *term, int16_t amount) {
 static ssize_t term_append_history(struct term *term, struct line *line, bool opt) {
     ssize_t res = 0;
     if (term->sb_max_caps > 0) {
-        ssize_t llen = MAX(line_length(line), 1);
-
+        struct line *tmp;
         /* If last line in history is wrapped concat current line to it */
         if (iconf(ICONF_REWRAP) && term->sb_limit &&
-                line_at(term, -1)->wrapped && llen + line_at(term, -1)->width < MAX_LINE_LEN) {
-            struct line **ptop = &term->scrollback[term->sb_top];
-            ssize_t oldw = (*ptop)->width;
-            *ptop = term_realloc_line(term, *ptop, oldw + llen);
-            for (ssize_t k = 0; k < llen; k++)
-                copy_cell(*ptop, oldw + k, line, k, 0);
+                line_at(term, -1)->wrapped && (tmp = concat_line(line_at(term, -1), line, opt))) {
 
-            (*ptop)->wrapped = line->wrapped;
-
-            /* Minimize line size to save memory */
-            if (opt && (*ptop)->pal) {
-                optimize_line_palette((*ptop));
-                struct line_palette *pal = realloc((*ptop)->pal, sizeof(struct line_palette) + sizeof(color_t)*((*ptop)->pal->size));
-                if (pal) {
-                    (*ptop)->pal = pal;
-                    pal->caps = pal->size;
-                }
-            }
-
-            term_free_line(line);
-
+            term->scrollback[term->sb_top] = tmp;
             if (term->view) term->view++;
 
         } else {
-
-            /* Minimize line size to save memory */
-            if (opt) {
-                if (!line->wrapped)
-                    line = term_realloc_line(term, line, llen);
-                if (line->pal) {
-                    optimize_line_palette(line);
-                    struct line_palette *pal = realloc(line->pal, sizeof(struct line_palette) + sizeof(color_t)*(line->pal->size));
-                    if (pal) {
-                        line->pal = pal;
-                        pal->caps = pal->size;
-                    }
-                }
-            }
+            /* Optimize line */
+            line = concat_line(line, NULL, opt);
 
             if (term->sb_limit == term->sb_max_caps) {
                 /* If view points to the line that is to be freed, scroll it down */
@@ -622,7 +440,7 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
                  * now term->scrollback functions as true cyclic buffer */
                 term->sb_top = (term->sb_top + 1) % term->sb_caps;
                 SWAP(struct line *, line, term->scrollback[term->sb_top]);
-                term_free_line(line);
+                free_line(line);
             } else {
                 /* More lines can be saved, term->scrollback is not cyclic yet */
 
@@ -631,7 +449,7 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
                     ssize_t new_cap = CBUF_STEP(term->sb_caps, term->sb_max_caps);
                     struct line **new = realloc(term->scrollback, new_cap * sizeof(*new));
                     if (!new) {
-                        term_free_line(line);
+                        free_line(line);
                         return res;
                     }
                     term->sb_caps = new_cap;
@@ -649,7 +467,7 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
                 term->view++;
             }
         }
-    } else term_free_line(line);
+    } else free_line(line);
     return res;
 }
 
@@ -700,17 +518,17 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     { // Resize altscreen
 
         for (ssize_t i = height; i < term->height; i++)
-            term_free_line(term->back_screen[i]);
+            free_line(term->back_screen[i]);
 
         struct line **new_back = realloc(term->back_screen, height * sizeof(term->back_screen[0]));
         if (!new_back) die("Can't allocate lines");
         term->back_screen = new_back;
 
         for (ssize_t i = 0; i < MIN(term->height, height); i++)
-            term->back_screen[i] = term_realloc_line(term, term->back_screen[i], width);
+            term->back_screen[i] = realloc_line(term->back_screen[i], term->c.sgr, width);
 
         for (ssize_t i = term->height; i < height; i++)
-            if (!(term->back_screen[i] = term_create_line(term, width)))
+            if (!(term->back_screen[i] = create_line(term->c.sgr, width)))
                 die("Can't allocate lines");
 
         // Adjust altscreen saved cursor position
@@ -789,7 +607,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             nnlines = MAX(nnlines * 2, MAX(MAX(new_cur_par - cursor_par, approx_cy - height - 1), 0) + height * 2);
 
             new_lines = calloc(nnlines, sizeof(*new_lines));
-            if (!new_lines || !(new_lines[0] = term_create_line(term, width)))
+            if (!new_lines || !(new_lines[0] = create_line(term->c.sgr, width)))
                 die("Can't allocate line");
 
             ssize_t y2 = y, dy = 0;
@@ -807,7 +625,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                     // If last character of line is wide, soft wrap
                     if (dx == width - 1 && line->cell[x].attr & attr_wide) {
                         new_lines[dy]->wrapped = 1;
-                        if (dy < nnlines - 1 && !(new_lines[++dy] = term_create_line(term, width)))
+                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->c.sgr, width)))
                             die("Can't allocate line");
                         dx = 0;
                     }
@@ -827,7 +645,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                     // Advance line, soft wrap
                     if (++dx == width && (x < len - 1 || line->wrapped)) {
                         new_lines[dy]->wrapped = 1;
-                        if (dy < nnlines - 1 && !(new_lines[++dy] = term_create_line(term, width)))
+                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->c.sgr, width)))
                             die("Can't allocate line");
                         dx = 0;
                     }
@@ -845,7 +663,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 }
                 // Advance line, hard wrap
                 if (!line->wrapped) {
-                    if (dy < nnlines - 1 && !(new_lines[++dy] = term_create_line(term, width)))
+                    if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->c.sgr, width)))
                         die("Can't allocate line");
                     par_start = dy;
                     dx = 0;
@@ -853,7 +671,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
                 // Pop from scrollback
                 if (y < 0) term->scrollback[(term->sb_top + term->sb_caps + y + 1) % term->sb_caps] = NULL;
-                term_free_line(line);
+                free_line(line);
             }
 
             // Update scrollback data
@@ -896,7 +714,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             }
             for (ssize_t i = 0; i < minh; i++) {
                 if (new_lines[i + start]->width < width || iconf(ICONF_CUT_LINES)) {
-                    new_lines[i + start] = term_realloc_line(term, new_lines[i + start], width);
+                    new_lines[i + start] = realloc_line(new_lines[i + start], term->c.sgr, width);
                 }
             }
         }
@@ -909,7 +727,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
         // Free extra lines from bottom
         for (ssize_t i = start + height; i < nnlines; i++)
-            term_free_line(new_lines[i]);
+            free_line(new_lines[i]);
 
         // Free old line buffer
         if (new_lines != term->screen) free(term->screen);
@@ -921,7 +739,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
         // Allocate new empty lines
         for (ssize_t i = minh; i < height; i++)
-            if (!(new_lines[i] = term_create_line(term, width)))
+            if (!(new_lines[i] = create_line(term->c.sgr, width)))
                 die("Can't allocate lines");
 
         term->screen = new_lines;
@@ -1172,11 +990,11 @@ static size_t term_decode_color(struct term *term, size_t arg, color_t *rcol, co
     return argc;
 }
 
-static void term_decode_sgr(struct term *term, size_t i, struct cell *mask, struct cell *val, color_t *fg, color_t *bg) {
-#define SET(f) (mask->attr |= (f), val->attr |= (f))
-#define RESET(f) (mask->attr |= (f), val->attr &= ~(f))
-#define SETFG(f) (mask->fg = 1, val->fg = (f))
-#define SETBG(f) (mask->bg = 1, val->bg = (f))
+static void term_decode_sgr(struct term *term, size_t i, struct cell *mask, struct sgr *sgr) {
+#define SET(f) (mask->attr |= (f), sgr->cel.attr |= (f))
+#define RESET(f) (mask->attr |= (f), sgr->cel.attr &= ~(f))
+#define SETFG(f) (mask->fg = 1, sgr->cel.fg = (f))
+#define SETBG(f) (mask->bg = 1, sgr->cel.bg = (f))
     do {
         uparam_t par = PARAM(i, 0);
         if ((term->esc.subpar_mask >> i) & 1) return;
@@ -1212,14 +1030,14 @@ static void term_decode_sgr(struct term *term, size_t i, struct cell *mask, stru
         case 34: case 35: case 36: case 37:
             SETFG(par - 30); break;
         case 38:
-            i += term_decode_color(term, i + 1, fg, &val->fg, &mask->fg);
+            i += term_decode_color(term, i + 1, &sgr->fg, &sgr->cel.fg, &mask->fg);
             break;
         case 39: SETFG(SPECIAL_FG); break;
         case 40: case 41: case 42: case 43:
         case 44: case 45: case 46: case 47:
             SETBG(par - 40); break;
         case 48:
-            i += term_decode_color(term, i + 1, bg, &val->bg, &mask->bg);
+            i += term_decode_color(term, i + 1, &sgr->bg, &sgr->cel.bg, &mask->bg);
             break;
         case 49: SETBG(SPECIAL_BG); break;
         case 90: case 91: case 92: case 93:
@@ -1308,9 +1126,9 @@ static uint16_t term_checksum(struct term *term, int16_t xs, int16_t ys, int16_t
 
 static void term_reverse_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
-    color_t fg = 0, bg = 0;
-    struct cell mask = {0}, val = {0};
-    term_decode_sgr(term, 4, &mask, &val, &fg, &bg);
+    struct sgr sgr = {0};
+    struct cell mask = {0};
+    term_decode_sgr(term, 4, &mask, &sgr);
 
     bool rect = term->mode.attr_ext_rectangle;
     for (; ys < ye; ys++) {
@@ -1323,7 +1141,7 @@ static void term_reverse_sgr(struct term *term, int16_t xs, int16_t ys, int16_t 
     }
 }
 
-static void term_encode_sgr(char *dst, char *end, struct cell cel, color_t fg, color_t bg) {
+static void term_encode_sgr(char *dst, char *end, struct sgr sgr) {
     // Maximal sequence is 0;1;2;3;4;6;7;8;9;38:2:255:255:255;48:2:255:255:255
     // 64 byte buffer is enough
 #define FMT(...) dst += snprintf(dst, end - dst, __VA_ARGS__)
@@ -1331,28 +1149,28 @@ static void term_encode_sgr(char *dst, char *end, struct cell cel, color_t fg, c
     FMT("0");
 
     // Encode attributes
-    if (cel.attr & attr_bold) FMT(";1");
-    if (cel.attr & attr_faint) FMT(";2");
-    if (cel.attr & attr_italic) FMT(";3");
-    if (cel.attr & attr_underlined) FMT(";4");
-    if (cel.attr & attr_blink) FMT(";6");
-    if (cel.attr & attr_inverse) FMT(";7");
-    if (cel.attr & attr_invisible) FMT(";8");
-    if (cel.attr & attr_strikethrough) FMT(";9");
+    if (sgr.cel.attr & attr_bold) FMT(";1");
+    if (sgr.cel.attr & attr_faint) FMT(";2");
+    if (sgr.cel.attr & attr_italic) FMT(";3");
+    if (sgr.cel.attr & attr_underlined) FMT(";4");
+    if (sgr.cel.attr & attr_blink) FMT(";6");
+    if (sgr.cel.attr & attr_inverse) FMT(";7");
+    if (sgr.cel.attr & attr_invisible) FMT(";8");
+    if (sgr.cel.attr & attr_strikethrough) FMT(";9");
 
     // Encode foreground color
-    if (cel.fg < 8) FMT(";%d", 30 + cel.fg);
-    else if (cel.fg < 16) FMT(";%d", 90 + cel.fg - 8);
-    else if (cel.fg < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";38:5:%d", cel.fg);
-    else if (cel.fg == SPECIAL_FG) /* FMT(";39") -- default, skip */;
-    else FMT(";38:2:%d:%d:%d", fg >> 16 & 0xFF, fg >>  8 & 0xFF, fg >>  0 & 0xFF);
+    if (sgr.cel.fg < 8) FMT(";%d", 30 + sgr.cel.fg);
+    else if (sgr.cel.fg < 16) FMT(";%d", 90 + sgr.cel.fg - 8);
+    else if (sgr.cel.fg < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";38:5:%d", sgr.cel.fg);
+    else if (sgr.cel.fg == SPECIAL_FG) /* FMT(";39") -- default, skip */;
+    else FMT(";38:2:%d:%d:%d", sgr.fg >> 16 & 0xFF, sgr.fg >>  8 & 0xFF, sgr.fg >>  0 & 0xFF);
 
     // Encode background color
-    if (cel.bg < 8) FMT(";%d", 40 + cel.bg);
-    else if (cel.bg < 16) FMT(";%d", 100 + cel.bg - 8);
-    else if (cel.bg < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";48:5:%d", cel.bg);
-    else if (cel.bg == SPECIAL_BG) /* FMT(";49") -- default, skip */;
-    else FMT(";48:2:%d:%d:%d", bg >> 16 & 0xFF, bg >>  8 & 0xFF, bg >>  0 & 0xFF);
+    if (sgr.cel.bg < 8) FMT(";%d", 40 + sgr.cel.bg);
+    else if (sgr.cel.bg < 16) FMT(";%d", 100 + sgr.cel.bg - 8);
+    else if (sgr.cel.bg < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";48:5:%d", sgr.cel.bg);
+    else if (sgr.cel.bg == SPECIAL_BG) /* FMT(";49") -- default, skip */;
+    else FMT(";48:2:%d:%d:%d", sgr.bg >> 16 & 0xFF, sgr.bg >>  8 & 0xFF, sgr.bg >>  0 & 0xFF);
 #undef FMT
 }
 
@@ -1365,53 +1183,51 @@ static void term_report_sgr(struct term *term, int16_t xs, int16_t ys, int16_t x
         return;
     }
 
-    struct cell common = term->screen[ys]->cell[xs];
-    color_t common_fg = 0, common_bg = 0;
+    struct sgr common = { .cel = term->screen[ys]->cell[xs] };
     bool has_common_fg = 1, has_common_bg = 1;
     bool true_fg = 0, true_bg = 0;
 
-    if (common.fg >= PALETTE_SIZE && term->screen[ys]->pal)
-        common_fg = term->screen[ys]->pal->data[common.fg - PALETTE_SIZE], true_fg = 1;
-    if (common.bg >= PALETTE_SIZE && term->screen[ys]->pal)
-        common_bg = term->screen[ys]->pal->data[common.bg - PALETTE_SIZE], true_bg = 1;
+    if (common.cel.fg >= PALETTE_SIZE && term->screen[ys]->pal)
+        common.fg = term->screen[ys]->pal->data[common.cel.fg - PALETTE_SIZE], true_fg = 1;
+    if (common.cel.bg >= PALETTE_SIZE && term->screen[ys]->pal)
+        common.bg = term->screen[ys]->pal->data[common.cel.bg - PALETTE_SIZE], true_bg = 1;
 
     for (; ys < ye; ys++) {
         struct line *line = term->screen[ys];
         for (int16_t i = xs; i < xe; i++) {
-            has_common_fg &= (common.fg == line->cell[i].fg || (true_fg && line->cell[i].fg >= PALETTE_SIZE &&
-                    common_fg == line->pal->data[line->cell[i].fg - PALETTE_SIZE]));
-            has_common_bg &= (common.bg == line->cell[i].bg || (true_bg && line->cell[i].bg >= PALETTE_SIZE &&
-                    common_bg == line->pal->data[line->cell[i].bg - PALETTE_SIZE]));
-            common.attr &= line->cell[i].attr;
+            has_common_fg &= (common.cel.fg == line->cell[i].fg || (true_fg && line->cell[i].fg >= PALETTE_SIZE &&
+                    common.fg == line->pal->data[line->cell[i].fg - PALETTE_SIZE]));
+            has_common_bg &= (common.cel.bg == line->cell[i].bg || (true_bg && line->cell[i].bg >= PALETTE_SIZE &&
+                    common.bg == line->pal->data[line->cell[i].bg - PALETTE_SIZE]));
+            common.cel.attr &= line->cell[i].attr;
         }
     }
 
-    if (!has_common_bg) common.bg = SPECIAL_BG;
-    if (!has_common_fg) common.fg = SPECIAL_FG;
+    if (!has_common_bg) common.cel.bg = SPECIAL_BG;
+    if (!has_common_fg) common.cel.fg = SPECIAL_FG;
 
-    char sgr[SGR_BUFSIZ];
-    term_encode_sgr(sgr, sgr + sizeof sgr, common, common_fg, common_bg);
-    term_answerback(term, CSI"%sm", sgr);
+    char str[SGR_BUFSIZ];
+    term_encode_sgr(str, str + sizeof str, common);
+    term_answerback(term, CSI"%sm", str);
 }
 
 static void term_apply_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
-    color_t fg = 0, bg = 0;
-    struct cell mask = {0}, val = {0};
-    term_decode_sgr(term, 4, &mask, &val, &fg, &bg);
+    struct sgr sgr = {0};
+    struct cell mask = {0};
+    term_decode_sgr(term, 4, &mask, &sgr);
 
     mask.attr |= attr_drawn;
-    val.attr &= ~attr_drawn;
+    sgr.cel.attr &= ~attr_drawn;
     bool rect = term->mode.attr_ext_rectangle;
     for (; ys < ye; ys++) {
         struct line *line = term->screen[ys];
-        if (val.fg >= PALETTE_SIZE) val.fg = alloc_color(line, fg);
-        if (val.bg >= PALETTE_SIZE) val.bg = alloc_color(line, bg);
+        sgr.cel = fixup_color(line, sgr);
         for (int16_t i = xs; i < (rect || ys == ye - 1 ? xe : term_max_ox(term)); i++) {
             struct cell *cel = &line->cell[i];
-            cel->attr = (cel->attr & ~mask.attr) | (val.attr & mask.attr);
-            if (mask.fg) cel->fg = val.fg;
-            if (mask.bg) cel->bg = val.bg;
+            cel->attr = (cel->attr & ~mask.attr) | (sgr.cel.attr & mask.attr);
+            if (mask.fg) cel->fg = sgr.cel.fg;
+            if (mask.bg) cel->bg = sgr.cel.bg;
         }
         if (!rect) xs = term_min_ox(term);
     }
@@ -1467,7 +1283,7 @@ static void term_fill(struct term *term, int16_t xs, int16_t ys, int16_t xe, int
         struct line *line = term->screen[ys];
         // Reset line wrapping state
         line->wrapped = 0;
-        struct cell cell = fixup_color(line, &term->c);
+        struct cell cell = fixup_color(line, term->c.sgr);
         cell.ch = ch;
         cell.attr = 0;
         for (int16_t i = xs; i < xe; i++)
@@ -1486,7 +1302,7 @@ static void term_protective_erase(struct term *term, int16_t xs, int16_t ys, int
         struct line *line = term->screen[ys];
         // Reset line wrapping state
         line->wrapped = 0;
-        struct cell cell = fixup_color(line, &term->c);
+        struct cell cell = fixup_color(line, term->c.sgr);
         cell.attr = 0;
         for (int16_t i = xs; i < xe; i++)
             if (!(line->cell[i].attr & attr_protected))
@@ -1630,7 +1446,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
                 ssize_t scrolled = 0;
                 for (int16_t i = 0; i < amount; i++) {
                     scrolled -= term_append_history(term, term->screen[top + i],  1);
-                    term->screen[top + i] = term_create_line(term, term->width);
+                    term->screen[top + i] = create_line(term->c.sgr, term->width);
                 }
 
                 if (scrolled < 0) /* View down, image up */ {
@@ -1682,7 +1498,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
             if (save && !term->mode.altscreen && term->top == top) {
                 ssize_t scrolled = 0;
                 for (int16_t i = 0; i < amount; i++) {
-                    struct line *ln = term_create_line(term, line_length(term->screen[top + i]));
+                    struct line *ln = create_line(term->c.sgr, line_length(term->screen[top + i]));
                     for (ssize_t k = term_min_x(term); k < MIN(term_max_x(term), ln->width); k++)
                         copy_cell(ln, k, term->screen[top + i], k, 0);
                     scrolled -= term_append_history(term, ln, 0);
@@ -1908,7 +1724,7 @@ static void term_set_vt52(struct term *term, bool set) {
         term->vt_level = 0;
         term->vt52c = term->c;
         term->c = (struct cursor) {
-            .cel = term->c.cel, .fg = term->c.fg, .bg = term->c.bg,
+            .sgr = term->c.sgr,
             .gl = 0, .gl_ss = 0, .gr = 2,
             .gn = {cs94_ascii, cs94_ascii, cs94_ascii, cs94_dec_graph}
         };
@@ -1977,9 +1793,11 @@ static void term_load_config(struct term *term) {
     };
 
     term->c = term->back_cs = term->cs = (struct cursor) {
-        .cel = MKCELL(SPECIAL_FG, SPECIAL_BG, 0, 0),
-        .fg = cconf(CCONF_FG),
-        .bg = cconf(CCONF_BG),
+        .sgr = (struct sgr){
+            .cel = MKCELL(SPECIAL_FG, SPECIAL_BG, 0, 0),
+            .fg = cconf(CCONF_FG),
+            .bg = cconf(CCONF_BG),
+        },
         .gl = 0, .gl_ss = 0, .gr = 2,
         .upcs = cs94_dec_sup,
         .gn = {cs94_ascii, cs94_ascii, cs94_ascii, cs94_ascii}
@@ -2288,12 +2106,7 @@ inline static void term_parse_cursor_report(struct term *term) {
     term->c = (struct cursor) {
         .x = MIN(x, term->width - 1),
         .y = MIN(y, term->height - 1),
-        .cel = (struct cell) {
-            .fg = term->c.cel.fg,
-            .bg = term->c.cel.bg,
-        },
-        .fg = term->c.fg,
-        .bg = term->c.bg,
+        .sgr = term->c.sgr,
         .origin = flags & 1,
         .pending = !!(flags & 8),
         .gn = { gn[0], gn[1], gn[2], gn[3] },
@@ -2303,16 +2116,11 @@ inline static void term_parse_cursor_report(struct term *term) {
         .gl_ss = flags & 4 ? 3 : flags & 2 ? 2 : term->c.gl
     };
 
-    if (sgr0 & 1) term->c.cel.attr |= attr_bold;
-    if (sgr0 & 2) term->c.cel.attr |= attr_underlined;
-    if (sgr0 & 4) term->c.cel.attr |= attr_blink;
-    if (sgr0 & 8) term->c.cel.attr |= attr_inverse;
-    if (sgr1 & 1) term->c.cel.attr |= attr_italic;
-    if (sgr1 & 2) term->c.cel.attr |= attr_faint;
-    if (sgr1 & 4) term->c.cel.attr |= attr_strikethrough;
-    if (sgr1 & 8) term->c.cel.attr |= attr_invisible;
-    if (prot & 1) term->c.cel.attr |= attr_protected;
-
+    term->c.sgr.cel.attr = (prot & 1 ? attr_protected : 0) |
+            (sgr0 & 1 ? attr_bold : 0) | (sgr0 & 2 ? attr_underlined : 0) |
+            (sgr0 & 4 ? attr_blink : 0) | (sgr0 & 8 ? attr_inverse : 0) |
+            (sgr1 & 1 ? attr_italic : 0) | (sgr1 & 2 ? attr_faint : 0) |
+            (sgr1 & 4 ? attr_strikethrough : 0) | (sgr1 & 8 ? attr_invisible : 0);
     return;
 err:
     term_esc_dump(term, 0);
@@ -2368,7 +2176,7 @@ static void term_dispatch_dcs(struct term *term) {
             switch(id) {
             case 'm': /* -> SGR */ {
                 char sgr[SGR_BUFSIZ];
-                term_encode_sgr(sgr, sgr + sizeof sgr, term->c.cel, term->c.fg, term->c.bg);
+                term_encode_sgr(sgr, sgr + sizeof sgr, term->c.sgr);
                 term_answerback(term, DCS"1$r%sm"ST, sgr);
                 break;
             }
@@ -2390,7 +2198,7 @@ static void term_dispatch_dcs(struct term *term) {
                 break;
             case 'q' << 8 | '"': /* -> DECSCA */
                 term_answerback(term, DCS"1$r%d\"q"ST, term->mode.protected ? 2 :
-                        term->c.cel.attr & attr_protected ? 1 : 2);
+                        term->c.sgr.cel.attr & attr_protected ? 1 : 2);
                 break;
             case 'q' << 8 | ' ': /* -> DECSCUSR */
                 term_answerback(term, DCS"1$r%d q"ST, window_get_cursor(term->win));
@@ -3447,7 +3255,7 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
     line->wrapped = 0;
 
     // Allocate color for cell
-    struct cell cur = fixup_color(line, &term->c);
+    struct cell cur = fixup_color(line, term->c.sgr);
 
     // Put charaters
     for (ssize_t i = 0; i < count; i++) {
@@ -3667,19 +3475,19 @@ static void term_dispatch_window_op(struct term *term) {
 
 static void term_report_cursor(struct term *term) {
     char csgr[3] = { 0x40, 0, 0 };
-    if (term->c.cel.attr & attr_bold) csgr[0] |= 1;
-    if (term->c.cel.attr & attr_underlined) csgr[0] |= 2;
-    if (term->c.cel.attr & attr_blink) csgr[0] |= 4;
-    if (term->c.cel.attr & attr_inverse) csgr[0] |= 8;
+    if (term->c.sgr.cel.attr & attr_bold) csgr[0] |= 1;
+    if (term->c.sgr.cel.attr & attr_underlined) csgr[0] |= 2;
+    if (term->c.sgr.cel.attr & attr_blink) csgr[0] |= 4;
+    if (term->c.sgr.cel.attr & attr_inverse) csgr[0] |= 8;
 
     if (iconf(ICONF_EXTENDED_CIR)) {
         csgr[0] |= 0x20;
         csgr[1] |= 0x40;
         // Extended byte
-        if (term->c.cel.attr & attr_italic) csgr[1] |= 1;
-        if (term->c.cel.attr & attr_faint) csgr[1] |= 2;
-        if (term->c.cel.attr & attr_strikethrough) csgr[1] |= 4;
-        if (term->c.cel.attr & attr_invisible) csgr[1] |= 8;
+        if (term->c.sgr.cel.attr & attr_italic) csgr[1] |= 1;
+        if (term->c.sgr.cel.attr & attr_faint) csgr[1] |= 2;
+        if (term->c.sgr.cel.attr & attr_strikethrough) csgr[1] |= 4;
+        if (term->c.sgr.cel.attr & attr_invisible) csgr[1] |= 8;
     }
 
     char cflags = 0x40;
@@ -3698,7 +3506,7 @@ static void term_report_cursor(struct term *term) {
         /* line */ term->c.y + 1,
         /* column */ term->c.x + 1,
         /* attributes */ csgr,
-        /* cell protection */ 0x40 + !!(term->c.cel.attr & attr_protected),
+        /* cell protection */ 0x40 + !!(term->c.sgr.cel.attr & attr_protected),
         /* flags */ cflags,
         /* gl */ term->c.gl,
         /* gr */ term->c.gr,
@@ -3984,7 +3792,7 @@ static void term_dispatch_csi(struct term *term) {
         break;
     }
     case C('m'): /* SGR */
-        term_decode_sgr(term, 0, &(struct cell){0}, &term->c.cel, &term->c.fg, &term->c.bg);
+        term_decode_sgr(term, 0, &(struct cell){0}, &term->c.sgr);
         break;
     case C('n') | P('>'): /* Disable key modifires, xterm */ {
             uparam_t p = term->esc.param[0];
@@ -4072,10 +3880,10 @@ static void term_dispatch_csi(struct term *term) {
     case C('q') | I0('"'): /* DECSCA */
         switch (PARAM(0, 2)) {
         case 1:
-            term->c.cel.attr |= attr_protected;
+            term->c.sgr.cel.attr |= attr_protected;
             break;
         case 0: case 2:
-            term->c.cel.attr &= ~attr_protected;
+            term->c.sgr.cel.attr &= ~attr_protected;
             break;
         }
         term->mode.protected = 0;
@@ -4381,11 +4189,11 @@ static void term_dispatch_esc(struct term *term) {
         term->esc.old_state = 0;
         return;
     case E('V'): /* SPA */
-        term->c.cel.attr |= attr_protected;
+        term->c.sgr.cel.attr |= attr_protected;
         term->mode.protected = 1;
         break;
     case E('W'): /* EPA */
-        term->c.cel.attr &= ~attr_protected;
+        term->c.sgr.cel.attr &= ~attr_protected;
         term->mode.protected = 1;
         break;
     case E('Z'): /* DECID */
@@ -5082,8 +4890,8 @@ void free_term(struct term *term) {
     term_free_scrollback(term);
 
     for (ssize_t i = 0; i < term->height; i++) {
-        term_free_line(term->screen[i]);
-        term_free_line(term->back_screen[i]);
+        free_line(term->screen[i]);
+        free_line(term->back_screen[i]);
     }
 
     free(term->screen);
