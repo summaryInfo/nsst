@@ -1471,7 +1471,7 @@ static void term_print_char(struct term *term, term_char_t ch) {
 }
 
 static void term_print_line(struct term *term, struct line *line) {
-    if (term->tty.printerfd < 0) return;
+    if (!tty_has_printer(&term->tty)) return;
 
     // TODO Print with SGR
     for (int16_t i = 0; i < MIN(line->width, term->width); i++)
@@ -1480,7 +1480,7 @@ static void term_print_line(struct term *term, struct line *line) {
 }
 
 static void term_print_screen(struct term *term, bool ext) {
-    if (term->tty.printerfd < 0) return;
+    if (!tty_has_printer(&term->tty)) return;
 
     int16_t top = ext ? 0 : term->top;
     int16_t bottom = ext ? term->height - 1 : term->bottom;
@@ -1883,7 +1883,7 @@ static void term_dispatch_dsr(struct term *term) {
             break;
         case 15: /* Printer status -- Has printer*/
             CHK_VT(2);
-            term_answerback(term, term->tty.printerfd < 0 ? CSI"?13n" : CSI"?10n");
+            term_answerback(term, tty_has_printer(&term->tty) ? CSI"?10n" : CSI"?13n");
             break;
         case 25: /* User defined keys lock */
             CHK_VT(2);

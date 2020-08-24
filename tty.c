@@ -460,3 +460,7 @@ void tty_print_string(struct tty *tty, const uint8_t *str, ssize_t size) {
         wri += res;
     } while(wri < size);
 }
+
+bool tty_has_printer(struct tty *tty) {
+    return tty->printerfd >= 0;
+}

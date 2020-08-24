@@ -28,6 +28,7 @@ void tty_print_string(struct tty *tty, const uint8_t *str, ssize_t size);
 ssize_t tty_refill(struct tty *tty);
 void tty_write(struct tty *tty, const uint8_t *buf, size_t len, bool crlf);
 void tty_hang(struct tty *tty);
+bool tty_has_printer(struct tty *tty);
 
 
 #endif
