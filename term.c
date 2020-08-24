@@ -10,45 +10,29 @@
 #include "mouse.h"
 #include "nrcs.h"
 #include "term.h"
+#include "tty.h"
 #include "window.h"
 
 #include <ctype.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <inttypes.h>
-#include <poll.h>
-#include <pwd.h>
-#include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
 
-//For openpty() function
-#if   defined(__linux)
-#   include <pty.h>
-#elif defined(__OpenBSD__) || defined(__NetBSD__) || defined(__APPLE__)
-#   include <util.h>
-#elif defined(__FreeBSD__) || defined(__DragonFly__)
-#   include <libutil.h>
-#endif
-
-#define TTY_MAX_WRITE 256
-#define FD_BUF_SIZE 4096
 #define ESC_MAX_PARAM 32
 #define ESC_MAX_STR 256
 #define ESC_MAX_LONG_STR 0x10000000
 #define ESC_DUMP_MAX 768
-#define MAX_REPORT 1024
 #define SGR_BUFSIZ 64
 #define UDK_MAX 37
 #define MAX_LINE_LEN 16384
+#define MAX_REPORT 1024
 
 #define CSI "\x9B"
 #define OSC "\x9D"
@@ -59,12 +43,12 @@
 #define IS_C1(c) ((uint32_t)(c) - 0x80U < 0x20U)
 #define IS_C0(c) ((c) < 0x20)
 #define IS_DEL(c) ((c) == 0x7f)
-#define IS_STREND(c) (IS_C1(c) || (c) == 0x1b || (c) == 0x1a || (c) == 0x18 || (c) == 0x07)
 
 #define TABSR_INIT_CAP 48
 #define TABSR_CAP_STEP(x) (4*(x)/3)
 #define TABSR_MAX_ENTRY 6
 
+#define IS_STREND(c) (IS_C1(c) || (c) == 0x1b || (c) == 0x1a || (c) == 0x18 || (c) == 0x07)
 #define MAX_EXTRA_PALETTE (0x10000 - PALETTE_SIZE)
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
 #define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
@@ -207,7 +191,10 @@ struct term {
 
     /* Mouse and selection state */
     struct mouse_state mstate;
+    /* Keyboard state */
     struct keyboard_state kstate;
+    /* TTY State and input buffer */
+    struct tty tty;
 
     /* Previous cursor state
      * Used for effective cursor invalidation */
@@ -267,316 +254,8 @@ struct term {
     struct window *win;
     color_t *palette;
 
-    pid_t child;
-    int fd;
-    int printerfd;
-
-    uint8_t *fd_start;
-    uint8_t *fd_end;
-    uint8_t fd_buf[FD_BUF_SIZE];
-
-    int32_t predec_buf[FD_BUF_SIZE];
+    int32_t *predec_buf;
 };
-
-/* Default termios, initialized from main */
-static struct termios dtio;
-
-static void handle_chld(int arg) {
-    int status;
-    char str[128];
-    ssize_t len = 0;
-
-    pid_t pid = waitpid(-1, &status, WNOHANG);
-    uint32_t loglevel = iconf(ICONF_LOG_LEVEL);
-
-    if (pid < 0) {
-        if (loglevel > 1) len = snprintf(str, sizeof str,
-                "[\033[33;1mWARN\033[m] Child wait failed");
-    } else if (WIFEXITED(status) && WEXITSTATUS(status)) {
-        if (loglevel > 2) len = snprintf(str, sizeof str,
-                "[\033[32;1mINFO\033[m] Child exited with status: %d\n", WEXITSTATUS(status));
-    } else if (WIFSIGNALED(status)) {
-        if (loglevel > 2) len = snprintf(str, sizeof str,
-                "[\033[32;1mINFO\033[m] Child terminated due to the signal: %d\n", WTERMSIG(status));
-    }
-
-    if (len) write(STDERR_FILENO, str, len);
-
-    (void)arg;
-}
-
-static void exec_shell(const char *cmd, const char **args) {
-
-    const struct passwd *pw;
-    errno = 0;
-    if (!(pw = getpwuid(getuid()))) {
-        if (errno) die("getpwuid(): %s", strerror(errno));
-        else die("I don't know you");
-     }
-
-    const char *sh = cmd;
-    if (!(sh = getenv("SHELL")))
-        sh = pw->pw_shell[0] ? pw->pw_shell : cmd;
-
-    if (args) cmd = args[0];
-    else cmd = sh;
-
-    const char *def[] = {cmd, NULL};
-    if (!args) args = def;
-
-    unsetenv("COLUMNS");
-    unsetenv("LINES");
-    unsetenv("TERMCAP");
-
-    setenv("LOGNAME", pw->pw_name, 1);
-    setenv("USER", pw->pw_name, 1);
-    setenv("SHELL", sh, 1);
-    setenv("HOME", pw->pw_dir, 1);
-    setenv("TERM", sconf(SCONF_TERM_NAME), 1);
-
-    signal(SIGCHLD, SIG_DFL);
-    signal(SIGHUP, SIG_DFL);
-    signal(SIGINT, SIG_DFL);
-    signal(SIGQUIT, SIG_DFL);
-    signal(SIGTERM, SIG_DFL);
-    signal(SIGALRM, SIG_DFL);
-
-    // Disable job control signals by default
-    // like login does
-#ifdef SIGTSTP
-    signal(SIGTSTP, SIG_IGN);
-    signal(SIGTTIN, SIG_IGN);
-    signal(SIGTTOU, SIG_IGN);
-#endif
-
-    execvp(cmd, (char *const *)args);
-    _exit(1);
-}
-
-void init_default_termios(void) {
-    /* Use stdin as base configuration */
-    if (tcgetattr(STDIN_FILENO, &dtio) < 0)
-        memset(&dtio, 0, sizeof(dtio));
-
-    /* Setup keys */
-
-    /* Disable everything */
-    for (size_t i = 0; i < NCCS; i++)
-#ifdef _POSIX_VDISABLE
-        dtio.c_cc[i] = _POSIX_VDISABLE;
-#else
-        dtio.c_cc[i] = 255;
-#endif
-
-    /* Then enable all known */
-
-#ifdef CINTR
-    dtio.c_cc[VINTR] = CINTR;
-#else
-    dtio.c_cc[VINTR] = '\003';
-#endif
-
-#ifdef CQUIT
-    dtio.c_cc[VQUIT] = CQUIT;
-#else
-    dtio.c_cc[VQUIT] = '\034';
-#endif
-
-#ifdef CERASE
-    dtio.c_cc[VERASE] = CERASE;
-#elif defined(__linux__)
-    dtio.c_cc[VERASE] = '\177';
-#else
-    dtio.c_cc[VERASE] = '\010';
-#endif
-
-#ifdef CKILL
-    dtio.c_cc[VKILL] = CKILL;
-#else
-    dtio.c_cc[VKILL] = '\025';
-#endif
-
-#ifdef CEOF
-    dtio.c_cc[VEOF] = CEOF;
-#else
-    dtio.c_cc[VEOF] = '\004';
-#endif
-
-#ifdef CSTART
-    dtio.c_cc[VSTART] = CSTART;
-#else
-    dtio.c_cc[VSTART] = '\021';
-#endif
-
-#ifdef CSTOP
-    dtio.c_cc[VSTOP] = CSTOP;
-#else
-    dtio.c_cc[VSTOP] = '\023';
-#endif
-
-#ifdef CSUSP
-    dtio.c_cc[VSUSP] = CSUSP;
-#else
-    dtio.c_cc[VSUSP] = '\032';
-#endif
-
-#ifdef VERASE2
-    dtio.c_cc[VERASE2] = CERASE2;
-#endif
-
-#ifdef VDSUSP
-#   ifdef CDSUSP
-    dtio.c_cc[VDSUSP] = CDSUSP;
-#   else
-    dtio.c_cc[VDSUSP] = '\031';
-#   endif
-#endif
-
-#ifdef VREPRINT
-#   ifdef CRPRNT
-    dtio.c_cc[VREPRINT] = CRPRNT;
-#   else
-    dtio.c_cc[VREPRINT] = '\022';
-#   endif
-#endif
-
-#ifdef VDISCRD
-#   ifdef CFLUSH
-    dtio.c_cc[VDISCRD] = CFLUSH;
-#   else
-    dtio.c_cc[VDISCRD] = '\017';
-#   endif
-#elif defined(VDISCARD)
-#   ifdef CFLUSH
-    dtio.c_cc[VDISCARD] = CFLUSH;
-#   else
-    dtio.c_cc[VDISCARD] = '\017';
-#   endif
-#endif
-
-#ifdef VWERSE
-    dtio.c_cc[VWERSE] = CWERASE;
-#elif defined(VWERASE)
-    dtio.c_cc[VWERASE] = '\027';
-#endif
-
-#ifdef VLNEXT
-#   ifdef CLNEXT
-    dtio.c_cc[VLNEXT] = CLNEXT;
-#   else
-    dtio.c_cc[VLNEXT] = '\026';
-#   endif
-#endif
-
-#ifdef VSTATUS
-    dtio.c_cc[VSTATUS] = CSTATUS;
-#endif
-
-#if VMIN != VEOF
-    dtio.c_cc[VMIN] = 1;
-#endif
-
-#if VTIME != VEOL
-    dtio.c_cc[VTIME] = 0;
-#endif
-
-    /* Input modes */
-#ifdef IMAXBEL
-    dtio.c_iflag = BRKINT | IGNPAR | ICRNL | IMAXBEL | IXON;
-#else
-    dtio.c_iflag = BRKINT | IGNPAR | ICRNL | IXON;
-#endif
-
-    /* Output modes */
-#ifdef ONLCR
-    dtio.c_oflag = OPOST | ONLCR;
-#else
-    dtio.c_oflag = OPOST;
-#endif
-
-    /* Control modes */
-    dtio.c_cflag = CS8 | CREAD;
-
-    /* Local modes */
-#if defined (ECHOCTL) && defined (ECHOKE)
-    dtio.c_lflag = ISIG | ICANON | IEXTEN | ECHO | ECHOCTL | ECHOKE | ECHOE | ECHOK;
-#else
-    dtio.c_lflag = ISIG | ICANON | IEXTEN | ECHO | ECHOE | ECHOK;
-#endif
-
-    /* Find and set max I/O baud rate */
-    int rate =
-#if defined(B230400)
-            B230400;
-#elif defined(B115200)
-            B115200;
-#elif defined(B57600)
-            B57600;
-#elif defined(B38400)
-            B38400;
-#elif defined(B19200)
-            B19200;
-#else
-            B9600;
-#endif
-    cfsetispeed(&dtio, rate);
-    cfsetospeed(&dtio, rate);
-
-}
-
-static int tty_open(struct term *term, const char *cmd, const char **args) {
-    /* Configure PTY */
-
-    struct termios tio = dtio;
-
-    tio.c_cc[VERASE] = iconf(ICONF_BACKSPACE_IS_DELETE) ? '\177' : '\010';
-
-    /* If IUTF8 is defined, enable it by default,
-     * when terminal itself is in UTF-8 mode */
-#ifdef IUTF8
-    if (iconf(ICONF_UTF8))
-        tio.c_iflag |= IUTF8;
-#endif
-
-    int slave, master;
-    if (openpty(&master, &slave, NULL, &tio, NULL) < 0) {
-        warn("Can't create pseudo terminal");
-        term->fd = -1;
-        return -1;
-    }
-
-    int fl = fcntl(master, F_GETFL);
-    if (fl >= 0) fcntl(master, F_SETFL, fl | O_NONBLOCK | O_CLOEXEC);
-
-    pid_t pid;
-    switch ((pid = fork())) {
-    case -1:
-        close(slave);
-        close(master);
-        warn("Can't fork");
-        term->fd = -1;
-        return -1;
-    case 0:
-        setsid();
-        errno = 0;
-        if (ioctl(slave, TIOCSCTTY, NULL) < 0)
-            die("Can't make tty controlling");
-        dup2(slave, 0);
-        dup2(slave, 1);
-        dup2(slave, 2);
-        close(slave);
-        exec_shell(cmd, args);
-        break;
-    default:
-        close(slave);
-        sigaction(SIGCHLD, &(struct sigaction){
-                .sa_handler = handle_chld, .sa_flags = SA_RESTART}, NULL);
-    }
-    term->child = pid;
-    term->fd = master;
-
-    return master;
-}
 
 static bool optimize_line_palette(struct line *line) {
     // Buffer here causes a leak in theory
@@ -992,21 +671,9 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     }
 
     { // Notify application
-
         int16_t wwidth, wheight;
         window_get_dim(term->win, &wwidth, &wheight);
-
-        struct winsize wsz = {
-            .ws_col = width,
-            .ws_row = height,
-            .ws_xpixel = wwidth,
-            .ws_ypixel = wheight
-        };
-
-        if (ioctl(term->fd, TIOCSWINSZ, &wsz) < 0) {
-            warn("Can't change tty size");
-            term_hang(term);
-        }
+        tty_set_winsz(&term->tty, width, height, wwidth, wheight);
     }
 
     { // Resize tabs
@@ -1021,6 +688,13 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             while (tab > 0 && !new_tabs[tab]) tab--;
             while ((tab += tabw) < width) new_tabs[tab] = 1;
         }
+    }
+
+    { // Resize predecode buffer
+
+        int32_t *newpb = realloc(term->predec_buf, width*sizeof(*newpb));
+        if (!newpb) die("Can't allocate predecode buffer");
+        term->predec_buf = newpb;
     }
 
     { // Resize altscreen
@@ -2163,31 +1837,16 @@ static void term_cr(struct term *term) {
             term_min_ox(term) : term_min_x(term), term->c.y);
 }
 
-static void term_print_string(struct term *term, uint8_t *str, ssize_t size) {
-    ssize_t wri = 0, res;
-    do {
-        res = write(term->printerfd, str, size);
-        if (res < 0) {
-            warn("Printer error");
-            if (term->printerfd != STDOUT_FILENO)
-                close(term->printerfd);
-            term->printerfd = -1;
-            break;
-        }
-        wri += res;
-    } while(wri < size);
-}
-
 static void term_print_char(struct term *term, term_char_t ch) {
     uint8_t buf[5] = {ch};
     size_t sz = 1;
     if (term->mode.utf8 && ch >= 0xA0 && term->esc.state == esc_ground)
         sz = utf8_encode(ch, buf, buf + 5);
-    term_print_string(term, buf, sz);
+    tty_print_string(&term->tty, buf, sz);
 }
 
 static void term_print_line(struct term *term, struct line *line) {
-    if (term->printerfd < 0) return;
+    if (term->tty.printerfd < 0) return;
 
     // TODO Print with SGR
     for (int16_t i = 0; i < MIN(line->width, term->width); i++)
@@ -2196,7 +1855,7 @@ static void term_print_line(struct term *term, struct line *line) {
 }
 
 static void term_print_screen(struct term *term, bool ext) {
-    if (term->printerfd < 0) return;
+    if (term->tty.printerfd < 0) return;
 
     int16_t top = ext ? 0 : term->top;
     int16_t bottom = ext ? term->height - 1 : term->bottom;
@@ -2426,10 +2085,8 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
     term->palette = malloc(PALETTE_SIZE * sizeof(color_t));
     term->win = win;
 
-    term->printerfd = -1;
     term->sb_max_caps = iconf(ICONF_HISTORY_LINES);
     term->vt_version = iconf(ICONF_VT_VERION);
-    term->fd_start = term->fd_end = term->fd_buf;
     term->sb_top = -1;
 
     term_load_config(term);
@@ -2440,21 +2097,13 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
         term_swap_screen(term, 0);
     }
 
-    if (tty_open(term, sconf(SCONF_SHELL), sconf_argv()) < 0) {
+    if (tty_open(&term->tty, sconf(SCONF_SHELL), sconf_argv()) < 0) {
         warn("Can't create tty");
         free_term(term);
         return NULL;
     }
 
     term_resize(term, width, height);
-
-    const char *printer_path = sconf(SCONF_PRINTER);
-    if (printer_path) {
-        if (printer_path[0] == '-' && !printer_path[1])
-            term->printerfd = STDOUT_FILENO;
-        else
-            term->printerfd = open(printer_path, O_WRONLY | O_CREAT, 0660);
-    }
 
     return term;
 }
@@ -2527,7 +2176,7 @@ static void term_dispatch_dsr(struct term *term) {
             break;
         case 15: /* Printer status -- Has printer*/
             CHK_VT(2);
-            term_answerback(term, term->printerfd >= 0 ? CSI"?10n" : CSI"?13n");
+            term_answerback(term, term->tty.printerfd < 0 ? CSI"?13n" : CSI"?10n");
             break;
         case 25: /* User defined keys lock */
             CHK_VT(2);
@@ -3584,7 +3233,6 @@ static void term_dispatch_mc(struct term *term) {
     if (term->esc.selector & P_MASK) {
         switch (PARAM(0, 0)) {
         case 1: /* Print current line */
-            if (term->printerfd < 0) break;
             term_print_line(term, term->screen[term->c.y]);
             break;
         case 4: /* Disable autoprint */
@@ -3592,7 +3240,6 @@ static void term_dispatch_mc(struct term *term) {
             term->mode.print_auto = term->esc.param[0] == 5;
             break;
         case 11: /* Print scrollback and screen */
-            if (term->printerfd < 0) break;
             for (ssize_t i = 1; i <= term->sb_limit; i++)
                 term_print_line(term, line_at(term, -i));
         case 10: /* Print screen */
@@ -3651,7 +3298,7 @@ static void term_precompose_at_cursor(struct term *term, term_char_t ch) {
     if (cel->ch != ch) *cel = MKCELLWITH(*cel, ch);
 }
 
-inline static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t rep) {
+static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t rep, const uint8_t **start, const uint8_t *end) {
     ssize_t res = 1;
 
     // Compute maximal with to be printed at once
@@ -3690,19 +3337,19 @@ inline static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssi
             res = rep;
         }
     } else {
-        uint8_t *blk_start = term->fd_start;
+        const uint8_t *blk_start = *start;
         term_char_t prev = -1U;
 
         do {
-            uint8_t *char_start = term->fd_start;
+            const uint8_t *char_start = *start;
             if (term->mode.utf8 && ch >= 0xA0) {
-                if (!utf8_decode(&ch, (const uint8_t **)&term->fd_start, term->fd_end)) {
+                if (!utf8_decode(&ch, start, end)) {
                     // If we encountered partial UTF-8,
                     // print all we have and return
                     res = 0;
                     break;
                 }
-            } else term->fd_start++;
+            } else (*start)++;
 
             enum charset glv = term->c.gn[term->c.gl_ss];
 
@@ -3735,7 +3382,7 @@ inline static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssi
                 // Don't include char if its too wide
                 // Unless its first char at right margin
                 if (totalwidth + wid > maxw && (!last || totalwidth)) {
-                    term->fd_start = char_start;
+                    *start = char_start;
                     break;
                 }
                 // Wide cells are indicated as
@@ -3746,16 +3393,16 @@ inline static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssi
                 term->predec_buf[count++] = ch;
             }
 
-            ch = *term->fd_start;
+            ch = **start;
 
             // If we have encountered control character, break
             if ((ch & 0x7F) < 0x20) break;
 
             // Since UCS-4 chars takes not more units than UTF-8, don't check other buffer length
-        } while(totalwidth < maxw && /* count < FD_BUF_SIZE && */ term->fd_start < term->fd_end);
+        } while(totalwidth < maxw && /* count < FD_BUF_SIZE && */ *start < end);
 
         if (term->mode.print_enabled)
-            term_print_string(term, blk_start, term->fd_start - blk_start);
+            tty_print_string(&term->tty, blk_start, *start - blk_start);
 
         if (prev != -1U) term->prev_ch = prev; // For REP CSI
     }
@@ -4259,7 +3906,7 @@ static void term_dispatch_csi(struct term *term) {
         break;
     case C('b'): /* REP */
         for (uparam_t i = PARAM(0, 1); i > 0;)
-            i = term_dispatch_print(term, term->prev_ch, i);
+            i = term_dispatch_print(term, term->prev_ch, i, NULL, NULL);
         break;
     case C('c'): /* DA1 */
     case C('c') | P('>'): /* DA2 */
@@ -5010,7 +4657,6 @@ static void term_dispatch_vt52(struct term *term, term_char_t ch) {
         term_erase(term, term->c.x, term->c.y, term->width, term->c.y + 1, 0);
         break;
     case 'V': /* Print cursor line */
-        if (term->printerfd < 0) break;
         term_print_line(term, term->screen[term->c.y]);
         break;
     case 'W': /* Enable printer */
@@ -5047,7 +4693,9 @@ static void term_dispatch_vt52_cup(struct term *term) {
     term->esc.state = esc_ground;
 }
 
-inline static bool term_dispatch(struct term *term, term_char_t ch) {
+inline static bool term_dispatch(struct term *term, const uint8_t **start, const uint8_t *end) {
+    uint8_t ch = *(*start)++;
+
     if (term->esc.state == esc_ground && (__builtin_expect(!IS_C1(ch), 1) || term->vt_level < 2)) {
         if (ch < 0x20) {
             if (term->mode.print_enabled) term_print_char(term, ch);
@@ -5056,9 +4704,9 @@ inline static bool term_dispatch(struct term *term, term_char_t ch) {
         } else {
             // One char is already consumed
             // Put it back to buffer
-            term->fd_start--;
+            (*start)--;
 
-            return term_dispatch_print(term, ch, 0);
+            return term_dispatch_print(term, ch, 0, start, end);
         }
     }
 
@@ -5228,172 +4876,14 @@ inline static bool term_dispatch(struct term *term, term_char_t ch) {
     return 1;
 }
 
-static ssize_t term_refill(struct term *term) {
-    if (term->fd == -1) return -1;
-
-    ssize_t inc, sz = term->fd_end - term->fd_start;
-
-    if (term->fd_start != term->fd_buf) {
-        memmove(term->fd_buf, term->fd_start, sz);
-        term->fd_end = term->fd_buf + sz;
-        term->fd_start = term->fd_buf;
-    }
-
-    if ((inc = read(term->fd, term->fd_end, sizeof(term->fd_buf) - sz)) < 0) {
-        if (errno != EAGAIN) {
-            warn("Can't read from tty");
-            term_hang(term);
-            return -1;
-        }
-        inc = 0;
-    }
-
-    term->fd_end += inc;
-    return inc;
-}
-
 void term_read(struct term *term) {
-    if (term_refill(term) <= 0) return;
+    if (tty_refill(&term->tty) <= 0) return;
 
     if (term->mode.scroll_on_output && term->view_pos.line)
         term_reset_view(term, 1);
 
-    while (term->fd_start < term->fd_end)
-        if (!term_dispatch(term, *term->fd_start++)) break;
-}
-
-inline static void tty_write_raw(struct term *term, const uint8_t *buf, ssize_t len) {
-    ssize_t res, lim = TTY_MAX_WRITE;
-    struct pollfd pfd = {
-        .events = POLLIN | POLLOUT,
-        .fd = term->fd
-    };
-    while (len) {
-        if (poll(&pfd, 1, -1) < 0 && errno != EINTR) {
-            warn("Can't poll tty");
-            term_hang(term);
-            return;
-        }
-        if (pfd.revents & POLLOUT) {
-            if ((res = write(term->fd, buf, MIN(lim, len))) < 0) {
-                warn("Can't write to from tty");
-                term_hang(term);
-                return;
-            }
-
-            if (res < (ssize_t)len) {
-                if (len < lim)
-                    lim = term_refill(term);
-                len -= res;
-                buf += res;
-            } else break;
-        }
-        if (pfd.revents & POLLIN)
-            lim = term_refill(term);
-    }
-}
-
-inline static void term_tty_write(struct term *term, const uint8_t *buf, size_t len) {
-    if (term->fd == -1) return;
-
-    const uint8_t *next;
-
-    if (!term->mode.crlf)
-        tty_write_raw(term, buf, len);
-    else while (len) {
-        if (*buf == '\r') {
-            next = buf + 1;
-            tty_write_raw(term, (const uint8_t *)"\r\n", 2);
-        } else {
-            next = memchr(buf , '\r', len);
-            if (!next) next = buf + len;
-            tty_write_raw(term, buf, next - buf);
-        }
-        len -= next - buf;
-        buf = next;
-    }
-}
-
-static size_t term_encode_c1(struct term *term, const uint8_t *in, uint8_t *out) {
-    uint8_t *fmtp = out;
-    for (uint8_t *it = (uint8_t *)in; *it && fmtp - out < MAX_REPORT - 1; it++) {
-        if (IS_C1(*it) && (term->mode.utf8 || !term->mode.eight_bit || term->vt_level < 2)) {
-            *fmtp++ = 0x1B;
-            *fmtp++ = *it ^ 0xC0;
-            // Theoretically we can use C1 encoded as UTF-8 if term->mode.utf8
-            // but noone understands that format
-            //*fmtp++ = 0xC0 | (*it >> 6);
-            //*fmtp++ = 0x80 | (*it & 0x3F);
-        } else {
-            *fmtp++ = *it;
-        }
-    }
-    *fmtp = 0x00;
-    return fmtp - out;
-}
-
-void term_answerback(struct term *term, const char *str, ...) {
-    static uint8_t fmt[MAX_REPORT], csi[MAX_REPORT];
-    va_list vl;
-    va_start(vl, str);
-    term_encode_c1(term, (const uint8_t *)str, fmt);
-    ssize_t res = vsnprintf((char *)csi, sizeof(csi), (char *)fmt, vl);
-    va_end(vl);
-    term_tty_write(term, csi, res);
-
-    if (iconf(ICONF_TRACE_INPUT)) {
-        ssize_t j = MAX_REPORT;
-        for (size_t i = res; i; i--) {
-            if (IS_C0(csi[i - 1]) || IS_DEL(csi[i - 1]))
-                csi[--j] = csi[i - 1] ^ 0x40, csi[--j] = '^';
-            else if (IS_C1(csi[i - 1]))
-                csi[--j] = csi[i - 1] ^ 0xC0, csi[--j] = '[', csi[--j] = '^';
-            else
-                csi[--j] = csi[i - 1];
-        }
-        info("Rep: %s", csi + j);
-    }
-}
-
-/* If len == 0 encodes C1 controls and determines length by NUL character */
-void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
-    bool encode = !len;
-    if (!len) len = strlen((char *)str);
-
-    const uint8_t *end = len + str, *start = str;
-    if (term->mode.echo) {
-        while (*start < *end) {
-            term_char_t ch = *start;
-            // Try to handle unencoded C1 bytes even if UTF-8 is enabled
-            if (term->mode.utf8 && ch >= 0xA0 && term->esc.state == esc_ground) {
-                if (!utf8_decode(&ch, &start, end)) break;
-            } else term->fd_start++;
-
-            if (IS_C1(ch)) {
-                term_dispatch(term, '^');
-                term_dispatch(term, '[');
-                ch ^= 0xC0;
-            } else if ((IS_C0(ch) || IS_DEL(ch)) && ch != '\n' && ch != '\t' && ch != '\r') {
-                term_dispatch(term, '^');
-                ch ^= 0x40;
-            }
-            term_dispatch(term, ch);
-        }
-    }
-
-    if (!(term->mode.no_scroll_on_input) && term->view_pos.line)
-        term_reset_view(term, 1);
-
-    uint8_t rep[MAX_REPORT];
-
-    if (encode) len = term_encode_c1(term, str, rep);
-
-    term_tty_write(term, encode ? rep : str, len);
-}
-
-void term_break(struct term *term) {
-    if (tcsendbreak(term->fd, 0))
-        warn("Can't send break");
+    while (term->tty.start < term->tty.end)
+        if (!term_dispatch(term, (const uint8_t **)&term->tty.start, term->tty.end)) break;
 }
 
 void term_toggle_numlock(struct term *term) {
@@ -5484,16 +4974,20 @@ struct window *term_window(struct term *term) {
     return term->win;
 }
 
-int term_fd(struct term *term) {
-    return term->fd;
-}
-
 bool term_is_reverse(struct term *term) {
     return term->mode.reverse_video;
 }
 
 ssize_t term_view(struct term *term) {
     return term->view;
+}
+
+int term_fd(struct term *term) {
+    return term->tty.fd;
+}
+
+void term_break(struct term *term) {
+    return tty_break(&term->tty);
 }
 
 void term_handle_focus(struct term *term, bool set) {
@@ -5503,18 +4997,87 @@ void term_handle_focus(struct term *term, bool set) {
     term->screen[term->c.y]->cell[term->c.x].attr &= ~attr_drawn;
 }
 
-void term_hang(struct term *term) {
-    if (term->fd >= 0) {
-        close(term->fd);
-        if (term->printerfd != STDOUT_FILENO)
-            close(term->printerfd);
-        term->fd = -1;
+static size_t encode_c1(uint8_t *out, const uint8_t *in, bool eightbit) {
+    uint8_t *fmtp = out;
+    for (uint8_t *it = (uint8_t *)in; *it && fmtp - out < MAX_REPORT - 1; it++) {
+        if (IS_C1(*it) && !eightbit) {
+            *fmtp++ = 0x1B;
+            *fmtp++ = *it ^ 0xC0;
+            // Theoretically we can use C1 encoded as UTF-8 if term->mode.utf8
+            // but noone understands that format
+            //*fmtp++ = 0xC0 | (*it >> 6);
+            //*fmtp++ = 0x80 | (*it & 0x3F);
+        } else {
+            *fmtp++ = *it;
+        }
     }
-    kill(term->child, SIGHUP);
+    *fmtp = 0x00;
+    return fmtp - out;
+}
+
+inline static bool has_8bit(struct term *term) {
+    return !term->mode.utf8 && term->mode.eight_bit && term->vt_level > 1;
+}
+
+void term_answerback(struct term *term, const char *str, ...) {
+    uint8_t fmt[MAX_REPORT], csi[MAX_REPORT];
+
+    encode_c1(fmt, (const uint8_t *)str, has_8bit(term));
+
+    va_list vl;
+    va_start(vl, str);
+    ssize_t res = vsnprintf((char *)csi, sizeof(csi), (char *)fmt, vl);
+    va_end(vl);
+
+    tty_write(&term->tty, csi, res, term->mode.crlf);
+
+    if (iconf(ICONF_TRACE_INPUT)) {
+        ssize_t j = MAX_REPORT;
+        for (size_t i = res; i; i--) {
+            if (IS_C0(csi[i - 1]) || IS_DEL(csi[i - 1]))
+                csi[--j] = csi[i - 1] ^ 0x40, csi[--j] = '^';
+            else if (IS_C1(csi[i - 1]))
+                csi[--j] = csi[i - 1] ^ 0xC0, csi[--j] = '[', csi[--j] = '^';
+            else
+                csi[--j] = csi[i - 1];
+        }
+        info("Rep: %s", csi + j);
+    }
+}
+
+/* If len == 0 encodes C1 controls and determines length by NUL character */
+void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
+    bool encode = !len;
+    if (!len) len = strlen((char *)str);
+
+    // Local echo
+    if (term->mode.echo) {
+        const uint8_t *end = len + str, *start = str;
+        uint8_t pre2[4] = "^[", pre1[3] = "^";
+        while (*start < *end) {
+            term_char_t ch = *start;
+            if (IS_C1(ch)) {
+                pre2[2] = *start++ ^ 0xC0;
+                term_dispatch(term, (const uint8_t **)&pre2, pre2 + 3);
+            } else if ((IS_C0(ch) && ch != '\n' && ch != '\t' && ch != '\r') || IS_DEL(ch)) {
+                pre1[1] = *start++ ^ 0x40;
+                term_dispatch(term, (const uint8_t **)&pre1, pre1 + 2);
+            } else {
+                if (!term_dispatch(term, &start, end)) break;
+            }
+        }
+    }
+
+    if (!(term->mode.no_scroll_on_input) && term->view_pos.line) term_reset_view(term, 1);
+
+    uint8_t rep[MAX_REPORT];
+    if (encode) len = encode_c1(rep, str, has_8bit(term));
+
+    tty_write(&term->tty, encode ? rep : str, len, term->mode.crlf);
 }
 
 void free_term(struct term *term) {
-    term_hang(term);
+    tty_hang(&term->tty);
 
     term_free_scrollback(term);
 
@@ -5528,5 +5091,6 @@ void free_term(struct term *term) {
 
     free(term->tabs);
     free(term->palette);
+    free(term->predec_buf);
     free(term);
 }

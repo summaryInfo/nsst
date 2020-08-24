@@ -91,21 +91,20 @@ void free_term(struct term *term);
 bool term_redraw(struct term *term);
 void term_resize(struct term *term, int16_t width, int16_t height);
 void term_handle_focus(struct term *term, bool focused);
-void term_sendkey(struct term *term, const uint8_t *data, size_t size);
-void term_answerback(struct term *term, const char *str, ...);
-void term_break(struct term *term);
 void term_scroll_view(struct term *term, int16_t amount);
 void term_read(struct term *term);
-int term_fd(struct term *term);
-void term_hang(struct term *term);
 void term_toggle_numlock(struct term *term);
 struct keyboard_state *term_get_kstate(struct term *term);
 struct mouse_state *term_get_mstate(struct term *term);
+struct window *term_window(struct term *term);
+int term_fd(struct term *term);
+void term_sendkey(struct term *term, const uint8_t *data, size_t size);
+void term_answerback(struct term *term, const char *str, ...);
 void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd);
 void term_damage(struct term *term, struct rect damage);
 void term_reset(struct term *term);
 void term_set_reverse(struct term *term, bool set);
-struct window *term_window(struct term *term);
+void term_break(struct term *term);
 
 struct line_view term_line_at(struct term *term, struct line_offset pos);
 struct line_offset term_get_view(struct term *term);
@@ -128,7 +127,5 @@ bool term_is_paste_nl_enabled(struct term *term);
 bool term_is_paste_quote_enabled(struct term *term);
 bool term_is_cursor_enabled(struct term *term);
 bool term_is_reverse(struct term *term);
-
-void init_default_termios(void);
 
 #endif

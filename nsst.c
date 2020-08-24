@@ -6,6 +6,7 @@
 
 #include "config.h"
 #include "feature.h"
+#include "tty.h"
 #include "util.h"
 #include "window.h"
 
