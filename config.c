@@ -152,7 +152,7 @@ static struct {
     int32_t min;
     int32_t max;
 } ioptions[] = {
-    [ICONF_LOG_LEVEL - ICONF_MIN] = {2, 2, 0, 3},
+    [ICONF_LOG_LEVEL - ICONF_MIN] = {3, 3, 0, 3},
     [ICONF_WINDOW_X - ICONF_MIN] = {200, 200, -32768, 32767 },
     [ICONF_WINDOW_Y - ICONF_MIN] = {200, 200, -32768, 32767 },
     [ICONF_WINDOW_NEGATIVE_X - ICONF_MIN] = {0, 0, 0, 1},
