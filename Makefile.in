@@ -51,6 +51,7 @@ boxdraw.o: boxdraw.h config.h font.h feature.h
 image.o: util.h image.h font.h feature.h
 mouse.o: config.h mouse.h window.h feature.h
 tty.o: config.h tty.h util.h feature.h
+line.o: line.h util.h feature.h
 
 
 .PHONY: all clean install install-strip uninstall force
