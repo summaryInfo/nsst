@@ -33,10 +33,10 @@ struct rect {
     uint16_t height;
 };
 
-void info(const char *fmt, ...);
-void warn(const char *fmt, ...);
-void fatal(const char *fmt, ...);
-_Noreturn void die(const char *fmt, ...);
+void info(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
+void warn(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
+void fatal(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
+_Noreturn void die(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
 inline static struct rect rect_scale_up(struct rect rect, int16_t x_factor, int16_t y_factor) {
     rect.x *= x_factor;
