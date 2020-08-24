@@ -1366,6 +1366,193 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, bool pno
     xcb_delete_property(con, win->wid, prop);
 }
 
+static void handle_event(void) {
+    for (xcb_generic_event_t *event; (event = xcb_poll_for_event(con)); free(event)) {
+        switch (event->response_type &= 0x7f) {
+            struct window *win;
+        case XCB_EXPOSE:{
+            xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
+            if (!(win = window_for_xid(ev->window))) break;
+            if (iconf(ICONF_TRACE_EVENTS)) {
+                info("Event: event=Expose win=0x%x x=%x y=%d width=%d height=%d",
+                        ev->window, ev->x, ev->y, ev->width, ev->height);
+            }
+            handle_expose(win, (struct rect){ev->x, ev->y, ev->width, ev->height});
+            break;
+        }
+        case XCB_CONFIGURE_NOTIFY:{
+            xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
+            if (!(win = window_for_xid(ev->window))) break;
+            if (iconf(ICONF_TRACE_EVENTS)) {
+                info("Event: event=ConfigureWindow win=0x%x x=%x y=%d width=%d"
+                        " height=%d border=%d redir=%d above_win=0x%x event_win=0x%x",
+                        ev->window, ev->x, ev->y, ev->width, ev->height, ev->border_width,
+                        ev->override_redirect, ev->above_sibling, ev->event);
+            }
+            if (ev->width != win->width || ev->height != win->height)
+                handle_resize(win, ev->width, ev->height);
+            break;
+        }
+        case XCB_KEY_PRESS:{
+            xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
+            if (!(win = window_for_xid(ev->event))) break;
+            if (iconf(ICONF_TRACE_EVENTS)) {
+                info("Event: event=KeyPress win=0x%x keycode=0x%x", ev->event, ev->detail);
+            }
+            handle_keydown(win, ev->detail);
+            break;
+        }
+        case XCB_FOCUS_IN:
+        case XCB_FOCUS_OUT:{
+            xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
+            if (!(win = window_for_xid(ev->event))) break;
+            if (iconf(ICONF_TRACE_EVENTS)) {
+                info("Event: event=%s win=0x%x", ev->response_type == XCB_FOCUS_IN ?
+                        "FocusIn" : "FocusOut", ev->event);
+            }
+            handle_focus(win, event->response_type == XCB_FOCUS_IN);
+            break;
+        }
+        case XCB_BUTTON_RELEASE: /* All these events have same structure */
+        case XCB_BUTTON_PRESS:
+        case XCB_MOTION_NOTIFY: {
+            xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t*)event;
+            if (!(win = window_for_xid(ev->event))) break;
+            if (iconf(ICONF_TRACE_EVENTS)) {
+                info("Event: event=%s mask=%d button=%d x=%d y=%d",
+                        ev->response_type == XCB_BUTTON_PRESS ? "ButtonPress" :
+                        ev->response_type == XCB_BUTTON_RELEASE ? "ButtonRelease" : "MotionNotify",
+                        ev->state, ev->detail, ev->event_x, ev->event_y);
+            }
+
+            mouse_handle_input(win->term, (struct mouse_event) {
+                /* XCB_BUTTON_PRESS -> mouse_event_press
+                 * XCB_BUTTON_RELEASE -> mouse_event_release
+                 * XCB_MOTION_NOTIFY -> mouse_event_motion */
+                .event = (ev->response_type & 0xF7) - 4,
+                .mask = ev->state & mask_state_mask,
+                .x = ev->event_x,
+                .y = ev->event_y,
+                .button = ev->detail - XCB_BUTTON_INDEX_1,
+            });
+            break;
+        }
+        case XCB_SELECTION_CLEAR: {
+            xcb_selection_clear_event_t *ev = (xcb_selection_clear_event_t*)event;
+            if (!(win = window_for_xid(ev->owner))) break;
+            if (iconf(ICONF_TRACE_EVENTS)) {
+                info("Event: event=SelectionClear owner=0x%x selection=0x%x", ev->owner, ev->selection);
+            }
+            // Clear even if set keep?
+            mouse_clear_selection(win->term);
+            break;
+        }
+        case XCB_PROPERTY_NOTIFY: {
+            xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)event;
+            if (!(win = window_for_xid(ev->window))) break;
+            if (iconf(ICONF_TRACE_EVENTS)) {
+                info("Event: event=PropertyNotify window=0x%x property=0x%x state=%d",
+                        ev->window, ev->atom, ev->state);
+            }
+            if ((ev->atom == XCB_ATOM_PRIMARY || ev->atom == XCB_ATOM_SECONDARY ||
+                    ev->atom == ctx.atom.CLIPBOARD) && ev->state == XCB_PROPERTY_NEW_VALUE)
+                receive_selection_data(win, ev->atom, 1);
+            break;
+        }
+        case XCB_SELECTION_NOTIFY: {
+            xcb_selection_notify_event_t *ev = (xcb_selection_notify_event_t*)event;
+            if (!(win = window_for_xid(ev->requestor))) break;
+            if (iconf(ICONF_TRACE_EVENTS)) {
+                info("Event: event=SelectionNotify owner=0x%x target=0x%x property=0x%x selection=0x%x",
+                        ev->requestor, ev->target, ev->property, ev->selection);
+            }
+            receive_selection_data(win, ev->property, 0);
+            break;
+        }
+        case XCB_SELECTION_REQUEST: {
+            xcb_selection_request_event_t *ev = (xcb_selection_request_event_t*)event;
+            if (!(win = window_for_xid(ev->owner))) break;
+            if (iconf(ICONF_TRACE_EVENTS)) {
+                info("Event: event=SelectionRequest owner=0x%x requestor=0x%x target=0x%x property=0x%x selection=0x%x",
+                        ev->owner, ev->requestor, ev->target, ev->property, ev->selection);
+            }
+            send_selection_data(win, ev->requestor, ev->selection, ev->target, ev->property, ev->time);
+            break;
+        }
+        case XCB_CLIENT_MESSAGE: {
+            xcb_client_message_event_t *ev = (xcb_client_message_event_t*)event;
+            if (!(win = window_for_xid(ev->window))) break;
+            if (iconf(ICONF_TRACE_EVENTS)) {
+                info("Event: event=ClientMessage window=0x%x type=0x%x data=[0x%08x,0x%08x,0x%08x,0x%08x,0x%08x]",
+                    ev->window, ev->type, ev->data.data32[0], ev->data.data32[1],
+                    ev->data.data32[2], ev->data.data32[3], ev->data.data32[4]);
+            }
+            if (ev->format == 32 && ev->data.data32[0] == ctx.atom.WM_DELETE_WINDOW) {
+                free_window(win);
+                if (!win_list_head && !ctx.daemon_mode)
+                    return free(event);
+            }
+            break;
+        }
+        case XCB_VISIBILITY_NOTIFY: {
+            xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
+            if (!(win = window_for_xid(ev->window))) break;
+            if (iconf(ICONF_TRACE_EVENTS)) {
+                info("Event: event=ClientMessage window=0x%x state=%d", ev->window, ev->state);
+            }
+            win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
+            break;
+        }
+        case XCB_KEY_RELEASE:
+        case XCB_MAP_NOTIFY:
+        case XCB_UNMAP_NOTIFY:
+        case XCB_DESTROY_NOTIFY:
+        case XCB_REPARENT_NOTIFY:
+           /* ignore */
+           break;
+        case 0: {
+            xcb_generic_error_t *err = (xcb_generic_error_t*)event;
+            warn("[X11 Error] major=%"PRIu8", minor=%"PRIu16", error=%"PRIu8, err->major_code, err->minor_code, err->error_code);
+            break;
+        }
+        default:
+            if (event->response_type == ctx.xkb_base_event) {
+                struct _xkb_any_event {
+                    uint8_t response_type;
+                    uint8_t xkb_type;
+                    uint16_t sequence;
+                    xcb_timestamp_t time;
+                    uint8_t device_id;
+                } *xkb_ev = (struct _xkb_any_event*)event;
+
+                if (iconf(ICONF_TRACE_EVENTS)) {
+                    info("Event: XKB Event %d", xkb_ev->xkb_type);
+                }
+
+                if (xkb_ev->device_id == ctx.xkb_core_kbd) {
+                    switch (xkb_ev->xkb_type) {
+                    case XCB_XKB_NEW_KEYBOARD_NOTIFY: {
+                        xcb_xkb_new_keyboard_notify_event_t *ev = (xcb_xkb_new_keyboard_notify_event_t*)event;
+                        if (ev->changed & XCB_XKB_NKN_DETAIL_KEYCODES)
+                    case XCB_XKB_MAP_NOTIFY:
+                            update_keymap();
+                        break;
+                    }
+                    case XCB_XKB_STATE_NOTIFY: {
+                        xcb_xkb_state_notify_event_t *ev = (xcb_xkb_state_notify_event_t*)event;
+                        xkb_state_update_mask(ctx.xkb_state, ev->baseMods, ev->latchedMods, ev->lockedMods,
+                                              ev->baseGroup, ev->latchedGroup, ev->lockedGroup);
+                        break;
+                    }
+                    default:
+                        warn("Unknown xcb-xkb event type: %02"PRIu8, xkb_ev->xkb_type);
+                    }
+                }
+            } else warn("Unknown xcb event type: %02"PRIu8, event->response_type);
+        }
+    }
+}
+
 /* Start window logic, handling all windows in context */
 void run(void) {
     for (int64_t next_timeout = SEC/iconf(ICONF_FPS);;) {
@@ -1375,193 +1562,11 @@ void run(void) {
         if (poll(ctx.pfds, ctx.pfdcap, next_timeout/(SEC/1000)) < 0 && errno != EINTR)
 #endif
             warn("Poll error: %s", strerror(errno));
-        if (ctx.pfds[0].revents & POLLIN) {
-            for (xcb_generic_event_t *event; (event = xcb_poll_for_event(con)); free(event)) {
-                switch (event->response_type &= 0x7f) {
-                    struct window *win;
-                case XCB_EXPOSE:{
-                    xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
-                    if (!(win = window_for_xid(ev->window))) break;
-                    if (iconf(ICONF_TRACE_EVENTS)) {
-                        info("Event: event=Expose win=0x%x x=%x y=%d width=%d height=%d",
-                                ev->window, ev->x, ev->y, ev->width, ev->height);
-                    }
-                    handle_expose(win, (struct rect){ev->x, ev->y, ev->width, ev->height});
-                    break;
-                }
-                case XCB_CONFIGURE_NOTIFY:{
-                    xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
-                    if (!(win = window_for_xid(ev->window))) break;
-                    if (iconf(ICONF_TRACE_EVENTS)) {
-                        info("Event: event=ConfigureWindow win=0x%x x=%x y=%d width=%d"
-                                " height=%d border=%d redir=%d above_win=0x%x event_win=0x%x",
-                                ev->window, ev->x, ev->y, ev->width, ev->height, ev->border_width,
-                                ev->override_redirect, ev->above_sibling, ev->event);
-                    }
-                    if (ev->width != win->width || ev->height != win->height)
-                        handle_resize(win, ev->width, ev->height);
-                    break;
-                }
-                case XCB_KEY_PRESS:{
-                    xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
-                    if (!(win = window_for_xid(ev->event))) break;
-                    if (iconf(ICONF_TRACE_EVENTS)) {
-                        info("Event: event=KeyPress win=0x%x keycode=0x%x", ev->event, ev->detail);
-                    }
-                    handle_keydown(win, ev->detail);
-                    break;
-                }
-                case XCB_FOCUS_IN:
-                case XCB_FOCUS_OUT:{
-                    xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
-                    if (!(win = window_for_xid(ev->event))) break;
-                    if (iconf(ICONF_TRACE_EVENTS)) {
-                        info("Event: event=%s win=0x%x", ev->response_type == XCB_FOCUS_IN ?
-                                "FocusIn" : "FocusOut", ev->event);
-                    }
-                    handle_focus(win, event->response_type == XCB_FOCUS_IN);
-                    break;
-                }
-                case XCB_BUTTON_RELEASE: /* All these events have same structure */
-                case XCB_BUTTON_PRESS:
-                case XCB_MOTION_NOTIFY: {
-                    xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t*)event;
-                    if (!(win = window_for_xid(ev->event))) break;
-                    if (iconf(ICONF_TRACE_EVENTS)) {
-                        info("Event: event=%s mask=%d button=%d x=%d y=%d",
-                                ev->response_type == XCB_BUTTON_PRESS ? "ButtonPress" :
-                                ev->response_type == XCB_BUTTON_RELEASE ? "ButtonRelease" : "MotionNotify",
-                                ev->state, ev->detail, ev->event_x, ev->event_y);
-                    }
 
-                    mouse_handle_input(win->term, (struct mouse_event) {
-                        /* XCB_BUTTON_PRESS -> mouse_event_press
-                         * XCB_BUTTON_RELEASE -> mouse_event_release
-                         * XCB_MOTION_NOTIFY -> mouse_event_motion */
-                        .event = (ev->response_type & 0xF7) - 4,
-                        .mask = ev->state & mask_state_mask,
-                        .x = ev->event_x,
-                        .y = ev->event_y,
-                        .button = ev->detail - XCB_BUTTON_INDEX_1,
-                    });
-                    break;
-                }
-                case XCB_SELECTION_CLEAR: {
-                    xcb_selection_clear_event_t *ev = (xcb_selection_clear_event_t*)event;
-                    if (!(win = window_for_xid(ev->owner))) break;
-                    if (iconf(ICONF_TRACE_EVENTS)) {
-                        info("Event: event=SelectionClear owner=0x%x selection=0x%x", ev->owner, ev->selection);
-                    }
-                    // Clear even if set keep?
-                    mouse_clear_selection(win->term);
-                    break;
-                }
-                case XCB_PROPERTY_NOTIFY: {
-                    xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)event;
-                    if (!(win = window_for_xid(ev->window))) break;
-                    if (iconf(ICONF_TRACE_EVENTS)) {
-                        info("Event: event=PropertyNotify window=0x%x property=0x%x state=%d",
-                                ev->window, ev->atom, ev->state);
-                    }
-                    if ((ev->atom == XCB_ATOM_PRIMARY || ev->atom == XCB_ATOM_SECONDARY ||
-                            ev->atom == ctx.atom.CLIPBOARD) && ev->state == XCB_PROPERTY_NEW_VALUE)
-                        receive_selection_data(win, ev->atom, 1);
-                    break;
-                }
-                case XCB_SELECTION_NOTIFY: {
-                    xcb_selection_notify_event_t *ev = (xcb_selection_notify_event_t*)event;
-                    if (!(win = window_for_xid(ev->requestor))) break;
-                    if (iconf(ICONF_TRACE_EVENTS)) {
-                        info("Event: event=SelectionNotify owner=0x%x target=0x%x property=0x%x selection=0x%x",
-                                ev->requestor, ev->target, ev->property, ev->selection);
-                    }
-                    receive_selection_data(win, ev->property, 0);
-                    break;
-                }
-                case XCB_SELECTION_REQUEST: {
-                    xcb_selection_request_event_t *ev = (xcb_selection_request_event_t*)event;
-                    if (!(win = window_for_xid(ev->owner))) break;
-                    if (iconf(ICONF_TRACE_EVENTS)) {
-                        info("Event: event=SelectionRequest owner=0x%x requestor=0x%x target=0x%x property=0x%x selection=0x%x",
-                                ev->owner, ev->requestor, ev->target, ev->property, ev->selection);
-                    }
-                    send_selection_data(win, ev->requestor, ev->selection, ev->target, ev->property, ev->time);
-                    break;
-                }
-                case XCB_CLIENT_MESSAGE: {
-                    xcb_client_message_event_t *ev = (xcb_client_message_event_t*)event;
-                    if (!(win = window_for_xid(ev->window))) break;
-                    if (iconf(ICONF_TRACE_EVENTS)) {
-                        info("Event: event=ClientMessage window=0x%x type=0x%x data=[0x%08x,0x%08x,0x%08x,0x%08x,0x%08x]",
-                            ev->window, ev->type, ev->data.data32[0], ev->data.data32[1],
-                            ev->data.data32[2], ev->data.data32[3], ev->data.data32[4]);
-                    }
-                    if (ev->format == 32 && ev->data.data32[0] == ctx.atom.WM_DELETE_WINDOW) {
-                        free_window(win);
-                        if (!win_list_head && !ctx.daemon_mode)
-                            return free(event);
-                    }
-                    break;
-                }
-                case XCB_VISIBILITY_NOTIFY: {
-                    xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
-                    if (!(win = window_for_xid(ev->window))) break;
-                    if (iconf(ICONF_TRACE_EVENTS)) {
-                        info("Event: event=ClientMessage window=0x%x state=%d", ev->window, ev->state);
-                    }
-                    win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
-                    break;
-                }
-                case XCB_KEY_RELEASE:
-                case XCB_MAP_NOTIFY:
-                case XCB_UNMAP_NOTIFY:
-                case XCB_DESTROY_NOTIFY:
-                case XCB_REPARENT_NOTIFY:
-                   /* ignore */
-                   break;
-                case 0: {
-                    xcb_generic_error_t *err = (xcb_generic_error_t*)event;
-                    warn("[X11 Error] major=%"PRIu8", minor=%"PRIu16", error=%"PRIu8, err->major_code, err->minor_code, err->error_code);
-                    break;
-                }
-                default:
-                    if (event->response_type == ctx.xkb_base_event) {
-                        struct _xkb_any_event {
-                            uint8_t response_type;
-                            uint8_t xkb_type;
-                            uint16_t sequence;
-                            xcb_timestamp_t time;
-                            uint8_t device_id;
-                        } *xkb_ev = (struct _xkb_any_event*)event;
+        // First check window system events
+        if (ctx.pfds[0].revents & POLLIN) handle_event();
 
-                        if (iconf(ICONF_TRACE_EVENTS)) {
-                            info("Event: XKB Event %d", xkb_ev->xkb_type);
-                        }
-
-                        if (xkb_ev->device_id == ctx.xkb_core_kbd) {
-                            switch (xkb_ev->xkb_type) {
-                            case XCB_XKB_NEW_KEYBOARD_NOTIFY: {
-                                xcb_xkb_new_keyboard_notify_event_t *ev = (xcb_xkb_new_keyboard_notify_event_t*)event;
-                                if (ev->changed & XCB_XKB_NKN_DETAIL_KEYCODES)
-                            case XCB_XKB_MAP_NOTIFY:
-                                    update_keymap();
-                                break;
-                            }
-                            case XCB_XKB_STATE_NOTIFY: {
-                                xcb_xkb_state_notify_event_t *ev = (xcb_xkb_state_notify_event_t*)event;
-                                xkb_state_update_mask(ctx.xkb_state, ev->baseMods, ev->latchedMods, ev->lockedMods,
-                                                      ev->baseGroup, ev->latchedGroup, ev->lockedGroup);
-                                break;
-                            }
-                            default:
-                                warn("Unknown xcb-xkb event type: %02"PRIu8, xkb_ev->xkb_type);
-                            }
-                        }
-                    } else warn("Unknown xcb event type: %02"PRIu8, event->response_type);
-                }
-            }
-        }
-
+        // Then read for PTYs
         for (struct window *win = win_list_head, *next; win; win = next) {
             next = win->next;
             if (ctx.pfds[win->poll_index].revents & POLLIN)
