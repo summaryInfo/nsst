@@ -3651,150 +3651,114 @@ static void term_precompose_at_cursor(struct term *term, term_char_t ch) {
     if (cel->ch != ch) *cel = MKCELLWITH(*cel, ch);
 }
 
-static void term_putchar(struct term *term, term_char_t ch) {
-    // TODO Remove this
-    // 'print' state
+inline static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t rep) {
+    ssize_t res = 1;
 
-    term->prev_ch = ch; // For REP CSI
-
-    int16_t width = wcwidth(ch);
-    if (width < 0) width = 1;
-    else if (width > 1) width = 2;
-    else if(!width) {
-        term_precompose_at_cursor(term, ch);
-        return;
-    }
-
-    if (iconf(ICONF_TRACE_CHARACTERS))
-        info("Char: (%x) '%lc' ", ch, ch);
-
-    // Wrap line if needed
-    if (term->mode.wrap) {
-        if (term->c.pending || (width == 2 && term->c.x == term_max_x(term) - 1))
-            term_do_wrap(term);
-    } else term->c.x = MIN(term->c.x, term_max_x(term) - width);
-
-    struct line *line = term->screen[term->c.y];
-    struct cell *cell = &line->cell[term->c.x];
-    int16_t maxsx = term->c.x + width;
-
-    // Shift characters to the left if insert mode is enabled
-    if (term->mode.insert && term->c.x + width < term_max_x(term)) {
-        for (struct cell *c = cell + width; c - line->cell < term_max_x(term); c++)
-            c->attr &= ~attr_drawn;
-        memmove(cell + width, cell, (term_max_x(term) - term->c.x - width)*sizeof(*cell));
-        maxsx = MAX(maxsx, term_max_x(term));
-    }
-
-    // Erase overwritten parts of wide characters
-    term_adjust_wide_left(term, term->c.x, term->c.y);
-    term_adjust_wide_right(term, term->c.x + width - 1, term->c.y);
-
-    // Clear selection when selected cell is overwritten
-    if (mouse_is_selected_2(term, term->c.x, maxsx, term->c.y))
-        mouse_clear_selection(term);
-
-    // Put character itself
-    term_put_cell(term, term->c.x, term->c.y, ch);
-
-    // Put dummy character to the left of wide
-    if (__builtin_expect(width > 1, 0)) {
-        // Don't need to call fixup_color,
-        // it is already done
-        cell[1] = term->c.cel;
-        cell[0].attr |= attr_wide;
-    }
-
-    if (term->mode.margin_bell) {
-        int16_t bcol = term->right - iconf(ICONF_MARGIN_BELL_COLUMN);
-        if (term->c.x < bcol && term->c.x + width >= bcol)
-            window_bell(term->win, term->mbvol);
-    }
-
-    term->c.pending = term->c.x + width == term_max_x(term);
-    term->c.x += width - term->c.pending;
-}
-
-inline static bool term_dispatch_print(struct term *term) {
-
-    bool complete = 1;
-
-    // Count maximal with to be printed at once
-
-    ssize_t count = 0, totalwidth = 0;
+    // Compute maximal with to be printed at once
     ssize_t maxw = term_max_x(term) - term_min_x(term);
+    ssize_t count = 0, totalwidth = 0;
     bool last = 0;
     if (!term->c.pending || !term->mode.wrap) {
         maxw = (term->c.x >= term_max_x(term) ? term->width : term_max_x(term)) - term->c.x;
         if (!maxw) maxw = 1, last = 1;
     }
 
-    uint8_t *blk_start = term->fd_start;
-    uint32_t ch, prev = -1U;
-    do {
-        ch = *term->fd_start;
-
-        // If we have encountered control character, break
-        if ((ch & 0x7F) < 0x20) break;
-
-        uint8_t *char_start = term->fd_start;
-        if (term->mode.utf8 && ch >= 0xA0) {
-            if (!utf8_decode(&ch, (const uint8_t **)&term->fd_start, term->fd_end)) {
-                // If we encountered partial UTF-8,
-                // print all we have and return
-                complete = 0;
-                goto done;
-            }
-        } else term->fd_start++;
-
-        enum charset glv = term->c.gn[term->c.gl_ss];
-
-        // Skip DEL char if not 96 set
-        if (ch == 0x7F && (glv > cs96_latin_1 || (!term->mode.enable_nrcs &&
-                (glv == cs96_latin_1 || glv == cs94_british)))) continue;
-
-        // Decode nrcs
-        // In theory this should be disabled while in UTF-8 mode, but
-        // in practive applications use these symbols, so keep translating.
-        // But decode only allow only DEC Graph in GL, unless configured otherwise
-        if (term->mode.utf8 && !iconf(ICONF_FORCE_UTF8_NRCS))
-            ch = nrcs_decode_fast(glv, ch);
-        else
-            ch = nrcs_decode(glv, term->c.gn[term->c.gr], term->c.upcs, ch, term->mode.enable_nrcs);
-        term->c.gl_ss = term->c.gl; // Reset single shift
-
-        prev = ch;
-
+    // If rep > 0, we should perform REP CSI
+    if (__builtin_expect(rep, 0)) {
         int32_t wid = wcwidth(ch);
         if(!wid) {
             // Don't put zero-width charactes
             // to predecode buffer
             if (!count) term_precompose_at_cursor(term, ch);
-            else term->predec_buf[count - 1] = try_precompose(term->predec_buf[count - 1], ch);
+            res = 0;
         } else {
-            // Don't include char if its too wide
-            if (totalwidth + wid > maxw && (!last || totalwidth)) {
-                term->fd_start = char_start;
-                break;
-            }
+            // Adjust width to be other 1 or 2
+            wid = 1 + (wid > 1);
+
             // Wide cells are indicated as
             // negative in predecode buffer
-            if (wid >= 2) {
-                ch = -ch;
-                totalwidth++;
+            if (wid > 1) ch = -ch;
+
+            while (maxw > totalwidth && rep) {
+                // Don't include char if its too wide
+                // Unless its first char at right margin
+                if (totalwidth + wid > maxw && (!last || totalwidth)) break;
+                totalwidth += wid;
+                term->predec_buf[count++] = ch;
+                rep--;
+            }
+            res = rep;
+        }
+    } else {
+        uint8_t *blk_start = term->fd_start;
+        term_char_t prev = -1U;
+
+        do {
+            uint8_t *char_start = term->fd_start;
+            if (term->mode.utf8 && ch >= 0xA0) {
+                if (!utf8_decode(&ch, (const uint8_t **)&term->fd_start, term->fd_end)) {
+                    // If we encountered partial UTF-8,
+                    // print all we have and return
+                    res = 0;
+                    break;
+                }
+            } else term->fd_start++;
+
+            enum charset glv = term->c.gn[term->c.gl_ss];
+
+            // Skip DEL char if not 96 set
+            if (ch == 0x7F && (glv > cs96_latin_1 || (!term->mode.enable_nrcs &&
+                    (glv == cs96_latin_1 || glv == cs94_british)))) continue;
+
+            // Decode nrcs
+            // In theory this should be disabled while in UTF-8 mode, but
+            // in practive applications use these symbols, so keep translating.
+            // But decode only allow only DEC Graph in GL, unless configured otherwise
+            if (term->mode.utf8 && !iconf(ICONF_FORCE_UTF8_NRCS))
+                ch = nrcs_decode_fast(glv, ch);
+            else
+                ch = nrcs_decode(glv, term->c.gn[term->c.gr], term->c.upcs, ch, term->mode.enable_nrcs);
+            term->c.gl_ss = term->c.gl; // Reset single shift
+
+            prev = ch;
+
+            int32_t wid = wcwidth(ch);
+            if(!wid) {
+                // Don't put zero-width charactes
+                // to predecode buffer
+                if (!count) term_precompose_at_cursor(term, ch);
+                else term->predec_buf[count - 1] = try_precompose(term->predec_buf[count - 1], ch);
+            } else {
+                // Adjust width to be other 1 or 2
+                wid = 1 + (wid > 1);
+
+                // Don't include char if its too wide
+                // Unless its first char at right margin
+                if (totalwidth + wid > maxw && (!last || totalwidth)) {
+                    term->fd_start = char_start;
+                    break;
+                }
+                // Wide cells are indicated as
+                // negative in predecode buffer
+                if (wid > 1) ch = -ch;
+
+                totalwidth += wid;
+                term->predec_buf[count++] = ch;
             }
 
-            totalwidth++;
-            term->predec_buf[count++] = ch;
-        }
-        // Since UCS-4 chars takes not more units than UTF-8, don't check other buffer length
-    } while(totalwidth < maxw && /* count < FD_BUF_SIZE && */ term->fd_start < term->fd_end);
+            ch = *term->fd_start;
 
-done:
-    if (prev != -1U) term->prev_ch = prev; // For REP CSI
+            // If we have encountered control character, break
+            if ((ch & 0x7F) < 0x20) break;
 
-    if (term->mode.print_enabled)
-        term_print_string(term, blk_start, term->fd_start - blk_start);
+            // Since UCS-4 chars takes not more units than UTF-8, don't check other buffer length
+        } while(totalwidth < maxw && /* count < FD_BUF_SIZE && */ term->fd_start < term->fd_end);
+
+        if (term->mode.print_enabled)
+            term_print_string(term, blk_start, term->fd_start - blk_start);
+
+        if (prev != -1U) term->prev_ch = prev; // For REP CSI
+    }
 
     if (term->mode.wrap) {
         if (term->c.pending || (term->c.x == term_max_x(term) - 1 && term->predec_buf[0] < 0))
@@ -3851,11 +3815,11 @@ done:
         cell++;
     }
 
-	term->c.x += totalwidth;
+    term->c.x += totalwidth;
     term->c.pending = term->c.x == term_max_x(term);
     term->c.x -= term->c.pending;
 
-    return complete;
+    return res;
 }
 
 static void term_dispatch_window_op(struct term *term) {
@@ -4294,10 +4258,8 @@ static void term_dispatch_csi(struct term *term) {
                 (term, term->c.x + PARAM(0, 1), term->c.y + PARAM(1, 0));
         break;
     case C('b'): /* REP */
-        // TODO Make this use term_dispatch_print
-        // by filling predec_buf
-        for (uparam_t i = PARAM(0, 1); i > 0; i--)
-            term_putchar(term, term->prev_ch);
+        for (uparam_t i = PARAM(0, 1); i > 0;)
+            i = term_dispatch_print(term, term->prev_ch, i);
         break;
     case C('c'): /* DA1 */
     case C('c') | P('>'): /* DA2 */
@@ -5094,9 +5056,9 @@ inline static _Bool term_dispatch(struct term *term, term_char_t ch) {
         } else {
             // One char is already consumed
             // Put it back to buffer
-
             term->fd_start--;
-            return term_dispatch_print(term);
+
+            return term_dispatch_print(term, ch, 0);
         }
     }
 
