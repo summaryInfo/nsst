@@ -195,6 +195,7 @@ struct term {
     ssize_t left;
     ssize_t right;
     bool *tabs;
+    bool requested_resize;
 
     /* Last written character
      * Used for REP */
@@ -977,7 +978,10 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
     // First try to read from tty to empty out input queue
     // since this is input from program not yet aware about resize
-    term_read(term);
+    if (!term->requested_resize) {
+        term_read(term);
+        term->requested_resize = 0;
+    }
 
     bool cur_moved = term->c.x == term->width - 1 && term->c.pending;
 
@@ -2362,6 +2366,8 @@ static void term_request_resize(struct term *term, int16_t w, int16_t h, bool in
     w = !w ? scr_w : w < 0 ? cur_w : w;
     h = !h ? scr_h : h < 0 ? cur_h : h;
 
+    term->requested_resize = 1;
+
     window_resize(term->win, w, h);
 }
 
@@ -3634,9 +3640,14 @@ static void term_dispatch_tmode(struct term *term, bool set) {
 
 static void term_precompose_at_cursor(struct term *term, term_char_t ch) {
     struct cell *cel = &term->screen[term->c.y]->cell[term->c.x];
+
+    // Step back to previous cell
     if (term->c.x) cel--;
     if (!cel->ch && term->c.x > 1 && cel[-1].attr & attr_wide) cel--;
+
     ch = try_precompose(cel->ch, ch);
+
+    // Only make cell dirty if precomposition happened
     if (cel->ch != ch) *cel = MKCELLWITH(*cel, ch);
 }
 
@@ -3704,21 +3715,21 @@ static void term_putchar(struct term *term, term_char_t ch) {
     term->c.x += width - term->c.pending;
 }
 
-inline static _Bool term_dispatch_print(struct term *term) {
+inline static bool term_dispatch_print(struct term *term) {
 
-    _Bool complete = 1;
+    bool complete = 1;
 
     // Count maximal with to be printed at once
 
     ssize_t count = 0, totalwidth = 0;
     ssize_t maxw = term_max_x(term) - term_min_x(term);
+    bool last = 0;
     if (!term->c.pending || !term->mode.wrap) {
-        if (term->c.x > term_max_x(term)) maxw = term->width - term->c.x;
-        else maxw = MAX(term_max_x(term) - term->c.x, 1);
+        maxw = (term->c.x >= term_max_x(term) ? term->width : term_max_x(term)) - term->c.x;
+        if (!maxw) maxw = 1, last = 1;
     }
 
     uint8_t *blk_start = term->fd_start;
-
     uint32_t ch, prev = -1U;
     do {
         ch = *term->fd_start;
@@ -3736,7 +3747,7 @@ inline static _Bool term_dispatch_print(struct term *term) {
             }
         } else term->fd_start++;
 
-        uint8_t glv = term->c.gn[term->c.gl_ss];
+        enum charset glv = term->c.gn[term->c.gl_ss];
 
         // Skip DEL char if not 96 set
         if (ch == 0x7F && (glv > cs96_latin_1 || (!term->mode.enable_nrcs &&
@@ -3754,7 +3765,7 @@ inline static _Bool term_dispatch_print(struct term *term) {
 
         prev = ch;
 
-        int16_t wid = wcwidth(ch);
+        int32_t wid = wcwidth(ch);
         if(!wid) {
             // Don't put zero-width charactes
             // to predecode buffer
@@ -3762,7 +3773,7 @@ inline static _Bool term_dispatch_print(struct term *term) {
             else term->predec_buf[count - 1] = try_precompose(term->predec_buf[count - 1], ch);
         } else {
             // Don't include char if its too wide
-            if (totalwidth + wid > maxw && !((term->c.x == term->width - 1 || term->c.x == term_max_x(term) - 1) && !totalwidth)) {
+            if (totalwidth + wid > maxw && (!last || totalwidth)) {
                 term->fd_start = char_start;
                 break;
             }
@@ -3829,18 +3840,18 @@ done:
 
     // Put charaters
     for (ssize_t i = 0; i < count; i++) {
-        cur.ch = abs(term->predec_buf[i]);
-        line->cell[term->c.x] = cur;
+        *cell = cur;
+        cell->ch = abs(term->predec_buf[i]);
 
         // Put dummy character to the left of wide
         if (__builtin_expect(term->predec_buf[i] < 0, 0)) {
-            line->cell[term->c.x].attr |= attr_wide;
-            line->cell[++term->c.x] = term->c.cel;
+            cell->attr |= attr_wide;
+            *cell++ = cur;
         }
-
-        term->c.x++;
+        cell++;
     }
 
+	term->c.x += totalwidth;
     term->c.pending = term->c.x == term_max_x(term);
     term->c.x -= term->c.pending;
 
@@ -5076,12 +5087,14 @@ static void term_dispatch_vt52_cup(struct term *term) {
 
 inline static _Bool term_dispatch(struct term *term, term_char_t ch) {
     if (term->esc.state == esc_ground && (__builtin_expect(!IS_C1(ch), 1) || term->vt_level < 2)) {
-        if (ch < 0x1F) {
-            if (term->mode.print_enabled)
-                term_print_char(term, ch);
+        if (ch < 0x20) {
+            if (term->mode.print_enabled) term_print_char(term, ch);
             term_dispatch_c0(term, ch);
             return 1;
         } else {
+            // One char is already consumed
+            // Put it back to buffer
+
             term->fd_start--;
             return term_dispatch_print(term);
         }
