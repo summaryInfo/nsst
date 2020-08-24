@@ -5,21 +5,23 @@ This is an implementation of VT220-like X11 terminal emulator.
 ## Features
 * Quite fast rendering
     * Almost same latency as `XTerm`, which is a lot faster than other modern terminals
-    * Scrolling performance is higher than most other terminals measured on my system
+    * Scrolling performance is on par with fastest terminals my system (`alacritty` and `urxvt`)
 * Small size and almost no dependencies
 * Uses xcb as X11 interface library
-    * So it is faster and more lightweight
+    * A litle bit faster because of its asyncrony
     * `size` including all loaded shared libs is only 80% of `st` on my system
-* Most escape sequences are already implemented
+* Most escape sequences from XTerm are implemented
 * Full keyboard mode from XTerm
-* OSC 13001 "Set background opacity"
+* Syncronous updates DCS
+* `OSC 13001 ; Po ST` "Set background opacity to `Po`"
 * Multiple terminal windows
-    * This would be extended to full daemon mode
+    * This would be extended to full daemon mode later
     * `Shift-Ctrl-N` is default keybinding
 * Configuration with Xrmdb and command line arguments
 * MIT-SHM and XRender backends (compile time option)
 * Compiles with `-flto` by default
 * No warnings with `-Wall -Wextra` (except `-Wimplicit-fallthrough`)
+* Rewraps text on resize (can be disabled by setting `--rewrap`/`rewrap` to false)
 
 See TODO file for things that are to be implemented.
 
@@ -44,7 +46,7 @@ Use `TERM=xterm` for now (via `-D`/`termName` option). Almost every escape seque
 See Emulation section of TODO for not yet implemented escape sequences.
 
 Works well with [Iosevka](https://github.com/be5invis/Iosevka) font. (Set font spacing to -1 it it feels to wide.)
-Multiple fonts could be loaded by enumerating them in parameter:
+Multiple fonts could be loaded by enumerating them in parameter like:
 
     Nsst.font: Iosevka-13:style=Thin,MaterialDesignIcons-13
 
@@ -59,13 +61,17 @@ No documentation yet for Xrmdb names, see `optmap[]` function in `config.c`.
 
 For command line arguments see `nsst --help`.
 For boolean options `--no-X`, `--without-X`, `--disable-X` are interpreted as `--X=0` and
-`--X`, `--with-X`, `--enable-X` are interpreted as `--X=1`
+`--X`, `--with-X`, `--enable-X` are interpreted as `--X=1`.
 
 By default only DEC Special Graphics charset is allowed with UTF-8 mode enabled.
 Spec is even stricter, disallowing any charset translations in UTF-8 mode, but DEC Special Graphics is used by applications frequently so it is allowed anyways.
-To force full NRCS translation in UTF-8 mode set `--force-nrsc`/`forceNrcs`
+To force full NRCS translation in UTF-8 mode set `--force-nrsc`/`forceNrcs`.
 
-Now nsst supports combining characters only via precomposition, but almost everything is ready to implement proper rendering of combining character (and variant glyphs support).
+Sequential graphical characters are decoded all at once, so can be printed faster.
+
+Debugging output can be enabled with `--trace-*`/`trace*` options. 
+
+For now nsst supports combining characters only via precomposition, but almost everything is ready to implement proper rendering of combining character (and variant glyphs support).
 The only tricky part is to extract positioning tables and implemnt basic text shaping. It would be implemented using glyphs with codes `0x200000` - `0xFFFFFF`,
 giving sufficient number of possible custom glyphs. DECDLD is also easy to implement this way.
 
@@ -74,7 +80,7 @@ Hotkeys are now configurable. With syntax `[<Mods>-]<Name>`, where `<Mods>` is X
 * `S` -- Shift
 * `C` -- Control
 * `L` -- Lock
-* `T` -- Shift+Control
+* `T` -- Shift+Control (configurable with `--term-mod`/`termMod`)
 * `1`/`A`/`M` -- Mod1/Alt/Meta
 * `2` -- Mod2/Numlock
 * `3` -- Mod3
@@ -94,10 +100,6 @@ Default keybindings:
     Nsst.reset: T-R
     Nsst.reloadConfig: T-X
 
-Example:
-
-    # Default, CS-N will be the same
-    Nsst.key.newWindow: T-N
 
 ## Dependencies
 ### Build
