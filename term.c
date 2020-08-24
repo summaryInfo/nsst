@@ -5047,7 +5047,7 @@ static void term_dispatch_vt52_cup(struct term *term) {
     term->esc.state = esc_ground;
 }
 
-inline static _Bool term_dispatch(struct term *term, term_char_t ch) {
+inline static bool term_dispatch(struct term *term, term_char_t ch) {
     if (term->esc.state == esc_ground && (__builtin_expect(!IS_C1(ch), 1) || term->vt_level < 2)) {
         if (ch < 0x20) {
             if (term->mode.print_enabled) term_print_char(term, ch);
