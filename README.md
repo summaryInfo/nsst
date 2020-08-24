@@ -42,7 +42,7 @@ See TODO file for things that are to be implemented.
 
 ## Notes
 
-Use `TERM=xterm` for now (via `-D`/`termName` option). Almost every escape sequence from `ctlseqs.ms` is implemented.
+Use `TERM=xterm` for now (via `-D`/`termName` option). Almost every escape sequence from [ctlseqs.ms](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html) is implemented.
 See Emulation section of TODO for not yet implemented escape sequences.
 
 Works well with [Iosevka](https://github.com/be5invis/Iosevka) font. (Set font spacing to -1 it it feels to wide.)
