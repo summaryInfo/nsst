@@ -76,7 +76,7 @@ struct sgr {
 
 color_id_t alloc_color(struct line *line, color_t col, color_id_t *pre);
 struct line *create_line(struct sgr sgr, ssize_t width);
-struct line *realloc_line(struct line *line, struct sgr sgr, ssize_t width);
+struct line *realloc_line(struct line *line, ssize_t width);
 /* concat_line will return NULL not touching src1 and src2 if resulting line is too long */
 /* if src2 is NULL, it will relocate src1 to its length if opt == 1 */
 /* if opt == 1, line palette will be minimized */

@@ -124,13 +124,14 @@ struct line *create_line(struct sgr sgr, ssize_t width) {
     return line;
 }
 
-struct line *realloc_line(struct line *line, struct sgr sgr, ssize_t width) {
+struct line *realloc_line(struct line *line, ssize_t width) {
     struct line *new = realloc(line, sizeof(*new) + (size_t)width * sizeof(new->cell[0]));
     if (!new) die("Can't create lines");
 
     if (width > new->width) {
-        struct cell cel = fixup_color(new, sgr);
+        struct cell cel = new->cell[new->width - 1];
         cel.attr = 0;
+        cel.ch = 0;
         fill_cells(new->cell + new->width, cel, width - new->width);
     }
 
@@ -145,7 +146,7 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
 
         if (llen + oldw > MAX_LINE_LEN) return NULL;
 
-        src1 = realloc_line(src1, (struct sgr){0}, oldw + llen);
+        src1 = realloc_line(src1, oldw + llen);
 
         for (ssize_t k = 0; k < llen; k++)
             copy_cell(src1, oldw + k, src2, k, 0);
@@ -156,7 +157,7 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     } else if (opt) {
         ssize_t llen = MAX(line_length(src1), 1);
         if (llen != src1->width)
-            src1 = realloc_line(src1, (struct sgr){0}, llen);
+            src1 = realloc_line(src1, llen);
     }
 
     if (opt && src1->pal) {

@@ -522,10 +522,10 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         term->back_screen = new_back;
 
         for (ssize_t i = 0; i < MIN(term->height, height); i++)
-            term->back_screen[i] = realloc_line(term->back_screen[i], term->sgr, width);
+            term->back_screen[i] = realloc_line(term->back_screen[i], width);
 
         for (ssize_t i = term->height; i < height; i++)
-            if (!(term->back_screen[i] = create_line(term->sgr, width)))
+            if (!(term->back_screen[i] = create_line((struct sgr){0}, width)))
                 die("Can't allocate lines");
 
         // Adjust altscreen saved cursor position
@@ -604,7 +604,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             nnlines = MAX(nnlines * 2, MAX(MAX(new_cur_par - cursor_par, approx_cy - height - 1), 0) + height * 2);
 
             new_lines = calloc(nnlines, sizeof(*new_lines));
-            if (!new_lines || !(new_lines[0] = create_line(term->sgr, width)))
+            if (!new_lines || !(new_lines[0] = create_line((struct sgr){0}, width)))
                 die("Can't allocate line");
 
             ssize_t y2 = y, dy = 0;
@@ -622,7 +622,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                     // If last character of line is wide, soft wrap
                     if (dx == width - 1 && line->cell[x].attr & attr_wide) {
                         new_lines[dy]->wrapped = 1;
-                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->sgr, width)))
+                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line((struct sgr){0}, width)))
                             die("Can't allocate line");
                         dx = 0;
                     }
@@ -642,7 +642,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                     // Advance line, soft wrap
                     if (++dx == width && (x < len - 1 || line->wrapped)) {
                         new_lines[dy]->wrapped = 1;
-                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->sgr, width)))
+                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line((struct sgr){0}, width)))
                             die("Can't allocate line");
                         dx = 0;
                     }
@@ -660,7 +660,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 }
                 // Advance line, hard wrap
                 if (!line->wrapped) {
-                    if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->sgr, width)))
+                    if (dy < nnlines - 1 && !(new_lines[++dy] = create_line((struct sgr){0}, width)))
                         die("Can't allocate line");
                     par_start = dy;
                     dx = 0;
@@ -711,7 +711,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             }
             for (ssize_t i = 0; i < minh; i++) {
                 if (new_lines[i + start]->width < width || iconf(ICONF_CUT_LINES)) {
-                    new_lines[i + start] = realloc_line(new_lines[i + start], term->sgr, width);
+                    new_lines[i + start] = realloc_line(new_lines[i + start], width);
                 }
             }
         }
@@ -736,7 +736,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
         // Allocate new empty lines
         for (ssize_t i = minh; i < height; i++)
-            if (!(new_lines[i] = create_line(term->sgr, width)))
+            if (!(new_lines[i] = create_line((struct sgr){0}, width)))
                 die("Can't allocate lines");
 
         term->screen = new_lines;
