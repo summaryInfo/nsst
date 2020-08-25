@@ -250,7 +250,7 @@ struct term {
     uint16_t vt_level;
 
     struct window *win;
-    color_t *palette;
+    color_t palette[PALETTE_SIZE];
 
     int32_t *predec_buf;
 };
@@ -365,6 +365,7 @@ static void term_free_scrollback(struct term *term) {
     free(term->scrollback);
 
     term->scrollback = NULL;
+    term->sb_max_caps = iconf(ICONF_HISTORY_LINES);
     term->sb_caps = 0;
     term->sb_limit = 0;
     term->sb_top = -1;
@@ -1684,6 +1685,7 @@ static void term_load_config(struct term *term) {
         .gn = {cs94_ascii, cs94_ascii, cs94_ascii, cs94_ascii}
     };
 
+    term->vt_version = iconf(ICONF_VT_VERION);
     term->vt_level = term->vt_version / 100;
     if (!term->vt_level) term_set_vt52(term, 1);
 
@@ -4855,21 +4857,7 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
 
 struct term *create_term(struct window *win, int16_t width, int16_t height) {
     struct term *term = calloc(1, sizeof(struct term));
-
-    term->palette = malloc(PALETTE_SIZE * sizeof(color_t));
     term->win = win;
-
-    term->sb_max_caps = iconf(ICONF_HISTORY_LINES);
-    term->vt_version = iconf(ICONF_VT_VERION);
-    term->sb_top = -1;
-
-    term_load_config(term);
-
-    for (size_t i = 0; i < 2; i++) {
-        term_cursor_mode(term, 1);
-        term_erase(term, 0, 0, term->width, term->height, 0);
-        term_swap_screen(term, 0);
-    }
 
     if (tty_open(&term->tty, sconf(SCONF_SHELL), sconf_argv()) < 0) {
         warn("Can't create tty");
@@ -4877,6 +4865,8 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
         return NULL;
     }
 
+    term_load_config(term);
+    term_free_scrollback(term);
     term_resize(term, width, height);
 
     return term;
@@ -4896,7 +4886,6 @@ void free_term(struct term *term) {
     free(term->back_screen);
 
     free(term->tabs);
-    free(term->palette);
     free(term->predec_buf);
     free(term);
 }
