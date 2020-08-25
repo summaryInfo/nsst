@@ -83,7 +83,6 @@ struct cursor {
     uint32_t gl;
     uint32_t gr;
     uint32_t gl_ss;
-    enum charset upcs;
     enum charset gn[4];
 
     bool origin : 1;
@@ -205,6 +204,9 @@ struct term {
     struct term_mode vt52mode;
 
     struct checksum_mode checksum_mode;
+
+    /* User preferred charset */
+    enum charset upcs;
 
     uint8_t bvol;
     uint8_t mbvol;
@@ -1674,6 +1676,7 @@ static void term_load_config(struct term *term) {
         .allow_numlock = iconf(ICONF_NUMLOCK),
     };
 
+    term->upcs = cs96_latin_1;
     term->c = term->back_cs = term->cs = (struct cursor) {
         .sgr = (struct sgr){
             .cel = MKCELL(SPECIAL_FG, SPECIAL_BG, 0, 0),
@@ -1681,7 +1684,6 @@ static void term_load_config(struct term *term) {
             .bg = cconf(CCONF_BG),
         },
         .gl = 0, .gl_ss = 0, .gr = 2,
-        .upcs = cs94_dec_sup,
         .gn = {cs94_ascii, cs94_ascii, cs94_ascii, cs94_ascii}
     };
 
@@ -2002,7 +2004,6 @@ inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
         .gn = { gn[0], gn[1], gn[2], gn[3] },
         .gl = gl,
         .gr = gr,
-        .upcs = term->c.upcs,
         .gl_ss = flags & 4 ? 3 : flags & 2 ? 2 : term->c.gl
     };
 
@@ -2151,9 +2152,8 @@ static void term_dispatch_dcs(struct term *term) {
             term_esc_dump(term, 0);
             break;
         }
-        enum charset cs = nrcs_parse(sel, 0, term->vt_level, term->mode.enable_nrcs);
-        if (cs == -1U) cs = nrcs_parse(E(*dstr), 1, term->vt_level, term->mode.enable_nrcs);
-        if (cs != -1U) term->c.upcs = cs;
+        enum charset cs = nrcs_parse(sel, PARAM(0, 0), term->vt_level, term->mode.enable_nrcs);
+        if (cs != -1U) term->upcs = cs;
         break;
     }
     case C('q') | I0('+'): /* XTGETTCAP */ {
@@ -3062,7 +3062,7 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
             if (term->mode.utf8 && !iconf(ICONF_FORCE_UTF8_NRCS))
                 ch = nrcs_decode_fast(glv, ch);
             else
-                ch = nrcs_decode(glv, term->c.gn[term->c.gr], term->c.upcs, ch, term->mode.enable_nrcs);
+                ch = nrcs_decode(glv, term->c.gn[term->c.gr], term->upcs, ch, term->mode.enable_nrcs);
             term->c.gl_ss = term->c.gl; // Reset single shift
 
             prev = ch;
@@ -4022,8 +4022,7 @@ static void term_dispatch_csi(struct term *term) {
         }
         break;
     case C('u') | I0('&'): /* DECRQUPSS */
-        term_answerback(term, DCS"%d!u%s"ST,
-                term->c.upcs > cs96_latin_1, nrcs_unparse(term->c.upcs));
+        term_answerback(term, DCS"%d!u%s"ST, nrcs_is_96(term->upcs), nrcs_unparse(term->upcs));
         break;
     case C('t') | I0(' '): /* DECSWBV */
         switch (PARAM(0, 1)) {
