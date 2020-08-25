@@ -1290,7 +1290,7 @@ static void term_selective_erase(struct term *term, int16_t xs, int16_t ys, int1
     }
 }
 
-inline static void term_put_cell(struct term *term, int16_t x, int16_t y, term_char_t ch) {
+inline static void term_put_cell(struct term *term, ssize_t x, ssize_t y, term_char_t ch) {
     struct line *line = term->screen[y];
 
     // Writing to the line resets its wrapping state
@@ -1299,7 +1299,7 @@ inline static void term_put_cell(struct term *term, int16_t x, int16_t y, term_c
     line->cell[x] = MKCELLWITH(fixup_color(line, term->sgr), ch);
 }
 
-inline static void term_adjust_wide_left(struct term *term, int16_t x, int16_t y) {
+inline static void term_adjust_wide_left(struct term *term, ssize_t x, ssize_t y) {
     if (x < 1) return;
     struct cell *cell = &term->screen[y]->cell[x - 1];
     if (cell->attr & attr_wide) {
@@ -1308,12 +1308,11 @@ inline static void term_adjust_wide_left(struct term *term, int16_t x, int16_t y
     }
 }
 
-inline static void term_adjust_wide_right(struct term *term, int16_t x, int16_t y) {
+inline static void term_adjust_wide_right(struct term *term, ssize_t x, ssize_t y) {
     if (x >= term->screen[y]->width - 1) return;
     struct cell *cell = &term->screen[y]->cell[x + 1];
     if (cell[-1].attr & attr_wide) {
         cell->attr &= ~attr_drawn;
-        cell->ch = 0;
     }
 }
 
@@ -3261,11 +3260,8 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
     // Compute maximal with to be printed at once
     ssize_t maxw = term_max_x(term) - term_min_x(term);
     ssize_t count = 0, totalwidth = 0;
-    bool last = 0;
-    if (!term->c.pending || !term->mode.wrap) {
+    if (!term->c.pending || !term->mode.wrap)
         maxw = (term->c.x >= term_max_x(term) ? term->width : term_max_x(term)) - term->c.x;
-        if (!maxw) maxw = 1, last = 1;
-    }
 
     // If rep > 0, we should perform REP CSI
     if (__builtin_expect(rep, 0)) {
@@ -3283,10 +3279,16 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
             // negative in predecode buffer
             if (wid > 1) ch = -ch;
 
-            while (maxw > totalwidth && rep) {
-                // Don't include char if its too wide
-                // Unless its first char at right margin
-                if (totalwidth + wid > maxw && (!last || totalwidth)) break;
+            // Allow printing at least one wide char at right margin
+            // if autowrap is off
+            if (maxw == 1 && !term->mode.wrap) maxw = wid;
+
+            // If autowrap is on, in this case line will be
+            // wrapped so we can print a lot more
+            if (term->mode.wrap && term->c.x == term_max_x(term) - 1)
+                maxw = term_max_x(term) - term_min_x(term);
+
+            while (totalwidth + wid < maxw && rep) {
                 totalwidth += wid;
                 term->predec_buf[count++] = ch;
                 rep--;
@@ -3336,10 +3338,20 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
                 wid = 1 + (wid > 1);
 
                 // Don't include char if its too wide
-                // Unless its first char at right margin
-                if (totalwidth + wid > maxw && (!last || totalwidth)) {
-                    *start = char_start;
-                    break;
+                // Unless its a wide char at right margin, and its first
+                // or autowrap is disabled, and we are at right margin
+                if (totalwidth + wid > maxw) {
+                    if (totalwidth || wid != 2) {
+                        *start = char_start;
+                        break;
+                    } else if (term->c.x == term_max_x(term) - 1) {
+                        maxw = term->mode.wrap ? term_max_x(term) - term_min_x(term) : wid;
+                    } else if (term->c.x == term->width - 1) {
+                        maxw = wid;
+                    } else {
+                        *start = char_start;
+                        break;
+                    }
                 }
                 // Wide cells are indicated as
                 // negative in predecode buffer
@@ -3393,7 +3405,7 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
 
     if (iconf(ICONF_TRACE_CHARACTERS)) {
         for (ssize_t i = 0; i < count; i++)
-            info("Char: (%x) '%lc' ", term->predec_buf[i], term->predec_buf[i]);
+            info("Char: (%x) '%lc' ", abs(term->predec_buf[i]), abs(term->predec_buf[i]));
     }
 
     // Writing to the line resets its wrapping state
@@ -3410,7 +3422,7 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
         // Put dummy character to the left of wide
         if (__builtin_expect(term->predec_buf[i] < 0, 0)) {
             cell->attr |= attr_wide;
-            *cell++ = cur;
+            *++cell = cur;
         }
         cell++;
     }
