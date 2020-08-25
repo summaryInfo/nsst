@@ -4114,6 +4114,9 @@ static void term_dispatch_csi(struct term *term) {
         mouse_report_locator(term, 1, x, y, mask);
         break;
     }
+    case C('q') | P('>'): /* XTVERSION */
+        term_answerback(term, DCS">|%s"ST, version_string());
+        break;
     //case C('p') | P('>'): /* XTSMPOINTER */ // TODO Pointer
     //    break;
     //case C('S') | P('?'): /* XTSMSGRAPHICS */ // TODO SIXEL

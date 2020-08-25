@@ -275,6 +275,15 @@ uint8_t *base64_encode(uint8_t *dst, const uint8_t *buf, const uint8_t *end) {
     return dst;
 }
 
+const char *version_string(void) {
+    static char str[32];
+    if (!str[0]) {
+        snprintf(str, sizeof str, "nsst v%d.%d.%d\n",
+            (NSST_VERSION / 10000) % 100, (NSST_VERSION / 100) % 100, NSST_VERSION % 100);
+    }
+    return str;
+}
+
 #if USE_PRECOMPOSE
 
 #include "precompose-table.h"

@@ -87,6 +87,7 @@ inline static bool intersect_with(struct rect *src, struct rect *dst) {
         }
 }
 
+const char *version_string(void);
 
 #define UTF8_MAX_LEN 4
 #define UTF_INVAL 0xfffd
