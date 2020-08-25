@@ -78,7 +78,6 @@ struct cursor {
     ssize_t x;
     ssize_t y;
 
-    struct sgr sgr;
     // Shift state
     uint32_t gl;
     uint32_t gr;
@@ -165,9 +164,13 @@ struct term {
     ssize_t view;
 
     struct cursor c;
-    struct cursor cs;
-    struct cursor back_cs;
-    struct cursor vt52c;
+    struct cursor saved_c;
+    struct cursor back_saved_c;
+    struct cursor vt52_saved_c;
+
+    struct sgr sgr;
+    struct sgr saved_sgr;
+    struct sgr back_saved_sgr;
 
     ssize_t width;
     ssize_t height;
@@ -201,7 +204,7 @@ struct term {
     bool prev_c_view_changed;
 
     struct term_mode mode;
-    struct term_mode vt52mode;
+    struct term_mode vt52_saved_mode;
 
     struct checksum_mode checksum_mode;
 
@@ -359,9 +362,8 @@ static void term_reset_view(struct term *term, bool damage) {
 }
 
 static void term_free_scrollback(struct term *term) {
-    if (!term->scrollback) return;
+    if (term->scrollback) term_reset_view(term, 0);
 
-    term_reset_view(term, 0);
     for (ssize_t i = 1; i <= (term->sb_caps == term->sb_max_caps ? term->sb_caps : term->sb_limit); i++)
         free_line(line_at(term, -i));
     free(term->scrollback);
@@ -478,7 +480,8 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
     // Ensure that term->back_screen is altscreen
     if (term->mode.altscreen) {
-        SWAP(struct cursor, term->back_cs, term->cs);
+        SWAP(struct cursor, term->back_saved_c, term->saved_c);
+        SWAP(struct sgr, term->back_saved_sgr, term->saved_sgr);
         SWAP(struct line **, term->back_screen, term->screen);
     }
 
@@ -519,17 +522,17 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         term->back_screen = new_back;
 
         for (ssize_t i = 0; i < MIN(term->height, height); i++)
-            term->back_screen[i] = realloc_line(term->back_screen[i], term->c.sgr, width);
+            term->back_screen[i] = realloc_line(term->back_screen[i], term->sgr, width);
 
         for (ssize_t i = term->height; i < height; i++)
-            if (!(term->back_screen[i] = create_line(term->c.sgr, width)))
+            if (!(term->back_screen[i] = create_line(term->sgr, width)))
                 die("Can't allocate lines");
 
         // Adjust altscreen saved cursor position
 
-        term->back_cs.x = MIN(MAX(term->back_cs.x, 0), width - 1);
-        term->back_cs.y = MIN(MAX(term->back_cs.y, 0), height - 1);
-        if (term->back_cs.pending) term->back_cs.x = width - 1;
+        term->back_saved_c.x = MIN(MAX(term->back_saved_c.x, 0), width - 1);
+        term->back_saved_c.y = MIN(MAX(term->back_saved_c.y, 0), height - 1);
+        if (term->back_saved_c.pending) term->back_saved_c.x = width - 1;
     }
 
     // Clear mouse selection
@@ -601,7 +604,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             nnlines = MAX(nnlines * 2, MAX(MAX(new_cur_par - cursor_par, approx_cy - height - 1), 0) + height * 2);
 
             new_lines = calloc(nnlines, sizeof(*new_lines));
-            if (!new_lines || !(new_lines[0] = create_line(term->c.sgr, width)))
+            if (!new_lines || !(new_lines[0] = create_line(term->sgr, width)))
                 die("Can't allocate line");
 
             ssize_t y2 = y, dy = 0;
@@ -619,7 +622,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                     // If last character of line is wide, soft wrap
                     if (dx == width - 1 && line->cell[x].attr & attr_wide) {
                         new_lines[dy]->wrapped = 1;
-                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->c.sgr, width)))
+                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->sgr, width)))
                             die("Can't allocate line");
                         dx = 0;
                     }
@@ -630,16 +633,16 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                         cset = 1;
                     }
                     // ..and saved cursor position
-                    if (!csset && term->cs.y == y && x == term->cs.x) {
-                        term->cs.y = dy;
-                        term->cs.x = dx;
+                    if (!csset && term->saved_c.y == y && x == term->saved_c.x) {
+                        term->saved_c.y = dy;
+                        term->saved_c.x = dx;
                         csset = 1;
                     }
                     copy_cell(new_lines[dy], dx, line, x, 0);
                     // Advance line, soft wrap
                     if (++dx == width && (x < len - 1 || line->wrapped)) {
                         new_lines[dy]->wrapped = 1;
-                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->c.sgr, width)))
+                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->sgr, width)))
                             die("Can't allocate line");
                         dx = 0;
                     }
@@ -650,14 +653,14 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                     term->c.x = MIN(width - 1, term->c.x - len + dx);
                     cset = 1;
                 }
-                if (!csset && term->cs.y == y && term->cs.x >= len) {
-                    term->cs.y = dy;
-                    term->cs.x = MIN(width - 1, term->cs.x - len + dx);
+                if (!csset && term->saved_c.y == y && term->saved_c.x >= len) {
+                    term->saved_c.y = dy;
+                    term->saved_c.x = MIN(width - 1, term->saved_c.x - len + dx);
                     csset = 1;
                 }
                 // Advance line, hard wrap
                 if (!line->wrapped) {
-                    if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->c.sgr, width)))
+                    if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->sgr, width)))
                         die("Can't allocate line");
                     par_start = dy;
                     dx = 0;
@@ -693,7 +696,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             scrolled = term_append_history(term, new_lines[start++], iconf(ICONF_MINIMIZE_SCROLLBACK));
             new_cur_par--;
             term->c.y--;
-            term->cs.y--;
+            term->saved_c.y--;
         }
 
         ssize_t minh = MIN(nnlines - start, height);
@@ -708,14 +711,14 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             }
             for (ssize_t i = 0; i < minh; i++) {
                 if (new_lines[i + start]->width < width || iconf(ICONF_CUT_LINES)) {
-                    new_lines[i + start] = realloc_line(new_lines[i + start], term->c.sgr, width);
+                    new_lines[i + start] = realloc_line(new_lines[i + start], term->sgr, width);
                 }
             }
         }
 
         // Adjust cursor
-        term->cs.y = MAX(MIN(term->cs.y, height - 1), 0);
-        if (term->cs.pending) term->cs.x = width - 1;
+        term->saved_c.y = MAX(MIN(term->saved_c.y, height - 1), 0);
+        if (term->saved_c.pending) term->saved_c.x = width - 1;
         term->c.y = MAX(MIN(term->c.y, height - 1), 0);
         if (term->c.pending) term->c.x = width - 1;
 
@@ -733,7 +736,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
         // Allocate new empty lines
         for (ssize_t i = minh; i < height; i++)
-            if (!(new_lines[i] = create_line(term->c.sgr, width)))
+            if (!(new_lines[i] = create_line(term->sgr, width)))
                 die("Can't allocate lines");
 
         term->screen = new_lines;
@@ -802,7 +805,8 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     }
 
     if (term->mode.altscreen) {
-        SWAP(struct cursor, term->back_cs, term->cs);
+        SWAP(struct cursor, term->back_saved_c, term->saved_c);
+        SWAP(struct sgr, term->back_saved_sgr, term->saved_sgr);
         SWAP(struct line **, term->back_screen, term->screen);
     }
 
@@ -1088,7 +1092,7 @@ static void term_fill(struct term *term, int16_t xs, int16_t ys, int16_t xe, int
         struct line *line = term->screen[ys];
         // Reset line wrapping state
         line->wrapped = 0;
-        struct cell cell = fixup_color(line, term->c.sgr);
+        struct cell cell = fixup_color(line, term->sgr);
         cell.ch = ch;
         cell.attr = 0;
         for (int16_t i = xs; i < xe; i++)
@@ -1107,7 +1111,7 @@ static void term_protective_erase(struct term *term, int16_t xs, int16_t ys, int
         struct line *line = term->screen[ys];
         // Reset line wrapping state
         line->wrapped = 0;
-        struct cell cell = fixup_color(line, term->c.sgr);
+        struct cell cell = fixup_color(line, term->sgr);
         cell.attr = 0;
         for (int16_t i = xs; i < xe; i++)
             if (!(line->cell[i].attr & attr_protected))
@@ -1134,7 +1138,7 @@ inline static void term_put_cell(struct term *term, int16_t x, int16_t y, term_c
     // Writing to the line resets its wrapping state
     line->wrapped = 0;
 
-    line->cell[x] = MKCELLWITH(fixup_color(line, term->c.sgr), ch);
+    line->cell[x] = MKCELLWITH(fixup_color(line, term->sgr), ch);
 }
 
 inline static void term_adjust_wide_left(struct term *term, int16_t x, int16_t y) {
@@ -1200,9 +1204,11 @@ static void term_move_left(struct term *term, int16_t amount) {
 
 static void term_cursor_mode(struct term *term, bool mode) {
     if (mode) /* save */ {
-        term->cs = term->c;
+        term->saved_c = term->c;
+        term->saved_sgr = term->sgr;
     } else /* restore */ {
-        term->c = term->cs;
+        term->c = term->saved_c;
+        term->sgr = term->saved_sgr;
         term->c.x = MIN(term->c.x, term->width - 1);
         term->c.y = MIN(term->c.y, term->height - 1);
     }
@@ -1210,7 +1216,8 @@ static void term_cursor_mode(struct term *term, bool mode) {
 
 static void term_swap_screen(struct term *term, bool damage) {
     term->mode.altscreen ^= 1;
-    SWAP(struct cursor, term->back_cs, term->cs);
+    SWAP(struct cursor, term->back_saved_c, term->saved_c);
+    SWAP(struct sgr, term->back_saved_sgr, term->saved_sgr);
     SWAP(struct line **, term->back_screen, term->screen);
     term_reset_view(term, damage);
     if (damage) mouse_clear_selection(term);
@@ -1259,7 +1266,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
                 ssize_t scrolled = 0;
                 for (int16_t i = 0; i < amount; i++) {
                     scrolled -= term_append_history(term, term->screen[top + i],  iconf(ICONF_MINIMIZE_SCROLLBACK));
-                    term->screen[top + i] = create_line(term->c.sgr, term->width);
+                    term->screen[top + i] = create_line(term->sgr, term->width);
                 }
 
                 if (scrolled < 0) /* View down, image up */ {
@@ -1311,7 +1318,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
             if (save && !term->mode.altscreen && term->top == top) {
                 ssize_t scrolled = 0;
                 for (int16_t i = 0; i < amount; i++) {
-                    struct line *ln = create_line(term->c.sgr, line_length(term->screen[top + i]));
+                    struct line *ln = create_line(term->sgr, line_length(term->screen[top + i]));
                     for (ssize_t k = term_min_x(term); k < MIN(term_max_x(term), ln->width); k++)
                         copy_cell(ln, k, term->screen[top + i], k, 0);
                     scrolled -= term_append_history(term, ln, 0);
@@ -1594,26 +1601,30 @@ static void term_set_vt52(struct term *term, bool set) {
     if (set) {
         term->kstate.keyboad_vt52 = 1;
         term->vt_level = 0;
-        term->vt52c = term->c;
+        term->vt52_saved_c = term->c;
         term->c = (struct cursor) {
-            .sgr = term->c.sgr,
-            .gl = 0, .gl_ss = 0, .gr = 2,
-            .gn = {cs94_ascii, cs94_ascii, cs94_ascii, cs94_dec_graph}
+            .x = term->c.x,
+            .y = term->c.y,
+            .pending = term->c.pending,
+            .gl = term->c.gl_ss = 0,
+            .gr = 2,
+            .gn = { cs94_ascii, cs94_ascii, cs94_ascii, cs94_dec_graph }
         };
-        term->vt52mode = term->mode;
+        term->vt52_saved_mode = term->mode;
         term->mode = (struct term_mode) {
             .focused = term->mode.focused,
-            .reverse_video = term->mode.reverse_video
+            .reverse_video = term->mode.reverse_video,
+            .wrap = 1
         };
         term_esc_start_seq(term);
     } else {
         term->kstate.keyboad_vt52 = 0;
         term->vt_level = 1;
-        term->mode = term->vt52mode;
-        term->vt52c.x = term->c.x;
-        term->vt52c.y = term->c.y;
-        term->vt52c.pending = term->c.pending;
-        term->c = term->vt52c;
+        term->vt52_saved_c.x = term->c.x;
+        term->vt52_saved_c.y = term->c.y;
+        term->vt52_saved_c.pending = term->c.pending;
+        term->c = term->vt52_saved_c;
+        term->mode = term->vt52_saved_mode;
     }
 }
 
@@ -1677,19 +1688,15 @@ static void term_load_config(struct term *term) {
     };
 
     term->upcs = cs96_latin_1;
-    term->c = term->back_cs = term->cs = (struct cursor) {
-        .sgr = (struct sgr){
-            .cel = MKCELL(SPECIAL_FG, SPECIAL_BG, 0, 0),
-            .fg = cconf(CCONF_FG),
-            .bg = cconf(CCONF_BG),
-        },
+    term->c = term->back_saved_c = term->saved_c = (struct cursor) {
         .gl = 0, .gl_ss = 0, .gr = 2,
         .gn = {cs94_ascii, cs94_ascii, cs94_ascii, cs94_ascii}
     };
-
-    term->vt_version = iconf(ICONF_VT_VERION);
-    term->vt_level = term->vt_version / 100;
-    if (!term->vt_level) term_set_vt52(term, 1);
+    term->sgr = term->saved_sgr = term->back_saved_sgr = (struct sgr) {
+        .cel = MKCELL(SPECIAL_FG, SPECIAL_BG, 0, 0),
+        .fg = cconf(CCONF_FG),
+        .bg = cconf(CCONF_BG),
+    };
 
     switch(iconf(ICONF_BELL_VOLUME)) {
     case 0: term->bvol = 0; break;
@@ -1709,7 +1716,7 @@ static void term_do_reset(struct term *term, bool hard) {
     if (term->mode.columns_132) term_set_132(term, 0);
     if (term->mode.altscreen) term_swap_screen(term, 1);
 
-    int16_t cx = term->c.x, cy = term->c.y;
+    ssize_t cx = term->c.x, cy = term->c.y;
     bool cpending = term->c.pending;
 
     term_load_config(term);
@@ -1722,13 +1729,12 @@ static void term_do_reset(struct term *term, bool hard) {
     window_set_colors(term->win, term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
 
     if (hard) {
-        term_cursor_mode(term, 1);
-        term->back_cs = term->cs;
         term_erase(term, 0, 0, term->width, term->height, 0);
-
         term_free_scrollback(term);
 
+        term->vt_version = iconf(ICONF_VT_VERION);
         term->vt_level = term->vt_version / 100;
+        if (!term->vt_level) term_set_vt52(term, 1);
 
         window_set_title(term->win, target_icon_label | target_title, NULL, term->mode.title_set_utf8);
     } else {
@@ -1737,7 +1743,6 @@ static void term_do_reset(struct term *term, bool hard) {
         term->c.pending = cpending;
     }
 
-    term_esc_start_seq(term);
     term->esc.state = esc_ground;
 }
 
@@ -1998,7 +2003,6 @@ inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
     term->c = (struct cursor) {
         .x = MIN(x, term->width - 1),
         .y = MIN(y, term->height - 1),
-        .sgr = term->c.sgr,
         .origin = flags & 1,
         .pending = !!(flags & 8),
         .gn = { gn[0], gn[1], gn[2], gn[3] },
@@ -2007,7 +2011,7 @@ inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
         .gl_ss = flags & 4 ? 3 : flags & 2 ? 2 : term->c.gl
     };
 
-    term->c.sgr.cel.attr = (prot & 1 ? attr_protected : 0) |
+    term->sgr.cel.attr = (prot & 1 ? attr_protected : 0) |
             (sgr0 & 1 ? attr_bold : 0) | (sgr0 & 2 ? attr_underlined : 0) |
             (sgr0 & 4 ? attr_blink : 0) | (sgr0 & 8 ? attr_inverse : 0) |
             (sgr1 & 1 ? attr_italic : 0) | (sgr1 & 2 ? attr_faint : 0) |
@@ -2064,7 +2068,7 @@ static void term_dispatch_dcs(struct term *term) {
             switch(id) {
             case 'm': /* -> SGR */ {
                 char sgr[SGR_BUFSIZ];
-                term_encode_sgr(sgr, sgr + sizeof sgr, term->c.sgr);
+                term_encode_sgr(sgr, sgr + sizeof sgr, term->sgr);
                 term_answerback(term, DCS"1$r%sm"ST, sgr);
                 break;
             }
@@ -2086,7 +2090,7 @@ static void term_dispatch_dcs(struct term *term) {
                 break;
             case 'q' << 8 | '"': /* -> DECSCA */
                 term_answerback(term, DCS"1$r%d\"q"ST, term->mode.protected ? 2 :
-                        term->c.sgr.cel.attr & attr_protected ? 1 : 2);
+                        term->sgr.cel.attr & attr_protected ? 1 : 2);
                 break;
             case 'q' << 8 | ' ': /* -> DECSCUSR */
                 term_answerback(term, DCS"1$r%d q"ST, window_get_cursor(term->win));
@@ -2281,14 +2285,14 @@ static void term_dispatch_osc(struct term *term) {
             dend = memchr(dstr, 0, ESC_MAX_STR);
         }
         uint8_t *res = NULL;
-        if (!(term->mode.title_set_utf8) && term->mode.utf8) {
+        if (term->mode.title_set_utf8 && !term->mode.utf8) {
             uint8_t *dst = dstr;
             const uint8_t *ptr = dst;
             term_char_t val = 0;
             while (*ptr && utf8_decode(&val, &ptr, dend))
                 *dst++ = val;
             *dst = '\0';
-        } else if (term->mode.title_set_utf8 && !(term->mode.utf8)) {
+        } else if (!term->mode.title_set_utf8 && term->mode.utf8) {
             res = malloc(term->esc.str_len * 2 + 1);
             uint8_t *ptr = res, *src = dstr;
             if (res) {
@@ -3145,7 +3149,7 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
     line->wrapped = 0;
 
     // Allocate color for cell
-    struct cell cur = fixup_color(line, term->c.sgr);
+    struct cell cur = fixup_color(line, term->sgr);
 
     // Put charaters
     for (ssize_t i = 0; i < count; i++) {
@@ -3365,19 +3369,19 @@ static void term_dispatch_window_op(struct term *term) {
 
 static void term_report_cursor(struct term *term) {
     char csgr[3] = { 0x40, 0, 0 };
-    if (term->c.sgr.cel.attr & attr_bold) csgr[0] |= 1;
-    if (term->c.sgr.cel.attr & attr_underlined) csgr[0] |= 2;
-    if (term->c.sgr.cel.attr & attr_blink) csgr[0] |= 4;
-    if (term->c.sgr.cel.attr & attr_inverse) csgr[0] |= 8;
+    if (term->sgr.cel.attr & attr_bold) csgr[0] |= 1;
+    if (term->sgr.cel.attr & attr_underlined) csgr[0] |= 2;
+    if (term->sgr.cel.attr & attr_blink) csgr[0] |= 4;
+    if (term->sgr.cel.attr & attr_inverse) csgr[0] |= 8;
 
     if (iconf(ICONF_EXTENDED_CIR)) {
         csgr[0] |= 0x20;
         csgr[1] |= 0x40;
         // Extended byte
-        if (term->c.sgr.cel.attr & attr_italic) csgr[1] |= 1;
-        if (term->c.sgr.cel.attr & attr_faint) csgr[1] |= 2;
-        if (term->c.sgr.cel.attr & attr_strikethrough) csgr[1] |= 4;
-        if (term->c.sgr.cel.attr & attr_invisible) csgr[1] |= 8;
+        if (term->sgr.cel.attr & attr_italic) csgr[1] |= 1;
+        if (term->sgr.cel.attr & attr_faint) csgr[1] |= 2;
+        if (term->sgr.cel.attr & attr_strikethrough) csgr[1] |= 4;
+        if (term->sgr.cel.attr & attr_invisible) csgr[1] |= 8;
     }
 
     char cflags = 0x40;
@@ -3396,7 +3400,7 @@ static void term_report_cursor(struct term *term) {
         /* line */ term->c.y + 1,
         /* column */ term->c.x + 1,
         /* attributes */ csgr,
-        /* cell protection */ 0x40 + !!(term->c.sgr.cel.attr & attr_protected),
+        /* cell protection */ 0x40 + !!(term->sgr.cel.attr & attr_protected),
         /* flags */ cflags,
         /* gl */ term->c.gl,
         /* gr */ term->c.gr,
@@ -3748,7 +3752,7 @@ static void term_dispatch_csi(struct term *term) {
         break;
     }
     case C('m'): /* SGR */
-        term_decode_sgr(term, 0, &(struct cell){0}, &term->c.sgr);
+        term_decode_sgr(term, 0, &(struct cell){0}, &term->sgr);
         break;
     case C('n') | P('>'): /* Disable key modifires, xterm */ {
             uparam_t p = term->esc.param[0];
@@ -3832,14 +3836,16 @@ static void term_dispatch_csi(struct term *term) {
         default:
             term_esc_dump(term, 0);
         }
+        term_esc_dump(term, 0);
+        warn("C %d", term->vt_level);
         break;
     case C('q') | I0('"'): /* DECSCA */
         switch (PARAM(0, 2)) {
         case 1:
-            term->c.sgr.cel.attr |= attr_protected;
+            term->sgr.cel.attr |= attr_protected;
             break;
         case 0: case 2:
-            term->c.sgr.cel.attr &= ~attr_protected;
+            term->sgr.cel.attr &= ~attr_protected;
             break;
         }
         term->mode.protected = 0;
@@ -4156,11 +4162,11 @@ static void term_dispatch_esc(struct term *term) {
         term->esc.old_state = 0;
         return;
     case E('V'): /* SPA */
-        term->c.sgr.cel.attr |= attr_protected;
+        term->sgr.cel.attr |= attr_protected;
         term->mode.protected = 1;
         break;
     case E('W'): /* EPA */
-        term->c.sgr.cel.attr &= ~attr_protected;
+        term->sgr.cel.attr &= ~attr_protected;
         term->mode.protected = 1;
         break;
     case E('Z'): /* DECID */
@@ -4865,6 +4871,11 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
     }
 
     term_load_config(term);
+
+    term->vt_version = iconf(ICONF_VT_VERION);
+    term->vt_level = term->vt_version / 100;
+    if (!term->vt_level) term_set_vt52(term, 1);
+
     term_free_scrollback(term);
     term_resize(term, width, height);
 
