@@ -33,6 +33,7 @@
 #define SGR_BUFSIZ 64
 #define UDK_MAX 37
 #define MAX_REPORT 1024
+#define PRINT_BLOCK_SIZE 256
 
 #define CSI "\x9B"
 #define OSC "\x9D"
@@ -55,6 +56,21 @@
 #define PARAM(i, d) (term->esc.param[i] > 0 ? (uparam_t)term->esc.param[i] : (uparam_t)(d))
 #define CHK_VT(v) { if (term->vt_level < (v)) break; }
 
+/* Macros for encoding dispatch selectors
+ * OSC commands just stores osc number as selector
+ * (and OSC L/OSC l/OSC I are translated to 0/1/2)
+ *
+ * Generic escape sequeces uses E(c) for final byte
+ * and I0(c), I1(c) for first and second intermediate
+ * bytes
+ *
+ * CSI and DCS sequeces use C(c) for final byte
+ * P(c) for private indicator byte and
+ * I0(c), I1(c) for intermediate bytes
+ *
+ * *_MASK macros can be used to extract
+ * corresponding parts of selectors
+ * */
 #define C(c) ((c) & 0x3F)
 #define P(p) ((p) ? ((((p) & 3) + 1) << 6) : 0)
 #define E(c) ((c) & 0x7F)
@@ -75,16 +91,21 @@ enum mode_status {
 };
 
 struct cursor {
+    /* Curosr position */
     ssize_t x;
     ssize_t y;
 
-    // Shift state
+    /* Character sets */
     uint32_t gl;
     uint32_t gr;
     uint32_t gl_ss;
     enum charset gn[4];
 
     bool origin : 1;
+
+    /* Pending wrap flag
+     * is used to match DEC VT terminals
+     * wrapping behaviour */
     bool pending : 1;
 };
 
@@ -110,10 +131,6 @@ struct term_mode {
     bool columns_132 : 1;
     bool preserve_display_132 : 1;
     bool disable_columns_132 : 1;
-    bool print_extend : 1;
-    bool print_form_feed : 1;
-    bool print_enabled : 1;
-    bool print_auto : 1;
     bool title_set_utf8 : 1;
     bool title_query_utf8 : 1;
     bool title_set_hex : 1;
@@ -136,6 +153,10 @@ struct term_mode {
     bool margin_bell : 1;
     bool bell_raise : 1;
     bool bell_urgent : 1;
+    bool print_extend : 1;
+    bool print_form_feed : 1;
+    bool print_auto : 1;
+    bool print_controller : 1;
 };
 
 struct checksum_mode {
@@ -147,38 +168,95 @@ struct checksum_mode {
     bool eight_bit : 1;
 };
 
+/* Parsing state
+ * IMPORTANT: Elements should not be
+ * rearranged, state machine will break
+ * */
+enum escape_state {
+    esc_ground,
+    esc_esc_entry, esc_esc_1, esc_esc_2, esc_esc_ignore,
+    esc_csi_entry, esc_csi_0, esc_csi_1, esc_csi_2, esc_csi_ignore,
+    esc_dcs_entry, esc_dcs_0, esc_dcs_1, esc_dcs_2,
+    esc_osc_entry, esc_osc_1, esc_osc_2, esc_osc_string,
+    esc_dcs_string,
+    esc_ign_entry, esc_ign_string,
+    esc_vt52_entry, esc_vt52_cup_0, esc_vt52_cup_1,
+};
+
+/* Printer controller mode
+ * parser state */
+enum pr_state {
+    pr_ground,
+    pr_csi,
+    pr_esc,
+    pr_bracket,
+    pr_5,
+    pr_4,
+    pr_ignore,
+};
+
 struct term {
-    struct line **screen;
-    struct line **back_screen;
-
-    /* Cyclic buffer for
-     * saved lines */
-    struct line **scrollback;
-    ssize_t sb_top;
-    ssize_t sb_limit;
-    ssize_t sb_caps;
-    ssize_t sb_max_caps;
-    /* offset in scrollback lines */
-    struct line_offset view_pos;
-    /* virtual line number */
-    ssize_t view;
-
+    /* Cursor state */
     struct cursor c;
-    struct cursor saved_c;
-    struct cursor back_saved_c;
-    struct cursor vt52_saved_c;
-
+    /* Graphics renderition state */
     struct sgr sgr;
+
+    /* There are two screens, and corresponding
+     * saved cursor (saved_c, back_saved_c) and SGR states (saved_sgr, back_saved_sgr),
+     * if term->mode.altscreen is set
+     * screen points to alternate screen and back_screen points to main screen,
+     * in opposite case screen points to main screen and back_screen points to
+     * alternate screen; same with saved_c/back_saved_c and saved_sgr/saved_back_sgr
+     * */
+    struct line **screen;
+    struct cursor saved_c;
     struct sgr saved_sgr;
+
+    struct line **back_screen;
+    struct cursor back_saved_c;
     struct sgr back_saved_sgr;
 
+    /* Cyclic buffer for scrollback buffer,
+     * it grows dynamically, and thus before
+     * it has reached maximal size (sb_max_caps)
+     * functions as simple array */
+    struct line **scrollback;
+    /* First line offset */
+    ssize_t sb_top;
+    /* Number of lines */
+    ssize_t sb_limit;
+    /* Capacity */
+    ssize_t sb_caps;
+    /* Maximal capacity */
+    ssize_t sb_max_caps;
+    /* Offset in scrollback lines */
+    struct line_offset view_pos;
+    /* Virtual line number */
+    ssize_t view;
+
+    /* VT52 mode saves current cursor G0-G3,GL,GR and origin
+     * state, and current terminal mode, and restores on exit */
+    struct cursor vt52_saved_c;
+    struct term_mode vt52_saved_mode;
+
+    /* Terminal screen dimentions */
     ssize_t width;
     ssize_t height;
+
+    /* Margins */
     ssize_t top;
     ssize_t bottom;
     ssize_t left;
     ssize_t right;
+
+    /* Tabstop positions */
     bool *tabs;
+
+    /* If this flag is set application
+     * already knows that terminal window
+     * would be resized, so it would be
+     * incorrect to read from terminal before
+     * resize */
     bool requested_resize;
 
     /* Last written character
@@ -193,7 +271,8 @@ struct term {
     struct mouse_state mstate;
     /* Keyboard state */
     struct keyboard_state kstate;
-    /* TTY State and input buffer */
+    /* TTY State, input buffer and
+     * printer state */
     struct tty tty;
 
     /* Previous cursor state
@@ -203,14 +282,17 @@ struct term {
     bool prev_c_hidden;
     bool prev_c_view_changed;
 
+    /* Terminal modes, most of DECSET/DECRST and RM/SM modes
+     * are stored here */
     struct term_mode mode;
-    struct term_mode vt52_saved_mode;
 
+    /* XTerm checksum extension flags */
     struct checksum_mode checksum_mode;
 
     /* User preferred charset */
     enum charset upcs;
 
+    /* Bell/margin bell volume */
     uint8_t bvol;
     uint8_t mbvol;
 
@@ -221,45 +303,60 @@ struct term {
      * [1000-1063] : 8 bytes;
      * [2000-2007] : 1 byte */
     uint8_t saved_modbits[21];
+    /* Other parts of saved state for XTSAVE/XTRESTORE */
     enum mouse_mode saved_mouse_mode;
     enum mouse_format saved_mouse_format;
     uint8_t saved_keyboard_type;
 
     struct escape {
-        enum escape_state {
-            esc_ground,
-            esc_esc_entry, esc_esc_1, esc_esc_2, esc_esc_ignore,
-            esc_csi_entry, esc_csi_0, esc_csi_1, esc_csi_2, esc_csi_ignore,
-            esc_dcs_entry, esc_dcs_0, esc_dcs_1, esc_dcs_2,
-            esc_osc_entry, esc_osc_1, esc_osc_2, esc_osc_string,
-            esc_dcs_string,
-            esc_ign_entry, esc_ign_string,
-            esc_vt52_entry, esc_vt52_cup_0, esc_vt52_cup_1,
-        } state, old_state;
+        /* Parser state */
+        enum escape_state state;
+        /* Encoded escape sequence description
+         * that allows to dispatch in one 'switch'*/
         uparam_t selector;
+
+        /* Saved state/selector, used for ST interpretation */
+        enum escape_state old_state;
         uparam_t old_selector;
 
+        /* CSI/DCS argument count and arguments */
         size_t i;
         iparam_t param[ESC_MAX_PARAM];
+        /* IMPORTANT: subpar_mask must contain
+         * at least ESC_MAX_PARAM bits */
         uint32_t subpar_mask;
 
+        /* Length of OSC/DCS string part */
         size_t str_len;
-        // Short strings are not allocated
-        uint8_t str_data[ESC_MAX_STR + 1];
-        // Long strings are
-        uint8_t *str_ptr;
+        /* Storage capacity */
         size_t str_cap;
+        /* Short strings are not allocated,
+         * but long strings are */
+        uint8_t str_data[ESC_MAX_STR + 1];
+        uint8_t *str_ptr;
     } esc;
 
+    /* Printer controller mode has its own state */
+    enum pr_state pr_state;
+
+    /* Emulated VT version, like 420 */
     uint16_t vt_version;
+    /* Emulation level, usually vt_version/100 */
     uint16_t vt_level;
 
+    /* Terminal window pointer */
     struct window *win;
+
+    /* Global color palette */
     color_t palette[PALETTE_SIZE];
 
+    /* Sequential graphical characters are decoded
+     * at once for faster parsing, and stored to this buffer
+     * size of this buffer is equal to terminal width */
     int32_t *predec_buf;
 };
 
+/* Damage terminal screen, relative to view */
 void term_damage(struct term *term, struct rect damage) {
     if (intersect_with(&damage, &(struct rect) {0, 0, term->width, term->height})) {
         struct line_offset vpos = term_get_view(term);
@@ -277,6 +374,8 @@ void term_damage(struct term *term, struct rect damage) {
     }
 }
 
+/* Damage terminal screen, relative to view
+ * Faster version for whole lines */
 void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd) {
     struct line_offset vpos = term_get_view(term);
     term_line_next(term, &vpos, ys);
@@ -284,10 +383,16 @@ void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd) {
         term_line_at(term, vpos).line->force_damage = 1;
 }
 
+/* Returns true if next line will be next physical line
+ * and not continuation part of current physical line */
 bool is_last_line(struct line_view line) {
     return !iconf(ICONF_REWRAP) || line.cell - line.line->cell + line.width >= line.line->width;
 }
 
+/* Internal function to address terminal screen and
+ * scrollback buffer continuously
+ * Lines with y >= 0 are on screen
+ * Line with y < 0 are saved line # -y */
 inline static struct line *line_at(struct term *term, ssize_t y) {
     return y >= 0 ? term->screen[y] :
             term->scrollback[(term->sb_top + term->sb_caps + y + 1) % term->sb_caps];
@@ -961,10 +1066,12 @@ static void term_reverse_sgr(struct term *term, int16_t xs, int16_t ys, int16_t 
     }
 }
 
-static void term_encode_sgr(char *dst, char *end, struct sgr sgr) {
-    // Maximal sequence is 0;1;2;3;4;6;7;8;9;38:2:255:255:255;48:2:255:255:255
-    // 64 byte buffer is enough
+
+static char *term_encode_sgr(char *dst, char *end, struct sgr sgr) {
 #define FMT(...) dst += snprintf(dst, end - dst, __VA_ARGS__)
+#define MAX_SGR_LEN 54
+    // Maximal length sequence is "0;1;2;3;4;6;7;8;9;38:2:255:255:255;48:2:255:255:255"
+
     // Reset everything
     FMT("0");
 
@@ -991,8 +1098,59 @@ static void term_encode_sgr(char *dst, char *end, struct sgr sgr) {
     else if (sgr.cel.bg < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";48:5:%d", sgr.cel.bg);
     else if (sgr.cel.bg == SPECIAL_BG) /* FMT(";49") -- default, skip */;
     else FMT(";48:2:%d:%d:%d", sgr.bg >> 16 & 0xFF, sgr.bg >>  8 & 0xFF, sgr.bg >>  0 & 0xFF);
+
+    return dst;
 #undef FMT
 }
+
+#if 0 /* In theory can be beneficial but not worth it in practice */
+static char *term_encode_sgr_with_mask(char *dst, char *end, struct sgr sgr, struct cell mask) {
+#define FMT(...) dst += snprintf(dst, end - dst, __VA_ARGS__)
+#define MAX_SGR_MASK_LEN 60
+    // Maximal sequence is 22;1;23;24;26;27;28;29;38:2:255:255:255;48:2:255:255:255
+    // Encode attributes
+
+    // Bold and faint are reset with one code, so, if one of them
+    // needs to be reset, other should be set, if was on
+    if ((mask.attr & attr_faint && !(sgr.cel.attr & attr_faint)) ||
+            (mask.attr & attr_bold && !(sgr.cel.attr & attr_bold))) {
+        FMT(";22");
+        mask.attr |= attr_bold | attr_faint;
+    }
+    if (mask.attr & attr_bold && sgr.cel.attr & attr_bold) FMT(";1");
+    if (mask.attr & attr_faint && sgr.cel.attr & attr_faint) FMT(";2");
+
+    if (mask.attr & attr_italic) FMT(";%d", 3 + 20*!!(sgr.cel.attr & attr_italic));
+    if (mask.attr & attr_underlined) FMT(";%d", 4 + 20*!!(sgr.cel.attr & attr_underlined));
+    if (mask.attr & attr_blink) FMT(";%d", 6 + 20*!!(sgr.cel.attr & attr_underlined));
+    if (mask.attr & attr_inverse) FMT(";%d", 7 + 20*!!(sgr.cel.attr & attr_underlined));
+    if (mask.attr & attr_invisible) FMT(";%d", 8 + 20*!!(sgr.cel.attr & attr_underlined));
+    if (mask.attr & attr_strikethrough) FMT(";%d", 9 + 20*!!(sgr.cel.attr & attr_underlined));
+
+    // Encode foreground color
+    if (mask.fg) {
+        if (sgr.cel.fg < 8) FMT(";%d", 30 + sgr.cel.fg);
+        else if (sgr.cel.fg < 16) FMT(";%d", 90 + sgr.cel.fg - 8);
+        else if (sgr.cel.fg < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";38:5:%d", sgr.cel.fg);
+        else if (sgr.cel.fg == SPECIAL_FG) FMT(";39");
+        else FMT(";38:2:%d:%d:%d", sgr.fg >> 16 & 0xFF, sgr.fg >>  8 & 0xFF, sgr.fg >>  0 & 0xFF);
+    }
+
+    if (mask.bg) {
+        // Encode background color
+        if (sgr.cel.bg < 8) FMT(";%d", 40 + sgr.cel.bg);
+        else if (sgr.cel.bg < 16) FMT(";%d", 100 + sgr.cel.bg - 8);
+        else if (sgr.cel.bg < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";48:5:%d", sgr.cel.bg);
+        else if (sgr.cel.bg == SPECIAL_BG) FMT(";49");
+        else FMT(";48:2:%d:%d:%d", sgr.bg >> 16 & 0xFF, sgr.bg >>  8 & 0xFF, sgr.bg >>  0 & 0xFF);
+    }
+
+    return dst;
+
+#undef FMT
+}
+#endif
+
 
 static struct sgr term_common_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
     term_rect_pre(term, &xs, &ys, &xe, &ye);
@@ -1473,21 +1631,51 @@ static void term_cr(struct term *term) {
             term_min_ox(term) : term_min_x(term), term->c.y);
 }
 
-static void term_print_char(struct term *term, term_char_t ch) {
-    uint8_t buf[5] = {ch};
-    size_t sz = 1;
-    if (term->mode.utf8 && ch >= 0xA0 && term->esc.state == esc_ground)
-        sz = utf8_encode(ch, buf, buf + 5);
-    tty_print_string(&term->tty, buf, sz);
+inline static bool attr_eq(struct cell a, struct cell b) {
+    return !((a.attr ^ b.attr) & ~(attr_drawn | attr_wide | attr_protected)) && a.fg == b.fg && a.bg == b.bg;
 }
 
 static void term_print_line(struct term *term, struct line *line) {
     if (!tty_has_printer(&term->tty)) return;
 
-    // TODO Print with SGR
-    for (int16_t i = 0; i < MIN(line->width, term->width); i++)
-        term_print_char(term, line->cell[i].ch);
-    term_print_char(term, '\n');
+    uint8_t buf[PRINT_BLOCK_SIZE];
+    uint8_t *pbuf = buf, *pend = buf + PRINT_BLOCK_SIZE;
+
+    struct cell prev = {0};
+
+    for (int16_t i = 0; i < line_length(line); i++) {
+        struct cell c = line->cell[i];
+
+        if (iconf(ICONF_PRINT_ATTR) && (!attr_eq(prev, c) || !i)) {
+            /* Print SGR state, if it have changed */
+            struct sgr sgr = { .cel = c };
+            if (c.fg >= PALETTE_SIZE) sgr.fg = line->pal->data[c.fg - PALETTE_SIZE];
+            if (c.bg >= PALETTE_SIZE) sgr.bg = line->pal->data[c.bg - PALETTE_SIZE];
+            *pbuf++ = '\033';
+            *pbuf++ = '[';
+            pbuf = (uint8_t *)term_encode_sgr((char *)pbuf, (char *)pend, sgr);
+            *pbuf++ = 'm';
+        }
+
+        /* Print blanks as ASCII space */
+        if (!c.ch) c.ch = ' ';
+
+        //TODO Encode NRCS when UTF is disabled
+        //for now just always print as UTF-8
+        if (c.ch < 0xA0) *pbuf++ = c.ch;
+        else pbuf += utf8_encode(c.ch, pbuf, pend);
+
+        prev = c;
+
+        /* If theres no more space for next char, flush buffer */
+        if (pbuf + MAX_SGR_LEN + UTF8_MAX_LEN + 1 >= pend) {
+            tty_print_string(&term->tty, buf, pbuf - buf);
+            pbuf = buf;
+        }
+    }
+
+    *pbuf++ = '\n';
+    tty_print_string(&term->tty, buf, pbuf - buf);
 }
 
 static void term_print_screen(struct term *term, bool ext) {
@@ -1496,14 +1684,16 @@ static void term_print_screen(struct term *term, bool ext) {
     int16_t top = ext ? 0 : term->top;
     int16_t bottom = ext ? term->height - 1 : term->bottom;
 
-    while (top < bottom) term_print_line(term, term->screen[top++]);
+    while (top < bottom)
+        term_print_line(term, term->screen[top++]);
+
     if (term->mode.print_form_feed)
-        term_print_char(term, '\f');
+        tty_print_string(&term->tty, (uint8_t[]){'\f'}, 1);
 }
 
 inline static void term_do_wrap(struct term *term) {
     term->screen[term->c.y]->wrapped = 1;
-    if (term->mode.print_auto && !term->mode.print_enabled)
+    if (term->mode.print_auto)
         term_print_line(term, term->screen[term->c.y]);
     term_index(term);
     term_cr(term);
@@ -2932,6 +3122,60 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
     return val;
 }
 
+static void print_intercept(struct term *term) {
+    /* If terminal is in controller mode
+     * all input is redirected to printer except for
+     * NUL, XON, XOFF (that are eaten) and 4 sequences:
+     * CSI"5i", ESC"[5i", CSI"[4i", ESC"[4i",
+     * first two of which are no-ops,
+     * and second two disabled printer controller */
+
+    uint8_t *blk_start = term->tty.start, ch;
+    while (term->tty.start < term->tty.end) {
+        switch ((ch = *term->tty.start++)) {
+        case 0x11: /* XON */
+        case 0x13: /* XOFF */
+        case 0x00: /* NUL */
+            if (blk_start < term->tty.start - 1)
+                tty_print_string(&term->tty, blk_start, term->tty.start - 1 - blk_start);
+            blk_start = term->tty.start;
+            break;
+        case 0x9B: /* CSI */
+        case 0x1B: /* ESC */
+            if (blk_start < term->tty.start - 1)
+                tty_print_string(&term->tty, blk_start, term->tty.start - 1 - blk_start);
+            blk_start = term->tty.start - 1;
+            if (ch == 0x1B) term->pr_state = pr_esc;
+            else term->pr_state = pr_csi;
+            break;
+        case '[':
+            if (term->pr_state == pr_esc) term->pr_state = pr_bracket;
+            else term->pr_state = pr_ground;
+            break;
+        case '4':
+        case '5':
+            if (term->pr_state == pr_bracket || term->pr_state == pr_csi) {
+                term->pr_state = ch == '4' ? pr_4 : pr_5;
+            } else term->pr_state = pr_ground;
+            break;
+        case 'i':
+            if (term->pr_state == pr_4) {
+                /* Disable printer controller mode */
+                term->mode.print_controller = 0;
+                return;
+            } else if (term->pr_state == pr_5) {
+                /* Eat sequence */
+                blk_start = term->tty.start;
+            }
+        default:
+            term->pr_state = pr_ground;
+        }
+    }
+
+    if (blk_start < term->tty.end && term->pr_state == pr_ground)
+        tty_print_string(&term->tty, blk_start, term->tty.end - blk_start);
+}
+
 static void term_dispatch_mc(struct term *term) {
     if (term->esc.selector & P_MASK) {
         switch (PARAM(0, 0)) {
@@ -2939,8 +3183,10 @@ static void term_dispatch_mc(struct term *term) {
             term_print_line(term, term->screen[term->c.y]);
             break;
         case 4: /* Disable autoprint */
+            term->mode.print_auto = 0;
+            break;
         case 5: /* Enable autoprint */
-            term->mode.print_auto = term->esc.param[0] == 5;
+            term->mode.print_auto = 1;
             break;
         case 11: /* Print scrollback and screen */
             for (ssize_t i = 1; i <= term->sb_limit; i++)
@@ -2957,8 +3203,16 @@ static void term_dispatch_mc(struct term *term) {
             term_print_screen(term, term->mode.print_extend);
             break;
         case 4: /* Disable printer */
+            // Well, this is never reached...
+            // but let it be here anyways
+            term->mode.print_controller = 0;
+            break;
         case 5: /* Enable printer */
-            term->mode.print_enabled = term->esc.param[0] == 5;
+            if (tty_has_printer(&term->tty)) {
+                term->mode.print_controller = 1;
+                term->pr_state = pr_ground;
+                print_intercept(term);
+            }
             break;
         default:
             term_esc_dump(term, 0);
@@ -3040,7 +3294,6 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
             res = rep;
         }
     } else {
-        const uint8_t *blk_start = *start;
         term_char_t prev = -1U;
 
         do {
@@ -3062,7 +3315,7 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
 
             // Decode nrcs
             // In theory this should be disabled while in UTF-8 mode, but
-            // in practive applications use these symbols, so keep translating.
+            // in practice applications use these symbols, so keep translating.
             // But decode only allow only DEC Graph in GL, unless configured otherwise
             if (term->mode.utf8 && !iconf(ICONF_FORCE_UTF8_NRCS))
                 ch = nrcs_decode_fast(glv, ch);
@@ -3103,9 +3356,6 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
 
             // Since maxw < width == length of predec_buf, don't check it
         } while(totalwidth < maxw && /* count < FD_BUF_SIZE && */ *start < end);
-
-        if (term->mode.print_enabled)
-            tty_print_string(&term->tty, blk_start, *start - blk_start);
 
         if (prev != -1U) term->prev_ch = prev; // For REP CSI
     }
@@ -4341,7 +4591,7 @@ static void term_dispatch_c0(struct term *term, term_char_t ch) {
     case 0x0a: /* LF */
     case 0x0b: /* VT */
     case 0x0c: /* FF */
-        if (!term->mode.print_enabled && term->mode.print_auto)
+        if (term->mode.print_auto)
             term_print_line(term, term->screen[term->c.y]);
         term_index(term);
         if (term->mode.crlf) term_cr(term);
@@ -4443,11 +4693,16 @@ static void term_dispatch_vt52(struct term *term, term_char_t ch) {
     case 'V': /* Print cursor line */
         term_print_line(term, term->screen[term->c.y]);
         break;
-    case 'W': /* Enable printer */
-        term->mode.print_enabled = 1;
+    case 'W': /* Enable printer controller mode */
+        if (tty_has_printer(&term->tty)) {
+            term->mode.print_controller = 1;
+            term->pr_state = pr_ground;
+            print_intercept(term);
+        }
         break;
-    case 'X': /* Disable printer */
-        term->mode.print_enabled = 0;
+    case 'X': /* Disable printer printer controller mdoe */
+        // This is never reached...
+        term->mode.print_controller = 0;
         break;
     case 'Y':
         term->esc.state = esc_vt52_cup_0;
@@ -4486,10 +4741,6 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         // Put it back to buffer
         (*start)--;
         return term_dispatch_print(term, ch, 0, start, end);
-    }
-
-    if (__builtin_expect(term->mode.print_enabled, 0)) {
-        term_print_char(term, ch);
     }
 
     // C1 controls are interpreted in all states, try them before others
@@ -4661,6 +4912,9 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
 
 void term_read(struct term *term) {
     if (tty_refill(&term->tty) <= 0) return;
+
+    if (term->mode.print_controller)
+        print_intercept(term);
 
     if (term->mode.scroll_on_output && term->view_pos.line)
         term_reset_view(term, 1);
