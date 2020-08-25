@@ -3279,14 +3279,16 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
             // negative in predecode buffer
             if (wid > 1) ch = -ch;
 
-            // Allow printing at least one wide char at right margin
-            // if autowrap is off
-            if (maxw == 1 && !term->mode.wrap) maxw = wid;
+            if (wid == 2) {
+                // Allow printing at least one wide char at right margin
+                // if autowrap is off
+                if (maxw == 1) maxw = wid;
 
-            // If autowrap is on, in this case line will be
-            // wrapped so we can print a lot more
-            if (term->mode.wrap && term->c.x == term_max_x(term) - 1)
-                maxw = term_max_x(term) - term_min_x(term);
+                // If autowrap is on, in this case line will be
+                // wrapped so we can print a lot more
+                if (term->mode.wrap && term->c.x == term_max_x(term) - 1)
+                    maxw = term_max_x(term) - term_min_x(term);
+            }
 
             while (totalwidth + wid < maxw && rep) {
                 totalwidth += wid;
@@ -3337,11 +3339,11 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
                 // Adjust width to be other 1 or 2
                 wid = 1 + (wid > 1);
 
-                // Don't include char if its too wide
-                // Unless its a wide char at right margin, and its first
-                // or autowrap is disabled, and we are at right margin
+                // Don't include char if its too wide, unless its a wide char 
+                // at right margin, or autowrap is disabled, and we are at right size of the screen
+                // In those cases recalculate maxw
                 if (totalwidth + wid > maxw) {
-                    if (totalwidth || wid != 2) {
+                    if (__builtin_expect(totalwidth || wid != 2, 1)) {
                         *start = char_start;
                         break;
                     } else if (term->c.x == term_max_x(term) - 1) {
