@@ -5,16 +5,18 @@
 #include "line.h"
 #include "util.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #define MAX_LINE_LEN 16384
-#define MAX_EXTRA_PALETTE (0x10000 - PALETTE_SIZE)
-#define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, (sz) ? 8*(sz)/5 : 4)
+#define MAX_EXTRA_PALETTE (0x10000 - PALETTE_SIZE - 1)
+#define INIT_CAP 4
+#define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, MAX(3*(sz)/2, INIT_CAP))
 
-static bool optimize_line_palette(struct line *line) {
+static bool optimize_line_palette(struct line *line, color_id_t *preserve) {
     // Buffer here causes a leak in theory
     static color_id_t *buf = NULL, buf_len = 0, *new;
 
@@ -37,6 +39,9 @@ static bool optimize_line_palette(struct line *line) {
             if (cel->fg >= PALETTE_SIZE) pbuf[cel->fg] = 0;
             if (cel->bg >= PALETTE_SIZE) pbuf[cel->bg] = 0;
         }
+
+        if (preserve && *preserve >= PALETTE_SIZE) pbuf[*preserve] = 0;
+
         color_t *pal = line->pal->data - PALETTE_SIZE;
         for (color_id_t i = PALETTE_SIZE; i < line->pal->size + PALETTE_SIZE; i++) {
             if (!pbuf[i]) {
@@ -53,12 +58,14 @@ static bool optimize_line_palette(struct line *line) {
             if (cel->fg >= PALETTE_SIZE) cel->fg = pbuf[cel->fg];
             if (cel->bg >= PALETTE_SIZE) cel->bg = pbuf[cel->bg];
         }
+
+        if (preserve && *preserve >= PALETTE_SIZE) *preserve = pbuf[*preserve];
     }
 
     return 1;
 }
 
-color_id_t alloc_color(struct line *line, color_t col) {
+color_id_t alloc_color(struct line *line, color_t col, color_id_t *pre) {
     if (line->pal) {
         if (line->pal->size > 0 && line->pal->data[line->pal->size - 1] == col)
             return PALETTE_SIZE + line->pal->size - 1;
@@ -67,10 +74,10 @@ color_id_t alloc_color(struct line *line, color_t col) {
     }
 
     if (!line->pal || line->pal->size + 1 > line->pal->caps) {
-        if (!optimize_line_palette(line)) return SPECIAL_BG;
-        if (!line->pal || line->pal->size + 1 >= line->pal->caps) {
+        if (!optimize_line_palette(line, pre)) return SPECIAL_BG;
+        if (!line->pal || line->pal->size + 1 > line->pal->caps) {
             if (line->pal && line->pal->caps == MAX_EXTRA_PALETTE) return SPECIAL_BG;
-            size_t newc = CAPS_INC_STEP(line->pal ? line->pal->caps : 0);
+            size_t newc = line->pal ? CAPS_INC_STEP(line->pal->caps) : INIT_CAP;
             struct line_palette *new = realloc(line->pal, sizeof(struct line_palette) + newc * sizeof(color_t));
             if (!new) return SPECIAL_BG;
             if (!line->pal) new->size = 0;
@@ -79,8 +86,8 @@ color_id_t alloc_color(struct line *line, color_t col) {
         }
     }
 
-    line->pal->data[line->pal->size++] = col;
-    return PALETTE_SIZE + line->pal->size - 1;
+    line->pal->data[line->pal->size] = col;
+    return PALETTE_SIZE + line->pal->size++;
 }
 
 struct line *create_line(struct sgr sgr, ssize_t width) {
@@ -133,7 +140,7 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     }
 
     if (opt && src1->pal) {
-        optimize_line_palette(src1);
+        optimize_line_palette(src1, NULL);
         struct line_palette *pal = realloc(src1->pal, sizeof(struct line_palette) + sizeof(color_t)*(src1->pal->size));
         if (pal) {
             src1->pal = pal;

@@ -74,7 +74,7 @@ struct sgr {
     struct cell cel;
 };
 
-color_id_t alloc_color(struct line *line, color_t col);
+color_id_t alloc_color(struct line *line, color_t col, color_id_t *pre);
 struct line *create_line(struct sgr sgr, ssize_t width);
 struct line *realloc_line(struct line *line, struct sgr sgr, ssize_t width);
 /* concat_line will return NULL not touching src1 and src2 if resulting line is too long */
@@ -96,18 +96,18 @@ inline static int16_t line_length(struct line *line) {
 
 inline static struct cell fixup_color(struct line *line, struct sgr sgr) {
     if (__builtin_expect(sgr.cel.bg >= PALETTE_SIZE, 0))
-        sgr.cel.bg = alloc_color(line, sgr.bg);
+        sgr.cel.bg = alloc_color(line, sgr.bg, NULL);
     if (__builtin_expect(sgr.cel.fg >= PALETTE_SIZE, 0))
-        sgr.cel.fg = alloc_color(line, sgr.fg);
+        sgr.cel.fg = alloc_color(line, sgr.fg, &sgr.cel.bg);
     return sgr.cel;
 }
 
 inline static void copy_cell(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, bool dmg) {
     struct cell cel = src->cell[sx];
-    if (cel.fg >= PALETTE_SIZE) cel.fg = alloc_color(dst,
-            src->pal->data[cel.fg - PALETTE_SIZE]);
     if (cel.bg >= PALETTE_SIZE) cel.bg = alloc_color(dst,
-            src->pal->data[cel.bg - PALETTE_SIZE]);
+            src->pal->data[cel.bg - PALETTE_SIZE], NULL);
+    if (cel.fg >= PALETTE_SIZE) cel.fg = alloc_color(dst,
+            src->pal->data[cel.fg - PALETTE_SIZE], &cel.bg);
     if (dmg) cel.attr &= ~attr_drawn;
     dst->cell[dx] = cel;
 }
