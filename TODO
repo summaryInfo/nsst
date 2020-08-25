@@ -1,28 +1,18 @@
 Until version 1.7:
-    Split term.c to screen.c/misc.c/parse.c/term.c
-    Rewrap lines
-        Allow disable rewrapping only for screen/part below cursor, while keep rewrapping scrollback
-        Recalculate non-rectangular selection position on resize
-        Do something with multi-line shell prompt eating history lines
-        Make selection operate on physical lines?
-            allows to get rid of term->view (and its recalculation on resize)
-            allows to keep non-rectangular selections after resizing
-    CSI ? 4 l / CSI ? 4 h -- DECSCLM
-    CSI > Ps q -- XTVERSION -> DCS > | text ST
-    Refactor config
-        Split global and perinstance settings, reload reliably
-        Allow geometry to be specified in characters
-        Implement named values for options instead of numeric
-    Print
-        Printing with SGR
-        More advanced printing method (command with pipe)
+    Recalculate non-rectangular selection position on resize
+    Allow geometry to be specified in characters
+    Printing with SGR
 ===================
 General
     Write man page
-    Allow short lines to be seleted properly
+    Add 'always' value to some options to prevent overriding
+    Allow disable rewrapping only for screen/part below cursor, while keep rewrapping scrollback
+    Do something with multi-line shell prompt eating history lines
+    Make selection operate on physical lines?
+        allows to get rid of term->view (and its recalculation on resize)
+        allows to keep non-rectangular selections after resizing
     Some alternative to XParseColor
     Implement proper daemon mode
-    Make X resource/option names more or less correspond to Xterm/rxvt-unicode?
 Render
     General
         Colored glyphs
@@ -36,13 +26,14 @@ Render
     XRender
         Slow scrolling of full-color images (with small font in chafa)
         Use multiple separate buffers for background/lines/glyphs to sort less
+        Allow short lines to be seleted properly
     Wayland
 Emulation
     Proper vt level restriction
     Is private mode 1044 semantics correct/sould it be implemented at all?
-    Is reset correctly implemented?
     VT220
         CSI ? 8 l / CSI ? 8 h -- DECARM (When ported to wayland)
+        CSI ? 4 l / CSI ? 4 h -- DECSCLM
         DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
     SIXEL
         CSI ? 80 l / CSI ? 80 h -- DECSDM
