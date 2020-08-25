@@ -329,8 +329,39 @@ int tty_open(struct tty *tty, const char *cmd, const char **args) {
 
     // Open printer file/pipe
     if (tty->fd >= 0) {
+        const char *print_cmd = sconf(SCONF_PRINT_CMD);
         const char *printer_path = sconf(SCONF_PRINTER);
-        if (printer_path) {
+        tty->printerfd = -1;
+
+
+        if (print_cmd) {
+            int pip[2];
+            pid_t pr_pid;
+            if (pipe(pip) < 0)  goto n_printer;
+
+            switch ((pr_pid = fork())) {
+            case -1:
+                goto n_printer;
+            default:
+                dup2(pip[0], 0);
+                close(pip[1]);
+                close(pip[0]);
+                tty->printerfd = pip[0];
+                execl("/bin/sh", "/bin/sh", "-c", print_cmd, NULL);
+                warn("Can't run print command: '%s'", print_cmd);
+                return 127;
+            case 0:
+                signal(SIGPIPE, SIG_IGN);
+                close(pip[0]);
+                tty->printerfd = pip[1];
+            }
+            if (0) {
+n_printer:
+                warn("Can't run print command: '%s'", print_cmd);
+            }
+        }
+
+        if (tty->printerfd < 0 && printer_path) {
             if (printer_path[0] == '-' && !printer_path[1])
                 tty->printerfd = STDOUT_FILENO;
             else

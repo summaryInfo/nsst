@@ -102,7 +102,8 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"override-boxdrawing", "\t(Use built-in box drawing characters)", "overrideBoxdrawing", ICONF_OVERRIDE_BOXDRAW},
 #endif
     {"pixel-mode", "\t\t(Subpixel rendering config; mono, bgr, rgb, bgrv, or rgbv)", "pixelMode", ICONF_PIXEL_MODE},
-    {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", "printer", SCONF_PRINTER},
+    {"print-command", "\t\t(Program to pipe CSI MC output into)", "printerCommand", SCONF_PRINT_CMD},
+    {"printer-file", ", -o<value>\t(File where CSI MC output to)", "printer-file", SCONF_PRINTER},
     {"raise-on-bell", "\t\t(Raise terminal window on bell)", "raiseOnBell", ICONF_RAISE_ON_BELL},
     {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", ICONF_RESIZE_DELAY},
     {"reverse-video", "\t\t(Initial reverse video setting)", "enableReverseVideo", ICONF_REVERSE_VIDEO},
@@ -262,6 +263,7 @@ static struct {
     [SCONF_TERM_NAME - SCONF_MIN] = { "xterm", NULL },
     [SCONF_TITLE - SCONF_MIN] = { "Not So Simple Terminal", NULL },
     [SCONF_PRINTER - SCONF_MIN] = { NULL, NULL },
+    [SCONF_PRINT_CMD - SCONF_MIN] = { NULL, NULL },
     [SCONF_TERM_CLASS - SCONF_MIN] = { NULL, NULL },
     [SCONF_FORCE_MOUSE_MOD - SCONF_MIN] = { "T", NULL },
     [SCONF_TERM_MOD - SCONF_MIN] = {"SC", NULL },

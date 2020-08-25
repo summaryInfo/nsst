@@ -152,6 +152,7 @@ enum config_option {
     SCONF_TERM_CLASS,
     SCONF_TITLE,
     SCONF_PRINTER,
+    SCONF_PRINT_CMD,
     SCONF_WORD_SEPARATORS,
     SCONF_TERM_MOD,
     SCONF_FORCE_MOUSE_MOD,
@@ -185,9 +186,9 @@ struct optmap_item {
 };
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 119
-#else
 #    define OPT_MAP_SIZE 120
+#else
+#    define OPT_MAP_SIZE 121
 #endif
 
 extern struct optmap_item optmap[OPT_MAP_SIZE];
