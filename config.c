@@ -46,9 +46,9 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"bold-color", "\t\t(Special color of bold text)", "boldColor", CCONF_BOLD},
     {"cursor-background", "\t(Default cursor backround color)", "cursorBackground", CCONF_CURSOR_BG},
     {"cursor-foreground", "\t(Default cursor foreround color)", "cursorForeground", CCONF_CURSOR_FG},
-    {"cut-lines", "\t\t(Cut long lines on resize with rewrapping disabled)", "cutLines", ICONF_CUT_LINES},
     {"cursor-shape", "\t\t(Shape of cursor)", "cursorShape", ICONF_CURSOR_SHAPE},
     {"cursor-width", "\t\t(Width of lines that forms cursor)", "cursorWidth", ICONF_CURSOR_WIDTH},
+    {"cut-lines", "\t\t(Cut long lines on resize with rewrapping disabled)", "cutLines", ICONF_CUT_LINES},
     {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", "deleteIsDelete", ICONF_DELETE_IS_DELETE},
     {"double-click-time", "\t(Time gap in milliseconds in witch two mouse presses will be considered double)", "doubleClickTime", ICONF_DOUBLE_CLICK_TIME},
     {"erase-scrollback", "\t(Allow ED 3 to clear scrollback buffer)", "eraseScrollback", ICONF_ALLOW_ERASE_SCROLLBACK},
@@ -101,7 +101,7 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
 #if USE_BOXDRAWING
     {"override-boxdrawing", "\t(Use built-in box drawing characters)", "overrideBoxdrawing", ICONF_OVERRIDE_BOXDRAW},
 #endif
-    {"pixel-mode", "\t\t(Subpixel rendering config: 0 - mono, 1 - BGR, 2 - RGB, 3 - BGRV, 4 - RGBV)", "pixelMode", ICONF_PIXEL_MODE},
+    {"pixel-mode", "\t\t(Subpixel rendering config; mono, bgr, rgb, bgrv, or rgbv)", "pixelMode", ICONF_PIXEL_MODE},
     {"printer", ", -o<value>\t(File where CSI MC-line commands output to)", "printer", SCONF_PRINTER},
     {"raise-on-bell", "\t\t(Raise terminal window on bell)", "raiseOnBell", ICONF_RAISE_ON_BELL},
     {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", ICONF_RESIZE_DELAY},
@@ -365,30 +365,101 @@ const char *sconf(uint32_t opt) {
 void sconf_set(uint32_t opt, const char *val) {
     if (SCONF_MIN <= opt && opt < SCONF_MAX) {
         opt -= SCONF_MIN;
+        if (!strcasecmp(val, "default")) val = soptions[opt].dflt;
         if (soptions[opt].val) free(soptions[opt].val);
         soptions[opt].val = val ? strdup(val) : NULL;
     } else if (opt < ICONF_MAX) {
         int32_t ival = ioptions[opt - ICONF_MIN].dflt;
         if (!val || sscanf(val, "%"SCNd32, &ival) == 1)
             iconf_set(opt, ival);
-        // Boolean option
-        else if (ioptions[opt].min == 0 && ioptions[opt].max == 1) {
+        else {
             ival = -1;
-            if (!strcasecmp(val, "yes") || !strcasecmp(val, "y") || !strcasecmp(val, "true")) ival = 1;
-            else if (!strcasecmp(val, "no") || !strcasecmp(val, "n") || !strcasecmp(val, "false")) ival = 0;
+            // Boolean options
+            if (opt == ICONF_LOG_LEVEL) {
+                if (!strcasecmp(val, "quiet")) ival = 0;
+                else if (!strcasecmp(val, "fatal")) ival = 1;
+                else if (!strcasecmp(val, "warn")) ival = 2;
+                else if (!strcasecmp(val, "info")) ival = 3;
+            } else if (opt == ICONF_CURSOR_SHAPE) {
+                if (!strcasecmp(val, "blinking-block")) ival = 1;
+                else if (!strcasecmp(val, "block")) ival = 2;
+                else if (!strcasecmp(val, "blinking-underline")) ival = 3;
+                else if (!strcasecmp(val, "underline")) ival = 4;
+                else if (!strcasecmp(val, "blinking-bar")) ival = 5;
+                else if (!strcasecmp(val, "bar")) ival = 6;
+            } else if (opt == ICONF_PIXEL_MODE) {
+                if (!strcasecmp(val, "mono")) ival = 0;
+                else if (!strcasecmp(val, "bgr")) ival = 1;
+                else if (!strcasecmp(val, "rgb")) ival = 2;
+                else if (!strcasecmp(val, "bgrv")) ival = 3;
+                else if (!strcasecmp(val, "rgbv")) ival = 4;
+            } else if (opt == ICONF_KEYBOARD_NRCS) {
+#define E(c) ((c) & 0x7F)
+#define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
+#define I1(i) (I0(i) << 5)
+                if (!val[1] && val[0] > 0x2F && val[0] < 0x7F) {
+                    uint32_t sel = E(val[0]);
+                    ival = nrcs_parse(sel, 0, 5, 1);
+                    if (ival < 0) ival = nrcs_parse(sel, 1, 5, 1);
+                } else if (val[0] >= 0x20 && val[0] < 0x30 && val[1] > 0x2F && val[1] < 0x7F && !val[3]) {
+                    uint32_t sel = E(val[1]) | I0(val[0]);
+                    ival = nrcs_parse(sel, 0, 5, 1);
+                    if (ival < 0) ival = nrcs_parse(sel, 1, 5, 1);
+                }
+            } else if (opt == ICONF_MARGIN_BELL_VOLUME || opt == ICONF_BELL_VOLUME) {
+                if (!strcasecmp(val, "off")) ival = 0;
+                else if (!strcasecmp(val, "low")) ival = 1;
+                else if (!strcasecmp(val, "high")) ival = 2;
+            } else if (opt == ICONF_MAPPING) {
+                // "default" is parsed separately
+                if (!strcasecmp(val, "legacy")) ival = keymap_legacy;
+                else if (!strcasecmp(val, "vt220")) ival = keymap_vt220;
+                else if (!strcasecmp(val, "hp")) ival = keymap_hp;
+                else if (!strcasecmp(val, "sun")) ival = keymap_sun;
+                else if (!strcasecmp(val, "sco")) ival = keymap_sco;
+            } else if (opt == ICONF_MODIFY_OTHER_FMT) {
+                if (!strcasecmp(val, "xterm")) ival = 0;
+                else if (!strcasecmp(val, "csi-u")) ival = 1;
+            } else if (ioptions[opt].min == 0 && ioptions[opt].max == 1) {
+                if (!strcasecmp(val, "yes") || !strcasecmp(val, "y") || !strcasecmp(val, "true")) ival = 1;
+                else if (!strcasecmp(val, "no") || !strcasecmp(val, "n") || !strcasecmp(val, "false")) ival = 0;
+            } else if (!strcasecmp(val, "default")) {
+                ival = ioptions[opt].dflt;
+            }
+
             if (ival >= 0) iconf_set(opt, ival);
             else warn("Unknown string option %d", opt);
-        } else warn("Unknown string option %d", opt);
+        }
     } else if (KCONF_MIN <= opt && opt < KCONF_MAX) {
         enum shortcut_action sa = opt - KCONF_MIN + 1;
+        if (!strcasecmp(val, "default")) {
+            const char *dflt[shortcut_MAX] = {
+                [shortcut_scroll_down] = "T-Up",
+                [shortcut_scroll_up] = "T-Down",
+                [shortcut_font_up] = "T-Page_Up",
+                [shortcut_font_down] = "T-Page_Down",
+                [shortcut_font_default] = "T-Home",
+                [shortcut_new_window] = "T-N",
+                [shortcut_numlock] = "T-Num_Lock",
+                [shortcut_copy] = "T-C",
+                [shortcut_paste] = "T-V",
+                [shortcut_break] = "Break",
+                [shortcut_reset] = "T-R",
+                [shortcut_reload_config] = "T-X",
+            };
+            if (dflt[sa]) val = dflt[sa];
+        }
         if (val) keyboard_set_shortcut(sa, val);
     } else if (CCONF_MIN <= opt && opt < CCONF_MAX) {
-            color_t col;
-            if (val) col = parse_color((uint8_t*)val, (uint8_t*)val + strlen(val));
-            else col = color(opt);
+            color_t col = 0;
+            bool dflt = !val || !strcasecmp(val, "default");
+            if (dflt) col = color(opt);
+            else if (val) col = parse_color((uint8_t*)val, (uint8_t*)val + strlen(val));
             if (col || !val) {
                 color_t old = cconf(opt);
-                if (val) {
+                if (!dflt) {
+                    // Keep alpha, unless its a special
+                    // color value or we are resetting to default
                     if ((opt >= CCONF_SELECTED_BG) && !old) old = 0xFF000000;
                     col = (col & 0xFFFFFF) | (old & 0xFF000000);
                 }

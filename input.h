@@ -23,7 +23,7 @@ enum shortcut_action {
     shortcut_reload_config,
     shortcut_copy,
     shortcut_paste,
-    shortcut_MAX = shortcut_paste + 1
+    shortcut_MAX
 };
 
 struct keyboard_state {
