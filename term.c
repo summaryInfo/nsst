@@ -41,8 +41,9 @@
 #define ST "\x9C"
 
 #define IS_C1(c) ((uint32_t)(c) - 0x80U < 0x20U)
-#define IS_C0(c) ((c) < 0x20)
-#define IS_DEL(c) ((c) == 0x7f)
+#define IS_C0(c) ((c) < 0x20U)
+#define IS_CBYTE(c) (((uint32_t)(c) & 0x7FU) < 0x20U)
+#define IS_DEL(c) ((c) == 0x7FU)
 
 #define TABSR_INIT_CAP 48
 #define TABSR_CAP_STEP(x) (4*(x)/3)
@@ -3049,7 +3050,7 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
             enum charset glv = term->c.gn[term->c.gl_ss];
 
             // Skip DEL char if not 96 set
-            if (ch == 0x7F && (glv > cs96_latin_1 || (!term->mode.enable_nrcs &&
+            if (IS_DEL(ch) && (glv > cs96_latin_1 || (!term->mode.enable_nrcs &&
                     (glv == cs96_latin_1 || glv == cs94_british)))) continue;
 
             // Decode nrcs
@@ -3091,7 +3092,7 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
             ch = **start;
 
             // If we have encountered control character, break
-            if ((ch & 0x7F) < 0x20) break;
+            if (IS_CBYTE(ch)) break;
 
             // Since UCS-4 chars takes not more units than UTF-8, don't check other buffer length
         } while(totalwidth < maxw && /* count < FD_BUF_SIZE && */ *start < end);
@@ -4469,21 +4470,17 @@ static void term_dispatch_vt52_cup(struct term *term) {
 inline static bool term_dispatch(struct term *term, const uint8_t **start, const uint8_t *end) {
     uint8_t ch = *(*start)++;
 
-    if (term->esc.state == esc_ground && (__builtin_expect(!IS_C1(ch), 1) || term->vt_level < 2)) {
-        if (ch < 0x20) {
-            if (term->mode.print_enabled) term_print_char(term, ch);
-            term_dispatch_c0(term, ch);
-            return 1;
-        } else {
-            // One char is already consumed
-            // Put it back to buffer
-            (*start)--;
-
-            return term_dispatch_print(term, ch, 0, start, end);
-        }
+    // Fast path for graphical characters
+    if (term->esc.state == esc_ground && !IS_CBYTE(ch)) {
+        // One char is already consumed
+        // Put it back to buffer
+        (*start)--;
+        return term_dispatch_print(term, ch, 0, start, end);
     }
 
-    if (term->mode.print_enabled) term_print_char(term, ch);
+    if (__builtin_expect(term->mode.print_enabled, 0)) {
+        term_print_char(term, ch);
+    }
 
     // C1 controls are interpreted in all states, try them before others
     if (__builtin_expect(IS_C1(ch), 0) && term->vt_level > 1) {
@@ -4495,11 +4492,14 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         return 1;
     }
 
-    if (term->esc.state != esc_dcs_string && term->esc.state != esc_osc_string) ch &= 0x7F;
+    // Reset 8th bit for all controls, except strings
+    if (term->esc.state != esc_dcs_string &&
+            term->esc.state != esc_osc_string) ch &= 0x7F;
 
     switch (term->esc.state) {
-    case esc_ground: /* never reached */
-        assert(0);
+    case esc_ground:
+        // Only C0 arrives, so ch < 0x20
+        term_dispatch_c0(term, ch);
         break;
     case esc_esc_entry:
         term_esc_start(term);
