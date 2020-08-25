@@ -90,16 +90,36 @@ color_id_t alloc_color(struct line *line, color_t col, color_id_t *pre) {
     return PALETTE_SIZE + line->pal->size++;
 }
 
+inline static void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
+    ssize_t i = (width+7)/8, inc = width % 8;
+    if (!inc) inc = 8;
+    switch(inc) do {
+        dst += inc;
+        inc = 8;
+        case 8: dst[7] = c;
+        case 7: dst[6] = c;
+        case 6: dst[5] = c;
+        case 5: dst[4] = c;
+        case 4: dst[3] = c;
+        case 3: dst[2] = c;
+        case 2: dst[1] = c;
+        case 1: dst[0] = c;
+    } while(--i > 0);
+}
+
 struct line *create_line(struct sgr sgr, ssize_t width) {
     struct line *line = malloc(sizeof(*line) + (size_t)width * sizeof(line->cell[0]));
     if (line) {
-        line->width = width;
         line->pal = NULL;
         line->wrapped = 0;
         line->force_damage = 0;
-        struct cell cel = fixup_color(line, sgr);
-        for (ssize_t i = 0; i < width; i++)
-            line->cell[i] = cel;
+        line->width = 0;
+        if (width) {
+            struct cell cel = fixup_color(line, sgr);
+            cel.attr = 0;
+            fill_cells(line->cell, cel, width);
+        }
+        line->width = width;
     } else warn("Can't allocate line");
     return line;
 }
@@ -109,11 +129,9 @@ struct line *realloc_line(struct line *line, struct sgr sgr, ssize_t width) {
     if (!new) die("Can't create lines");
 
     if (width > new->width) {
-        struct cell cell = fixup_color(new, sgr);
-        cell.attr = 0;
-
-        for (ssize_t i = new->width; i < width; i++)
-            new->cell[i] = cell;
+        struct cell cel = fixup_color(new, sgr);
+        cel.attr = 0;
+        fill_cells(new->cell + new->width, cel, width - new->width);
     }
 
     new->width = width;
@@ -121,8 +139,8 @@ struct line *realloc_line(struct line *line, struct sgr sgr, ssize_t width) {
 }
 
 struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
-    ssize_t llen = MAX(line_length(src2 ? src2 : src1), 1);
     if (src2) {
+        ssize_t llen = MAX(line_length(src2), 1);
         ssize_t oldw = src1->width;
 
         if (llen + oldw > MAX_LINE_LEN) return NULL;
@@ -135,8 +153,10 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
         src1->wrapped = src2->wrapped;
 
         free_line(src2);
-    } else if (opt && src1->width != llen) {
-        src1 = realloc_line(src1, (struct sgr){0}, llen);
+    } else if (opt) {
+        ssize_t llen = MAX(line_length(src1), 1);
+        if (llen != src1->width)
+            src1 = realloc_line(src1, (struct sgr){0}, llen);
     }
 
     if (opt && src1->pal) {

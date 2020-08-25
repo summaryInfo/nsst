@@ -123,6 +123,7 @@ enum config_option {
     ICONF_NUMLOCK,
     ICONF_REWRAP,
     ICONF_CUT_LINES,
+    ICONF_MINIMIZE_SCROLLBACK,
     // Backround opacity
     // These can't be read with iconf
     ICONF_ALPHA,
@@ -184,9 +185,9 @@ struct optmap_item {
 };
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 118
-#else
 #    define OPT_MAP_SIZE 119
+#else
+#    define OPT_MAP_SIZE 120
 #endif
 
 extern struct optmap_item optmap[OPT_MAP_SIZE];

@@ -687,7 +687,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 }
             } else lower_left.line--;
 
-            scrolled = term_append_history(term, new_lines[start++], 1);
+            scrolled = term_append_history(term, new_lines[start++], iconf(ICONF_MINIMIZE_SCROLLBACK));
             new_cur_par--;
             term->c.y--;
             term->cs.y--;
@@ -1255,7 +1255,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
             if (save && !term->mode.altscreen && term->top == top) {
                 ssize_t scrolled = 0;
                 for (int16_t i = 0; i < amount; i++) {
-                    scrolled -= term_append_history(term, term->screen[top + i],  1);
+                    scrolled -= term_append_history(term, term->screen[top + i],  iconf(ICONF_MINIMIZE_SCROLLBACK));
                     term->screen[top + i] = create_line(term->c.sgr, term->width);
                 }
 
@@ -3094,7 +3094,7 @@ static ssize_t term_dispatch_print(struct term *term, term_char_t ch, ssize_t re
             // If we have encountered control character, break
             if (IS_CBYTE(ch)) break;
 
-            // Since UCS-4 chars takes not more units than UTF-8, don't check other buffer length
+            // Since maxw < width == length of predec_buf, don't check it
         } while(totalwidth < maxw && /* count < FD_BUF_SIZE && */ *start < end);
 
         if (term->mode.print_enabled)

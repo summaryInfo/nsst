@@ -90,6 +90,7 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"margin-bell-high-volume", " (High volume value for DECSMBV)", "marginBellHighVolume", ICONF_MARGIN_BELL_HIGH_VOLUME},
     {"margin-bell-low-volume", "(Low volume value for DECSMBV)", "marginBellLowVolume", ICONF_MARGIN_BELL_LOW_VOLUME},
     {"meta-sends-escape", "\t(Alt/Meta sends escape prefix instead of setting 8-th bit)", "metaSendsEscape", ICONF_META_IS_ESC},
+    {"minimize-scrollback", "\t(Realloc lines to save memory; makes scrolling a little slower)", "minimizeScrollback", ICONF_MINIMIZE_SCROLLBACK},
     {"modify-cursor", "\t\t(Enable encoding modifiers for cursor keys)", "modifyCursor", ICONF_MODIFY_CURSOR},
     {"modify-function", "\t(Enable encoding modifiers for function keys)", "modifyFunction", ICONF_MODIFY_FUNCTION},
     {"modify-keypad", "\t\t(Enable encoding modifiers keypad keys)", "modifyKeypad", ICONF_MODIFY_KEYPAD},
@@ -248,6 +249,7 @@ static struct {
     [ICONF_NUMLOCK - ICONF_MIN] = {1, 1, 0, 1},
     [ICONF_REWRAP - ICONF_MIN] = {1, 1, 0, 1},
     [ICONF_CUT_LINES - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_MINIMIZE_SCROLLBACK - ICONF_MIN] = {1, 1, 0, 1},
 };
 
 static struct {
