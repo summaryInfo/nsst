@@ -525,7 +525,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             term->back_screen[i] = realloc_line(term->back_screen[i], width);
 
         for (ssize_t i = term->height; i < height; i++)
-            if (!(term->back_screen[i] = create_line((struct sgr){0}, width)))
+            if (!(term->back_screen[i] = create_line(term->sgr, width)))
                 die("Can't allocate lines");
 
         // Adjust altscreen saved cursor position
@@ -604,7 +604,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             nnlines = MAX(nnlines * 2, MAX(MAX(new_cur_par - cursor_par, approx_cy - height - 1), 0) + height * 2);
 
             new_lines = calloc(nnlines, sizeof(*new_lines));
-            if (!new_lines || !(new_lines[0] = create_line((struct sgr){0}, width)))
+            if (!new_lines || !(new_lines[0] = create_line(term->sgr, width)))
                 die("Can't allocate line");
 
             ssize_t y2 = y, dy = 0;
@@ -622,7 +622,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                     // If last character of line is wide, soft wrap
                     if (dx == width - 1 && line->cell[x].attr & attr_wide) {
                         new_lines[dy]->wrapped = 1;
-                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line((struct sgr){0}, width)))
+                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->sgr, width)))
                             die("Can't allocate line");
                         dx = 0;
                     }
@@ -642,7 +642,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                     // Advance line, soft wrap
                     if (++dx == width && (x < len - 1 || line->wrapped)) {
                         new_lines[dy]->wrapped = 1;
-                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line((struct sgr){0}, width)))
+                        if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->sgr, width)))
                             die("Can't allocate line");
                         dx = 0;
                     }
@@ -660,7 +660,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 }
                 // Advance line, hard wrap
                 if (!line->wrapped) {
-                    if (dy < nnlines - 1 && !(new_lines[++dy] = create_line((struct sgr){0}, width)))
+                    if (dy < nnlines - 1 && !(new_lines[++dy] = create_line(term->sgr, width)))
                         die("Can't allocate line");
                     par_start = dy;
                     dx = 0;
@@ -736,7 +736,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
         // Allocate new empty lines
         for (ssize_t i = minh; i < height; i++)
-            if (!(new_lines[i] = create_line((struct sgr){0}, width)))
+            if (!(new_lines[i] = create_line(term->sgr, width)))
                 die("Can't allocate lines");
 
         term->screen = new_lines;
@@ -1874,10 +1874,11 @@ static void term_dispatch_da(struct term *term, uparam_t mode) {
              *28 - Rectangular editing
              *29 - ANSI text locator (i.e., DEC Locator mode).
              */
-            term_answerback(term, CSI"?%u;1;2;6%s;9%sc",
+
+            term_answerback(term, CSI"?%u;1;2;6%s;9;15%sc",
                     60 + term->vt_version/100,
                     term->kstate.keyboard_mapping == keymap_vt220 ? ";8" : "",
-                    term->vt_level >= 4 ? ";21;22;28" : ";22");
+                    term->vt_level >= 4 ? ";16;17;18;21;22;28;29" : ";22;29");
         }
     }
 }
@@ -3834,10 +3835,9 @@ static void term_dispatch_csi(struct term *term) {
         case 2: term->mode.eight_bit = 1; break;
         case 1: term->mode.eight_bit = 0; break;
         default:
+            term->esc.state = esc_csi_2;
             term_esc_dump(term, 0);
         }
-        term_esc_dump(term, 0);
-        warn("C %d", term->vt_level);
         break;
     case C('q') | I0('"'): /* DECSCA */
         switch (PARAM(0, 2)) {
