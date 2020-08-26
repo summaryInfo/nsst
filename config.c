@@ -103,7 +103,7 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
 #endif
     {"pixel-mode", "\t\t(Subpixel rendering config; mono, bgr, rgb, bgrv, or rgbv)", "pixelMode", ICONF_PIXEL_MODE},
     {"print-command", "\t\t(Program to pipe CSI MC output into)", "printerCommand", SCONF_PRINT_CMD},
-    {"printer-file", ", -o<value>\t(File where CSI MC output to)", "printerFile", SCONF_PRINTER},
+    {"printer-file", ", -o<value> (File where CSI MC output to)", "printerFile", SCONF_PRINTER},
     {"print-attributes", "\t(Print cell attributes when printing is enabled)", "printAttributes", ICONF_PRINT_ATTR },
     {"raise-on-bell", "\t\t(Raise terminal window on bell)", "raiseOnBell", ICONF_RAISE_ON_BELL},
     {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", ICONF_RESIZE_DELAY},

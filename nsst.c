@@ -45,7 +45,7 @@ static _Noreturn void usage(char *argv0, int code) {
                 "\t--<X>=no, --<X>=n, --<X>=false\n"
             "are equivalent to --<X>=0,\n"
             "where 'yes', 'y', 'true', 'no', 'n' and 'false' are case independet\n"
-            "All options are also accept special value 'default' to reset to built-in default"
+            "All options are also accept special value 'default' to reset to built-in default\n"
         );
     }
     free_context();
