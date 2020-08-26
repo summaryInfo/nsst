@@ -75,7 +75,7 @@ Sequential graphical characters are decoded all at once, so can be printed faste
 Debugging output can be enabled with `--trace-*`/`trace*` options.
 
 For now nsst supports combining characters only via precomposition, but almost everything is ready to implement proper rendering of combining character (and variant glyphs support).
-The only tricky part is to extract positioning tables and implemnt basic text shaping. It would be implemented using glyphs with codes `0x200000` - `0xFFFFFF`,
+The only tricky part is to extract positioning tables and implemnt basic text shaping. It would be implemented using glyphs with codes `0x110000` - `0x1FFFFF`,
 giving sufficient number of possible custom glyphs. DECDLD is also easy to implement this way.
 
 Hotkeys are now configurable. With syntax `[<Mods>-]<Name>`, where `<Mods>` is XKB key name and mods is a set of one or more of folowing:
