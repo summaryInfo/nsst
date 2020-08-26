@@ -1329,10 +1329,9 @@ static void term_swap_screen(struct term *term, bool damage) {
 static void term_scroll_horizontal(struct term *term, int16_t left, int16_t amount) {
     int16_t top = term_min_y(term), right = term_max_x(term), bottom = term_max_y(term);
 
-    if (term->prev_c_y >= 0 && top <= term->prev_c_y && term->prev_c_y < bottom &&
-        left <= term->prev_c_y && term->prev_c_x < right) {
+    if (top <= term->prev_c_y && term->prev_c_y < bottom && left <= term->prev_c_y && term->prev_c_x < right) {
         term->screen[term->prev_c_y]->cell[term->prev_c_x].drawn = 0;
-        term->prev_c_x = MAX(left, MIN(right, term->prev_c_x - amount));
+        term->prev_c_x = MAX(left, MIN(right - 1, term->prev_c_x - amount));
     }
 
     for (int16_t i = top; i < bottom; i++) {
@@ -1354,13 +1353,12 @@ static void term_scroll_horizontal(struct term *term, int16_t left, int16_t amou
 static void term_scroll(struct term *term, int16_t top, int16_t amount, bool save) {
     int16_t left = term_min_x(term), right = term_max_x(term), bottom = term_max_y(term);
 
-    if (left == 0 && right == term->width) { // Fast scrolling without margins
-        if (top <= term->prev_c_y && term->prev_c_y < bottom) {
-            term->screen[term->prev_c_y]->cell[term->prev_c_x].drawn = 0;
-            if (amount >= 0) term->prev_c_y = MAX(top, term->prev_c_y - amount);
-            else term->prev_c_y = MIN(bottom, term->prev_c_y - amount);
-        }
+    if (top <= term->prev_c_y && term->prev_c_y < bottom && left <= term->prev_c_x && term->prev_c_x < right) {
+        term->screen[term->prev_c_y]->cell[term->prev_c_x].drawn = 0;
+        term->prev_c_y = MAX(top, MIN(bottom - 1, term->prev_c_y - amount));
+    }
 
+    if (left == 0 && right == term->width) { // Fast scrolling without margins
         if (amount > 0) { /* up */
             amount = MIN(amount, (bottom - top));
             int16_t rest = (bottom - top) - amount;
@@ -1403,12 +1401,6 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
             }
         }
     } else { // Slow scrolling with margins
-
-        if (term->prev_c_y >= 0 && top <= term->prev_c_y && term->prev_c_y < bottom &&
-            left <= term->prev_c_y && term->prev_c_x < right) {
-            term->screen[term->prev_c_y]->cell[term->prev_c_x].drawn = 0;
-            term->prev_c_y = MAX(top, MIN(bottom, term->prev_c_y - amount));
-        }
 
         for (int16_t i = top; i < bottom; i++) {
             term_adjust_wide_left(term, left, i);
