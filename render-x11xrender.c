@@ -83,7 +83,7 @@ bool renderer_reload_font(struct window *win, bool need_free) {
         c = xcb_render_create_glyph_set_checked(con, win->ren.gsid, win->ren.pfglyph);
         if (check_void_cookie(c)) warn("Can't create glyph set");
 
-        for (term_char_t i = ' '; i <= '~'; i++) {
+        for (uint32_t i = ' '; i <= '~'; i++) {
             struct glyph *glyph = glyph_cache_fetch(win->font_cache, i, face_normal);
             glyph->x_off = win->char_width;
             register_glyph(win, i, glyph);
@@ -307,24 +307,20 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
             next_dirty = 1;
         }
         for (int16_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
-            bool dirty = line.line->force_damage || !(line.cell[i].attr & attr_drawn) ||
-                    (!win->blink_commited && (line.cell[i].attr & attr_blink)) ||
-                    (cond_cblink && k == cur_y && i == cur_x);
+            struct cell cel = line.cell[i];
+            struct attr attr = attr_at(line.line, i + line.cell - line.line->cell);
+            bool dirty = line.line->force_damage || !cel.drawn ||
+                    (!win->blink_commited && attr.blink) || (cond_cblink && k == cur_y && i == cur_x);
 
             struct cellspec spec;
-            struct cell cel;
             struct glyph *glyph = NULL;
             bool g_wide = 0;
-            term_char_t g = 0;
+            uint32_t g = 0;
             if (dirty || next_dirty) {
-                cel = line.cell[i];
+                if (k == cur_y && i == cur_x && cursor && win->focused &&
+                        ((win->cursor_type + 1) & ~1) == cusor_type_block) attr.reverse ^= 1;
 
-                if (k == cur_y && i == cur_x && cursor &&
-                        win->focused && ((win->cursor_type + 1) & ~1) == cusor_type_block)
-                    cel.attr ^= attr_inverse;
-
-                spec = describe_cell(cel, palette, line.line->pal->data,
-                        win->blink_state, mouse_is_selected_in_view(win->term, i, k));
+                spec = describe_cell(cel, attr, palette, win->blink_state, mouse_is_selected_in_view(win->term, i, k));
                 g =  spec.ch | (spec.face << 24);
 
                 bool fetched = glyph_cache_is_fetched(win->font_cache, g);
@@ -353,7 +349,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
                     .strikethrough = spec.stroke
                 };
 
-                line.cell[i].attr |= attr_drawn;
+                line.cell[i].drawn = 1;
             }
             next_dirty = dirty;
         }

@@ -749,45 +749,29 @@ uint32_t get_win_gravity_from_config() {
     }
 };
 
-struct cellspec describe_cell(struct cell cell, color_t *palette, color_t *extra, bool blink, bool selected) {
+struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, bool blink, bool selected) {
     struct cellspec res;
 
     // Check special colors
-    if (__builtin_expect(iconf(ICONF_SPEICAL_BOLD), 0) &&
-            palette[SPECIAL_BOLD] && cell.attr & attr_bold) {
-        cell.fg = SPECIAL_BOLD;
-        cell.attr &= ~attr_bold;
-    }
-    if (__builtin_expect(iconf(ICONF_SPEICAL_UNDERLINE), 0) &&
-            palette[SPECIAL_UNDERLINE] && cell.attr & attr_underlined) {
-        cell.fg = SPECIAL_UNDERLINE;
-        cell.attr &= ~attr_underlined;
-    }
-    if (__builtin_expect(iconf(ICONF_SPEICAL_BLINK), 0) &&
-            palette[SPECIAL_BLINK] && cell.attr & attr_blink) {
-        cell.fg = SPECIAL_BLINK;
-        cell.attr &= ~attr_blink;
-    }
-    if (__builtin_expect(iconf(ICONF_SPEICAL_REVERSE), 0) &&
-            palette[SPECIAL_REVERSE] && cell.attr & attr_inverse) {
-        cell.fg = SPECIAL_REVERSE;
-        cell.attr &= ~attr_inverse;
-    }
-    if (__builtin_expect(iconf(ICONF_SPEICAL_ITALIC), 0) &&
-            palette[SPECIAL_ITALIC] && cell.attr & attr_italic) {
-        cell.fg = SPECIAL_ITALIC;
-        cell.attr &= ~attr_italic;
-    }
+    if (__builtin_expect(iconf(ICONF_SPEICAL_BOLD), 0) && palette[SPECIAL_BOLD] && attr.bold)
+        attr.fg = palette[SPECIAL_BOLD], attr.bold = 0;
+    if (__builtin_expect(iconf(ICONF_SPEICAL_UNDERLINE), 0) && palette[SPECIAL_UNDERLINE] && attr.underlined)
+        attr.fg = palette[SPECIAL_UNDERLINE], attr.underlined = 0;
+    if (__builtin_expect(iconf(ICONF_SPEICAL_BLINK), 0) && palette[SPECIAL_BLINK] && attr.blink)
+        attr.fg = palette[SPECIAL_BLINK], attr.blink = 0;
+    if (__builtin_expect(iconf(ICONF_SPEICAL_REVERSE), 0) && palette[SPECIAL_REVERSE] && attr.reverse)
+        attr.fg = palette[SPECIAL_REVERSE], attr.reverse = 0;
+    if (__builtin_expect(iconf(ICONF_SPEICAL_ITALIC), 0) && palette[SPECIAL_ITALIC] && attr.italic)
+        attr.fg = palette[SPECIAL_ITALIC], attr.italic = 0;
 
     // Calculate colors
 
-    if ((cell.attr & (attr_bold | attr_faint)) == attr_bold && cell.fg < 8) cell.fg += 8;
-    res.bg = cell.bg < PALETTE_SIZE ? palette[cell.bg] : extra[cell.bg - PALETTE_SIZE];
-    res.fg = cell.fg < PALETTE_SIZE ? palette[cell.fg] : extra[cell.fg - PALETTE_SIZE];
-    if ((cell.attr & (attr_bold | attr_faint)) == attr_faint)
-        res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
-    if ((cell.attr & attr_inverse) ^ selected) SWAP(color_t, res.fg, res.bg);
-    if ((!selected && cell.attr & attr_invisible) || (cell.attr & attr_blink && blink)) res.fg = res.bg;
+    if (attr.bold && !attr.faint && color_idx(attr.fg) < 8) attr.fg = indirect_color(color_idx(attr.fg) + 8);
+    res.bg = direct_color(attr.bg, palette);
+    res.fg = direct_color(attr.fg, palette);
+    if (!attr.bold && attr.faint) res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
+    if (attr.reverse ^ selected) SWAP(color_t, res.fg, res.bg);
+    if ((!selected && attr.invisible) || (attr.blink && blink)) res.fg = res.bg;
 
     // If selected colors are set use them
 
@@ -802,10 +786,12 @@ struct cellspec describe_cell(struct cell cell, color_t *palette, color_t *extra
     // Calculate attributes
 
     res.ch = cell.ch;
-    res.face = cell.ch ? (cell.attr & face_mask) : 0;
-    res.wide = !!(cell.attr & attr_wide);
-    res.underlined = !!(cell.attr & attr_underlined) && (res.fg != res.bg);
-    res.stroke = !!(cell.attr & attr_strikethrough) && (res.fg != res.bg);
+    res.face = 0;
+    if (cell.ch && attr.bold) res.face |= face_bold;
+    if (cell.ch && attr.italic) res.face |= face_italic;
+    res.wide = cell.wide;
+    res.underlined = attr.underlined && res.fg != res.bg;
+    res.stroke = attr.strikethrough && res.fg != res.bg;
 
     return res;
 }
@@ -1313,7 +1299,7 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, bool pno
                 pos = data;
                 size = 0;
                 if (rep->type == ctx.atom.UTF8_STRING) {
-                    term_char_t ch;
+                    uint32_t ch;
                     while (pos < end)
                         if (utf8_decode(&ch, (const uint8_t **)&pos, end))
                             buf1[size++] = ch;

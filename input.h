@@ -84,10 +84,9 @@ struct keyboard_state {
 
 };
 
-typedef uint32_t term_char_t;
 
 struct key {
-    term_char_t utf32;
+    uint32_t utf32;
     uint32_t sym;
     uint32_t mask;
     uint8_t utf8data[6]; // zero terminated

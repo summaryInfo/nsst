@@ -299,7 +299,7 @@ int pre2_cmpfn(const void * a, const void *b) {
     return ai->mod - bi->mod;
 }
 
-term_char_t try_precompose(term_char_t ch, term_char_t comb) {
+uint32_t try_precompose(uint32_t ch, uint32_t comb) {
     struct pre1_item *r1 = bsearch(&(struct pre1_item){ch, comb, 0},
             pre1_tab, sizeof(pre1_tab)/sizeof(*pre1_tab), sizeof(*pre1_tab), pre1_cmpfn);
     if (r1) return r1->dst;
@@ -313,7 +313,7 @@ term_char_t try_precompose(term_char_t ch, term_char_t comb) {
 
 #else
 
-term_char_t try_precompose(term_char_t ch, term_char_t comb) { (void)comb; return ch; }
+uint32_t try_precompose(uint32_t ch, uint32_t comb) { (void)comb; return ch; }
 
 #endif
 

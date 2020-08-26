@@ -17,8 +17,8 @@ struct reply {
     uint8_t idx;
     uint8_t final;
     uint8_t priv;
-    term_char_t init;
-    term_char_t param[3];
+    uint32_t init;
+    uint32_t param[3];
 };
 
 struct shortcut {
@@ -39,7 +39,7 @@ struct shortcut {
     [shortcut_reload_config] = {XKB_KEY_X, mask_shift | mask_control},
 };
 
-static inline bool is_edit_keypad(term_char_t ks, bool deldel) {
+static inline bool is_edit_keypad(uint32_t ks, bool deldel) {
     switch (ks) {
     case XKB_KEY_Delete:
         return !deldel;
@@ -54,7 +54,7 @@ static inline bool is_edit_keypad(term_char_t ks, bool deldel) {
     return 0;
 }
 
-static inline bool is_edit_function(term_char_t ks, bool deldel) {
+static inline bool is_edit_function(uint32_t ks, bool deldel) {
     switch (ks) {
     case XKB_KEY_KP_Insert:
     case XKB_KEY_KP_Delete:
@@ -64,39 +64,39 @@ static inline bool is_edit_function(term_char_t ks, bool deldel) {
     return is_edit_keypad(ks, deldel);
 }
 
-static inline bool is_cursor(term_char_t ks) {
+static inline bool is_cursor(uint32_t ks) {
     return XKB_KEY_Home <= ks && ks <= XKB_KEY_Select;
 }
 
-static inline bool is_keypad(term_char_t ks) {
+static inline bool is_keypad(uint32_t ks) {
     return XKB_KEY_KP_Space <= ks && ks <= XKB_KEY_KP_Equal;
 }
 
-static inline bool is_keypad_function(term_char_t ks) {
+static inline bool is_keypad_function(uint32_t ks) {
     return XKB_KEY_KP_F1 <= ks && ks <= XKB_KEY_KP_F4;
 }
 
-static inline bool is_function(term_char_t ks) {
+static inline bool is_function(uint32_t ks) {
     return XKB_KEY_F1 <= ks && ks <= XKB_KEY_F35;
 }
 
-static inline bool is_misc_function(term_char_t ks) {
+static inline bool is_misc_function(uint32_t ks) {
     return XKB_KEY_Select <= ks && ks <= XKB_KEY_Break;
 }
 
-static inline bool is_special(term_char_t ks) {
+static inline bool is_special(uint32_t ks) {
     return XKB_KEY_ISO_Lock <= ks && ks <= XKB_KEY_Delete;
 }
 
-static inline bool is_private(term_char_t ks) {
+static inline bool is_private(uint32_t ks) {
     return 0x11000000 <= ks && ks <= 0x1100FFFF;
 }
 
-static inline bool is_ctrl_letter(term_char_t ks) {
+static inline bool is_ctrl_letter(uint32_t ks) {
     return ks >= 0x40 && ks <= 0x7F;
 }
 
-static inline bool is_ctrl(term_char_t ks) {
+static inline bool is_ctrl(uint32_t ks) {
     return ks < 0x20 || (ks >= 0x7F && ks < 0x100);
 }
 
@@ -120,8 +120,8 @@ static inline bool is_modify_allowed(struct key *k, struct keyboard_state *mode)
     else return mode->modkey_other;
 }
 
-static term_char_t filter_modifiers(struct key *k, struct keyboard_state *mode) {
-    term_char_t res = k->mask & (mask_control | mask_shift | mask_mod_1);
+static uint32_t filter_modifiers(struct key *k, struct keyboard_state *mode) {
+    uint32_t res = k->mask & (mask_control | mask_shift | mask_mod_1);
 
     if (mode->modkey_other <= 1) {
         if (is_ctrl_letter(k->sym) && !(res & ~mask_control)) {
@@ -144,8 +144,8 @@ static term_char_t filter_modifiers(struct key *k, struct keyboard_state *mode) 
     return res;
 }
 
-static inline term_char_t mask_to_param(term_char_t mask) {
-    term_char_t res = 0;
+static inline uint32_t mask_to_param(uint32_t mask) {
+    uint32_t res = 0;
     if (mask & mask_shift) res |= 1;
     if (mask & mask_control) res |= 4;
     if (mask & mask_mod_1) res |= 2;
@@ -177,7 +177,7 @@ static bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode)
             else res = 1;
         }
         if (res) {
-            term_char_t new_mods = filter_modifiers(k, mode);
+            uint32_t new_mods = filter_modifiers(k, mode);
             if (new_mods) k->mask = new_mods;
             else return 0;
         }
@@ -205,14 +205,14 @@ static bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode)
     }
 }
 
-static void modify_others(term_char_t ch, term_char_t param, bool fmt, struct reply *reply) {
+static void modify_others(uint32_t ch, uint32_t param, bool fmt, struct reply *reply) {
     if (!param) return;
 
     if (fmt) *reply = (struct reply) { 2, 'u', 0, '\233', {ch, param} };
     else *reply = (struct reply) { 3, '~', 0, '\233', {27, param, ch} };
 }
 
-static void modify_cursor(term_char_t param, uint8_t level, struct reply *reply) {
+static void modify_cursor(uint32_t param, uint8_t level, struct reply *reply) {
     if (param) switch (level) {
     case 4: reply->priv = '>';
     case 3: if (!reply->idx)
@@ -222,7 +222,7 @@ static void modify_cursor(term_char_t param, uint8_t level, struct reply *reply)
     }
 }
 
-static term_char_t fnkey_dec(term_char_t ks, bool is_fkey, struct reply *reply) {
+static uint32_t fnkey_dec(uint32_t ks, bool is_fkey, struct reply *reply) {
     if (is_fkey) {
         reply->final = '~';
         uint8_t values[] = {
@@ -233,7 +233,7 @@ static term_char_t fnkey_dec(term_char_t ks, bool is_fkey, struct reply *reply) 
                 (XKB_KEY_F1 <= ks && ks <= XKB_KEY_F20) ?
                 values[ks - XKB_KEY_F1] : 42 + ks - XKB_KEY_F21;
     } else {
-        term_char_t p;
+        uint32_t p;
         switch (ks) {
         case XKB_KEY_Find: p = 1; break;
         case XKB_KEY_Insert:
@@ -257,8 +257,8 @@ static term_char_t fnkey_dec(term_char_t ks, bool is_fkey, struct reply *reply) 
     }
 }
 
-static bool fnkey_hp(term_char_t ks, bool is_fkey, struct reply *reply) {
-    term_char_t res;
+static bool fnkey_hp(uint32_t ks, bool is_fkey, struct reply *reply) {
+    uint32_t res;
     if (is_fkey) {
         if (XKB_KEY_F1 <= ks && ks <= XKB_KEY_F8)
             res = "pqrstuvw"[ks - XKB_KEY_F1];
@@ -290,8 +290,8 @@ static bool fnkey_hp(term_char_t ks, bool is_fkey, struct reply *reply) {
     return 1;
 }
 
-static bool fnkey_sco(term_char_t ks, bool is_fkey, struct reply *reply) {
-    term_char_t res;
+static bool fnkey_sco(uint32_t ks, bool is_fkey, struct reply *reply) {
+    uint32_t res;
     if (is_fkey) {
         if (ks - XKB_KEY_F1 < 48)
             res = "MNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@[\\]^_`{"[ks - XKB_KEY_F1];
@@ -318,8 +318,8 @@ static bool fnkey_sco(term_char_t ks, bool is_fkey, struct reply *reply) {
     return 1;
 }
 
-static bool fnkey_sun(term_char_t ks, bool is_fkey, struct reply *reply) {
-    term_char_t arg = 0, fin = 0;
+static bool fnkey_sun(uint32_t ks, bool is_fkey, struct reply *reply) {
+    uint32_t arg = 0, fin = 0;
     if (is_fkey) {
         if (ks - XKB_KEY_F1 < 37) {
             arg = (uint8_t[]) {
@@ -356,7 +356,7 @@ static bool fnkey_sun(term_char_t ks, bool is_fkey, struct reply *reply) {
 }
 
 inline static uint32_t translate_keypad(uint32_t in) {
-    struct { term_char_t from, to; } tab[] = {
+    struct { uint32_t from, to; } tab[] = {
         { XKB_KEY_Delete, XKB_KEY_DRemove },
         { XKB_KEY_Home, XKB_KEY_Find },
         { XKB_KEY_End, XKB_KEY_Select },
@@ -514,10 +514,10 @@ void keyboard_handle_input(struct key k, struct term *term) {
     translate_adjust(&k, mode);
 
     struct reply reply = {0};
-    term_char_t param = k.mask && is_modify_allowed(&k, mode) ? mask_to_param(k.mask) : 0;
+    uint32_t param = k.mask && is_modify_allowed(&k, mode) ? mask_to_param(k.mask) : 0;
 
 
-    bool (*kfn[keymap_MAX])(term_char_t, bool, struct reply *) = {
+    bool (*kfn[keymap_MAX])(uint32_t, bool, struct reply *) = {
         [keymap_hp] = fnkey_hp,
         [keymap_sun] = fnkey_sun,
         [keymap_sco] = fnkey_sco
@@ -529,7 +529,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
                 mode->modkey_fn : mode->modkey_cursor, &reply);
         dump_reply(term, &reply);
     } else if (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode->delete_is_del)) {
-        term_char_t deccode = fnkey_dec(k.sym, k.is_fkey, &reply);
+        uint32_t deccode = fnkey_dec(k.sym, k.is_fkey, &reply);
         if (k.is_fkey && k.mask & mask_shift && mode->keyboard_mapping == keymap_vt220) {
             struct udk udk = reply.param[0] < UDK_MAX ? mode->udk[reply.param[0]] : (struct udk){0};
             if (udk.val) {
@@ -583,8 +583,8 @@ void keyboard_handle_input(struct key k, struct term *term) {
         if (is_modify_others_allowed(&k, mode)) {
             /* Is it OK to use k.ascii here?
              * It allows to identify key in layout independent fasion
-             * term_char_t val = k.ascii ? k.ascii : k.sym; */
-            term_char_t val = k.sym < 0x100 ? k.sym : k.utf32;
+             * uint32_t val = k.ascii ? k.ascii : k.sym; */
+            uint32_t val = k.sym < 0x100 ? k.sym : k.utf32;
             modify_others(val, mask_to_param(k.mask), mode->modkey_other_fmt, &reply);
             dump_reply(term, &reply);
         } else {

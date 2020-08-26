@@ -48,7 +48,7 @@ struct renderer {
 struct cellspec {
     color_t fg;
     color_t bg;
-    term_char_t ch;
+    uint32_t ch;
     uint8_t face;
     bool underlined;
     bool stroke;
@@ -158,7 +158,7 @@ void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 void window_set_default_props(struct window *win);
 void handle_resize(struct window *win, int16_t width, int16_t height);
 struct window *find_shared_font(struct window *win, bool need_free);
-struct cellspec describe_cell(struct cell cell, color_t *palette, color_t *extra, bool blink, bool selected);
+struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, bool blink, bool selected);
 
 #endif
 

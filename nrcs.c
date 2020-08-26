@@ -45,7 +45,7 @@ static const unsigned short tech_tr[] = {
     0x03BE, 0x03C5, 0x03B6, 0x2190, 0x2191, 0x2192, 0x2193,
 };
 
-bool nrcs_encode(enum charset set, term_char_t *ch, bool nrcs) {
+bool nrcs_encode(enum charset set, uint32_t *ch, bool nrcs) {
     bool done = 0;
     switch (set) {
     case cs94_ascii:
@@ -148,7 +148,7 @@ bool nrcs_encode(enum charset set, term_char_t *ch, bool nrcs) {
     return done;
 }
 
-term_char_t nrcs_decode_fast(enum charset gl, term_char_t ch) {
+uint32_t nrcs_decode_fast(enum charset gl, uint32_t ch) {
     if (gl == cs94_dec_graph) {
         if (0x5F <= ch && ch <= 0x7E)
             ch = graph_tr[ch - 0x5F];
@@ -156,7 +156,7 @@ term_char_t nrcs_decode_fast(enum charset gl, term_char_t ch) {
     return ch;
 }
 
-term_char_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, term_char_t ch, bool nrcs) {
+uint32_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, uint32_t ch, bool nrcs) {
     if (ch > 0xFF) return ch;
     if (ch == 0x7F) return U' ';
 

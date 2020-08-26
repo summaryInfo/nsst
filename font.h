@@ -15,7 +15,6 @@ enum face_name {
     face_normal = 0,
     face_italic = 1 << 0,
     face_bold = 1 << 1,
-    face_mask = 3,
     face_MAX = 4,
 };
 
@@ -41,7 +40,6 @@ struct glyph {
     uint8_t data[];
 };
 
-typedef uint32_t term_char_t;
 
 struct font *create_font(const char* descr, double size);
 void free_font(struct font *font);
@@ -54,7 +52,7 @@ struct glyph_cache *glyph_cache_ref(struct glyph_cache *ref);
 void free_glyph_cache(struct glyph_cache *cache);
 struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face);
 void glyph_cache_get_dim(struct glyph_cache *cache, int16_t *w, int16_t *h, int16_t *d);
-bool glyph_cache_is_fetched(struct glyph_cache *cache, term_char_t ch);
+bool glyph_cache_is_fetched(struct glyph_cache *cache, uint32_t ch);
 
 #endif
 

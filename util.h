@@ -25,7 +25,6 @@
 #endif
 
 typedef uint32_t color_t;
-typedef uint32_t term_char_t;
 struct rect {
     int16_t x;
     int16_t y;
@@ -92,8 +91,8 @@ const char *version_string(void);
 #define UTF8_MAX_LEN 4
 #define UTF_INVAL 0xfffd
 
-size_t utf8_encode(term_char_t u, uint8_t *buf, uint8_t *end);
-bool utf8_decode(term_char_t *res, const uint8_t **buf, const uint8_t *end);
+size_t utf8_encode(uint32_t u, uint8_t *buf, uint8_t *end);
+bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end);
 
 /* *_decode returns source buffer end */
 /* *_encode returns destination buffer end */
@@ -105,5 +104,5 @@ const uint8_t *base64_decode(uint8_t *dst, const uint8_t *buf, const uint8_t *en
 color_t parse_color(const uint8_t *str, const uint8_t *end);
 
 /* Unicode precomposition */
-term_char_t try_precompose(term_char_t ch, term_char_t comb);
+uint32_t try_precompose(uint32_t ch, uint32_t comb);
 #endif

@@ -225,7 +225,7 @@ void mouse_scroll_selection(struct term *term, ssize_t amount, bool save) {
     }
  }
 
-inline static bool is_separator(term_char_t ch) {
+inline static bool is_separator(uint32_t ch) {
         if (!ch) return 1;
         uint8_t cbuf[UTF8_MAX_LEN + 1];
         cbuf[utf8_encode(ch, cbuf, cbuf + UTF8_MAX_LEN)] = '\0';
@@ -295,7 +295,7 @@ outer:
 
     line = term_line_at(term, vpos);
     if (loc->n.x0 > 0 && loc->n.x0 < line.width)
-        loc->n.x0 -= !!(line.cell[loc->n.x0 - 1].attr & attr_wide);
+        loc->n.x0 -= !!(line.cell[loc->n.x0 - 1].wide);
 
     vpos = term_get_line_pos(term, loc->n.y1);
     if (loc->snap == snap_line) {
@@ -328,7 +328,7 @@ outer2:
 
     line = term_line_at(term, vpos);
     if (loc->n.x1 < line.width)
-        loc->n.x1 += !!(line.cell[loc->n.x1].attr & attr_wide);
+        loc->n.x1 += !!(line.cell[loc->n.x1].wide);
 }
 
 bool mouse_is_selected(struct term *term, int16_t x, ssize_t y) {

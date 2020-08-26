@@ -245,23 +245,22 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
         bool next_dirty = 0;
         struct rect l_bound = {-1, k, 0, 1};
         for (int16_t i =  MIN(win->cw, line.width) - 1; i >= 0; i--) {
-            bool dirty = line.line->force_damage || !(line.cell[i].attr & attr_drawn) ||
-                    (!win->blink_commited && (line.cell[i].attr & attr_blink)) ||
-                    (cond_cblink && k == cur_y && i == cur_x);
+            struct cell cel = line.cell[i];
+            struct attr attr = attr_at(line.line, i + line.cell - line.line->cell);
+
+            bool dirty = line.line->force_damage || !cel.drawn ||
+                    (!win->blink_commited && (attr.blink)) || (cond_cblink && k == cur_y && i == cur_x);
 
             struct cellspec spec;
-            struct cell cel;
             struct glyph *glyph = NULL;
             bool g_wide = 0;
             if (dirty || next_dirty) {
-                cel = line.cell[i];
 
                 if (k == cur_y && i == cur_x && cursor &&
                         win->focused && ((win->cursor_type + 1) & ~1) == cusor_type_block)
-                    cel.attr ^= attr_inverse;
+                    attr.reverse ^= 1;
 
-                spec = describe_cell(cel, palette, line.line->pal ? line.line->pal->data : NULL,
-                        win->blink_state, mouse_is_selected_in_view(win->term, i, k));
+                spec = describe_cell(cel, attr, palette, win->blink_state, mouse_is_selected_in_view(win->term, i, k));
 
                 if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face);
                 g_wide = glyph && glyph->x_off > win->char_width - iconf(ICONF_FONT_SPACING);
@@ -293,7 +292,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
                 // Strikethough
                 if (spec.stroke) image_draw_rect(win->ren.im, r_strike, spec.fg);
 
-                line.cell[i].attr |= attr_drawn;
+                line.cell[i].drawn = 1;
 
                 if (l_bound.x < 0) l_bound.width = i + g_wide;
 

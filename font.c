@@ -474,7 +474,7 @@ void free_glyph_cache(struct glyph_cache *cache) {
     }
 }
 
-struct glyph *glyph_cache_fetch(struct glyph_cache *cache, term_char_t ch, enum face_name face) {
+struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face) {
     uint32_t g = ch | (face << 24);
     size_t h = hash(g);
 
@@ -517,7 +517,7 @@ struct glyph *glyph_cache_fetch(struct glyph_cache *cache, term_char_t ch, enum 
     return new;
 }
 
-bool glyph_cache_is_fetched(struct glyph_cache *cache, term_char_t ch) {
+bool glyph_cache_is_fetched(struct glyph_cache *cache, uint32_t ch) {
     size_t h = hash(ch);
     struct glyph *res = cache->tab[h % cache->caps];
     for (; res; res = res->next)
