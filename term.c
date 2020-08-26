@@ -43,7 +43,7 @@
 
 #define IS_C1(c) ((uint32_t)(c) - 0x80U < 0x20U)
 #define IS_C0(c) ((c) < 0x20U)
-#define IS_CBYTE(c) (!((uint32_t)(c) & 0x60))
+#define IS_CBYTE(c) (((uint32_t)(c) & 0x7F) < 0x20)
 #define IS_DEL(c) ((c) == 0x7FU)
 
 #define TABSR_INIT_CAP 48
@@ -3199,8 +3199,8 @@ static void term_precompose_at_cursor(struct term *term, uint32_t ch) {
 }
 inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bool raw) {
     uint32_t b = *(*buf)++, part, i;
-    if (LIKELY(**buf < 0xC0 || raw)) return b;
-    if (UNLIKELY(**buf > 0x7F)) return UTF_INVAL;
+    if (LIKELY(b < 0xC0 || raw)) return b;
+    if (UNLIKELY(b > 0xF7)) return UTF_INVAL;
 
     int8_t len = (int8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(b >> 3U) - 24];
 
@@ -3209,7 +3209,7 @@ inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bo
         return -1;
     }
 
-    part = *(*buf)++ & (0x7F >> len);
+    part = b & (0x7F >> len);
     for (i = len; i--;) {
         b = *(*buf)++;
         if (UNLIKELY((b & 0xC0) != 0x80)) return UTF_INVAL;
@@ -3217,12 +3217,12 @@ inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bo
     }
 
     const static uint32_t maxv[] = {0x80, 0x800, 0x10000, 0x110000};
-    if (UNLIKELY(part >= maxv[len]) || UNLIKELY(part - 0xD800 < 0xE000 - 0xD800)) return UTF_INVAL;
+    if (UNLIKELY(part >= maxv[len] || part - 0xD800 < 0xE000 - 0xD800)) return UTF_INVAL;
 
     return part;
 }
 
-static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, const uint8_t **start, const uint8_t *end) {
+static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, const uint8_t **start, const uint8_t *end) {
     ssize_t res = 1;
 
     // Compute maximal with to be printed at once
