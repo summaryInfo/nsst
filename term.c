@@ -43,7 +43,7 @@
 
 #define IS_C1(c) ((uint32_t)(c) - 0x80U < 0x20U)
 #define IS_C0(c) ((c) < 0x20U)
-#define IS_CBYTE(c) (((uint32_t)(c) & 0x7FU) < 0x20U)
+#define IS_CBYTE(c) (!((uint32_t)(c) & 0x60))
 #define IS_DEL(c) ((c) == 0x7FU)
 
 #define TABSR_INIT_CAP 48
@@ -3197,13 +3197,37 @@ static void term_precompose_at_cursor(struct term *term, uint32_t ch) {
         cel->drawn = 0;
     }
 }
+inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bool raw) {
+    uint32_t b = *(*buf)++, part, i;
+    if (LIKELY(**buf < 0xC0 || raw)) return b;
+    if (UNLIKELY(**buf > 0x7F)) return UTF_INVAL;
+
+    int8_t len = (int8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(b >> 3U) - 24];
+
+    if (*buf + len >= end) {
+        (*buf)--;
+        return -1;
+    }
+
+    part = *(*buf)++ & (0x7F >> len);
+    for (i = len; i--;) {
+        b = *(*buf)++;
+        if (UNLIKELY((b & 0xC0) != 0x80)) return UTF_INVAL;
+        part = (part << 6) | (b & 0x3F);
+    }
+
+    const static uint32_t maxv[] = {0x80, 0x800, 0x10000, 0x110000};
+    if (UNLIKELY(part >= maxv[len]) || UNLIKELY(part - 0xD800 < 0xE000 - 0xD800)) return UTF_INVAL;
+
+    return part;
+}
 
 static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, const uint8_t **start, const uint8_t *end) {
     ssize_t res = 1;
 
     // Compute maximal with to be printed at once
-    ssize_t maxw = term_max_x(term) - term_min_x(term);
-    ssize_t count = 0, totalwidth = 0;
+    ssize_t maxw = term_max_x(term) - term_min_x(term), totalw = 0;
+    int32_t *pbuf = term->predec_buf;
     if (!term->c.pending || !term->mode.wrap)
         maxw = (term->c.x >= term_max_x(term) ? term->width : term_max_x(term)) - term->c.x;
 
@@ -3213,7 +3237,7 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
         if (!wid) {
             // Don't put zero-width charactes
             // to predecode buffer
-            if (!count) term_precompose_at_cursor(term, ch);
+            if (!totalw) term_precompose_at_cursor(term, ch);
             res = 0;
         } else {
             // Adjust width to be other 1 or 2
@@ -3234,9 +3258,9 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
                     maxw = term_max_x(term) - term_min_x(term);
             }
 
-            while (totalwidth + wid <= maxw && rep) {
-                totalwidth += wid;
-                term->predec_buf[count++] = ch;
+            while (totalw + wid <= maxw && rep) {
+                totalw += wid;
+                *pbuf++ = ch;
                 rep--;
             }
             res = rep;
@@ -3246,14 +3270,12 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
 
         do {
             const uint8_t *char_start = *start;
-            if (term->mode.utf8 && ch >= 0xA0) {
-                if (!utf8_decode(&ch, start, end)) {
-                    // If we encountered partial UTF-8,
-                    // print all we have and return
-                    res = 0;
-                    break;
-                }
-            } else (*start)++;
+            if (UNLIKELY((ch = decode_special(start, end, !term->mode.utf8)) < 0)) {
+                // If we encountered partial UTF-8,
+                // print all we have and return
+                res = 0;
+                break;
+            }
 
             enum charset glv = term->c.gn[term->c.gl_ss];
 
@@ -3265,7 +3287,7 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
             // In theory this should be disabled while in UTF-8 mode, but
             // in practice applications use these symbols, so keep translating.
             // But decode only allow only DEC Graph in GL, unless configured otherwise
-            if (term->mode.utf8 && !iconf(ICONF_FORCE_UTF8_NRCS))
+            if (LIKELY(term->mode.utf8 && !iconf(ICONF_FORCE_UTF8_NRCS)))
                 ch = nrcs_decode_fast(glv, ch);
             else
                 ch = nrcs_decode(glv, term->c.gn[term->c.gr], term->upcs, ch, term->mode.enable_nrcs);
@@ -3274,11 +3296,11 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
             prev = ch;
 
             int32_t wid = wcwidth(ch);
-            if(!wid) {
+            if(UNLIKELY(!wid)) {
                 // Don't put zero-width charactes
                 // to predecode buffer
-                if (!count) term_precompose_at_cursor(term, ch);
-                else term->predec_buf[count - 1] = try_precompose(term->predec_buf[count - 1], ch);
+                if (totalw) term_precompose_at_cursor(term, ch);
+                else pbuf[-1] = try_precompose(pbuf[-1], ch);
             } else {
                 // Adjust width to be other 1 or 2
                 wid = 1 + (wid > 1);
@@ -3286,8 +3308,8 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
                 // Don't include char if its too wide, unless its a wide char
                 // at right margin, or autowrap is disabled, and we are at right size of the screen
                 // In those cases recalculate maxw
-                if (totalwidth + wid > maxw) {
-                    if (LIKELY(totalwidth || wid != 2)) {
+                if (totalw + wid > maxw) {
+                    if (LIKELY(totalw || wid != 2)) {
                         *start = char_start;
                         break;
                     } else if (term->c.x == term_max_x(term) - 1) {
@@ -3303,8 +3325,8 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
                 // negative in predecode buffer
                 if (wid > 1) ch = -ch;
 
-                totalwidth += wid;
-                term->predec_buf[count++] = ch;
+                totalw += wid;
+                *pbuf++ = ch;
             }
 
             ch = **start;
@@ -3313,7 +3335,7 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
             if (IS_CBYTE(ch)) break;
 
             // Since maxw < width == length of predec_buf, don't check it
-        } while(totalwidth < maxw && /* count < FD_BUF_SIZE && */ *start < end);
+        } while(totalw < maxw && /* count < FD_BUF_SIZE && */ *start < end);
 
         if (prev != -1U) term->prev_ch = prev; // For REP CSI
     }
@@ -3321,16 +3343,16 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
     if (term->mode.wrap) {
         if (term->c.pending || (term->c.x == term_max_x(term) - 1 && term->predec_buf[0] < 0))
             term_do_wrap(term);
-    } else term->c.x = MIN(term->c.x, term_max_x(term) - totalwidth);
+    } else term->c.x = MIN(term->c.x, term_max_x(term) - totalw);
 
     struct line *line = term->screen[term->c.y];
     struct cell *cell = &line->cell[term->c.x];
-    ssize_t maxsx = term->c.x + totalwidth;
+    ssize_t maxsx = term->c.x + totalw;
 
     // Shift characters to the left if insert mode is enabled
-    if (term->mode.insert && term->c.x + totalwidth < term_max_x(term)) {
-        for (struct cell *c = cell + totalwidth; c - line->cell < term_max_x(term); c++) c->drawn = 0;
-        memmove(cell + totalwidth, cell, (term_max_x(term) - term->c.x - totalwidth)*sizeof(*cell));
+    if (term->mode.insert && term->c.x + totalw < term_max_x(term)) {
+        for (struct cell *c = cell + totalw; c - line->cell < term_max_x(term); c++) c->drawn = 0;
+        memmove(cell + totalw, cell, (term_max_x(term) - term->c.x - totalw)*sizeof(*cell));
         maxsx = MAX(maxsx, term_max_x(term));
     }
 
@@ -3340,17 +3362,17 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
 
     // Erase overwritten parts of wide characters
     term_adjust_wide_left(term, term->c.x, term->c.y);
-    term_adjust_wide_right(term, term->c.x + totalwidth - 1, term->c.y);
+    term_adjust_wide_right(term, term->c.x + totalw - 1, term->c.y);
 
     if (term->mode.margin_bell) {
         ssize_t bcol = term->right - iconf(ICONF_MARGIN_BELL_COLUMN);
-        if (term->c.x < bcol && term->c.x + totalwidth >= bcol)
+        if (term->c.x < bcol && term->c.x + totalw >= bcol)
             window_bell(term->win, term->mbvol);
     }
 
     if (iconf(ICONF_TRACE_CHARACTERS)) {
-        for (ssize_t i = 0; i < count; i++)
-            info("Char: (%x) '%lc' ", abs(term->predec_buf[i]), abs(term->predec_buf[i]));
+        for (int32_t *p = term->predec_buf; p < pbuf; p++)
+            info("Char: (%x) '%lc' ", abs(*p), abs(*p));
     }
 
     // Writing to the line resets its wrapping state
@@ -3360,18 +3382,18 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
     uint32_t attrid = alloc_attr(line, term->sgr);
 
     // Put charaters
-    for (ssize_t i = 0; i < count; i++) {
-        *cell = MKCELL(abs(term->predec_buf[i]), attrid);
+    for (int32_t *p = term->predec_buf; p < pbuf; p++) {
+        *cell = MKCELL(abs(*p), attrid);
 
         // Put dummy character to the left of wide
-        if (UNLIKELY(term->predec_buf[i] < 0)) {
+        if (UNLIKELY(*p < 0)) {
             cell->wide = 1;
             *++cell = MKCELL(0, attrid);
         }
         cell++;
     }
 
-    term->c.x += totalwidth;
+    term->c.x += totalw;
     term->c.pending = term->c.x == term_max_x(term);
     term->c.x -= term->c.pending;
 

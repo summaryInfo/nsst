@@ -63,8 +63,8 @@ void info(const char *fmt, ...) {
 
 size_t utf8_encode(uint32_t u, uint8_t *buf, uint8_t *end) {
     static const uint32_t utf8_min[] = {0x80, 0x800, 0x10000, 0x110000};
-    static const uint8_t utf8_mask[] = {0x00, 0xc0, 0xe0, 0xf0};
-    if (u > 0x10ffff) u = UTF_INVAL;
+    static const uint8_t utf8_mask[] = {0x00, 0xC0, 0xE0, 0xF0};
+    if (u > 0x10FFFF) u = UTF_INVAL;
     size_t i = 0, j;
     while (u > utf8_min[i++]);
     if ((ptrdiff_t)i > end - buf) return 0;
@@ -77,38 +77,31 @@ size_t utf8_encode(uint32_t u, uint8_t *buf, uint8_t *end) {
 }
 
 bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end) {
-    if (*buf >= end) return 0;
-    uint32_t part = *(*buf)++;
-    uint8_t len = 0, i = 0x80;
-    if (part > 0xF7) {
-        part = UTF_INVAL;
-    } else {
-        while (part & i) {
-            len++;
-            part &= ~i;
-            i /= 2;
-        }
-        if (len == 1) {
-            part = UTF_INVAL;
-        }  else if (len > 1) {
-            uint8_t i = --len;
-            if (end - *buf < i) {
-                (*buf)--;
-                return 0;
-            }
-            while (i--) {
-                if ((**buf & 0xC0) != 0x80) {
-                    *res = UTF_INVAL;
-                    return 1;
-                }
-                part = (part << 6) + (*(*buf)++ & ~0xC0);
-            }
-            if (part >= 0xD800 && part < 0xE000 &&
-                    part >= (uint32_t[]){0x80, 0x800, 0x10000, 0x110000}[len - 1])
-                part = UTF_INVAL;
-        }
+    int8_t len = (const int8_t[32]){
+        /* 00xx xxxx */  0, 0, 0, 0, 0, 0, 0, 0,
+        /* 01xx xxxx */  0, 0, 0, 0, 0, 0, 0, 0,
+        /* 10xx xxxx */ -1,-1,-1,-1,-1,-1,-1,-1,
+        /* 11xx xxxx */  1, 1, 1, 1, 2, 2, 3,-1 }[**buf >> 3U];
+
+    if (UNLIKELY(len < 0)) goto inval;
+    else if (*buf + len >= end) return 0;
+
+    uint32_t part = *(*buf)++ & (0x7F >> len), i = len;
+
+    while (i--) {
+        if (UNLIKELY((**buf & 0xC0) != 0x80)) goto inval;
+        part = (part << 6) | (*(*buf)++ & 0x3F);
     }
+
+    const static uint32_t maxv[] = {0x80, 0x800, 0x10000, 0x110000};
+    if (UNLIKELY(part >= maxv[len]) || UNLIKELY(part - 0xD800 < 0xE000 - 0xD800)) goto inval2;
+
     *res = part;
+    return 1;
+inval:
+    (*buf)++;
+inval2:
+    *res = UTF_INVAL;
     return 1;
 }
 
