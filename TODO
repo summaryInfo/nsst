@@ -25,7 +25,6 @@ Render
     XRender
         Slow scrolling of full-color images (with small font in chafa)
         Use multiple separate buffers for background/lines/glyphs to sort less
-        Allow short lines to be seleted properly
     Wayland
 Emulation
     Encode NRCSs for printer autoprint mode

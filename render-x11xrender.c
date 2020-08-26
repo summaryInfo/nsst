@@ -293,11 +293,33 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
 
     if (cond_cblink) cursor |= win->blink_state;
 
+    // First redraw selected parts of padding to short lines
     struct line_offset vpos = term_get_view(win->term);
     for (ssize_t k = 0; k < win->ch; k++, term_line_next(win->term, &vpos, 1)) {
         struct line_view line = term_line_at(win->term, vpos);
+        if (win->cw > line.width && mouse_is_selected_in_view(win->term, win->cw - 1, k)) {
+            push_rect(&(xcb_rectangle_t){
+                .x = line.width * win->char_width,
+                .y = k * (win->char_height + win->char_depth),
+                .width = (win->cw - line.width) * win->char_width,
+                .height = win->char_height + win->char_depth
+            });
+        }
+    }
+
+    if (rctx.bufpos) {
+        xcb_render_color_t col = MAKE_COLOR(palette[SPECIAL_SELECTED_BG] ?
+                palette[SPECIAL_CURSOR_BG] : palette[SPECIAL_FG]);
+        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
+            rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
+    }
+    rctx.bufpos = 0;
+
+    vpos = term_get_view(win->term);
+    for (ssize_t k = 0; k < win->ch; k++, term_line_next(win->term, &vpos, 1)) {
+        struct line_view line = term_line_at(win->term, vpos);
         bool next_dirty = 0;
-        if (win->cw > line.width) {
+        if (win->cw > line.width && !mouse_is_selected_in_view(win->term, win->cw - 1, k)) {
             push_rect(&(xcb_rectangle_t){
                 .x = line.width * win->char_width,
                 .y = k * (win->char_height + win->char_depth),
@@ -412,8 +434,6 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
         xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0,
             rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
 
-    //qsort(rctx.cbuffer, rctx.cbufpos, sizeof(rctx.cbuffer[0]), cmp_by_fg);
-    //shell_sort_fg(rctx.cbuffer, rctx.cbufpos);
     merge_sort_fg(rctx.cbuffer, rctx.cbufpos);
 
     // Draw chars
