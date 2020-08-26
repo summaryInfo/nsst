@@ -3286,7 +3286,7 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
                 // Adjust width to be other 1 or 2
                 wid = 1 + (wid > 1);
 
-                // Don't include char if its too wide, unless its a wide char 
+                // Don't include char if its too wide, unless its a wide char
                 // at right margin, or autowrap is disabled, and we are at right size of the screen
                 // In those cases recalculate maxw
                 if (totalwidth + wid > maxw) {

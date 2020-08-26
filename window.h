@@ -33,7 +33,7 @@ enum modifier_mask {
     mask_shift = 1 << 0,
     mask_lock = 1 << 1,
     mask_control = 1 << 2,
-    mask_mod_1 = 1 << 3, /* Alt */ 
+    mask_mod_1 = 1 << 3, /* Alt */
     mask_mod_2 = 1 << 4, /* Numlock */
     mask_mod_3 = 1 << 5,
     mask_mod_4 = 1 << 6, /* Super */
