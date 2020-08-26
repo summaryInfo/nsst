@@ -51,7 +51,7 @@ See Emulation section of TODO for not yet implemented escape sequences.
 Works well with [Iosevka](https://github.com/be5invis/Iosevka) font. (Set font spacing to -1 it it feels to wide.)
 Multiple fonts could be loaded by enumerating them in parameter like:
 
-    Nsst.font: Iosevka-13:style=Thin,MaterialDesignIcons-13
+    Nsst.font: Iosevka-13,MaterialDesignIcons-13
 
 Set `--override-boxdrawing`/`overrideBoxdrawing` to `true` if box drawing characters of font you use does not align.
 
