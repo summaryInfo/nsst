@@ -92,16 +92,16 @@ Hotkeys are now configurable. With syntax `[<Mods>-]<Name>`, where `<Mods>` is X
 
 Default keybindings:
 
-    Nsst.break: Break
-    Nsst.numlock: T-Num_Lock
-    Nsst.scrollUp: T-Up
-    Nsst.scrollDown: T-Down
-    Nsst.incFontSize: T-Page_Up
-    Nsst.decFontSize: T-Page_Down
-    Nsst.resetFontSize: T-Home
-    Nsst.newWindow: T-N
-    Nsst.reset: T-R
-    Nsst.reloadConfig: T-X
+    Nsst.key.break: Break
+    Nsst.key.numlock: T-Num_Lock
+    Nsst.key.scrollUp: T-Up
+    Nsst.key.scrollDown: T-Down
+    Nsst.key.incFontSize: T-Page_Up
+    Nsst.key.decFontSize: T-Page_Down
+    Nsst.key.resetFontSize: T-Home
+    Nsst.key.newWindow: T-N
+    Nsst.key.reset: T-R
+    Nsst.key.reloadConfig: T-X
 
 
 ## Dependencies
