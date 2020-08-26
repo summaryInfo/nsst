@@ -39,6 +39,9 @@ See TODO file for things that are to be implemented.
 * `term.c` -- Terminal logic
 * `util.c` -- General utilities (encoding/decoding and logging)
 * `window-x11.c` -- X11 specific window code
+* `line.c` -- Line manipulation functions
+* `tty.c` -- low level TTY/PTY code
+* `mouse.c` -- Mouse events and selection handling
 
 ## Notes
 
