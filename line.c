@@ -150,21 +150,20 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
 }
 
 void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len, bool dmg) {
-    uint32_t previd = ATTRID_MAX, newid = 0;
-    struct cell *sc = src->cell + sx, *dc = dst->cell + dx;
-    ssize_t dir = 1;
-    if (dx > sx) {
-        sc += len - 1;
-        dc += len - 1;
-        dir = -1;
-    }
-    for (ssize_t i = 0; i < len; i++, sc += dir, dc += dir) {
-        struct cell c = *sc;
-        if (dmg) c.drawn = 0;
-        if (c.attrid && c.attrid != previd)
-            newid = alloc_attr(dst, src->attrs->data[c.attrid - 1]);
-        c.attrid = newid;
-        *dc = c;
+    struct cell *sc = src->cell + sx, *dc = dst->cell + dx, c;
+    if (dst != src) {
+        uint32_t previd = ATTRID_MAX, newid = 0;
+        for (ssize_t i = 0; i < len; i++) {
+            c = *sc++;
+            c.drawn &= !dmg;
+            if (c.attrid && c.attrid != previd)
+                newid = alloc_attr(dst, src->attrs->data[c.attrid - 1]);
+            c.attrid = newid;
+            *dc++ = c;
+        }
+    } else {
+        memmove(dc, sc, len * sizeof(*sc));
+        if (dmg) while (len--) dc++->drawn = 0;
     }
 }
 

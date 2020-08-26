@@ -1181,16 +1181,14 @@ static void term_copy(struct term *term, int16_t xs, int16_t ys, int16_t xe, int
     if (yd <= ys) {
         for (; ys < ye; ys++, yd++) {
             struct line *sl = term->screen[ys], *dl = term->screen[yd];
-            // Reset line wrapping state
-            dl->wrapped = 0;
-            copy_line(dl, xs, sl, xd, xe - xs, dmg);
+            dl->wrapped = 0; // Reset line wrapping state
+            copy_line(dl, xd, sl, xs, xe - xs, dmg);
         }
     } else {
-        for (yd += ye - ys, xd += xe - xs; ys < ye; ye--, yd--) {
+        for (yd += ye - ys; ys < ye; ye--, yd--) {
             struct line *sl = term->screen[ye - 1], *dl = term->screen[yd - 1];
-            // Reset line wrapping state
-            dl->wrapped = 0;
-            copy_line(dl, xs, sl, xd, xe - xs, dmg);
+            dl->wrapped = 0; // Reset line wrapping state
+            copy_line(dl, xd, sl, xs, xe - xs, dmg);
         }
     }
 }
@@ -3215,7 +3213,7 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
     // If rep > 0, we should perform REP CSI
     if (__builtin_expect(rep, 0)) {
         int32_t wid = wcwidth(ch);
-        if(!wid) {
+        if (!wid) {
             // Don't put zero-width charactes
             // to predecode buffer
             if (!count) term_precompose_at_cursor(term, ch);
@@ -3224,11 +3222,11 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
             // Adjust width to be other 1 or 2
             wid = 1 + (wid > 1);
 
-            // Wide cells are indicated as
-            // negative in predecode buffer
-            if (wid > 1) ch = -ch;
-
             if (wid == 2) {
+                // Wide cells are indicated as
+                // negative in predecode buffer
+                ch = -ch;
+
                 // Allow printing at least one wide char at right margin
                 // if autowrap is off
                 if (maxw == 1) maxw = wid;
@@ -3239,7 +3237,7 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
                     maxw = term_max_x(term) - term_min_x(term);
             }
 
-            while (totalwidth + wid < maxw && rep) {
+            while (totalwidth + wid <= maxw && rep) {
                 totalwidth += wid;
                 term->predec_buf[count++] = ch;
                 rep--;
