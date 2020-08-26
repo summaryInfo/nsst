@@ -358,7 +358,7 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
 
     if (bg && bg != obg) {
         uint32_t values2[2];
-        values2[0] = values2[1] = win->bg;
+        values2[0] = values2[1] = color_premult(win->bg, color_a(win->bg));
         xcb_change_window_attributes(con, win->wid, XCB_CW_BACK_PIXEL, values2);
         xcb_change_gc(con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
     }
@@ -783,6 +783,10 @@ struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palet
     if (cell.ch == 0x2588) res.bg = res.fg;
     if (cell.ch == ' ' || res.fg == res.bg) cell.ch = 0;
 
+    // Premultiply alpha
+    if (res.fg < 0xFF000000) res.fg = color_premult(res.fg, color_a(res.fg));
+    if (res.bg < 0xFF000000) res.bg = color_premult(res.bg, color_a(res.bg));
+
     // Calculate attributes
 
     res.ch = cell.ch;
@@ -919,7 +923,8 @@ struct window *create_window(void) {
         XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_PROPERTY_CHANGE;
     uint32_t mask1 =  XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
         XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
-    uint32_t values1[5] = { win->bg, win->bg, XCB_GRAVITY_NORTH_WEST, win->ev_mask, ctx.mid };
+    color_t bg = color_premult(win->bg, color_a(win->bg));
+    uint32_t values1[5] = { bg, bg, XCB_GRAVITY_NORTH_WEST, win->ev_mask, ctx.mid };
     int16_t x = iconf(ICONF_WINDOW_X);
     int16_t y = iconf(ICONF_WINDOW_Y);
 
@@ -938,7 +943,7 @@ struct window *create_window(void) {
 
     win->gc = xcb_generate_id(con);
     uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
-    uint32_t values2[3] = { win->bg, win->bg, 0 };
+    uint32_t values2[3] = { bg, bg, 0 };
 
     c = xcb_create_gc_checked(con, win->gc, win->wid, mask2, values2);
     if (check_void_cookie(c)) goto error;

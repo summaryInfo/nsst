@@ -165,7 +165,8 @@ bool renderer_reload_font(struct window *win, bool need_free) {
             return 0;
         }
 
-        image_draw_rect(win->ren.im, (struct rect){0, 0, win->ren.im.width, win->ren.im.height}, win->bg);
+        image_draw_rect(win->ren.im, (struct rect){0, 0, win->ren.im.width, win->ren.im.height},
+                color_premult(win->bg, color_a(win->bg)));
     }
 
     return 1;
@@ -307,6 +308,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
                     c = palette[SPECIAL_SELECTED_BG];
                     if (!c) c = palette[SPECIAL_FG];
                 }
+                c = color_premult(c, color_a(c));
                 image_draw_rect(win->ren.im, (struct rect){
                     .x = line.width * win->char_width,
                     .y = k * (win->char_height + win->char_depth),
@@ -352,8 +354,9 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
                 count = 0;
             }
         }
+        color_t c = color_premult(win->cursor_fg, color_a(win->cursor_fg));
         for (size_t i = 0; i < count; i++)
-            image_draw_rect(win->ren.im, rects[i + off], win->cursor_fg);
+            image_draw_rect(win->ren.im, rects[i + off], c);
     }
 
     bool drawn_any = win->ren.boundc;
@@ -424,9 +427,10 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
 
     resize_bounds(win, delta_y);
 
+    color_t c = color_premult(win->bg, color_a(win->bg));
     if (delta_y > 0) image_draw_rect(win->ren.im,
-            (struct rect) { 0, common_h, common_w, height - common_h }, win->bg);
+            (struct rect) { 0, common_h, common_w, height - common_h }, c);
     if (delta_x > 0) image_draw_rect(win->ren.im,
-            (struct rect) { common_w, 0, width - common_w, height }, win->bg);
+            (struct rect) { common_w, 0, width - common_w, height }, c);
 
 }

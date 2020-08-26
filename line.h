@@ -92,6 +92,12 @@ inline static uint8_t color_r(color_t c) { return (c >> 16) & 0xFF; }
 inline static uint8_t color_g(color_t c) { return (c >> 8) & 0xFF; }
 inline static uint8_t color_b(color_t c) { return c & 0xFF; }
 inline static uint8_t color_a(color_t c) { return c >> 24; }
+inline static color_t mk_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+    return (a << 24U) | (r << 16U) | (g << 8U) | b;
+}
+inline static color_t color_premult(color_t c, uint8_t a) {
+    return mk_color(color_r(c)*a/255, color_g(c)*a/255,color_b(c)*a/255, a);
+}
 
 inline static void free_line(struct line *line) {
     if (line) free(line->attrs);
