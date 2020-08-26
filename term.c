@@ -3197,6 +3197,7 @@ static void term_precompose_at_cursor(struct term *term, uint32_t ch) {
         cel->drawn = 0;
     }
 }
+
 inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bool raw) {
     uint32_t b = *(*buf)++, part, i;
     if (LIKELY(b < 0xC0 || raw)) return b;
