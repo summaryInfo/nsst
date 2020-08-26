@@ -1055,25 +1055,46 @@ static uint16_t term_checksum(struct term *term, int16_t xs, int16_t ys, int16_t
     return mode.positive ? res : -res;
 }
 
-static void term_reverse_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct attr mask) {
+static void term_reverse_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct attr *attr) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
-    //uint32 amsk = attr_mask(mask)
+    uint32_t mask = attr_mask(attr);
 
-    //TODO//////////////////
-
-    //bool rect = term->mode.attr_ext_rectangle;
-    //for (; ys < ye; ys++) {
-    //    struct line *line = term->screen[ys];
-    //    for (int16_t i = xs; i < (rect || ys == ye - 1 ? xe : term_max_ox(term)); i++) {
-    //        // TODO Oh no...
-    //        
-    //        attr_mask_set(line->cell + i, attr_mask(line->cell + i) ^ amsk);
-    //        line->cell[i].drawn = 0;
-    //    }
-    //    if (!rect) xs = term_min_ox(term);
-    //}
+    bool rect = term->mode.attr_ext_rectangle;
+    for (; ys < ye; ys++) {
+        struct line *line = term->screen[ys];
+        // TODO Optimize
+        for (int16_t i = xs; i < (rect || ys == ye - 1 ? xe : term_max_ox(term)); i++) {
+            struct attr newa = attr_at(line, i);
+            attr_mask_set(&newa, attr_mask(&newa) ^ mask);
+            line->cell[i].attrid = alloc_attr(line, newa);
+            line->cell[i].drawn = 0;
+        }
+        if (!rect) xs = term_min_ox(term);
+    }
 }
 
+static void term_apply_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct attr *mask, struct attr *attr) {
+    term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
+    uint32_t mmsk = attr_mask(mask);
+    uint32_t amsk = attr_mask(attr) & mmsk;
+
+    bool rect = term->mode.attr_ext_rectangle;
+    for (; ys < ye; ys++) {
+        struct line *line = term->screen[ys];
+        // TODO Optimize
+        for (int16_t i = xs; i < (rect || ys == ye - 1 ? xe : term_max_ox(term)); i++) {
+            struct attr newa = attr_at(line, i);
+            attr_mask_set(&newa, (attr_mask(&newa) & ~mmsk) | amsk);
+            if (mask->fg) newa.fg = attr->fg;
+            if (mask->bg) newa.bg = attr->bg;
+
+            line->cell[i].attrid = alloc_attr(line, newa);
+            line->cell[i].drawn = 0;
+        }
+        if (!rect) xs = term_min_ox(term);
+    }
+
+}
 
 static char *term_encode_sgr(char *dst, char *end, struct attr attr) {
 #define FMT(...) dst += snprintf(dst, end - dst, __VA_ARGS__)
@@ -1131,26 +1152,6 @@ static struct attr term_common_sgr(struct term *term, int16_t xs, int16_t ys, in
     if (!has_common_fg) common.fg = indirect_color(SPECIAL_FG);
 
     return common;
-}
-
-static void term_apply_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct attr mask, struct attr attr) {
-    term_erase_pre(term, &xs, &ys, &xe, &ye, 1);
-
-    //TODO/////////////////
-    //bool rect = term->mode.attr_ext_rectangle;
-    //for (; ys < ye; ys++) {
-    //    struct line *line = term->screen[ys];
-    //    uint32_t idx = alloc_attr(line, attr);
-    //    for (int16_t i = xs; i < (rect || ys == ye - 1 ? xe : term_max_ox(term)); i++) {
-    //        struct cell *cel = attrline->cell[i];
-    //        attr_mask_set(
-    //        cel->attr = (cel->attr & ~mask.attr) | (sgr.cel.attr & mask.attr);
-    //        if (mask.fg) cel->fg = sgr.cel.fg;
-    //        if (mask.bg) cel->bg = sgr.cel.bg;
-    //        cel.drawn = 0;
-    //    }
-    //    if (!rect) xs = term_min_ox(term);
-    //}
 }
 
 static void term_copy(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, int16_t xd, int16_t yd, bool origin) {
@@ -4075,7 +4076,7 @@ static void term_dispatch_csi(struct term *term) {
         term_decode_sgr(term, 4, &mask, &sgr);
         term_apply_sgr(term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
                 term_min_ox(term) + PARAM(3, term_max_ox(term) - term_min_ox(term)),
-                term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)), mask, sgr);
+                term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)), &mask, &sgr);
         break;
     }
     case C('t') | I0('$'): /* DECRARA */ {
@@ -4084,7 +4085,7 @@ static void term_dispatch_csi(struct term *term) {
         term_decode_sgr(term, 4, &mask, &sgr);
         term_reverse_sgr(term, term_min_ox(term) + PARAM(1, 1) - 1, term_min_oy(term) + PARAM(0, 1) - 1,
                 term_min_ox(term) + PARAM(3, term_max_ox(term) - term_min_ox(term)),
-                term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)), mask);
+                term_min_oy(term) + PARAM(2, term_max_oy(term) - term_min_oy(term)), &mask);
         break;
     }
     case C('v') | I0('$'): /* DECCRA */
