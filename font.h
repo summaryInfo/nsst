@@ -15,6 +15,7 @@ enum face_name {
     face_normal = 0,
     face_italic = 1 << 0,
     face_bold = 1 << 1,
+    face_bold_italic = face_bold | face_italic,
     face_MAX = 4,
 };
 
