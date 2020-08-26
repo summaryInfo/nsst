@@ -158,13 +158,13 @@ void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize
         dc += len - 1;
         dir = -1;
     }
-    for (ssize_t i = 0; i < len; i++) {
-        struct cell c = *(sc += dir);
+    for (ssize_t i = 0; i < len; i++, sc += dir, dc += dir) {
+        struct cell c = *sc;
         if (dmg) c.drawn = 0;
         if (c.attrid && c.attrid != previd)
             newid = alloc_attr(dst, src->attrs->data[c.attrid - 1]);
         c.attrid = newid;
-        *(dc += dir) = c;
+        *dc = c;
     }
 }
 
