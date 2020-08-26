@@ -45,6 +45,7 @@ struct font {
     uint16_t dpi;
     double pixel_size;
     double size;
+    FcCharSet *subst_chars;
     struct face_list face_types[face_MAX];
 };
 
@@ -64,6 +65,7 @@ void free_font(struct font *font) {
         if (--global.fonts == 0) {
             FcFini();
             FT_Done_FreeType(global.library);
+            if (font->subst_chars) FcCharSetDestroy(font->subst_chars);
         }
         free(font);
     }
@@ -270,14 +272,47 @@ struct font *font_ref(struct font *font) {
     return font;
 }
 
+static void add_font_substitute(struct font *font, struct face_list *faces, uint32_t ch, const FcPattern *pat){
+    if (!font->subst_chars) font->subst_chars = FcCharSetCreate();
+    FcCharSetAddChar(font->subst_chars, ch);
+
+    FcPattern *chset_pat = pat ? FcPatternDuplicate(pat) : FcPatternCreate();
+    FcPatternAddDouble(chset_pat, FC_DPI, font->dpi);
+    FcPatternAddCharSet(chset_pat, FC_CHARSET, font->subst_chars);
+    FcPatternAddBool(chset_pat, FC_SCALABLE, FcTrue);
+    FcDefaultSubstitute(chset_pat);
+    if (FcConfigSubstitute(NULL, chset_pat, FcMatchPattern) == FcFalse) {
+        warn("Can't find substitute font");
+        return;
+    }
+
+    FcResult result;
+    FcPattern *final_pat = FcFontMatch(NULL, chset_pat, &result);
+    if (result != FcResultMatch) {
+        warn("Font doesn't match");
+        return;
+    }
+
+    load_append_fonts(font, faces, (struct patern_holder){ .length = 1, .pats = &final_pat });
+    FcPatternDestroy(final_pat);
+}
+
 struct glyph *font_render_glyph(struct font *font, uint32_t ch, enum face_name attr) {
     struct face_list *faces = &font->face_types[attr];
     int glyph_index = 0;
     FT_Face face = faces->faces[0];
-    for (size_t i = 0; glyph_index == 0 && i < faces->length; i++)
+    for (size_t i = 0; !glyph_index && i < faces->length; i++)
         if ((glyph_index = FT_Get_Char_Index(faces->faces[i], ch)))
             face = faces->faces[i];
-    //size_t sz = faces->faces[0]->size->metrics.x_ppem/font->dpi*72.0*64;
+    if (!glyph_index && iconf(ICONF_ALLOW_SUBST_FONTS)) {
+        size_t oldlen = faces->length, sz = faces->faces[0]->size->metrics.x_ppem*72.0/font->dpi*64;
+        //TODO: Clarify pattern here?
+        add_font_substitute(font,faces, ch, NULL);
+        for (size_t i = oldlen; !glyph_index && i < faces->length; i++) {
+            FT_Set_Char_Size(faces->faces[i], 0, sz, font->dpi, font->dpi);
+            if ((glyph_index = FT_Get_Char_Index(faces->faces[i],ch))) face = faces->faces[i];
+        }
+    }
 
     FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT);
 

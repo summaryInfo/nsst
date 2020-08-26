@@ -124,6 +124,7 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"special-italic", "\t(If special color should be used for italic text)", "specialItalic", ICONF_SPEICAL_ITALIC},
     {"special-reverse", "\t(If special color should be used for reverse text)", "specialReverse", ICONF_SPEICAL_REVERSE},
     {"special-underlined", "\t(If special color should be used for underlined text)", "specialUnderlined", ICONF_SPEICAL_UNDERLINE},
+    {"substitute-fonts", "\t(Enable substitute font support)", "substitudeFonts", ICONF_ALLOW_SUBST_FONTS},
     {"sync-timeout", "\t\t(Syncronous update timeout)", "syncTimeout", ICONF_SYNC_TIME},
     {"tab-width", "\t\t(Initial width of tab character)", "tabWidth", ICONF_TAB_WIDTH},
     {"term-mod", "\t\t(Meaning of 'T' modifer)", "termMod", SCONF_TERM_MOD},
@@ -253,6 +254,7 @@ static struct {
     [ICONF_CUT_LINES - ICONF_MIN] = {0, 0, 0, 1},
     [ICONF_MINIMIZE_SCROLLBACK - ICONF_MIN] = {1, 1, 0, 1},
     [ICONF_PRINT_ATTR - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_ALLOW_SUBST_FONTS] = {1, 1, 0, 1},
 };
 
 static struct {
