@@ -336,10 +336,9 @@ int tty_open(struct tty *tty, const char *cmd, const char **args) {
 
         if (print_cmd) {
             int pip[2];
-            pid_t pr_pid;
             if (pipe(pip) < 0)  goto n_printer;
 
-            switch ((pr_pid = fork())) {
+            switch (fork()) {
             case -1:
                 goto n_printer;
             default:

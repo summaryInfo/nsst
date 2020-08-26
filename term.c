@@ -363,13 +363,15 @@ void term_damage(struct term *term, struct rect damage) {
         term_line_next(term, &vpos, damage.y);
         for (ssize_t i = damage.y; i < damage.y + damage.height; i++) {
             struct line_view line = term_line_at(term, vpos);
-            for (ssize_t j = damage.x; j <  MIN(damage.x + damage.width, line.width); j++)
-                line.cell[j].drawn = 0;
-            if (damage.x >= line.width) {
-                if (line.width) line.cell[line.width - 1].drawn = 0;
-                else line.line->force_damage = 1;
-            }
-            term_line_next(term, &vpos, 1);
+            if (line.line) {
+                for (ssize_t j = damage.x; j <  MIN(damage.x + damage.width, line.width); j++)
+                    line.cell[j].drawn = 0;
+                if (damage.x >= line.width) {
+                    if (line.width) line.cell[line.width - 1].drawn = 0;
+                    else line.line->force_damage = 1;
+                }
+                term_line_next(term, &vpos, 1);
+            };
         }
     }
 }
@@ -463,7 +465,10 @@ static void term_reset_view(struct term *term, bool damage) {
     term->view_pos = (struct line_offset){0};
     term->view = 0;
     mouse_scroll_view(term, -old_view);
-    if (damage) term_damage_lines(term, 0, term->height);
+    if (damage) {
+        for(ssize_t i = 0; i < term->height; i++)
+            term->screen[i]->force_damage = 1;
+    }
 }
 
 static void term_free_scrollback(struct term *term) {
@@ -712,7 +717,6 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             new_lines[0] = create_line(term->sgr, width);
 
             ssize_t y2 = y, dy = 0;
-            par_start = 0;
             for (ssize_t dx = 0; y < term->height; y++) {
                 struct line *line = line_at(term, y);
                 ssize_t len = line->width;
@@ -773,7 +777,6 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 // Advance line, hard wrap
                 if (!line->wrapped) {
                     if (dy < nnlines - 1) new_lines[++dy] = create_line(term->sgr, width);
-                    par_start = dy;
                     dx = 0;
                 }
 

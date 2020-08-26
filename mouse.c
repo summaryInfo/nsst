@@ -299,7 +299,7 @@ outer:
 
     vpos = term_get_line_pos(term, loc->n.y1);
     if (loc->snap == snap_line) {
-        while ((line = term_line_at(term, vpos)).wrapped) {
+        while (term_line_at(term, vpos).wrapped) {
             if (term_line_next(term, &vpos, 1)) break;
             loc->n.y1++;
         }
@@ -506,7 +506,7 @@ void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, 
     } else {
         if (!term_get_mstate(term)->locator_pixels)
             adj_coords(term_window(term), &x, &y);
-        term_answerback(term, CSI"%d;%d;%d;%d;1&w", evt, mask, y + 1, x + 1);
+        term_answerback(term, CSI"%d;%d;%d;%d;1&w", evt, lmask, y + 1, x + 1);
     }
 }
 
@@ -612,7 +612,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
             uint8_t buf[UTF8_MAX_LEN * 3 + 3];
             off += utf8_encode(ev.button + ' ', buf + off, buf + sizeof buf);
             off += utf8_encode(ev.x + ' ', buf + off, buf + sizeof buf);
-            off += utf8_encode(ev.y + ' ', buf + off, buf + sizeof buf);
+            utf8_encode(ev.y + ' ', buf + off, buf + sizeof buf);
             term_answerback(term, CSI"%s%s",
                     term_get_kstate(term)->keyboard_mapping == keymap_sco ? ">M" : "M", buf);
             break;

@@ -1,7 +1,6 @@
 Until version 1.7:
     Recalculate non-rectangular selection position on resize
     Allow geometry to be specified in characters
-    Printing with SGR
 ===================
 General
     Write man page
@@ -29,6 +28,7 @@ Render
         Allow short lines to be seleted properly
     Wayland
 Emulation
+    Encode NRCSs for printer autoprint mode
     Proper vt level restriction
     Is private mode 1044 semantics correct/sould it be implemented at all?
     VT220

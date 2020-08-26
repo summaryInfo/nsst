@@ -69,7 +69,7 @@ To force full NRCS translation in UTF-8 mode set `--force-nrsc`/`forceNrcs`.
 
 Sequential graphical characters are decoded all at once, so can be printed faster.
 
-Debugging output can be enabled with `--trace-*`/`trace*` options. 
+Debugging output can be enabled with `--trace-*`/`trace*` options.
 
 For now nsst supports combining characters only via precomposition, but almost everything is ready to implement proper rendering of combining character (and variant glyphs support).
 The only tricky part is to extract positioning tables and implemnt basic text shaping. It would be implemented using glyphs with codes `0x200000` - `0xFFFFFF`,
