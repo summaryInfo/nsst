@@ -753,15 +753,15 @@ struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palet
     struct cellspec res;
 
     // Check special colors
-    if (__builtin_expect(iconf(ICONF_SPEICAL_BOLD), 0) && palette[SPECIAL_BOLD] && attr.bold)
+    if (UNLIKELY(iconf(ICONF_SPEICAL_BOLD)) && palette[SPECIAL_BOLD] && attr.bold)
         attr.fg = palette[SPECIAL_BOLD], attr.bold = 0;
-    if (__builtin_expect(iconf(ICONF_SPEICAL_UNDERLINE), 0) && palette[SPECIAL_UNDERLINE] && attr.underlined)
+    if (UNLIKELY(iconf(ICONF_SPEICAL_UNDERLINE)) && palette[SPECIAL_UNDERLINE] && attr.underlined)
         attr.fg = palette[SPECIAL_UNDERLINE], attr.underlined = 0;
-    if (__builtin_expect(iconf(ICONF_SPEICAL_BLINK), 0) && palette[SPECIAL_BLINK] && attr.blink)
+    if (UNLIKELY(iconf(ICONF_SPEICAL_BLINK)) && palette[SPECIAL_BLINK] && attr.blink)
         attr.fg = palette[SPECIAL_BLINK], attr.blink = 0;
-    if (__builtin_expect(iconf(ICONF_SPEICAL_REVERSE), 0) && palette[SPECIAL_REVERSE] && attr.reverse)
+    if (UNLIKELY(iconf(ICONF_SPEICAL_REVERSE)) && palette[SPECIAL_REVERSE] && attr.reverse)
         attr.fg = palette[SPECIAL_REVERSE], attr.reverse = 0;
-    if (__builtin_expect(iconf(ICONF_SPEICAL_ITALIC), 0) && palette[SPECIAL_ITALIC] && attr.italic)
+    if (UNLIKELY(iconf(ICONF_SPEICAL_ITALIC)) && palette[SPECIAL_ITALIC] && attr.italic)
         attr.fg = palette[SPECIAL_ITALIC], attr.italic = 0;
 
     // Calculate colors

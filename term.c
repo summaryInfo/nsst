@@ -3208,7 +3208,7 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
         maxw = (term->c.x >= term_max_x(term) ? term->width : term_max_x(term)) - term->c.x;
 
     // If rep > 0, we should perform REP CSI
-    if (__builtin_expect(rep, 0)) {
+    if (UNLIKELY(rep)) {
         int32_t wid = wcwidth(ch);
         if (!wid) {
             // Don't put zero-width charactes
@@ -3287,7 +3287,7 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
                 // at right margin, or autowrap is disabled, and we are at right size of the screen
                 // In those cases recalculate maxw
                 if (totalwidth + wid > maxw) {
-                    if (__builtin_expect(totalwidth || wid != 2, 1)) {
+                    if (LIKELY(totalwidth || wid != 2)) {
                         *start = char_start;
                         break;
                     } else if (term->c.x == term_max_x(term) - 1) {
@@ -3364,7 +3364,7 @@ static ssize_t term_dispatch_print(struct term *term, uint32_t ch, ssize_t rep, 
         *cell = MKCELL(abs(term->predec_buf[i]), attrid);
 
         // Put dummy character to the left of wide
-        if (__builtin_expect(term->predec_buf[i] < 0, 0)) {
+        if (UNLIKELY(term->predec_buf[i] < 0)) {
             cell->wide = 1;
             *++cell = MKCELL(0, attrid);
         }
@@ -4699,7 +4699,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
     }
 
     // C1 controls are interpreted in all states, try them before others
-    if (__builtin_expect(IS_C1(ch), 0) && term->vt_level > 1) {
+    if (UNLIKELY(IS_C1(ch)) && term->vt_level > 1) {
         term->esc.old_selector = term->esc.selector;
         term->esc.old_state = term->esc.state;
         term->esc.state = esc_esc_entry;
