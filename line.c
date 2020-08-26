@@ -156,9 +156,11 @@ void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize
         for (ssize_t i = 0; i < len; i++) {
             c = *sc++;
             c.drawn &= !dmg;
-            if (c.attrid && c.attrid != previd)
-                newid = alloc_attr(dst, src->attrs->data[c.attrid - 1]);
-            c.attrid = newid;
+            if (c.attrid) {
+                if (c.attrid != previd)
+                    newid = alloc_attr(dst, src->attrs->data[c.attrid - 1]);
+                c.attrid = newid;
+            }
             *dc++ = c;
         }
     } else {

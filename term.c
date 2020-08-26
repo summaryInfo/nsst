@@ -745,9 +745,11 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
                     // Copy cell
                     struct cell c = line->cell[x];
-                    if (c.attrid && c.attrid != previd)
-                        newid = alloc_attr(new_lines[dy], line->attrs->data[c.attrid - 1]);
-                    c.attrid = newid;
+                    if (c.attrid) {
+                        if (c.attrid != previd)
+                            newid = alloc_attr(new_lines[dy], line->attrs->data[c.attrid - 1]);
+                        c.attrid = newid;
+                    };
                     new_lines[dy]->cell[dx] = c;
 
                     // Advance line, soft wrap
