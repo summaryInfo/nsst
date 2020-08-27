@@ -1757,6 +1757,8 @@ static void term_set_vt52(struct term *term, bool set) {
 void term_set_reverse(struct term *term, bool set) {
     if (set ^ term->mode.reverse_video) {
         SWAP(color_t, term->palette[SPECIAL_BG], term->palette[SPECIAL_FG]);
+        SWAP(color_t, term->palette[0], term->palette[7]);
+        SWAP(color_t, term->palette[8], term->palette[15]);
         SWAP(color_t, term->palette[SPECIAL_CURSOR_BG], term->palette[SPECIAL_CURSOR_FG]);
         SWAP(color_t, term->palette[SPECIAL_SELECTED_BG], term->palette[SPECIAL_SELECTED_FG]);
         mouse_damage_selection(term);
@@ -2450,13 +2452,19 @@ static void term_dispatch_osc(struct term *term) {
             else pnext = dend;
 
             if (!errno && s_end == parg - 1 && idx < PALETTE_SIZE - SPECIAL_PALETTE_SIZE + 5) {
-                if (parg[0] == '?' && parg[1] == '\0')
+                if (term->mode.reverse_video) switch(idx) {
+                    case 0: idx = 7; break;
+                    case 7: idx = 0; break;
+                    case 8: idx =15; break;
+                    case 15:idx = 8; break;
+                }
+                if (parg[0] == '?' && parg[1] == '\0') {
                     term_answerback(term, OSC"%d;%d;rgb:%04x/%04x/%04x"ST, term->esc.selector,
                             idx - (term->esc.selector == 5) * SPECIAL_BOLD, color_r(term->palette[idx]) * 0x101,
                             color_g(term->palette[idx]) * 0x101, color_b(term->palette[idx]) * 0x101);
-                else if ((col = parse_color(parg, pnext)))
+                } else if ((col = parse_color(parg, pnext))) {
                     term->palette[idx] = col;
-                else {
+                } else {
                     if (pnext != dend) *pnext = ';';
                     term_esc_dump(term, 0);
                 }
@@ -2478,6 +2486,12 @@ static void term_dispatch_osc(struct term *term) {
                 errno = 0;
                 unsigned long idx = strtoul((char *)dstr, (char **)&s_end, 10);
                 if (term->esc.selector == 105) idx += SPECIAL_BOLD;
+                if (term->mode.reverse_video) switch(idx) {
+                    case 0: idx = 7; break;
+                    case 7: idx = 0; break;
+                    case 8: idx =15; break;
+                    case 15:idx = 8; break;
+                }
                 if (!errno && !*s_end && s_end != dstr && idx < PALETTE_SIZE - SPECIAL_PALETTE_SIZE + 5)
                     term->palette[idx] = cconf(CCONF_COLOR_0 + idx);
                 else term_esc_dump(term, 0);
