@@ -262,7 +262,7 @@ static struct {
     char *val;
 } soptions[] = {
     [SCONF_FONT_NAME - SCONF_MIN] = { "mono", NULL },
-    [SCONF_ANSWERBACK_STRING - SCONF_MIN] = { "", NULL },
+    [SCONF_ANSWERBACK_STRING - SCONF_MIN] = { "\006", NULL },
     [SCONF_SHELL - SCONF_MIN] = { "/bin/sh", NULL },
     [SCONF_TERM_NAME - SCONF_MIN] = { "xterm", NULL },
     [SCONF_TITLE - SCONF_MIN] = { "Not So Simple Terminal", NULL },
