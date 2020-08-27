@@ -13,7 +13,7 @@ This is an implementation of VT220-like X11 terminal emulator.
 * Most escape sequences from XTerm are implemented
 * Full keyboard mode from XTerm
 * Syncronous updates DCS
-* `OSC 13001 ; Po ST` "Set background opacity to `Po`"
+* `OSC 13001 ; Po ST` "Set background opacity to `Po` (`Po` is floating point)"
 * Multiple terminal windows
     * This would be extended to full daemon mode later
     * `Shift-Ctrl-N` is default keybinding
@@ -102,6 +102,7 @@ Default keybindings:
     Nsst.key.newWindow: T-N
     Nsst.key.reset: T-R
     Nsst.key.reloadConfig: T-X
+    Nsst.key.reverseVideo: T-I
 
 
 ## Dependencies
