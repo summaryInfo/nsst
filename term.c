@@ -3312,7 +3312,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
             if(UNLIKELY(!wid)) {
                 // Don't put zero-width charactes
                 // to predecode buffer
-                if (totalw) term_precompose_at_cursor(term, ch);
+                if (!totalw) term_precompose_at_cursor(term, ch);
                 else pbuf[-1] = try_precompose(pbuf[-1], ch);
             } else {
                 // Adjust width to be other 1 or 2
