@@ -128,6 +128,8 @@ enum config_option {
     ICONF_ALLOW_SUBST_FONTS,
     ICONF_FORCE_SCALABLE,
     ICONF_ALPHA,
+    ICONF_BLEND_ALL_BG,
+    ICONF_BLEND_FG,
     ICONF_MAX,
 
     SCONF_MIN = ICONF_MAX,
@@ -188,9 +190,9 @@ struct optmap_item {
 };
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 124
+#    define OPT_MAP_SIZE 126
 #else
-#    define OPT_MAP_SIZE 125
+#    define OPT_MAP_SIZE 127
 #endif
 
 extern struct optmap_item optmap[OPT_MAP_SIZE];

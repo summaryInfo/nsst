@@ -789,7 +789,8 @@ struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palet
     if (attr.reverse ^ selected) SWAP(color_t, res.fg, res.bg);
 
     // Apply background opacity
-    if (color_idx(attr.bg) == SPECIAL_BG) res.bg = color_apply_a(res.bg, alpha);
+    if (color_idx(attr.bg) == SPECIAL_BG || iconf(ICONF_BLEND_ALL_BG)) res.bg = color_apply_a(res.bg, alpha);
+    if (UNLIKELY(iconf(ICONF_BLEND_FG))) res.fg = color_apply_a(res.fg, alpha);
 
     if ((!selected && attr.invisible) || (attr.blink && blink)) res.fg = res.bg;
 
