@@ -93,7 +93,7 @@ bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end) {
         part = (part << 6) | (*(*buf)++ & 0x3F);
     }
 
-    const static uint32_t maxv[] = {0x80, 0x800, 0x10000, 0x110000};
+    static const uint32_t maxv[] = {0x80, 0x800, 0x10000, 0x110000};
     if (UNLIKELY(part >= maxv[len]) || UNLIKELY(part - 0xD800 < 0xE000 - 0xD800)) goto inval2;
 
     *res = part;
