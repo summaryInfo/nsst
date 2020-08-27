@@ -149,7 +149,7 @@ static void load_face_list(struct font *font, struct face_list* faces, const cha
         FcPattern *final_pat = NULL;
         FcPattern *pat = FcNameParse((FcChar8*) tok);
         FcPatternAddDouble(pat, FC_DPI, font->dpi);
-        //FcPatternAddBool(pat, FC_SCALABLE, FcTrue);
+        if (iconf(ICONF_FORCE_SCALABLE)) FcPatternAddBool(pat, FC_SCALABLE, FcTrue);
         FcPatternDel(pat, FC_STYLE);
         FcPatternDel(pat, FC_WEIGHT);
         FcPatternDel(pat, FC_SLANT);
@@ -272,14 +272,42 @@ struct font *font_ref(struct font *font) {
     return font;
 }
 
-static void add_font_substitute(struct font *font, struct face_list *faces, uint32_t ch, const FcPattern *pat){
+static void add_font_substitute(struct font *font, struct face_list *faces, enum face_name attr, uint32_t ch){
     if (!font->subst_chars) font->subst_chars = FcCharSetCreate();
     FcCharSetAddChar(font->subst_chars, ch);
 
-    FcPattern *chset_pat = pat ? FcPatternDuplicate(pat) : FcPatternCreate();
+    FcPattern *chset_pat = FcPatternCreate();
     FcPatternAddDouble(chset_pat, FC_DPI, font->dpi);
     FcPatternAddCharSet(chset_pat, FC_CHARSET, font->subst_chars);
-    FcPatternAddBool(chset_pat, FC_SCALABLE, FcTrue);
+    if (iconf(ICONF_FORCE_SCALABLE) || FT_IS_SCALABLE(faces->faces[0]))
+        FcPatternAddBool(chset_pat, FC_SCALABLE, FcTrue);
+
+    switch (attr) {
+    case face_normal:
+        FcPatternAddString(chset_pat, FC_STYLE, (FcChar8*) "Regular");
+        FcPatternAddInteger(chset_pat, FC_WEIGHT, FC_WEIGHT_REGULAR);
+        FcPatternAddInteger(chset_pat, FC_SLANT, FC_SLANT_ROMAN);
+        break;
+    case face_normal | face_italic:
+        FcPatternAddString(chset_pat, FC_STYLE, (FcChar8*) "Italic");
+        FcPatternAddInteger(chset_pat, FC_SLANT, FC_SLANT_ITALIC);
+        FcPatternAddInteger(chset_pat, FC_WEIGHT, FC_WEIGHT_REGULAR);
+        break;
+    case face_bold:
+        FcPatternAddString(chset_pat, FC_STYLE, (FcChar8*) "Bold");
+        FcPatternAddInteger(chset_pat, FC_SLANT, FC_SLANT_ROMAN);
+        FcPatternAddInteger(chset_pat, FC_WEIGHT, FC_WEIGHT_BOLD);
+        break;
+    case face_bold | face_italic:
+        FcPatternAddString(chset_pat, FC_STYLE, (FcChar8*) "Bold Italic");
+        FcPatternAddString(chset_pat, FC_STYLE, (FcChar8*) "BoldItalic");
+        FcPatternAddInteger(chset_pat, FC_SLANT, FC_SLANT_ITALIC);
+        FcPatternAddInteger(chset_pat, FC_WEIGHT, FC_WEIGHT_BOLD);
+        break;
+    default:
+        warn("Unknown face type");
+    }
+
     FcDefaultSubstitute(chset_pat);
     if (FcConfigSubstitute(NULL, chset_pat, FcMatchPattern) == FcFalse) {
         warn("Can't find substitute font");
@@ -306,8 +334,7 @@ struct glyph *font_render_glyph(struct font *font, uint32_t ch, enum face_name a
             face = faces->faces[i];
     if (!glyph_index && iconf(ICONF_ALLOW_SUBST_FONTS)) {
         size_t oldlen = faces->length, sz = faces->faces[0]->size->metrics.x_ppem*72.0/font->dpi*64;
-        //TODO: Clarify pattern here?
-        add_font_substitute(font,faces, ch, NULL);
+        add_font_substitute(font, faces, attr, ch);
         for (size_t i = oldlen; !glyph_index && i < faces->length; i++) {
             FT_Set_Char_Size(faces->faces[i], 0, sz, font->dpi, font->dpi);
             if ((glyph_index = FT_Get_Char_Index(faces->faces[i],ch))) face = faces->faces[i];
@@ -321,62 +348,65 @@ struct glyph *font_render_glyph(struct font *font, uint32_t ch, enum face_name a
     bool ordrev = ord == pixmode_bgr || ord == pixmode_bgrv;
     bool lcd = ord != pixmode_mono;
 
-    size_t stride;
-    if (lcd && !ordv) {
-        FT_Render_Glyph(face->glyph, FT_RENDER_MODE_LCD);
-        stride = 4*face->glyph->bitmap.width/3;
-    } else if (lcd && ordv) {
-        FT_Render_Glyph(face->glyph, FT_RENDER_MODE_LCD_V);
-        stride = 4*face->glyph->bitmap.width;
-    } else {
-        FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
-        stride = (face->glyph->bitmap.width + 3) & ~3;
-    }
+    if (lcd && !ordv) FT_Render_Glyph(face->glyph, FT_RENDER_MODE_LCD);
+    else if (lcd && ordv) FT_Render_Glyph(face->glyph, FT_RENDER_MODE_LCD_V);
+    else FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
+
+    size_t stride = face->glyph->bitmap.width;
+
+    if (face->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_LCD) stride /= 3;
+    if (lcd) stride *= 4;
+    stride = (stride + 3) & ~3;
 
     struct glyph *glyph = malloc(sizeof(*glyph) + stride * face->glyph->bitmap.rows);
     glyph->x = -face->glyph->bitmap_left;
     glyph->y = face->glyph->bitmap_top;
-
     glyph->width = face->glyph->bitmap.width;
     glyph->height = face->glyph->bitmap.rows;
     glyph->x_off = face->glyph->advance.x/64.;
     glyph->y_off = face->glyph->advance.y/64.;
     glyph->stride = stride;
-    glyph->pixmode = pixmode_mono;
-
-    int pitch = face->glyph->bitmap.pitch;
-    uint8_t *src = face->glyph->bitmap.buffer;
-    unsigned short num_grays = face->glyph->bitmap.num_grays;
-
-    if (pitch < 0)
-        src -= pitch*(face->glyph->bitmap.rows - 1);
+    glyph->pixmode = ord;
 
     double gamma = iconf(ICONF_GAMMA) / 10000.0;
 
+    int pitch = face->glyph->bitmap.pitch;
+    uint8_t *src = face->glyph->bitmap.buffer;
+    if (pitch < 0) src -= pitch*(face->glyph->bitmap.rows - 1);
+    uint16_t num_grays = face->glyph->bitmap.num_grays;
+
     switch (face->glyph->bitmap.pixel_mode) {
     case FT_PIXEL_MODE_MONO:
-        for (size_t i = 0; i < glyph->height; i++)
-            for (size_t j = 0; j < glyph->width; j++)
-                glyph->data[stride*i + j] = 0xFF * ((src[pitch*i + j/8] >> (7 - j%8)) & 0x1);
-        break;
-    case FT_PIXEL_MODE_GRAY:
-        for (size_t i = 0; i < glyph->height; i++)
-            for (size_t j = 0; j < glyph->width; j++)
-                glyph->data[stride*i + j] = 0xFF * pow(src[pitch*i + j] / (double)(num_grays - 1), gamma);
-        break;
     case FT_PIXEL_MODE_GRAY2:
-        for (size_t i = 0; i < glyph->height; i++)
-            for (size_t j = 0; j < glyph->width; j++)
-                glyph->data[stride*i + j] = 0x55 * ((src[pitch*i + j/4] >> (3 - j%4)) & 0x3);
-        break;
-    case FT_PIXEL_MODE_GRAY4:
-        for (size_t i = 0; i < glyph->height; i++)
-            for (size_t j = 0; j < glyph->width; j++)
-                glyph->data[stride*i + j] = 0x11 * ((src[pitch*i + j/2] >> (1 - j%2)) & 0xF);
+    case FT_PIXEL_MODE_GRAY4:;
+        FT_Bitmap sbm;
+        FT_Bitmap_Init(&sbm);
+        FT_Bitmap_Convert(global.library, &face->glyph->bitmap, &sbm, 4);
+        pitch = sbm.pitch;
+        src = sbm.buffer;
+        if (pitch < 0) src -= pitch*(sbm.rows - 1);
+        num_grays = sbm.num_grays;
+    case FT_PIXEL_MODE_GRAY:
+        if (lcd) {
+            for (size_t i = 0; i < glyph->height; i++) {
+                for (size_t j = 0; j < glyph->width; j++) {
+                    uint8_t v = MIN(0xFF, 0xFF * pow(src[pitch*i + j] / (double)(num_grays - 1), gamma));
+                    glyph->data[stride*i + 4*j + 0] = v;
+                    glyph->data[stride*i + 4*j + 1] = v;
+                    glyph->data[stride*i + 4*j + 2] = v;
+                    glyph->data[stride*i + 4*j + 3] = v;
+                }
+            }
+        } else {
+            for (size_t i = 0; i < glyph->height; i++)
+                for (size_t j = 0; j < glyph->width; j++)
+                    glyph->data[stride*i + j] = 0xFF * pow(src[pitch*i + j] / (double)(num_grays - 1), gamma);
+        }
+        if (face->glyph->bitmap.pixel_mode != FT_PIXEL_MODE_GRAY)
+            FT_Bitmap_Done(global.library, &sbm);
         break;
     case FT_PIXEL_MODE_LCD_V:
         glyph->height /= 3;
-        glyph->pixmode = ord;
         for (size_t i = 0; i < glyph->height; i++) {
             for (size_t j = 0; j < glyph->width; j++) {
                 int16_t acc = 0;
@@ -389,7 +419,6 @@ struct glyph *font_render_glyph(struct font *font, uint32_t ch, enum face_name a
         break;
     case FT_PIXEL_MODE_LCD:
         glyph->width /= 3;
-        glyph->pixmode = ord;
         for (size_t i = 0; i < glyph->height; i++) {
             for (size_t j = 0; j < glyph->width; j++) {
                 int16_t acc = 0;
@@ -406,16 +435,14 @@ struct glyph *font_render_glyph(struct font *font, uint32_t ch, enum face_name a
         return font_render_glyph(font, 0, attr);
     }
 
-    if (iconf(ICONF_LOG_LEVEL) == 4 && iconf(ICONF_TRACE_FONTS)) {
+    if (iconf(ICONF_LOG_LEVEL) == 3 && iconf(ICONF_TRACE_FONTS)) {
         info("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
         info("Num grays: %d", face->glyph->bitmap.num_grays);
         info("Glyph: %d %d", glyph->width, glyph->height);
-        size_t img_width = glyph->width;
-        if (lcd) img_width *= 3;
 
         for (size_t k = 0; k < glyph->height; k++) {
-            for (size_t m = 0 ;m < img_width; m++)
-                fprintf(stderr, "%02x", src[pitch*k+m]);
+            for (size_t m = 0; m < glyph->width; m++)
+                fprintf(stderr, "%02x", glyph->data[stride*k+m]);
             putc('\n', stderr);
         }
     }

@@ -126,6 +126,7 @@ enum config_option {
     ICONF_MINIMIZE_SCROLLBACK,
     ICONF_PRINT_ATTR,
     ICONF_ALLOW_SUBST_FONTS,
+    ICONF_FORCE_SCALABLE,
     // Backround opacity
     // These can't be read with iconf
     ICONF_ALPHA,
@@ -188,9 +189,9 @@ struct optmap_item {
 };
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 122
-#else
 #    define OPT_MAP_SIZE 123
+#else
+#    define OPT_MAP_SIZE 124
 #endif
 
 extern struct optmap_item optmap[OPT_MAP_SIZE];

@@ -63,6 +63,7 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"force-dpi", "\t\t(DPI value for fonts)", "dpi", ICONF_DPI},
     {"force-mouse-mod", "\t(Modifer to force mouse action)", "forceMouseMod", SCONF_FORCE_MOUSE_MOD},
     {"force-nrcs", "\t\t(Enable NRCS translation when UTF-8 mode is enabled)", "forceNrcs", ICONF_FORCE_UTF8_NRCS},
+    {"force-scalable", "\t(Do not search for pixmap fonts)", "forceScalable", ICONF_FORCE_SCALABLE},
     {"foreground", "\t\t(Default foreground color)", "foreground", CCONF_FG},
     {"fps", "\t\t\t(Window refresh rate)", "fps", ICONF_FPS},
     {"has-meta", "\t\t(Handle meta/alt)", "hasMeta", ICONF_HAS_META},
@@ -255,6 +256,7 @@ static struct {
     [ICONF_MINIMIZE_SCROLLBACK - ICONF_MIN] = {1, 1, 0, 1},
     [ICONF_PRINT_ATTR - ICONF_MIN] = {1, 1, 0, 1},
     [ICONF_ALLOW_SUBST_FONTS] = {1, 1, 0, 1},
+    [ICONF_FORCE_SCALABLE] = {0, 0, 0, 1},
 };
 
 static struct {

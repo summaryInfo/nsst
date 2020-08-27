@@ -3276,7 +3276,6 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
                 res = 0;
                 break;
             }
-            if (ch == UTF_INVAL) warn("I");
 
             enum charset glv = term->c.gn[term->c.gl_ss];
 
