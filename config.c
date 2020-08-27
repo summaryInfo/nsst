@@ -276,6 +276,19 @@ static struct {
     [SCONF_FORCE_MOUSE_MOD - SCONF_MIN] = { "T", NULL },
     [SCONF_TERM_MOD - SCONF_MIN] = {"SC", NULL },
     [SCONF_WORD_SEPARATORS - SCONF_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`", NULL },
+    [KCONF_SCROLL_DOWN - SCONF_MIN] = { "T-Up", NULL },
+    [KCONF_SCROLL_UP - SCONF_MIN] = { "T-Down", NULL },
+    [KCONF_FONT_INC - SCONF_MIN] = { "T-Page_Up", NULL },
+    [KCONF_FONT_DEC - SCONF_MIN] = { "T-Page_Down", NULL },
+    [KCONF_FONT_RESET - SCONF_MIN] = { "T-Home", NULL },
+    [KCONF_NEW_WINDOW - SCONF_MIN] = { "T-N", NULL },
+    [KCONF_NUMLOCK - SCONF_MIN] = { "T-Num_Lock", NULL },
+    [KCONF_COPY - SCONF_MIN] = { "T-C", NULL },
+    [KCONF_PASTE - SCONF_MIN] = { "T-V", NULL },
+    [KCONF_BREAK - SCONF_MIN] = { "Break", NULL },
+    [KCONF_RESET - SCONF_MIN] = { "T-R", NULL },
+    [KCONF_RELOAD_CONFIG - SCONF_MIN] = { "T-X", NULL },
+    [KCONF_REVERSE_VIDEO - SCONF_MIN] = { "T-I", NULL },
 };
 
 static color_t coptions[PALETTE_SIZE];
@@ -361,7 +374,7 @@ void iconf_set(uint32_t opt, int32_t val) {
 }
 
 const char *sconf(uint32_t opt) {
-    if (SCONF_MIN > opt || opt >= SCONF_MAX) {
+    if (SCONF_MIN > opt || opt >= KCONF_MAX) {
         warn("Unknown string option %d", opt);
         return NULL;
     }
@@ -370,9 +383,9 @@ const char *sconf(uint32_t opt) {
 }
 
 void sconf_set(uint32_t opt, const char *val) {
-    if (SCONF_MIN <= opt && opt < SCONF_MAX) {
+    if (SCONF_MIN <= opt && opt < KCONF_MAX) {
         opt -= SCONF_MIN;
-        if (!strcasecmp(val, "default")) val = soptions[opt].dflt;
+        if (!strcasecmp(val, "default")) val = NULL;
         if (soptions[opt].val) free(soptions[opt].val);
         soptions[opt].val = val ? strdup(val) : NULL;
     } else if (opt < ICONF_MAX) {
@@ -442,27 +455,6 @@ void sconf_set(uint32_t opt, const char *val) {
             if (ival >= 0) iconf_set(opt, ival);
             else warn("Unknown string option %d", opt);
         }
-    } else if (KCONF_MIN <= opt && opt < KCONF_MAX) {
-        enum shortcut_action sa = opt - KCONF_MIN + 1;
-        if (!strcasecmp(val, "default")) {
-            const char *dflt[shortcut_MAX] = {
-                [shortcut_scroll_down] = "T-Up",
-                [shortcut_scroll_up] = "T-Down",
-                [shortcut_font_up] = "T-Page_Up",
-                [shortcut_font_down] = "T-Page_Down",
-                [shortcut_font_default] = "T-Home",
-                [shortcut_new_window] = "T-N",
-                [shortcut_numlock] = "T-Num_Lock",
-                [shortcut_copy] = "T-C",
-                [shortcut_paste] = "T-V",
-                [shortcut_break] = "Break",
-                [shortcut_reset] = "T-R",
-                [shortcut_reload_config] = "T-X",
-                [shortcut_reverse_video] = "T-I",
-            };
-            if (dflt[sa]) val = dflt[sa];
-        }
-        if (val) keyboard_set_shortcut(sa, val);
     } else if (CCONF_MIN <= opt && opt < CCONF_MAX) {
             color_t col = 0;
             bool dflt = !val || !strcasecmp(val, "default");

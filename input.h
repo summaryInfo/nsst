@@ -105,5 +105,6 @@ void keyboard_set_shortcut(enum shortcut_action sa, const char *val);
 enum shortcut_action keyboard_find_shortcut(struct key k);
 void keyboard_reset_udk(struct term *term);
 bool keyboard_set_udk(struct term *term, const uint8_t *str, const uint8_t *end, bool reset, bool lock);
+void keyboard_set_force_select_mask(const char *mask);
 
 #endif

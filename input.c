@@ -40,6 +40,8 @@ struct shortcut {
     [shortcut_reverse_video] = {XKB_KEY_I, mask_shift | mask_control},
 };
 
+static uint32_t force_mouse_mask;
+
 static inline bool is_edit_keypad(uint32_t ks, bool deldel) {
     switch (ks) {
     case XKB_KEY_Delete:
@@ -720,11 +722,6 @@ again:
     return mask;
 }
 
-uint32_t keyboard_force_select_mask(void) {
-    const char *tmodstr = sconf(SCONF_FORCE_MOUSE_MOD);
-    return decode_mask(tmodstr, tmodstr + strlen(tmodstr));
-}
-
 void keyboard_set_shortcut(enum shortcut_action sa, const char *c) {
     uint32_t sym, mask = 0;
     char *dash = strchr(c, '-');
@@ -756,3 +753,10 @@ enum shortcut_action keyboard_find_shortcut(struct key k) {
     return action;
 }
 
+void keyboard_set_force_select_mask(const char *mask) {
+    force_mouse_mask = decode_mask(mask, mask + strlen(mask));
+}
+
+uint32_t keyboard_force_select_mask(void) {
+    return force_mouse_mask;
+}
