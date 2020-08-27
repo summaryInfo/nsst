@@ -111,7 +111,9 @@ struct window {
     int16_t saved_width;
     int16_t saved_height;
 
+    uint8_t alpha;
     color_t bg;
+    color_t bg_premul;
     color_t cursor_fg;
     enum cursor_type cursor_type;
 
@@ -158,7 +160,7 @@ void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 void window_set_default_props(struct window *win);
 void handle_resize(struct window *win, int16_t width, int16_t height);
 struct window *find_shared_font(struct window *win, bool need_free);
-struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, bool blink, bool selected);
+struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, uint8_t alpha, bool blink, bool selected);
 
 #endif
 

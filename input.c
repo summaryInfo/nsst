@@ -37,6 +37,7 @@ struct shortcut {
     [shortcut_break] = {XKB_KEY_Break, 0},
     [shortcut_reset] = {XKB_KEY_R, mask_shift | mask_control},
     [shortcut_reload_config] = {XKB_KEY_X, mask_shift | mask_control},
+    [shortcut_reverse_video] = {XKB_KEY_I, mask_shift | mask_control},
 };
 
 static inline bool is_edit_keypad(uint32_t ks, bool deldel) {

@@ -79,6 +79,7 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"key-reload-config", "\t(Reload config hotkey)", "key.reloadConfig", KCONF_RELOAD_CONFIG},
     {"key-reset", "\t\t(Terminal reset hotkey)", "key.reset", KCONF_RESET},
     {"key-reset-font", "\t(Reset font size hotkey)", "key.resetFontSize", KCONF_FONT_RESET},
+    {"key-reverse-video", "\t(Toggle reverse video mode hotkey)", "key.reverseVideo", KCONF_REVERSE_VIDEO},
     {"key-scroll-down", "\t(Scroll down hotkey)", "key.scrollDown", KCONF_SCROLL_DOWN},
     {"key-scroll-up", "\t\t(Scroll up hotkey)", "key.scrollUp", KCONF_SCROLL_UP},
     {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", "keyboardDialect", ICONF_KEYBOARD_NRCS},
@@ -257,6 +258,7 @@ static struct {
     [ICONF_PRINT_ATTR - ICONF_MIN] = {1, 1, 0, 1},
     [ICONF_ALLOW_SUBST_FONTS] = {1, 1, 0, 1},
     [ICONF_FORCE_SCALABLE] = {0, 0, 0, 1},
+    [ICONF_ALPHA] = {255, 255, 0, 255},
 };
 
 static struct {
@@ -339,7 +341,7 @@ static color_t color(uint32_t opt) {
 }
 
 int32_t iconf(uint32_t opt) {
-    if (opt >= ICONF_ALPHA) {
+    if (opt >= ICONF_MAX) {
         warn("Unknown integer config option %d", opt);
         return 0;
     }
@@ -347,15 +349,12 @@ int32_t iconf(uint32_t opt) {
 }
 
 void iconf_set(uint32_t opt, int32_t val) {
-    if (opt < ICONF_ALPHA) {
+    if (opt < ICONF_MAX) {
         if (opt == ICONF_MAPPING && val >= keymap_MAX)
             val = keymap_default;
         if (val > ioptions[opt].max) val = ioptions[opt].max;
         else if (val < ioptions[opt].min) val = ioptions[opt].min;
         ioptions[opt].val = val;
-    } else if (opt == ICONF_ALPHA) {
-        color_t bg = cconf(CCONF_BG);
-        cconf_set(CCONF_BG, (bg & 0xFFFFFF) | (MAX(0, MIN(val, 255)) << 24));
     } else {
         warn("Unknown integer option %d", opt);
     }
@@ -378,9 +377,14 @@ void sconf_set(uint32_t opt, const char *val) {
         soptions[opt].val = val ? strdup(val) : NULL;
     } else if (opt < ICONF_MAX) {
         int32_t ival = ioptions[opt - ICONF_MIN].dflt;
-        if (!val || sscanf(val, "%"SCNd32, &ival) == 1)
+        double alpha;
+        // Accept floating point opacity values
+        if (val && opt == ICONF_ALPHA && sscanf(val, "%lf", &alpha) == 1) {
+            if (alpha > 1) alpha /= 255;
+            iconf_set(opt, 255*alpha);
+        } else if (!val || sscanf(val, "%"SCNd32, &ival) == 1) {
             iconf_set(opt, ival);
-        else {
+        } else {
             ival = -1;
             // Boolean options
             if (opt == ICONF_LOG_LEVEL) {
@@ -454,6 +458,7 @@ void sconf_set(uint32_t opt, const char *val) {
                 [shortcut_break] = "Break",
                 [shortcut_reset] = "T-R",
                 [shortcut_reload_config] = "T-X",
+                [shortcut_reverse_video] = "T-I",
             };
             if (dflt[sa]) val = dflt[sa];
         }
@@ -480,7 +485,7 @@ void sconf_set(uint32_t opt, const char *val) {
 }
 
 bool bconf_set(uint32_t opt, bool val) {
-    if (opt < ICONF_ALPHA && ioptions[opt].min == 0 && ioptions[opt].max == 1) {
+    if (opt < ICONF_MAX && ioptions[opt].min == 0 && ioptions[opt].max == 1) {
         ioptions[opt].val = val;
         return 1;
     }

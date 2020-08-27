@@ -23,6 +23,7 @@ enum shortcut_action {
     shortcut_reload_config,
     shortcut_copy,
     shortcut_paste,
+    shortcut_reverse_video,
     shortcut_MAX
 };
 

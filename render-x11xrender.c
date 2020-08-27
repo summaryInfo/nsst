@@ -120,7 +120,7 @@ bool renderer_reload_font(struct window *win, bool need_free) {
             return 0;
         }
 
-        xcb_render_color_t color = MAKE_COLOR(color_premult(win->bg, color_a(win->bg)));
+        xcb_render_color_t color = MAKE_COLOR(win->bg_premul);
         xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, color, 1, &bound);
 
         xcb_pixmap_t pid = xcb_generate_id(con);
@@ -309,7 +309,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
 
     if (rctx.bufpos) {
         color_t c = palette[SPECIAL_SELECTED_BG] ? palette[SPECIAL_CURSOR_BG] : palette[SPECIAL_FG];
-        xcb_render_color_t col = MAKE_COLOR(color_premult(c, color_a(c)));
+        xcb_render_color_t col = MAKE_COLOR(color_apply_a(c, win->alpha));
         xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
             rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
     }
@@ -342,7 +342,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
                 if (k == cur_y && i == cur_x && cursor && win->focused &&
                         ((win->cursor_type + 1) & ~1) == cusor_type_block) attr.reverse ^= 1;
 
-                spec = describe_cell(cel, attr, palette, win->blink_state, mouse_is_selected_in_view(win->term, i, k));
+                spec = describe_cell(cel, attr, palette, win->alpha, win->blink_state, mouse_is_selected_in_view(win->term, i, k));
                 g =  spec.ch | (spec.face << 24);
 
                 bool fetched = glyph_cache_is_fetched(win->font_cache, g);
@@ -380,7 +380,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
     }
 
     if (rctx.bufpos) {
-        xcb_render_color_t col = MAKE_COLOR(color_premult(win->bg, color_a(win->bg)));
+        xcb_render_color_t col = MAKE_COLOR(win->bg_premul);
         xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
             rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
     }
@@ -562,7 +562,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
             }
         }
         if (count) {
-            xcb_render_color_t c = MAKE_COLOR(color_premult(win->cursor_fg, color_a(win->cursor_fg)));
+            xcb_render_color_t c = MAKE_COLOR(win->cursor_fg);
             xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_OVER, win->ren.pic1, c, count, rects + off);
         }
     }
@@ -622,6 +622,6 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     for (size_t i = 0; i < rectc; i++)
         rectv[i] = rect_scale_up(rectv[i], win->char_width, win->char_height + win->char_depth);
 
-    xcb_render_color_t color = MAKE_COLOR(color_premult(win->bg, color_a(win->bg)));
+    xcb_render_color_t color = MAKE_COLOR(win->bg_premul);
     xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, color, rectc, (xcb_rectangle_t*)rectv);
 }

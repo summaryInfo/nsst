@@ -2373,10 +2373,9 @@ static void term_do_set_color(struct term *term, uint32_t sel, uint8_t *dstr, ui
         term_answerback(term, OSC"%d;rgb:%04x/%04x/%04x"ST, sel,
                color_r(col) * 0x101, color_g(col) * 0x101, color_b(col) * 0x101);
     } else if ((col = parse_color(dstr, dend))) {
-        term->palette[cid] = col = color_premult(col, color_a(term->palette[cid])); // Keep alpha
+        term->palette[cid] = col;
 
         term_colors_changed(term, sel, col);
-
     } else term_esc_dump(term, 0);
 }
 
@@ -2556,15 +2555,15 @@ static void term_dispatch_osc(struct term *term) {
     }
     case 13001: /* Select background alpha */ {
         errno = 0;
-        unsigned long res = strtoul((char *)dstr, (char **)&dstr, 10);
-        if (res > 255 || errno || *dstr) {
+        double res = strtod((char *)dstr, (char **)&dstr);
+        if (errno || *dstr) {
             term_esc_dump(term, 0);
             break;
         }
-        color_t bg = term->palette[term->mode.reverse_video ? SPECIAL_FG : SPECIAL_BG];
-        bg = (bg & 0x00FFFFFF) | res << 24;
-        term->palette[term->mode.reverse_video ? SPECIAL_FG : SPECIAL_BG] = bg;
-        if (!term->mode.reverse_video) window_set_colors(term->win, term->palette[SPECIAL_BG], 0);
+        // For compatibiliry with older versions,
+        // if res is not normalized, assume it to be 8-bit value
+        if (res > 1) res /= 255;
+        window_set_alpha(term->win, res);
         break;
     }
     //case 50: /* Set Font */ // TODO OSC 50

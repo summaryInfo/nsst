@@ -352,21 +352,32 @@ enum cursor_type window_get_cursor(struct window *win) {
 }
 
 void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
-    color_t obg = win->bg, ofg = win->cursor_fg;
-    if (bg) win->bg = bg;
+    color_t obg = win->bg_premul, ofg = win->cursor_fg;
+
+    if (bg) {
+        win->bg = bg;
+        win->bg_premul = color_apply_a(bg, win->alpha);
+    }
     if (cursor_fg) win->cursor_fg = cursor_fg;
 
-    if (bg && bg != obg) {
+    if (bg && win->bg_premul != obg) {
         uint32_t values2[2];
-        values2[0] = values2[1] = color_premult(win->bg, color_a(win->bg));
+        values2[0] = values2[1] = win->bg_premul;
         xcb_change_window_attributes(con, win->wid, XCB_CW_BACK_PIXEL, values2);
         xcb_change_gc(con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
     }
 
-    if ((bg && bg != obg) || (cursor_fg && cursor_fg != ofg)) {
-        term_damage_lines(win->term, 0, win->ch);
+    if ((bg && win->bg_premul != obg) || (cursor_fg && cursor_fg != ofg)) {
+        // If reverse video is set via option
+        // win->term can be NULL at this point
+        if (win->term) term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
+}
+
+void window_set_alpha(struct window *win, double alpha) {
+    win->alpha = MAX(MIN(255, 255*alpha), 0);
+    window_set_colors(win, win->bg, 0);
 }
 
 void window_set_mouse(struct window *win, bool enabled) {
@@ -749,7 +760,7 @@ uint32_t get_win_gravity_from_config() {
     }
 };
 
-struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, bool blink, bool selected) {
+struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, uint8_t alpha, bool blink, bool selected) {
     struct cellspec res;
 
     // Check special colors
@@ -771,6 +782,10 @@ struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palet
     res.fg = direct_color(attr.fg, palette);
     if (!attr.bold && attr.faint) res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
     if (attr.reverse ^ selected) SWAP(color_t, res.fg, res.bg);
+
+    // Apply background opacity
+    if (color_idx(attr.bg) == SPECIAL_BG) res.bg = color_apply_a(res.bg, alpha);
+
     if ((!selected && attr.invisible) || (attr.blink && blink)) res.fg = res.bg;
 
     // If selected colors are set use them
@@ -782,10 +797,6 @@ struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palet
 
     if (cell.ch == 0x2588) res.bg = res.fg;
     if (cell.ch == ' ' || res.fg == res.bg) cell.ch = 0;
-
-    // Premultiply alpha
-    if (res.fg < 0xFF000000) res.fg = color_premult(res.fg, color_a(res.fg));
-    if (res.bg < 0xFF000000) res.bg = color_premult(res.bg, color_a(res.bg));
 
     // Calculate attributes
 
@@ -898,10 +909,10 @@ struct window *create_window(void) {
     win->underline_width = iconf(ICONF_UNDERLINE_WIDTH);
     win->left_border = iconf(ICONF_LEFT_BORDER);
     win->top_border = iconf(ICONF_TOP_BORDER);
-    win->bg = cconf(CCONF_BG);
-    win->cursor_fg = cconf(CCONF_CURSOR_FG);
-    if (iconf(ICONF_REVERSE_VIDEO))
-        SWAP(color_t, win->bg, win->cursor_fg);
+    win->bg = cconf(iconf(ICONF_REVERSE_VIDEO) ? CCONF_FG : CCONF_BG);
+    win->cursor_fg = cconf(iconf(ICONF_REVERSE_VIDEO) ? CCONF_CURSOR_BG : CCONF_CURSOR_FG);
+    win->alpha = iconf(ICONF_ALPHA);
+    win->bg_premul = color_apply_a(win->bg, win->alpha);
     win->cursor_type = iconf(ICONF_CURSOR_SHAPE);
     win->font_size = iconf(ICONF_FONT_SIZE);
     win->width = iconf(ICONF_WINDOW_WIDTH);
@@ -923,8 +934,7 @@ struct window *create_window(void) {
         XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_PROPERTY_CHANGE;
     uint32_t mask1 =  XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
         XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
-    color_t bg = color_premult(win->bg, color_a(win->bg));
-    uint32_t values1[5] = { bg, bg, XCB_GRAVITY_NORTH_WEST, win->ev_mask, ctx.mid };
+    uint32_t values1[5] = { win->bg_premul, win->bg_premul, XCB_GRAVITY_NORTH_WEST, win->ev_mask, ctx.mid };
     int16_t x = iconf(ICONF_WINDOW_X);
     int16_t y = iconf(ICONF_WINDOW_Y);
 
@@ -943,7 +953,7 @@ struct window *create_window(void) {
 
     win->gc = xcb_generate_id(con);
     uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
-    uint32_t values2[3] = { bg, bg, 0 };
+    uint32_t values2[3] = { win->bg_premul, win->bg_premul, 0 };
 
     c = xcb_create_gc_checked(con, win->gc, win->wid, mask2, values2);
     if (check_void_cookie(c)) goto error;
@@ -1218,6 +1228,9 @@ static void handle_keydown(struct window *win, xkb_keycode_t keycode) {
         return;
     case shortcut_reset:
         term_reset(win->term);
+        return;
+    case shortcut_reverse_video:
+        term_set_reverse(win->term, !term_is_reverse(win->term));
         return;
     case shortcut_MAX:
     case shortcut_none:;

@@ -127,8 +127,6 @@ enum config_option {
     ICONF_PRINT_ATTR,
     ICONF_ALLOW_SUBST_FONTS,
     ICONF_FORCE_SCALABLE,
-    // Backround opacity
-    // These can't be read with iconf
     ICONF_ALPHA,
     ICONF_MAX,
 
@@ -145,6 +143,7 @@ enum config_option {
     KCONF_RELOAD_CONFIG,
     KCONF_COPY,
     KCONF_PASTE,
+    KCONF_REVERSE_VIDEO,
     KCONF_MAX,
 
     SCONF_MIN = KCONF_MAX,
@@ -189,9 +188,9 @@ struct optmap_item {
 };
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 123
-#else
 #    define OPT_MAP_SIZE 124
+#else
+#    define OPT_MAP_SIZE 125
 #endif
 
 extern struct optmap_item optmap[OPT_MAP_SIZE];
