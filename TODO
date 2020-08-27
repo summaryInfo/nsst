@@ -1,7 +1,3 @@
-Until version 1.7:
-    Recalculate non-rectangular selection position on resize
-    Allow geometry to be specified in characters
-===================
 General
     Write man page
     Add 'always' value to some options to prevent overriding
@@ -12,6 +8,8 @@ General
         allows to keep non-rectangular selections after resizing
     Some alternative to XParseColor
     Implement proper daemon mode
+    Recalculate non-rectangular selection position on resize
+    Allow geometry to be specified in characters
 Render
     General
         Colored glyphs
