@@ -89,7 +89,7 @@ bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end) {
     uint32_t part = *(*buf)++ & (0x7F >> len), i = len;
 
     while (i--) {
-        if (UNLIKELY((**buf & 0xC0) != 0x80)) goto inval;
+        if (UNLIKELY((**buf & 0xC0) != 0x80)) goto inval2;
         part = (part << 6) | (*(*buf)++ & 0x3F);
     }
 

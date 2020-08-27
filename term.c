@@ -3199,22 +3199,21 @@ static void term_precompose_at_cursor(struct term *term, uint32_t ch) {
 }
 
 inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bool raw) {
-    uint32_t b = *(*buf)++, part, i;
-    if (LIKELY(b < 0xC0 || raw)) return b;
-    if (UNLIKELY(b > 0xF7)) return UTF_INVAL;
+    uint32_t part = *(*buf)++, i;
+    if (LIKELY(part < 0xC0 || raw)) return part;
+    if (UNLIKELY(part > 0xF7)) return UTF_INVAL;
 
-    int8_t len = (int8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(b >> 3U) - 24];
+    uint32_t len = (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(part >> 3U) - 24];
 
     if (*buf + len >= end) {
         (*buf)--;
         return -1;
     }
 
-    part = b & (0x7F >> len);
+    part &= 0x7F >> len;
     for (i = len; i--;) {
-        b = *(*buf)++;
-        if (UNLIKELY((b & 0xC0) != 0x80)) return UTF_INVAL;
-        part = (part << 6) | (b & 0x3F);
+        if (UNLIKELY((**buf & 0xC0) != 0x80)) return UTF_INVAL;
+        part = (part << 6) | (*(*buf)++ & 0x3F);
     }
 
     const static uint32_t maxv[] = {0x80, 0x800, 0x10000, 0x110000};
@@ -3277,6 +3276,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
                 res = 0;
                 break;
             }
+            if (ch == UTF_INVAL) warn("I");
 
             enum charset glv = term->c.gn[term->c.gl_ss];
 
