@@ -3215,7 +3215,7 @@ inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bo
         part = (part << 6) | (*(*buf)++ & 0x3F);
     }
 
-    const static uint32_t maxv[] = {0x80, 0x800, 0x10000, 0x110000};
+    static const uint32_t maxv[] = {0x80, 0x800, 0x10000, 0x110000};
     if (UNLIKELY(part >= maxv[len] || part - 0xD800 < 0xE000 - 0xD800)) return UTF_INVAL;
 
     return part;
