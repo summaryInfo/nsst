@@ -71,6 +71,8 @@ for i; do
         bindir="${i#--bindir=}" ;;
     --mandir=*)
         mandir="${i#--mandir=}" ;;
+    --mandir=*)
+        sharedir="${i#--sharedir=}" ;;
     --prefix=*)
         prefix="${i#--prefix=}" ;;
     [A-Za-z_]*=*)
@@ -83,6 +85,7 @@ done
 
 [ x = x"$bindir" ] && bindir=${prefix}/bin
 [ x = x"$mandir" ] && mandir=${prefix}/share/man
+[ x = x"$sharedir" ] && sharedir=${prefix}/share
 
 deps="fontconfig freetype2 xkbcommon"
 objs="nsst.o util.o font.o term.o tty.o line.o config.o mouse.o input.o nrcs.o"
@@ -122,6 +125,7 @@ sed < "./Makefile.in" > "./Makefile" \
     -e "s:@PREFIX@:$prefix:" \
     -e "s:@BINDIR@:$bindir:" \
     -e "s:@MANDIR@:$mandir:" \
+    -e "s:@SHAREDIR@:$sharedir:" \
     -e "s:@DEPS@:$deps:" \
     -e "s:@OBJECTS@:$objs:" \
     -e "s:@VARS@:$vars:"

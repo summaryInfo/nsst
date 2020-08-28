@@ -2,6 +2,7 @@ NAME ?= @NAME@
 PERFIX ?= @PREFIX@
 BINDIR ?= @BINDIR@
 MANDIR ?= @MANDIR@
+SHAREDIR ?= @SHAREDIR@
 
 @VARS@
 
@@ -24,14 +25,16 @@ clean:
 force: clean
 	$(MAKE) all
 
-install-strip: all
-	install $(NAME) $(BINDIR)/$(NAME)
+install-strip: install
 	strip $(BINDIR)/$(NAME)
 
 install: all
 	install $(NAME) $(BINDIR)/$(NAME)
+	mkdir -p $(SHAREDIR)/nsst
+	install -m 644 docs/nsst.conf $(SHAREDIR)/nsst/nsst.conf
 
 uninstall:
+	rm -rf $(SHAREDIR)/nsst
 	rm -f $(BINDIR)/$(NAME)
 
 $(NAME): $(OBJ)
