@@ -597,7 +597,7 @@ void parse_config(void) {
             SWAP(char, *next, saved);
             unsigned colorn = 0;
             enum config_option opt = -1U;
-            if (sscanf(ptr, "color%u", &colorn) == 1) {
+            if (sscanf(ptr, "color%u", &colorn) == 1 && colorn < 256) {
                 opt = colorn + CCONF_COLOR_0;
             } else {
                 struct optmap_item *res = bsearch(&(struct optmap_item){ptr, NULL, 0},
