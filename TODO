@@ -1,5 +1,9 @@
-General
+Until version 2.0
     Write man page
+    Refactor frame timings
+        use separate timings for erase,scroll,resize
+        just wait for screen update completion?
+General
     Add 'always' value to some options to prevent overriding
     Allow disable rewrapping only for screen/part below cursor, while keep rewrapping scrollback
     Do something with multi-line shell prompt eating history lines
@@ -15,11 +19,7 @@ Render
         Colored glyphs
         Add options to select width of ambigues characters
         Combining characters support
-        Add optional fallback fonts support
         Make window operations work with reparenting
-        Refactor frame timings
-            use separate timings for erase,scroll,resize
-            just wait for screen update completion?
     XRender
         Slow scrolling of full-color images (with small font in chafa)
         Use multiple separate buffers for background/lines/glyphs to sort less
