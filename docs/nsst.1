@@ -104,28 +104,33 @@ Default backround color
 .It Fl \-backspace-is-del Ns = Ns Ar bool
 Backspace sends DEL instead of BS
 .It Fl \-bell Ns = Ns Ar value
-Bell volume index. Value is one of off, low or high
+Bell volume index.
+Value is one of off, low or high
 .It Fl \-bell-high-volume Ns = Ns Ar volume
 High volume value for DECSWBV, from 0 to 100
 .It Fl \-bell-low-volume Ns = Ns Ar volume
 Low volume value for DECSWBV, from 0 to 100
 .It Fl \-blink-color Ns = Ns Ar color
 Special color of blinking text
-.Ar Color format is same as for
+.Ar Color
+format is same as for
 .Fl \-colorN
 .It Fl \-blink-time Ns = Ns Ar time
 Text and cursor blink interval in microseconds.
 .It Fl \-bold-color Ns = Ns Ar color
 Special color of bold text
-.Ar Color format is same as for
+.Ar Color
+format is same as for
 .Fl \-colorN
 .It Fl \-cursor-background Ns = Ns Ar color
 Default cursor backround color.
-.Ar Color format is same as for
+.Ar Color
+format is same as for
 .Fl \-colorN
 .It Fl \-cursor-foreground Ns = Ns Ar color
 Default cursor foreround color.
-.Ar Color format is same as for
+.Ar Color
+format is same as for
 .Fl \-colorN
 .It Fl \-cursor-shape Ns = Ns Ar shape
 Shape of cursor.
@@ -153,7 +158,7 @@ Don't allow to change window size, if supported
 Step in numbering function keys
 .It Fl \-font Ns = Ns Ar name , Fl f name
 Comma-separated list of fontconfig font patterns
-.It Fl \-font-gamma Ns = Ns Ar <value>
+.It Fl \-font-gamma Ns = Ns Ar gamma
 Factor of font sharpenning kind of hack, power multiplied by 10000
 .It Fl \-font-size Ns = Ns Ar points
 Font size in points
@@ -171,7 +176,8 @@ Enable NRCS translation even when UTF-8 mode is enabled
 Do not search for pixmap fonts
 .It Fl \-foreground Ns = Ns Ar color
 Default foreground color.
-.Ar Color format is same as for
+.Ar Color
+format is same as for
 .Fl \-colorN
 .It Fl \-fps Ns = Ns Ar fps
 Window refresh rate
@@ -183,7 +189,8 @@ mode state
 Top and bottom internal botder width
 .It Fl \-italic-color Ns = Ns Ar color
 Special color of italic text.
-.Ar Color format is same as for
+.Ar Color
+format is same as for
 .Fl \-colorN
 .It Fl \-keep-clipboard Ns = Ns Ar bool
 Reuse copied clipboard content instead of current selection data
@@ -231,7 +238,8 @@ Filering level of logged information.
 .Ar level
 is one of quiet, fatal, warn or info
 .It Fl \-margin-bell Ns = Ns Ar value
-Margin bell volume index. Value is one of off, low or high
+Margin bell volume index.
+Value is one of off, low or high
 .It Fl \-margin-bell-column Ns = Ns Ar column
 Column at which margin bell rings when armed
 .It Fl \-margin-bell-high-volume Ns = Ns Ar volume
@@ -296,7 +304,8 @@ Additional delay after resize in microseconds
 Initial reverse video setting
 .It Fl \-reversed-color Ns = Ns Ar color
 Special color of reversed text.
-.Ar Color format is same as for
+.Ar Color
+format is same as for
 .Fl \-colorN
 .It Fl \-rewrap Ns = Ns Ar bool
 Rewrap text on resize. Multiline shell prompts can erase lines above, that probably can not be fixed.
@@ -314,11 +323,13 @@ Number of saved lines in scrollback buffer
 Use CLIPBOARD selection to store hightlighted data
 .It Fl \-selected-background Ns = Ns Ar color
 Color of selected background. If unspecified uses foreground color
-.Ar Color format is same as for
+.Ar Color
+format is same as for
 .Fl \-colorN
 .It Fl \-selected-foreground Ns = Ns Ar color
 Color of selected text. If unspecified uses background color.
-.Ar Color format is same as for
+.Ar Color
+format is same as for
 .Fl \-colorN
 .It Fl \-shell Ns = Ns Ar path
 Shell to start in new instance. It diffes from
@@ -368,7 +379,8 @@ Time gap in milliseconds in witch tree mouse presses will be considered triple c
 Text underline width
 .It Fl \-underlined-color Ns = Ns Ar color
 Special color of underlined text.
-.Ar Color format is same as for
+.Ar Color
+format is same as for
 .Fl \-colorN
 .It Fl \-urgent-on-bell Ns = Ns Ar bool
 Set ICCCM window urgency on bell
