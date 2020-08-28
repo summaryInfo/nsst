@@ -43,7 +43,7 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"appcursor", "\t\t(Initial application cursor mode value)", ICONF_APPCURSOR},
     {"appkey", "\t\t(Initial application keypad mode value)", ICONF_APPKEY},
     {"autowrap", "\t\t(Initial autowrap setting)", ICONF_INIT_WRAP},
-    {"background", "\t\t(Default backround color)", CCONF_BG},
+    {"background", "\t\t(Default background color)", CCONF_BG},
     {"backspace-is-del", "\t(Backspace sends DEL instead of BS)", ICONF_BACKSPACE_IS_DELETE},
     {"bell", "\t\t\t(Bell setting)", ICONF_BELL_VOLUME},
     {"bell-high-volume", "\t(High volume value for DECSWBV)", ICONF_BELL_HIGH_VOLUME},
