@@ -1,0 +1,395 @@
+.\" Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved
+.Dd August 27, 2020
+.Dt NSST 1
+.Os
+.Sh NAME
+.Nm nsst
+.Nd not so simple terminal
+.Sh SYNOPSIS
+.Nm
+.Op Fl option Ns Op = Ns value
+.Op Fl \-long-option Ns Op = Ns Aq value
+.Oo
+.Op Fl e 
+.Ar program
+.Oo
+.Aq args
+.Ar ...
+.Oc
+.Oc
+.Sh DESCRIPTION
+.Pp
+Nsst is X11 terminal emulator, built to be fast and small without sacrificing features.
+.Sh OPTIONS
+.Pp
+Options can be specified either as command line arguments or in config file (without leading dashes) located at $XDG_CONFIG_HOME/nsst.conf or ~/.config/nsst.conf by default.
+Config file path can be specified with 
+.Fl \-config Ns = Ns Ar path
+option.
+If this option is set in config file this path would be used during config reloading.
+Config realoading can be requeseted by sending SIGUSR1 to terminal.
+.Pp
+Options specified via command line arguments feature additional syntax. For boolean options
+.Fl \-boolean-option ,
+.Fl \-with-boolean-option ,
+.Fl \-enalbe-boolean-option ,
+are equivalent to
+.Fl \-boolean-option Ns = Ns Ar true .
+and
+.Fl \-no-boolean-option ,
+.Fl \-without-boolean-option ,
+.Fl \-disable-boolean-option ,
+are equivalent to
+.Fl \-boolean-option Ns = Ns Ar false .
+.Ar Yes , Ar y , Ar true 
+(case independent) values of boolean options can be used to enable option.
+.Ar \&No , Ar n , Ar false
+(case independent) can be used to disable it.
+.Pp
+Every option also acceptes special value
+.Ar default
+that resets option to builtin default.
+.Bl -tag -width Ds
+.It Fl Fl help , Fl h
+Print help message and exit
+.It Fl Fl version , Fl v
+Print version string and exit
+.It Fl \-geometry Ns = Ns Ar geometry , Fl g Ns = Ns Ar geometry
+Speicfy window geometry in pixels.
+.Ar Geometry
+is in format 
+.Bq = Ns
+.Bo
+.Aq width Ns
+.Brq xX Ns
+.Aq height Ns
+.Bc Ns
+.Bo Ns
+.Brq +- Ns
+.Aq xoffset Ns
+.Brq +- Ns
+.Aq yoffset Ns
+.Bc
+.It Fl \-color Ns N Ns = Ns Ar color
+Set color number N from 256 color palette.
+.Ar Color
+should be in format #RGB or rgb:R/G/B, where R, G and B are one to four hex digits.
+.It Fl \-allow-alternate Ns = Ns Ar bool
+Enable alternate screen
+.It Fl \-allow-blinking Ns = Ns Ar bool
+Allow blinking text and cursor
+.It Fl \-allow-modify-edit-keypad Ns = Ns Ar bool
+ Allow modifing edit keypad keys in legacy keyboad layout
+.It Fl \-allow-modify-function Ns = Ns Ar bool
+Allow modifing function keys in legacy keyboad layout
+.It Fl \-allow-modify-keypad Ns = Ns Ar bool
+Allow modifing keypad keys in legacy keyboad layout
+.It Fl \-allow-modify-misc Ns = Ns Ar bool
+Allow modifing miscelleneous keys in legacy keyboad layout
+.It Fl \-alpha Ns = Ns Ar opacity
+Backround opacity, requires compositor to be running
+.It Fl \-alternate-scroll Ns = Ns Ar bool
+Scrolling sends arrow keys escapes in alternate screen
+.It Fl \-answerback-string Ns = Ns Ar string
+<ENQ> report, default is <ACK>
+.It Fl \-appcursor Ns = Ns Ar bool
+Initial application cursor mode value
+.It Fl \-appkey Ns = Ns Ar bool
+Initial application keypad mode value
+.It Fl \-autowrap Ns = Ns Ar bool
+Initial autowrap setting
+.It Fl \-background Ns = Ns Ar color
+Default backround color
+.Fl \-colorN
+.It Fl \-blink-time Ns = Ns Ar time
+.It Fl \-backspace-is-del Ns = Ns Ar bool
+Backspace sends DEL instead of BS
+.It Fl \-bell Ns = Ns Ar value
+Bell volume index. Value is one of off, low or high
+.It Fl \-bell-high-volume Ns = Ns Ar volume
+High volume value for DECSWBV, from 0 to 100
+.It Fl \-bell-low-volume Ns = Ns Ar volume
+Low volume value for DECSWBV, from 0 to 100
+.It Fl \-blink-color Ns = Ns Ar color
+Special color of blinking text
+.Ar Color format is same as for
+.Fl \-colorN
+.It Fl \-blink-time Ns = Ns Ar time
+Text and cursor blink interval in microseconds.
+.It Fl \-bold-color Ns = Ns Ar color
+Special color of bold text
+.Ar Color format is same as for
+.Fl \-colorN
+.It Fl \-cursor-background Ns = Ns Ar color
+Default cursor backround color.
+.Ar Color format is same as for
+.Fl \-colorN
+.It Fl \-cursor-foreground Ns = Ns Ar color
+Default cursor foreround color.
+.Ar Color format is same as for
+.Fl \-colorN
+.It Fl \-cursor-shape Ns = Ns Ar shape
+Shape of cursor.
+.It Fl \-config Ns = Ns Ar path
+Path of config file. Can be set to
+.Qq /dev/null
+to prevent config loading
+.Ar Shape
+is one of block, blinking-block, bar, blinking-bar, underline, blinking-underline
+.It Fl \-cursor-width Ns = Ns Ar pixels
+Width of lines that forms cursor
+.It Fl \-cut-lines Ns = Ns Ar bool
+Cut long lines on resize with rewrapping disabled
+.It Fl \-delete-is-del Ns = Ns Ar bool
+Delete sends DEL symbol instead of escape sequence
+.It Fl \-double-click-time Ns = Ns Ar time
+Time gap in milliseconds in witch two mouse presses will be considered double click
+.It Fl \-erase-scrollback Ns = Ns Ar bool 
+Allow ED 3 to clear scrollback buffer
+.It Fl \-extended-cir Ns = Ns Ar bool
+Report all SGR attributes in DECCIR
+.It Fl \-fixed Ns = Ns Ar bool
+Don't allow to change window size, if supported
+.It Fl \-fkey-increment Ns = Ns Ar number
+Step in numbering function keys
+.It Fl \-font Ns = Ns Ar name , Fl f name
+Comma-separated list of fontconfig font patterns
+.It Fl \-font-gamma Ns = Ns Ar <value>
+Factor of font sharpenning kind of hack, power multiplied by 10000
+.It Fl \-font-size Ns = Ns Ar points
+Font size in points
+.It Fl \-font-size-step Ns = Ns Ar points
+Font size step in points
+.It Fl \-font-spacing Ns = Ns Ar pixels
+Additional horizontal spacing for individual cells
+.It Fl \-force-dpi Ns = Ns Ar dpi
+DPI value for fonts
+.It Fl \-force-mouse-mod Ns = Ns Ar mods
+Modifer to force mouse action
+.It Fl \-force-nrcs Ns = Ns Ar bool
+Enable NRCS translation even when UTF-8 mode is enabled
+.It Fl \-force-scalable Ns = Ns Ar bool
+Do not search for pixmap fonts
+.It Fl \-foreground Ns = Ns Ar color
+Default foreground color.
+.Ar Color format is same as for
+.Fl \-colorN
+.It Fl \-fps Ns = Ns Ar fps
+Window refresh rate
+.It Fl \-has-meta Ns = Ns Ar bool
+Initial
+.Qq handle meta/alt modifer
+mode state
+.It Fl \-horizontal-border Ns = Ns Ar pixels
+Top and bottom internal botder width
+.It Fl \-italic-color Ns = Ns Ar color
+Special color of italic text.
+.Ar Color format is same as for
+.Fl \-colorN
+.It Fl \-keep-clipboard Ns = Ns Ar bool
+Reuse copied clipboard content instead of current selection data
+.It Fl \-keep-selection Ns = Ns Ar bool
+Don't clear X11 selection when unhighlighted
+.It Fl \-key-break Ns = Ns Ar key
+Send break hotke, initial value is Break
+.It Fl \-key-dec-font Ns = Ns Ar key
+Decrement font size hotkey, initial value is T-Page_Down
+.It Fl \-key-inc-font Ns = Ns Ar key
+Increment font size hotkey, initial value is T-Page_Up
+.It Fl \-key-new-window Ns = Ns Ar key
+Create new window hotkey, initial value is T-N
+.It Fl \-key-numlock Ns = Ns Ar key
+'appkey' mode allow toggle hotkey, initial value is T-Numlock
+.It Fl \-key-reload-config Ns = Ns Ar key
+Reload config hotkey, initial value is T-C
+.It Fl \-key-reset Ns = Ns Ar key
+Terminal reset hotkey, initial value is T-R
+.It Fl \-key-reset-font Ns = Ns Ar key
+Reset font size hotkey, initial value is T-Home
+.It Fl \-key-reverse-video Ns = Ns Ar key
+Toggle reverse video mode hotkey, initial value is T-I
+.It Fl \-key-scroll-down Ns = Ns Ar key
+Scroll down hotkey, initial value is T-Down
+.It Fl \-key-scroll-up Ns = Ns Ar key
+Scroll up hotkey, initial value is T-Up
+.It Fl \-keyboard-dialect Ns = Ns Ar cs
+National replacement character set to be used in non-UTF-8 mode for keyboard input
+.Ar cs
+is in format accepted by corresponding escape sequences
+.It Fl \-keyboard-mapping Ns = Ns Ar mapping
+Initial keyboard mapping.
+.Ar Mapping
+is one of default, legacy, vt220, hp, sun and sco.
+More information about keyboard mappings can be found in XTerm's ctlseqs.ms
+.It Fl \-line-spacing Ns = Ns Ar pixels
+Additional vertical line spacing
+.It Fl \-lock-keyboard Ns = Ns Ar bool
+Initial value of KAM
+.Qq disable keyboad input
+mode state
+.It Fl \-log-level Ns = Ns Ar level
+Filering level of logged information.
+.Ar level
+is one of quiet, fatal, warn or info
+.It Fl \-margin-bell Ns = Ns Ar value
+Margin bell volume index. Value is one of off, low or high
+.It Fl \-margin-bell-column Ns = Ns Ar column
+Column at which margin bell rings when armed
+.It Fl \-margin-bell-high-volume Ns = Ns Ar volume
+ High volume value for DECSMBV, from 0 to 100
+.It Fl \-margin-bell-low-volume Ns = Ns Ar volume
+Low volume value for DECSMBV, from 0 to 100
+.It Fl \-meta-sends-escape Ns = Ns Ar bool
+Alt/Meta sends escape prefix instead of setting 8-th bit
+.It Fl \-minimize-scrollback Ns = Ns Ar bool
+Realloc lines to save memory; makes scrolling a little slower.
+Better to be enabled when rewrapping enabled
+.It Fl \-modify-cursor Ns = Ns Ar fmt
+Enable encoding modifiers for cursor keys.
+.Ar fmt
+0 disables reportting keys with modifers, 1 sends \fBSS3 ...\fP sequences
+2 sends \fBCSI ...\fP sequences, 3 sends \fBCSI 1; ...\fP sequences, with dummy first argument 1,
+3 sends privite \fBCSI > 1; ...\fP sequences.
+.It Fl \-modify-function Ns = Ns Ar fmt
+Enable encoding modifiers for function keys
+.Ar Fmt
+is same as for
+.Fl \-modify-cursor
+.It Fl \-modify-keypad Ns = Ns Ar fmt
+Enable encoding modifiers keypad keys.
+.Ar Fmt
+is same as for
+.Fl \-modify-cursor
+.It Fl \-modify-other Ns = Ns Ar value
+Enable encoding modifiers for other (non-function) keys.
+0 is disable, 1 is all, excluding commonly known values, 2 is all.
+.It Fl \-modify-other-fmt Ns = Ns Ar value
+Format of encoding modifers when modiy other keys is enabled.
+.Ar Value
+is one of xterm, csi-u. xterm sends \fBCSI 27 ; M ; K ~\fP sequences.
+csu-u sends \fBCSI K ; M u\fP sequences. M is decimal modifier mask. K is pressed key code.
+.It Fl \-nrcs Ns = Ns Ar bool
+Initial value of
+.Qq enable NRCSs support
+mode state
+.It Fl \-numlock Ns = Ns Ar bool
+Initial value of 
+.Qq allow numlock
+mode state
+.It Fl \-override-boxdrawing Ns = Ns Ar bool
+Use built-in box drawing characters.
+Use this if font line drawing characters does not align or are missing
+.It Fl \-pixel-mode Ns = Ns Ar value
+Subpixels arrangement. Mono disables subpixel rendering
+.Ar Value
+is one of mono, bgr, rgb, bgrv, rgbv.
+.It Fl \-print-command Ns = Ns Ar path
+Program to pipe CSI MC output into
+.It Fl \-printer-file Ns = Ns Ar path , Fl o Ar path
+File where CSI MC will output to
+.It Fl \-print-attributes Ns = Ns Ar bool
+Print cell attributes when auto print mode (CSI ? 5 i) is enabled
+.It Fl \-raise-on-bell Ns = Ns Ar bool
+Raise terminal window on bell
+.It Fl \-resize-delay Ns = Ns Ar time
+Additional delay after resize in microseconds
+.It Fl \-reverse-video Ns = Ns Ar bool
+Initial reverse video setting
+.It Fl \-reversed-color Ns = Ns Ar color
+Special color of reversed text.
+.Ar Color format is same as for
+.Fl \-colorN
+.It Fl \-rewrap Ns = Ns Ar bool
+Rewrap text on resize. Multiline shell prompts can erase lines above, that probably can not be fixed.
+.It Fl \-scroll-amount Ns = Ns Ar lines
+Number of lines scrolled in a time
+.It Fl \-scroll-delay Ns = Ns Ar time
+Additional delay after scroll in microseconds
+.It Fl \-scroll-on-input Ns = Ns Ar bool
+Scroll view to bottom on key press
+.It Fl \-scroll-on-output Ns = Ns Ar bool
+Scroll view to bottom when character in printed
+.It Fl \-scrollback-size Ns = Ns Ar lines , Fl H Ar lines
+Number of saved lines in scrollback buffer
+.It Fl \-select-to-clipboard Ns = Ns Ar bool
+Use CLIPBOARD selection to store hightlighted data
+.It Fl \-selected-background Ns = Ns Ar color
+Color of selected background. If unspecified uses foreground color
+.Ar Color format is same as for
+.Fl \-colorN
+.It Fl \-selected-foreground Ns = Ns Ar color
+Color of selected text. If unspecified uses background color.
+.Ar Color format is same as for
+.Fl \-colorN
+.It Fl \-shell Ns = Ns Ar path
+Shell to start in new instance. It diffes from
+.Fl e
+in aspect that
+.Fl e
+can also contain arguments and it applies only to first terminal window.
+.It Fl \-special-blink Ns = Ns Ar bool
+Enable/disable blinking text special color
+.It Fl \-special-bold Ns = Ns Ar bool
+Enable/disable bold text special color
+.It Fl \-special-italic Ns = Ns Ar bool
+Enable/disable italic text special color
+.It Fl \-special-reverse Ns = Ns Ar bool
+Enable/disable reverse text special color
+.It Fl \-special-underlined Ns = Ns Ar bool
+Enable/disable underlined text special color
+.It Fl \-substitute-fonts Ns = Ns Ar bool
+Enable/disable substitute font support
+.It Fl \-sync-timeout Ns = Ns Ar time
+Syncronous update timeout in microseconds
+.It Fl \-tab-width Ns = Ns Ar width
+Initial width of tab character, default is 8
+.It Fl \-term-mod Ns = Ns Ar mods
+Modifers to which T modifer expands. If
+.Ar mods
+contains T it expands to CS
+.It Fl \-term-name Ns = Ns Ar name , Fl D Ar name
+Terminfo terminal name, initial TERM value. Default is TERM=xterm
+.It Fl \-title Ns = Ns Ar title , Fl T title , Fl t title
+Initial window and window icon title
+.It Fl \-trace-characters Ns = Ns Ar bool
+Trace interpreted characters
+.It Fl \-trace-controls Ns = Ns Ar bool
+Trace interpreted control characters and sequences
+.It Fl \-trace-events Ns = Ns Ar bool
+Trace recieved events
+.It Fl \-trace-fonts Ns = Ns Ar bool
+Log font related information
+.It Fl \-trace-input Ns = Ns Ar bool
+Trace user input
+.It Fl \-trace-misc Ns = Ns Ar bool
+Trace miscelleneous information
+.It Fl \-triple-click-time Ns = Ns Ar time
+Time gap in milliseconds in witch tree mouse presses will be considered triple click
+.It Fl \-underline-width Ns = Ns Ar pixels
+Text underline width
+.It Fl \-underlined-color Ns = Ns Ar color
+Special color of underlined text.
+.Ar Color format is same as for
+.Fl \-colorN
+.It Fl \-urgent-on-bell Ns = Ns Ar bool
+Set ICCCM window urgency on bell
+.It Fl \-use-utf8 Ns = Ns Ar bool
+Enable UTF-8 mode. Enabled by default if current locale encoding is UTF-8
+.It Fl \-vertical-border Ns = Ns Ar pixels
+Left and right internal border width
+.It Fl \-visual-bell Ns = Ns Ar bool
+Enable/disable visual bell
+.It Fl \-visual-bell-time Ns = Ns Ar time
+Duration of visual bell, in microseconds
+.It Fl \-vt-version Ns = Ns Ar version , Fl V Ar version
+Emulated DEC VT version, e.g. 520
+.It Fl \-window-class Ns = Ns Ar class , Fl c Ar class
+X11 Window class
+.It Fl \-window-ops Ns = Ns Ar bool
+Allow window manipulation with escape sequences
+.It Fl \-word-break Ns = Ns Ar separators
+Symbols treated as word separators when snapping mouse selection
+.El
+.Sh AUTHORS
+Baskov Evgeny <j-basevgser@yandex.ru>
+

@@ -32,9 +32,11 @@ install: all
 	install $(NAME) $(BINDIR)/$(NAME)
 	mkdir -p $(SHAREDIR)/nsst
 	install -m 644 docs/nsst.conf $(SHAREDIR)/nsst/nsst.conf
+	install -m 644 docs/nsst.conf $(MANDIR)/man1/nsst.1
 
 uninstall:
 	rm -rf $(SHAREDIR)/nsst
+	rm -f $(MANDIR)/man1/nsst.1
 	rm -f $(BINDIR)/$(NAME)
 
 $(NAME): $(OBJ)
