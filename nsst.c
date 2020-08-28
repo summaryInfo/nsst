@@ -125,7 +125,7 @@ static void parse_options(char **argv) {
                 *arg++ = '\0';
                 if (!*arg) arg = argv[++ind];
 
-                struct optmap_item *res = bsearch(&(struct optmap_item){opt, NULL, NULL, 0},
+                struct optmap_item *res = bsearch(&(struct optmap_item){opt, NULL, 0},
                         optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
                 if (res && arg)
                     sconf_set(res->opt, arg);
@@ -134,13 +134,13 @@ static void parse_options(char **argv) {
                 else if (arg && !strncmp(opt, "color", 5) &&
                         sscanf(opt, "color%zu", &n) == 1)
                     sconf_set(CCONF_COLOR_0 + n, arg);
+                else if (!strcmp(opt, "config")) /* nothing */;
                 else  usage(argv[0], EXIT_FAILURE);
             } else {
                 if (!strcmp(opt, "help"))
                     usage(argv[0], EXIT_SUCCESS);
                 else if (!strcmp(opt, "version"))
                     version();
-                else if (!strcmp(opt, "no-config-file")) /* NOTHING */;
                 else {
                     bool val = 1;
                     if (!strncmp(opt, "no-", 3)) opt += 3, val = 0;
@@ -148,7 +148,7 @@ static void parse_options(char **argv) {
                     else if (!strncmp(opt, "disable-", 8)) opt += 8, val = 0;
                     else if (!strncmp(opt, "with-", 5)) opt += 5, val = 1;
                     else if (!strncmp(opt, "without-", 8)) opt += 8, val = 0;
-                    struct optmap_item *res = bsearch(&(struct optmap_item){opt, NULL, NULL, 0},
+                    struct optmap_item *res = bsearch(&(struct optmap_item){opt, NULL, 0},
                             optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
                     if (!res || !bconf_set(res->opt, val))
                         usage(argv[0], EXIT_FAILURE);
@@ -176,7 +176,6 @@ static void parse_options(char **argv) {
                 enum config_option opt = 0;
                 switch (letter) {
                 case 'f': opt = SCONF_FONT_NAME; break;
-                case 's': opt = SCONF_SHELL; break;
                 case 'D': opt = SCONF_TERM_NAME; break;
                 case 'o': opt = SCONF_PRINTER; break;
                 case 'c': opt = SCONF_TERM_CLASS; break;
@@ -219,20 +218,27 @@ int main(int argc, char **argv) {
     // And enable UTF-8 support if locale encoding is UTF-8
     iconf_set(ICONF_UTF8, bset);
 
-    // This option should be process before everything else
-    // since config loading happens during context initialization
-    // which is performed before argv parsing
-    for (char **opt = argv; *opt; opt++)
-        if (!strcmp("--no-config-file", *opt))
-            iconf_set(ICONF_SKIP_CONFIG_FILE, 1);
-
-    // Initialize graphical context
+    // Initialize contexts
     init_context();
-
-    (void)argc;
-
-    parse_options(argv);
     init_default_termios();
+
+    // Parse --config/-C argument before parsing config file
+    for (int i = 1; i < argc; i++) {
+        char *arg = NULL;
+        if (!strncmp(argv[i], "--config=", sizeof "--config=" - 1)) {
+            arg = argv[i] + sizeof "--config=" - 1;
+            if (!*arg) arg = argv[++i];
+            if (!arg) usage(argv[0], EXIT_FAILURE);
+        } else if (!strncmp(argv[i], "-C", sizeof "-C" - 1)) {
+            arg = argv[i] + sizeof "-C" - 1;
+            if (!*arg) arg = argv[++i];
+            if (!arg) usage(argv[0], EXIT_FAILURE);
+        }
+        if (arg) sconf_set(SCONF_CONFIG_PATH, arg);
+    }
+
+    parse_config();
+    parse_options(argv);
 
     create_window();
     run();

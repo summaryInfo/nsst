@@ -144,6 +144,7 @@ enum config_option {
     SCONF_WORD_SEPARATORS,
     SCONF_TERM_MOD,
     SCONF_FORCE_MOUSE_MOD,
+    SCONF_CONFIG_PATH,
     SCONF_MAX,
 
     KCONF_MIN = SCONF_MAX,
@@ -185,14 +186,13 @@ enum config_option {
 struct optmap_item {
     const char *arg_name;
     const char *arg_desc;
-    const char *name;
     enum config_option opt;
 };
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 126
-#else
 #    define OPT_MAP_SIZE 127
+#else
+#    define OPT_MAP_SIZE 128
 #endif
 
 extern struct optmap_item optmap[OPT_MAP_SIZE];
@@ -214,5 +214,7 @@ const char **sconf_argv(void);
 
 /* Get argv for -e flag */
 void sconf_set_argv(const char **argv);
+
+void parse_config(void);
 
 #endif

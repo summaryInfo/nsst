@@ -17,11 +17,11 @@ This is an implementation of VT220-like X11 terminal emulator.
 * Multiple terminal windows
     * This would be extended to full daemon mode later
     * `Shift-Ctrl-N` is default keybinding
-* Configuration with Xrmdb and command line arguments
+* Configuration with symmetrical config file options and command line arguments
 * MIT-SHM and XRender backends (compile time option)
 * Compiles with `-flto` by default
 * No warnings with `-Wall -Wextra` (except `-Wimplicit-fallthrough`)
-* Rewraps text on resize (can be disabled by setting `--rewrap`/`rewrap` to false)
+* Rewraps text on resize (can be disabled by setting `rewrap` to false)
 
 See TODO file for things that are to be implemented.
 
@@ -45,7 +45,7 @@ See TODO file for things that are to be implemented.
 
 ## Notes
 
-Use `TERM=xterm` for now (via `-D`/`termName` option). Almost every escape sequence from [ctlseqs.ms](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html) is implemented.
+Use `TERM=xterm` for now (via `term-name` option). Almost every escape sequence from [ctlseqs.ms](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html) is implemented.
 See Emulation section of TODO for not yet implemented escape sequences.
 
 Works well with [Iosevka](https://github.com/be5invis/Iosevka) font. (Set font spacing to -1 it it feels to wide.)
@@ -53,26 +53,26 @@ Multiple fonts could be loaded by enumerating them in parameter like:
 
     Nsst.font: Iosevka-13,MaterialDesignIcons-13
 
-Set `--override-boxdrawing`/`overrideBoxdrawing` to `true` if box drawing characters of font you use does not align.
+Set `override-boxdrawing` to `true` if box drawing characters of font you use does not align.
 
-If font looks to blurry try setting `--font-gamma`/`fontGamma` to value greater than `10000`.
+If font looks to blurry try setting `font-gamma` to value greater than `10000`.
 
 Set pixelMode to your monitor's pixel alignment to enable subpixel rendering.
 
-All options are now available through Xrmdb and command line arguments.
-No documentation yet for Xrmdb names, see `optmap[]` function in `config.c`.
-
 For command line arguments see `nsst --help`.
-For boolean options `--no-X`, `--without-X`, `--disable-X` are interpreted as `--X=0` and
+Config file uses same option names.
+Default config file location is `$XDG_CONFIG_HOME/nsst.conf`.
+Config file path can be set via `--config`/`-C` argument.
+For boolean arguments `--no-X`, `--without-X`, `--disable-X` are interpreted as `--X=0` and
 `--X`, `--with-X`, `--enable-X` are interpreted as `--X=1`.
 
 By default only DEC Special Graphics charset is allowed with UTF-8 mode enabled.
 Spec is even stricter, disallowing any charset translations in UTF-8 mode, but DEC Special Graphics is used by applications frequently so it is allowed anyways.
-To force full NRCS translation in UTF-8 mode set `--force-nrsc`/`forceNrcs`.
+To force full NRCS translation in UTF-8 mode set `force-nrsc`.
 
 Sequential graphical characters are decoded all at once, so can be printed faster.
 
-Debugging output can be enabled with `--trace-*`/`trace*` options.
+Debugging output can be enabled with `trace-*` options.
 
 For now nsst supports combining characters only via precomposition, but almost everything is ready to implement proper rendering of combining character (and variant glyphs support).
 The only tricky part is to extract positioning tables and implemnt basic text shaping. It would be implemented using glyphs with codes `0x110000` - `0x1FFFFF`,
@@ -83,7 +83,7 @@ Hotkeys are now configurable. With syntax `[<Mods>-]<Name>`, where `<Mods>` is X
 * `S` -- Shift
 * `C` -- Control
 * `L` -- Lock
-* `T` -- Shift+Control (configurable with `--term-mod`/`termMod`)
+* `T` -- Shift+Control (configurable with `term-mod`)
 * `1`/`A`/`M` -- Mod1/Alt/Meta
 * `2` -- Mod2/Numlock
 * `3` -- Mod3
@@ -92,17 +92,17 @@ Hotkeys are now configurable. With syntax `[<Mods>-]<Name>`, where `<Mods>` is X
 
 Default keybindings:
 
-    Nsst.key.break: Break
-    Nsst.key.numlock: T-Num_Lock
-    Nsst.key.scrollUp: T-Up
-    Nsst.key.scrollDown: T-Down
-    Nsst.key.incFontSize: T-Page_Up
-    Nsst.key.decFontSize: T-Page_Down
-    Nsst.key.resetFontSize: T-Home
-    Nsst.key.newWindow: T-N
-    Nsst.key.reset: T-R
-    Nsst.key.reloadConfig: T-X
-    Nsst.key.reverseVideo: T-I
+    key-break=Break
+    key-numlock=T-Num_Lock
+    key-scroll-up=T-Up
+    key-scroll-down=T-Down
+    key-inc-font=T-Page_Up
+    key-dec-font=T-Page_Down
+    key-reset-font=T-Home
+    key-new-window=T-N
+    key-reset=T-R
+    key-reload-config=T-X
+    key-reverse-video=T-I
 
 
 ## Dependencies
@@ -114,7 +114,6 @@ Default keybindings:
 
 ### Runtime
 * `libxcb`
-* `xcb-util-xrm`
 * `fontconfig`
 * `freetype2`
 * `xkbcommon`
@@ -122,20 +121,19 @@ Default keybindings:
 
 #### Void Linux
 
-    xbps-install libxcb-devel libxkbcommon-devel xcb-util-xrm-devel \
+    xbps-install libxcb-devel libxkbcommon-devel \
         fontconfig-devel freetype-devel
 
 #### Arch Linux and derivatives
 
-    pacman -S libxcb xcb-util-xrm libxkbcommon libxkbcommon-x11 \
+    pacman -S libxcb libxkbcommon libxkbcommon-x11 \
         fontconfig freetype2
 
 #### Debian and derivatives
 
     apt update
     apt install libx11-xcb-dev libxcb-shm0-dev libxcb-render0-dev \
-        libxcb-xrm-dev libxkbcommon-dev xkbcommon-x11-dev \
-        libfontconfig1-dev libfreetype-dev
+        libxkbcommon-dev xkbcommon-x11-dev libfontconfig1-dev libfreetype-dev
 
 ## How to get it
 

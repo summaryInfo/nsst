@@ -1223,7 +1223,7 @@ static void term_protective_erase(struct term *term, int16_t xs, int16_t ys, int
         line->wrapped = 0;
         struct cell c = { .attrid = alloc_attr(line, term->sgr) };
         for (int16_t i = xs; i < xe; i++)
-            if (!attr_at(line,i).protected) line->cell[i] = c;
+            if (!attr_at(line, i).protected) line->cell[i] = c;
     }
 }
 

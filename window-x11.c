@@ -28,7 +28,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <xcb/xcb.h>
-#include <xcb/xcb_xrm.h>
 #include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
@@ -91,41 +90,6 @@ static struct window *window_for_xid(xcb_window_t xid) {
         if (win->wid == xid) return win;
     info("Window for xid not found");
     return NULL;
-}
-
-static void load_config(void) {
-    xcb_xrm_database_t *xrmdb = xcb_xrm_database_from_default(con);
-    if (!xrmdb) return;
-
-    char *res, name[OPT_NAME_MAX] = NSST_CLASS".color";
-    const size_t n_pos = strlen(name);
-
-    // .color0 -- .color255
-    for (unsigned j = 0; j < PALETTE_SIZE - SPECIAL_PALETTE_SIZE; j++) {
-        snprintf(name + n_pos, OPT_NAME_MAX, "%u", j);
-        if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res)) {
-            sconf_set(CCONF_COLOR_0 + j, res);
-            free(res);
-        }
-    }
-
-    //optmap is defined in config.c
-    for (size_t i = 0; i < OPT_MAP_SIZE; i++) {
-        snprintf(name, OPT_NAME_MAX, NSST_CLASS".%s", optmap[i].name);
-        char *res = NULL;
-        if (!xcb_xrm_resource_get_string(xrmdb, name, NULL, &res))
-            sconf_set(optmap[i].opt, res);
-        if (res) free(res);
-    }
-
-    xcb_xrm_database_free(xrmdb);
-
-    // Parse all shortcuts
-    for (size_t i = shortcut_break; i < shortcut_MAX; i++)
-        keyboard_set_shortcut(i, sconf(KCONF_BREAK + i - shortcut_break));
-    keyboard_set_force_select_mask(sconf(SCONF_FORCE_MOUSE_MOD));
-
-    reload_config = 0;
 }
 
 static void handle_sigusr1(int sig) {
@@ -322,9 +286,6 @@ void init_context(void) {
     for (; it.rem; xcb_screen_next(&it))
         if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
     if (dpi > 0) iconf_set(ICONF_DPI, dpi);
-
-    if (!iconf(ICONF_SKIP_CONFIG_FILE)) load_config();
-    else iconf_set(ICONF_SKIP_CONFIG_FILE, 0);
 
     sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART}, NULL);
 }
@@ -1653,8 +1614,9 @@ void run(void) {
         if ((!ctx.daemon_mode && !win_list_head) || xcb_connection_has_error(con)) break;
 
         if (reload_config) {
-            load_config();
+            parse_config();
             reload_all_fonts();
+            reload_config = 0;
         }
     }
 }

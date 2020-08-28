@@ -90,12 +90,12 @@ objs="nsst.o util.o font.o term.o tty.o line.o config.o mouse.o input.o nrcs.o"
 case "$backend" in
 x11shm)
     objs="$objs window-x11.o render-x11shm.o image.o"
-    deps="$deps xcb xcb-xkb xcb-xrm xcb-shm xkbcommon-x11"
+    deps="$deps xcb xcb-xkb xcb-shm xkbcommon-x11"
     use_x11shm=1
     ;;
 x11xrender)
     objs="$objs window-x11.o render-x11xrender.o"
-    deps="$deps xcb xcb-xkb xcb-xrm xcb-render xkbcommon-x11"
+    deps="$deps xcb xcb-xkb xcb-render xkbcommon-x11"
     use_x11shm=0
     ;;
 *)

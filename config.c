@@ -10,148 +10,156 @@
 #include "util.h"
 #include "window.h"
 
+#include <ctype.h>
+#include <fcntl.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define CN_BASE 16
 #define CN_EXT (6*6*6)
 #define CN_GRAY (PALETTE_SIZE - CN_BASE - CN_EXT)
 #define SD28B(x) ((x) ? 0x37 + 0x28 * (x) : 0)
 
+
 struct optmap_item optmap[OPT_MAP_SIZE] = {
-    {"allow-alternate", "\t(Enable alternate screen)", "allowAlternate", ICONF_ALLOW_ALTSCREEN},
-    {"allow-blinking", "\t(Allow blinking text and cursor)", "allowBlinking", ICONF_ALLOW_BLINKING},
-    {"allow-modify-edit-keypad", " (Allow modifing edit keypad keys)", "modkeyAllowEditKeypad", ICONF_MALLOW_EDIT},
-    {"allow-modify-function", "\t(Allow modifing function keys)", "modkeyAllowFunction", ICONF_MALLOW_FUNCTION},
-    {"allow-modify-keypad", "\t(Allow modifing keypad keys)", "modkeyAllowKeypad", ICONF_MALLOW_KEYPAD},
-    {"allow-modify-misc", "\t(Allow modifing miscelleneous keys)", "modkeyAllowMisc", ICONF_MALLOW_MISC},
-    {"alpha", "\t\t\t(Backround opacity, requires compositor to be running)", "alpha", ICONF_ALPHA},
-    {"alternate-scroll", "\t(Scrolling sends arrow keys escapes in alternate screen)", "alternateScroll", ICONF_ALTERNATE_SCROLL},
-    {"answerback-string", "\t(ENQ report)", "answerbackString", SCONF_ANSWERBACK_STRING},
-    {"appcursor", "\t\t(Initial application cursor mode value)", "appcursor", ICONF_APPCURSOR},
-    {"appkey", "\t\t(Initial application keypad mode value)", "appkey", ICONF_APPKEY},
-    {"autowrap", "\t\t(Initial autowrap setting)", "enableAutowrap", ICONF_INIT_WRAP},
-    {"background", "\t\t(Default backround color)", "background", CCONF_BG},
-    {"backspace-is-del", "\t(Backspace sends DEL instead of BS)", "backspaceIsDelete", ICONF_BACKSPACE_IS_DELETE},
-    {"bell", "\t\t\t(Bell setting)", "bell", ICONF_BELL_VOLUME},
-    {"bell-high-volume", "\t(High volume value for DECSWBV)", "bellHighVolume", ICONF_BELL_HIGH_VOLUME},
-    {"bell-low-volume", "\t(Low volume value for DECSWBV)", "bellLowVolume", ICONF_BELL_LOW_VOLUME},
-    {"blend-all-background", "\t(Apply opacity to all background colors, not just default one)", "blendAllBackground", ICONF_BLEND_ALL_BG},
-    {"blend-foreground", "\t(Apply opacity to foreground colors)", "blendForeground", ICONF_BLEND_FG},
-    {"blink-color", "\t\t(Special color of blinking text)", "blinkColor", CCONF_BLINK},
-    {"blink-time", "\t\t(Text blink interval in microseconds)","blinkTime", ICONF_BLINK_TIME},
-    {"bold-color", "\t\t(Special color of bold text)", "boldColor", CCONF_BOLD},
-    {"cursor-background", "\t(Default cursor background color)", "cursorBackground", CCONF_CURSOR_BG},
-    {"cursor-foreground", "\t(Default cursor foreground color)", "cursorForeground", CCONF_CURSOR_FG},
-    {"cursor-shape", "\t\t(Shape of cursor)", "cursorShape", ICONF_CURSOR_SHAPE},
-    {"cursor-width", "\t\t(Width of lines that forms cursor)", "cursorWidth", ICONF_CURSOR_WIDTH},
-    {"cut-lines", "\t\t(Cut long lines on resize with rewrapping disabled)", "cutLines", ICONF_CUT_LINES},
-    {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", "deleteIsDelete", ICONF_DELETE_IS_DELETE},
-    {"double-click-time", "\t(Time gap in milliseconds in witch two mouse presses will be considered double)", "doubleClickTime", ICONF_DOUBLE_CLICK_TIME},
-    {"erase-scrollback", "\t(Allow ED 3 to clear scrollback buffer)", "eraseScrollback", ICONF_ALLOW_ERASE_SCROLLBACK},
-    {"extended-cir", "\t\t(Report all SGR attributes in DECCIR)", "extendedCir", ICONF_EXTENDED_CIR},
-    {"fixed", "\t\t\t(Don't allow to change window size, if supported)", "fixed", ICONF_FIXED_SIZE},
-    {"fkey-increment", "\t(Step in numbering function keys)", "fkeyIncrement", ICONF_FKEY_INCREMENT},
-    {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)", "font", SCONF_FONT_NAME},
-    {"font-gamma", "\t\t(Factor of sharpenning\t(king of hack))", "fontGamma",ICONF_GAMMA},
-    {"font-size", "\t\t(Font size in points)", "fontSize", ICONF_FONT_SIZE},
-    {"font-size-step", "\t(Font size step in points)", "fontSizeStep", ICONF_FONT_SIZE_STEP},
-    {"font-spacing", "\t\t(Additional spacing for individual symbols)", "fontSpacing", ICONF_FONT_SPACING},
-    {"force-dpi", "\t\t(DPI value for fonts)", "dpi", ICONF_DPI},
-    {"force-mouse-mod", "\t(Modifer to force mouse action)", "forceMouseMod", SCONF_FORCE_MOUSE_MOD},
-    {"force-nrcs", "\t\t(Enable NRCS translation when UTF-8 mode is enabled)", "forceNrcs", ICONF_FORCE_UTF8_NRCS},
-    {"force-scalable", "\t(Do not search for pixmap fonts)", "forceScalable", ICONF_FORCE_SCALABLE},
-    {"foreground", "\t\t(Default foreground color)", "foreground", CCONF_FG},
-    {"fps", "\t\t\t(Window refresh rate)", "fps", ICONF_FPS},
-    {"has-meta", "\t\t(Handle meta/alt)", "hasMeta", ICONF_HAS_META},
-    {"horizontal-border", "\t(Top and bottom botders)", "horizontalBorder", ICONF_TOP_BORDER},
-    {"italic-color", "\t\t(Special color of italic text)", "italicColor", CCONF_ITALIC},
-    {"keep-clipboard", "\t(Reuse copied clipboard content instead of current selection data)", "keepClipboard", ICONF_KEEP_CLIPBOARD},
-    {"keep-selection", "\t(Don't clear X11 selection when unhighlighted)", "keepSelection", ICONF_KEEP_SELECTION},
-    {"key-break", "\t\t(Send break hotkey", "key.break)", KCONF_BREAK},
-    {"key-dec-font", "\t\t(Decrement font size hotkey)", "key.decFontSize", KCONF_FONT_DEC},
-    {"key-inc-font", "\t\t(Increment font size hotkey)", "key.incFontSize", KCONF_FONT_INC},
-    {"key-new-window", "\t(Create new window hotkey)", "key.newWindow", KCONF_NEW_WINDOW},
-    {"key-numlock", "\t\t('appkey' mode allow toggle hotkey)", "key.numlock", KCONF_NUMLOCK},
-    {"key-reload-config", "\t(Reload config hotkey)", "key.reloadConfig", KCONF_RELOAD_CONFIG},
-    {"key-reset", "\t\t(Terminal reset hotkey)", "key.reset", KCONF_RESET},
-    {"key-reset-font", "\t(Reset font size hotkey)", "key.resetFontSize", KCONF_FONT_RESET},
-    {"key-reverse-video", "\t(Toggle reverse video mode hotkey)", "key.reverseVideo", KCONF_REVERSE_VIDEO},
-    {"key-scroll-down", "\t(Scroll down hotkey)", "key.scrollDown", KCONF_SCROLL_DOWN},
-    {"key-scroll-up", "\t\t(Scroll up hotkey)", "key.scrollUp", KCONF_SCROLL_UP},
-    {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", "keyboardDialect", ICONF_KEYBOARD_NRCS},
-    {"keyboard-mapping", "\t(Initial keyboad mapping)", "keyboardMapping", ICONF_MAPPING},
-    {"line-spacing", "\t\t(Additional lines vertical spacing)", "lineSpacing", ICONF_LINE_SPACING},
-    {"lock-keyboard", "\t\t(Disable keyboad input)", "lockKeyboard", ICONF_LOCK},
-    {"log-level","\t\t(Filering level of logged information)", "logLevel", ICONF_LOG_LEVEL},
-    {"margin-bell", "\t\t(Margin bell setting)", "marginBell", ICONF_MARGIN_BELL_VOLUME},
-    {"margin-bell-column", "\t(Columnt at which margin bell rings when armed)", "marginBellColumn", ICONF_MARGIN_BELL_COLUMN},
-    {"margin-bell-high-volume", " (High volume value for DECSMBV)", "marginBellHighVolume", ICONF_MARGIN_BELL_HIGH_VOLUME},
-    {"margin-bell-low-volume", "(Low volume value for DECSMBV)", "marginBellLowVolume", ICONF_MARGIN_BELL_LOW_VOLUME},
-    {"meta-sends-escape", "\t(Alt/Meta sends escape prefix instead of setting 8-th bit)", "metaSendsEscape", ICONF_META_IS_ESC},
-    {"minimize-scrollback", "\t(Realloc lines to save memory; makes scrolling a little slower)", "minimizeScrollback", ICONF_MINIMIZE_SCROLLBACK},
-    {"modify-cursor", "\t\t(Enable encoding modifiers for cursor keys)", "modifyCursor", ICONF_MODIFY_CURSOR},
-    {"modify-function", "\t(Enable encoding modifiers for function keys)", "modifyFunction", ICONF_MODIFY_FUNCTION},
-    {"modify-keypad", "\t\t(Enable encoding modifiers keypad keys)", "modifyKeypad", ICONF_MODIFY_KEYPAD},
-    {"modify-other", "\t\t(Enable encoding modifiers for other keys)", "modifyOther", ICONF_MODIFY_OTHER},
-    {"modify-other-fmt", "\t(Format of encoding modifers)", "modifyOtherFmt", ICONF_MODIFY_OTHER_FMT},
-    {"nrcs", "\t\t\t(Enable NRCSs support)", "allowNrcs", ICONF_ALLOW_NRCS},
-    {"numlock", "\t\t(Initial numlock state)", "numlock", ICONF_NUMLOCK},
+    {"allow-alternate", "\t(Enable alternate screen)", ICONF_ALLOW_ALTSCREEN},
+    {"allow-blinking", "\t(Allow blinking text and cursor)", ICONF_ALLOW_BLINKING},
+    {"allow-modify-edit-keypad", " (Allow modifing edit keypad keys)", ICONF_MALLOW_EDIT},
+    {"allow-modify-function", "\t(Allow modifing function keys)", ICONF_MALLOW_FUNCTION},
+    {"allow-modify-keypad", "\t(Allow modifing keypad keys)", ICONF_MALLOW_KEYPAD},
+    {"allow-modify-misc", "\t(Allow modifing miscelleneous keys)", ICONF_MALLOW_MISC},
+    {"alpha", "\t\t\t(Backround opacity, requires compositor to be running)", ICONF_ALPHA},
+    {"alternate-scroll", "\t(Scrolling sends arrow keys escapes in alternate screen)", ICONF_ALTERNATE_SCROLL},
+    {"answerback-string", "\t(ENQ report)", SCONF_ANSWERBACK_STRING},
+    {"appcursor", "\t\t(Initial application cursor mode value)", ICONF_APPCURSOR},
+    {"appkey", "\t\t(Initial application keypad mode value)", ICONF_APPKEY},
+    {"autowrap", "\t\t(Initial autowrap setting)", ICONF_INIT_WRAP},
+    {"background", "\t\t(Default backround color)", CCONF_BG},
+    {"backspace-is-del", "\t(Backspace sends DEL instead of BS)", ICONF_BACKSPACE_IS_DELETE},
+    {"bell", "\t\t\t(Bell setting)", ICONF_BELL_VOLUME},
+    {"bell-high-volume", "\t(High volume value for DECSWBV)", ICONF_BELL_HIGH_VOLUME},
+    {"bell-low-volume", "\t(Low volume value for DECSWBV)", ICONF_BELL_LOW_VOLUME},
+    {"blend-all-background", "\t(Apply opacity to all background colors, not just default one)", ICONF_BLEND_ALL_BG},
+    {"blend-foreground", "\t(Apply opacity to foreground colors)", ICONF_BLEND_FG},
+    {"blink-color", "\t\t(Special color of blinking text)", CCONF_BLINK},
+    {"blink-time", "\t\t(Text blink interval in microseconds)",ICONF_BLINK_TIME},
+    {"bold-color", "\t\t(Special color of bold text)", CCONF_BOLD},
+    {"config", "\t\t(Configuration file path)", SCONF_CONFIG_PATH},
+    {"cursor-background", "\t(Default cursor background color)", CCONF_CURSOR_BG},
+    {"cursor-foreground", "\t(Default cursor foreground color)", CCONF_CURSOR_FG},
+    {"cursor-shape", "\t\t(Shape of cursor)", ICONF_CURSOR_SHAPE},
+    {"cursor-width", "\t\t(Width of lines that forms cursor)", ICONF_CURSOR_WIDTH},
+    {"cut-lines", "\t\t(Cut long lines on resize with rewrapping disabled)", ICONF_CUT_LINES},
+    {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", ICONF_DELETE_IS_DELETE},
+    {"double-click-time", "\t(Time gap in milliseconds in witch two mouse presses will be considered double)", ICONF_DOUBLE_CLICK_TIME},
+    {"erase-scrollback", "\t(Allow ED 3 to clear scrollback buffer)", ICONF_ALLOW_ERASE_SCROLLBACK},
+    {"extended-cir", "\t\t(Report all SGR attributes in DECCIR)", ICONF_EXTENDED_CIR},
+    {"fixed", "\t\t\t(Don't allow to change window size, if supported)", ICONF_FIXED_SIZE},
+    {"fkey-increment", "\t(Step in numbering function keys)", ICONF_FKEY_INCREMENT},
+    {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)", SCONF_FONT_NAME},
+    {"font-gamma", "\t\t(Factor of font sharpenning)", ICONF_GAMMA},
+    {"font-size", "\t\t(Font size in points)", ICONF_FONT_SIZE},
+    {"font-size-step", "\t(Font size step in points)", ICONF_FONT_SIZE_STEP},
+    {"font-spacing", "\t\t(Additional spacing for individual symbols)", ICONF_FONT_SPACING},
+    {"force-dpi", "\t\t(DPI value for fonts)", ICONF_DPI},
+    {"force-mouse-mod", "\t(Modifer to force mouse action)", SCONF_FORCE_MOUSE_MOD},
+    {"force-nrcs", "\t\t(Enable NRCS translation when UTF-8 mode is enabled)", ICONF_FORCE_UTF8_NRCS},
+    {"force-scalable", "\t(Do not search for pixmap fonts)", ICONF_FORCE_SCALABLE},
+    {"foreground", "\t\t(Default foreground color)", CCONF_FG},
+    {"fps", "\t\t\t(Window refresh rate)", ICONF_FPS},
+    {"has-meta", "\t\t(Handle meta/alt)", ICONF_HAS_META},
+    {"horizontal-border", "\t(Top and bottom botders)", ICONF_TOP_BORDER},
+    {"italic-color", "\t\t(Special color of italic text)", CCONF_ITALIC},
+    {"keep-clipboard", "\t(Reuse copied clipboard content instead of current selection data)", ICONF_KEEP_CLIPBOARD},
+    {"keep-selection", "\t(Don't clear X11 selection when unhighlighted)", ICONF_KEEP_SELECTION},
+    {"key-break", "\t\t(Send break hotkey", KCONF_BREAK},
+    {"key-dec-font", "\t\t(Decrement font size hotkey)", KCONF_FONT_DEC},
+    {"key-inc-font", "\t\t(Increment font size hotkey)", KCONF_FONT_INC},
+    {"key-new-window", "\t(Create new window hotkey)", KCONF_NEW_WINDOW},
+    {"key-numlock", "\t\t('appkey' mode allow toggle hotkey)", KCONF_NUMLOCK},
+    {"key-reload-config", "\t(Reload config hotkey)", KCONF_RELOAD_CONFIG},
+    {"key-reset", "\t\t(Terminal reset hotkey)", KCONF_RESET},
+    {"key-reset-font", "\t(Reset font size hotkey)", KCONF_FONT_RESET},
+    {"key-reverse-video", "\t(Toggle reverse video mode hotkey)", KCONF_REVERSE_VIDEO},
+    {"key-scroll-down", "\t(Scroll down hotkey)", KCONF_SCROLL_DOWN},
+    {"key-scroll-up", "\t\t(Scroll up hotkey)", KCONF_SCROLL_UP},
+    {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", ICONF_KEYBOARD_NRCS},
+    {"keyboard-mapping", "\t(Initial keyboad mapping)", ICONF_MAPPING},
+    {"line-spacing", "\t\t(Additional lines vertical spacing)", ICONF_LINE_SPACING},
+    {"lock-keyboard", "\t\t(Disable keyboad input)", ICONF_LOCK},
+    {"log-level","\t\t(Filering level of logged information)", ICONF_LOG_LEVEL},
+    {"margin-bell", "\t\t(Margin bell setting)", ICONF_MARGIN_BELL_VOLUME},
+    {"margin-bell-column", "\t(Columnt at which margin bell rings when armed)", ICONF_MARGIN_BELL_COLUMN},
+    {"margin-bell-high-volume", " (High volume value for DECSMBV)", ICONF_MARGIN_BELL_HIGH_VOLUME},
+    {"margin-bell-low-volume", "(Low volume value for DECSMBV)", ICONF_MARGIN_BELL_LOW_VOLUME},
+    {"meta-sends-escape", "\t(Alt/Meta sends escape prefix instead of setting 8-th bit)", ICONF_META_IS_ESC},
+    {"minimize-scrollback", "\t(Realloc lines to save memory; makes scrolling a little slower)", ICONF_MINIMIZE_SCROLLBACK},
+    {"modify-cursor", "\t\t(Enable encoding modifiers for cursor keys)", ICONF_MODIFY_CURSOR},
+    {"modify-function", "\t(Enable encoding modifiers for function keys)", ICONF_MODIFY_FUNCTION},
+    {"modify-keypad", "\t\t(Enable encoding modifiers keypad keys)", ICONF_MODIFY_KEYPAD},
+    {"modify-other", "\t\t(Enable encoding modifiers for other keys)", ICONF_MODIFY_OTHER},
+    {"modify-other-fmt", "\t(Format of encoding modifers)", ICONF_MODIFY_OTHER_FMT},
+    {"nrcs", "\t\t\t(Enable NRCSs support)", ICONF_ALLOW_NRCS},
+    {"numlock", "\t\t(Initial numlock state)", ICONF_NUMLOCK},
 #if USE_BOXDRAWING
-    {"override-boxdrawing", "\t(Use built-in box drawing characters)", "overrideBoxdrawing", ICONF_OVERRIDE_BOXDRAW},
+    {"override-boxdrawing", "\t(Use built-in box drawing characters)", ICONF_OVERRIDE_BOXDRAW},
 #endif
-    {"pixel-mode", "\t\t(Subpixel rendering config; mono, bgr, rgb, bgrv, or rgbv)", "pixelMode", ICONF_PIXEL_MODE},
-    {"print-command", "\t\t(Program to pipe CSI MC output into)", "printerCommand", SCONF_PRINT_CMD},
-    {"printer-file", ", -o<value> (File where CSI MC output to)", "printerFile", SCONF_PRINTER},
-    {"print-attributes", "\t(Print cell attributes when printing is enabled)", "printAttributes", ICONF_PRINT_ATTR },
-    {"raise-on-bell", "\t\t(Raise terminal window on bell)", "raiseOnBell", ICONF_RAISE_ON_BELL},
-    {"resize-delay", "\t\t(Additional delay after resize in microseconds)", "resizeDelay", ICONF_RESIZE_DELAY},
-    {"reverse-video", "\t\t(Initial reverse video setting)", "enableReverseVideo", ICONF_REVERSE_VIDEO},
-    {"reversed-color", "\t(Special color of reversed text)", "reversedColor", CCONF_REVERSE},
-    {"rewrap", "\t\t(Rewrap text on resize)", "rewrap", ICONF_REWRAP},
-    {"scroll-amount", "\t\t(Number of lines scrolled in a time)", "scrollAmout", ICONF_SCROLL_AMOUNT},
-    {"scroll-delay", "\t\t(Additional delay after scroll in microseconds)", "scrollDelay", ICONF_SCROLL_DELAY},
-    {"scroll-on-input", "\t(Scroll view to bottom on key press)", "scrollOnInput", ICONF_SCROLL_ON_INPUT},
-    {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", "scrollOnOutput", ICONF_SCROLL_ON_OUTPUT},
-    {"scrollback-size", ", -H<value> (Number of saved lines)", "scrollbackSize", ICONF_HISTORY_LINES},
-    {"select-to-clipboard", "\t(Use CLIPBOARD selection to store hightlighted data)", "selectToClipboard", ICONF_SELECT_TO_CLIPBOARD},
-    {"selected-background", "\t(Color of selected background)", "selectedBackground", CCONF_SELECTED_BG},
-    {"selected-foreground", "\t(Color of selected text)", "selectedForeground", CCONF_SELECTED_FG},
-    {"shell", ", -s<value>\t(Shell to start in new instance)", "shell", SCONF_SHELL},
-    {"special-blink", "\t\t(If special color should be used for blinking text)", "specialBlink", ICONF_SPEICAL_BLINK},
-    {"special-bold", "\t\t(If special color should be used for bold text)", "specialBold", ICONF_SPEICAL_BOLD},
-    {"special-italic", "\t(If special color should be used for italic text)", "specialItalic", ICONF_SPEICAL_ITALIC},
-    {"special-reverse", "\t(If special color should be used for reverse text)", "specialReverse", ICONF_SPEICAL_REVERSE},
-    {"special-underlined", "\t(If special color should be used for underlined text)", "specialUnderlined", ICONF_SPEICAL_UNDERLINE},
-    {"substitute-fonts", "\t(Enable substitute font support)", "substitudeFonts", ICONF_ALLOW_SUBST_FONTS},
-    {"sync-timeout", "\t\t(Syncronous update timeout)", "syncTimeout", ICONF_SYNC_TIME},
-    {"tab-width", "\t\t(Initial width of tab character)", "tabWidth", ICONF_TAB_WIDTH},
-    {"term-mod", "\t\t(Meaning of 'T' modifer)", "termMod", SCONF_TERM_MOD},
-    {"term-name", ", -D<value>\t(TERM value)", "termName", SCONF_TERM_NAME},
-    {"title", ", -T<value>, -t<value> (Initial window title)", "title", SCONF_TITLE},
-    {"trace-characters", "\t(Trace interpreted characters)", "traceCharacters", ICONF_TRACE_CHARACTERS},
-    {"trace-controls", "\t(Trace interpreted control characters and sequences)", "traceControls", ICONF_TRACE_CONTROLS},
-    {"trace-events", "\t\t(Trace recieved events)", "traceEvents", ICONF_TRACE_EVENTS},
-    {"trace-fonts", "\t\t(Log font related information)", "traceFonts", ICONF_TRACE_FONTS},
-    {"trace-input", "\t\t(Trace user input)", "traceInput", ICONF_TRACE_INPUT},
-    {"trace-misc", "\t\t(Trace miscelleneous information)", "traceMisc", ICONF_TRACE_MISC},
-    {"triple-click-time", "\t(Time gap in milliseconds in witch tree mouse presses will be considered triple)", "trippleClickTime", ICONF_TRIPLE_CLICK_TIME},
-    {"underline-width", "\t(Text underline width)", "underlineWidth", ICONF_UNDERLINE_WIDTH},
-    {"underlined-color", "\t(Special color of underlined text)", "underlinedColor", CCONF_UNDERLINE},
-    {"urgent-on-bell", "\t(Set window urgency on bell)", "urgentOnBell", ICONF_URGENT_ON_BELL},
-    {"use-utf8", "\t\t(Enable UTF-8 I/O)", "useUtf8", ICONF_UTF8},
-    {"vertical-border", "\t(Left and right borders)", "verticalBorder", ICONF_LEFT_BORDER},
-    {"visual-bell", "\t\t(Whether bell should be visual or normal)", "visualBell", ICONF_VISUAL_BELL},
-    {"visual-bell-time", "\t(Length of visual bell)", "visualBellTime", ICONF_VISUAL_BELL_TIME},
-    {"vt-version", ", -V<value>\t(Emulated VT version)", "vtVersion", ICONF_VT_VERION},
-    {"window-class", ", -c<value> (X11 Window class)", "windowClass", SCONF_TERM_CLASS},
-    {"window-ops", "\t\t(Allow window manipulation with escape sequences)", "allowWindowOps", ICONF_ALLOW_WINDOW_OPS},
-    {"word-break", "\t\t(Symbols treated as word separators when snapping mouse selection)", "wordBreak", SCONF_WORD_SEPARATORS},
+    {"pixel-mode", "\t\t(Subpixel rendering config; mono, bgr, rgb, bgrv, or rgbv)", ICONF_PIXEL_MODE},
+    {"print-command", "\t\t(Program to pipe CSI MC output into)", SCONF_PRINT_CMD},
+    {"printer-file", ", -o<value> (File where CSI MC output to)", SCONF_PRINTER},
+    {"print-attributes", "\t(Print cell attributes when printing is enabled)", ICONF_PRINT_ATTR },
+    {"raise-on-bell", "\t\t(Raise terminal window on bell)", ICONF_RAISE_ON_BELL},
+    {"resize-delay", "\t\t(Additional delay after resize in microseconds)", ICONF_RESIZE_DELAY},
+    {"reverse-video", "\t\t(Initial reverse video setting)", ICONF_REVERSE_VIDEO},
+    {"reversed-color", "\t(Special color of reversed text)", CCONF_REVERSE},
+    {"rewrap", "\t\t(Rewrap text on resize)", ICONF_REWRAP},
+    {"scroll-amount", "\t\t(Number of lines scrolled in a time)", ICONF_SCROLL_AMOUNT},
+    {"scroll-delay", "\t\t(Additional delay after scroll in microseconds)", ICONF_SCROLL_DELAY},
+    {"scroll-on-input", "\t(Scroll view to bottom on key press)", ICONF_SCROLL_ON_INPUT},
+    {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", ICONF_SCROLL_ON_OUTPUT},
+    {"scrollback-size", ", -H<value> (Number of saved lines)", ICONF_HISTORY_LINES},
+    {"select-to-clipboard", "\t(Use CLIPBOARD selection to store hightlighted data)", ICONF_SELECT_TO_CLIPBOARD},
+    {"selected-background", "\t(Color of selected background)", CCONF_SELECTED_BG},
+    {"selected-foreground", "\t(Color of selected text)", CCONF_SELECTED_FG},
+    {"shell", ", -s<value>\t(Shell to start in new instance)", SCONF_SHELL},
+    {"special-blink", "\t\t(If special color should be used for blinking text)", ICONF_SPEICAL_BLINK},
+    {"special-bold", "\t\t(If special color should be used for bold text)", ICONF_SPEICAL_BOLD},
+    {"special-italic", "\t(If special color should be used for italic text)", ICONF_SPEICAL_ITALIC},
+    {"special-reverse", "\t(If special color should be used for reverse text)", ICONF_SPEICAL_REVERSE},
+    {"special-underlined", "\t(If special color should be used for underlined text)", ICONF_SPEICAL_UNDERLINE},
+    {"substitute-fonts", "\t(Enable substitute font support)", ICONF_ALLOW_SUBST_FONTS},
+    {"sync-timeout", "\t\t(Syncronous update timeout)", ICONF_SYNC_TIME},
+    {"tab-width", "\t\t(Initial width of tab character)", ICONF_TAB_WIDTH},
+    {"term-mod", "\t\t(Meaning of 'T' modifer)", SCONF_TERM_MOD},
+    {"term-name", ", -D<value>\t(TERM value)", SCONF_TERM_NAME},
+    {"title", ", -T<value>, -t<value> (Initial window title)", SCONF_TITLE},
+    {"trace-characters", "\t(Trace interpreted characters)", ICONF_TRACE_CHARACTERS},
+    {"trace-controls", "\t(Trace interpreted control characters and sequences)", ICONF_TRACE_CONTROLS},
+    {"trace-events", "\t\t(Trace recieved events)", ICONF_TRACE_EVENTS},
+    {"trace-fonts", "\t\t(Log font related information)", ICONF_TRACE_FONTS},
+    {"trace-input", "\t\t(Trace user input)", ICONF_TRACE_INPUT},
+    {"trace-misc", "\t\t(Trace miscelleneous information)", ICONF_TRACE_MISC},
+    {"triple-click-time", "\t(Time gap in milliseconds in witch tree mouse presses will be considered triple)", ICONF_TRIPLE_CLICK_TIME},
+    {"underline-width", "\t(Text underline width)", ICONF_UNDERLINE_WIDTH},
+    {"underlined-color", "\t(Special color of underlined text)", CCONF_UNDERLINE},
+    {"urgent-on-bell", "\t(Set window urgency on bell)", ICONF_URGENT_ON_BELL},
+    {"use-utf8", "\t\t(Enable UTF-8 I/O)", ICONF_UTF8},
+    {"vertical-border", "\t(Left and right borders)", ICONF_LEFT_BORDER},
+    {"visual-bell", "\t\t(Whether bell should be visual or normal)", ICONF_VISUAL_BELL},
+    {"visual-bell-time", "\t(Length of visual bell)", ICONF_VISUAL_BELL_TIME},
+    {"vt-version", ", -V<value>\t(Emulated VT version)", ICONF_VT_VERION},
+    {"window-class", ", -c<value> (X11 Window class)", SCONF_TERM_CLASS},
+    {"window-ops", "\t\t(Allow window manipulation with escape sequences)", ICONF_ALLOW_WINDOW_OPS},
+    {"word-break", "\t\t(Symbols treated as word separators when snapping mouse selection)", SCONF_WORD_SEPARATORS},
 };
 
 static struct {
@@ -280,6 +288,7 @@ static struct {
     [SCONF_FORCE_MOUSE_MOD - SCONF_MIN] = { "T", NULL },
     [SCONF_TERM_MOD - SCONF_MIN] = {"SC", NULL },
     [SCONF_WORD_SEPARATORS - SCONF_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`", NULL },
+    [SCONF_CONFIG_PATH - SCONF_MIN] = { NULL, NULL },
     [KCONF_SCROLL_DOWN - SCONF_MIN] = { "T-Up", NULL },
     [KCONF_SCROLL_UP - SCONF_MIN] = { "T-Down", NULL },
     [KCONF_FONT_INC - SCONF_MIN] = { "T-Page_Up", NULL },
@@ -523,4 +532,120 @@ const char **sconf_argv(void) {
 
 void sconf_set_argv(const char **val) {
     argv = val;
+}
+
+static int optmap_cmp(const void *a, const void *b) {
+    const char *a_arg_name = ((const struct optmap_item *)a)->arg_name;
+    const char *b_arg_name = ((const struct optmap_item *)b)->arg_name;
+    return strcmp(a_arg_name, b_arg_name);
+}
+
+void parse_config(void) {
+    char pathbuf[PATH_MAX];
+    const char *path = sconf(SCONF_CONFIG_PATH);
+    int fd = -1;
+
+    /* Config file is search in following places:
+     * 1. sconf(SCONF_CONFIG_PATH) set with --config=
+     * 2. $XDG_CONFIG_HOME/nsst.conf
+     * 3. $HOME/.config/nsst.conf
+     * If file is not found in those places, just give up */
+
+    if (path) fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        const char *xdg_cfg = getenv("XDG_CONFIG_HOME");
+        if (xdg_cfg) {
+            snprintf(pathbuf, sizeof pathbuf, "%s/nsst.conf", xdg_cfg);
+            fd = open(pathbuf, O_RDONLY);
+        }
+    }
+    if (fd < 0) {
+        const char *home = getenv("HOME");
+        if (home) {
+            snprintf(pathbuf, sizeof pathbuf, "%s/.config/nsst.conf", home);
+            fd = open(pathbuf, O_RDONLY);
+        }
+    }
+
+    if (fd < 0) {
+        if (path) goto e_open;
+        return;
+    }
+
+    struct stat stt;
+    if (fstat(fd, &stt) < 0) goto e_open;
+
+    char *addr = mmap(NULL, stt.st_size + 1, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if (addr == MAP_FAILED) goto e_open;
+
+    close(fd);
+
+    char *ptr = addr, *end = addr + stt.st_size;
+    char saved = '\0';
+    ssize_t line_n = 0;
+    while (ptr < end) {
+        line_n++;
+        while (ptr < end && isspace((unsigned)*ptr)) ptr++;
+        if (ptr >= end) break;
+
+        char *start = ptr;
+        if (isalpha((unsigned)*ptr)) {
+            char *next = ptr;
+
+            while (next < end && !isspace((unsigned)*next) && *next != '#' && *next != '=') next++;
+
+            SWAP(char, *next, saved);
+            unsigned colorn = 0;
+            enum config_option opt = -1U;
+            if (sscanf(ptr, "color%u", &colorn) == 1) {
+                opt = colorn + CCONF_COLOR_0;
+            } else {
+                struct optmap_item *res = bsearch(&(struct optmap_item){ptr, NULL, 0},
+                        optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
+                if (res) opt = res->opt;
+            }
+            SWAP(char, *next, saved);
+            if (opt == -1U) goto e_wrong_line;
+
+            while(next < end && isblank((unsigned)*next)) next++;
+            if (next >= end || *next++ != '=') goto e_wrong_line;
+
+            while (next < end && isblank((unsigned)*next)) next++;
+            char *valstart = next;
+            while (next < end && *next != '\n') next++;
+            while (next > valstart && isblank((unsigned)next[-1])) next--;
+
+            SWAP(char, *next, saved);
+            sconf_set(opt, valstart);
+            SWAP(char, *next, saved);
+
+            ptr = next;
+        } else if (*ptr != '#') goto e_wrong_line;
+
+        while(ptr < end && isblank((unsigned)*ptr)) ptr++;
+        if (ptr < end && *ptr == '#')
+            while (ptr < end && *ptr != '\n') ptr++;
+
+        if (0) {
+e_wrong_line:
+            ptr = start;
+            while(ptr < end && *ptr != '\n') ptr++;
+            SWAP(char, *ptr, saved);
+            warn("Can't parse config line #%zd: %s", line_n, start);
+            SWAP(char, *ptr, saved);
+            ptr++;
+        }
+    }
+
+    munmap(addr, stt.st_size + 1);
+
+    // Parse all shortcuts
+    for (size_t i = shortcut_break; i < shortcut_MAX; i++)
+        keyboard_set_shortcut(i, sconf(KCONF_BREAK + i - shortcut_break));
+    keyboard_set_force_select_mask(sconf(SCONF_FORCE_MOUSE_MOD));
+
+    return;
+e_open:
+    if (fd >= 0) close(fd);
+    warn("Can't read config file: %s", path ? path : pathbuf);
 }
