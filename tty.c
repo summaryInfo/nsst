@@ -366,6 +366,11 @@ n_printer:
             else
                 tty->printerfd = open(printer_path, O_WRONLY | O_CREAT, 0660);
         }
+
+        if (tty->printerfd >= 0) {
+            int fl = fcntl(tty->printerfd, F_GETFL);
+            if (fl >= 0) fcntl(tty->printerfd, F_SETFL, fl | O_CLOEXEC);
+        }
     }
 
     return tty->fd;
