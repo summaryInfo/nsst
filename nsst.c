@@ -204,6 +204,12 @@ static void parse_options(char **argv) {
     }
 
     if (argv[ind]) sconf_set_argv((const char**)&argv[ind]);
+
+    // Reparse all keyboad shortcuts
+    for (size_t i = shortcut_break; i < shortcut_MAX; i++)
+        keyboard_set_shortcut(i, sconf(KCONF_BREAK + i - shortcut_break));
+    keyboard_set_force_select_mask(sconf(SCONF_FORCE_MOUSE_MOD));
+
 }
 
 int main(int argc, char **argv) {
