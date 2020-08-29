@@ -145,6 +145,7 @@ cat <<END
     prefix................... $prefix
     bindir................... $bindir
     mandir................... $mandir
+    sharedir................. $sharedir
     backend.................. $backend
     boxdrawing............... $use_boxdrawing
     precompose............... $use_precompose
