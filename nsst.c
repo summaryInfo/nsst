@@ -209,7 +209,7 @@ static void parse_options(char **argv) {
 int main(int argc, char **argv) {
 
     // Load locale
-    setlocale(LC_ALL, "");
+    setlocale(LC_CTYPE, "");
     char *charset = nl_langinfo(CODESET);
     bool bset = charset && (charset[0] & ~0x20) == 'U' &&
             (charset[1] & ~0x20) == 'T' && (charset[2] & ~0x20) == 'F' &&
