@@ -203,7 +203,6 @@ static struct {
     [ICONF_GAMMA - ICONF_MIN] = {10000, 10000, 2000, 200000},
     [ICONF_DPI - ICONF_MIN] = {96, 96, 10, 10000},
     [ICONF_KEYBOARD_NRCS - ICONF_MIN] = {cs94_ascii, cs94_ascii, 0, nrcs_MAX},
-    [ICONF_SKIP_CONFIG_FILE - ICONF_MIN] = {0, 0, 0, 1},
     [ICONF_ALLOW_NRCS - ICONF_MIN] = {1, 1, 0, 1},
     [ICONF_ALLOW_WINDOW_OPS - ICONF_MIN] = {1, 1, 0, 1},
 #if USE_BOXDRAWING
