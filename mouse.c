@@ -668,7 +668,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
                (ev.event == mouse_event_release && ev.button == 0 &&
                     (loc->state == state_sel_progress))) {
 
-		int16_t y = ev.y;
+        int16_t y = ev.y;
         adj_coords(term, &ev.x, &ev.y);
         change_selection(term, ev.event + 1, ev.x, ev.y, ev.mask & mask_mod_1);
         pending_scroll(term, y, ev.event);

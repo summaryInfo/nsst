@@ -249,6 +249,11 @@ struct term {
     ssize_t left;
     ssize_t right;
 
+    /* Smooth scroll acumulator */
+    ssize_t scrolled;
+    bool must_stop;
+    struct timespec last_scrolled;
+
     /* Tabstop positions */
     bool *tabs;
 
@@ -1439,6 +1444,12 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
         }
     }
     mouse_scroll_selection(term, amount, save);
+
+    if (term->mode.smooth_scroll && (term->scrolled += abs(amount)) > iconf(ICONF_SMOOTH_SCROLL_STEP)) {
+        term->must_stop = 1;
+        term->scrolled = 0;
+        clock_gettime(CLOCK_TYPE, &term->last_scrolled);
+    }
 }
 
 static void term_set_tb_margins(struct term *term, int16_t top, int16_t bottom) {
@@ -1787,6 +1798,7 @@ static void term_load_config(struct term *term) {
         .select_to_clipboard = iconf(ICONF_SELECT_TO_CLIPBOARD),
         .bell_raise = iconf(ICONF_RAISE_ON_BELL),
         .bell_urgent = iconf(ICONF_URGENT_ON_BELL),
+        .smooth_scroll = iconf(ICONF_SMOOTH_SCROLL),
     };
 
     for (size_t i = 0; i < PALETTE_SIZE; i++)
@@ -4900,8 +4912,12 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
     return 1;
 }
 
+bool term_can_continue(struct term *term, bool input, struct timespec *now) {
+    return (!term->must_stop && input) || ((input || term->must_stop) && TIMEDIFF(term->last_scrolled, *now) > iconf(ICONF_SMOOTH_SCROLL_DELAY)*1000LL);
+}
+
 void term_read(struct term *term) {
-    if (tty_refill(&term->tty) <= 0) return;
+    if (tty_refill(&term->tty) < 0 || term->tty.start >= term->tty.end) return;
 
     if (term->mode.print_controller)
         print_intercept(term);
@@ -4909,8 +4925,11 @@ void term_read(struct term *term) {
     if (term->mode.scroll_on_output && term->view_pos.line)
         term_reset_view(term, 1);
 
-    while (term->tty.start < term->tty.end)
+    term->must_stop = 0;
+    while (term->tty.start < term->tty.end && !term->must_stop)
         if (!term_dispatch(term, (const uint8_t **)&term->tty.start, term->tty.end)) break;
+
+
 }
 
 void term_toggle_numlock(struct term *term) {

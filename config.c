@@ -135,6 +135,9 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"selected-background", "\t(Color of selected background)", CCONF_SELECTED_BG},
     {"selected-foreground", "\t(Color of selected text)", CCONF_SELECTED_FG},
     {"shell", ", -s<value>\t(Shell to start in new instance)", SCONF_SHELL},
+    {"smooth-scroll", "\t\t(Inital value of DECSCLM mode)", ICONF_SMOOTH_SCROLL},
+    {"smooth-scroll-delay", "\t(Delay between scrolls when DECSCLM is enabled)", ICONF_SMOOTH_SCROLL_DELAY},
+    {"smooth-scroll-step", "\t(Amount of lines per scroll when DECSCLM is enabled)", ICONF_SMOOTH_SCROLL_STEP},
     {"special-blink", "\t\t(If special color should be used for blinking text)", ICONF_SPEICAL_BLINK},
     {"special-bold", "\t\t(If special color should be used for bold text)", ICONF_SPEICAL_BOLD},
     {"special-italic", "\t(If special color should be used for italic text)", ICONF_SPEICAL_ITALIC},
@@ -275,6 +278,9 @@ static struct {
     [ICONF_ALPHA - ICONF_MIN] = {255, 255, 0, 255},
     [ICONF_BLEND_ALL_BG - ICONF_MIN] = {0, 0, 0, 1},
     [ICONF_BLEND_FG - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_SMOOTH_SCROLL_STEP - ICONF_MIN] = {1, 1, 1, 1000000},
+    [ICONF_SMOOTH_SCROLL_DELAY - ICONF_MIN] = {500, 500, 0, 999999},
+    [ICONF_SMOOTH_SCROLL - ICONF_MIN] = {0, 0, 0, 1},
 };
 
 static struct {

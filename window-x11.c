@@ -1526,6 +1526,7 @@ static void handle_event(void) {
 
 /* Start window logic, handling all windows in context */
 void run(void) {
+    struct timespec prev;
     for (int64_t next_timeout = SEC/iconf(ICONF_FPS);;) {
 #if USE_PPOLL
         if (ppoll(ctx.pfds, ctx.pfdcap, &(struct timespec){next_timeout / SEC, next_timeout % SEC}, NULL) < 0 && errno != EINTR)
@@ -1534,21 +1535,21 @@ void run(void) {
 #endif
             warn("Poll error: %s", strerror(errno));
 
+        next_timeout = iconf(ctx.vbell_count ? ICONF_VISUAL_BELL_TIME : ICONF_BLINK_TIME)*1000LL;
+        struct timespec cur;
+        clock_gettime(CLOCK_TYPE, &cur);
+
         // First check window system events
         if (ctx.pfds[0].revents & POLLIN) handle_event();
 
         // Then read for PTYs
         for (struct window *win = win_list_head, *next; win; win = next) {
             next = win->next;
-            if (ctx.pfds[win->poll_index].revents & POLLIN)
+            if (term_can_continue(win->term, ctx.pfds[win->poll_index].revents & POLLIN, &cur)) {
                 term_read(win->term);
-            else if (ctx.pfds[win->poll_index].revents & (POLLERR | POLLNVAL | POLLHUP))
+            } else if (ctx.pfds[win->poll_index].revents & (POLLERR | POLLNVAL | POLLHUP))
                 free_window(win);
         }
-
-        next_timeout = iconf(ctx.vbell_count ? ICONF_VISUAL_BELL_TIME : ICONF_BLINK_TIME)*1000LL;
-        struct timespec cur;
-        clock_gettime(CLOCK_TYPE, &cur);
 
         bool pending_scroll = 0;
         for (struct window *win = win_list_head; win; win = win->next) {
@@ -1622,5 +1623,6 @@ void run(void) {
             reload_all_fonts();
             reload_config = 0;
         }
+        prev = cur;
     }
 }

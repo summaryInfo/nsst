@@ -8,10 +8,11 @@
 #include "util.h"
 #include "window.h"
 
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <inttypes.h>
 #include <sys/types.h>
+#include <time.h>
 
 typedef uint32_t uparam_t;
 typedef int32_t iparam_t;
@@ -71,5 +72,6 @@ bool term_is_paste_nl_enabled(struct term *term);
 bool term_is_paste_quote_enabled(struct term *term);
 bool term_is_cursor_enabled(struct term *term);
 bool term_is_reverse(struct term *term);
+bool term_can_continue(struct term *term, bool input, struct timespec *now);
 
 #endif

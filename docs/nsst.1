@@ -315,6 +315,12 @@ format is same as for
 .Fl \-colorN
 .It Fl \-rewrap Ns = Ns Ar bool
 Rewrap text on resize. Multiline shell prompts can erase lines above, that probably can not be fixed.
+.It Fl \-smooth-scroll-delay Ns = Ns Ar teme
+Delay in microseconds between subsequent scrolls when smooth scroll mode is enabled
+.It Fl \-smooth-scroll-step Ns = Ns Ar lines
+Maximal amount of lines to be scrolled without delay when smooth scroll mode is enabled
+.It Fl \-smooth-scroll Ns = Ns Ar bool
+Initial smooth scroll setting
 .It Fl \-scroll-amount Ns = Ns Ar lines
 Number of lines scrolled in a time
 .It Fl \-scroll-delay Ns = Ns Ar time
