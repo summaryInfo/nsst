@@ -315,6 +315,8 @@ int tty_open(struct tty *tty, const char *cmd, const char **args) {
         errno = 0;
         if (ioctl(slave, TIOCSCTTY, NULL) < 0)
             die("Can't make tty controlling");
+        const char *cwd = sconf(SCONF_CWD);
+        if (cwd) chdir(cwd);
         dup2(slave, 0);
         dup2(slave, 1);
         dup2(slave, 2);

@@ -146,6 +146,7 @@ enum config_option {
     SCONF_TERM_MOD,
     SCONF_FORCE_MOUSE_MOD,
     SCONF_CONFIG_PATH,
+    SCONF_CWD,
     SCONF_MAX,
 
     KCONF_MIN = SCONF_MAX,
@@ -191,9 +192,9 @@ struct optmap_item {
 };
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 128
-#else
 #    define OPT_MAP_SIZE 129
+#else
+#    define OPT_MAP_SIZE 130
 #endif
 
 extern struct optmap_item optmap[OPT_MAP_SIZE];
