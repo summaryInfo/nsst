@@ -1,10 +1,26 @@
 Until 2.1
+    CSI ? 4 l / CSI ? 4 h -- DECSCLM
     Recalculate non-rectangular selection position on resize
     Allow geometry to be specified in characters
     Refactor frame timings
         use separate timings for erase,scroll,resize
         just wait for screen update completion?
     Implement proper daemon mode
+        Separate client, server global and server pre instance config
+            move away from iconf/sconf/cconf towards config structures
+        nsstc execs
+            start protocol:
+                -> <ENC><NUL><SOH>nsst1
+                <- <ACK><NUL><SOH>nsst1
+                -> <STX>
+                -> <key>=<value><LF>
+                    ...
+                -> cwd=<curret dir><ETX>
+                <- <DC1>
+                -> <ACK><terminal master descriptor> or -><NAK>
+                <- <DC2>
+                -> <ACK><terminal printer descriptor> or -><NAK>
+            end server protocol <ENC><NUL><EM>
 General
     Add 'always' value to some options to prevent overriding
     Allow disable rewrapping only for screen/part below cursor, while keep rewrapping scrollback
@@ -28,7 +44,6 @@ Emulation
     Is private mode 1044 semantics correct/sould it be implemented at all?
     VT220
         CSI ? 8 l / CSI ? 8 h -- DECARM (When ported to wayland)
-        CSI ? 4 l / CSI ? 4 h -- DECSCLM
         DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
     SIXEL
         CSI ? 80 l / CSI ? 80 h -- DECSDM
