@@ -83,7 +83,7 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"keep-clipboard", "\t(Reuse copied clipboard content instead of current selection data)", ICONF_KEEP_CLIPBOARD},
     {"keep-selection", "\t(Don't clear X11 selection when unhighlighted)", ICONF_KEEP_SELECTION},
     {"key-break", "\t\t(Send break hotkey", KCONF_BREAK},
-    {"key-copy", "\t\t(Copy from clipboard hotkey)", KCONF_COPY},
+    {"key-copy", "\t\t(Copy to clipboard hotkey)", KCONF_COPY},
     {"key-dec-font", "\t\t(Decrement font size hotkey)", KCONF_FONT_DEC},
     {"key-inc-font", "\t\t(Increment font size hotkey)", KCONF_FONT_INC},
     {"key-new-window", "\t(Create new window hotkey)", KCONF_NEW_WINDOW},
