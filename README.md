@@ -103,6 +103,8 @@ Default keybindings:
     key-reset=T-R
     key-reload-config=T-X
     key-reverse-video=T-I
+    key-copy=T-C
+    key-paste=T-V
 
 
 ## Dependencies
