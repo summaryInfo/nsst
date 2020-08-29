@@ -40,7 +40,7 @@ uninstall:
 	rm -f $(BINDIR)/$(NAME)
 
 $(NAME): $(OBJ)
-	$(CC) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
+	$(CCLD) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
 
 font.o: util.h config.h window.h boxdraw.h feature.h
 window-x11.o: util.h config.h term.h window.h window-x11.h line.h input.h mouse.h feature.h

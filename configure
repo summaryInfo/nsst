@@ -5,6 +5,7 @@ use_x11shm=1
 use_boxdrawing=1
 use_precompose=1
 use_posix_shm=0
+use_clang=0
 prefix=/usr/local
 name=nsst
 backend=x11shm
@@ -38,6 +39,7 @@ Usage: configure [options]
     --enable-posix-shm      enable posix shared memory functions usage
     --disable-posix-shm     disble posix shared memory functions usa
     --backend=<targ>        Rendering backend [x11shm]/x11xrender
+    --use-clang             Configure to compile with clang/lld
 END
 }
 
@@ -63,6 +65,8 @@ for i; do
         use_posix_shm=1 ;;
     --disable-posix-shm)
         use_posix_shm=0 ;;
+    --use-clang)
+        use_clang=1 ;;
     --backend=*)
         backend="${i#--backend=}" ;;
     --name=*)
@@ -82,6 +86,12 @@ for i; do
         exit 1 ;;
     esac
 done
+
+if [ "$use_clang" = 1 ]; then
+    vars="${vars}${nl}CCLD=clang -fuse-ld=/usr/bin/ld.lld${nl}CC=clang"
+else
+    vars="${vars}${nl}"'CCLD=$(CC)'
+fi
 
 [ x = x"$bindir" ] && bindir=${prefix}/bin
 [ x = x"$mandir" ] && mandir=${prefix}/share/man
@@ -140,6 +150,7 @@ cat <<END
     precompose............... $use_precompose
     ppoll.................... $use_ppoll
     posix shm................ $use_posix_shm
+    force clang+lld.......... $use_clang
 
     Do "make && make install" to compile and install nsst
 END
