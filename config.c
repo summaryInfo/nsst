@@ -88,7 +88,7 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"key-inc-font", "\t\t(Increment font size hotkey)", KCONF_FONT_INC},
     {"key-new-window", "\t(Create new window hotkey)", KCONF_NEW_WINDOW},
     {"key-numlock", "\t\t('appkey' mode allow toggle hotkey)", KCONF_NUMLOCK},
-    {"key-paste", "\t\t(Paste from clipboard hotkey)", KCONF_COPY},
+    {"key-paste", "\t\t(Paste from clipboard hotkey)", KCONF_PASTE},
     {"key-reload-config", "\t(Reload config hotkey)", KCONF_RELOAD_CONFIG},
     {"key-reset", "\t\t(Terminal reset hotkey)", KCONF_RESET},
     {"key-reset-font", "\t(Reset font size hotkey)", KCONF_FONT_RESET},
