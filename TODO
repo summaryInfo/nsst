@@ -1,5 +1,4 @@
 Until 2.1
-    CSI ? 4 l / CSI ? 4 h -- DECSCLM
     Recalculate non-rectangular selection position on resize
     Allow geometry to be specified in characters
     Refactor frame timings
