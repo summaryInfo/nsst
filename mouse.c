@@ -450,9 +450,9 @@ static void change_selection(struct term *term, uint8_t state, int16_t x, ssize_
         struct timespec now;
         clock_gettime(CLOCK_TYPE, &now);
 
-        if (TIMEDIFF(loc->click1, now) < iconf(ICONF_TRIPLE_CLICK_TIME)*(SEC/1000))
+        if (TIMEDIFF(loc->click1, now) < iconf(ICONF_TRIPLE_CLICK_TIME)*1000LL)
             loc->snap = snap_line;
-        else if (TIMEDIFF(loc->click0, now) < iconf(ICONF_DOUBLE_CLICK_TIME)*(SEC/1000))
+        else if (TIMEDIFF(loc->click0, now) < iconf(ICONF_DOUBLE_CLICK_TIME)*1000LL)
             loc->snap = snap_word;
         else
             loc->snap = snap_none;
@@ -478,7 +478,8 @@ void mouse_scroll_view(struct term *term, ssize_t delta) {
     }
 }
 
-inline static void adj_coords(struct window *win, int16_t *x, int16_t *y) {
+inline static void adj_coords(struct term *term, int16_t *x, int16_t *y) {
+    struct window *win = term_window(term);
     int16_t cw, ch, w, h, bw, bh;
 
     window_get_dim_ext(win, dim_cell_size, &cw, &ch);
@@ -504,8 +505,7 @@ void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, 
     if (x < bw || x >= w + bw || y < bh || y > h + bh) {
         if (evt == 1) term_answerback(term, CSI"0&w");
     } else {
-        if (!term_get_mstate(term)->locator_pixels)
-            adj_coords(term_window(term), &x, &y);
+        if (!term_get_mstate(term)->locator_pixels) adj_coords(term, &x, &y);
         term_answerback(term, CSI"%d;%d;%d;%d;1&w", evt, lmask, y + 1, x + 1);
     }
 }
@@ -541,8 +541,38 @@ void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, 
     window_set_mouse(term_window(term), 1);
 }
 
+void pending_scroll(struct term *term, int16_t y, enum mouse_event_type event) {
+    struct mouse_state *loc = term_get_mstate(term);
+    int16_t h, bh;
+
+    window_get_dim_ext(term_window(term), dim_border, NULL, &bh);
+    window_get_dim_ext(term_window(term), dim_grid_size, NULL, &h);
+
+    if (event == mouse_event_motion) {
+        if (y - bh >= h) loc->pending_scroll = -1;
+        else if (y < bh) loc->pending_scroll = 1;
+        mouse_pending_scroll(term);
+    }
+}
+
+bool mouse_pending_scroll(struct term *term) {
+    struct mouse_state *loc = term_get_mstate(term);
+
+    if (loc->pending_scroll && loc->state == state_sel_progress) {
+        struct timespec now;
+        clock_gettime(CLOCK_TYPE, &now);
+        bool can_scroll = TIMEDIFF(loc->last_scroll, now) > iconf(ICONF_SELECT_SCROLL_TIME)*1000LL;
+        if (can_scroll) {
+            term_scroll_view(term, loc->pending_scroll);
+            loc->last_scroll = now;
+        }
+    }
+    return loc->pending_scroll;
+}
+
 void mouse_handle_input(struct term *term, struct mouse_event ev) {
     struct mouse_state *loc = term_get_mstate(term);
+    loc->pending_scroll = 0;
     /* Report mouse */
     if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & mask_mod_mask) != keyboard_force_select_mask() &&
             !term_get_kstate(term)->keyboad_vt52) {
@@ -574,7 +604,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
         enum mouse_mode md = loc->mouse_mode;
 
         if (loc->mouse_format != mouse_format_pixel)
-            adj_coords(term_window(term), &ev.x, &ev.y);
+            adj_coords(term, &ev.x, &ev.y);
 
         if (md == mouse_mode_x10 && ev.button > 2) return;
 
@@ -638,8 +668,10 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
                (ev.event == mouse_event_release && ev.button == 0 &&
                     (loc->state == state_sel_progress))) {
 
-        adj_coords(term_window(term), &ev.x, &ev.y);
+		int16_t y = ev.y;
+        adj_coords(term, &ev.x, &ev.y);
         change_selection(term, ev.event + 1, ev.x, ev.y, ev.mask & mask_mod_1);
+        pending_scroll(term, y, ev.event);
 
         if (ev.event == mouse_event_release) {
             loc->targ = term_is_select_to_clipboard_enabled(term) ? clip_clipboard : clip_primary;

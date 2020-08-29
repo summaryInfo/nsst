@@ -1,3 +1,10 @@
+Until 2.1
+    Recalculate non-rectangular selection position on resize
+    Allow geometry to be specified in characters
+    Refactor frame timings
+        use separate timings for erase,scroll,resize
+        just wait for screen update completion?
+    Implement proper daemon mode
 General
     Add 'always' value to some options to prevent overriding
     Allow disable rewrapping only for screen/part below cursor, while keep rewrapping scrollback
@@ -6,18 +13,11 @@ General
         allows to get rid of term->view (and its recalculation on resize)
         allows to keep non-rectangular selections after resizing
     Some alternative to XParseColor
-    Implement proper daemon mode
-    Recalculate non-rectangular selection position on resize
-    Allow geometry to be specified in characters
 Render
     General
         Colored glyphs
         Add options to select width of ambigues characters
         Combining characters support
-        Make window operations work with reparenting
-        Refactor frame timings
-            use separate timings for erase,scroll,resize
-            just wait for screen update completion?
     XRender
         Slow scrolling of full-color images (with small font in chafa)
         Use multiple separate buffers for background/lines/glyphs to sort less

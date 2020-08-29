@@ -130,6 +130,7 @@ enum config_option {
     ICONF_ALPHA,
     ICONF_BLEND_ALL_BG,
     ICONF_BLEND_FG,
+    ICONF_SELECT_SCROLL_TIME,
     ICONF_MAX,
 
     SCONF_MIN = ICONF_MAX,
@@ -190,9 +191,9 @@ struct optmap_item {
 };
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 127
-#else
 #    define OPT_MAP_SIZE 128
+#else
+#    define OPT_MAP_SIZE 129
 #endif
 
 extern struct optmap_item optmap[OPT_MAP_SIZE];

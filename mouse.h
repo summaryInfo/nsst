@@ -37,6 +37,9 @@ struct mouse_state {
     struct timespec click0;
     struct timespec click1;
 
+    struct timespec last_scroll;
+    int32_t pending_scroll;
+
     enum clip_target targ;
 
     uint8_t button;
@@ -80,6 +83,7 @@ void mouse_damage_selection(struct term *term);
 void mouse_selection_erase(struct term *term, struct rect rect);
 void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask);
 void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, iparam_t ye);
+bool mouse_pending_scroll(struct term *term);
 
 #endif
 

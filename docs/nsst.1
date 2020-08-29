@@ -147,7 +147,9 @@ Cut long lines on resize with rewrapping disabled
 .It Fl \-delete-is-del Ns = Ns Ar bool
 Delete sends DEL symbol instead of escape sequence
 .It Fl \-double-click-time Ns = Ns Ar time
-Time gap in milliseconds in witch two mouse presses will be considered double click
+Time gap in microseconds in witch two mouse presses will be considered double click
+.It Fl \-select-scroll-time Ns = Ns Ar
+Time between subsequent scrolls during mouse selection in microseconds
 .It Fl \-erase-scrollback Ns = Ns Ar bool 
 Allow ED 3 to clear scrollback buffer
 .It Fl \-extended-cir Ns = Ns Ar bool
@@ -374,7 +376,7 @@ Trace user input
 .It Fl \-trace-misc Ns = Ns Ar bool
 Trace miscelleneous information
 .It Fl \-triple-click-time Ns = Ns Ar time
-Time gap in milliseconds in witch tree mouse presses will be considered triple click
+Time gap in microseconds in witch tree mouse presses will be considered triple click
 .It Fl \-underline-width Ns = Ns Ar pixels
 Text underline width
 .It Fl \-underlined-color Ns = Ns Ar color

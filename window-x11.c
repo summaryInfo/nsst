@@ -1550,7 +1550,10 @@ void run(void) {
         struct timespec cur;
         clock_gettime(CLOCK_TYPE, &cur);
 
+        bool pending_scroll = 0;
         for (struct window *win = win_list_head; win; win = win->next) {
+            pending_scroll |= mouse_pending_scroll(win->term);
+
             if (TIMEDIFF(win->last_sync, cur) > iconf(ICONF_SYNC_TIME)*1000LL && win->sync_active)
                 win->sync_active = 0;
             if (win->in_blink && TIMEDIFF(win->vbell_start, cur) > iconf(ICONF_VISUAL_BELL_TIME)*1000LL) {
@@ -1608,6 +1611,7 @@ void run(void) {
 
             if (!win->slow_mode) next_timeout = MIN(next_timeout,  remains);
         }
+        if (pending_scroll) next_timeout = MIN(next_timeout, iconf(ICONF_SELECT_SCROLL_TIME)*1000LL);
         xcb_flush(con);
 
         // TODO Try reconnect after timeout
