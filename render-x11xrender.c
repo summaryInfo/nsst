@@ -308,7 +308,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
     }
 
     if (rctx.bufpos) {
-        color_t c = palette[SPECIAL_SELECTED_BG] ? palette[SPECIAL_CURSOR_BG] : palette[SPECIAL_FG];
+        color_t c = palette[SPECIAL_SELECTED_BG] ? palette[SPECIAL_SELECTED_BG] : palette[SPECIAL_FG];
         xcb_render_color_t col = MAKE_COLOR(color_apply_a(c, win->alpha));
         xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
             rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
