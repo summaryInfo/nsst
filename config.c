@@ -647,8 +647,5 @@ e_open:
         keyboard_set_shortcut(i, sconf(KCONF_BREAK + i - shortcut_break));
     keyboard_set_force_select_mask(sconf(SCONF_FORCE_MOUSE_MOD));
 
-    if (fd < 0) {
-        close(fd);
-        warn("Can't read config file: %s", path ? path : pathbuf);
-    }
+    if (fd < 0) warn("Can't read config file: %s", path ? path : pathbuf);
 }
