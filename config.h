@@ -191,9 +191,9 @@ struct optmap_item {
 };
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 129
+#    define OPT_MAP_SIZE 131
 #else
-#    define OPT_MAP_SIZE 130
+#    define OPT_MAP_SIZE 132
 #endif
 
 extern struct optmap_item optmap[OPT_MAP_SIZE];
