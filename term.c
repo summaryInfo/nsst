@@ -45,12 +45,12 @@
 #define IS_C0(c) ((c) < 0x20U)
 #define IS_CBYTE(c) (!((uint32_t)(c) & 0x60))
 #define IS_DEL(c) ((c) == 0x7FU)
+#define IS_STREND(c) ((c) == 0x1B || (c) == 0x1A || (c) == 0x18 || (c) == 0x07)
 
 #define TABSR_INIT_CAP 48
 #define TABSR_CAP_STEP(x) (4*(x)/3)
 #define TABSR_MAX_ENTRY 6
 
-#define IS_STREND(c) ((c) == 0x1B || (c) == 0x1A || (c) == 0x18 || (c) == 0x07)
 #define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
 #define STR_CAP_STEP(x) (4*(x)/3)
 #define PARAM(i, d) (term->esc.param[i] > 0 ? (uparam_t)term->esc.param[i] : (uparam_t)(d))
