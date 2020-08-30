@@ -133,6 +133,8 @@ enum config_option {
     ICONF_SMOOTH_SCROLL_STEP,
     ICONF_SMOOTH_SCROLL_DELAY,
     ICONF_SMOOTH_SCROLL,
+    ICONF_LUIT,
+    ICONF_NEED_LUIT,
     ICONF_MAX,
 
     SCONF_MIN = ICONF_MAX,
@@ -149,6 +151,7 @@ enum config_option {
     SCONF_FORCE_MOUSE_MOD,
     SCONF_CONFIG_PATH,
     SCONF_CWD,
+    SCONF_LUIT_PATH,
     SCONF_MAX,
 
     KCONF_MIN = SCONF_MAX,
@@ -194,9 +197,9 @@ struct optmap_item {
 };
 
 #if USE_BOXDRAWING
-#    define OPT_MAP_SIZE 134
+#    define OPT_MAP_SIZE 136
 #else
-#    define OPT_MAP_SIZE 135
+#    define OPT_MAP_SIZE 137
 #endif
 
 extern struct optmap_item optmap[OPT_MAP_SIZE];

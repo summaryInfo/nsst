@@ -10,12 +10,15 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <langinfo.h>
+#include <locale.h>
 #include <poll.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <termios.h>
@@ -103,6 +106,21 @@ void exec_shell(const char *cmd, const char **args) {
     signal(SIGTTIN, SIG_IGN);
     signal(SIGTTOU, SIG_IGN);
 #endif
+
+    // Launch LUIT if it is needed and accessable
+    const char *luit = sconf(SCONF_LUIT_PATH);
+    if (iconf(ICONF_LUIT) && iconf(ICONF_NEED_LUIT) && !access(luit, X_OK)) {
+        ssize_t narg = 0;
+        for (const char **arg = args; *arg; arg++) narg++;
+        const char **new_args = calloc(narg + 2, sizeof(*new_args));
+        if (new_args) {
+            new_args[0] = luit;
+            for (ssize_t i = 1; i <= narg; i++)
+                new_args[i] = args[i - 1];
+            args = new_args;
+            cmd = new_args[0];
+        }
+    }
 
     execvp(cmd, (char *const *)args);
     _exit(1);

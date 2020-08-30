@@ -100,6 +100,8 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"line-spacing", "\t\t(Additional lines vertical spacing)", ICONF_LINE_SPACING},
     {"lock-keyboard", "\t\t(Disable keyboad input)", ICONF_LOCK},
     {"log-level","\t\t(Filering level of logged information)", ICONF_LOG_LEVEL},
+    {"luit", "\t\t(Run luit if terminal doesn't support encoding by itself)", ICONF_LUIT},
+    {"luit-path", "\t\t(Path to luit executable)", SCONF_LUIT_PATH},
     {"margin-bell", "\t\t(Margin bell setting)", ICONF_MARGIN_BELL_VOLUME},
     {"margin-bell-column", "\t(Columnt at which margin bell rings when armed)", ICONF_MARGIN_BELL_COLUMN},
     {"margin-bell-high-volume", " (High volume value for DECSMBV)", ICONF_MARGIN_BELL_HIGH_VOLUME},
@@ -281,6 +283,8 @@ static struct {
     [ICONF_SMOOTH_SCROLL_STEP - ICONF_MIN] = {1, 1, 1, 1000000},
     [ICONF_SMOOTH_SCROLL_DELAY - ICONF_MIN] = {500, 500, 0, 999999},
     [ICONF_SMOOTH_SCROLL - ICONF_MIN] = {0, 0, 0, 1},
+    [ICONF_LUIT - ICONF_MIN] = {1, 1, 0, 1},
+    [ICONF_NEED_LUIT - ICONF_MIN] = {0, 0, 0, 1},
 };
 
 static struct {
@@ -300,6 +304,7 @@ static struct {
     [SCONF_WORD_SEPARATORS - SCONF_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`", NULL },
     [SCONF_CONFIG_PATH - SCONF_MIN] = { NULL, NULL },
     [SCONF_CWD - SCONF_MIN] = { NULL, NULL },
+    [SCONF_LUIT_PATH - SCONF_MIN] = { "/usr/bin/luit", NULL },
     [KCONF_SCROLL_DOWN - SCONF_MIN] = { "T-Up", NULL },
     [KCONF_SCROLL_UP - SCONF_MIN] = { "T-Down", NULL },
     [KCONF_FONT_INC - SCONF_MIN] = { "T-Page_Up", NULL },

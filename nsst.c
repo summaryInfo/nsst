@@ -2,6 +2,7 @@
 
 #include "feature.h"
 
+#define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
 #include "config.h"
@@ -10,14 +11,16 @@
 #include "util.h"
 #include "window.h"
 
+#include <fcntl.h>
 #include <inttypes.h>
 #include <langinfo.h>
 #include <locale.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 
 static int optmap_cmp(const void *a, const void *b) {
     const char *a_arg_name = ((const struct optmap_item *)a)->arg_name;
@@ -217,12 +220,17 @@ int main(int argc, char **argv) {
     // Load locale
     setlocale(LC_CTYPE, "");
     char *charset = nl_langinfo(CODESET);
-    bool bset = charset && (charset[0] & ~0x20) == 'U' &&
-            (charset[1] & ~0x20) == 'T' && (charset[2] & ~0x20) == 'F' &&
-            (charset[3] == '8' || charset[4] == '8');
-
-    // And enable UTF-8 support if locale encoding is UTF-8
-    iconf_set(ICONF_UTF8, bset);
+    bool utf8 = 0, need_luit = 0;
+    if (charset) {
+        // Builtin support for locales only include UTF-8, Latin-1 and ASCII
+        // TODO: Check for supported NRCSs and prefere them to luit
+        utf8 = !strncasecmp(charset, "UTF", 3) && (charset[3] == '8' || charset[4] == '8');
+        bool supported = !strcasecmp(charset, "ISO-8859-1") || !strcasecmp(charset, "ASCII");
+        need_luit = !supported && !utf8;
+        utf8 |= (!access(sconf(SCONF_LUIT_PATH), X_OK) && need_luit);
+    }
+    iconf_set(ICONF_UTF8, utf8);
+    iconf_set(ICONF_NEED_LUIT, need_luit);
 
     // Initialize contexts
     init_context();
