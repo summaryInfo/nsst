@@ -5130,18 +5130,21 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
 
     // Local echo
     if (term->mode.echo) {
-        const uint8_t *end = len + str, *start = str;
+        const uint8_t *start = encode ? rep : str, *ptmp;
+        const uint8_t *end = start + len;
         uint8_t pre2[4] = "^[", pre1[3] = "^";
         while (*start < *end) {
             uint32_t ch = *start;
             if (IS_C1(ch)) {
                 pre2[2] = *start++ ^ 0xC0;
-                term_dispatch(term, (const uint8_t **)&pre2, pre2 + 3);
+                ptmp = pre2;
+                while (ptmp < pre2 + 3 && term_dispatch_print(term, 0, 0, &ptmp, pre2 + 3));
             } else if ((IS_C0(ch) && ch != '\n' && ch != '\t' && ch != '\r') || IS_DEL(ch)) {
                 pre1[1] = *start++ ^ 0x40;
-                term_dispatch(term, (const uint8_t **)&pre1, pre1 + 2);
+                ptmp = pre1;
+                while (ptmp < pre1 + 2 && term_dispatch_print(term, 0, 0, &ptmp, pre1 + 2));
             } else {
-                if (!term_dispatch(term, &start, end)) break;
+                if (!term_dispatch_print(term, 0, 0, &start, end)) break;
             }
         }
     }
