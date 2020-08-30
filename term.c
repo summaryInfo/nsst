@@ -50,7 +50,7 @@
 #define TABSR_CAP_STEP(x) (4*(x)/3)
 #define TABSR_MAX_ENTRY 6
 
-#define IS_STREND(c) (IS_C1(c) || (c) == 0x1b || (c) == 0x1a || (c) == 0x18 || (c) == 0x07)
+#define IS_STREND(c) ((c) == 0x1B || (c) == 0x1A || (c) == 0x18 || (c) == 0x07)
 #define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
 #define STR_CAP_STEP(x) (4*(x)/3)
 #define PARAM(i, d) (term->esc.param[i] > 0 ? (uparam_t)term->esc.param[i] : (uparam_t)(d))
@@ -4755,9 +4755,9 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         return 1;
     }
 
-    // Reset 8th bit for all controls, except strings
-    if (term->esc.state != esc_dcs_string &&
-            term->esc.state != esc_osc_string) ch &= 0x7F;
+    // Treat bytes with 8th bits set as their lower couterparts
+    // (Unless they are a printable character, part of a string or C1 control)
+    ch &= 0x7F;
 
     switch (term->esc.state) {
     case esc_ground:
@@ -4778,9 +4778,9 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
             term_dispatch_esc(term);
         } else
     case esc_esc_ignore:
-        if (ch <= 0x1F)
+        if (IS_C0(ch))
             term_dispatch_c0(term, ch);
-        else if (ch == 0x7F)
+        else if (IS_DEL(ch))
             /* ignore */;
         else if (0x30 <= ch && ch <= 0x7E)
             term->esc.state = esc_ground;
@@ -4826,10 +4826,10 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
                 term_dispatch_csi(term);
         } else
     case esc_csi_ignore:
-        if (ch <= 0x1F) {
+        if (IS_C0(ch)) {
             if (esc_dcs_entry > term->esc.state || term->esc.state > esc_dcs_2)
                 term_dispatch_c0(term, ch);
-        } else if (ch == 0x7F)
+        } else if (IS_DEL(ch))
             /* ignore */;
         else if (esc_dcs_entry <= term->esc.state && term->esc.state <= esc_dcs_2)
             term->esc.state = esc_ign_string;
@@ -4854,7 +4854,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
             term->esc.state = esc_osc_string;
         else
     case esc_ign_string:
-        if (ch == 0x1b || ch == 0x1a || ch == 0x18 || ch == 0x07)
+        if (IS_STREND(ch))
             term_dispatch_c0(term, ch);
         else
             term->esc.state = esc_ign_string;
@@ -4862,36 +4862,48 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
     case esc_ign_entry:
         term_esc_start_string(term);
         term->esc.state = esc_ign_string;
-        if (ch == 0x1b || ch == 0x1a || ch == 0x18 || ch == 0x07)
+        if (IS_STREND(ch))
             term_dispatch_c0(term, ch);
         break;
     case esc_osc_string:
-        if (ch <= 0x1F && ch != 0x1B && ch != 0x1A && ch != 0x18 && ch != 0x07)
+        if (IS_C0(ch) && !IS_STREND(ch))
             /* ignore */;
         else
     case esc_dcs_string:
-        if (ch == 0x7F && term->esc.state != esc_osc_string)
-            /* ignore */;
-        else if (ch == 0x1b || ch == 0x1a || ch == 0x18 || ch == 0x07)
+        if (IS_STREND(ch))
             term_dispatch_c0(term, ch);
         else {
-            // Don't encode UTF-8 back, now we operate on bytes
-            if (term->esc.str_len + 1 >= term->esc.str_cap) {
-                size_t new_cap = STR_CAP_STEP(term->esc.str_cap);
-                if (new_cap > ESC_MAX_LONG_STR) break;
-                uint8_t *new = realloc(term->esc.str_ptr, new_cap + 1);
-                if (!new) break;
-                if (!term->esc.str_ptr) memcpy(new, term->esc.str_data, term->esc.str_len);
-                term->esc.str_ptr = new;
-                term->esc.str_cap = new_cap;
-            }
-
-            term_esc_str(term)[term->esc.str_len++] = ch;
+            ch = *--*start;
+            do {
+                ssize_t len = 1;
+                if (ch >= 0xA0 && ch < 0xF8 && term->mode.utf8) {
+                    len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
+                    // Unterminated UTF-8
+                    if (len + *start >= end) return 0;
+                } else if (term->esc.state == esc_dcs_string && IS_DEL(ch)) {
+                    ++*start;
+                    len = 0;
+                }
+                if (term->esc.str_len + len >= term->esc.str_cap) {
+                    size_t new_cap = STR_CAP_STEP(term->esc.str_cap);
+                    if (new_cap > ESC_MAX_LONG_STR) break;
+                    uint8_t *new = realloc(term->esc.str_ptr, new_cap + 1);
+                    if (!new) break;
+                    if (!term->esc.str_ptr) memcpy(new, term->esc.str_data, term->esc.str_len);
+                    term->esc.str_ptr = new;
+                    term->esc.str_cap = new_cap;
+                }
+                while (len--) {
+                    term_esc_str(term)[term->esc.str_len++] = ch;
+                    ch = *++*start;
+                    if ((ch & 0xA0) != 0x80) break;
+                }
+            } while (!IS_STREND(ch) && !IS_C1(ch));
             term_esc_str(term)[term->esc.str_len] = '\0';
         }
         break;
     case esc_vt52_entry:
-        if (ch <= 0x1F)
+        if (IS_C0(ch))
             term_dispatch_c0(term, ch);
         else
             term_dispatch_vt52(term, ch);
@@ -4899,7 +4911,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
     case esc_vt52_cup_0:
         term_esc_start_seq(term);
     case esc_vt52_cup_1:
-        if (ch <= 0x1F)
+        if (IS_C0(ch))
             term_dispatch_c0(term, ch);
         else {
             term->esc.param[term->esc.i++] = ch - ' ';
@@ -5100,6 +5112,11 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
     bool encode = !len;
     if (!len) len = strlen((char *)str);
 
+    if (!(term->mode.no_scroll_on_input) && term->view_pos.line) term_reset_view(term, 1);
+
+    uint8_t rep[MAX_REPORT];
+    if (encode) len = encode_c1(rep, str, has_8bit(term));
+
     // Local echo
     if (term->mode.echo) {
         const uint8_t *end = len + str, *start = str;
@@ -5117,11 +5134,6 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
             }
         }
     }
-
-    if (!(term->mode.no_scroll_on_input) && term->view_pos.line) term_reset_view(term, 1);
-
-    uint8_t rep[MAX_REPORT];
-    if (encode) len = encode_c1(rep, str, has_8bit(term));
 
     tty_write(&term->tty, encode ? rep : str, len, term->mode.crlf);
 }
