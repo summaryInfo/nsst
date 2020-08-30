@@ -4883,9 +4883,11 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
             term_dispatch_c0(term, ch);
         else {
             ch = *--*start;
+            bool utf8 = term->mode.utf8 || (term->mode.title_set_utf8 && !term->mode.title_set_hex
+                    && term->esc.state == esc_osc_string && term->esc.selector < 3);
             do {
                 ssize_t len = 1;
-                if (ch >= 0xA0 && ch < 0xF8 && term->mode.utf8) {
+                if (ch >= 0xA0 && ch < 0xF8 && utf8) {
                     len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
                 } else if ((term->esc.state == esc_dcs_string && IS_DEL(ch)) || IS_C0(ch)) {
                     ++*start, len = 0;
