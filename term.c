@@ -43,7 +43,7 @@
 
 #define IS_C1(c) ((uint32_t)(c) - 0x80U < 0x20U)
 #define IS_C0(c) ((c) < 0x20U)
-#define IS_CBYTE(c) (((uint32_t)(c) & 0x7F) < 0x20)
+#define IS_CBYTE(c) (!((uint32_t)(c) & 0x60))
 #define IS_DEL(c) ((c) == 0x7FU)
 
 #define TABSR_INIT_CAP 48
@@ -3354,10 +3354,8 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
                 *pbuf++ = ch;
             }
 
-            ch = **start;
-
             // If we have encountered control character, break
-            if (IS_CBYTE(ch)) break;
+            if (IS_CBYTE(**start)) break;
 
             // Since maxw < width == length of predec_buf, don't check it
         } while(totalw < maxw && /* count < FD_BUF_SIZE && */ *start < end);
