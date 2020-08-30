@@ -227,7 +227,7 @@ int main(int argc, char **argv) {
         utf8 = !strncasecmp(charset, "UTF", 3) && (charset[3] == '8' || charset[4] == '8');
         bool supported = !strcasecmp(charset, "ISO-8859-1") || !strcasecmp(charset, "ASCII");
         need_luit = !supported && !utf8;
-        utf8 |= (!access(sconf(SCONF_LUIT_PATH), X_OK) && need_luit);
+        utf8 |= (!access(sconf(SCONF_LUIT_PATH), X_OK) && need_luit && iconf(ICONF_LUIT));
     }
     iconf_set(ICONF_UTF8, utf8);
     iconf_set(ICONF_NEED_LUIT, need_luit);
