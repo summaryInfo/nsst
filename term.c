@@ -4735,15 +4735,11 @@ static void term_dispatch_vt52_cup(struct term *term) {
 }
 
 inline static bool term_dispatch(struct term *term, const uint8_t **start, const uint8_t *end) {
-    uint8_t ch = *(*start)++;
-
     // Fast path for graphical characters
-    if (term->esc.state == esc_ground && !IS_CBYTE(ch)) {
-        // One char is already consumed
-        // Put it back to buffer
-        (*start)--;
-        return term_dispatch_print(term, ch, 0, start, end);
-    }
+    if (term->esc.state == esc_ground && !IS_CBYTE(**start))
+        return term_dispatch_print(term, 0, 0, start, end);
+
+    uint8_t ch = *(*start)++;
 
     // C1 controls are interpreted in all states, try them before others
     if (UNLIKELY(IS_C1(ch)) && term->vt_level > 1) {
