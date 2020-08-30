@@ -4856,8 +4856,21 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
     case esc_ign_string:
         if (IS_STREND(ch))
             term_dispatch_c0(term, ch);
-        else
+        else {
             term->esc.state = esc_ign_string;
+            ch = *--*start;
+            do {
+                ssize_t len = 1;
+                if (ch >= 0xA0 && ch < 0xF8 && term->mode.utf8) {
+                    len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
+                }
+                if (len + *start >= end) return 0;
+                while (len--) {
+                    ch = *++*start;
+                    if ((ch & 0xA0) != 0x80) break;
+                }
+            } while (*start < end && !IS_STREND(ch) && !IS_C1(ch));
+        }
         break;
     case esc_ign_entry:
         term_esc_start_string(term);
@@ -4878,12 +4891,10 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
                 ssize_t len = 1;
                 if (ch >= 0xA0 && ch < 0xF8 && term->mode.utf8) {
                     len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
-                    // Unterminated UTF-8
-                    if (len + *start >= end) return 0;
-                } else if (term->esc.state == esc_dcs_string && IS_DEL(ch)) {
-                    ++*start;
-                    len = 0;
+                } else if ((term->esc.state == esc_dcs_string && IS_DEL(ch)) || IS_C0(ch)) {
+                    ++*start, len = 0;
                 }
+                if (len + *start >= end) return 0;
                 if (term->esc.str_len + len >= term->esc.str_cap) {
                     size_t new_cap = STR_CAP_STEP(term->esc.str_cap);
                     if (new_cap > ESC_MAX_LONG_STR) break;
@@ -4898,7 +4909,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
                     ch = *++*start;
                     if ((ch & 0xA0) != 0x80) break;
                 }
-            } while (!IS_STREND(ch) && !IS_C1(ch));
+            } while (*start < end && !IS_STREND(ch) && !IS_C1(ch));
             term_esc_str(term)[term->esc.str_len] = '\0';
         }
         break;
