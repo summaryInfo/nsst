@@ -126,7 +126,7 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
 
         src1 = realloc_line(src1, oldw + llen);
 
-        copy_line(src1, oldw, src2, 0, llen, 0);
+        copy_line(src1, oldw, src2, 0, llen, 1);
 
         src1->wrapped = src2->wrapped;
 

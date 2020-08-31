@@ -533,8 +533,9 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
             line = concat_line(line, NULL, opt);
 
             if (term->sb_limit == term->sb_max_caps) {
+                warn("%zd", term->sb_max_caps);
                 /* If view points to the line that is to be freed, scroll it down */
-                if (term->view_pos.line == -term->sb_limit) {
+                if (term->view_pos.line == -term->sb_max_caps) {
                     if (iconf(ICONF_REWRAP))
                         res = line_segments(line_at(term, -term->sb_limit), term->view_pos.offset, term->width);
                     else
@@ -1012,7 +1013,8 @@ inline static void term_erase_pre(struct term *term, int16_t *xs, int16_t *ys, i
         *ye = MAX(0, MIN(*ye, term->height));
     }
 
-    window_delay_redraw(term->win);
+
+    if (!term->view_pos.line) window_delay_redraw(term->win);
     mouse_selection_erase(term, (struct rect){ *xs, *ys, *xe - *xs, *ye - *ys});
 }
 
@@ -1391,6 +1393,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
                 for (int16_t i = top; i < bottom - amount; i++)
                      term->screen[i]->force_damage = 1;
             }
+
         } else { /* down */
             amount = MAX(amount, -(bottom - top));
             int16_t rest = (bottom - top) + amount;
@@ -1406,6 +1409,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
                      term->screen[i]->force_damage = 1;
             }
         }
+        if (amount && !term->view_pos.line) window_delay_redraw(term->win);
     } else { // Slow scrolling with margins
 
         for (int16_t i = top; i < bottom; i++) {
@@ -1563,6 +1567,7 @@ static void term_rindex_horizonal(struct term *term) {
 static void term_index(struct term *term) {
     if (term->c.y == term_max_y(term) - 1 && term_cursor_in_region(term)) {
         term_scroll(term, term_min_y(term), 1, 1);
+
         term_reset_pending(term);
     } else if (term->c.y != term_max_y(term) - 1)
         term_move_to(term, term->c.x, term->c.y + 1);
@@ -4928,8 +4933,9 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
     return 1;
 }
 
-void term_read(struct term *term) {
-    if (tty_refill(&term->tty) < 0 || term->tty.start >= term->tty.end) return;
+bool term_read(struct term *term) {
+    if (tty_refill(&term->tty) < 0 ||
+        term->tty.start >= term->tty.end) return 0;
 
     if (term->mode.print_controller)
         print_intercept(term);
@@ -4939,6 +4945,8 @@ void term_read(struct term *term) {
 
     while (term->tty.start < term->tty.end)
         if (!term_dispatch(term, (const uint8_t **)&term->tty.start, term->tty.end)) break;
+
+    return 1;
 }
 
 void term_toggle_numlock(struct term *term) {

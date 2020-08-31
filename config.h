@@ -65,8 +65,8 @@ enum config_option {
     ICONF_OVERRIDE_BOXDRAW,
 #endif
     ICONF_FPS,
-    ICONF_SCROLL_DELAY,
-    ICONF_RESIZE_DELAY,
+    ICONF_MAX_FRAME_TIME,
+    ICONF_FRAME_FINISHED_DELAY,
     ICONF_SYNC_TIME,
     ICONF_SCROLL_AMOUNT,
     ICONF_FONT_SIZE_STEP,
@@ -199,7 +199,7 @@ struct optmap_item {
 #if USE_BOXDRAWING
 #    define OPT_MAP_SIZE 136
 #else
-#    define OPT_MAP_SIZE 137
+#    define OPT_MAP_SIZE 135
 #endif
 
 extern struct optmap_item optmap[OPT_MAP_SIZE];

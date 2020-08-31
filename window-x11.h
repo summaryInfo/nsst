@@ -78,14 +78,12 @@ struct window {
     bool mouse_events : 1;
     bool force_redraw : 1;
     bool blink_commited : 1;
-    bool scroll_delayed : 1;
-    bool resize_delayed : 1;
     bool drawn_somthing : 1;
     bool sync_active : 1;
     bool slow_mode : 1;
     bool in_blink : 1;
     bool init_invert : 1;
-    bool flush_scroll : 1;
+    bool wait_for_redraw : 1;
 
     int16_t width;
     int16_t height;
@@ -96,11 +94,12 @@ struct window {
     int16_t left_border;
     int16_t top_border;
     int16_t font_size;
-    struct timespec last_blink;
     struct timespec last_scroll;
-    struct timespec last_resize;
+    struct timespec last_shift;
+    struct timespec last_blink;
     struct timespec last_sync;
-    struct timespec next_draw;
+    struct timespec last_read;
+    struct timespec last_draw;
     struct timespec vbell_start;
     int16_t damaged_y0;
     int16_t damaged_y1;

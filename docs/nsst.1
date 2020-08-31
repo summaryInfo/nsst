@@ -183,6 +183,8 @@ format is same as for
 .Fl \-colorN
 .It Fl \-fps Ns = Ns Ar fps
 Window refresh rate
+.It Fl \-frame-wait-delay Ns = Ns Ar time
+Maximal time since last application output before redraw is scheduled.
 .It Fl \-has-meta Ns = Ns Ar bool
 Initial
 .Qq handle meta/alt modifer
@@ -256,6 +258,8 @@ Column at which margin bell rings when armed
  High volume value for DECSMBV, from 0 to 100
 .It Fl \-margin-bell-low-volume Ns = Ns Ar volume
 Low volume value for DECSMBV, from 0 to 100
+.It Fl \-max-frame-time Ns = Ns Ar time
+Maximal time between redraws in microseconds. It is used to reduce flickering.
 .It Fl \-meta-sends-escape Ns = Ns Ar bool
 Alt/Meta sends escape prefix instead of setting 8-th bit
 .It Fl \-minimize-scrollback Ns = Ns Ar bool
@@ -308,8 +312,6 @@ File where CSI MC will output to
 Print cell attributes when auto print mode (CSI ? 5 i) is enabled
 .It Fl \-raise-on-bell Ns = Ns Ar bool
 Raise terminal window on bell
-.It Fl \-resize-delay Ns = Ns Ar time
-Additional delay after resize in microseconds
 .It Fl \-reverse-video Ns = Ns Ar bool
 Initial reverse video setting
 .It Fl \-reversed-color Ns = Ns Ar color
@@ -327,8 +329,6 @@ Maximal amount of lines to be scrolled without delay when smooth scroll mode is 
 Initial smooth scroll setting
 .It Fl \-scroll-amount Ns = Ns Ar lines
 Number of lines scrolled in a time
-.It Fl \-scroll-delay Ns = Ns Ar time
-Additional delay after scroll in microseconds
 .It Fl \-scroll-on-input Ns = Ns Ar bool
 Scroll view to bottom on key press
 .It Fl \-scroll-on-output Ns = Ns Ar bool

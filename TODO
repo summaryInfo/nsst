@@ -1,12 +1,13 @@
 Until 2.1
     Recalculate non-rectangular selection position on resize
+    CSI ? 35 l / CSI ? 35 h -- font shifting functions
+    OSC 50 ; Pt ST -- Set font
     Allow geometry to be specified in characters
-    Refactor frame timings
-        use separate timings for erase,scroll,resize
-        just wait for screen update completion?
     Implement proper daemon mode
         Separate client, server global and server pre instance config
             move away from iconf/sconf/cconf towards config structures
+            that should be stored locally in term/window/keyboard_state/input_state
+            to allow using customized pre-instance config, whilst leaving small amount of options global
         nsstc execs
             start protocol:
                 -> <ENC><NUL><SOH>nsst1
@@ -69,7 +70,6 @@ Emulation
         CSI ? 1001 l / CSI ? 1001 h -- Hightlight mouse tracking
         CSI ? 1039 l / CSI ? 1039 h -- Alt sends escape [input]
         CSI ? 14 l / CSI ? 14 h -- Cursor blinking XORing
-        CSI ? 35 l / CSI ? 35 h -- font shifting functions
         CSI Ps ; Ps ; Ps ; Ps ; Ps T -- XTHIMOUSE
         CSI Pm # p, CSI Pm # { -- XTPUSHSGR
         CSI # q, CSI # } -- XTPOPSGR
@@ -80,7 +80,6 @@ Emulation
         DCS + Q Pt ST -- XTGETXRES -> DCS Ps + R Pt ST
         OSC I Pt ST -- Set icon XPM file
         OSC 3 ; Pt ST -- Set X property
-        OSC 50 ; Pt ST -- Set font
         ESC # 3 / ESC # 4 DECDHL
         ESC # 5 DECSWL
         ESC # 6 DECDWL

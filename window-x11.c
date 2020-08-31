@@ -359,15 +359,15 @@ void window_set_sync(struct window *win, bool state) {
 }
 
 void window_delay_redraw(struct window *win) {
-    clock_gettime(CLOCK_TYPE, &win->last_scroll);
+    win->wait_for_redraw = 1;
 }
 
 void window_request_scroll_flush(struct window *win) {
     clock_gettime(CLOCK_TYPE, &win->last_scroll);
     ctx.pfds[win->poll_index].fd = -ctx.pfds[win->poll_index].fd;
     win->force_redraw = 1;
+    win->wait_for_redraw = 0;
 }
-
 
 void window_resize(struct window *win, int16_t width, int16_t height) {
     if (win->height != height || win->width != width) {
@@ -1021,10 +1021,8 @@ bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_
     struct timespec cur;
     clock_gettime(CLOCK_TYPE, &cur);
 
-    bool scrolled_recently = TIMEDIFF(win->last_scroll, cur) <  SEC/2/iconf(ICONF_FPS);
-
-    win->last_scroll = cur;
-
+    bool scrolled_recently = TIMEDIFF(win->last_shift, cur) <  SEC/2/iconf(ICONF_FPS);
+    win->last_shift = cur;
     if (delay && scrolled_recently) return 0;
 
     ys = MAX(0, MIN(ys, win->ch));
@@ -1122,7 +1120,8 @@ void handle_resize(struct window *win, int16_t width, int16_t height) {
     if (delta_x || delta_y) {
         term_resize(win->term, new_cw, new_ch);
         renderer_resize(win, new_cw, new_ch);
-        clock_gettime(CLOCK_TYPE, &win->last_resize);
+        clock_gettime(CLOCK_TYPE, &win->last_read);
+        win->wait_for_redraw = 1;
     }
 
     if (delta_x < 0 || delta_y < 0)
@@ -1551,76 +1550,85 @@ void run(void) {
         // Then read for PTYs
         for (struct window *win = win_list_head, *next; win; win = next) {
             next = win->next;
-            bool need_read = ctx.pfds[win->poll_index].revents & POLLIN;
-            if (ctx.pfds[win->poll_index].fd < 0 && TIMEDIFF(win->last_scroll, cur) > iconf(ICONF_SMOOTH_SCROLL_DELAY)) {
-                ctx.pfds[win->poll_index].fd = -ctx.pfds[win->poll_index].fd;
-                need_read = 1;
+            if (UNLIKELY(ctx.pfds[win->poll_index].revents & (POLLERR | POLLNVAL | POLLHUP))) {
+                free_window(win);
+            } else {
+                bool need_read = ctx.pfds[win->poll_index].revents & POLLIN;
+                // If we requested flush scroll, pty fd got disabled from polling
+                // to prevent active waiting loop. If smooth scroll timeout got expired
+                // we can enable it back and attempt to read from pty.
+                // If there is nothing to read it won't block since O_NONBLOCK is set for ptys
+                if (!need_read && ctx.pfds[win->poll_index].fd < 0 && TIMEDIFF(win->last_scroll, cur) > iconf(ICONF_SMOOTH_SCROLL_DELAY)*1000LL) {
+                    ctx.pfds[win->poll_index].fd = -ctx.pfds[win->poll_index].fd;
+                    need_read = 1;
+                }
+                if (need_read && term_read(win->term)) win->last_read = cur;
+                if (win->wait_for_redraw) {
+                    // If we are waiting for the frame to finish, we need to
+                    // reduce poll timeout
+                    int64_t diff = (iconf(ICONF_FRAME_FINISHED_DELAY) + 1)*1000LL - TIMEDIFF(win->last_read, cur);
+                    if (win->wait_for_redraw &= diff > 0 && win->active) next_timeout = MIN(next_timeout, diff);
+                }
             }
-            if (need_read) term_read(win->term);
-            else if (ctx.pfds[win->poll_index].revents & (POLLERR | POLLNVAL | POLLHUP)) free_window(win);
         }
 
-        bool pending_scroll = 0;
+        bool pending_scroll_all = 0;
         for (struct window *win = win_list_head; win; win = win->next) {
-            pending_scroll |= mouse_pending_scroll(win->term);
+            // Scroll down selection
+            bool pending_scroll = mouse_pending_scroll(win->term);
+            pending_scroll_all |= pending_scroll;
 
-            if (TIMEDIFF(win->last_sync, cur) > iconf(ICONF_SYNC_TIME)*1000LL && win->sync_active)
-                win->sync_active = 0;
-            if (win->in_blink && TIMEDIFF(win->vbell_start, cur) > iconf(ICONF_VISUAL_BELL_TIME)*1000LL) {
+            // Deactivate syncronous update mode if it has expired
+            if (UNLIKELY(win->sync_active) && TIMEDIFF(win->last_sync, cur) > iconf(ICONF_SYNC_TIME)*1000LL)
+                win->sync_active = 0, win->wait_for_redraw = 0;
+
+            // Reset revert if visual blink duration finished
+            if (UNLIKELY(win->in_blink) && TIMEDIFF(win->vbell_start, cur) > iconf(ICONF_VISUAL_BELL_TIME)*1000LL) {
                 term_set_reverse(win->term, win->init_invert);
                 win->in_blink = 0;
                 ctx.vbell_count--;
             }
-            if (TIMEDIFF(win->last_blink, cur) > iconf(ICONF_BLINK_TIME)*1000LL &&
-                    win->active && iconf(ICONF_ALLOW_BLINKING)) {
+
+            // Change blink state if blinking interval is expired
+            if (win->active && iconf(ICONF_ALLOW_BLINKING) &&
+                    TIMEDIFF(win->last_blink, cur) > iconf(ICONF_BLINK_TIME)*1000LL) {
                 win->blink_state = !win->blink_state;
                 win->blink_commited = 0;
                 win->last_blink = cur;
             }
 
-            int64_t scroll_delay = 1000LL * iconf(ICONF_SCROLL_DELAY);
-            int64_t resize_delay = 1000LL * iconf(ICONF_RESIZE_DELAY);
+            // We need to skeep frame if redraw is not forced
+            // and ether syncronous update is active, window is not visible
+            // or we are waiting for frame to finish and maximal frame time is not expired
+            if (!win->force_redraw && !pending_scroll) {
+                if (UNLIKELY(win->sync_active || !win->active)) continue;
+                if (win->wait_for_redraw && TIMEDIFF(win->last_draw, cur) < iconf(ICONF_MAX_FRAME_TIME)*1000LL) continue;
+            }
+
             int64_t frame_time = SEC / iconf(ICONF_FPS);
+            int64_t remains = frame_time - TIMEDIFF(win->last_draw, cur);
 
-            if (!win->resize_delayed && TIMEDIFF(win->last_resize, cur) < frame_time) {
-                if (win->slow_mode) win->next_draw = cur, win->slow_mode = 0;
-                TIMEINC(win->next_draw, resize_delay), win->resize_delayed = 1;
-            }
-
-            if (!win->scroll_delayed && TIMEDIFF(win->last_scroll, cur) < frame_time) {
-                if (win->slow_mode) win->next_draw = cur, win->slow_mode = 0;
-                TIMEINC(win->next_draw, scroll_delay), win->scroll_delayed = 1;
-            }
-
-            if ((win->sync_active || !win->active) && !win->force_redraw) continue;
-
-            int64_t remains = TIMEDIFF(cur, win->next_draw);
-
-            if (remains <= 10000LL || win->force_redraw) {
-                if (win->force_redraw)
-                    redraw_borders(win, 1, 1);
+            if (remains <= 10000LL || win->force_redraw || pending_scroll) {
+                if (win->force_redraw) redraw_borders(win, 1, 1);
 
                 remains = frame_time;
-                bool old_drawn = win->drawn_somthing;
-                win->drawn_somthing = term_redraw(win->term);
+                if ((win->drawn_somthing = term_redraw(win->term)) || win->wait_for_redraw) win->last_draw = cur;
 
                 if (iconf(ICONF_TRACE_MISC) && win->drawn_somthing) info("Redraw");
 
-                if (win->drawn_somthing || old_drawn) {
-                    win->next_draw = cur;
-                    TIMEINC(win->next_draw, remains);
-                    win->slow_mode = 0;
-                } else win->slow_mode = 1;
+                // If we haven't been drawn anything
+                // increase poll timeout
+                win->slow_mode = !win->drawn_somthing;
 
                 win->force_redraw = 0;
-                win->resize_delayed = 0;
-                win->scroll_delayed = 0;
                 win->blink_commited = 1;
             }
 
             if (!win->slow_mode) next_timeout = MIN(next_timeout,  remains);
         }
-        if (pending_scroll) next_timeout = MIN(next_timeout, iconf(ICONF_SELECT_SCROLL_TIME)*1000LL);
+        if (pending_scroll_all) next_timeout = MIN(next_timeout, iconf(ICONF_SELECT_SCROLL_TIME)*1000LL);
+
+        next_timeout = MAX(0, next_timeout);
         xcb_flush(con);
 
         // TODO Try reconnect after timeout
