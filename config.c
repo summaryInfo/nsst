@@ -101,7 +101,7 @@ struct optmap_item optmap[OPT_MAP_SIZE] = {
     {"line-spacing", "\t\t(Additional lines vertical spacing)", ICONF_LINE_SPACING},
     {"lock-keyboard", "\t\t(Disable keyboad input)", ICONF_LOCK},
     {"log-level","\t\t(Filering level of logged information)", ICONF_LOG_LEVEL},
-    {"luit", "\t\t(Run luit if terminal doesn't support encoding by itself)", ICONF_LUIT},
+    {"luit", "\t\t\t(Run luit if terminal doesn't support encoding by itself)", ICONF_LUIT},
     {"luit-path", "\t\t(Path to luit executable)", SCONF_LUIT_PATH},
     {"margin-bell", "\t\t(Margin bell setting)", ICONF_MARGIN_BELL_VOLUME},
     {"margin-bell-column", "\t(Columnt at which margin bell rings when armed)", ICONF_MARGIN_BELL_COLUMN},
