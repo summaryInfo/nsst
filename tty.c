@@ -98,6 +98,7 @@ void exec_shell(const char *cmd, const char **args) {
     signal(SIGQUIT, SIG_DFL);
     signal(SIGTERM, SIG_DFL);
     signal(SIGALRM, SIG_DFL);
+    signal(SIGPIPE, SIG_DFL);
 
     // Disable job control signals by default
     // like login does
