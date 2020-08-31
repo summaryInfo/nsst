@@ -100,6 +100,8 @@ static void handle_term(int sig) {
     for (struct window *win = win_list_head; win; win = win->next)
         term_hang(win->term);
 
+    (void)sig;
+
     _exit(EXIT_SUCCESS);
 }
 
