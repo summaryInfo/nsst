@@ -88,7 +88,6 @@ volatile sig_atomic_t reload_config;
 static struct window *window_for_xid(xcb_window_t xid) {
     for (struct window *win = win_list_head; win; win = win->next)
         if (win->wid == xid) return win;
-    info("Window for xid not found");
     return NULL;
 }
 
