@@ -533,7 +533,6 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
             line = concat_line(line, NULL, opt);
 
             if (term->sb_limit == term->sb_max_caps) {
-                warn("%zd", term->sb_max_caps);
                 /* If view points to the line that is to be freed, scroll it down */
                 if (term->view_pos.line == -term->sb_max_caps) {
                     if (iconf(ICONF_REWRAP))
