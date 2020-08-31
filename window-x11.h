@@ -85,6 +85,7 @@ struct window {
     bool slow_mode : 1;
     bool in_blink : 1;
     bool init_invert : 1;
+    bool flush_scroll : 1;
 
     int16_t width;
     int16_t height;

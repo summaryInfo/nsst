@@ -358,9 +358,16 @@ void window_set_sync(struct window *win, bool state) {
     win->sync_active = state;
 }
 
-void window_delay(struct window *win) {
+void window_delay_redraw(struct window *win) {
     clock_gettime(CLOCK_TYPE, &win->last_scroll);
 }
+
+void window_request_scroll_flush(struct window *win) {
+    clock_gettime(CLOCK_TYPE, &win->last_scroll);
+    ctx.pfds[win->poll_index].fd = -ctx.pfds[win->poll_index].fd;
+    win->force_redraw = 1;
+}
+
 
 void window_resize(struct window *win, int16_t width, int16_t height) {
     if (win->height != height || win->width != width) {
@@ -1544,10 +1551,13 @@ void run(void) {
         // Then read for PTYs
         for (struct window *win = win_list_head, *next; win; win = next) {
             next = win->next;
-            if (term_can_continue(win->term, ctx.pfds[win->poll_index].revents & POLLIN, &cur)) {
-                term_read(win->term);
-            } else if (ctx.pfds[win->poll_index].revents & (POLLERR | POLLNVAL | POLLHUP))
-                free_window(win);
+            bool need_read = ctx.pfds[win->poll_index].revents & POLLIN;
+            if (ctx.pfds[win->poll_index].fd < 0 && TIMEDIFF(win->last_scroll, cur) > iconf(ICONF_SMOOTH_SCROLL_DELAY)) {
+                ctx.pfds[win->poll_index].fd = -ctx.pfds[win->poll_index].fd;
+                need_read = 1;
+            }
+            if (need_read) term_read(win->term);
+            else if (ctx.pfds[win->poll_index].revents & (POLLERR | POLLNVAL | POLLHUP)) free_window(win);
         }
 
         bool pending_scroll = 0;
@@ -1582,8 +1592,7 @@ void run(void) {
                 TIMEINC(win->next_draw, scroll_delay), win->scroll_delayed = 1;
             }
 
-            if (win->sync_active) continue;
-            if (!win->active && !win->force_redraw) continue;
+            if ((win->sync_active || !win->active) && !win->force_redraw) continue;
 
             int64_t remains = TIMEDIFF(cur, win->next_draw);
 

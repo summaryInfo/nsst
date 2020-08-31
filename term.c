@@ -251,8 +251,6 @@ struct term {
 
     /* Smooth scroll acumulator */
     ssize_t scrolled;
-    bool must_stop;
-    struct timespec last_scrolled;
 
     /* Tabstop positions */
     bool *tabs;
@@ -1014,7 +1012,7 @@ inline static void term_erase_pre(struct term *term, int16_t *xs, int16_t *ys, i
         *ye = MAX(0, MIN(*ye, term->height));
     }
 
-    window_delay(term->win);
+    window_delay_redraw(term->win);
     mouse_selection_erase(term, (struct rect){ *xs, *ys, *xe - *xs, *ye - *ys});
 }
 
@@ -1446,9 +1444,8 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
     mouse_scroll_selection(term, amount, save);
 
     if (term->mode.smooth_scroll && (term->scrolled += abs(amount)) > iconf(ICONF_SMOOTH_SCROLL_STEP)) {
-        term->must_stop = 1;
+        window_request_scroll_flush(term->win);
         term->scrolled = 0;
-        clock_gettime(CLOCK_TYPE, &term->last_scrolled);
     }
 }
 
@@ -4931,10 +4928,6 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
     return 1;
 }
 
-bool term_can_continue(struct term *term, bool input, struct timespec *now) {
-    return (!term->must_stop && input) || ((input || term->must_stop) && TIMEDIFF(term->last_scrolled, *now) > iconf(ICONF_SMOOTH_SCROLL_DELAY)*1000LL);
-}
-
 void term_read(struct term *term) {
     if (tty_refill(&term->tty) < 0 || term->tty.start >= term->tty.end) return;
 
@@ -4944,11 +4937,8 @@ void term_read(struct term *term) {
     if (term->mode.scroll_on_output && term->view_pos.line)
         term_reset_view(term, 1);
 
-    term->must_stop = 0;
-    while (term->tty.start < term->tty.end && !term->must_stop)
+    while (term->tty.start < term->tty.end)
         if (!term_dispatch(term, (const uint8_t **)&term->tty.start, term->tty.end)) break;
-
-
 }
 
 void term_toggle_numlock(struct term *term) {

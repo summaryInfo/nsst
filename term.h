@@ -72,6 +72,5 @@ bool term_is_paste_nl_enabled(struct term *term);
 bool term_is_paste_quote_enabled(struct term *term);
 bool term_is_cursor_enabled(struct term *term);
 bool term_is_reverse(struct term *term);
-bool term_can_continue(struct term *term, bool input, struct timespec *now);
 
 #endif
