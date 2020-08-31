@@ -5168,6 +5168,10 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
     return term;
 }
 
+void term_hang(struct term *term) {
+    tty_hang(&term->tty);
+}
+
 void free_term(struct term *term) {
     tty_hang(&term->tty);
 

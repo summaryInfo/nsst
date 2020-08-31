@@ -50,6 +50,7 @@ void term_damage(struct term *term, struct rect damage);
 void term_reset(struct term *term);
 void term_set_reverse(struct term *term, bool set);
 void term_break(struct term *term);
+void term_hang(struct term *term);
 
 struct line_view term_line_at(struct term *term, struct line_offset pos);
 struct line_offset term_get_view(struct term *term);

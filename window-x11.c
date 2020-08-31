@@ -96,6 +96,13 @@ static void handle_sigusr1(int sig) {
     (void)sig;
 }
 
+static void handle_term(int sig) {
+    for (struct window *win = win_list_head; win; win = win->next)
+        term_hang(win->term);
+
+    _exit(EXIT_SUCCESS);
+}
+
 static xcb_atom_t intern_atom(const char *atom) {
     xcb_atom_t at;
     xcb_generic_error_t *err;
@@ -287,6 +294,11 @@ void init_context(void) {
     if (dpi > 0) iconf_set(ICONF_DPI, dpi);
 
     sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART}, NULL);
+
+    struct sigaction sa = { .sa_handler = handle_term };
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGQUIT, &sa, NULL);
 }
 
 /* Free all resources */
