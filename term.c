@@ -5083,7 +5083,7 @@ static size_t encode_c1(uint8_t *out, const uint8_t *in, bool eightbit) {
 }
 
 inline static bool has_8bit(struct term *term) {
-    return !term->mode.utf8 && term->mode.eight_bit && term->vt_level > 1;
+    return term->mode.eight_bit && term->vt_level > 1;
 }
 
 void term_answerback(struct term *term, const char *str, ...) {
