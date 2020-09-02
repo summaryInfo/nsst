@@ -3241,7 +3241,7 @@ inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bo
 
     uint32_t len = (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(part >> 3U) - 24];
 
-    if (*buf + len >= end) {
+    if (*buf + len > end) {
         (*buf)--;
         return -1;
     }
