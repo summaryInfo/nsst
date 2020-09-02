@@ -91,6 +91,7 @@ struct window {
     struct timespec last_blink;
     struct timespec last_sync;
     struct timespec last_read;
+    struct timespec last_wait_start;
     struct timespec last_draw;
     struct timespec vbell_start;
     int16_t damaged_y0;

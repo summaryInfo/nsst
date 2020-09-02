@@ -371,6 +371,7 @@ void window_set_sync(struct window *win, bool state) {
 }
 
 void window_delay_redraw(struct window *win) {
+    if (!win->wait_for_redraw) clock_gettime(CLOCK_TYPE, &win->last_wait_start);
     win->wait_for_redraw = 1;
 }
 
@@ -1122,7 +1123,7 @@ void handle_resize(struct window *win, int16_t width, int16_t height) {
         term_resize(win->term, new_cw, new_ch);
         renderer_resize(win, new_cw, new_ch);
         clock_gettime(CLOCK_TYPE, &win->last_read);
-        win->wait_for_redraw = 1;
+        window_delay_redraw(win);
     }
 
     if (delta_x < 0 || delta_y < 0)
@@ -1607,17 +1608,20 @@ void run(void) {
             // or we are waiting for frame to finish and maximal frame time is not expired
             if (!win->force_redraw && !pending_scroll) {
                 if (UNLIKELY(win->sync_active || !win->active)) continue;
-                if (win->wait_for_redraw && TIMEDIFF(win->last_draw, cur) < win->cfg.max_frame_time*1000LL) continue;
+                if (win->wait_for_redraw) {
+                    if (TIMEDIFF(win->last_wait_start, cur) < win->cfg.max_frame_time*1000LL) continue;
+                    else win->wait_for_redraw = 0;
+                }
             }
 
             int64_t frame_time = SEC / win->cfg.fps;
             int64_t remains = frame_time - TIMEDIFF(win->last_draw, cur);
 
-            if (remains <= 10000LL || win->force_redraw || win->wait_for_redraw || pending_scroll) {
+            if (remains <= 10000LL || win->force_redraw || pending_scroll) {
                 if (win->force_redraw) redraw_borders(win, 1, 1);
 
                 remains = frame_time;
-                if ((win->drawn_somthing = term_redraw(win->term)) || win->wait_for_redraw) win->last_draw = cur;
+                if ((win->drawn_somthing = term_redraw(win->term))) win->last_draw = cur;
 
                 if (gconfig.trace_misc && win->drawn_somthing) info("Redraw");
 

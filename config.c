@@ -499,7 +499,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_int(value, &val.i, 2, 1000, 60)) c->fps = val.i;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_frame_wait_delay].opt)) {
-            if (parse_int(value, &val.i, 0, 10*SEC/1000, SEC/120000)) c->frame_finished_delay = val.i;
+            if (parse_int(value, &val.i, 0, 10*SEC/1000, SEC/240000)) c->frame_finished_delay = val.i;
             else goto e_value;
         } else goto e_unknown;
         break;
@@ -625,7 +625,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_int(value, &val.i, 0, 100, 50)) c->margin_bell_low_volume = val.i;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_max_frame_time].opt)) {
-            if (parse_int(value, &val.i, 0, 10*SEC/1000, SEC/30000)) c->max_frame_time = val.i;
+            if (parse_int(value, &val.i, 0, 10*SEC/1000, SEC/20000)) c->max_frame_time = val.i;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_meta_sends_escape].opt)) {
             if (parse_bool(value, &val.b, 1)) c->meta_is_esc = val.b;
