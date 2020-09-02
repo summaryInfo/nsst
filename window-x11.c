@@ -333,7 +333,7 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
 
     if (bg) {
         win->bg = bg;
-        win->bg_premul = color_apply_a(bg, 255*win->cfg.alpha);
+        win->bg_premul = color_apply_a(bg, win->cfg.alpha);
     }
     if (cursor_fg) win->cursor_fg = cursor_fg;
 
@@ -771,8 +771,8 @@ struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palet
     if (attr.reverse ^ selected) SWAP(color_t, res.fg, res.bg);
 
     // Apply background opacity
-    if (color_idx(attr.bg) == SPECIAL_BG || cfg->blend_all_bg) res.bg = color_apply_a(res.bg, 255*cfg->alpha);
-    if (UNLIKELY(cfg->blend_fg)) res.fg = color_apply_a(res.fg, 255*cfg->alpha);
+    if (color_idx(attr.bg) == SPECIAL_BG || cfg->blend_all_bg) res.bg = color_apply_a(res.bg, cfg->alpha);
+    if (UNLIKELY(cfg->blend_fg)) res.fg = color_apply_a(res.fg, cfg->alpha);
 
     if ((!selected && attr.invisible) || (attr.blink && blink)) res.fg = res.bg;
 
@@ -900,7 +900,7 @@ struct window *create_window(struct instance_config *cfg) {
 
     win->bg = win->cfg.palette[cfg->reverse_video ? SPECIAL_FG : SPECIAL_BG];
     win->cursor_fg = win->cfg.palette[cfg->reverse_video ? SPECIAL_CURSOR_BG : SPECIAL_CURSOR_FG];
-    win->bg_premul = color_apply_a(win->bg, 255*win->cfg.alpha);
+    win->bg_premul = color_apply_a(win->bg, win->cfg.alpha);
     win->active = 1;
     win->focused = 1;
 

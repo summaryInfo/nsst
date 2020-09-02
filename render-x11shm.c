@@ -306,7 +306,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
                 if (mouse_is_selected_in_view(win->term, win->cw - 1, k)) {
                     c = palette[SPECIAL_SELECTED_BG];
                     if (!c) c = palette[SPECIAL_FG];
-                    c = color_apply_a(c, win->cfg.alpha*255);
+                    c = color_apply_a(c, win->cfg.alpha);
                 }
                 image_draw_rect(win->ren.im, (struct rect){
                     .x = line.width * win->char_width,
