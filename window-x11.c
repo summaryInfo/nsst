@@ -296,7 +296,7 @@ void init_context(void) {
         if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
     if (dpi > 0) set_default_dpi(dpi);
 
-    sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART}, NULL);
+    sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART }, NULL);
 
     struct sigaction sa = { .sa_handler = handle_term };
     sigaction(SIGTERM, &sa, NULL);
@@ -586,13 +586,19 @@ bool window_is_mapped(struct window *win) {
     return win->active;
 }
 
+static void reload_window(struct window *win) {
+    // TODO Reload terminal palette here
+
+    int16_t w = win->cfg.width, h = win->cfg.height;
+    init_instance_config(&win->cfg);
+    win->cfg.width = w, win->cfg.height = h;
+    window_set_alpha(win, win->cfg.alpha);
+    renderer_reload_font(win, 1);
+}
+
 static void do_reload_config(void) {
-    for (struct window *win = win_list_head; win; win = win->next) {
-        init_instance_config(&win->cfg);
-        renderer_reload_font(win, 1);
-        term_damage_lines(win->term, 0, win->ch);
-        win->force_redraw = 1;
-    }
+    for (struct window *win = win_list_head; win; win = win->next)
+        reload_window(win);
     reload_config = 0;
 }
 
@@ -1198,10 +1204,7 @@ static void handle_keydown(struct window *win, xkb_keycode_t keycode) {
         window_paste_clip(win, clip_clipboard);
         return;
     case shortcut_reload_config:
-        init_instance_config(&win->cfg);
-        renderer_reload_font(win, 1);
-        term_damage_lines(win->term, 0, win->ch);
-        win->force_redraw = 1;
+        reload_window(win);
         return;
     case shortcut_reset:
         term_reset(win->term);
@@ -1545,13 +1548,15 @@ void run(void) {
 #endif
             warn("Poll error: %s", strerror(errno));
 
-        next_timeout = 30*SEC;
-
-        struct timespec cur;
-        clock_gettime(CLOCK_TYPE, &cur);
-
         // First check window system events
         if (ctx.pfds[0].revents & POLLIN) handle_event();
+
+        // Reload config if requested
+        if (reload_config) do_reload_config();
+
+        next_timeout = 30*SEC;
+        struct timespec cur;
+        clock_gettime(CLOCK_TYPE, &cur);
 
         // Then read for PTYs
         for (struct window *win = win_list_head, *next; win; win = next) {
@@ -1643,7 +1648,6 @@ void run(void) {
         // TODO Try reconnect after timeout
         if ((!ctx.daemon_mode && !win_list_head) || xcb_connection_has_error(con)) break;
 
-        if (reload_config) do_reload_config();
         prev = cur;
     }
 }
