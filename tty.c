@@ -76,11 +76,6 @@ void exec_shell(char **args, char *sh, char *termname, char *luit) {
     if (!(sh = getenv("SHELL")))
         sh = pw->pw_shell[0] ? pw->pw_shell : sh;
 
-    if (args) sh = args[0];
-
-    char *def[] = {sh, NULL};
-    if (!args) args = def;
-
     unsetenv("COLUMNS");
     unsetenv("LINES");
     unsetenv("TERMCAP");
@@ -90,6 +85,11 @@ void exec_shell(char **args, char *sh, char *termname, char *luit) {
     setenv("SHELL", sh, 1);
     setenv("HOME", pw->pw_dir, 1);
     setenv("TERM", termname, 1);
+
+    if (args) sh = args[0];
+
+    char *def[] = {sh, NULL};
+    if (!args) args = def;
 
     signal(SIGCHLD, SIG_DFL);
     signal(SIGHUP, SIG_DFL);
