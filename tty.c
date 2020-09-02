@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -45,7 +46,7 @@ static void handle_chld(int arg) {
     ssize_t len = 0;
 
     pid_t pid = waitpid(-1, &status, WNOHANG);
-    uint32_t loglevel = iconf(ICONF_LOG_LEVEL);
+    uint32_t loglevel = gconfig.log_level;
 
     if (pid < 0) {
         if (loglevel > 1) len = snprintf(str, sizeof str,
@@ -63,7 +64,7 @@ static void handle_chld(int arg) {
     (void)arg;
 }
 
-void exec_shell(const char *cmd, const char **args) {
+void exec_shell(char **args, char *sh, char *termname, char *luit) {
 
     const struct passwd *pw;
     errno = 0;
@@ -72,14 +73,12 @@ void exec_shell(const char *cmd, const char **args) {
         else die("I don't know you");
      }
 
-    const char *sh = cmd;
     if (!(sh = getenv("SHELL")))
-        sh = pw->pw_shell[0] ? pw->pw_shell : cmd;
+        sh = pw->pw_shell[0] ? pw->pw_shell : sh;
 
-    if (args) cmd = args[0];
-    else cmd = sh;
+    if (args) sh = args[0];
 
-    const char *def[] = {cmd, NULL};
+    char *def[] = {sh, NULL};
     if (!args) args = def;
 
     unsetenv("COLUMNS");
@@ -90,7 +89,7 @@ void exec_shell(const char *cmd, const char **args) {
     setenv("USER", pw->pw_name, 1);
     setenv("SHELL", sh, 1);
     setenv("HOME", pw->pw_dir, 1);
-    setenv("TERM", sconf(SCONF_TERM_NAME), 1);
+    setenv("TERM", termname, 1);
 
     signal(SIGCHLD, SIG_DFL);
     signal(SIGHUP, SIG_DFL);
@@ -109,21 +108,20 @@ void exec_shell(const char *cmd, const char **args) {
 #endif
 
     // Launch LUIT if it is needed and accessable
-    const char *luit = sconf(SCONF_LUIT_PATH);
-    if (iconf(ICONF_LUIT) && iconf(ICONF_NEED_LUIT) && !access(luit, X_OK)) {
+    if (luit) {
         ssize_t narg = 0;
-        for (const char **arg = args; *arg; arg++) narg++;
-        const char **new_args = calloc(narg + 2, sizeof(*new_args));
+        for (char **arg = args; *arg; arg++) narg++;
+        char **new_args = calloc(narg + 2, sizeof(*new_args));
         if (new_args) {
             new_args[0] = luit;
             for (ssize_t i = 1; i <= narg; i++)
                 new_args[i] = args[i - 1];
             args = new_args;
-            cmd = new_args[0];
+            sh = new_args[0];
         }
     }
 
-    execvp(cmd, (char *const *)args);
+    execvp(sh, (char *const *)args);
     _exit(1);
 }
 
@@ -298,17 +296,26 @@ void init_default_termios(void) {
 
 }
 
-int tty_open(struct tty *tty, const char *cmd, const char **args) {
+int tty_open(struct tty *tty, struct instance_config *cfg) {
     /* Configure PTY */
 
     struct termios tio = dtio;
 
-    tio.c_cc[VERASE] = iconf(ICONF_BACKSPACE_IS_DELETE) ? '\177' : '\010';
+    tio.c_cc[VERASE] = cfg->backspace_is_delete ? '\177' : '\010';
+
+    /* Check if we
+     * 1. Want to run luit (encoding is not supported)
+     * 2. Allowed to run it
+     * 3. Can run it */
+    bool do_luit = gconfig.want_luit && cfg->allow_luit && !access(cfg->luit, X_OK);
+
+    /* If we can and want to run luit we need to enable UTF-8 */
+    cfg->utf8 |= do_luit;
 
     /* If IUTF8 is defined, enable it by default,
      * when terminal itself is in UTF-8 mode */
 #ifdef IUTF8
-    if (iconf(ICONF_UTF8))
+    if (cfg->utf8)
         tio.c_iflag |= IUTF8;
 #endif
 
@@ -334,29 +341,28 @@ int tty_open(struct tty *tty, const char *cmd, const char **args) {
         errno = 0;
         if (ioctl(slave, TIOCSCTTY, NULL) < 0)
             die("Can't make tty controlling");
-        const char *cwd = sconf(SCONF_CWD);
-        if (cwd && chdir(cwd) < 0)
+        if (cfg->cwd && chdir(cfg->cwd) < 0)
             warn("Can't change current directory");
         dup2(slave, 0);
         dup2(slave, 1);
         dup2(slave, 2);
         close(slave);
-        exec_shell(cmd, args);
+        exec_shell(cfg->argv, cfg->shell, cfg->terminfo, do_luit ? cfg->luit : NULL);
         break;
     default:
+        /* Reset argv to not use it twice */
+        cfg->argv = NULL;
         close(slave);
         sigaction(SIGCHLD, &(struct sigaction){
                 .sa_handler = handle_chld, .sa_flags = SA_RESTART}, NULL);
     }
 
-    // Open printer file/pipe
+    /* Open printer file/pipe */
     if (tty->fd >= 0) {
-        const char *print_cmd = sconf(SCONF_PRINT_CMD);
-        const char *printer_path = sconf(SCONF_PRINTER);
         tty->printerfd = -1;
 
-
-        if (print_cmd) {
+        /* Printer command is more prioritized that file */
+        if (cfg->printer_cmd) {
             int pip[2];
             if (pipe(pip) < 0)  goto n_printer;
 
@@ -368,8 +374,8 @@ int tty_open(struct tty *tty, const char *cmd, const char **args) {
                 close(pip[1]);
                 close(pip[0]);
                 tty->printerfd = pip[0];
-                execl("/bin/sh", "/bin/sh", "-c", print_cmd, NULL);
-                warn("Can't run print command: '%s'", print_cmd);
+                execl("/bin/sh", "/bin/sh", "-c", cfg->printer_cmd, NULL);
+                warn("Can't run print command: '%s'", cfg->printer_cmd);
                 return 127;
             case 0:
                 signal(SIGPIPE, SIG_IGN);
@@ -378,15 +384,15 @@ int tty_open(struct tty *tty, const char *cmd, const char **args) {
             }
             if (0) {
 n_printer:
-                warn("Can't run print command: '%s'", print_cmd);
+                warn("Can't run print command: '%s'", cfg->printer_cmd);
             }
         }
 
-        if (tty->printerfd < 0 && printer_path) {
-            if (printer_path[0] == '-' && !printer_path[1])
+        if (tty->printerfd < 0 && cfg->printer_file) {
+            if (cfg->printer_file[0] == '-' && !cfg->printer_file[1])
                 tty->printerfd = STDOUT_FILENO;
             else
-                tty->printerfd = open(printer_path, O_WRONLY | O_CREAT, 0660);
+                tty->printerfd = open(cfg->printer_file, O_WRONLY | O_CREAT, 0660);
         }
 
         if (tty->printerfd >= 0) {

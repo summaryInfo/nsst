@@ -32,18 +32,17 @@ static void put(struct glyph *glyph, bool lcd, int16_t x, int16_t y, uint8_t val
         glyph->data[glyph->stride*y + 4*x + i] = val;
 }
 
-struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t depth) {
+struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t depth, enum pixel_mode pixmode, int16_t hspacing, int16_t vspacing) {
     if (!is_boxdraw(c)) return NULL;
 
-    enum pixel_mode pixmode = iconf(ICONF_PIXEL_MODE);
     bool lcd = pixmode != pixmode_mono;
     size_t stride = lcd ? 4*width : (width + 3) & ~3;
     struct glyph *glyph = calloc(1, sizeof(struct glyph) + stride * (height + depth) * sizeof(uint8_t));
     if (!glyph) return NULL;
 
     glyph->y_off = 0;
-    glyph->x = iconf(ICONF_FONT_SPACING)/2;
-    glyph->y = height + iconf(ICONF_LINE_SPACING)/2;
+    glyph->x = hspacing/2;
+    glyph->y = height + vspacing/2;
     glyph->height = height + depth;
     glyph->x_off = glyph->width = width;
     glyph->stride = stride;

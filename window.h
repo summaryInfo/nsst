@@ -6,21 +6,13 @@
 #include "feature.h"
 
 #include "font.h"
+#include "config.h"
 #include "util.h"
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <unistd.h>
-
-enum cursor_type {
-    cusor_type_block_blink = 1,
-    cusor_type_block = 2,
-    cusor_type_underline_blink = 3,
-    cusor_type_underline = 4,
-    cusor_type_bar_blink = 5,
-    cusor_type_bar = 6,
-};
 
 /* WARNING: Order is important */
 enum mouse_event_type {
@@ -95,7 +87,7 @@ void init_context(void);
 void free_context(void);
 void run(void);
 
-struct window *create_window();
+struct window *create_window(struct instance_config *cfg);
 void free_window(struct window *win);
 
 bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
@@ -117,7 +109,6 @@ void window_get_title(struct window *win, enum title_target which, char **name, 
 
 void window_set_mouse(struct window *win, bool enabled);
 void window_set_colors(struct window *win, color_t bg, color_t cursor_fg);
-void window_set_cursor(struct window *win, enum cursor_type type);
 void window_get_dim(struct window *win, int16_t *width, int16_t *height);
 void window_get_dim_ext(struct window *win, enum window_dimension which, int16_t *width, int16_t *height);
 void window_get_pointer(struct window *win, int16_t *px, int16_t *py, uint32_t *pmask);
@@ -125,6 +116,7 @@ enum cursor_type window_get_cursor(struct window *win);
 void window_set_clip(struct window *win, uint8_t *data, uint32_t time, enum clip_target target);
 void window_set_sync(struct window *win, bool state);
 void window_set_alpha(struct window *win, double alpha);
+struct instance_config *window_cfg(struct window *win);
 
 #define CLIP_TIME_NOW 0
 

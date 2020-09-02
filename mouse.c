@@ -5,10 +5,11 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "config.h"
+#include "input.h"
 #include "mouse.h"
 #include "term.h"
-#include "window.h"
 #include "time.h"
+#include "window.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -225,11 +226,11 @@ void mouse_scroll_selection(struct term *term, ssize_t amount, bool save) {
     }
  }
 
-inline static bool is_separator(uint32_t ch) {
+inline static bool is_separator(uint32_t ch, char *seps) {
         if (!ch) return 1;
         uint8_t cbuf[UTF8_MAX_LEN + 1];
         cbuf[utf8_encode(ch, cbuf, cbuf + UTF8_MAX_LEN)] = '\0';
-        return strstr(sconf(SCONF_WORD_SEPARATORS), (char *)cbuf);
+        return strstr(seps, (char *)cbuf);
 }
 
 static void snap_selection(struct term *term) {
@@ -253,6 +254,7 @@ static void snap_selection(struct term *term) {
 
     struct line_view line;
     struct line_offset vpos;
+    char *seps = window_cfg(term_window(term))->word_separators;
 
     if (loc->snap == snap_line) {
         loc->n.x0 = 0;
@@ -273,13 +275,13 @@ static void snap_selection(struct term *term) {
     } else if (loc->snap == snap_word) {
         if ((line = term_line_at(term, vpos)).line) {
             loc->n.x0 = MAX(MIN(loc->n.x0, line.width - 1), 0);
-            bool cat = is_separator(line.cell[loc->n.x0].ch);
+            bool cat = is_separator(line.cell[loc->n.x0].ch, seps);
             while (1) {
                 while (loc->n.x0 > 0) {
-                    if (cat != is_separator(line.cell[loc->n.x0 - 1].ch)) goto outer;
+                    if (cat != is_separator(line.cell[loc->n.x0 - 1].ch, seps)) goto outer;
                     loc->n.x0--;
                 }
-                if (cat == is_separator(line.cell[0].ch) && !term_line_next(term, &vpos, -1)) {
+                if (cat == is_separator(line.cell[0].ch, seps) && !term_line_next(term, &vpos, -1)) {
                     line = term_line_at(term, vpos);
                     if (!line.wrapped) {
                         term_line_next(term, &vpos, 1);
@@ -306,15 +308,15 @@ outer:
     } else if (loc->snap == snap_word) {
         if ((line = term_line_at(term, vpos)).line) {
             loc->n.x1 = MAX(MIN(loc->n.x1, line.width - 1), 0);
-            bool cat = is_separator(line.cell[loc->n.x1].ch);
+            bool cat = is_separator(line.cell[loc->n.x1].ch, seps);
             while(1) {
                 while (loc->n.x1 < line.width - 1) {
-                    if (cat != is_separator(line.cell[loc->n.x1 + 1].ch)) goto outer2;
+                    if (cat != is_separator(line.cell[loc->n.x1 + 1].ch, seps)) goto outer2;
                     loc->n.x1++;
                 }
                 if (line.wrapped && !term_line_next(term, &vpos, 1)) {
                     line = term_line_at(term, vpos);
-                    if (cat != is_separator(line.cell[0].ch)) {
+                    if (cat != is_separator(line.cell[0].ch, seps)) {
                         term_line_next(term, &vpos, -1);
                         break;
                     }
@@ -440,6 +442,7 @@ static uint8_t *selection_data(struct term *term) {
 
 static void change_selection(struct term *term, uint8_t state, int16_t x, ssize_t y, bool rectangular) {
     struct mouse_state *loc = term_get_mstate(term);
+    struct instance_config *cfg = window_cfg(term_window(term));
     struct selected old = loc->n;
     uint8_t oldstate = loc->state;
 
@@ -450,9 +453,9 @@ static void change_selection(struct term *term, uint8_t state, int16_t x, ssize_
         struct timespec now;
         clock_gettime(CLOCK_TYPE, &now);
 
-        if (TIMEDIFF(loc->click1, now) < iconf(ICONF_TRIPLE_CLICK_TIME)*1000LL)
+        if (TIMEDIFF(loc->click1, now) < cfg->triple_click_time*1000LL)
             loc->snap = snap_line;
-        else if (TIMEDIFF(loc->click0, now) < iconf(ICONF_DOUBLE_CLICK_TIME)*1000LL)
+        else if (TIMEDIFF(loc->click0, now) < cfg->double_click_time*1000LL)
             loc->snap = snap_word;
         else
             loc->snap = snap_none;
@@ -557,11 +560,12 @@ void pending_scroll(struct term *term, int16_t y, enum mouse_event_type event) {
 
 bool mouse_pending_scroll(struct term *term) {
     struct mouse_state *loc = term_get_mstate(term);
+    struct instance_config *cfg = window_cfg(term_window(term));
 
     if (loc->pending_scroll && loc->state == state_sel_progress) {
         struct timespec now;
         clock_gettime(CLOCK_TYPE, &now);
-        bool can_scroll = TIMEDIFF(loc->last_scroll, now) > iconf(ICONF_SELECT_SCROLL_TIME)*1000LL;
+        bool can_scroll = TIMEDIFF(loc->last_scroll, now) > cfg->select_scroll_time*1000LL;
         if (can_scroll) {
             term_scroll_view(term, loc->pending_scroll);
             loc->last_scroll = now;
@@ -573,8 +577,9 @@ bool mouse_pending_scroll(struct term *term) {
 void mouse_handle_input(struct term *term, struct mouse_event ev) {
     struct mouse_state *loc = term_get_mstate(term);
     loc->pending_scroll = 0;
+    uint32_t force_mask = window_cfg(term_window(term))->force_mouse_mask;
     /* Report mouse */
-    if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & mask_mod_mask) != keyboard_force_select_mask() &&
+    if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & mask_mod_mask) != force_mask &&
             !term_get_kstate(term)->keyboad_vt52) {
         if (loc->locator_filter) {
             if (ev.x < loc->filter.x || ev.x >= loc->filter.x + loc->filter.width ||
@@ -599,8 +604,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
                 mouse_report_locator(term, 2 + ev.button * 2 + (ev.event == mouse_event_release), ev.x, ev.y, ev.mask);
             }
         }
-    } else if (loc->mouse_mode != mouse_mode_none &&
-            (ev.mask & 0xFF) != keyboard_force_select_mask() && !term_get_kstate(term)->keyboad_vt52) {
+    } else if (loc->mouse_mode != mouse_mode_none && (ev.mask & 0xFF) != force_mask && !term_get_kstate(term)->keyboad_vt52) {
         enum mouse_mode md = loc->mouse_mode;
 
         if (loc->mouse_format != mouse_format_pixel)
@@ -660,7 +664,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
         loc->y = ev.y;
     /* Scroll view */
     } else if (ev.event == mouse_event_press && (ev.button == 3 || ev.button == 4)) {
-        term_scroll_view(term, (2 *(ev.button == 3) - 1) * iconf(ICONF_SCROLL_AMOUNT));
+        term_scroll_view(term, (2 *(ev.button == 3) - 1) * window_cfg(term_window(term))->scroll_amount);
     /* Select */
     } else if ((ev.event == mouse_event_press && ev.button == 0) ||
                (ev.event == mouse_event_motion && ev.mask & mask_button_1 &&

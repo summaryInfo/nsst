@@ -5,10 +5,6 @@ Until 2.1
     Allow geometry to be specified in characters
     Implement proper daemon mode
         Separate client, server global and server pre instance config
-            move away from iconf/sconf/cconf towards config structures
-            that should be stored locally in term/window/keyboard_state/input_state
-            to allow using customized pre-instance config, whilst leaving small amount of options global
-        nsstc execs
             start protocol:
                 -> <ENC><NUL><SOH>nsst1
                 <- <ACK><NUL><SOH>nsst1

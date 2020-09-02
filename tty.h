@@ -3,6 +3,8 @@
 
 #define FD_BUF_SIZE 4096
 
+#include "config.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -20,8 +22,7 @@ struct tty {
 
 void init_default_termios(void);
 
-void exec_shell(const char *cmd, const char **args);
-int tty_open(struct tty *tty, const char *cmd, const char **args);
+int tty_open(struct tty *tty, struct instance_config *cfg);
 void tty_break(struct tty *tty);
 void tty_set_winsz(struct tty *tty, int16_t width, int16_t height, int16_t wwidth, int16_t wheight);
 void tty_print_string(struct tty *tty, const uint8_t *str, ssize_t size);

@@ -260,18 +260,18 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
                         win->focused && ((win->cursor_type + 1) & ~1) == cusor_type_block)
                     attr.reverse ^= 1;
 
-                spec = describe_cell(cel, attr, palette, win->alpha, win->blink_state, mouse_is_selected_in_view(win->term, i, k));
+                spec = describe_cell(cel, attr, palette, &win->cfg, win->blink_state, mouse_is_selected_in_view(win->term, i, k));
 
                 if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face);
-                g_wide = glyph && glyph->x_off > win->char_width - iconf(ICONF_FONT_SPACING);
+                g_wide = glyph && glyph->x_off > win->char_width - win->cfg.font_spacing;
             }
 
             if (dirty || (g_wide && next_dirty)) {
                 int16_t cw = win->char_width, ch = win->char_height;
                 int16_t cd = win->char_depth, ul = win->underline_width;
                 int16_t x = i * cw, y = k * (ch + cd);
-                int16_t ls = iconf(ICONF_LINE_SPACING)/2;
-                int16_t fs = iconf(ICONF_FONT_SPACING)/2;
+                int16_t ls = win->cfg.line_spacing/2;
+                int16_t fs = win->cfg.font_spacing/2;
 
                 struct rect r_cell = { x, y, cw * (1 + spec.wide), ch + cd};
                 struct rect r_under = { x + fs, y + ch + 1 + ls, cw, ul };
@@ -322,7 +322,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
         }
 
         // Only reset force flag for last part of the line
-        if (is_last_line(line)) line.line->force_damage = 0;
+        if (is_last_line(line, win->cfg.rewrap)) line.line->force_damage = 0;
     }
 
     if (cursor) {

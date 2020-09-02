@@ -11,6 +11,7 @@
 #include "window.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -24,318 +25,163 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+
+static double default_dpi = 96;
+static double default_utf8 = 1;
+
+struct global_config gconfig = {
+    .log_level = 3,
+};
+
+struct optmap_item optmap[] = {
+    [o_allow_alternate] = {"allow-alternate", "\t(Enable alternate screen)"},
+    [o_allow_blinking] = {"allow-blinking", "\t(Allow blinking text and cursor)"},
+    [o_allow_modify_edit_keypad] = {"allow-modify-edit-keypad", " (Allow modifing edit keypad keys)"},
+    [o_allow_modify_function] = {"allow-modify-function", "\t(Allow modifing function keys)"},
+    [o_allow_modify_keypad] = {"allow-modify-keypad", "\t(Allow modifing keypad keys)"},
+    [o_allow_modify_misc] = {"allow-modify-misc", "\t(Allow modifing miscelleneous keys)"},
+    [o_alpha] = {"alpha", "\t\t\t(Backround opacity, requires compositor to be running)"},
+    [o_alternate_scroll] = {"alternate-scroll", "\t(Scrolling sends arrow keys escapes in alternate screen)"},
+    [o_answerback_string] = {"answerback-string", "\t(ENQ report)"},
+    [o_appcursor] = {"appcursor", "\t\t(Initial application cursor mode value)"},
+    [o_appkey] = {"appkey", "\t\t(Initial application keypad mode value)"},
+    [o_autowrap] = {"autowrap", "\t\t(Initial autowrap setting)"},
+    [o_background] = {"background", "\t\t(Default background color)"},
+    [o_backspace_is_del] = {"backspace-is-del", "\t(Backspace sends DEL instead of BS)"},
+    [o_bell] = {"bell", "\t\t\t(Bell setting)"},
+    [o_bell_high_volume] = {"bell-high-volume", "\t(High volume value for DECSWBV)"},
+    [o_bell_low_volume] = {"bell-low-volume", "\t(Low volume value for DECSWBV)"},
+    [o_blend_all_background] = {"blend-all-background", "\t(Apply opacity to all background colors, not just default one)"},
+    [o_blend_foreground] = {"blend-foreground", "\t(Apply opacity to foreground colors)"},
+    [o_blink_color] = {"blink-color", "\t\t(Special color of blinking text)"},
+    [o_blink_time] = {"blink-time", "\t\t(Text blink interval in microseconds)"},
+    [o_bold_color] = {"bold-color", "\t\t(Special color of bold text)"},
+    [o_config] = {"config", "\t\t(Configuration file path)"},
+    [o_cursor_background] = {"cursor-background", "\t(Default cursor background color)"},
+    [o_cursor_foreground] = {"cursor-foreground", "\t(Default cursor foreground color)"},
+    [o_cursor_shape] = {"cursor-shape", "\t\t(Shape of cursor)"},
+    [o_cursor_width] = {"cursor-width", "\t\t(Width of lines that forms cursor)"},
+    [o_cut_lines] = {"cut-lines", "\t\t(Cut long lines on resize with rewrapping disabled)"},
+    [o_cwd] = {"cwd", "\t\t\t(Current working directory for an application)"},
+    [o_delete_is_del] = {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)"},
+    [o_double_click_time] = {"double-click-time", "\t(Time gap in microseconds in witch two mouse presses will be considered double)"},
+    [o_dpi] = {"dpi", "\t\t\t(DPI value for fonts)"},
+    [o_erase_scrollback] = {"erase-scrollback", "\t(Allow ED 3 to clear scrollback buffer)"},
+    [o_extended_cir] = {"extended-cir", "\t\t(Report all SGR attributes in DECCIR)"},
+    [o_fixed] = {"fixed", "\t\t\t(Don't allow to change window size, if supported)"},
+    [o_fkey_increment] = {"fkey-increment", "\t(Step in numbering function keys)"},
+    [o_font] = {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)"},
+    [o_font_gamma] = {"font-gamma", "\t\t(Factor of font sharpenning)"},
+    [o_font_size] = {"font-size", "\t\t(Font size in points)"},
+    [o_font_size_step] = {"font-size-step", "\t(Font size step in points)"},
+    [o_font_spacing] = {"font-spacing", "\t\t(Additional spacing for individual symbols)"},
+    [o_force_mouse_mod] = {"force-mouse-mod", "\t(Modifer to force mouse action)"},
+    [o_force_nrcs] = {"force-nrcs", "\t\t(Enable NRCS translation when UTF-8 mode is enabled)"},
+    [o_force_scalable] = {"force-scalable", "\t(Do not search for pixmap fonts)"},
+    [o_foreground] = {"foreground", "\t\t(Default foreground color)"},
+    [o_fps] = {"fps", "\t\t\t(Window refresh rate)"},
+    [o_frame_wait_delay] = {"frame-wait-delay", "\t(Maximal time since last application output before redraw)"},
+    [o_has_meta] = {"has-meta", "\t\t(Handle meta/alt)"},
+    [o_horizontal_border] = {"horizontal-border", "\t(Top and bottom botders)"},
+    [o_italic_color] = {"italic-color", "\t\t(Special color of italic text)"},
+    [o_keep_clipboard] = {"keep-clipboard", "\t(Reuse copied clipboard content instead of current selection data)"},
+    [o_keep_selection] = {"keep-selection", "\t(Don't clear X11 selection when unhighlighted)"},
+    [o_key_break] = {"key-break", "\t\t(Send break hotkey"},
+    [o_key_copy] = {"key-copy", "\t\t(Copy to clipboard hotkey)"},
+    [o_key_dec_font] = {"key-dec-font", "\t\t(Decrement font size hotkey)"},
+    [o_key_inc_font] = {"key-inc-font", "\t\t(Increment font size hotkey)"},
+    [o_key_new_window] = {"key-new-window", "\t(Create new window hotkey)"},
+    [o_key_numlock] = {"key-numlock", "\t\t('appkey' mode allow toggle hotkey)"},
+    [o_key_paste] = {"key-paste", "\t\t(Paste from clipboard hotkey)"},
+    [o_key_reload_config] = {"key-reload-config", "\t(Reload config hotkey)"},
+    [o_key_reset] = {"key-reset", "\t\t(Terminal reset hotkey)"},
+    [o_key_reset_font] = {"key-reset-font", "\t(Reset font size hotkey)"},
+    [o_key_reverse_video] = {"key-reverse-video", "\t(Toggle reverse video mode hotkey)"},
+    [o_key_scroll_down] = {"key-scroll-down", "\t(Scroll down hotkey)"},
+    [o_key_scroll_up] = {"key-scroll-up", "\t\t(Scroll up hotkey)"},
+    [o_keyboard_dialect] = {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)"},
+    [o_keyboard_mapping] = {"keyboard-mapping", "\t(Initial keyboad mapping)"},
+    [o_line_spacing] = {"line-spacing", "\t\t(Additional lines vertical spacing)"},
+    [o_lock_keyboard] = {"lock-keyboard", "\t\t(Disable keyboad input)"},
+    [o_log_level] = {"log-level","\t\t(Filering level of logged information)"},
+    [o_luit] = {"luit", "\t\t\t(Run luit if terminal doesn't support encoding by itself)"},
+    [o_luit_path] = {"luit-path", "\t\t(Path to luit executable)"},
+    [o_margin_bell] = {"margin-bell", "\t\t(Margin bell setting)"},
+    [o_margin_bell_column] = {"margin-bell-column", "\t(Columnt at which margin bell rings when armed)"},
+    [o_margin_bell_high_volume] = {"margin-bell-high-volume", " (High volume value for DECSMBV)"},
+    [o_margin_bell_low_volume] = {"margin-bell-low-volume", "(Low volume value for DECSMBV)"},
+    [o_max_frame_time] = {"max-frame-time", "\t(Maximal time between frames in microseconds)"},
+    [o_meta_sends_escape] = {"meta-sends-escape", "\t(Alt/Meta sends escape prefix instead of setting 8-th bit)"},
+    [o_minimize_scrollback] = {"minimize-scrollback", "\t(Realloc lines to save memory; makes scrolling a little slower)"},
+    [o_modify_cursor] = {"modify-cursor", "\t\t(Enable encoding modifiers for cursor keys)"},
+    [o_modify_function] = {"modify-function", "\t(Enable encoding modifiers for function keys)"},
+    [o_modify_keypad] = {"modify-keypad", "\t\t(Enable encoding modifiers keypad keys)"},
+    [o_modify_other] = {"modify-other", "\t\t(Enable encoding modifiers for other keys)"},
+    [o_modify_other_fmt] = {"modify-other-fmt", "\t(Format of encoding modifers)"},
+    [o_nrcs] = {"nrcs", "\t\t\t(Enable NRCSs support)"},
+    [o_numlock] = {"numlock", "\t\t(Initial numlock state)"},
+#if USE_BOXDRAWING
+    [o_override_boxdrawing] = {"override-boxdrawing", "\t(Use built-in box drawing characters)"},
+#endif
+    [o_pixel_mode] = {"pixel-mode", "\t\t(Subpixel rendering config; mono, bgr, rgb, bgrv, or rgbv)"},
+    [o_print_attributes] = {"print-attributes", "\t(Print cell attributes when printing is enabled)"},
+    [o_print_command] = {"print-command", "\t\t(Program to pipe CSI MC output into)"},
+    [o_printer_file] = {"printer-file", ", -o<value> (File where CSI MC output to)"},
+    [o_raise_on_bell] = {"raise-on-bell", "\t\t(Raise terminal window on bell)"},
+    [o_reverse_video] = {"reverse-video", "\t\t(Initial reverse video setting)"},
+    [o_reversed_color] = {"reversed-color", "\t(Special color of reversed text)"},
+    [o_rewrap] = {"rewrap", "\t\t(Rewrap text on resize)"},
+    [o_scroll_amount] = {"scroll-amount", "\t\t(Number of lines scrolled in a time)"},
+    [o_scroll_on_input] = {"scroll-on-input", "\t(Scroll view to bottom on key press)"},
+    [o_scroll_on_output] = {"scroll-on-output", "\t(Scroll view to bottom when character in printed)"},
+    [o_scrollback_size] = {"scrollback-size", ", -H<value> (Number of saved lines)"},
+    [o_select_scroll_time] = {"select-scroll-time", "\t(Delay between scrolls of window while selecting with mouse in microseconds)"},
+    [o_select_to_clipboard] = {"select-to-clipboard", "\t(Use CLIPBOARD selection to store hightlighted data)"},
+    [o_selected_background] = {"selected-background", "\t(Color of selected background)"},
+    [o_selected_foreground] = {"selected-foreground", "\t(Color of selected text)"},
+    [o_shell] = {"shell", ", -s<value>\t(Shell to start in new instance)"},
+    [o_smooth_scroll] = {"smooth-scroll", "\t\t(Inital value of DECSCLM mode)"},
+    [o_smooth_scroll_delay] = {"smooth-scroll-delay", "\t(Delay between scrolls when DECSCLM is enabled)"},
+    [o_smooth_scroll_step] = {"smooth-scroll-step", "\t(Amount of lines per scroll when DECSCLM is enabled)"},
+    [o_special_blink] = {"special-blink", "\t\t(If special color should be used for blinking text)"},
+    [o_special_bold] = {"special-bold", "\t\t(If special color should be used for bold text)"},
+    [o_special_italic] = {"special-italic", "\t(If special color should be used for italic text)"},
+    [o_special_reverse] = {"special-reverse", "\t(If special color should be used for reverse text)"},
+    [o_special_underlined] = {"special-underlined", "\t(If special color should be used for underlined text)"},
+    [o_substitute_fonts] = {"substitute-fonts", "\t(Enable substitute font support)"},
+    [o_sync_timeout] = {"sync-timeout", "\t\t(Syncronous update timeout)"},
+    [o_tab_width] = {"tab-width", "\t\t(Initial width of tab character)"},
+    [o_term_mod] = {"term-mod", "\t\t(Meaning of 'T' modifer)"},
+    [o_term_name] = {"term-name", ", -D<value>\t(TERM value)"},
+    [o_title] = {"title", ", -T<value>, -t<value> (Initial window title)"},
+    [o_trace_characters] = {"trace-characters", "\t(Trace interpreted characters)"},
+    [o_trace_controls] = {"trace-controls", "\t(Trace interpreted control characters and sequences)"},
+    [o_trace_events] = {"trace-events", "\t\t(Trace recieved events)"},
+    [o_trace_fonts] = {"trace-fonts", "\t\t(Log font related information)"},
+    [o_trace_input] = {"trace-input", "\t\t(Trace user input)"},
+    [o_trace_misc] = {"trace-misc", "\t\t(Trace miscelleneous information)"},
+    [o_triple_click_time] = {"triple-click-time", "\t(Time gap in microseconds in witch tree mouse presses will be considered triple)"},
+    [o_underline_width] = {"underline-width", "\t(Text underline width)"},
+    [o_underlined_color] = {"underlined-color", "\t(Special color of underlined text)"},
+    [o_urgent_on_bell] = {"urgent-on-bell", "\t(Set window urgency on bell)"},
+    [o_use_utf8] = {"use-utf8", "\t\t(Enable UTF-8 I/O)"},
+    [o_vertical_border] = {"vertical-border", "\t(Left and right borders)"},
+    [o_visual_bell] = {"visual-bell", "\t\t(Whether bell should be visual or normal)"},
+    [o_visual_bell_time] = {"visual-bell-time", "\t(Length of visual bell)"},
+    [o_vt_version] = {"vt-version", ", -V<value>\t(Emulated VT version)"},
+    [o_window_class] = {"window-class", ", -c<value> (X11 Window class)"},
+    [o_window_ops] = {"window-ops", "\t\t(Allow window manipulation with escape sequences)"},
+    [o_word_break] = {"word-break", "\t\t(Symbols treated as word separators when snapping mouse selection)"},
+};
+
+
 #define CN_BASE 16
 #define CN_EXT (6*6*6)
 #define CN_GRAY (PALETTE_SIZE - CN_BASE - CN_EXT)
 #define SD28B(x) ((x) ? 0x37 + 0x28 * (x) : 0)
 
-
-struct optmap_item optmap[OPT_MAP_SIZE] = {
-    {"allow-alternate", "\t(Enable alternate screen)", ICONF_ALLOW_ALTSCREEN},
-    {"allow-blinking", "\t(Allow blinking text and cursor)", ICONF_ALLOW_BLINKING},
-    {"allow-modify-edit-keypad", " (Allow modifing edit keypad keys)", ICONF_MALLOW_EDIT},
-    {"allow-modify-function", "\t(Allow modifing function keys)", ICONF_MALLOW_FUNCTION},
-    {"allow-modify-keypad", "\t(Allow modifing keypad keys)", ICONF_MALLOW_KEYPAD},
-    {"allow-modify-misc", "\t(Allow modifing miscelleneous keys)", ICONF_MALLOW_MISC},
-    {"alpha", "\t\t\t(Backround opacity, requires compositor to be running)", ICONF_ALPHA},
-    {"alternate-scroll", "\t(Scrolling sends arrow keys escapes in alternate screen)", ICONF_ALTERNATE_SCROLL},
-    {"answerback-string", "\t(ENQ report)", SCONF_ANSWERBACK_STRING},
-    {"appcursor", "\t\t(Initial application cursor mode value)", ICONF_APPCURSOR},
-    {"appkey", "\t\t(Initial application keypad mode value)", ICONF_APPKEY},
-    {"autowrap", "\t\t(Initial autowrap setting)", ICONF_INIT_WRAP},
-    {"background", "\t\t(Default background color)", CCONF_BG},
-    {"backspace-is-del", "\t(Backspace sends DEL instead of BS)", ICONF_BACKSPACE_IS_DELETE},
-    {"bell", "\t\t\t(Bell setting)", ICONF_BELL_VOLUME},
-    {"bell-high-volume", "\t(High volume value for DECSWBV)", ICONF_BELL_HIGH_VOLUME},
-    {"bell-low-volume", "\t(Low volume value for DECSWBV)", ICONF_BELL_LOW_VOLUME},
-    {"blend-all-background", "\t(Apply opacity to all background colors, not just default one)", ICONF_BLEND_ALL_BG},
-    {"blend-foreground", "\t(Apply opacity to foreground colors)", ICONF_BLEND_FG},
-    {"blink-color", "\t\t(Special color of blinking text)", CCONF_BLINK},
-    {"blink-time", "\t\t(Text blink interval in microseconds)",ICONF_BLINK_TIME},
-    {"bold-color", "\t\t(Special color of bold text)", CCONF_BOLD},
-    {"config", "\t\t(Configuration file path)", SCONF_CONFIG_PATH},
-    {"cursor-background", "\t(Default cursor background color)", CCONF_CURSOR_BG},
-    {"cursor-foreground", "\t(Default cursor foreground color)", CCONF_CURSOR_FG},
-    {"cursor-shape", "\t\t(Shape of cursor)", ICONF_CURSOR_SHAPE},
-    {"cursor-width", "\t\t(Width of lines that forms cursor)", ICONF_CURSOR_WIDTH},
-    {"cut-lines", "\t\t(Cut long lines on resize with rewrapping disabled)", ICONF_CUT_LINES},
-    {"cwd", "\t\t\t(Current working directory for an application)", SCONF_CWD},
-    {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)", ICONF_DELETE_IS_DELETE},
-    {"double-click-time", "\t(Time gap in microseconds in witch two mouse presses will be considered double)", ICONF_DOUBLE_CLICK_TIME},
-    {"dpi", "\t\t\t(DPI value for fonts)", ICONF_DPI},
-    {"erase-scrollback", "\t(Allow ED 3 to clear scrollback buffer)", ICONF_ALLOW_ERASE_SCROLLBACK},
-    {"extended-cir", "\t\t(Report all SGR attributes in DECCIR)", ICONF_EXTENDED_CIR},
-    {"fixed", "\t\t\t(Don't allow to change window size, if supported)", ICONF_FIXED_SIZE},
-    {"fkey-increment", "\t(Step in numbering function keys)", ICONF_FKEY_INCREMENT},
-    {"font", ", -f<value>\t(Comma-separated list of fontconfig font patterns)", SCONF_FONT_NAME},
-    {"font-gamma", "\t\t(Factor of font sharpenning)", ICONF_GAMMA},
-    {"font-size", "\t\t(Font size in points)", ICONF_FONT_SIZE},
-    {"font-size-step", "\t(Font size step in points)", ICONF_FONT_SIZE_STEP},
-    {"font-spacing", "\t\t(Additional spacing for individual symbols)", ICONF_FONT_SPACING},
-    {"force-mouse-mod", "\t(Modifer to force mouse action)", SCONF_FORCE_MOUSE_MOD},
-    {"force-nrcs", "\t\t(Enable NRCS translation when UTF-8 mode is enabled)", ICONF_FORCE_UTF8_NRCS},
-    {"force-scalable", "\t(Do not search for pixmap fonts)", ICONF_FORCE_SCALABLE},
-    {"foreground", "\t\t(Default foreground color)", CCONF_FG},
-    {"fps", "\t\t\t(Window refresh rate)", ICONF_FPS},
-    {"frame-wait-delay", "\t(Maximal time since last application output before redraw)", ICONF_FRAME_FINISHED_DELAY},
-    {"has-meta", "\t\t(Handle meta/alt)", ICONF_HAS_META},
-    {"horizontal-border", "\t(Top and bottom botders)", ICONF_TOP_BORDER},
-    {"italic-color", "\t\t(Special color of italic text)", CCONF_ITALIC},
-    {"keep-clipboard", "\t(Reuse copied clipboard content instead of current selection data)", ICONF_KEEP_CLIPBOARD},
-    {"keep-selection", "\t(Don't clear X11 selection when unhighlighted)", ICONF_KEEP_SELECTION},
-    {"key-break", "\t\t(Send break hotkey", KCONF_BREAK},
-    {"key-copy", "\t\t(Copy to clipboard hotkey)", KCONF_COPY},
-    {"key-dec-font", "\t\t(Decrement font size hotkey)", KCONF_FONT_DEC},
-    {"key-inc-font", "\t\t(Increment font size hotkey)", KCONF_FONT_INC},
-    {"key-new-window", "\t(Create new window hotkey)", KCONF_NEW_WINDOW},
-    {"key-numlock", "\t\t('appkey' mode allow toggle hotkey)", KCONF_NUMLOCK},
-    {"key-paste", "\t\t(Paste from clipboard hotkey)", KCONF_PASTE},
-    {"key-reload-config", "\t(Reload config hotkey)", KCONF_RELOAD_CONFIG},
-    {"key-reset", "\t\t(Terminal reset hotkey)", KCONF_RESET},
-    {"key-reset-font", "\t(Reset font size hotkey)", KCONF_FONT_RESET},
-    {"key-reverse-video", "\t(Toggle reverse video mode hotkey)", KCONF_REVERSE_VIDEO},
-    {"key-scroll-down", "\t(Scroll down hotkey)", KCONF_SCROLL_DOWN},
-    {"key-scroll-up", "\t\t(Scroll up hotkey)", KCONF_SCROLL_UP},
-    {"keyboard-dialect", "\t(National replacement character set to be used in non-UTF-8 mode)", ICONF_KEYBOARD_NRCS},
-    {"keyboard-mapping", "\t(Initial keyboad mapping)", ICONF_MAPPING},
-    {"line-spacing", "\t\t(Additional lines vertical spacing)", ICONF_LINE_SPACING},
-    {"lock-keyboard", "\t\t(Disable keyboad input)", ICONF_LOCK},
-    {"log-level","\t\t(Filering level of logged information)", ICONF_LOG_LEVEL},
-    {"luit", "\t\t\t(Run luit if terminal doesn't support encoding by itself)", ICONF_LUIT},
-    {"luit-path", "\t\t(Path to luit executable)", SCONF_LUIT_PATH},
-    {"margin-bell", "\t\t(Margin bell setting)", ICONF_MARGIN_BELL_VOLUME},
-    {"margin-bell-column", "\t(Columnt at which margin bell rings when armed)", ICONF_MARGIN_BELL_COLUMN},
-    {"margin-bell-high-volume", " (High volume value for DECSMBV)", ICONF_MARGIN_BELL_HIGH_VOLUME},
-    {"margin-bell-low-volume", "(Low volume value for DECSMBV)", ICONF_MARGIN_BELL_LOW_VOLUME},
-    {"max-frame-time", "\t(Maximal time between frames in microseconds)", ICONF_MAX_FRAME_TIME},
-    {"meta-sends-escape", "\t(Alt/Meta sends escape prefix instead of setting 8-th bit)", ICONF_META_IS_ESC},
-    {"minimize-scrollback", "\t(Realloc lines to save memory; makes scrolling a little slower)", ICONF_MINIMIZE_SCROLLBACK},
-    {"modify-cursor", "\t\t(Enable encoding modifiers for cursor keys)", ICONF_MODIFY_CURSOR},
-    {"modify-function", "\t(Enable encoding modifiers for function keys)", ICONF_MODIFY_FUNCTION},
-    {"modify-keypad", "\t\t(Enable encoding modifiers keypad keys)", ICONF_MODIFY_KEYPAD},
-    {"modify-other", "\t\t(Enable encoding modifiers for other keys)", ICONF_MODIFY_OTHER},
-    {"modify-other-fmt", "\t(Format of encoding modifers)", ICONF_MODIFY_OTHER_FMT},
-    {"nrcs", "\t\t\t(Enable NRCSs support)", ICONF_ALLOW_NRCS},
-    {"numlock", "\t\t(Initial numlock state)", ICONF_NUMLOCK},
-#if USE_BOXDRAWING
-    {"override-boxdrawing", "\t(Use built-in box drawing characters)", ICONF_OVERRIDE_BOXDRAW},
-#endif
-    {"pixel-mode", "\t\t(Subpixel rendering config; mono, bgr, rgb, bgrv, or rgbv)", ICONF_PIXEL_MODE},
-    {"print-attributes", "\t(Print cell attributes when printing is enabled)", ICONF_PRINT_ATTR },
-    {"print-command", "\t\t(Program to pipe CSI MC output into)", SCONF_PRINT_CMD},
-    {"printer-file", ", -o<value> (File where CSI MC output to)", SCONF_PRINTER},
-    {"raise-on-bell", "\t\t(Raise terminal window on bell)", ICONF_RAISE_ON_BELL},
-    {"reverse-video", "\t\t(Initial reverse video setting)", ICONF_REVERSE_VIDEO},
-    {"reversed-color", "\t(Special color of reversed text)", CCONF_REVERSE},
-    {"rewrap", "\t\t(Rewrap text on resize)", ICONF_REWRAP},
-    {"scroll-amount", "\t\t(Number of lines scrolled in a time)", ICONF_SCROLL_AMOUNT},
-    {"scroll-on-input", "\t(Scroll view to bottom on key press)", ICONF_SCROLL_ON_INPUT},
-    {"scroll-on-output", "\t(Scroll view to bottom when character in printed)", ICONF_SCROLL_ON_OUTPUT},
-    {"scrollback-size", ", -H<value> (Number of saved lines)", ICONF_HISTORY_LINES},
-    {"select-scroll-time", "\t(Delay between scrolls of window while selecting with mouse in microseconds)", ICONF_SELECT_SCROLL_TIME},
-    {"select-to-clipboard", "\t(Use CLIPBOARD selection to store hightlighted data)", ICONF_SELECT_TO_CLIPBOARD},
-    {"selected-background", "\t(Color of selected background)", CCONF_SELECTED_BG},
-    {"selected-foreground", "\t(Color of selected text)", CCONF_SELECTED_FG},
-    {"shell", ", -s<value>\t(Shell to start in new instance)", SCONF_SHELL},
-    {"smooth-scroll", "\t\t(Inital value of DECSCLM mode)", ICONF_SMOOTH_SCROLL},
-    {"smooth-scroll-delay", "\t(Delay between scrolls when DECSCLM is enabled)", ICONF_SMOOTH_SCROLL_DELAY},
-    {"smooth-scroll-step", "\t(Amount of lines per scroll when DECSCLM is enabled)", ICONF_SMOOTH_SCROLL_STEP},
-    {"special-blink", "\t\t(If special color should be used for blinking text)", ICONF_SPEICAL_BLINK},
-    {"special-bold", "\t\t(If special color should be used for bold text)", ICONF_SPEICAL_BOLD},
-    {"special-italic", "\t(If special color should be used for italic text)", ICONF_SPEICAL_ITALIC},
-    {"special-reverse", "\t(If special color should be used for reverse text)", ICONF_SPEICAL_REVERSE},
-    {"special-underlined", "\t(If special color should be used for underlined text)", ICONF_SPEICAL_UNDERLINE},
-    {"substitute-fonts", "\t(Enable substitute font support)", ICONF_ALLOW_SUBST_FONTS},
-    {"sync-timeout", "\t\t(Syncronous update timeout)", ICONF_SYNC_TIME},
-    {"tab-width", "\t\t(Initial width of tab character)", ICONF_TAB_WIDTH},
-    {"term-mod", "\t\t(Meaning of 'T' modifer)", SCONF_TERM_MOD},
-    {"term-name", ", -D<value>\t(TERM value)", SCONF_TERM_NAME},
-    {"title", ", -T<value>, -t<value> (Initial window title)", SCONF_TITLE},
-    {"trace-characters", "\t(Trace interpreted characters)", ICONF_TRACE_CHARACTERS},
-    {"trace-controls", "\t(Trace interpreted control characters and sequences)", ICONF_TRACE_CONTROLS},
-    {"trace-events", "\t\t(Trace recieved events)", ICONF_TRACE_EVENTS},
-    {"trace-fonts", "\t\t(Log font related information)", ICONF_TRACE_FONTS},
-    {"trace-input", "\t\t(Trace user input)", ICONF_TRACE_INPUT},
-    {"trace-misc", "\t\t(Trace miscelleneous information)", ICONF_TRACE_MISC},
-    {"triple-click-time", "\t(Time gap in microseconds in witch tree mouse presses will be considered triple)", ICONF_TRIPLE_CLICK_TIME},
-    {"underline-width", "\t(Text underline width)", ICONF_UNDERLINE_WIDTH},
-    {"underlined-color", "\t(Special color of underlined text)", CCONF_UNDERLINE},
-    {"urgent-on-bell", "\t(Set window urgency on bell)", ICONF_URGENT_ON_BELL},
-    {"use-utf8", "\t\t(Enable UTF-8 I/O)", ICONF_UTF8},
-    {"vertical-border", "\t(Left and right borders)", ICONF_LEFT_BORDER},
-    {"visual-bell", "\t\t(Whether bell should be visual or normal)", ICONF_VISUAL_BELL},
-    {"visual-bell-time", "\t(Length of visual bell)", ICONF_VISUAL_BELL_TIME},
-    {"vt-version", ", -V<value>\t(Emulated VT version)", ICONF_VT_VERION},
-    {"window-class", ", -c<value> (X11 Window class)", SCONF_TERM_CLASS},
-    {"window-ops", "\t\t(Allow window manipulation with escape sequences)", ICONF_ALLOW_WINDOW_OPS},
-    {"word-break", "\t\t(Symbols treated as word separators when snapping mouse selection)", SCONF_WORD_SEPARATORS},
-};
-
-static struct {
-    int32_t val;
-    int32_t dflt;
-    int32_t min;
-    int32_t max;
-} ioptions[] = {
-    [ICONF_LOG_LEVEL - ICONF_MIN] = {3, 3, 0, 3},
-    [ICONF_WINDOW_X - ICONF_MIN] = {200, 200, -32768, 32767 },
-    [ICONF_WINDOW_Y - ICONF_MIN] = {200, 200, -32768, 32767 },
-    [ICONF_WINDOW_NEGATIVE_X - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_WINDOW_NEGATIVE_Y - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_WINDOW_WIDTH - ICONF_MIN] = {800, 800, 1, 32767},
-    [ICONF_WINDOW_HEIGHT - ICONF_MIN] = {600, 600, 1, 32767},
-    [ICONF_FIXED_SIZE - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_HAS_GEOMETRY - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_HISTORY_LINES - ICONF_MIN] = {1024, 1024, -1, 1000000000},
-    [ICONF_UTF8 - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_VT_VERION - ICONF_MIN] = {420, 420, 0, 999},
-    [ICONF_FORCE_UTF8_NRCS - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_TAB_WIDTH - ICONF_MIN] = {8, 8, 1, 100},
-    [ICONF_INIT_WRAP - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_SCROLL_ON_INPUT - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_SCROLL_ON_OUTPUT - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_CURSOR_SHAPE - ICONF_MIN] = {cusor_type_bar, cusor_type_bar, 1, 6},
-    [ICONF_UNDERLINE_WIDTH - ICONF_MIN] = {1, 1, 0, 16},
-    [ICONF_CURSOR_WIDTH - ICONF_MIN] = {2, 2, 0, 16},
-    [ICONF_PIXEL_MODE - ICONF_MIN] = {0, 0, 0, 4},
-    [ICONF_REVERSE_VIDEO - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_ALLOW_ALTSCREEN - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_LEFT_BORDER - ICONF_MIN] = {8, 8, 0, 100},
-    [ICONF_TOP_BORDER - ICONF_MIN] = {8, 8, 0 , 100},
-    [ICONF_BLINK_TIME - ICONF_MIN] = {800000, 800000, 0, 10000000},
-    [ICONF_VISUAL_BELL_TIME - ICONF_MIN] = {200000, 200000, 0, 10000000},
-    [ICONF_FONT_SIZE - ICONF_MIN] = {0, 0, 1, 200},
-    [ICONF_FONT_SPACING - ICONF_MIN] = {0, 0, -100, 100},
-    [ICONF_LINE_SPACING - ICONF_MIN] = {0, 0, -100, 100},
-    [ICONF_GAMMA - ICONF_MIN] = {10000, 10000, 2000, 200000},
-    [ICONF_DPI - ICONF_MIN] = {96, 96, 10, 10000},
-    [ICONF_KEYBOARD_NRCS - ICONF_MIN] = {cs94_ascii, cs94_ascii, 0, nrcs_MAX},
-    [ICONF_ALLOW_NRCS - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_ALLOW_WINDOW_OPS - ICONF_MIN] = {1, 1, 0, 1},
-#if USE_BOXDRAWING
-    [ICONF_OVERRIDE_BOXDRAW - ICONF_MIN] = {0, 0, 0, 1},
-#endif
-    [ICONF_FPS - ICONF_MIN] = {60, 60, 2, 1000},
-    [ICONF_MAX_FRAME_TIME - ICONF_MIN] = {SEC/30000, SEC/30000, SEC/1000000, 10*SEC/1000},
-    [ICONF_FRAME_FINISHED_DELAY - ICONF_MIN] = {SEC/120000, SEC/120000, SEC/1000000, SEC/1000},
-    [ICONF_SYNC_TIME - ICONF_MIN] = {SEC/2000, SEC/2000, 0, 10*SEC/1000},
-    [ICONF_SCROLL_AMOUNT - ICONF_MIN] = {2, 2, 1, 100},
-    [ICONF_FONT_SIZE_STEP - ICONF_MIN] = {1, 1, 1, 250},
-    [ICONF_ALTERNATE_SCROLL - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_DOUBLE_CLICK_TIME - ICONF_MIN] = {300000, 300000, 10000, 1000000000},
-    [ICONF_TRIPLE_CLICK_TIME - ICONF_MIN] = {600000, 600000, 10000, 1000000000},
-    [ICONF_SELECT_SCROLL_TIME - ICONF_MIN] = {10000, 10000, 1000, 1000000000},
-    [ICONF_KEEP_CLIPBOARD - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_KEEP_SELECTION - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_SELECT_TO_CLIPBOARD - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_ALLOW_BLINKING - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_EXTENDED_CIR - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_SPEICAL_BOLD - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_SPEICAL_BLINK - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_SPEICAL_UNDERLINE - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_SPEICAL_ITALIC - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_SPEICAL_REVERSE - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_MARGIN_BELL_COLUMN - ICONF_MIN] = {10, 10, 0, 100},
-    [ICONF_MARGIN_BELL_VOLUME - ICONF_MIN] = {0, 0, 0, 2},
-    [ICONF_BELL_VOLUME - ICONF_MIN] = {2, 2, 0, 2},
-    [ICONF_BELL_LOW_VOLUME - ICONF_MIN] = {50, 50, 0, 100},
-    [ICONF_MARGIN_BELL_LOW_VOLUME - ICONF_MIN] = {50, 50, 0, 100},
-    [ICONF_MARGIN_BELL_HIGH_VOLUME - ICONF_MIN] = {100, 100, 0, 100},
-    [ICONF_BELL_HIGH_VOLUME - ICONF_MIN] = {100, 100, 0, 100},
-    [ICONF_VISUAL_BELL - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_RAISE_ON_BELL - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_URGENT_ON_BELL - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_ALLOW_ERASE_SCROLLBACK - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_TRACE_CHARACTERS - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_TRACE_CONTROLS - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_TRACE_EVENTS - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_TRACE_FONTS - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_TRACE_INPUT - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_TRACE_MISC - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_APPCURSOR - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_APPKEY - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_BACKSPACE_IS_DELETE - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_DELETE_IS_DELETE - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_FKEY_INCREMENT - ICONF_MIN] = {10, 10, 0, 48},
-    [ICONF_HAS_META - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_MAPPING - ICONF_MIN] = {keymap_default, keymap_default, 0, keymap_MAX},
-    [ICONF_LOCK - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_META_IS_ESC - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_MODIFY_CURSOR - ICONF_MIN] = {3, 3, 0, 3},
-    [ICONF_MODIFY_FUNCTION - ICONF_MIN] = {3, 3, 0, 3},
-    [ICONF_MODIFY_KEYPAD - ICONF_MIN] = {3, 3, 0, 3},
-    [ICONF_MODIFY_OTHER - ICONF_MIN] = {0, 0, 0, 4},
-    [ICONF_MODIFY_OTHER_FMT - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_MALLOW_EDIT - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_MALLOW_FUNCTION - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_MALLOW_KEYPAD - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_MALLOW_MISC - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_NUMLOCK - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_REWRAP - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_CUT_LINES - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_MINIMIZE_SCROLLBACK - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_PRINT_ATTR - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_ALLOW_SUBST_FONTS - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_FORCE_SCALABLE - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_ALPHA - ICONF_MIN] = {255, 255, 0, 255},
-    [ICONF_BLEND_ALL_BG - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_BLEND_FG - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_SMOOTH_SCROLL_STEP - ICONF_MIN] = {1, 1, 1, 1000000},
-    [ICONF_SMOOTH_SCROLL_DELAY - ICONF_MIN] = {500, 500, 0, 999999},
-    [ICONF_SMOOTH_SCROLL - ICONF_MIN] = {0, 0, 0, 1},
-    [ICONF_LUIT - ICONF_MIN] = {1, 1, 0, 1},
-    [ICONF_NEED_LUIT - ICONF_MIN] = {0, 0, 0, 1},
-};
-
-static struct {
-    const char *dflt;
-    char *val;
-} soptions[] = {
-    [SCONF_FONT_NAME - SCONF_MIN] = { "mono", NULL },
-    [SCONF_ANSWERBACK_STRING - SCONF_MIN] = { "\006", NULL },
-    [SCONF_SHELL - SCONF_MIN] = { "/bin/sh", NULL },
-    [SCONF_TERM_NAME - SCONF_MIN] = { "xterm", NULL },
-    [SCONF_TITLE - SCONF_MIN] = { "Not So Simple Terminal", NULL },
-    [SCONF_PRINTER - SCONF_MIN] = { NULL, NULL },
-    [SCONF_PRINT_CMD - SCONF_MIN] = { NULL, NULL },
-    [SCONF_TERM_CLASS - SCONF_MIN] = { NULL, NULL },
-    [SCONF_FORCE_MOUSE_MOD - SCONF_MIN] = { "T", NULL },
-    [SCONF_TERM_MOD - SCONF_MIN] = {"SC", NULL },
-    [SCONF_WORD_SEPARATORS - SCONF_MIN] = { " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`", NULL },
-    [SCONF_CONFIG_PATH - SCONF_MIN] = { NULL, NULL },
-    [SCONF_CWD - SCONF_MIN] = { NULL, NULL },
-    [SCONF_LUIT_PATH - SCONF_MIN] = { "/usr/bin/luit", NULL },
-    [KCONF_SCROLL_DOWN - SCONF_MIN] = { "T-Up", NULL },
-    [KCONF_SCROLL_UP - SCONF_MIN] = { "T-Down", NULL },
-    [KCONF_FONT_INC - SCONF_MIN] = { "T-Page_Up", NULL },
-    [KCONF_FONT_DEC - SCONF_MIN] = { "T-Page_Down", NULL },
-    [KCONF_FONT_RESET - SCONF_MIN] = { "T-Home", NULL },
-    [KCONF_NEW_WINDOW - SCONF_MIN] = { "T-N", NULL },
-    [KCONF_NUMLOCK - SCONF_MIN] = { "T-Num_Lock", NULL },
-    [KCONF_COPY - SCONF_MIN] = { "T-C", NULL },
-    [KCONF_PASTE - SCONF_MIN] = { "T-V", NULL },
-    [KCONF_BREAK - SCONF_MIN] = { "Break", NULL },
-    [KCONF_RESET - SCONF_MIN] = { "T-R", NULL },
-    [KCONF_RELOAD_CONFIG - SCONF_MIN] = { "T-X", NULL },
-    [KCONF_REVERSE_VIDEO - SCONF_MIN] = { "T-I", NULL },
-};
-
-static color_t coptions[PALETTE_SIZE];
-static bool color_init;
-static const char **argv = NULL;
-
-
-/* Internal function, that calculates default palette
- *
- * base[CN_BASE] is default first 16 colors
- * next 6x6x6 colors are RGB cube
- * last 24 are gray scale
- *
- * default background and cursor background is color 0
- * default foreground and cursor foreground is color 15
- */
-static color_t color(uint32_t opt) {
-    static color_t base[CN_BASE] = {
+static color_t color(uint32_t n) {
+    static const color_t base[CN_BASE] = {
     // That's gruvbox colors
             0xFF222222, 0xFFFF4433, 0xFFBBBB22, 0xFFFFBB22,
             0xFF88AA99, 0xFFDD8899, 0xFF88CC77, 0xFFDDCCAA,
@@ -349,216 +195,713 @@ static color_t color(uint32_t opt) {
     // to get default xterm colors
     };
 
-    switch (opt) {
-    case CCONF_BG:
-    case CCONF_CURSOR_BG:
+    switch (n) {
+    case SPECIAL_BG:
+    case SPECIAL_CURSOR_BG:
         return base[0];
-    case CCONF_FG:
-    case CCONF_CURSOR_FG:
-    case CCONF_BOLD:
-    case CCONF_UNDERLINE:
-    case CCONF_BLINK:
-    case CCONF_REVERSE:
-    case CCONF_ITALIC:
+    case SPECIAL_FG:
+    case SPECIAL_CURSOR_FG:
+    case SPECIAL_BOLD:
+    case SPECIAL_UNDERLINE:
+    case SPECIAL_BLINK:
+    case SPECIAL_REVERSE:
+    case SPECIAL_ITALIC:
         return base[15];
         /* Invert text by default */
-    case CCONF_SELECTED_BG:
-    case CCONF_SELECTED_FG:
-        /* No default special colors */
+    case SPECIAL_SELECTED_BG:
+    case SPECIAL_SELECTED_FG:
         return 0;
     }
 
-    opt -= CCONF_COLOR_0;
-
-    if (opt < CN_BASE) return base[opt];
-    else if (opt < CN_EXT + CN_BASE) {
-        return 0xFF000000 | SD28B(((opt - CN_BASE) / 1) % 6) |
-            (SD28B(((opt - CN_BASE) / 6) % 6) << 8) | (SD28B(((opt - CN_BASE) / 36) % 6) << 16);
-    } else if (opt < CN_GRAY + CN_EXT + CN_BASE) {
-        uint8_t val = MIN(0x08 + 0x0A * (opt - CN_BASE - CN_EXT), 0xFF);
+    if (n < CN_BASE) return base[n];
+    else if (n < CN_EXT + CN_BASE) {
+        return 0xFF000000 | SD28B(((n - CN_BASE) / 1) % 6) |
+            (SD28B(((n - CN_BASE) / 6) % 6) << 8) | (SD28B(((n - CN_BASE) / 36) % 6) << 16);
+    } else if (n < CN_GRAY + CN_EXT + CN_BASE) {
+        uint8_t val = MIN(0x08 + 0x0A * (n - CN_BASE - CN_EXT), 0xFF);
         return 0xFF000000 + val * 0x10101;
     }
 
     return base[0];
 }
 
-int32_t iconf(uint32_t opt) {
-    if (opt >= ICONF_MAX) {
-        warn("Unknown integer config option %d", opt);
-        return 0;
-    }
-    return ioptions[opt].val;
-}
-
-void iconf_set(uint32_t opt, int32_t val) {
-    if (opt < ICONF_MAX) {
-        if (opt == ICONF_MAPPING && val >= keymap_MAX)
-            val = keymap_default;
-        if (val > ioptions[opt].max) val = ioptions[opt].max;
-        else if (val < ioptions[opt].min) val = ioptions[opt].min;
-        ioptions[opt].val = val;
-    } else {
-        warn("Unknown integer option %d", opt);
-    }
-}
-
-const char *sconf(uint32_t opt) {
-    if (SCONF_MIN > opt || opt >= KCONF_MAX) {
-        warn("Unknown string option %d", opt);
-        return NULL;
-    }
-    opt -= SCONF_MIN;
-    return soptions[opt].val ? soptions[opt].val : soptions[opt].dflt;
-}
-
-void sconf_set(uint32_t opt, const char *val) {
-    if (SCONF_MIN <= opt && opt < KCONF_MAX) {
-        opt -= SCONF_MIN;
-        if (!strcasecmp(val, "default")) val = NULL;
-        if (soptions[opt].val) free(soptions[opt].val);
-        soptions[opt].val = val ? strdup(val) : NULL;
-    } else if (opt < ICONF_MAX) {
-        int32_t ival = ioptions[opt - ICONF_MIN].dflt;
-        double alpha;
-        // Accept floating point opacity values
-        if (val && opt == ICONF_ALPHA && sscanf(val, "%lf", &alpha) == 1) {
-            if (alpha > 1) alpha /= 255;
-            iconf_set(opt, 255*alpha);
-        } else if (!val || sscanf(val, "%"SCNd32, &ival) == 1) {
-            iconf_set(opt, ival);
-        } else {
-            ival = -1;
-            // Boolean options
-            if (opt == ICONF_LOG_LEVEL) {
-                if (!strcasecmp(val, "quiet")) ival = 0;
-                else if (!strcasecmp(val, "fatal")) ival = 1;
-                else if (!strcasecmp(val, "warn")) ival = 2;
-                else if (!strcasecmp(val, "info")) ival = 3;
-            } else if (opt == ICONF_CURSOR_SHAPE) {
-                if (!strcasecmp(val, "blinking-block")) ival = 1;
-                else if (!strcasecmp(val, "block")) ival = 2;
-                else if (!strcasecmp(val, "blinking-underline")) ival = 3;
-                else if (!strcasecmp(val, "underline")) ival = 4;
-                else if (!strcasecmp(val, "blinking-bar")) ival = 5;
-                else if (!strcasecmp(val, "bar")) ival = 6;
-            } else if (opt == ICONF_PIXEL_MODE) {
-                if (!strcasecmp(val, "mono")) ival = 0;
-                else if (!strcasecmp(val, "bgr")) ival = 1;
-                else if (!strcasecmp(val, "rgb")) ival = 2;
-                else if (!strcasecmp(val, "bgrv")) ival = 3;
-                else if (!strcasecmp(val, "rgbv")) ival = 4;
-            } else if (opt == ICONF_KEYBOARD_NRCS) {
-#define E(c) ((c) & 0x7F)
-#define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
-#define I1(i) (I0(i) << 5)
-                if (!val[1] && val[0] > 0x2F && val[0] < 0x7F) {
-                    uint32_t sel = E(val[0]);
-                    ival = nrcs_parse(sel, 0, 5, 1);
-                    if (ival < 0) ival = nrcs_parse(sel, 1, 5, 1);
-                } else if (val[0] >= 0x20 && val[0] < 0x30 && val[1] > 0x2F && val[1] < 0x7F && !val[3]) {
-                    uint32_t sel = E(val[1]) | I0(val[0]);
-                    ival = nrcs_parse(sel, 0, 5, 1);
-                    if (ival < 0) ival = nrcs_parse(sel, 1, 5, 1);
-                }
-            } else if (opt == ICONF_MARGIN_BELL_VOLUME || opt == ICONF_BELL_VOLUME) {
-                if (!strcasecmp(val, "off")) ival = 0;
-                else if (!strcasecmp(val, "low")) ival = 1;
-                else if (!strcasecmp(val, "high")) ival = 2;
-            } else if (opt == ICONF_MAPPING) {
-                // "default" is parsed separately
-                if (!strcasecmp(val, "legacy")) ival = keymap_legacy;
-                else if (!strcasecmp(val, "vt220")) ival = keymap_vt220;
-                else if (!strcasecmp(val, "hp")) ival = keymap_hp;
-                else if (!strcasecmp(val, "sun")) ival = keymap_sun;
-                else if (!strcasecmp(val, "sco")) ival = keymap_sco;
-            } else if (opt == ICONF_MODIFY_OTHER_FMT) {
-                if (!strcasecmp(val, "xterm")) ival = 0;
-                else if (!strcasecmp(val, "csi-u")) ival = 1;
-            } else if (ioptions[opt].min == 0 && ioptions[opt].max == 1) {
-                if (!strcasecmp(val, "yes") || !strcasecmp(val, "y") || !strcasecmp(val, "true")) ival = 1;
-                else if (!strcasecmp(val, "no") || !strcasecmp(val, "n") || !strcasecmp(val, "false")) ival = 0;
-            } else if (!strcasecmp(val, "default")) {
-                ival = ioptions[opt].dflt;
-            }
-
-            if (ival >= 0) iconf_set(opt, ival);
-            else warn("Unknown string option %d", opt);
-        }
-    } else if (CCONF_MIN <= opt && opt < CCONF_MAX) {
-            color_t col = 0;
-            bool dflt = !val || !strcasecmp(val, "default");
-            if (dflt) col = color(opt);
-            else if (val) col = parse_color((uint8_t*)val, (uint8_t*)val + strlen(val));
-            if (col || !val) {
-                color_t old = cconf(opt);
-                if (!dflt) {
-                    // Keep alpha, unless its a special
-                    // color value or we are resetting to default
-                    if ((opt >= CCONF_SELECTED_BG) && !old) old = 0xFF000000;
-                    col = (col & 0xFFFFFF) | (old & 0xFF000000);
-                }
-                cconf_set(opt, col);
-            } else warn("Wrong color format: '%s'", val);
-    } else {
-        warn("Unknown string option %d", opt);
-        return;
-    }
-}
-
-bool bconf_set(uint32_t opt, bool val) {
-    if (opt < ICONF_MAX && ioptions[opt].min == 0 && ioptions[opt].max == 1) {
-        ioptions[opt].val = val;
+static bool parse_bool(const char *str, bool *val, bool dflt) {
+    if (!strcasecmp(str, "default")) {
+        *val = dflt;
+        return 1;
+    } else if (!strcasecmp(str, "true") || !strcasecmp(str, "yes") || !strcasecmp(str, "y") || !strcmp(str, "1")) {
+        *val = 1;
+        return 1;
+    } else if (!strcasecmp(str, "false") || !strcasecmp(str, "no") || !strcasecmp(str, "n") || !strcmp(str, "0")) {
+        *val = 0;
         return 1;
     }
     return 0;
 }
 
-void cconf_set(uint32_t opt, color_t val) {
-    if (!color_init) {
-        for (size_t i = 0; i < PALETTE_SIZE; i++)
-            coptions[i] = color(i + CCONF_COLOR_0);
-        color_init = 1;
+static bool parse_geometry(struct instance_config *cfg, const char *value) {
+    int16_t x = 0, y = 0, w = 0, h = 0;
+    char xsgn = '+', ysgn = '+';
+    if (value[0] == '=') value++;
+    if (value[0] == '+' || value[0] == '-') {
+        bool scanned = sscanf(value, "%c%"SCNd16"%c%"SCNd16, &xsgn, &x, &ysgn, &y) == 4;
+        if (!scanned || (xsgn != '+' && xsgn != '-') || (ysgn != '+' && ysgn != '-')) return 0;
+        if (xsgn == '-') x = -x;
+        if (ysgn == '-') y = -y;
+    } else {
+        int res = sscanf(value, "%"SCNd16"%*[xX]%"SCNd16"%c%"SCNd16"%c%"SCNd16,
+                &w, &h, &xsgn, &x, &ysgn, &y);
+        if (res == 6) {
+            if ((xsgn != '+' && xsgn != '-') || (ysgn != '+' && ysgn != '-')) return 0;
+            if (xsgn == '-') x = -x;
+            if (ysgn == '-') y = -y;
+        } else if (res != 2) return 0;
+        cfg->width = w;
+        cfg->height = h;
     }
-    if (opt < CCONF_MIN || opt >= CCONF_MAX) {
-        warn("Unknown color option");
-        return;
-    }
-    coptions[opt - CCONF_COLOR_0] = val ? val : color(opt);
+
+    cfg->user_geometry = 1;
+    cfg->x = x;
+    cfg->y = y;
+    cfg->stick_to_right = xsgn == '-';
+    cfg->stick_to_bottom = ysgn == '-';
+    return 1;
 }
 
-color_t cconf(uint32_t opt) {
-    if (!color_init) {
-        for (size_t i = 0; i < PALETTE_SIZE; i++)
-            coptions[i] = color(i + CCONF_COLOR_0);
-        color_init = 1;
+static bool parse_int(const char *str, int64_t *val, int64_t min, int64_t max, int64_t dflt) {
+    if (!strcasecmp(str, "default")) *val = dflt;
+    else {
+        errno = 0;
+        char *end;
+        *val = strtoll(str, &end, 0);
+        if (errno || !end || *end) return 0;
+        if (*val < min) *val = min;
+        if (*val > max) *val = max;
     }
-    if (CCONF_MIN > opt || opt >= CCONF_MAX) {
-        warn("Unknown option");
+    return 1;
+}
+
+static bool parse_enum(const char *str, int *val, int dflt, int start, ...) {
+    if (!strcasecmp(str, "default")) *val = dflt;
+    else {
+        va_list va;
+        va_start(va, start);
+        const char *s;
+        bool valset = 0;
+        while ((s = va_arg(va, const char *))) {
+            if (!strcasecmp(str, s)) {
+                *val = start;
+                valset = 1;
+                break;
+            }
+            start++;
+        }
+        va_end(va);
+        return valset;
+    }
+    return 1;
+}
+
+static char *parse_str(const char *str, const char *dflt) {
+    if (!strcasecmp(str, "default")) return dflt ? strdup(dflt) : NULL;
+    else return strdup(str);
+}
+
+static bool parse_col(const char *str, color_t *val, color_t dflt) {
+    if (!strcasecmp(str, "default")) *val = dflt;
+    else {
+        const uint8_t *end = (const uint8_t *)str + strlen(str);
+        *val = parse_color((const uint8_t *)str, end);
+        if (!*val) return 0;
+    }
+    return 1;
+}
+
+static bool parse_double(const char *str, double *val, double min, double max, double dflt) {
+    if (!strcasecmp(str, "default")) *val = dflt;
+    else if (sscanf(str, "%lf", val) == 1) {
+        if (*val > max) *val = max;
+        if (*val < min) *val = min;
+    } else return 0;
+    return 1;
+}
+
+bool set_option(struct instance_config *c, const char *name, const char *value, bool allow_global) {
+    struct global_config *g = &gconfig;
+    color_t *p = c->palette;
+
+    switch(*name) {
+        union {
+            int64_t i;
+            int e;
+            bool b;
+            char *s;
+            double f;
+            color_t c;
+        } val;
+        unsigned cnum;
+    case 'a':
+        if (!strcmp(name, optmap[o_allow_alternate].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->allow_altscreen = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_allow_blinking].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->allow_blinking = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_allow_modify_edit_keypad].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->allow_legacy_edit = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_allow_modify_function].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->allow_legacy_function = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_allow_modify_keypad].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->allow_legacy_keypad = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_allow_modify_misc].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->allow_legacy_misc = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_alpha].opt)) {
+            if (parse_double(value, &val.f, 0, 1, 1)) c->alpha = val.f;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_alternate_scroll].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->alternate_scroll = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_answerback_string].opt)) {
+            if (c->answerback_string) free(c->answerback_string);
+            c->answerback_string = parse_str(value, "\006");
+        } else if (!strcmp(name, optmap[o_appcursor].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->appcursor = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_appkey].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->appkey = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_autowrap].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->wrap = val.b;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'b':
+        if (!strcmp(name, optmap[o_background].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_BG))) p[SPECIAL_BG] = val.c;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_backspace_is_del].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->wrap = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_bell].opt)) {
+            if (parse_enum(value, &val.e, 2, 0, "off", "low", "high", NULL)) c->bell_volume = val.e;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_bell_high_volume].opt)) {
+            if (parse_int(value, &val.i, 0, 100, 100)) c->bell_high_volume = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_bell_low_volume].opt)) {
+            if (parse_int(value, &val.i, 0, 100, 50)) c->bell_low_volume = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_blend_all_background].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->blend_all_bg = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_blend_foreground].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->blend_fg = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_blink_color].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_BLINK))) p[SPECIAL_BLINK] = val.c;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_blink_time].opt)) {
+            if (parse_int(value, &val.i, 0, 10*SEC/1000, 800000)) c->blink_time = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_bold_color].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_BOLD))) p[SPECIAL_BOLD] = val.c;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'c':
+        if (!strcmp(name, optmap[o_config].opt)) {
+            if (c->config_path) free(c->config_path);
+            c->config_path = parse_str(value, NULL);
+        } else if (!strcmp(name, optmap[o_cursor_background].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_CURSOR_BG))) p[SPECIAL_CURSOR_BG] = val.c;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_cursor_foreground].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_CURSOR_FG))) p[SPECIAL_CURSOR_FG] = val.c;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_cursor_shape].opt)) {
+            if (parse_enum(value, &val.e, 6, 1, "blinking-block", "block",
+                    "blinking-underline", "underline", "blinking-bar", "bar", NULL)) c->cursor_shape = val.e;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_cursor_width].opt)) {
+            if (parse_int(value, &val.i, 0, 16, 2)) c->cursor_width = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_cut_lines].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->cut_lines = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_cwd].opt)) {
+            if (c->cwd) free(c->cwd);
+            c->cwd = parse_str(value, NULL);
+        } else if (sscanf(name, "color%u", &cnum) == 1 && cnum < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) {
+            if (parse_col(value, &val.c, color(cnum))) p[cnum] = val.c;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'd':
+        if (!strcmp(name, optmap[o_delete_is_del].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->delete_is_delete = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_double_click_time].opt)) {
+            if (parse_int(value, &val.i, 0, 10*SEC/1000, 300000)) c->double_click_time = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_dpi].opt)) {
+            if (parse_double(value, &val.f, 0, 1000, default_dpi)) c->dpi = val.f;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'e':
+        if (!strcmp(name, optmap[o_erase_scrollback].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->allow_erase_scrollback = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_extended_cir].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->extended_cir = val.b;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'f':
+        if (!strcmp(name, optmap[o_fixed].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->fixed = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_fkey_increment].opt)) {
+            if (parse_int(value, &val.i, 0, 48, 10)) c->fkey_increment = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_font].opt)) {
+            if (c->font_name) free(c->font_name);
+            c->font_name = parse_str(value, "mono");
+        } else if (!strcmp(name, optmap[o_font_gamma].opt)) {
+            if (parse_double(value, &val.f, 0.2, 2, 1)) c->gamma = val.f;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_font_size].opt)) {
+            if (parse_int(value, &val.i, 1, 1000, 0)) c->font_size = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_font_size_step].opt)) {
+            if (parse_int(value, &val.i, 0, 250, 1)) c->font_size_step = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_font_spacing].opt)) {
+            if (parse_int(value, &val.i, -100, 100, 0)) c->font_spacing = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_force_mouse_mod].opt)) {
+            if (c->force_mouse_mod) free(c->force_mouse_mod);
+            c->force_mouse_mod = parse_str(value, "T");
+        } else if (!strcmp(name, optmap[o_force_nrcs].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->force_utf8_nrcs = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_force_scalable].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->force_scalable = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_foreground].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_FG))) p[SPECIAL_FG] = val.c;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_fps].opt)) {
+            if (parse_int(value, &val.i, 2, 1000, 60)) c->fps = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_frame_wait_delay].opt)) {
+            if (parse_int(value, &val.i, 0, 10*SEC/1000, SEC/120000)) c->frame_finished_delay = val.i;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'g':
+        if (!strcmp(name, "geometry")) {
+            if (!parse_geometry(c, value)) goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'h':
+        if (!strcmp(name, optmap[o_has_meta].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->has_meta = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_horizontal_border].opt)) {
+            if (parse_int(value, &val.i, 0, 200, 8)) c->left_border = val.i;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'i':
+        if (!strcmp(name, optmap[o_italic_color].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_ITALIC))) p[SPECIAL_ITALIC] = val.c;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'k':
+        if (!strcmp(name, optmap[o_keep_clipboard].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->keep_clipboard = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_keep_selection].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->keep_selection = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_key_break].opt)) {
+            if (c->key[shortcut_break]) free(c->key[shortcut_break]);
+            c->key[shortcut_break] = parse_str(value, "Break");
+        } else if (!strcmp(name, optmap[o_key_copy].opt)) {
+            if (c->key[shortcut_copy]) free(c->key[shortcut_copy]);
+            c->key[shortcut_copy] = parse_str(value, "T-C");
+        } else if (!strcmp(name, optmap[o_key_dec_font].opt)) {
+            if (c->key[shortcut_font_down]) free(c->key[shortcut_font_down]);
+            c->key[shortcut_font_down] = parse_str(value, "T-Page_Down");
+        } else if (!strcmp(name, optmap[o_key_inc_font].opt)) {
+            if (c->key[shortcut_font_up]) free(c->key[shortcut_font_up]);
+            c->key[shortcut_font_up] = parse_str(value, "T-Page_Up");
+        } else if (!strcmp(name, optmap[o_key_new_window].opt)) {
+            if (c->key[shortcut_new_window]) free(c->key[shortcut_new_window]);
+            c->key[shortcut_new_window] = parse_str(value, "T-N");
+        } else if (!strcmp(name, optmap[o_key_numlock].opt)) {
+            if (c->key[shortcut_numlock]) free(c->key[shortcut_numlock]);
+            c->key[shortcut_numlock] = parse_str(value, "T-Num_Lock");
+        } else if (!strcmp(name, optmap[o_key_paste].opt)) {
+            if (c->key[shortcut_paste]) free(c->key[shortcut_paste]);
+            c->key[shortcut_paste] = parse_str(value, "T-V");
+        } else if (!strcmp(name, optmap[o_key_reload_config].opt)) {
+            if (c->key[shortcut_reload_config]) free(c->key[shortcut_reload_config]);
+            c->key[shortcut_reload_config] = parse_str(value, "T-X");
+        } else if (!strcmp(name, optmap[o_key_reset].opt)) {
+            if (c->key[shortcut_reset]) free(c->key[shortcut_reset]);
+            c->key[shortcut_reset] = parse_str(value, "T-R");
+        } else if (!strcmp(name, optmap[o_key_reset_font].opt)) {
+            if (c->key[shortcut_font_default]) free(c->key[shortcut_font_default]);
+            c->key[shortcut_font_default] = parse_str(value, "T-Home");
+        } else if (!strcmp(name, optmap[o_key_reverse_video].opt)) {
+            if (c->key[shortcut_reverse_video]) free(c->key[shortcut_reverse_video]);
+            c->key[shortcut_reverse_video] = parse_str(value, "T-I");
+        } else if (!strcmp(name, optmap[o_key_scroll_down].opt)) {
+            if (c->key[shortcut_scroll_down]) free(c->key[shortcut_scroll_down]);
+            c->key[shortcut_scroll_down] = parse_str(value, "T-Down");
+        } else if (!strcmp(name, optmap[o_key_scroll_up].opt)) {
+            if (c->key[shortcut_scroll_up]) free(c->key[shortcut_scroll_up]);
+            c->key[shortcut_scroll_up] = parse_str(value, "T-Up");
+        } else if (!strcmp(name, optmap[o_keyboard_dialect].opt)) {
+            if (!strcasecmp(value, "default")) c->keyboard_nrcs = cs94_ascii;
+            else {
+#define E(c) ((c) & 0x7F)
+#define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
+#define I1(i) (I0(i) << 5)
+                if (!value[1] && value[0] > 0x2F && value[0] < 0x7F) {
+                    uint32_t sel = E(value[0]);
+                    val.e = nrcs_parse(sel, 0, 5, 1);
+                    if (val.e < 0) val.e = nrcs_parse(sel, 1, 5, 1);
+                } else if (value[0] >= 0x20 && value[0] < 0x30 && value[1] > 0x2F && value[1] < 0x7F && !value[3]) {
+                    uint32_t sel = E(value[1]) | I0(value[0]);
+                    val.e = nrcs_parse(sel, 0, 5, 1);
+                    if (val.e < 0) val.e = nrcs_parse(sel, 1, 5, 1);
+                    if (val.e < 0) goto e_value;
+                    c->keyboard_nrcs = val.e;
+                } else goto e_value;
+            }
+        } else if (!strcmp(name, optmap[o_keyboard_mapping].opt)) {
+            if (parse_enum(value, &val.e, keymap_default, keymap_legacy,
+                    "legacy", "vt220", "hp", "sun", "sco", NULL)) c->mapping = val.e;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'l':
+        if (!strcmp(name, optmap[o_line_spacing].opt)) {
+            if (parse_int(value, &val.i, -100, 100, 0)) c->line_spacing = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_lock_keyboard].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->lock = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_log_level].opt)) {
+            if (parse_enum(name, &val.e, 3, 0,
+                    "quiet", "fatal", "warn", "info", NULL) && allow_global) g->log_level = val.e;
+        } else if (!strcmp(name, optmap[o_luit].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->allow_luit = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_luit_path].opt)) {
+            if (c->luit) free(c->luit);
+            c->luit = parse_str(value, "/usr/bin/luit");
+        } else goto e_unknown;
+        break;
+    case 'm':
+        if (!strcmp(name, optmap[o_margin_bell].opt)) {
+            if (parse_enum(value, &val.e, 2, 0, "off", "low", "high", NULL)) c->margin_bell_volume = val.e;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_margin_bell_column].opt)) {
+            if (parse_int(value, &val.i, 0, 200, 10)) c->margin_bell_column = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_margin_bell_high_volume].opt)) {
+            if (parse_int(value, &val.i, 0, 100, 100)) c->margin_bell_high_volume = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_margin_bell_low_volume].opt)) {
+            if (parse_int(value, &val.i, 0, 100, 50)) c->margin_bell_low_volume = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_max_frame_time].opt)) {
+            if (parse_int(value, &val.i, 0, 10*SEC/1000, SEC/30000)) c->max_frame_time = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_meta_sends_escape].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->meta_is_esc = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_minimize_scrollback].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->minimize_scrollback = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_modify_cursor].opt)) {
+            if (parse_int(value, &val.i, 0, 3, 3)) c->modify_cursor = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_modify_function].opt)) {
+            if (parse_int(value, &val.i, 0, 3, 3)) c->modify_function = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_modify_keypad].opt)) {
+            if (parse_int(value, &val.i, 0, 3, 3)) c->modify_keypad = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_modify_other].opt)) {
+            if (parse_int(value, &val.i, 0, 4, 0)) c->modify_other = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_modify_other_fmt].opt)) {
+            if (parse_enum(value, &val.e, 0, 0, "xterm", "csi-u", NULL)) c->modify_other_fmt = val.e;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'n':
+        if (!strcmp(name, optmap[o_nrcs].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->allow_nrcs = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_numlock].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->numlock = val.b;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+#if USE_BOXDRAWING
+    case 'o':
+        if (!strcmp(name, optmap[o_override_boxdrawing].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->override_boxdraw = val.b;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+#endif
+    case 'p':
+        if (!strcmp(name, optmap[o_pixel_mode].opt)) {
+            if (parse_enum(value, &val.e, pixmode_mono, pixmode_mono,
+                    "mono", "bgr", "rgb", "bgrv", "rgbv", NULL)) c->modify_other_fmt = val.e;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_print_attributes].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->print_attr = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_print_command].opt)) {
+            if (c->printer_cmd) free(c->printer_cmd);
+            c->printer_cmd = parse_str(value, NULL);
+        } else if (!strcmp(name, optmap[o_printer_file].opt)) {
+            if (c->printer_file) free(c->printer_file);
+            c->printer_file = parse_str(value, NULL);
+        } else goto e_unknown;
+        break;
+    case 'r':
+        if (!strcmp(name, optmap[o_raise_on_bell].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->raise_on_bell = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_reverse_video].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->reverse_video = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_reversed_color].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_REVERSE))) p[SPECIAL_REVERSE] = val.c;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_rewrap].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->rewrap = val.b;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 's':
+        if (!strcmp(name, optmap[o_scroll_amount].opt)) {
+            if (parse_int(value, &val.i, 0, 1000, 2)) c->scroll_amount = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_scroll_on_input].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->scroll_on_input = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_scroll_on_output].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->scroll_on_output = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_scrollback_size].opt)) {
+            if (parse_int(value, &val.i, 0, 1000000000, 10000)) c->scrollback_size = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_select_scroll_time].opt)) {
+            if (parse_int(value, &val.i, 0, 10*SEC/1000, 10000)) c->select_scroll_time = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_select_to_clipboard].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->select_to_clipboard = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_selected_background].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_SELECTED_BG))) p[SPECIAL_SELECTED_BG] = val.c;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_selected_foreground].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_SELECTED_FG))) p[SPECIAL_SELECTED_FG] = val.c;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_shell].opt)) {
+            if (c->shell) free(c->shell);
+            c->shell = parse_str(value, "/bin/sh");
+        } else if (!strcmp(name, optmap[o_smooth_scroll].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->smooth_scroll = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_smooth_scroll_delay].opt)) {
+            if (parse_int(value, &val.i, 0, 10*SEC/1000, 500)) c->smooth_scroll_delay = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_smooth_scroll_step].opt)) {
+            if (parse_int(value, &val.i, 1, 100000, 1)) c->smooth_scroll_step = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_special_blink].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->special_blink = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_special_bold].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->special_bold = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_special_italic].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->special_italic = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_special_reverse].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->special_reverse = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_special_underlined].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->special_underline = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_substitute_fonts].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->allow_subst_font = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_sync_timeout].opt)) {
+            if (parse_int(value, &val.i, 0, 10*SEC/1000, SEC/2000)) c->sync_time = val.i;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 't':
+        if (!strcmp(name, optmap[o_tab_width].opt)) {
+            if (parse_int(value, &val.i, 1, 1000, 8)) c->tab_width = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_term_mod].opt)) {
+            if (c->term_mod) free(c->term_mod);
+            c->term_mod = parse_str(value, "SC");
+        } else if (!strcmp(name, optmap[o_term_name].opt)) {
+            c->terminfo = parse_str(value, "xterm");
+        } else if (!strcmp(name, optmap[o_title].opt)) {
+            if (c->title) free(c->title);
+            c->title = parse_str(value, "Not So Simple Terminal");
+        } else if (!strcmp(name, optmap[o_trace_characters].opt)) {
+            if (parse_bool(value, &val.b, 0) && allow_global) g->trace_characters = val.b;
+        } else if (!strcmp(name, optmap[o_trace_controls].opt)) {
+            if (parse_bool(value, &val.b, 0) && allow_global) g->trace_controls = val.b;
+        } else if (!strcmp(name, optmap[o_trace_events].opt)) {
+            if (parse_bool(value, &val.b, 0) && allow_global) g->trace_events = val.b;
+        } else if (!strcmp(name, optmap[o_trace_fonts].opt)) {
+            if (parse_bool(value, &val.b, 0) && allow_global) g->trace_fonts = val.b;
+        } else if (!strcmp(name, optmap[o_trace_input].opt)) {
+            if (parse_bool(value, &val.b, 0) && allow_global) g->trace_input = val.b;
+        } else if (!strcmp(name, optmap[o_trace_misc].opt)) {
+            if (parse_bool(value, &val.b, 0) && allow_global) g->trace_misc = val.b;
+        } else if (!strcmp(name, optmap[o_triple_click_time].opt)) {
+            if (parse_int(value, &val.i, 0, 10*SEC/1000, 600000)) c->triple_click_time = val.i;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'u':
+        if (!strcmp(name, optmap[o_underline_width].opt)) {
+            if (parse_int(value, &val.i, 0, 16, 1)) c->underline_width = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_underlined_color].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_UNDERLINE))) p[SPECIAL_UNDERLINE] = val.c;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_urgent_on_bell].opt)) {
+            if (parse_bool(value, &val.b, 0)) c->urgency_on_bell = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_use_utf8].opt)) {
+            if (parse_bool(value, &val.b, default_utf8)) c->utf8 = val.b;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'v':
+        if (!strcmp(name, optmap[o_vertical_border].opt)) {
+            if (parse_int(value, &val.i, 0, 200, 8)) c->top_border = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_visual_bell].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->visual_bell = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_visual_bell_time].opt)) {
+            if (parse_int(value, &val.i, 0, 10*SEC/1000, 200000)) c->visual_bell_time = val.i;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_vt_version].opt)) {
+            if (parse_int(value, &val.i, 0, 999, 420)) c->vt_version = val.i;
+            else goto e_value;
+        } else goto e_unknown;
+        break;
+    case 'w':
+        if (!strcmp(name, optmap[o_window_class].opt)) {
+            if (c->window_class) free(c->window_class);
+            c->window_class = parse_str(value, NULL);
+        } else if (!strcmp(name, optmap[o_window_ops].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->allow_window_ops = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_word_break].opt)) {
+            if (c->word_separators) free(c->word_separators);
+            c->word_separators = parse_str(value, " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`");
+        } else goto e_unknown;
+        break;
+    default:
+    e_unknown:
+        warn("Unknown option: %s=\"%s\"", name, value);
+        return 0;
+    e_value:
+        warn("Invalid value: %s=\"%s\"", name, value);
         return 0;
     }
-    color_t val = coptions[opt - CCONF_COLOR_0];
-    return val ? val : color(opt);
+    if (gconfig.trace_misc) info("Option set: %s=\"%s\"", name, value);
+    return 1;
 }
 
-const char **sconf_argv(void) {
-    const char **res = argv;
-    argv = NULL;
-    return res;
+void set_default_dpi(double dpi) {
+    default_dpi = dpi;
 }
 
-void sconf_set_argv(const char **val) {
-    argv = val;
+void copy_config(struct instance_config *dst, struct instance_config *src) {
+    *dst = *src;
+    for (ssize_t i = 0; i < shortcut_MAX; i++)
+        dst->key[i] = src->key[i] ? strdup(src->key[i]) : NULL;
+    dst->word_separators = src->word_separators ? strdup(src->word_separators) : NULL;
+    dst->cwd = src->cwd ? strdup(src->cwd) : NULL;
+    dst->printer_cmd = src->printer_cmd ? strdup(src->printer_cmd) : NULL;
+    dst->printer_file = src->printer_file ? strdup(src->printer_file) : NULL;
+    dst->luit = src->luit ? strdup(src->luit) : NULL;
+    dst->terminfo = src->terminfo ? strdup(src->terminfo) : NULL;
+    dst->answerback_string = src->answerback_string ? strdup(src->answerback_string) : NULL;
+    dst->title = src->title ? strdup(src->title) : NULL;
+    dst->window_class = src->window_class ? strdup(src->window_class) : NULL;
+    dst->font_name = src->font_name ? strdup(src->font_name) : NULL;
+    dst->config_path = src->config_path ? strdup(src->config_path) : NULL;
+    dst->term_mod = src->term_mod ? strdup(src->term_mod) : NULL;
+    dst->force_mouse_mod = src->force_mouse_mod ? strdup(src->force_mouse_mod) : NULL;
+    dst->shell = src->shell ? strdup(src->shell) : NULL;
+    src->argv = NULL;
 }
 
-static int optmap_cmp(const void *a, const void *b) {
-    const char *a_arg_name = ((const struct optmap_item *)a)->arg_name;
-    const char *b_arg_name = ((const struct optmap_item *)b)->arg_name;
-    return strcmp(a_arg_name, b_arg_name);
+void free_config(struct instance_config *src) {
+    for (ssize_t i = 0; i < shortcut_MAX; i++)
+        free(src->key[i]);
+    free(src->word_separators);
+    free(src->cwd);
+    free(src->printer_cmd);
+    free(src->printer_file);
+    free(src->luit);
+    free(src->terminfo);
+    free(src->answerback_string);
+    free(src->title);
+    free(src->window_class);
+    free(src->font_name);
+    free(src->config_path);
+    free(src->term_mod);
+    free(src->force_mouse_mod);
+    free(src->shell);
 }
 
-void parse_config(void) {
+void init_instance_config(struct instance_config *cfg) {
+    for (size_t i = 0; i < sizeof(optmap)/sizeof(*optmap); i++)
+        if (i != o_config) set_option(cfg, optmap[i].opt, "default", 0);
+    for (size_t i = 0; i < PALETTE_SIZE; i++)
+        cfg->palette[i] = color(i);
+
+    cfg->x = 200;
+    cfg->y = 200;
+    cfg->width = 800;
+    cfg->height = 600;
+
+    parse_config(cfg);
+}
+
+void parse_config(struct instance_config *cfg) {
     char pathbuf[PATH_MAX];
-    const char *path = sconf(SCONF_CONFIG_PATH);
+    const char *path = cfg->config_path;
     int fd = -1;
 
     /* Config file is search in following places:
@@ -597,58 +940,46 @@ void parse_config(void) {
     close(fd);
 
     char *ptr = addr, *end = addr + stt.st_size;
-    char saved = '\0';
+    char saved1 = '\0', saved2 = '\0';
     ssize_t line_n = 0;
     while (ptr < end) {
         line_n++;
+
         while (ptr < end && isspace((unsigned)*ptr)) ptr++;
         if (ptr >= end) break;
 
         char *start = ptr;
         if (isalpha((unsigned)*ptr)) {
-            char *next = ptr;
+            char *name_start, *name_end, *value_start, *value_end;
 
-            while (next < end && !isspace((unsigned)*next) && *next != '#' && *next != '=') next++;
+            name_start = ptr;
 
-            SWAP(char, *next, saved);
-            unsigned colorn = 0;
-            enum config_option opt = -1U;
-            if (sscanf(ptr, "color%u", &colorn) == 1 && colorn < 256) {
-                opt = colorn + CCONF_COLOR_0;
-            } else {
-                struct optmap_item *res = bsearch(&(struct optmap_item){ptr, NULL, 0},
-                        optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
-                if (res) opt = res->opt;
-            }
-            SWAP(char, *next, saved);
-            if (opt == -1U) goto e_wrong_line;
+            while (ptr < end && !isspace((unsigned)*ptr) && *ptr != '#' && *ptr != '=') ptr++;
+            name_end = ptr;
 
-            while(next < end && isblank((unsigned)*next)) next++;
-            if (next >= end || *next++ != '=') goto e_wrong_line;
+            while (ptr < end && isblank((unsigned)*ptr)) ptr++;
+            if (ptr >= end || *ptr++ != '=') goto e_wrong_line;
+            while (ptr < end && isblank((unsigned)*ptr)) ptr++;
+            value_start = ptr;
 
-            while (next < end && isblank((unsigned)*next)) next++;
-            char *valstart = next;
-            while (next < end && *next != '\n') next++;
-            while (next > valstart && isblank((unsigned)next[-1])) next--;
-
-            SWAP(char, *next, saved);
-            sconf_set(opt, valstart);
-            SWAP(char, *next, saved);
-
-            ptr = next;
-        } else if (*ptr != '#') goto e_wrong_line;
-
-        while(ptr < end && isblank((unsigned)*ptr)) ptr++;
-        if (ptr < end && *ptr == '#')
             while (ptr < end && *ptr != '\n') ptr++;
+            while (ptr > value_start && isblank((unsigned)ptr[-1])) ptr--;
+            value_end = ptr;
 
-        if (0) {
+            SWAP(char, *value_end, saved1);
+            SWAP(char, *name_end, saved2);
+            set_option(cfg, name_start, value_start, 1);
+            SWAP(char, *name_end, saved2);
+            SWAP(char, *value_end, saved1);
+        } else if (*ptr == '#') {
+            while (ptr < end && *ptr != '\n') ptr++;
+        } else {
 e_wrong_line:
             ptr = start;
             while(ptr < end && *ptr != '\n') ptr++;
-            SWAP(char, *ptr, saved);
+            SWAP(char, *ptr, saved1);
             warn("Can't parse config line #%zd: %s", line_n, start);
-            SWAP(char, *ptr, saved);
+            SWAP(char, *ptr, saved1);
             ptr++;
         }
     }
@@ -657,9 +988,7 @@ e_wrong_line:
 
 e_open:
     // Parse all shortcuts
-    for (size_t i = shortcut_break; i < shortcut_MAX; i++)
-        keyboard_set_shortcut(i, sconf(KCONF_BREAK + i - shortcut_break));
-    keyboard_set_force_select_mask(sconf(SCONF_FORCE_MOUSE_MOD));
+    keyboard_parse_config(cfg);
 
     if (fd < 0) warn("Can't read config file: %s", path ? path : pathbuf);
 }

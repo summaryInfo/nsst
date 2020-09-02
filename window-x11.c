@@ -39,6 +39,7 @@
 #define PASTE_BLOCK_SIZE 1024
 
 struct context {
+    double font_size;
     bool daemon_mode;
     xcb_screen_t *screen;
     xcb_colormap_t mid;
@@ -293,7 +294,7 @@ void init_context(void) {
     xcb_screen_iterator_t it = xcb_setup_roots_iterator(xcb_get_setup(con));
     for (; it.rem; xcb_screen_next(&it))
         if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
-    if (dpi > 0) iconf_set(ICONF_DPI, dpi);
+    if (dpi > 0) set_default_dpi(dpi);
 
     sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART}, NULL);
 
@@ -318,16 +319,13 @@ void free_context(void) {
     memset(&con, 0, sizeof(con));
 }
 
-void window_get_dim(struct window *win, int16_t *width, int16_t *height) {
-    if (width) *width = win->width;
-    if (height) *height = win->height;
+struct instance_config *window_cfg(struct window *win) {
+    return &win->cfg;
 }
 
-void window_set_cursor(struct window *win, enum cursor_type type) {
-    win->cursor_type = type;
-}
-enum cursor_type window_get_cursor(struct window *win) {
-    return win->cursor_type;
+void window_get_dim(struct window *win, int16_t *width, int16_t *height) {
+    if (width) *width = win->cfg.width;
+    if (height) *height = win->cfg.height;
 }
 
 void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
@@ -335,7 +333,7 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
 
     if (bg) {
         win->bg = bg;
-        win->bg_premul = color_apply_a(bg, win->alpha);
+        win->bg_premul = color_apply_a(bg, 255*win->cfg.alpha);
     }
     if (cursor_fg) win->cursor_fg = cursor_fg;
 
@@ -355,7 +353,7 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
 }
 
 void window_set_alpha(struct window *win, double alpha) {
-    win->alpha = MAX(MIN(255, 255*alpha), 0);
+    win->cfg.alpha = MAX(MIN(1, alpha), 0);
     window_set_colors(win, win->bg, 0);
 }
 
@@ -384,7 +382,7 @@ void window_request_scroll_flush(struct window *win) {
 }
 
 void window_resize(struct window *win, int16_t width, int16_t height) {
-    if (win->height != height || win->width != width) {
+    if (win->cfg.height != height || win->cfg.width != width) {
         uint32_t vals[] = {width, height};
         xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
         handle_resize(win, width, height);
@@ -509,8 +507,8 @@ void window_get_dim_ext(struct window *win, enum window_dimension which, int16_t
             free(rep);
         }
         if (which == dim_grid_position) {
-            x += win->left_border;
-            y += win->top_border;
+            x += win->cfg.left_border;
+            y += win->cfg.top_border;
         }
         break;
     case dim_grid_size:
@@ -526,8 +524,8 @@ void window_get_dim_ext(struct window *win, enum window_dimension which, int16_t
         y = win->char_depth + win->char_height;
         break;
     case dim_border:
-        x = win->left_border;
-        y = win->top_border;
+        x = win->cfg.left_border;
+        y = win->cfg.top_border;
         break;
     }
 
@@ -540,8 +538,8 @@ void window_get_pointer(struct window *win, int16_t *px, int16_t *py, uint32_t *
     xcb_query_pointer_cookie_t c = xcb_query_pointer(con, win->wid);
     xcb_query_pointer_reply_t *qre = xcb_query_pointer_reply(con, c, NULL);
     if (qre) {
-        x = MIN(MAX(0, qre->win_x), win->width);
-        y = MIN(MAX(0, qre->win_y), win->height);
+        x = MIN(MAX(0, qre->win_x), win->cfg.width);
+        y = MIN(MAX(0, qre->win_y), win->cfg.height);
         mask = qre->mask;
         free(qre);
     }
@@ -569,7 +567,7 @@ void window_bell(struct window *win, uint8_t vol) {
         if (term_is_bell_raise_enabled(win->term)) window_action(win, action_restore_minimized);
         if (term_is_bell_urgent_enabled(win->term)) set_urgency(win->wid, 1);
     }
-    if (iconf(ICONF_VISUAL_BELL)) {
+    if (win->cfg.visual_bell) {
         if (!win->in_blink) {
             win->init_invert = term_is_reverse(win->term);
             win->in_blink = 1;
@@ -587,26 +585,24 @@ bool window_is_mapped(struct window *win) {
     return win->active;
 }
 
-static int32_t window_get_font_size(struct window *win) {
-    return win->font_size;
-}
-
-static void reload_all_fonts(void) {
+static void do_reload_config(void) {
     for (struct window *win = win_list_head; win; win = win->next) {
+        init_instance_config(&win->cfg);
         renderer_reload_font(win, 1);
         term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
+    reload_config = 0;
 }
 
 static void window_set_font(struct window *win, const char * name, int32_t size) {
-    bool reload = name || size != win->font_size;
+    bool reload = name || size != win->cfg.font_size;
     if (name) {
-        free(win->font_name);
-        win->font_name = strdup(name);
+        free(win->cfg.font_name);
+        win->cfg.font_name = strdup(name);
     }
 
-    if (size >= 0) win->font_size = size;
+    if (size >= 0) win->cfg.font_size = size;
 
     if (reload) {
         renderer_reload_font(win, 1);
@@ -628,7 +624,7 @@ static void set_icon_label(xcb_window_t wid, const char *title, bool utf8) {
 }
 
 void window_set_title(struct window *win, enum title_target which, const char *title, bool utf8) {
-    if (!title) title = sconf(SCONF_TITLE);
+    if (!title) title = win->cfg.title;
 
     if (which & target_title) set_title(win->wid, title, utf8);
 
@@ -735,9 +731,7 @@ void window_pop_title(struct window *win, enum title_target which) {
 }
 
 
-uint32_t get_win_gravity_from_config() {
-    bool nx = iconf(ICONF_WINDOW_NEGATIVE_X);
-    bool ny = iconf(ICONF_WINDOW_NEGATIVE_Y);
+uint32_t get_win_gravity_from_config(bool nx, bool ny) {
     switch (nx + 2 * ny) {
     case 0: return XCB_GRAVITY_NORTH_WEST;
     case 1: return XCB_GRAVITY_NORTH_EAST;
@@ -746,19 +740,19 @@ uint32_t get_win_gravity_from_config() {
     }
 };
 
-struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, uint8_t alpha, bool blink, bool selected) {
+struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, struct instance_config *cfg, bool blink, bool selected) {
     struct cellspec res;
 
     // Check special colors
-    if (UNLIKELY(iconf(ICONF_SPEICAL_BOLD)) && palette[SPECIAL_BOLD] && attr.bold)
+    if (UNLIKELY(cfg->special_bold) && palette[SPECIAL_BOLD] && attr.bold)
         attr.fg = palette[SPECIAL_BOLD], attr.bold = 0;
-    if (UNLIKELY(iconf(ICONF_SPEICAL_UNDERLINE)) && palette[SPECIAL_UNDERLINE] && attr.underlined)
+    if (UNLIKELY(cfg->special_underline) && palette[SPECIAL_UNDERLINE] && attr.underlined)
         attr.fg = palette[SPECIAL_UNDERLINE], attr.underlined = 0;
-    if (UNLIKELY(iconf(ICONF_SPEICAL_BLINK)) && palette[SPECIAL_BLINK] && attr.blink)
+    if (UNLIKELY(cfg->special_blink) && palette[SPECIAL_BLINK] && attr.blink)
         attr.fg = palette[SPECIAL_BLINK], attr.blink = 0;
-    if (UNLIKELY(iconf(ICONF_SPEICAL_REVERSE)) && palette[SPECIAL_REVERSE] && attr.reverse)
+    if (UNLIKELY(cfg->special_reverse) && palette[SPECIAL_REVERSE] && attr.reverse)
         attr.fg = palette[SPECIAL_REVERSE], attr.reverse = 0;
-    if (UNLIKELY(iconf(ICONF_SPEICAL_ITALIC)) && palette[SPECIAL_ITALIC] && attr.italic)
+    if (UNLIKELY(cfg->special_italic) && palette[SPECIAL_ITALIC] && attr.italic)
         attr.fg = palette[SPECIAL_ITALIC], attr.italic = 0;
 
     // Calculate colors
@@ -770,8 +764,8 @@ struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palet
     if (attr.reverse ^ selected) SWAP(color_t, res.fg, res.bg);
 
     // Apply background opacity
-    if (color_idx(attr.bg) == SPECIAL_BG || iconf(ICONF_BLEND_ALL_BG)) res.bg = color_apply_a(res.bg, alpha);
-    if (UNLIKELY(iconf(ICONF_BLEND_FG))) res.fg = color_apply_a(res.fg, alpha);
+    if (color_idx(attr.bg) == SPECIAL_BG || cfg->blend_all_bg) res.bg = color_apply_a(res.bg, 255*cfg->alpha);
+    if (UNLIKELY(cfg->blend_fg)) res.fg = color_apply_a(res.fg, 255*cfg->alpha);
 
     if ((!selected && attr.invisible) || (attr.blink && blink)) res.fg = res.bg;
 
@@ -802,15 +796,14 @@ struct window *find_shared_font(struct window *win, bool need_free) {
     bool found_font = 0, found_cache = 0;
     struct window *found = 0;
 
-    win->font_pixmode = iconf(ICONF_PIXEL_MODE);
-
     for (struct window *src = win_list_head; src; src = src->next) {
-        if ((src->font_size == win->font_size || (!win->font_size &&
-                src->font_size == iconf(ICONF_FONT_SIZE))) &&
-                !strcmp(win->font_name, src->font_name) && src != win) {
+        if ((src->cfg.font_size == win->cfg.font_size || (!win->cfg.font_size && src->cfg.font_size == ctx.font_size)) &&
+                src->cfg.dpi == win->cfg.dpi && src->cfg.force_scalable == win->cfg.force_scalable &&
+                src->cfg.gamma == win->cfg.gamma && !strcmp(win->cfg.font_name, src->cfg.font_name) && src != win) {
             found_font = 1;
             found = src;
-            if (win->font_pixmode == src->font_pixmode) {
+            if (win->font_pixmode == src->font_pixmode && win->cfg.font_spacing == src->cfg.font_spacing &&
+                    win->cfg.line_spacing == src->cfg.line_spacing && win->cfg.override_boxdraw == src->cfg.override_boxdraw) {
                 found_cache = 1;
                 break;
             }
@@ -818,14 +811,14 @@ struct window *find_shared_font(struct window *win, bool need_free) {
     }
 
     struct font *newf = found_font ? font_ref(found->font) :
-            create_font(win->font_name, win->font_size);
+            create_font(win->cfg.font_name, win->cfg.font_size, win->cfg.dpi, win->cfg.gamma, win->cfg.force_scalable);
     if (!newf) {
-        warn("Can't create new font: %s", win->font_name);
+        warn("Can't create new font: %s", win->cfg.font_name);
         return NULL;
     }
 
     struct glyph_cache *newc = found_cache ? glyph_cache_ref(found->font_cache) :
-            create_glyph_cache(newf);
+            create_glyph_cache(newf, win->cfg.pixel_mode, win->cfg.line_spacing, win->cfg.font_spacing, win->cfg.override_boxdraw);
 
     if (need_free) {
         free_glyph_cache(win->font_cache);
@@ -834,11 +827,10 @@ struct window *find_shared_font(struct window *win, bool need_free) {
 
     win->font = newf;
     win->font_cache = newc;
-    win->font_size = font_get_size(newf);
+    win->cfg.font_size = font_get_size(newf);
 
     //Initialize default font size
-    if (!iconf(ICONF_FONT_SIZE))
-        iconf_set(ICONF_FONT_SIZE, win->font_size);
+    if (!ctx.font_size) ctx.font_size = win->cfg.font_size;
 
     glyph_cache_get_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
 
@@ -851,24 +843,24 @@ void window_set_default_props(struct window *win) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom.WM_PROTOCOLS, XCB_ATOM_ATOM, 32, 1, &ctx.atom.WM_DELETE_WINDOW);
     const char *extra;
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(NSST_CLASS), NSST_CLASS);
-    if ((extra = sconf(SCONF_TERM_CLASS)))
+    if ((extra = win->cfg.window_class))
         xcb_change_property(con, XCB_PROP_MODE_APPEND, win->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, strlen(extra), extra);
     uint32_t nhints[] = {
         64 | 256, //PResizeInc, PBaseSize
-        iconf(ICONF_WINDOW_X), iconf(ICONF_WINDOW_Y), // Position
-        win->width, win->height, // Size
-        win->left_border * 2 + win->char_width, win->left_border * 2 + win->char_depth + win->char_height, // Min size
+        win->cfg.x, win->cfg.y, // Position
+        win->cfg.width, win->cfg.height, // Size
+        win->cfg.left_border * 2 + win->char_width, win->cfg.left_border * 2 + win->char_depth + win->char_height, // Min size
         0, 0, //Max size
         win->char_width, win->char_depth + win->char_height, // Size inc
         0, 0, 0, 0, // Min/max aspect
-        win->left_border * 2 + win->char_width, win->left_border * 2 + win->char_depth + win->char_height, // Base size
-        get_win_gravity_from_config(), // Gravity
+        win->cfg.left_border * 2 + win->char_width, win->cfg.left_border * 2 + win->char_depth + win->char_height, // Base size
+        get_win_gravity_from_config(win->cfg.stick_to_right, win->cfg.stick_to_bottom), // Gravity
     };
-    if (iconf(ICONF_HAS_GEOMETRY))
+    if (win->cfg.user_geometry)
         nhints[0] |= 1 | 2 | 512; // USPosition, USSize, PWinGravity
     else
         nhints[0] |= 4 | 8; // PPosition, PSize
-    if (iconf(ICONF_FIXED_SIZE)) {
+    if (win->cfg.fixed) {
         nhints[7] = nhints[5] = nhints[3];
         nhints[8] = nhints[6] = nhints[4];
         nhints[0] |= 16 | 32; // PMinSize, PMaxSize
@@ -890,26 +882,22 @@ void window_set_default_props(struct window *win) {
 }
 
 /* Create new window */
-struct window *create_window(void) {
+struct window *create_window(struct instance_config *cfg) {
     struct window *win = calloc(1, sizeof(struct window));
-    win->cursor_width = iconf(ICONF_CURSOR_WIDTH);
-    win->underline_width = iconf(ICONF_UNDERLINE_WIDTH);
-    win->left_border = iconf(ICONF_LEFT_BORDER);
-    win->top_border = iconf(ICONF_TOP_BORDER);
-    win->bg = cconf(iconf(ICONF_REVERSE_VIDEO) ? CCONF_FG : CCONF_BG);
-    win->cursor_fg = cconf(iconf(ICONF_REVERSE_VIDEO) ? CCONF_CURSOR_BG : CCONF_CURSOR_FG);
-    win->alpha = iconf(ICONF_ALPHA);
-    win->bg_premul = color_apply_a(win->bg, win->alpha);
-    win->cursor_type = iconf(ICONF_CURSOR_SHAPE);
-    win->font_size = iconf(ICONF_FONT_SIZE);
-    win->width = iconf(ICONF_WINDOW_WIDTH);
-    win->height = iconf(ICONF_WINDOW_HEIGHT);
+    if (!win) {
+        free(win);
+        return NULL;
+    }
 
+    copy_config(&win->cfg, cfg);
+
+    win->bg = win->cfg.palette[cfg->reverse_video ? SPECIAL_FG : SPECIAL_BG];
+    win->cursor_fg = win->cfg.palette[cfg->reverse_video ? SPECIAL_CURSOR_BG : SPECIAL_CURSOR_FG];
+    win->bg_premul = color_apply_a(win->bg, 255*win->cfg.alpha);
     win->active = 1;
     win->focused = 1;
 
-    win->font_name = strdup(sconf(SCONF_FONT_NAME));
-    if (!win->font_name) {
+    if (!win->cfg.font_name) {
         free_window(win);
         return NULL;
     }
@@ -922,18 +910,17 @@ struct window *create_window(void) {
     uint32_t mask1 =  XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
         XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
     uint32_t values1[5] = { win->bg_premul, win->bg_premul, XCB_GRAVITY_NORTH_WEST, win->ev_mask, ctx.mid };
-    int16_t x = iconf(ICONF_WINDOW_X);
-    int16_t y = iconf(ICONF_WINDOW_Y);
+
+    int16_t x = win->cfg.x;
+    int16_t y = win->cfg.y;
 
     // Adjust geometry
-    if (iconf(ICONF_WINDOW_NEGATIVE_X))
-        x += ctx.screen->width_in_pixels - win->width - 2;
-    if (iconf(ICONF_WINDOW_NEGATIVE_Y))
-        y += ctx.screen->height_in_pixels - win->height - 2;
+    if (win->cfg.stick_to_right) x += ctx.screen->width_in_pixels - win->cfg.width - 2;
+    if (win->cfg.stick_to_bottom) y += ctx.screen->height_in_pixels - win->cfg.height - 2;
 
     win->wid = xcb_generate_id(con);
     c = xcb_create_window_checked(con, TRUE_COLOR_ALPHA_DEPTH, win->wid, ctx.screen->root,
-                                  x, y, win->width, win->height, 0,
+                                  x, y, win->cfg.width, win->cfg.height, 0,
                                   XCB_WINDOW_CLASS_INPUT_OUTPUT,
                                   ctx.vis->visual_id, mask1, values1);
     if (check_void_cookie(c)) goto error;
@@ -951,7 +938,7 @@ struct window *create_window(void) {
     if (!win->term) goto error;
 
     window_set_default_props(win);
-    window_set_title(win, target_title | target_icon_label, NULL, iconf(ICONF_UTF8));
+    window_set_title(win, target_title | target_icon_label, NULL, win->cfg.utf8);
 
     win->next = win_list_head;
     win->prev = NULL;
@@ -1027,7 +1014,7 @@ void free_window(struct window *win) {
         win->title_stack = tmp;
     }
 
-    free(win->font_name);
+    free_config(&win->cfg);
     free(win);
 };
 
@@ -1035,7 +1022,7 @@ bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_
     struct timespec cur;
     clock_gettime(CLOCK_TYPE, &cur);
 
-    bool scrolled_recently = TIMEDIFF(win->last_shift, cur) <  SEC/2/iconf(ICONF_FPS);
+    bool scrolled_recently = TIMEDIFF(win->last_shift, cur) <  SEC/2/win->cfg.fps;
     win->last_shift = cur;
     if (delay && scrolled_recently) return 0;
 
@@ -1105,13 +1092,13 @@ void window_paste_clip(struct window *win, enum clip_target target) {
 }
 
 static void redraw_borders(struct window *win, bool top_left, bool bottom_right) {
-        int16_t width = win->cw * win->char_width + win->left_border;
-        int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
+        int16_t width = win->cw * win->char_width + win->cfg.left_border;
+        int16_t height = win->ch * (win->char_height + win->char_depth) + win->cfg.top_border;
         xcb_rectangle_t borders[NUM_BORDERS] = {
-            {0, 0, win->left_border, height},
-            {win->left_border, 0, width, win->top_border},
-            {width, 0, win->width - width, win->height},
-            {0, height, width, win->height - height},
+            {0, 0, win->cfg.left_border, height},
+            {win->cfg.left_border, 0, width, win->cfg.top_border},
+            {width, 0, win->cfg.width - width, win->cfg.height},
+            {0, height, width, win->cfg.height - height},
         };
         size_t count = 4, offset = 0;
         if (!top_left) count -= 2, offset += 2;
@@ -1123,11 +1110,11 @@ static void redraw_borders(struct window *win, bool top_left, bool bottom_right)
 void handle_resize(struct window *win, int16_t width, int16_t height) {
     //Handle resize
 
-    win->width = width;
-    win->height = height;
+    win->cfg.width = width;
+    win->cfg.height = height;
 
-    int16_t new_cw = MAX(2, (win->width - 2*win->left_border)/win->char_width);
-    int16_t new_ch = MAX(1, (win->height - 2*win->top_border)/(win->char_height+win->char_depth));
+    int16_t new_cw = MAX(2, (win->cfg.width - 2*win->cfg.left_border)/win->char_width);
+    int16_t new_ch = MAX(1, (win->cfg.height - 2*win->cfg.top_border)/(win->char_height+win->char_depth));
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
 
@@ -1143,23 +1130,23 @@ void handle_resize(struct window *win, int16_t width, int16_t height) {
 }
 
 static void handle_expose(struct window *win, struct rect damage) {
-    int16_t width = win->cw * win->char_width + win->left_border;
-    int16_t height = win->ch * (win->char_height + win->char_depth) + win->top_border;
+    int16_t width = win->cw * win->char_width + win->cfg.left_border;
+    int16_t height = win->ch * (win->char_height + win->char_depth) + win->cfg.top_border;
 
     size_t num_damaged = 0;
     struct rect damaged[NUM_BORDERS], borders[NUM_BORDERS] = {
-        {0, 0, win->left_border, height},
-        {win->left_border, 0, width, win->top_border},
-        {width, 0, win->width - width, win->height},
-        {0, height, width, win->height - height},
+        {0, 0, win->cfg.left_border, height},
+        {win->cfg.left_border, 0, width, win->cfg.top_border},
+        {width, 0, win->cfg.width - width, win->cfg.height},
+        {0, height, width, win->cfg.height - height},
     };
     for (size_t i = 0; i < NUM_BORDERS; i++)
         if (intersect_with(&borders[i], &damage))
                 damaged[num_damaged++] = borders[i];
     if (num_damaged) xcb_poly_fill_rectangle(con, win->wid, win->gc, num_damaged, (xcb_rectangle_t *)damaged);
 
-    struct rect inters = { 0, 0, width - win->left_border, height - win->top_border};
-    damage = rect_shift(damage, -win->left_border, -win->top_border);
+    struct rect inters = { 0, 0, width - win->cfg.left_border, height - win->cfg.top_border};
+    damage = rect_shift(damage, -win->cfg.left_border, -win->cfg.top_border);
     if (intersect_with(&inters, &damage)) renderer_update(win, inters);
 }
 
@@ -1173,7 +1160,7 @@ static void handle_keydown(struct window *win, xkb_keycode_t keycode) {
 
     if (key.sym == XKB_KEY_NoSymbol) return;
 
-    enum shortcut_action action = keyboard_find_shortcut(key);
+    enum shortcut_action action = keyboard_find_shortcut(&win->cfg, key);
 
     switch (action) {
     case shortcut_break:
@@ -1183,25 +1170,25 @@ static void handle_keydown(struct window *win, xkb_keycode_t keycode) {
         term_toggle_numlock(win->term);
         return;
     case shortcut_scroll_up:
-        term_scroll_view(win->term, -iconf(ICONF_SCROLL_AMOUNT));
+        term_scroll_view(win->term, -win->cfg.scroll_amount);
         return;
     case shortcut_scroll_down:
-        term_scroll_view(win->term, iconf(ICONF_SCROLL_AMOUNT));
+        term_scroll_view(win->term, win->cfg.scroll_amount);
         return;
     case shortcut_font_up:
     case shortcut_font_down:
     case shortcut_font_default:;
-        int32_t size = window_get_font_size(win);
+        int32_t size = win->cfg.font_size;
         if (action == shortcut_font_up)
-            size += iconf(ICONF_FONT_SIZE_STEP);
+            size += win->cfg.font_size_step;
         else if (action == shortcut_font_down)
-            size -= iconf(ICONF_FONT_SIZE_STEP);
+            size -= win->cfg.font_size_step;
         else if (action == shortcut_font_default)
-            size = iconf(ICONF_FONT_SIZE);
+            size = ctx.font_size;
         window_set_font(win, NULL, size);
         return;
     case shortcut_new_window:
-        create_window();
+        create_window(&win->cfg);
         return;
     case shortcut_copy:
         clip_copy(win);
@@ -1210,7 +1197,10 @@ static void handle_keydown(struct window *win, xkb_keycode_t keycode) {
         window_paste_clip(win, clip_clipboard);
         return;
     case shortcut_reload_config:
-        reload_config = 1;
+        init_instance_config(&win->cfg);
+        renderer_reload_font(win, 1);
+        term_damage_lines(win->term, 0, win->ch);
+        win->force_redraw = 1;
         return;
     case shortcut_reset:
         term_reset(win->term);
@@ -1363,7 +1353,7 @@ static void handle_event(void) {
         case XCB_EXPOSE:{
             xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
             if (!(win = window_for_xid(ev->window))) break;
-            if (iconf(ICONF_TRACE_EVENTS)) {
+            if (gconfig.trace_events) {
                 info("Event: event=Expose win=0x%x x=%x y=%d width=%d height=%d",
                         ev->window, ev->x, ev->y, ev->width, ev->height);
             }
@@ -1373,20 +1363,20 @@ static void handle_event(void) {
         case XCB_CONFIGURE_NOTIFY:{
             xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
             if (!(win = window_for_xid(ev->window))) break;
-            if (iconf(ICONF_TRACE_EVENTS)) {
+            if (gconfig.trace_events) {
                 info("Event: event=ConfigureWindow win=0x%x x=%x y=%d width=%d"
                         " height=%d border=%d redir=%d above_win=0x%x event_win=0x%x",
                         ev->window, ev->x, ev->y, ev->width, ev->height, ev->border_width,
                         ev->override_redirect, ev->above_sibling, ev->event);
             }
-            if (ev->width != win->width || ev->height != win->height)
+            if (ev->width != win->cfg.width || ev->height != win->cfg.height)
                 handle_resize(win, ev->width, ev->height);
             break;
         }
         case XCB_KEY_PRESS:{
             xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
             if (!(win = window_for_xid(ev->event))) break;
-            if (iconf(ICONF_TRACE_EVENTS)) {
+            if (gconfig.trace_events) {
                 info("Event: event=KeyPress win=0x%x keycode=0x%x", ev->event, ev->detail);
             }
             handle_keydown(win, ev->detail);
@@ -1396,7 +1386,7 @@ static void handle_event(void) {
         case XCB_FOCUS_OUT:{
             xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
             if (!(win = window_for_xid(ev->event))) break;
-            if (iconf(ICONF_TRACE_EVENTS)) {
+            if (gconfig.trace_events) {
                 info("Event: event=%s win=0x%x", ev->response_type == XCB_FOCUS_IN ?
                         "FocusIn" : "FocusOut", ev->event);
             }
@@ -1408,7 +1398,7 @@ static void handle_event(void) {
         case XCB_MOTION_NOTIFY: {
             xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t*)event;
             if (!(win = window_for_xid(ev->event))) break;
-            if (iconf(ICONF_TRACE_EVENTS)) {
+            if (gconfig.trace_events) {
                 info("Event: event=%s mask=%d button=%d x=%d y=%d",
                         ev->response_type == XCB_BUTTON_PRESS ? "ButtonPress" :
                         ev->response_type == XCB_BUTTON_RELEASE ? "ButtonRelease" : "MotionNotify",
@@ -1430,7 +1420,7 @@ static void handle_event(void) {
         case XCB_SELECTION_CLEAR: {
             xcb_selection_clear_event_t *ev = (xcb_selection_clear_event_t*)event;
             if (!(win = window_for_xid(ev->owner))) break;
-            if (iconf(ICONF_TRACE_EVENTS)) {
+            if (gconfig.trace_events) {
                 info("Event: event=SelectionClear owner=0x%x selection=0x%x", ev->owner, ev->selection);
             }
             // Clear even if set keep?
@@ -1440,7 +1430,7 @@ static void handle_event(void) {
         case XCB_PROPERTY_NOTIFY: {
             xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)event;
             if (!(win = window_for_xid(ev->window))) break;
-            if (iconf(ICONF_TRACE_EVENTS)) {
+            if (gconfig.trace_events) {
                 info("Event: event=PropertyNotify window=0x%x property=0x%x state=%d",
                         ev->window, ev->atom, ev->state);
             }
@@ -1452,7 +1442,7 @@ static void handle_event(void) {
         case XCB_SELECTION_NOTIFY: {
             xcb_selection_notify_event_t *ev = (xcb_selection_notify_event_t*)event;
             if (!(win = window_for_xid(ev->requestor))) break;
-            if (iconf(ICONF_TRACE_EVENTS)) {
+            if (gconfig.trace_events) {
                 info("Event: event=SelectionNotify owner=0x%x target=0x%x property=0x%x selection=0x%x",
                         ev->requestor, ev->target, ev->property, ev->selection);
             }
@@ -1462,7 +1452,7 @@ static void handle_event(void) {
         case XCB_SELECTION_REQUEST: {
             xcb_selection_request_event_t *ev = (xcb_selection_request_event_t*)event;
             if (!(win = window_for_xid(ev->owner))) break;
-            if (iconf(ICONF_TRACE_EVENTS)) {
+            if (gconfig.trace_events) {
                 info("Event: event=SelectionRequest owner=0x%x requestor=0x%x target=0x%x property=0x%x selection=0x%x",
                         ev->owner, ev->requestor, ev->target, ev->property, ev->selection);
             }
@@ -1472,7 +1462,7 @@ static void handle_event(void) {
         case XCB_CLIENT_MESSAGE: {
             xcb_client_message_event_t *ev = (xcb_client_message_event_t*)event;
             if (!(win = window_for_xid(ev->window))) break;
-            if (iconf(ICONF_TRACE_EVENTS)) {
+            if (gconfig.trace_events) {
                 info("Event: event=ClientMessage window=0x%x type=0x%x data=[0x%08x,0x%08x,0x%08x,0x%08x,0x%08x]",
                     ev->window, ev->type, ev->data.data32[0], ev->data.data32[1],
                     ev->data.data32[2], ev->data.data32[3], ev->data.data32[4]);
@@ -1487,7 +1477,7 @@ static void handle_event(void) {
         case XCB_VISIBILITY_NOTIFY: {
             xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
             if (!(win = window_for_xid(ev->window))) break;
-            if (iconf(ICONF_TRACE_EVENTS)) {
+            if (gconfig.trace_events) {
                 info("Event: event=ClientMessage window=0x%x state=%d", ev->window, ev->state);
             }
             win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
@@ -1515,7 +1505,7 @@ static void handle_event(void) {
                     uint8_t device_id;
                 } *xkb_ev = (struct _xkb_any_event*)event;
 
-                if (iconf(ICONF_TRACE_EVENTS)) {
+                if (gconfig.trace_events) {
                     info("Event: XKB Event %d", xkb_ev->xkb_type);
                 }
 
@@ -1546,7 +1536,7 @@ static void handle_event(void) {
 /* Start window logic, handling all windows in context */
 void run(void) {
     struct timespec prev;
-    for (int64_t next_timeout = SEC/iconf(ICONF_FPS);;) {
+    for (int64_t next_timeout = SEC;;) {
 #if USE_PPOLL
         if (ppoll(ctx.pfds, ctx.pfdcap, &(struct timespec){next_timeout / SEC, next_timeout % SEC}, NULL) < 0 && errno != EINTR)
 #else
@@ -1554,7 +1544,8 @@ void run(void) {
 #endif
             warn("Poll error: %s", strerror(errno));
 
-        next_timeout = iconf(ctx.vbell_count ? ICONF_VISUAL_BELL_TIME : ICONF_BLINK_TIME)*1000LL;
+        next_timeout = 30*SEC;
+
         struct timespec cur;
         clock_gettime(CLOCK_TYPE, &cur);
 
@@ -1572,7 +1563,7 @@ void run(void) {
                 // to prevent active waiting loop. If smooth scroll timeout got expired
                 // we can enable it back and attempt to read from pty.
                 // If there is nothing to read it won't block since O_NONBLOCK is set for ptys
-                if (!need_read && ctx.pfds[win->poll_index].fd < 0 && TIMEDIFF(win->last_scroll, cur) > iconf(ICONF_SMOOTH_SCROLL_DELAY)*1000LL) {
+                if (!need_read && ctx.pfds[win->poll_index].fd < 0 && TIMEDIFF(win->last_scroll, cur) > win->cfg.smooth_scroll_delay*1000LL) {
                     ctx.pfds[win->poll_index].fd = -ctx.pfds[win->poll_index].fd;
                     need_read = 1;
                 }
@@ -1580,32 +1571,32 @@ void run(void) {
                 if (win->wait_for_redraw) {
                     // If we are waiting for the frame to finish, we need to
                     // reduce poll timeout
-                    int64_t diff = (iconf(ICONF_FRAME_FINISHED_DELAY) + 1)*1000LL - TIMEDIFF(win->last_read, cur);
+                    int64_t diff = (win->cfg.frame_finished_delay + 1)*1000LL - TIMEDIFF(win->last_read, cur);
                     if (win->wait_for_redraw &= diff > 0 && win->active) next_timeout = MIN(next_timeout, diff);
                 }
             }
         }
 
-        bool pending_scroll_all = 0;
         for (struct window *win = win_list_head; win; win = win->next) {
+            next_timeout = MIN(next_timeout, (win->in_blink ? win->cfg.visual_bell_time : win->cfg.blink_time)*1000LL);
+
             // Scroll down selection
             bool pending_scroll = mouse_pending_scroll(win->term);
-            pending_scroll_all |= pending_scroll;
 
             // Deactivate syncronous update mode if it has expired
-            if (UNLIKELY(win->sync_active) && TIMEDIFF(win->last_sync, cur) > iconf(ICONF_SYNC_TIME)*1000LL)
+            if (UNLIKELY(win->sync_active) && TIMEDIFF(win->last_sync, cur) > win->cfg.sync_time*1000LL)
                 win->sync_active = 0, win->wait_for_redraw = 0;
 
             // Reset revert if visual blink duration finished
-            if (UNLIKELY(win->in_blink) && TIMEDIFF(win->vbell_start, cur) > iconf(ICONF_VISUAL_BELL_TIME)*1000LL) {
+            if (UNLIKELY(win->in_blink) && TIMEDIFF(win->vbell_start, cur) > win->cfg.visual_bell_time*1000LL) {
                 term_set_reverse(win->term, win->init_invert);
                 win->in_blink = 0;
                 ctx.vbell_count--;
             }
 
             // Change blink state if blinking interval is expired
-            if (win->active && iconf(ICONF_ALLOW_BLINKING) &&
-                    TIMEDIFF(win->last_blink, cur) > iconf(ICONF_BLINK_TIME)*1000LL) {
+            if (win->active && win->cfg.allow_blinking &&
+                    TIMEDIFF(win->last_blink, cur) > win->cfg.blink_time*1000LL) {
                 win->blink_state = !win->blink_state;
                 win->blink_commited = 0;
                 win->last_blink = cur;
@@ -1616,19 +1607,19 @@ void run(void) {
             // or we are waiting for frame to finish and maximal frame time is not expired
             if (!win->force_redraw && !pending_scroll) {
                 if (UNLIKELY(win->sync_active || !win->active)) continue;
-                if (win->wait_for_redraw && TIMEDIFF(win->last_draw, cur) < iconf(ICONF_MAX_FRAME_TIME)*1000LL) continue;
+                if (win->wait_for_redraw && TIMEDIFF(win->last_draw, cur) < win->cfg.max_frame_time*1000LL) continue;
             }
 
-            int64_t frame_time = SEC / iconf(ICONF_FPS);
+            int64_t frame_time = SEC / win->cfg.fps;
             int64_t remains = frame_time - TIMEDIFF(win->last_draw, cur);
 
-            if (remains <= 10000LL || win->force_redraw || pending_scroll) {
+            if (remains <= 10000LL || win->force_redraw || win->wait_for_redraw || pending_scroll) {
                 if (win->force_redraw) redraw_borders(win, 1, 1);
 
                 remains = frame_time;
                 if ((win->drawn_somthing = term_redraw(win->term)) || win->wait_for_redraw) win->last_draw = cur;
 
-                if (iconf(ICONF_TRACE_MISC) && win->drawn_somthing) info("Redraw");
+                if (gconfig.trace_misc && win->drawn_somthing) info("Redraw");
 
                 // If we haven't been drawn anything
                 // increase poll timeout
@@ -1639,8 +1630,8 @@ void run(void) {
             }
 
             if (!win->slow_mode) next_timeout = MIN(next_timeout,  remains);
+            if (pending_scroll) next_timeout = MIN(next_timeout, win->cfg.select_scroll_time*1000LL);
         }
-        if (pending_scroll_all) next_timeout = MIN(next_timeout, iconf(ICONF_SELECT_SCROLL_TIME)*1000LL);
 
         next_timeout = MAX(0, next_timeout);
         xcb_flush(con);
@@ -1648,11 +1639,7 @@ void run(void) {
         // TODO Try reconnect after timeout
         if ((!ctx.daemon_mode && !win_list_head) || xcb_connection_has_error(con)) break;
 
-        if (reload_config) {
-            parse_config();
-            reload_all_fonts();
-            reload_config = 0;
-        }
+        if (reload_config) do_reload_config();
         prev = cur;
     }
 }

@@ -54,7 +54,7 @@ struct render_context {
 static void register_glyph(struct window *win, uint32_t ch, struct glyph * glyph) {
     xcb_render_glyphinfo_t spec = {
         .width = glyph->width, .height = glyph->height,
-        .x = glyph->x - iconf(ICONF_FONT_SPACING)/2, .y = glyph->y - iconf(ICONF_LINE_SPACING)/2,
+        .x = glyph->x - win->cfg.font_spacing/2, .y = glyph->y - win->cfg.line_spacing/2,
         .x_off = win->char_width, .y_off = glyph->y_off
     };
     xcb_void_cookie_t c;
@@ -66,7 +66,7 @@ static void register_glyph(struct window *win, uint32_t ch, struct glyph * glyph
 bool renderer_reload_font(struct window *win, bool need_free) {
     struct window *found = find_shared_font(win, need_free);
 
-    win->ren.pfglyph = iconf(ICONF_PIXEL_MODE) ? rctx.pfargb : rctx.pfalpha;
+    win->ren.pfglyph = win->cfg.pixel_mode ? rctx.pfargb : rctx.pfalpha;
 
     xcb_void_cookie_t c;
 
@@ -91,11 +91,11 @@ bool renderer_reload_font(struct window *win, bool need_free) {
     }
 
     if (need_free) {
-        handle_resize(win, win->width, win->height);
+        handle_resize(win, win->cfg.width, win->cfg.height);
         window_set_default_props(win);
     } else {
-        win->cw = MAX(1, (win->width - 2*win->left_border) / win->char_width);
-        win->ch = MAX(1, (win->height - 2*win->top_border) / (win->char_height + win->char_depth));
+        win->cw = MAX(1, (win->cfg.width - 2*win->cfg.left_border) / win->char_width);
+        win->ch = MAX(1, (win->cfg.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
 
         xcb_rectangle_t bound = { 0, 0, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height) };
 
@@ -289,7 +289,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
     rctx.cbufpos = 0;
     rctx.bufpos = 0;
 
-    bool cond_cblink = !win->blink_commited && (win->cursor_type & 1) && term_is_cursor_enabled(win->term);
+    bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1) && term_is_cursor_enabled(win->term);
 
     if (cond_cblink) cursor |= win->blink_state;
 
@@ -309,7 +309,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
 
     if (rctx.bufpos) {
         color_t c = palette[SPECIAL_SELECTED_BG] ? palette[SPECIAL_SELECTED_BG] : palette[SPECIAL_FG];
-        xcb_render_color_t col = MAKE_COLOR(color_apply_a(c, win->alpha));
+        xcb_render_color_t col = MAKE_COLOR(color_apply_a(c, win->cfg.alpha));
         xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
             rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
     }
@@ -340,9 +340,9 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
             uint32_t g = 0;
             if (dirty || next_dirty) {
                 if (k == cur_y && i == cur_x && cursor && win->focused &&
-                        ((win->cursor_type + 1) & ~1) == cusor_type_block) attr.reverse ^= 1;
+                        ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block) attr.reverse ^= 1;
 
-                spec = describe_cell(cel, attr, palette, win->alpha, win->blink_state, mouse_is_selected_in_view(win->term, i, k));
+                spec = describe_cell(cel, attr, palette, &win->cfg, win->blink_state, mouse_is_selected_in_view(win->term, i, k));
                 g =  spec.ch | (spec.face << 24);
 
                 bool fetched = glyph_cache_is_fetched(win->font_cache, g);
@@ -350,7 +350,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
 
                 if (!fetched && glyph) register_glyph(win, g, glyph);
 
-                g_wide = glyph && glyph->x_off > win->char_width - iconf(ICONF_FONT_SPACING);
+                g_wide = glyph && glyph->x_off > win->char_width - win->cfg.font_spacing;
             }
             if (dirty || (g_wide && next_dirty)) {
                 if (2*(rctx.cbufpos + 1) >= rctx.cbufsize) {
@@ -376,7 +376,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
             next_dirty = dirty;
         }
         // Only reset force flag for last part of the line
-        if (is_last_line(line)) line.line->force_damage = 0;
+        if (is_last_line(line, win->cfg.rewrap)) line.line->force_damage = 0;
     }
 
     if (rctx.bufpos) {
@@ -505,9 +505,9 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
                     rctx.cbuffer[k].fg == rctx.cbuffer[i].fg && rctx.cbuffer[i].underlined);
             push_rect(&(xcb_rectangle_t) {
                 .x = rctx.cbuffer[k].x,
-                .y = rctx.cbuffer[k].y + win->char_height + 1 + iconf(ICONF_LINE_SPACING)/2,
+                .y = rctx.cbuffer[k].y + win->char_height + 1 + win->cfg.line_spacing/2,
                 .width = rctx.cbuffer[i - 1].x + win->char_width - rctx.cbuffer[k].x,
-                .height = win->underline_width
+                .height = win->cfg.underline_width
             });
         }
         i = j;
@@ -521,9 +521,9 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
                     rctx.cbuffer[k].fg == rctx.cbuffer[i].fg && rctx.cbuffer[i].strikethrough);
             push_rect(&(xcb_rectangle_t) {
                 .x = rctx.cbuffer[k].x,
-                .y = rctx.cbuffer[k].y + 2*win->char_height/3 - win->underline_width/2 + iconf(ICONF_LINE_SPACING)/2,
+                .y = rctx.cbuffer[k].y + 2*win->char_height/3 - win->cfg.underline_width/2 + win->cfg.line_spacing/2,
                 .width = rctx.cbuffer[i - 1].x + win->char_width - rctx.cbuffer[k].x,
-                .height = win->underline_width
+                .height = win->cfg.underline_width
             });
         }
         if (rctx.bufpos) {
@@ -544,19 +544,19 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
         };
         size_t off = 0, count = 4;
         if (win->focused) {
-            if (((win->cursor_type + 1) & ~1) == cusor_type_bar) {
+            if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_bar) {
                 if (marg) {
                     off = 2;
-                    rects[2].width = win->cursor_width;
-                    rects[2].x -= win->cursor_width - 1;
+                    rects[2].width = win->cfg.cursor_width;
+                    rects[2].x -= win->cfg.cursor_width - 1;
                 } else
-                    rects[0].width = win->cursor_width;
+                    rects[0].width = win->cfg.cursor_width;
                 count = 1;
-            } else if (((win->cursor_type + 1) & ~1) == cusor_type_underline) {
+            } else if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_underline) {
                 count = 1;
                 off = 3;
-                rects[3].height = win->cursor_width;
-                rects[3].y -= win->cursor_width - 1;
+                rects[3].height = win->cfg.cursor_shape;
+                rects[3].y -= win->cfg.cursor_shape - 1;
             } else {
                 count = 0;
             }
@@ -576,7 +576,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
 
 void renderer_update(struct window *win, struct rect rect) {
     xcb_copy_area(con, win->ren.pid1, win->wid, win->gc, rect.x, rect.y,
-            rect.x + win->left_border, rect.y + win->top_border, rect.width, rect.height);
+            rect.x + win->cfg.left_border, rect.y + win->cfg.top_border, rect.width, rect.height);
 }
 
 void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {

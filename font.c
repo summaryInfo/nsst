@@ -42,9 +42,12 @@ struct face_list {
 
 struct font {
     size_t refs;
-    uint16_t dpi;
+    double dpi;
     double pixel_size;
     double size;
+    double gamma;
+    bool allow_subst_font;
+    bool force_scalable;
     FcCharSet *subst_chars;
     struct face_list face_types[face_MAX];
 };
@@ -95,7 +98,7 @@ static void load_append_fonts(struct font *font, struct face_list *faces, struct
             index.u.i = 0;
         }
 
-        if (iconf(ICONF_TRACE_FONTS))
+        if (gconfig.trace_fonts)
             info("Font file: %s:%d", file.u.s, index.u.i);
         FT_Error err = FT_New_Face(global.library, (const char*)file.u.s, index.u.i, &faces->faces[faces->length]);
         if (err != FT_Err_Ok) {
@@ -149,7 +152,7 @@ static void load_face_list(struct font *font, struct face_list* faces, const cha
         FcPattern *final_pat = NULL;
         FcPattern *pat = FcNameParse((FcChar8*) tok);
         FcPatternAddDouble(pat, FC_DPI, font->dpi);
-        if (iconf(ICONF_FORCE_SCALABLE)) FcPatternAddBool(pat, FC_SCALABLE, FcTrue);
+        if (font->force_scalable) FcPatternAddBool(pat, FC_SCALABLE, FcTrue);
         FcPatternDel(pat, FC_STYLE);
         FcPatternDel(pat, FC_WEIGHT);
         FcPatternDel(pat, FC_SLANT);
@@ -235,7 +238,7 @@ static void load_face_list(struct font *font, struct face_list* faces, const cha
     free(tmp);
 }
 
-struct font *create_font(const char* descr, double size) {
+struct font *create_font(const char* descr, double size, double dpi, double gamma, bool force_scalable) {
     if (global.fonts++ == 0) {
         if (FcInit() == FcFalse)
             die("Can't initialize fontconfig");
@@ -253,8 +256,10 @@ struct font *create_font(const char* descr, double size) {
 
     font->refs = 1;
     font->pixel_size = 0;
-    font->dpi = iconf(ICONF_DPI);
+    font->dpi = dpi;
     font->size = size;
+    font->gamma = gamma;
+    font->force_scalable = force_scalable;
 
 
     for (size_t i = 0; i < face_MAX; i++)
@@ -279,7 +284,7 @@ static void add_font_substitute(struct font *font, struct face_list *faces, enum
     FcPattern *chset_pat = FcPatternCreate();
     FcPatternAddDouble(chset_pat, FC_DPI, font->dpi);
     FcPatternAddCharSet(chset_pat, FC_CHARSET, font->subst_chars);
-    if (iconf(ICONF_FORCE_SCALABLE) || FT_IS_SCALABLE(faces->faces[0]))
+    if (font->force_scalable || FT_IS_SCALABLE(faces->faces[0]))
         FcPatternAddBool(chset_pat, FC_SCALABLE, FcTrue);
 
     switch (attr) {
@@ -325,14 +330,14 @@ static void add_font_substitute(struct font *font, struct face_list *faces, enum
     FcPatternDestroy(final_pat);
 }
 
-struct glyph *font_render_glyph(struct font *font, uint32_t ch, enum face_name attr) {
+struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t ch, enum face_name attr) {
     struct face_list *faces = &font->face_types[attr];
     int glyph_index = 0;
     FT_Face face = faces->faces[0];
     for (size_t i = 0; !glyph_index && i < faces->length; i++)
         if ((glyph_index = FT_Get_Char_Index(faces->faces[i], ch)))
             face = faces->faces[i];
-    if (!glyph_index && iconf(ICONF_ALLOW_SUBST_FONTS)) {
+    if (!glyph_index && font->allow_subst_font) {
         size_t oldlen = faces->length, sz = faces->faces[0]->size->metrics.x_ppem*72.0/font->dpi*64;
         add_font_substitute(font, faces, attr, ch);
         for (size_t i = oldlen; !glyph_index && i < faces->length; i++) {
@@ -343,7 +348,6 @@ struct glyph *font_render_glyph(struct font *font, uint32_t ch, enum face_name a
 
     FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT);
 
-    enum pixel_mode ord = iconf(ICONF_PIXEL_MODE);
     bool ordv = ord == pixmode_bgrv || ord == pixmode_rgbv;
     bool ordrev = ord == pixmode_bgr || ord == pixmode_bgrv;
     bool lcd = ord != pixmode_mono;
@@ -368,7 +372,7 @@ struct glyph *font_render_glyph(struct font *font, uint32_t ch, enum face_name a
     glyph->stride = stride;
     glyph->pixmode = ord;
 
-    double gamma = iconf(ICONF_GAMMA) / 10000.0;
+    double gamma = font->gamma;
 
     int pitch = face->glyph->bitmap.pitch;
     uint8_t *src = face->glyph->bitmap.buffer;
@@ -432,10 +436,10 @@ struct glyph *font_render_glyph(struct font *font, uint32_t ch, enum face_name a
     case FT_PIXEL_MODE_BGRA:
         warn("Colored glyph encountered");
         free(glyph);
-        return font_render_glyph(font, 0, attr);
+        return font_render_glyph(font, ord, 0, attr);
     }
 
-    if (iconf(ICONF_LOG_LEVEL) == 3 && iconf(ICONF_TRACE_FONTS)) {
+    if (gconfig.log_level == 3 && gconfig.trace_fonts) {
         info("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
         info("Num grays: %d", face->glyph->bitmap.num_grays);
         info("Glyph: %d %d", glyph->width, glyph->height);
@@ -459,6 +463,10 @@ struct glyph_cache {
     int16_t char_width;
     int16_t char_height;
     int16_t char_depth;
+    int16_t vspacing;
+    int16_t hspacing;
+    bool override_boxdraw;
+    enum pixel_mode pixmode;
     size_t refc;
     struct glyph **tab;
     size_t size;
@@ -477,7 +485,7 @@ uint64_t hash(uint64_t v) {
     return v ^ v >> 28;
 }
 
-struct glyph_cache *create_glyph_cache(struct font *font) {
+struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmode, int16_t vspacing, int16_t hspacing, bool boxdraw) {
     struct glyph_cache *cache = calloc(1, sizeof(struct glyph_cache));
     if (!cache) {
         warn("Can't allocate glyph cache");
@@ -487,6 +495,10 @@ struct glyph_cache *create_glyph_cache(struct font *font) {
     cache->caps = HASH_INIT_CAP;
     cache->refc = 1;
     cache->font = font;
+    cache->vspacing = vspacing;
+    cache->hspacing = hspacing;
+    cache->override_boxdraw = boxdraw;
+    cache->pixmode = pixmode;
 
     if (!cache->tab) {
         free(cache);
@@ -503,11 +515,11 @@ struct glyph_cache *create_glyph_cache(struct font *font) {
         maxh = MAX(maxh, g->y);
     }
 
-    cache->char_width = total / ('~' - ' ' + 1) + iconf(ICONF_FONT_SPACING);
+    cache->char_width = total / ('~' - ' ' + 1) + hspacing;
     cache->char_height = maxh;
-    cache->char_depth = maxd + iconf(ICONF_LINE_SPACING);
+    cache->char_depth = maxd + vspacing;
 
-    if (iconf(ICONF_TRACE_FONTS)) {
+    if (gconfig.trace_fonts) {
         info("Font dim: width=%"PRId16", height=%"PRId16", depth=%"PRId16,
                 cache->char_width, cache->char_height, cache->char_depth);
     }
@@ -546,11 +558,11 @@ struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum fac
 
     struct glyph *new;
 #if USE_BOXDRAWING
-    if (is_boxdraw(ch) && iconf(ICONF_OVERRIDE_BOXDRAW))
-        new = make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth);
+    if (is_boxdraw(ch) && cache->override_boxdraw)
+        new = make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth, cache->pixmode, cache->hspacing, cache->vspacing);
     else
 #endif
-        new = font_render_glyph(cache->font, ch, face);
+        new = font_render_glyph(cache->font, cache->pixmode, ch, face);
 
     if (!new) return NULL;
 

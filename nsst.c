@@ -7,6 +7,7 @@
 
 #include "config.h"
 #include "feature.h"
+#include "input.h"
 #include "tty.h"
 #include "util.h"
 #include "window.h"
@@ -22,14 +23,8 @@
 #include <string.h>
 #include <unistd.h>
 
-static int optmap_cmp(const void *a, const void *b) {
-    const char *a_arg_name = ((const struct optmap_item *)a)->arg_name;
-    const char *b_arg_name = ((const struct optmap_item *)b)->arg_name;
-    return strcmp(a_arg_name, b_arg_name);
-}
-
 static _Noreturn void usage(char *argv0, int code) {
-    if (iconf(ICONF_LOG_LEVEL) > 0 || code == EXIT_SUCCESS) {
+    if (gconfig.log_level > 0 || code == EXIT_SUCCESS) {
         printf("%s%s", argv0, " [-options] [-e] [command [args]]\n"
             "Where options are:\n"
                 "\t--help, -h\t\t\t(Print this message and exit)\n"
@@ -37,8 +32,8 @@ static _Noreturn void usage(char *argv0, int code) {
                 "\t--color<N>=<color>, \t\t(Set palette color <N>, <N> is from 0 to 255)\n"
                 "\t--geometry=<value>, -g<value> \t(Window geometry, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>])\n"
         );
-        for (size_t i = 0; i < sizeof(optmap)/sizeof(optmap[0]); i++)
-            printf("\t--%s=<value>%s\n", optmap[i].arg_name, optmap[i].arg_desc);
+        for (size_t i = 0; i < o_MAX; i++)
+            printf("\t--%s=<value>%s\n", optmap[i].opt, optmap[i].descr);
         printf("%s",
             "For every boolean option --<X>=<Y>\n"
                 "\t--<X>, --enable-<X>, --with-<X>,\n"
@@ -78,41 +73,12 @@ static _Noreturn void version(void) {
     exit(EXIT_SUCCESS);
 }
 
-static void parse_geometry(char *arg, char *argv0) {
-    int16_t x = 0, y = 0, w = 0, h = 0;
-    char xsgn = '+', ysgn = '+';
-    if (arg[0] == '=') arg++;
-    if (arg[0] == '+' || arg[0] == '-') {
-        bool scanned = sscanf(arg, "%c%"SCNd16"%c%"SCNd16, &xsgn, &x, &ysgn, &y) == 4;
-        if (!scanned || (xsgn != '+' && xsgn != '-') || (ysgn != '+' && ysgn != '-'))
-            usage(argv0, EXIT_FAILURE);
-        if (xsgn == '-') x = -x;
-        if (ysgn == '-') y = -y;
-    } else {
-        int res = sscanf(arg, "%"SCNd16"%*[xX]%"SCNd16"%c%"SCNd16"%c%"SCNd16,
-                &w, &h, &xsgn, &x, &ysgn, &y);
-        if (res == 6) {
-            if ((xsgn != '+' && xsgn != '-') || (ysgn != '+' && ysgn != '-'))
-                usage(argv0, EXIT_FAILURE);
-            if (xsgn == '-') x = -x;
-            if (ysgn == '-') y = -y;
-        } else if (res != 2) usage(argv0, EXIT_FAILURE);
-        iconf_set(ICONF_WINDOW_WIDTH, w);
-        iconf_set(ICONF_WINDOW_HEIGHT, h);
-    }
-    iconf_set(ICONF_HAS_GEOMETRY, 1);
-    iconf_set(ICONF_WINDOW_X, x);
-    iconf_set(ICONF_WINDOW_Y, y);
-    iconf_set(ICONF_WINDOW_NEGATIVE_X, xsgn == '-');
-    iconf_set(ICONF_WINDOW_NEGATIVE_Y, ysgn == '-');
-}
-
-static void parse_options(char **argv) {
+static void parse_options(struct instance_config *cfg, char **argv) {
     size_t ind = 1;
 
     char *arg, *opt;
     while (argv[ind] && argv[ind][0] == '-') {
-        size_t cind = 0, n;
+        size_t cind = 0;
         if (!argv[ind][1]) usage(argv[0], EXIT_FAILURE);
         if (argv[ind][1] == '-') {
             if (!argv[ind][2]) {
@@ -128,32 +94,17 @@ static void parse_options(char **argv) {
                 *arg++ = '\0';
                 if (!*arg) arg = argv[++ind];
 
-                struct optmap_item *res = bsearch(&(struct optmap_item){opt, NULL, 0},
-                        optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
-                if (res && arg)
-                    sconf_set(res->opt, arg);
-                else if (arg && !strcmp(opt, "geometry"))
-                    parse_geometry(arg, argv[0]);
-                else if (arg && !strncmp(opt, "color", 5) &&
-                        sscanf(opt, "color%zu", &n) == 1)
-                    sconf_set(CCONF_COLOR_0 + n, arg);
-                else if (!strcmp(opt, "config")) /* nothing */;
-                else  usage(argv[0], EXIT_FAILURE);
+                if (!strcmp(opt, "config") && !set_option(cfg, opt, arg, 1))
+                    usage(argv[0], EXIT_FAILURE);
             } else {
                 if (!strcmp(opt, "help"))
                     usage(argv[0], EXIT_SUCCESS);
                 else if (!strcmp(opt, "version"))
                     version();
                 else {
-                    bool val = 1;
-                    if (!strncmp(opt, "no-", 3)) opt += 3, val = 0;
-                    else if (!strncmp(opt, "enable-", 7)) opt += 7, val = 1;
-                    else if (!strncmp(opt, "disable-", 8)) opt += 8, val = 0;
-                    else if (!strncmp(opt, "with-", 5)) opt += 5, val = 1;
-                    else if (!strncmp(opt, "without-", 8)) opt += 8, val = 0;
-                    struct optmap_item *res = bsearch(&(struct optmap_item){opt, NULL, 0},
-                            optmap, OPT_MAP_SIZE, sizeof(*optmap), optmap_cmp);
-                    if (!res || !bconf_set(res->opt, val))
+                    const char *val = "true";
+                    if (!strncmp(opt, "no-", 3)) opt += 3, val = "false";
+                    if (!set_option(cfg, opt, val, 1))
                         usage(argv[0], EXIT_FAILURE);
                 }
             }
@@ -163,7 +114,7 @@ static void parse_options(char **argv) {
             switch (letter) {
             case 'e':
                 if (!argv[++ind]) usage(argv[0], EXIT_FAILURE);
-                sconf_set_argv((const char**)&argv[ind]);
+                cfg->argv = &argv[ind];
                 return;
             case 'h':
                 usage(argv[0], EXIT_FAILURE);
@@ -176,21 +127,19 @@ static void parse_options(char **argv) {
                 if (!argv[ind]) usage(argv[0], EXIT_FAILURE);
                 arg = argv[ind] + cind;
 
-                enum config_option opt = 0;
+                const char *opt = NULL;
                 switch (letter) {
-                case 'f': opt = SCONF_FONT_NAME; break;
-                case 'D': opt = SCONF_TERM_NAME; break;
-                case 'o': opt = SCONF_PRINTER; break;
-                case 'c': opt = SCONF_TERM_CLASS; break;
+                case 'f': opt = "font"; break;
+                case 'D': opt = "term-name"; break;
+                case 'o': opt = "printer-file"; break;
+                case 'c': opt = "window-class"; break;
                 case 't':
-                case 'T': opt = SCONF_TITLE; break;
-                case 'V': opt = ICONF_VT_VERION; break;
-                case 'H': opt = ICONF_HISTORY_LINES; break;
+                case 'T': opt = "title"; break;
+                case 'V': opt = "vt-version"; break;
+                case 'H': opt = "scrollback-size"; break;
+                case 'g': opt = "geometry"; break;
                 }
-                if (opt) sconf_set(opt, arg);
-                else if (letter == 'g') {
-                    // Still need to parse geometry
-                    parse_geometry(arg, argv[0]);
+                if (opt && !set_option(cfg, opt, arg, 1)) {
                 } else {
                     // Treat all unknown options not having arguments
                     if (cind) cind--;
@@ -206,33 +155,28 @@ static void parse_options(char **argv) {
         if (argv[ind]) ind++;
     }
 
-    if (argv[ind]) sconf_set_argv((const char**)&argv[ind]);
+    if (argv[ind]) cfg->argv = &argv[ind];
 
-    // Reparse all keyboad shortcuts
-    for (size_t i = shortcut_break; i < shortcut_MAX; i++)
-        keyboard_set_shortcut(i, sconf(KCONF_BREAK + i - shortcut_break));
-    keyboard_set_force_select_mask(sconf(SCONF_FORCE_MOUSE_MOD));
-
+    // Parse all shortcuts
+    keyboard_parse_config(cfg);
 }
+
+static struct instance_config cfg;
 
 int main(int argc, char **argv) {
 
     // Load locale
     setlocale(LC_CTYPE, "");
+
     char *charset = nl_langinfo(CODESET);
-    bool utf8 = 0, need_luit = 0;
     if (charset) {
         // Builtin support for locales only include UTF-8, Latin-1 and ASCII
         // TODO: Check for supported NRCSs and prefere them to luit
-        utf8 = !strncasecmp(charset, "UTF", 3) && (charset[3] == '8' || charset[4] == '8');
+        gconfig.utf8 = !strncasecmp(charset, "UTF", 3) && (charset[3] == '8' || charset[4] == '8');
         bool supported = !strcasecmp(charset, "ISO-8859-1") || !strcasecmp(charset, "ASCII");
-        need_luit = !supported && !utf8;
-        utf8 |= (!access(sconf(SCONF_LUIT_PATH), X_OK) && need_luit && iconf(ICONF_LUIT));
+        gconfig.want_luit = !supported && !gconfig.utf8;
     }
-    iconf_set(ICONF_UTF8, utf8);
-    iconf_set(ICONF_NEED_LUIT, need_luit);
 
-    // Initialize contexts
     init_context();
     init_default_termios();
 
@@ -248,14 +192,16 @@ int main(int argc, char **argv) {
             if (!*arg) arg = argv[++i];
             if (!arg) usage(argv[0], EXIT_FAILURE);
         }
-        if (arg) sconf_set(SCONF_CONFIG_PATH, arg);
+        if (arg) set_option(&cfg, "config", arg, 1);
     }
 
-    parse_config();
-    parse_options(argv);
+    init_instance_config(&cfg);
+    parse_options(&cfg, argv);
+    create_window(&cfg);
+    free_config(&cfg);
 
-    create_window();
     run();
+
     free_context();
 
     return EXIT_SUCCESS;

@@ -6,6 +6,7 @@
 #include "feature.h"
 
 #include "window.h"
+#include "config.h"
 #include "term.h"
 #if USE_X11SHM
 #   include "image.h"
@@ -85,15 +86,6 @@ struct window {
     bool init_invert : 1;
     bool wait_for_redraw : 1;
 
-    int16_t width;
-    int16_t height;
-    int16_t cw;
-    int16_t ch;
-    int16_t cursor_width;
-    int16_t underline_width;
-    int16_t left_border;
-    int16_t top_border;
-    int16_t font_size;
     struct timespec last_scroll;
     struct timespec last_shift;
     struct timespec last_blink;
@@ -111,19 +103,18 @@ struct window {
     int16_t saved_width;
     int16_t saved_height;
 
-    uint8_t alpha;
     color_t bg;
     color_t bg_premul;
     color_t cursor_fg;
-    enum cursor_type cursor_type;
 
     uint8_t *clipped[clip_MAX];
     uint8_t *clipboard;
 
+    int16_t cw;
+    int16_t ch;
     int16_t char_width;
     int16_t char_depth;
     int16_t char_height;
-    char *font_name;
     struct font *font;
     struct glyph_cache *font_cache;
     enum pixel_mode font_pixmode;
@@ -134,6 +125,9 @@ struct window {
     struct title_stack_item *title_stack;
 
     struct renderer ren;
+
+    // Window configuration
+    struct instance_config cfg;
 };
 
 extern xcb_connection_t *con;
@@ -160,7 +154,7 @@ void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 void window_set_default_props(struct window *win);
 void handle_resize(struct window *win, int16_t width, int16_t height);
 struct window *find_shared_font(struct window *win, bool need_free);
-struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, uint8_t alpha, bool blink, bool selected);
+struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, struct instance_config *cfg, bool blink, bool selected);
 
 #endif
 

@@ -3,29 +3,13 @@
 #ifndef INPUT_H_
 #define INPUT_H_ 1
 
+#include "config.h"
+
 #include <stdbool.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 
 #define UDK_MAX 37
-
-enum shortcut_action {
-    shortcut_none,
-    shortcut_break,
-    shortcut_numlock,
-    shortcut_scroll_up,
-    shortcut_scroll_down,
-    shortcut_font_up,
-    shortcut_font_down,
-    shortcut_font_default,
-    shortcut_new_window,
-    shortcut_reset,
-    shortcut_reload_config,
-    shortcut_copy,
-    shortcut_paste,
-    shortcut_reverse_video,
-    shortcut_MAX
-};
 
 struct keyboard_state {
     bool keyboad_vt52 : 1;
@@ -68,15 +52,7 @@ struct keyboard_state {
 
     uint16_t fkey_inc_step : 5;
 
-    enum keyboad_mapping {
-        keymap_default,
-        keymap_legacy,
-        keymap_vt220,
-        keymap_hp,
-        keymap_sun,
-        keymap_sco,
-        keymap_MAX
-    } keyboard_mapping;
+    enum keyboad_mapping keyboard_mapping;
 
     struct udk {
         uint8_t *val;
@@ -100,11 +76,9 @@ struct term;
 
 void keyboard_handle_input(struct key k, struct term *term);
 struct key keyboard_describe_key(struct xkb_state *state, xkb_keycode_t keycode);
-uint32_t keyboard_force_select_mask(void);
-void keyboard_set_shortcut(enum shortcut_action sa, const char *val);
-enum shortcut_action keyboard_find_shortcut(struct key k);
 void keyboard_reset_udk(struct term *term);
 bool keyboard_set_udk(struct term *term, const uint8_t *str, const uint8_t *end, bool reset, bool lock);
-void keyboard_set_force_select_mask(const char *mask);
+enum shortcut_action keyboard_find_shortcut(struct instance_config *cfg, struct key k);
+void keyboard_parse_config(struct instance_config *cfg);
 
 #endif

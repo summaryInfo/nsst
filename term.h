@@ -56,7 +56,7 @@ struct line_view term_line_at(struct term *term, struct line_offset pos);
 struct line_offset term_get_view(struct term *term);
 struct line_offset term_get_line_pos(struct term *term, ssize_t y);
 ssize_t term_line_next(struct term *term, struct line_offset *pos, ssize_t amount);
-bool is_last_line(struct line_view line);
+bool is_last_line(struct line_view line, bool rewrap);
 
 bool term_is_paste_requested(struct term *term);
 void term_paste_begin(struct term *term);

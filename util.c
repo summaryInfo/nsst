@@ -17,7 +17,7 @@
 #include <strings.h>
 
 _Noreturn void die(const char *fmt, ...) {
-    if (iconf(ICONF_LOG_LEVEL) > 0) {
+    if (gconfig.log_level > 0) {
         va_list args;
         va_start(args, fmt);
         fputs("[\033[31;1mFATAL\033[m] ", stderr);
@@ -29,7 +29,7 @@ _Noreturn void die(const char *fmt, ...) {
 }
 
 void fatal(const char *fmt, ...) {
-    if (iconf(ICONF_LOG_LEVEL) > 0) {
+    if (gconfig.log_level > 0) {
         va_list args;
         va_start(args, fmt);
         fputs("[\033[31;1mFATAL\033[m] ", stderr);
@@ -40,7 +40,7 @@ void fatal(const char *fmt, ...) {
 }
 
 void warn(const char *fmt, ...) {
-    if (iconf(ICONF_LOG_LEVEL) > 1) {
+    if (gconfig.log_level > 1) {
         va_list args;
         va_start(args, fmt);
         fputs("[\033[33;1mWARN\033[m] ", stderr);
@@ -51,7 +51,7 @@ void warn(const char *fmt, ...) {
 }
 
 void info(const char *fmt, ...) {
-    if (iconf(ICONF_LOG_LEVEL) > 2) {
+    if (gconfig.log_level > 2) {
         va_list args;
         va_start(args, fmt);
         fputs("[\033[32;1mINFO\033[m] ", stderr);

@@ -21,27 +21,6 @@ struct reply {
     uint32_t param[3];
 };
 
-struct shortcut {
-    uint32_t ksym;
-    uint32_t mask;
-} cshorts[shortcut_MAX] = {
-    [shortcut_scroll_down] = {XKB_KEY_Up, mask_shift | mask_control},
-    [shortcut_scroll_up] = {XKB_KEY_Down, mask_shift | mask_control},
-    [shortcut_font_up] = {XKB_KEY_Page_Up, mask_shift | mask_control},
-    [shortcut_font_down] = {XKB_KEY_Page_Down, mask_shift | mask_control},
-    [shortcut_font_default] = {XKB_KEY_Home, mask_shift | mask_control},
-    [shortcut_new_window] = {XKB_KEY_N, mask_shift | mask_control},
-    [shortcut_numlock] = {XKB_KEY_Num_Lock, mask_shift | mask_control},
-    [shortcut_copy] = {XKB_KEY_C, mask_shift | mask_control},
-    [shortcut_paste] = {XKB_KEY_V, mask_shift | mask_control},
-    [shortcut_break] = {XKB_KEY_Break, 0},
-    [shortcut_reset] = {XKB_KEY_R, mask_shift | mask_control},
-    [shortcut_reload_config] = {XKB_KEY_X, mask_shift | mask_control},
-    [shortcut_reverse_video] = {XKB_KEY_I, mask_shift | mask_control},
-};
-
-static uint32_t force_mouse_mask;
-
 static inline bool is_edit_keypad(uint32_t ks, bool deldel) {
     switch (ks) {
     case XKB_KEY_Delete:
@@ -401,7 +380,7 @@ static void dump_reply(struct term *term, struct reply *reply) {
     str[strp] = '\0';
     term_sendkey(term, str, 0);
 
-    if (iconf(ICONF_TRACE_INPUT)) {
+    if (gconfig.trace_input) {
         char pre[4] = {'^'};
         if (reply->init < 0x80) pre[1] = reply->init ^ 0x40;
         else pre[1] = '[', pre[2] = reply->init ^ 0xC0;
@@ -504,7 +483,7 @@ bool keyboard_set_udk(struct term *term, const uint8_t *str, const uint8_t *end,
 void keyboard_handle_input(struct key k, struct term *term) {
     struct keyboard_state *mode = term_get_kstate(term);
 
-    if (iconf(ICONF_TRACE_INPUT)) {
+    if (gconfig.trace_input) {
         info("Key: sym=0x%X mask=0x%X ascii=0x%X utf32=0x%X",
                 k.sym, k.mask, k.ascii, k.utf32);
     }
@@ -536,7 +515,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
         if (k.is_fkey && k.mask & mask_shift && mode->keyboard_mapping == keymap_vt220) {
             struct udk udk = reply.param[0] < UDK_MAX ? mode->udk[reply.param[0]] : (struct udk){0};
             if (udk.val) {
-                if (iconf(ICONF_TRACE_INPUT))
+                if (gconfig.trace_input)
                     info("Key str: '%s' ", udk.val);
                 term_sendkey(term, udk.val, udk.len);
             }
@@ -573,7 +552,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
         } else {
             uint8_t ch = " XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXX"
                     "XXXXXXXXXXX*+,-./0123456789XXX=" [k.sym - XKB_KEY_KP_Space];
-            if (iconf(ICONF_TRACE_INPUT))
+            if (gconfig.trace_input)
                 info("Key char: (%x) '%c' ", ch, ch);
             term_sendkey(term, &ch, 1);
         }
@@ -605,7 +584,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
                 }
             } else {
                 if (term_is_nrcs_enabled(term))
-                    nrcs_encode(iconf(ICONF_KEYBOARD_NRCS), &k.utf32, 1);
+                    nrcs_encode(window_cfg(term_window(term))->keyboard_nrcs, &k.utf32, 1);
 
                 if (k.utf32 > 0xFF) {
                     mode->appkey = saved_appkey;
@@ -624,7 +603,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
                 }
             }
             k.utf8data[k.utf8len] = '\0';
-            if (iconf(ICONF_TRACE_INPUT))
+            if (gconfig.trace_input)
                 info("Key char: (%x) '%s' ", k.utf32, k.utf8data);
             term_sendkey(term, k.utf8data, k.utf8len);
         }
@@ -683,7 +662,7 @@ struct key keyboard_describe_key(struct xkb_state *state, xkb_keycode_t keycode)
     return k;
 }
 
-static uint32_t decode_mask(const char *c, const char *end) {
+static uint32_t decode_mask(const char *c, const char *end, const char *termmod) {
     uint32_t mask = 0;
     bool recur = 0, has_t = 0;
 
@@ -713,7 +692,7 @@ again:
     }
 
     if (has_t && !recur) {
-        c = sconf(SCONF_TERM_MOD);
+        c = termmod;
         end = c + strlen(c);
         recur = 1;
         goto again;
@@ -722,41 +701,39 @@ again:
     return mask;
 }
 
-void keyboard_set_shortcut(enum shortcut_action sa, const char *c) {
-    uint32_t sym, mask = 0;
-    char *dash = strchr(c, '-');
+void keyboard_parse_config(struct instance_config *cfg) {
+    for (ssize_t i = shortcut_none + 1; i < shortcut_MAX; i++) {
+        uint32_t sym, mask = 0;
+        char *c = cfg->key[i];
+        char *dash = strchr(c, '-');
 
-    if (iconf(ICONF_TRACE_INPUT))
-        info("Set shortcut: %d = '%s'", sa, c);
+        if (gconfig.trace_input)
+            info("Set shortcut: %zd = '%s'", i, c);
 
-    if (dash) {
-        mask = decode_mask(c, dash);
-        c = dash + 1;
+        if (dash) {
+            mask = decode_mask(c, dash, cfg->term_mod);
+            c = dash + 1;
+        }
+
+        if ((sym = xkb_keysym_from_name(c, 0)) == XKB_KEY_NoSymbol)
+            sym = xkb_keysym_from_name(c, XKB_KEYSYM_CASE_INSENSITIVE);
+        if (sym == XKB_KEY_NoSymbol) warn("Wrong key name: '%s'", dash);
+
+
+        cfg->cshorts[i] = (struct shortcut) { sym, mask };
     }
 
-    if ((sym = xkb_keysym_from_name(c, 0)) == XKB_KEY_NoSymbol)
-        sym = xkb_keysym_from_name(c, XKB_KEYSYM_CASE_INSENSITIVE);
-    if (sym == XKB_KEY_NoSymbol) warn("Wrong key name: '%s'", dash);
-
-
-    cshorts[sa] = (struct shortcut) { sym, mask };
+    cfg->force_mouse_mask = decode_mask(cfg->force_mouse_mod,
+            cfg->force_mouse_mod + strlen(cfg->force_mouse_mod), cfg->term_mod);
 }
 
-enum shortcut_action keyboard_find_shortcut(struct key k) {
+enum shortcut_action keyboard_find_shortcut(struct instance_config *cfg, struct key k) {
     enum shortcut_action action = shortcut_none + 1;
     for (; action < shortcut_MAX; action++)
-        if (cshorts[action].ksym == k.sym && (k.mask & 0xFF) == cshorts[action].mask)
+        if (cfg->cshorts[action].ksym == k.sym && (k.mask & 0xFF) == cfg->cshorts[action].mask)
             break;
 
     if (action == shortcut_MAX) return shortcut_none;
 
     return action;
-}
-
-void keyboard_set_force_select_mask(const char *mask) {
-    force_mouse_mask = decode_mask(mask, mask + strlen(mask));
-}
-
-uint32_t keyboard_force_select_mask(void) {
-    return force_mouse_mask;
 }

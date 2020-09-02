@@ -390,8 +390,8 @@ void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd) {
 
 /* Returns true if next line will be next physical line
  * and not continuation part of current physical line */
-bool is_last_line(struct line_view line) {
-    return !iconf(ICONF_REWRAP) || line.cell - line.line->cell + line.width >= line.line->width;
+bool is_last_line(struct line_view line, bool rewrap) {
+    return !rewrap || line.cell - line.line->cell + line.width >= line.line->width;
 }
 
 /* Internal function to address terminal screen and
@@ -418,7 +418,7 @@ struct line_view term_line_at(struct term *term, struct line_offset pos) {
 
 ssize_t term_line_next(struct term *term, struct line_offset *pos, ssize_t amount) {
     struct line *ln;
-    if (iconf(ICONF_REWRAP)) {
+    if (window_cfg(term->win)->rewrap) {
         // Rewrapping is enabled
         if (amount < 0) {
             if (pos->line - 1 < -term->sb_limit) return amount;
@@ -482,7 +482,7 @@ static void term_free_scrollback(struct term *term) {
     free(term->scrollback);
 
     term->scrollback = NULL;
-    term->sb_max_caps = iconf(ICONF_HISTORY_LINES);
+    term->sb_max_caps = window_cfg(term->win)->scrollback_size;
     term->sb_caps = 0;
     term->sb_limit = 0;
     term->sb_top = -1;
@@ -522,7 +522,7 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
     if (term->sb_max_caps > 0) {
         struct line *tmp;
         /* If last line in history is wrapped concat current line to it */
-        if (iconf(ICONF_REWRAP) && term->sb_limit &&
+        if (window_cfg(term->win)->rewrap && term->sb_limit &&
                 line_at(term, -1)->wrapped && (tmp = concat_line(line_at(term, -1), line, opt))) {
 
             term->scrollback[term->sb_top] = tmp;
@@ -535,7 +535,7 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
             if (term->sb_limit == term->sb_max_caps) {
                 /* If view points to the line that is to be freed, scroll it down */
                 if (term->view_pos.line == -term->sb_max_caps) {
-                    if (iconf(ICONF_REWRAP))
+                    if (window_cfg(term->win)->rewrap)
                         res = line_segments(line_at(term, -term->sb_limit), term->view_pos.offset, term->width);
                     else
                         res = 1;
@@ -612,7 +612,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
         if (width > term->width) {
             memset(new_tabs + term->width, 0, (width - term->width) * sizeof(new_tabs[0]));
-            ssize_t tab = term->width ? term->width - 1: 0, tabw = iconf(ICONF_TAB_WIDTH);
+            ssize_t tab = term->width ? term->width - 1: 0, tabw = window_cfg(term->win)->tab_width;
             while (tab > 0 && !new_tabs[tab]) tab--;
             while ((tab += tabw) < width) new_tabs[tab] = 1;
         }
@@ -663,7 +663,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         struct line **new_lines = term->screen;
         ssize_t nnlines = term->height, cursor_par = 0, new_cur_par = 0;
 
-        if (term->width != width && term->width && iconf(ICONF_REWRAP)) {
+        if (term->width != width && term->width && window_cfg(term->win)->rewrap) {
             ssize_t lline = 0, loff = 0, y= 0;
             nnlines = 0;
 
@@ -810,7 +810,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 }
             } else lower_left.line--;
 
-            scrolled = term_append_history(term, new_lines[start++], iconf(ICONF_MINIMIZE_SCROLLBACK));
+            scrolled = term_append_history(term, new_lines[start++], window_cfg(term->win)->minimize_scrollback);
             new_cur_par--;
             term->c.y--;
             term->saved_c.y--;
@@ -819,7 +819,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         ssize_t minh = MIN(nnlines - start, height);
 
         // Resize lines if rewrapping is disabled
-        if (!iconf(ICONF_REWRAP)) {
+        if (!window_cfg(term->win)->cut_lines) {
             if (scrolled) {
                 window_shift(term->win, 0, scrolled, 0, 0, term->width, term->height - scrolled, 0);
                 term_damage_lines(term, term->height - scrolled, term->height);
@@ -827,7 +827,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 window_shift(term->win, 0, start, 0, 0, MIN(term->width, width), height - start, 0);
             }
             for (ssize_t i = 0; i < minh; i++) {
-                if (new_lines[i + start]->width < width || iconf(ICONF_CUT_LINES)) {
+                if (new_lines[i + start]->width < width || window_cfg(term->win)->cut_lines) {
                     new_lines[i + start] = realloc_line(new_lines[i + start], width);
                 }
             }
@@ -873,7 +873,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     {  // Fixup view
 
         // Reposition view
-        if (iconf(ICONF_REWRAP)) {
+        if (window_cfg(term->win)->rewrap) {
             if (to_bottom) {
                 // Stick to bottom
                 term->view_pos.offset = 0;
@@ -905,11 +905,11 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     }
 
     // Damage screen
-    if (!term->mode.altscreen && iconf(ICONF_REWRAP)) {
+    if (!term->mode.altscreen && window_cfg(term->win)->rewrap) {
         // Just damage everything if rewrapping is enabled
         term_damage_lines(term, 0, term->height);
     } else {
-        if (!term->mode.altscreen && !iconf(ICONF_REWRAP)) {
+        if (!term->mode.altscreen && !window_cfg(term->win)->rewrap) {
             // Damage changed parts
             if (dy > 0) term_damage(term, (struct rect) { 0, minh, minw, dy });
             if (dx > 0) term_damage(term, (struct rect) { minw, 0, dx, height });
@@ -1373,7 +1373,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
             if (save && !term->mode.altscreen && term->top == top) {
                 ssize_t scrolled = 0;
                 for (int16_t i = 0; i < amount; i++) {
-                    scrolled -= term_append_history(term, term->screen[top + i],  iconf(ICONF_MINIMIZE_SCROLLBACK));
+                    scrolled -= term_append_history(term, term->screen[top + i], window_cfg(term->win)->minimize_scrollback);
                     term->screen[top + i] = create_line(term->sgr, term->width);
                 }
 
@@ -1444,9 +1444,10 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
             term_erase(term, left, top, right, top + amount, 0);
         }
     }
+
     mouse_scroll_selection(term, amount, save);
 
-    if (term->mode.smooth_scroll && (term->scrolled += abs(amount)) > iconf(ICONF_SMOOTH_SCROLL_STEP)) {
+    if (term->mode.smooth_scroll && (term->scrolled += abs(amount)) > window_cfg(term->win)->smooth_scroll_step) {
         window_request_scroll_flush(term->win);
         term->scrolled = 0;
     }
@@ -1597,7 +1598,7 @@ static void term_print_line(struct term *term, struct line *line) {
         struct cell c = line->cell[i];
         struct attr attr = attr_at(line, i);
 
-        if (iconf(ICONF_PRINT_ATTR) && (!attr_eq(&prev, &attr) || !i)) {
+        if (window_cfg(term->win)->print_attr && (!attr_eq(&prev, &attr) || !i)) {
             /* Print SGR state, if it have changed */
             *pbuf++ = '\033';
             *pbuf++ = '[';
@@ -1667,7 +1668,7 @@ static void term_tabs(struct term *term, int16_t n) {
 
 static void term_reset_tabs(struct term *term) {
     memset(term->tabs, 0, term->width * sizeof(term->tabs[0]));
-    int16_t tabw = iconf(ICONF_TAB_WIDTH);
+    int16_t tabw = window_cfg(term->win)->tab_width;
     for (int16_t i = tabw; i < term->width; i += tabw)
         term->tabs[i] = 1;
 }
@@ -1729,7 +1730,7 @@ static void term_set_132(struct term *term, bool set) {
     term_move_to(term, term_min_ox(term), term_min_oy(term));
     if (!(term->mode.preserve_display_132))
         term_erase(term, 0, 0, term->width, term->height, 0);
-    if (iconf(ICONF_ALLOW_WINDOW_OPS))
+    if (window_cfg(term->win)->allow_window_ops)
         term_request_resize(term, set ? 132 : 80, 24, 1);
     term->mode.columns_132 = set;
 }
@@ -1784,48 +1785,50 @@ static void term_load_config(struct term *term) {
 
     term->mstate = (struct mouse_state) {0};
 
+    //TODO Do I really need duplicate options
+    struct instance_config *cfg = window_cfg(term->win);
     term->mode = (struct term_mode) {
         .focused = term->mode.focused,
-        .utf8 = iconf(ICONF_UTF8),
-        .title_query_utf8 = iconf(ICONF_UTF8),
-        .title_set_utf8 = iconf(ICONF_UTF8),
-        .disable_altscreen = !iconf(ICONF_ALLOW_ALTSCREEN),
-        .wrap = iconf(ICONF_INIT_WRAP),
-        .no_scroll_on_input = !iconf(ICONF_SCROLL_ON_INPUT),
-        .scroll_on_output = iconf(ICONF_SCROLL_ON_OUTPUT),
-        .enable_nrcs = iconf(ICONF_ALLOW_NRCS),
-        .keep_clipboard = iconf(ICONF_KEEP_CLIPBOARD),
-        .keep_selection = iconf(ICONF_KEEP_SELECTION),
-        .select_to_clipboard = iconf(ICONF_SELECT_TO_CLIPBOARD),
-        .bell_raise = iconf(ICONF_RAISE_ON_BELL),
-        .bell_urgent = iconf(ICONF_URGENT_ON_BELL),
-        .smooth_scroll = iconf(ICONF_SMOOTH_SCROLL),
+        .utf8 = cfg->utf8,
+        .title_query_utf8 = cfg->utf8,
+        .title_set_utf8 = cfg->utf8,
+        .disable_altscreen = !cfg->allow_altscreen,
+        .wrap = cfg->wrap,
+        .no_scroll_on_input = !cfg->scroll_on_input,
+        .scroll_on_output = cfg->scroll_on_output,
+        .enable_nrcs = cfg->allow_nrcs,
+        .keep_clipboard = cfg->keep_clipboard,
+        .keep_selection = cfg->keep_selection,
+        .select_to_clipboard = cfg->select_to_clipboard,
+        .bell_raise = cfg->raise_on_bell,
+        .bell_urgent = cfg->urgency_on_bell,
+        .smooth_scroll = cfg->smooth_scroll,
     };
 
     for (size_t i = 0; i < PALETTE_SIZE; i++)
-        term->palette[i] = cconf(CCONF_COLOR_0 + i);
-    term_set_reverse(term, iconf(ICONF_REVERSE_VIDEO));
+        term->palette[i] = cfg->palette[i];
+    term_set_reverse(term, cfg->reverse_video);
 
     term->kstate = (struct keyboard_state) {
-        .appcursor = iconf(ICONF_APPCURSOR),
-        .appkey = iconf(ICONF_APPKEY),
-        .backspace_is_del = iconf(ICONF_BACKSPACE_IS_DELETE),
-        .delete_is_del = iconf(ICONF_DELETE_IS_DELETE),
-        .fkey_inc_step = iconf(ICONF_FKEY_INCREMENT),
-        .has_meta = iconf(ICONF_HAS_META),
-        .keyboard_mapping = iconf(ICONF_MAPPING),
-        .keylock = iconf(ICONF_LOCK),
-        .meta_escape = iconf(ICONF_META_IS_ESC),
-        .modkey_cursor = iconf(ICONF_MODIFY_CURSOR),
-        .modkey_fn = iconf(ICONF_MODIFY_FUNCTION),
-        .modkey_keypad = iconf(ICONF_MODIFY_KEYPAD),
-        .modkey_other = iconf(ICONF_MODIFY_OTHER),
-        .modkey_other_fmt = iconf(ICONF_MODIFY_OTHER_FMT),
-        .modkey_legacy_allow_edit_keypad = iconf(ICONF_MALLOW_EDIT),
-        .modkey_legacy_allow_function = iconf(ICONF_MALLOW_FUNCTION),
-        .modkey_legacy_allow_keypad = iconf(ICONF_MALLOW_KEYPAD),
-        .modkey_legacy_allow_misc = iconf(ICONF_MALLOW_MISC),
-        .allow_numlock = iconf(ICONF_NUMLOCK),
+        .appcursor = cfg->appcursor,
+        .appkey = cfg->appkey,
+        .backspace_is_del = cfg->backspace_is_delete,
+        .delete_is_del = cfg->delete_is_delete,
+        .fkey_inc_step = cfg->fkey_increment,
+        .has_meta = cfg->has_meta,
+        .keyboard_mapping = cfg->mapping,
+        .keylock = cfg->lock,
+        .meta_escape = cfg->meta_is_esc,
+        .modkey_cursor = cfg->modify_cursor,
+        .modkey_fn = cfg->modify_function,
+        .modkey_keypad = cfg->modify_keypad,
+        .modkey_other = cfg->modify_other,
+        .modkey_other_fmt = cfg->modify_other_fmt,
+        .modkey_legacy_allow_edit_keypad = cfg->allow_legacy_edit,
+        .modkey_legacy_allow_function = cfg->allow_legacy_function,
+        .modkey_legacy_allow_keypad = cfg->allow_legacy_keypad,
+        .modkey_legacy_allow_misc = cfg->allow_legacy_misc,
+        .allow_numlock = cfg->numlock,
     };
 
     term->upcs = cs96_latin_1;
@@ -1838,16 +1841,16 @@ static void term_load_config(struct term *term) {
         .bg = indirect_color(SPECIAL_BG),
     };
 
-    switch(iconf(ICONF_BELL_VOLUME)) {
+    switch(cfg->bell_volume) {
     case 0: term->bvol = 0; break;
-    case 1: term->bvol = iconf(ICONF_BELL_LOW_VOLUME); break;
-    case 2: term->bvol = iconf(ICONF_BELL_HIGH_VOLUME);
+    case 1: term->bvol = cfg->bell_low_volume; break;
+    case 2: term->bvol = cfg->bell_high_volume;
     }
 
-    switch(iconf(ICONF_MARGIN_BELL_VOLUME)) {
+    switch(cfg->margin_bell_volume) {
     case 0: term->mbvol = 0; break;
-    case 1: term->mbvol = iconf(ICONF_MARGIN_BELL_LOW_VOLUME); break;
-    case 2: term->mbvol = iconf(ICONF_MARGIN_BELL_HIGH_VOLUME);
+    case 1: term->mbvol = cfg->margin_bell_low_volume; break;
+    case 2: term->mbvol = cfg->margin_bell_high_volume;
     }
 
 }
@@ -1864,15 +1867,15 @@ static void term_do_reset(struct term *term, bool hard) {
     term_reset_tabs(term);
     keyboard_reset_udk(term);
 
+    // TODO Reset cursor shape to default
     window_set_mouse(term->win, 0);
-    window_set_cursor(term->win, iconf(ICONF_CURSOR_SHAPE));
     window_set_colors(term->win, term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
 
     if (hard) {
         term_erase(term, 0, 0, term->width, term->height, 0);
         term_free_scrollback(term);
 
-        term->vt_version = iconf(ICONF_VT_VERION);
+        term->vt_version = window_cfg(term->win)->vt_version;
         term->vt_level = term->vt_version / 100;
         if (!term->vt_level) term_set_vt52(term, 1);
 
@@ -1887,7 +1890,7 @@ static void term_do_reset(struct term *term, bool hard) {
 }
 
 static void term_esc_dump(struct term *term, bool use_info) {
-    if (use_info && !iconf(ICONF_TRACE_CONTROLS)) return;
+    if (use_info && !gconfig.trace_controls) return;
 
     char *pref = use_info ? "Seq: " : "Unrecognized ";
 
@@ -2241,7 +2244,7 @@ static void term_dispatch_dcs(struct term *term) {
                 term_answerback(term, DCS"1$r%d\"q"ST, 2 - (term->sgr.protected && !term->mode.protected));
                 break;
             case 'q' << 8 | ' ': /* -> DECSCUSR */
-                term_answerback(term, DCS"1$r%d q"ST, window_get_cursor(term->win));
+                term_answerback(term, DCS"1$r%d q"ST, window_cfg(term->win)->cursor_shape);
                 break;
             case '|' << 8 | '*': /* -> DECSLNS */
                 term_answerback(term, DCS"1$r%d*|"ST, term->height);
@@ -2256,14 +2259,14 @@ static void term_dispatch_dcs(struct term *term) {
                 break;
             case 't' << 8 | ' ': /* -> DECSWBV */ {
                 uparam_t val = 8;
-                if (term->bvol == iconf(ICONF_BELL_LOW_VOLUME)) val = 4;
+                if (term->bvol == window_cfg(term->win)->bell_low_volume) val = 4;
                 else if (!term->bvol) val = 0;
                 term_answerback(term, DCS"1$r%d t"ST, val);
                 break;
             }
             case 'u' << 8 | ' ': /* -> DECSMBV */ {
                 uparam_t val = 8;
-                if (term->mbvol == iconf(ICONF_MARGIN_BELL_LOW_VOLUME)) val = 4;
+                if (term->mbvol == window_cfg(term->win)->bell_high_volume) val = 4;
                 else if (!term->mbvol) val = 0;
                 term_answerback(term, DCS"1$r%d u"ST, val);
                 break;
@@ -2397,10 +2400,10 @@ static void term_do_set_color(struct term *term, uint32_t sel, uint8_t *dstr, ui
 static void term_do_reset_color(struct term *term) {
     uint32_t cid = selector_to_cid(term->esc.selector - 100, term->mode.reverse_video);
 
-    term->palette[cid] = cconf(CCONF_COLOR_0 + selector_to_cid(term->esc.selector - 100, 0));
+    term->palette[cid] = window_cfg(term->win)->palette[selector_to_cid(term->esc.selector - 100, 0)];
 
     term_colors_changed(term, term->esc.selector - 100, term->esc.selector == 111 ?
-            cconf(CCONF_CURSOR_BG) : term->palette[cid]);
+            window_cfg(term->win)->palette[SPECIAL_CURSOR_BG] : term->palette[cid]);
 }
 
 inline static bool is_osc_state(uint32_t state) {
@@ -2506,24 +2509,30 @@ static void term_dispatch_osc(struct term *term) {
                     case 15:idx = 8; break;
                 }
                 if (!errno && !*s_end && s_end != dstr && idx < PALETTE_SIZE - SPECIAL_PALETTE_SIZE + 5)
-                    term->palette[idx] = cconf(CCONF_COLOR_0 + idx);
+                    term->palette[idx] = window_cfg(term->win)->palette[idx];
                 else term_esc_dump(term, 0);
                 if (pnext != dend) *pnext = ';';
                 dstr = pnext + 1;
             } while (pnext != dend);
         } else {
             for (size_t i = 0; i < PALETTE_SIZE - SPECIAL_PALETTE_SIZE + 5; i++)
-                term->palette[i] = cconf(CCONF_COLOR_0 + i);
+                term->palette[i] = window_cfg(term->win)->palette[i];
         }
         break;
     }
     case 6:
     case 106: /* Enable/disable special color */ {
-        // IMPORTANT: this option affects all instances
         ssize_t n;
         uparam_t idx, val;
-        if (sscanf((char *)dstr, "%"SCNparam";%"SCNparam"%zn", &idx, &val, &n) == 2 && n == dend - dstr && idx < 5)
-            iconf_set(ICONF_SPEICAL_BOLD + idx, !!val);
+        if (sscanf((char *)dstr, "%"SCNparam";%"SCNparam"%zn", &idx, &val, &n) == 2 && n == dend - dstr && idx < 5) {
+            switch (idx) {
+            case 0: window_cfg(term->win)->special_bold = val; break;
+            case 1: window_cfg(term->win)->special_blink = val; break;
+            case 2: window_cfg(term->win)->special_underline = val; break;
+            case 3: window_cfg(term->win)->special_italic = val; break;
+            case 4: window_cfg(term->win)->special_reverse = val; break;
+            }
+        }
         else term_esc_dump(term, 0);
         break;
     }
@@ -2552,7 +2561,7 @@ static void term_dispatch_osc(struct term *term) {
         term_do_reset_color(term);
         break;
     case 52: /* Manipulate selecion data */ {
-        if (!iconf(ICONF_ALLOW_WINDOW_OPS)) break;
+        if (window_cfg(term->win)->allow_window_ops) break;
 
         enum clip_target ts[clip_MAX] = {0};
         bool toclip = term->mode.select_to_clipboard;
@@ -2651,8 +2660,9 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
         case 10: /* Show toolbar */
             // IGNORE - There is no toolbar
             break;
-        case 12: /* Start blinking cursor */
-            window_set_cursor(term->win, ((window_get_cursor(term->win) + 1) & ~1) - set);
+        case 12: /* Start blinking cursor */;
+            enum cursor_type *shp = &window_cfg(term->win)->cursor_shape;
+            *shp = ((*shp + 1) & ~1) - set;
             break;
         case 13: /* Start blinking cursor (menu item) */
         case 14: /* Enable XOR of controll sequence and menu for blinking */
@@ -2890,7 +2900,7 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = modstate_aways_disabled;
             break;
         case 12: /* Start blinking cursor */
-            val = MODSTATE(window_get_cursor(term->win) & 1);
+            val = MODSTATE(window_cfg(term->win)->cursor_shape & 1);
             break;
         case 13: /* Start blinking cursor (menu item) */
         case 14: /* Enable XORG of control sequence and menu for blinking */
@@ -3313,7 +3323,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
             // In theory this should be disabled while in UTF-8 mode, but
             // in practice applications use these symbols, so keep translating.
             // But decode only allow only DEC Graph in GL, unless configured otherwise
-            if (LIKELY(term->mode.utf8 && !iconf(ICONF_FORCE_UTF8_NRCS)))
+            if (LIKELY(term->mode.utf8 && !window_cfg(term->win)->force_utf8_nrcs))
                 ch = nrcs_decode_fast(glv, ch);
             else
                 ch = nrcs_decode(glv, term->c.gn[term->c.gr], term->upcs, ch, term->mode.enable_nrcs);
@@ -3389,12 +3399,12 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
     term_adjust_wide_right(term, term->c.x + totalw - 1, term->c.y);
 
     if (term->mode.margin_bell) {
-        ssize_t bcol = term->right - iconf(ICONF_MARGIN_BELL_COLUMN);
+        ssize_t bcol = term->right - window_cfg(term->win)->margin_bell_column;
         if (term->c.x < bcol && term->c.x + totalw >= bcol)
             window_bell(term->win, term->mbvol);
     }
 
-    if (iconf(ICONF_TRACE_CHARACTERS)) {
+    if (gconfig.trace_characters) {
         for (int32_t *p = term->predec_buf; p < pbuf; p++)
             info("Char: (%x) '%lc' ", abs(*p), abs(*p));
     }
@@ -3427,8 +3437,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
 static void term_dispatch_window_op(struct term *term) {
     uparam_t pa = PARAM(0, 24);
     // Only title operations allowed by default
-    if (!iconf(ICONF_ALLOW_WINDOW_OPS) &&
-            (pa < 20 || pa > 23)) return;
+    if (!window_cfg(term->win)->allow_window_ops && (pa < 20 || pa > 23)) return;
 
     switch (pa) {
     case 1: /* Undo minimize */
@@ -3627,7 +3636,7 @@ static void term_report_cursor(struct term *term) {
     if (term->sgr.blink) csgr[0] |= 4;
     if (term->sgr.reverse) csgr[0] |= 8;
 
-    if (iconf(ICONF_EXTENDED_CIR)) {
+    if (window_cfg(term->win)->extended_cir) {
         csgr[0] |= 0x20;
         csgr[1] |= 0x40;
         // Extended byte
@@ -3862,7 +3871,7 @@ static void term_dispatch_csi(struct term *term) {
             erase(term, 0, 0, term->width, term->height, 0);
             break;
         case 3: /* Scrollback */
-            if (iconf(ICONF_ALLOW_ERASE_SCROLLBACK) && !term->mode.altscreen) {
+            if (window_cfg(term->win)->allow_erase_scrollback && !term->mode.altscreen) {
                 term_free_scrollback(term);
                 break;
             }
@@ -3992,16 +4001,17 @@ static void term_dispatch_csi(struct term *term) {
                 break;
             }
         } else {
+            struct instance_config *cfg = window_cfg(term->win);
             if (inone || p == 0) {
-                term->kstate.modkey_legacy_allow_keypad = iconf(ICONF_MALLOW_KEYPAD);
-                term->kstate.modkey_legacy_allow_edit_keypad = iconf(ICONF_MALLOW_EDIT);
-                term->kstate.modkey_legacy_allow_function = iconf(ICONF_MALLOW_FUNCTION);
-                term->kstate.modkey_legacy_allow_misc = iconf(ICONF_MALLOW_MISC);
+                term->kstate.modkey_legacy_allow_keypad = cfg->allow_legacy_keypad;
+                term->kstate.modkey_legacy_allow_edit_keypad = cfg->allow_legacy_edit;
+                term->kstate.modkey_legacy_allow_function = cfg->allow_legacy_function;
+                term->kstate.modkey_legacy_allow_misc = cfg->allow_legacy_misc;
             }
-            if (inone || p == 1) term->kstate.modkey_cursor = iconf(ICONF_MODIFY_CURSOR);
-            if (inone || p == 2) term->kstate.modkey_fn = iconf(ICONF_MODIFY_FUNCTION);
-            if (inone || p == 3) term->kstate.modkey_keypad = iconf(ICONF_MODIFY_KEYPAD);
-            if (inone || p == 4) term->kstate.modkey_other = iconf(ICONF_MODIFY_OTHER);
+            if (inone || p == 1) term->kstate.modkey_cursor = cfg->modify_cursor;
+            if (inone || p == 2) term->kstate.modkey_fn = cfg->modify_function;
+            if (inone || p == 3) term->kstate.modkey_keypad = cfg->modify_keypad;
+            if (inone || p == 4) term->kstate.modkey_other = cfg->modify_other;
         }
         break;
     }
@@ -4071,7 +4081,7 @@ static void term_dispatch_csi(struct term *term) {
         break;
     case C('q') | I0(' '): /* DECSCUSR */ {
         enum cursor_type csr = PARAM(0, 1);
-        if (csr < 7) window_set_cursor(term->win, csr);
+        if (csr < 7) window_cfg(term->win)->cursor_shape = csr;
         break;
     }
     case C('p') | I0('!'): /* DECSTR */
@@ -4214,11 +4224,11 @@ static void term_dispatch_csi(struct term *term) {
         }
         break;
     case C('|') | I0('$'): /* DECSCPP */
-        if (iconf(ICONF_ALLOW_WINDOW_OPS))
+        if (window_cfg(term->win)->allow_window_ops)
             term_request_resize(term, PARAM(0, 80), -1, 1);
         break;
     case C('|') | I0('*'): /* DECSNLS */
-        if (iconf(ICONF_ALLOW_WINDOW_OPS))
+        if (window_cfg(term->win)->allow_window_ops)
             term_request_resize(term, -1, PARAM(0, 24), 1);
     case C('W') | P('?'): /* DECST8C */
         if (PARAM(0, 5) == 5) term_reset_tabs(term);
@@ -4287,10 +4297,10 @@ static void term_dispatch_csi(struct term *term) {
             term->bvol = 0;
             break;
         case 2: case 3: case 4:
-            term->bvol = iconf(ICONF_BELL_LOW_VOLUME);
+            term->bvol = window_cfg(term->win)->bell_low_volume;
             break;
         default:
-            term->bvol = iconf(ICONF_BELL_HIGH_VOLUME);
+            term->bvol = window_cfg(term->win)->bell_high_volume;
         }
         break;
     case C('u') | I0(' '): /* DECSMBV */
@@ -4299,10 +4309,10 @@ static void term_dispatch_csi(struct term *term) {
             term->mbvol = 0;
             break;
         case 2: case 3: case 4:
-            term->mbvol = iconf(ICONF_MARGIN_BELL_LOW_VOLUME);
+            term->mbvol = window_cfg(term->win)->margin_bell_low_volume;
             break;
         default:
-            term->mbvol = iconf(ICONF_MARGIN_BELL_HIGH_VOLUME);
+            term->mbvol = window_cfg(term->win)->margin_bell_high_volume;
         }
         break;
     case C('w') | I0('\''): /* DECEFR */ {
@@ -4382,7 +4392,7 @@ static void term_dispatch_csi(struct term *term) {
 }
 
 static void term_dispatch_esc(struct term *term) {
-    if (iconf(ICONF_TRACE_CONTROLS)) {
+    if (gconfig.trace_controls) {
         if (term->esc.selector != E('[') && term->esc.selector != E('P') &&
                 term->esc.selector != E(']'))
             term_esc_dump(term, 1);
@@ -4561,7 +4571,7 @@ static void term_dispatch_esc(struct term *term) {
 }
 
 static void term_dispatch_c0(struct term *term, uint32_t ch) {
-    if (iconf(ICONF_TRACE_CONTROLS) && ch != 0x1B)
+    if (gconfig.trace_controls && ch != 0x1B)
         info("Seq: ^%c", ch ^ 0x40);
 
     switch (ch) {
@@ -4572,7 +4582,7 @@ static void term_dispatch_c0(struct term *term, uint32_t ch) {
     case 0x04: /* EOT (IGNORE) */
         break;
     case 0x05: /* ENQ */
-        term_answerback(term, "%s", sconf(SCONF_ANSWERBACK_STRING));
+        term_answerback(term, "%s", window_cfg(term->win)->answerback_string);
         break;
     case 0x06: /* ACK (IGNORE) */
         break;
@@ -5097,7 +5107,7 @@ void term_answerback(struct term *term, const char *str, ...) {
 
     tty_write(&term->tty, csi, res, term->mode.crlf);
 
-    if (iconf(ICONF_TRACE_INPUT)) {
+    if (gconfig.trace_input) {
         ssize_t j = MAX_REPORT;
         for (size_t i = res; i; i--) {
             if (IS_C0(csi[i - 1]) || IS_DEL(csi[i - 1]))
@@ -5149,7 +5159,7 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
     struct term *term = calloc(1, sizeof(struct term));
     term->win = win;
 
-    if (tty_open(&term->tty, sconf(SCONF_SHELL), sconf_argv()) < 0) {
+    if (tty_open(&term->tty, window_cfg(term->win)) < 0) {
         warn("Can't create tty");
         free_term(term);
         return NULL;
@@ -5157,7 +5167,7 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
 
     term_load_config(term);
 
-    term->vt_version = iconf(ICONF_VT_VERION);
+    term->vt_version = window_cfg(term->win)->vt_version;
     term->vt_level = term->vt_version / 100;
     if (!term->vt_level) term_set_vt52(term, 1);
 
