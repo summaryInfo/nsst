@@ -1,4 +1,6 @@
 Until 2.1
+	change color_apply_a to use double
+	fix config reloading?
     Recalculate non-rectangular selection position on resize
     CSI ? 35 l / CSI ? 35 h -- font shifting functions
     OSC 50 ; Pt ST -- Set font
@@ -9,14 +11,9 @@ Until 2.1
                 -> <ENC><NUL><SOH>nsst1
                 <- <ACK><NUL><SOH>nsst1
                 -> <STX>
-                -> <key>=<value><LF>
+                -> <key>=<value><NUL>
                     ...
-                -> cwd=<curret dir><ETX>
-                <- <DC1>
-                -> <ACK><terminal master descriptor> or -><NAK>
-                <- <DC2>
-                -> <ACK><terminal printer descriptor> or -><NAK>
-            end server protocol <ENC><NUL><EM>
+                -> cwd=<curret dir><NUL><ETX>
 General
     Add 'always' value to some options to prevent overriding
     Allow disable rewrapping only for screen/part below cursor, while keep rewrapping scrollback

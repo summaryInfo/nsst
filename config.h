@@ -51,6 +51,7 @@ enum keyboad_mapping {
 struct global_config {
     uint8_t log_level : 2;
 
+	bool daemon_mode : 1;
     bool trace_characters : 1;
     bool trace_controls : 1;
     bool trace_events : 1;

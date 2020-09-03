@@ -94,7 +94,7 @@ static void parse_options(struct instance_config *cfg, char **argv) {
                 *arg++ = '\0';
                 if (!*arg) arg = argv[++ind];
 
-                if (!strcmp(opt, "config") && !set_option(cfg, opt, arg, 1))
+                if (strcmp(opt, "config") && !set_option(cfg, opt, arg, 1))
                     usage(argv[0], EXIT_FAILURE);
             } else {
                 if (!strcmp(opt, "help"))
