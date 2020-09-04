@@ -988,7 +988,7 @@ e_open:
     if (fd < 0) warn("Can't read config file: %s", path ? path : pathbuf);
 }
 
-void init_instance_config(struct instance_config *cfg, bool allow_global) {
+void init_instance_config(struct instance_config *cfg, const char *config_path, bool allow_global) {
     for (size_t i = 0; i < sizeof(optmap)/sizeof(*optmap); i++)
         if (i != o_config) set_option(cfg, optmap[i].opt, "default", allow_global);
     for (size_t i = 0; i < PALETTE_SIZE; i++)
@@ -998,6 +998,9 @@ void init_instance_config(struct instance_config *cfg, bool allow_global) {
     cfg->y = 200;
     cfg->width = 800;
     cfg->height = 600;
+
+    if (config_path)
+        set_option(cfg, optmap[o_config].opt, config_path, 0);
 
     parse_config(cfg, allow_global);
 }

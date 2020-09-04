@@ -184,6 +184,7 @@ int main(int argc, char **argv) {
     init_default_termios();
 
     // Parse --config/-C argument before parsing config file
+    char *cpath = NULL;
     for (int i = 1; i < argc; i++) {
         char *arg = NULL;
         if (!strncmp(argv[i], "--config=", sizeof "--config=" - 1)) {
@@ -195,10 +196,10 @@ int main(int argc, char **argv) {
             if (!*arg) arg = argv[++i];
             if (!arg) usage(argv[0], EXIT_FAILURE);
         }
-        if (arg) set_option(&cfg, "config", arg, 1);
+        if (arg) cpath = arg;
     }
 
-    init_instance_config(&cfg, 1);
+    init_instance_config(&cfg, cpath, 1);
     parse_options(&cfg, argv);
 
     if (!gconfig.daemon_mode) create_window(&cfg);

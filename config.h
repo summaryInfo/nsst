@@ -357,6 +357,6 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
 void set_default_dpi(double dpi);
 void copy_config(struct instance_config *dst, struct instance_config *src);
 void free_config(struct instance_config *src);
-void init_instance_config(struct instance_config *cfg, bool allow_global);
+void init_instance_config(struct instance_config *cfg, const char *config_path, bool allow_global);
 
 #endif

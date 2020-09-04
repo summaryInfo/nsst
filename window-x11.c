@@ -605,7 +605,9 @@ static void reload_window(struct window *win) {
     // TODO Reload terminal palette here
 
     int16_t w = win->cfg.width, h = win->cfg.height;
-    init_instance_config(&win->cfg, 0);
+    char *cpath = win->cfg.config_path;
+    win->cfg.config_path = NULL;
+    init_instance_config(&win->cfg, cpath, 0);
     win->cfg.width = w, win->cfg.height = h;
     window_set_alpha(win, win->cfg.alpha);
     renderer_reload_font(win, 1);
@@ -1590,7 +1592,10 @@ static void append_pending_launch(struct pending_launch *lnch) {
 
     buffer[len] = '\0';
 
-    if (buffer[0] == '\003' /* ETX */ && len == 1) { // End of configuration
+    if (buffer[0] == '\001' /* SOH */) {
+        char *cpath = len > 1 ? buffer + 1 : NULL;
+        init_instance_config(&lnch->cfg, cpath, 0);
+    } else if (buffer[0] == '\003' /* ETX */ && len == 1) { // End of configuration
         if (lnch->args) lnch->args[lnch->argn] = NULL;
         lnch->cfg.argv = lnch->args;
         create_window(&lnch->cfg);
@@ -1631,8 +1636,6 @@ static void accept_pending_launch(void) {
     } else {
         ctx.pfds[lnch->poll_index].fd = fd;
         ctx.pfds[lnch->poll_index].events = POLLIN | POLLHUP;
-
-        init_instance_config(&lnch->cfg, 0);
 
         lnch->next = ctx.first_pending;
         if (ctx.first_pending) ctx.first_pending->prev = lnch;
