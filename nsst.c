@@ -36,11 +36,9 @@ static _Noreturn void usage(char *argv0, int code) {
             printf("\t--%s=<value>%s\n", optmap[i].opt, optmap[i].descr);
         printf("%s",
             "For every boolean option --<X>=<Y>\n"
-                "\t--<X>, --enable-<X>, --with-<X>,\n"
-                "\t--<X>=yes, --<X>=y,  --<X>=true\n"
+                "\t--<X>, --<X>=yes, --<X>=y,  --<X>=true\n"
             "are equivalent to --<X>=1, and\n"
-                "\t--no-<X>, --disable-<X>, --without-<X>\n"
-                "\t--<X>=no, --<X>=n, --<X>=false\n"
+                "\t--no-<X>, --<X>=no, --<X>=n, --<X>=false\n"
             "are equivalent to --<X>=0,\n"
             "where 'yes', 'y', 'true', 'no', 'n' and 'false' are case independet\n"
             "All options are also accept special value 'default' to reset to built-in default\n"
@@ -132,6 +130,7 @@ static void parse_options(struct instance_config *cfg, char **argv) {
 
                 const char *opt = NULL;
                 switch (letter) {
+                case 'C': goto next;
                 case 'f': opt = "font"; break;
                 case 'D': opt = "term-name"; break;
                 case 'o': opt = "printer-file"; break;
@@ -142,16 +141,14 @@ static void parse_options(struct instance_config *cfg, char **argv) {
                 case 'H': opt = "scrollback-size"; break;
                 case 'g': opt = "geometry"; break;
                 }
-                if (opt && !set_option(cfg, opt, arg, 1)) {
-                } else {
-                    // Treat all unknown options not having arguments
-                    if (cind) cind--;
-                    warn("Unknown option -%c", letter);
-                    // Next option, same argv element
-                    continue;
+                if (opt) {
+                    set_option(cfg, opt, arg, 1);
+                    goto next;
                 }
-                // Next argv element
-                goto next;
+                // Treat all unknown options not having arguments
+                if (cind) cind--;
+                warn("Unknown option -%c", letter);
+                // Next option, same argv element
             }
         }
     next:
@@ -186,17 +183,13 @@ int main(int argc, char **argv) {
     // Parse --config/-C argument before parsing config file
     char *cpath = NULL;
     for (int i = 1; i < argc; i++) {
-        char *arg = NULL;
-        if (!strncmp(argv[i], "--config=", sizeof "--config=" - 1)) {
-            arg = argv[i] + sizeof "--config=" - 1;
+        if (!strncmp(argv[i], "--config=", sizeof "--config=" - 1) ||
+                !strncmp(argv[i], "-C", sizeof "-C" - 1)) {
+            char *arg = argv[i] + (argv[i][1] == '-' ? sizeof "--config=" : sizeof "-C") - 1;
             if (!*arg) arg = argv[++i];
             if (!arg) usage(argv[0], EXIT_FAILURE);
-        } else if (!strncmp(argv[i], "-C", sizeof "-C" - 1)) {
-            arg = argv[i] + sizeof "-C" - 1;
-            if (!*arg) arg = argv[++i];
-            if (!arg) usage(argv[0], EXIT_FAILURE);
+            cpath = arg;
         }
-        if (arg) cpath = arg;
     }
 
     init_instance_config(&cfg, cpath, 1);

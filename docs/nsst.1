@@ -30,16 +30,12 @@ If this option is set in config file this path would be used during config reloa
 Config realoading can be requeseted by sending SIGUSR1 to terminal.
 .Pp
 Options specified via command line arguments feature additional syntax. For boolean options
-.Fl \-boolean-option ,
-.Fl \-with-boolean-option ,
-.Fl \-enalbe-boolean-option ,
-are equivalent to
+.Fl \-boolean-option
+is equivalent to
 .Fl \-boolean-option Ns = Ns Ar true .
 and
-.Fl \-no-boolean-option ,
-.Fl \-without-boolean-option ,
-.Fl \-disable-boolean-option ,
-are equivalent to
+.Fl \-no-boolean-option
+is equivalent to
 .Fl \-boolean-option Ns = Ns Ar false .
 .Ar Yes , Ar y , Ar true
 (case independent) values of boolean options can be used to enable option.
