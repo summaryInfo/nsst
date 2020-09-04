@@ -1,19 +1,9 @@
 Until 2.1
-	change color_apply_a to use double
-	fix config reloading?
     Recalculate non-rectangular selection position on resize
     CSI ? 35 l / CSI ? 35 h -- font shifting functions
     OSC 50 ; Pt ST -- Set font
     Allow geometry to be specified in characters
-    Implement proper daemon mode
-        Separate client, server global and server pre instance config
-            start protocol:
-                -> <ENC><NUL><SOH>nsst1
-                <- <ACK><NUL><SOH>nsst1
-                -> <STX>
-                -> <key>=<value><NUL>
-                    ...
-                -> cwd=<curret dir><NUL><ETX>
+    Write client for daemon mode
 General
     Add 'always' value to some options to prevent overriding
     Allow disable rewrapping only for screen/part below cursor, while keep rewrapping scrollback

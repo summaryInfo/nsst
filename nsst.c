@@ -112,6 +112,9 @@ static void parse_options(struct instance_config *cfg, char **argv) {
             char letter = argv[ind][cind];
             // One letter options
             switch (letter) {
+            case 'd':
+                gconfig.daemon_mode = 1;
+                break;
             case 'e':
                 if (!argv[++ind]) usage(argv[0], EXIT_FAILURE);
                 cfg->argv = &argv[ind];
@@ -195,9 +198,11 @@ int main(int argc, char **argv) {
         if (arg) set_option(&cfg, "config", arg, 1);
     }
 
-    init_instance_config(&cfg);
+    init_instance_config(&cfg, 1);
     parse_options(&cfg, argv);
-    create_window(&cfg);
+
+    if (!gconfig.daemon_mode) create_window(&cfg);
+
     free_config(&cfg);
 
     run();

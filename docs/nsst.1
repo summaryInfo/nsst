@@ -10,7 +10,7 @@
 .Op Fl option Ns Op = Ns value
 .Op Fl \-long-option Ns Op = Ns Aq value
 .Oo
-.Op Fl e 
+.Op Fl e
 .Ar program
 .Oo
 .Aq args
@@ -23,7 +23,7 @@ Nsst is X11 terminal emulator, built to be fast and small without sacrificing fe
 .Sh OPTIONS
 .Pp
 Options can be specified either as command line arguments or in config file (without leading dashes) located at $XDG_CONFIG_HOME/nsst.conf or ~/.config/nsst.conf by default.
-Config file path can be specified with 
+Config file path can be specified with
 .Fl \-config Ns = Ns Ar path
 option.
 If this option is set in config file this path would be used during config reloading.
@@ -41,7 +41,7 @@ and
 .Fl \-disable-boolean-option ,
 are equivalent to
 .Fl \-boolean-option Ns = Ns Ar false .
-.Ar Yes , Ar y , Ar true 
+.Ar Yes , Ar y , Ar true
 (case independent) values of boolean options can be used to enable option.
 .Ar \&No , Ar n , Ar false
 (case independent) can be used to disable it.
@@ -57,7 +57,7 @@ Print version string and exit
 .It Fl \-geometry Ns = Ns Ar geometry , Fl g Ns = Ns Ar geometry
 Speicfy window geometry in pixels.
 .Ar Geometry
-is in format 
+is in format
 .Bq = Ns
 .Bo
 .Aq width Ns
@@ -144,13 +144,15 @@ is one of block, blinking-block, bar, blinking-bar, underline, blinking-underlin
 Width of lines that forms cursor
 .It Fl \-cut-lines Ns = Ns Ar bool
 Cut long lines on resize with rewrapping disabled
+.It Fl \-daemon Ns = Ns Ar bool , Fl d
+Enable daemon mode
 .It Fl \-delete-is-del Ns = Ns Ar bool
 Delete sends DEL symbol instead of escape sequence
 .It Fl \-double-click-time Ns = Ns Ar time
 Time gap in microseconds in witch two mouse presses will be considered double click
 .It Fl \-select-scroll-time Ns = Ns Ar
 Time between subsequent scrolls during mouse selection in microseconds
-.It Fl \-erase-scrollback Ns = Ns Ar bool 
+.It Fl \-erase-scrollback Ns = Ns Ar bool
 Allow ED 3 to clear scrollback buffer
 .It Fl \-extended-cir Ns = Ns Ar bool
 Report all SGR attributes in DECCIR
@@ -294,7 +296,7 @@ Initial value of
 .Qq enable NRCSs support
 mode state
 .It Fl \-numlock Ns = Ns Ar bool
-Initial value of 
+Initial value of
 .Qq allow numlock
 mode state
 .It Fl \-override-boxdrawing Ns = Ns Ar bool
@@ -353,6 +355,8 @@ Shell to start in new instance. It diffes from
 in aspect that
 .Fl e
 can also contain arguments and it applies only to first terminal window.
+.It Fl \-socket Ns = Ns Ar path
+Path for daemon socket to be created
 .It Fl \-special-blink Ns = Ns Ar bool
 Enable/disable blinking text special color
 .It Fl \-special-bold Ns = Ns Ar bool

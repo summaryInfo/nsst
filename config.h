@@ -49,9 +49,11 @@ enum keyboad_mapping {
 };
 
 struct global_config {
+    char *sockpath;
+
     uint8_t log_level : 2;
 
-	bool daemon_mode : 1;
+    bool daemon_mode : 1;
     bool trace_characters : 1;
     bool trace_controls : 1;
     bool trace_events : 1;
@@ -228,6 +230,7 @@ enum optidx {
     o_cursor_width,
     o_cut_lines,
     o_cwd,
+    o_daemon,
     o_delete_is_del,
     o_double_click_time,
     o_dpi,
@@ -308,6 +311,7 @@ enum optidx {
     o_smooth_scroll,
     o_smooth_scroll_delay,
     o_smooth_scroll_step,
+    o_socket,
     o_special_blink,
     o_special_bold,
     o_special_italic,
@@ -353,7 +357,6 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
 void set_default_dpi(double dpi);
 void copy_config(struct instance_config *dst, struct instance_config *src);
 void free_config(struct instance_config *src);
-void parse_config(struct instance_config *cfg);
-void init_instance_config(struct instance_config *cfg);
+void init_instance_config(struct instance_config *cfg, bool allow_global);
 
 #endif

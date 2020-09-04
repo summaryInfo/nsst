@@ -63,6 +63,7 @@ struct optmap_item optmap[] = {
     [o_cursor_width] = {"cursor-width", "\t\t(Width of lines that forms cursor)"},
     [o_cut_lines] = {"cut-lines", "\t\t(Cut long lines on resize with rewrapping disabled)"},
     [o_cwd] = {"cwd", "\t\t\t(Current working directory for an application)"},
+    [o_daemon] = {"daemon", "\t\t(Start terminal as daemon)"},
     [o_delete_is_del] = {"delete-is-del", "\t\t(Delete sends DEL symbol instead of escape sequence)"},
     [o_double_click_time] = {"double-click-time", "\t(Time gap in microseconds in witch two mouse presses will be considered double)"},
     [o_dpi] = {"dpi", "\t\t\t(DPI value for fonts)"},
@@ -143,6 +144,7 @@ struct optmap_item optmap[] = {
     [o_smooth_scroll] = {"smooth-scroll", "\t\t(Inital value of DECSCLM mode)"},
     [o_smooth_scroll_delay] = {"smooth-scroll-delay", "\t(Delay between scrolls when DECSCLM is enabled)"},
     [o_smooth_scroll_step] = {"smooth-scroll-step", "\t(Amount of lines per scroll when DECSCLM is enabled)"},
+    [o_socket] = {"socket", "\t\t(Daemon socket path)"},
     [o_special_blink] = {"special-blink", "\t\t(If special color should be used for blinking text)"},
     [o_special_bold] = {"special-bold", "\t\t(If special color should be used for bold text)"},
     [o_special_italic] = {"special-italic", "\t(If special color should be used for italic text)"},
@@ -441,7 +443,9 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
         } else goto e_unknown;
         break;
     case 'd':
-        if (!strcmp(name, optmap[o_delete_is_del].opt)) {
+        if (!strcmp(name, optmap[o_daemon].opt)) {
+            if (parse_bool(value, &val.b, 0) && allow_global) g->daemon_mode = val.b;
+        } else if (!strcmp(name, optmap[o_delete_is_del].opt)) {
             if (parse_bool(value, &val.b, 0)) c->delete_is_delete = val.b;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_double_click_time].opt)) {
@@ -756,6 +760,11 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
         } else if (!strcmp(name, optmap[o_sync_timeout].opt)) {
             if (parse_int(value, &val.i, 0, 10*SEC/1000, SEC/2000)) c->sync_time = val.i;
             else goto e_value;
+        } else if (!strcmp(name, optmap[o_socket].opt)) {
+            if (allow_global) {
+                if (gconfig.sockpath) free(gconfig.sockpath);
+                gconfig.sockpath = parse_str(value, "/tmp/nsst-sock0");
+            }
         } else goto e_unknown;
         break;
     case 't':
@@ -885,21 +894,7 @@ void free_config(struct instance_config *src) {
     free(src->shell);
 }
 
-void init_instance_config(struct instance_config *cfg) {
-    for (size_t i = 0; i < sizeof(optmap)/sizeof(*optmap); i++)
-        if (i != o_config) set_option(cfg, optmap[i].opt, "default", 0);
-    for (size_t i = 0; i < PALETTE_SIZE; i++)
-        cfg->palette[i] = color(i);
-
-    cfg->x = 200;
-    cfg->y = 200;
-    cfg->width = 800;
-    cfg->height = 600;
-
-    parse_config(cfg);
-}
-
-void parse_config(struct instance_config *cfg) {
+void parse_config(struct instance_config *cfg, bool allow_global) {
     char pathbuf[PATH_MAX];
     const char *path = cfg->config_path;
     int fd = -1;
@@ -968,7 +963,7 @@ void parse_config(struct instance_config *cfg) {
 
             SWAP(char, *value_end, saved1);
             SWAP(char, *name_end, saved2);
-            set_option(cfg, name_start, value_start, 1);
+            set_option(cfg, name_start, value_start, allow_global);
             SWAP(char, *name_end, saved2);
             SWAP(char, *value_end, saved1);
         } else if (*ptr == '#') {
@@ -992,3 +987,18 @@ e_open:
 
     if (fd < 0) warn("Can't read config file: %s", path ? path : pathbuf);
 }
+
+void init_instance_config(struct instance_config *cfg, bool allow_global) {
+    for (size_t i = 0; i < sizeof(optmap)/sizeof(*optmap); i++)
+        if (i != o_config) set_option(cfg, optmap[i].opt, "default", allow_global);
+    for (size_t i = 0; i < PALETTE_SIZE; i++)
+        cfg->palette[i] = color(i);
+
+    cfg->x = 200;
+    cfg->y = 200;
+    cfg->width = 800;
+    cfg->height = 600;
+
+    parse_config(cfg, allow_global);
+}
+

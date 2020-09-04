@@ -26,6 +26,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/un.h>
 #include <unistd.h>
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
@@ -40,7 +43,6 @@
 
 struct context {
     double font_size;
-    bool daemon_mode;
     xcb_screen_t *screen;
     xcb_colormap_t mid;
     xcb_visualtype_t *vis;
@@ -79,6 +81,15 @@ struct context {
     size_t pfdcap;
 
     size_t vbell_count;
+
+    struct pending_launch {
+        struct pending_launch *next, *prev;
+        ssize_t argn;
+        ssize_t argcap;
+        ssize_t poll_index;
+        char **args;
+        struct instance_config cfg;
+    } *first_pending;
 };
 
 struct context ctx;
@@ -100,6 +111,9 @@ static void handle_sigusr1(int sig) {
 static void handle_term(int sig) {
     for (struct window *win = win_list_head; win; win = win->next)
         term_hang(win->term);
+
+    if (gconfig.daemon_mode)
+        unlink(gconfig.sockpath);
 
     (void)sig;
 
@@ -213,11 +227,9 @@ cleanup_context:
 
 /* Initialize global state object */
 void init_context(void) {
-    ctx.daemon_mode = 0;
-
     ctx.pfds = calloc(INIT_PFD_NUM, sizeof(struct pollfd));
     if (!ctx.pfds) die("Can't allocate pfds");
-    ctx.pfdn = 1;
+    ctx.pfdn = 2;
     ctx.pfdcap = INIT_PFD_NUM;
     for (size_t i = 1; i < INIT_PFD_NUM; i++)
         ctx.pfds[i].fd = -1;
@@ -311,6 +323,9 @@ void free_context(void) {
     xkb_state_unref(ctx.xkb_state);
     xkb_keymap_unref(ctx.xkb_keymap);
     xkb_context_unref(ctx.xkb_ctx);
+
+    if (gconfig.daemon_mode)
+        unlink(gconfig.sockpath);
 
     free_render_context();
     free(ctx.pfds);
@@ -590,7 +605,7 @@ static void reload_window(struct window *win) {
     // TODO Reload terminal palette here
 
     int16_t w = win->cfg.width, h = win->cfg.height;
-    init_instance_config(&win->cfg);
+    init_instance_config(&win->cfg, 0);
     win->cfg.width = w, win->cfg.height = h;
     window_set_alpha(win, win->cfg.alpha);
     renderer_reload_font(win, 1);
@@ -888,6 +903,25 @@ void window_set_default_props(struct window *win) {
             XCB_ATOM_WM_HINTS, 8*sizeof(*wmhints), sizeof(wmhints)/sizeof(*wmhints), wmhints);
 }
 
+ssize_t alloc_pollfd(void) {
+    if (ctx.pfdn + 1 > ctx.pfdcap) {
+        struct pollfd *new = realloc(ctx.pfds, (ctx.pfdcap + INIT_PFD_NUM)*sizeof(*ctx.pfds));
+        if (new) {
+            for (size_t i = 0; i < INIT_PFD_NUM; i++) {
+                new[i + ctx.pfdcap].fd = -1;
+                new[i + ctx.pfdcap].events = 0;
+            }
+            ctx.pfdcap += INIT_PFD_NUM;
+            ctx.pfds = new;
+        } else return -1;
+    }
+
+    ctx.pfdn++;
+    size_t i = 2;
+    while (ctx.pfds[i].fd >= 0) i++;
+    return i;
+}
+
 /* Create new window */
 struct window *create_window(struct instance_config *cfg) {
     struct window *win = calloc(1, sizeof(struct window));
@@ -952,21 +986,8 @@ struct window *create_window(struct instance_config *cfg) {
     if (win_list_head) win_list_head->prev = win;
     win_list_head = win;
 
-    if (ctx.pfdn + 1 > ctx.pfdcap) {
-        struct pollfd *new = realloc(ctx.pfds, (ctx.pfdcap + INIT_PFD_NUM)*sizeof(*ctx.pfds));
-        if (new) {
-            for (size_t i = 0; i < INIT_PFD_NUM; i++) {
-                new[i + ctx.pfdcap].fd = -1;
-                new[i + ctx.pfdcap].events = 0;
-            }
-            ctx.pfdcap += INIT_PFD_NUM;
-            ctx.pfds = new;
-        } else goto error;
-    }
-
-    ctx.pfdn++;
-    size_t i = 1;
-    while (ctx.pfds[i].fd >= 0) i++;
+    ssize_t i = alloc_pollfd();
+    if (i < 0) goto error;
     ctx.pfds[i].events = POLLIN | POLLHUP;
     ctx.pfds[i].fd = term_fd(win->term);
     win->poll_index = i;
@@ -1473,7 +1494,7 @@ static void handle_event(void) {
             }
             if (ev->format == 32 && ev->data.data32[0] == ctx.atom.WM_DELETE_WINDOW) {
                 free_window(win);
-                if (!win_list_head && !ctx.daemon_mode)
+                if (!win_list_head && !gconfig.daemon_mode)
                     return free(event);
             }
             break;
@@ -1537,8 +1558,119 @@ static void handle_event(void) {
     }
 }
 
+#define MAX_ARG_LEN 512
+#define INIT_ARGN 4
+#define ARGN_STEP(x) (MAX(INIT_ARGN, 3*(x)/2))
+#define NUM_PENDING 8
+
+static void free_pending_launch(struct pending_launch *lnch) {
+        if (lnch->next) lnch->next->prev = lnch->prev;
+        if (lnch->prev) lnch->prev->next = lnch->prev;
+        else ctx.first_pending = lnch->next;
+
+        close(ctx.pfds[lnch->poll_index].fd);
+        ctx.pfds[lnch->poll_index].fd = -1;
+
+        for (ssize_t i = 0; i < lnch->argn; i++)
+            free(lnch->args[i]);
+        free(lnch->args);
+        free_config(&lnch->cfg);
+        free(lnch);
+}
+
+static void append_pending_launch(struct pending_launch *lnch) {
+    int fd = ctx.pfds[lnch->poll_index].fd;
+    char buffer[MAX_ARG_LEN + 1];
+
+    ssize_t len = recv(fd, buffer, MAX_ARG_LEN, 0);
+    if (len < 0) {
+        warn("Can't recv argument: %s", strerror(errno));
+        return;
+    }
+
+    buffer[len] = '\0';
+
+    if (buffer[0] == '\003' /* ETX */ && len == 1) { // End of configuration
+        if (lnch->args) lnch->args[lnch->argn] = NULL;
+        lnch->cfg.argv = lnch->args;
+        create_window(&lnch->cfg);
+        free_pending_launch(lnch);
+    } else if (buffer[0] == '\035' /* GS */ && len > 1) { // Option
+        char *name_end = memchr(buffer + 1, '=', len);
+        if (!name_end) {
+            warn("Wrong option format: '%s'", buffer + 1);
+            return;
+        }
+
+        *name_end = '\0';
+        set_option(&lnch->cfg, buffer + 1, name_end + 1, 1);
+    } else if (buffer[0] == '\036' /* RS */ && len > 1) { // Argument
+        if (lnch->argn + 2 > lnch->argcap) {
+            ssize_t newsz = ARGN_STEP(lnch->argcap);
+            char **new = realloc(lnch->args, newsz*sizeof(*new));
+            if (!new) {
+                free_pending_launch(lnch);
+                return;
+            }
+            lnch->args = new;
+            lnch->argcap = newsz;
+        }
+
+        lnch->args[lnch->argn++] = strdup(buffer + 1);
+    }
+}
+
+static void accept_pending_launch(void) {
+    int fd = accept(ctx.pfds[1].fd, NULL, NULL);
+
+    struct pending_launch *lnch = calloc(1, sizeof(struct pending_launch));
+    if (fd < 0 || !lnch || (lnch->poll_index = alloc_pollfd()) < 0) {
+        close(fd);
+        free(lnch);
+        warn("Can't create pending launch: %s", strerror(errno));
+    } else {
+        ctx.pfds[lnch->poll_index].fd = fd;
+        ctx.pfds[lnch->poll_index].events = POLLIN | POLLHUP;
+
+        init_instance_config(&lnch->cfg, 0);
+
+        lnch->next = ctx.first_pending;
+        if (ctx.first_pending) ctx.first_pending->prev = lnch;
+        ctx.first_pending = lnch;
+    }
+}
+
 /* Start window logic, handling all windows in context */
 void run(void) {
+    if (gconfig.daemon_mode) {
+        struct sockaddr_un addr;
+        memset(&addr, 0, sizeof addr);
+        addr.sun_family = AF_UNIX;
+        strncpy(addr.sun_path, gconfig.sockpath, sizeof addr.sun_path - 1);
+
+        int fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+        if (fd < 0) {
+            warn("Can't create daemon socket: %s", strerror(errno));
+            return;
+        }
+
+        if (bind(fd, (struct sockaddr*)&addr,
+                offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path)) < 0) {
+            warn("Can't bind daemon socket: %s", strerror(errno));
+            close(fd);
+            return;
+        }
+        if (listen(fd, NUM_PENDING) < 0) {
+            warn("Can't listen to daemon socket: %s", strerror(errno));
+            close(fd);
+            unlink(gconfig.sockpath);
+            return;
+        }
+
+        ctx.pfds[1].fd = fd;
+        ctx.pfds[1].events = POLLIN | POLLHUP;
+    }
+
     struct timespec prev;
     for (int64_t next_timeout = SEC;;) {
 #if USE_PPOLL
@@ -1553,6 +1685,22 @@ void run(void) {
 
         // Reload config if requested
         if (reload_config) do_reload_config();
+
+        // Handle daemon requests
+        if (ctx.pfds[1].revents & POLLIN) accept_pending_launch();
+        else if (ctx.pfds[1].revents & (POLLERR | POLLNVAL | POLLHUP)) {
+            close(ctx.pfds[1].fd);
+            ctx.pfds[1].fd = -1;
+            unlink(gconfig.sockpath);
+            gconfig.daemon_mode = 0;
+        }
+
+        // Handle pending launches
+        for (struct pending_launch *holder = ctx.first_pending, *next; holder; holder = next) {
+            next = holder->next;
+            if (ctx.pfds[holder->poll_index].revents & POLLIN) append_pending_launch(holder);
+            else if (ctx.pfds[holder->poll_index].revents & (POLLERR | POLLHUP | POLLNVAL)) free_pending_launch(holder);
+        }
 
         next_timeout = 30*SEC;
         struct timespec cur;
@@ -1645,9 +1793,10 @@ void run(void) {
         next_timeout = MAX(0, next_timeout);
         xcb_flush(con);
 
-        // TODO Try reconnect after timeout
-        if ((!ctx.daemon_mode && !win_list_head) || xcb_connection_has_error(con)) break;
+        if ((!gconfig.daemon_mode && !win_list_head) || xcb_connection_has_error(con)) break;
 
         prev = cur;
     }
+
+    if (gconfig.daemon_mode) unlink(gconfig.sockpath);
 }
