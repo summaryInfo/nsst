@@ -1674,7 +1674,6 @@ void run(void) {
         ctx.pfds[1].events = POLLIN | POLLHUP;
     }
 
-    struct timespec prev;
     for (int64_t next_timeout = SEC;;) {
 #if USE_PPOLL
         if (ppoll(ctx.pfds, ctx.pfdcap, &(struct timespec){next_timeout / SEC, next_timeout % SEC}, NULL) < 0 && errno != EINTR)
@@ -1797,8 +1796,6 @@ void run(void) {
         xcb_flush(con);
 
         if ((!gconfig.daemon_mode && !win_list_head) || xcb_connection_has_error(con)) break;
-
-        prev = cur;
     }
 
     if (gconfig.daemon_mode) unlink(gconfig.sockpath);
