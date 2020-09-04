@@ -140,6 +140,7 @@ static void parse_options(struct instance_config *cfg, char **argv) {
                 case 'V': opt = "vt-version"; break;
                 case 'H': opt = "scrollback-size"; break;
                 case 'g': opt = "geometry"; break;
+                case 's': opt = "socket"; break;
                 }
                 if (opt) {
                     set_option(cfg, opt, arg, 1);
