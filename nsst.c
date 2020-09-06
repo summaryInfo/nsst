@@ -118,7 +118,7 @@ static void parse_options(struct instance_config *cfg, char **argv) {
                 cfg->argv = &argv[ind];
                 return;
             case 'h':
-                usage(argv[0], EXIT_FAILURE);
+                usage(argv[0], EXIT_SUCCESS);
                 break;
             case 'v':
                 version();
