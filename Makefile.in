@@ -17,7 +17,7 @@ LDFLAGS += -lrt -lm -lutil $(LIBS)
 CFLAGS += $(INCLUES)
 
 
-all: $(NAME)
+all: $(NAME) $(NAME)c
 
 clean:
 	rm -rf *.o *.gcda $(NAME)
@@ -30,6 +30,7 @@ install-strip: install
 
 install: all
 	install -D $(NAME) $(BINDIR)/$(NAME)
+	install -D $(NAME)c $(BINDIR)/$(NAME)c
 	install -Dm 644 docs/nsst.conf $(SHAREDIR)/nsst/nsst.conf
 	install -Dm 644 docs/nsst.1 $(MANDIR)/man1/nsst.1
 
@@ -37,9 +38,13 @@ uninstall:
 	rm -rf $(SHAREDIR)/nsst
 	rm -f $(MANDIR)/man1/nsst.1
 	rm -f $(BINDIR)/$(NAME)
+	rm -f $(BINDIR)/$(NAME)c
 
 $(NAME): $(OBJ)
 	$(CCLD) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
+
+$(NAME)c: nsstc.o
+	$(CCLD) $(CFLAGS) nsstc.o $(LDFLAGS) -o $@
 
 font.o: util.h config.h window.h boxdraw.h feature.h
 window-x11.o: util.h config.h term.h window.h window-x11.h line.h input.h mouse.h feature.h
@@ -56,6 +61,7 @@ image.o: util.h image.h font.h feature.h
 mouse.o: config.h mouse.h window.h feature.h
 tty.o: config.h tty.h util.h feature.h
 line.o: line.h util.h feature.h
+nsstc.o: feature.h
 
 
 .PHONY: all clean install install-strip uninstall force

@@ -3,7 +3,6 @@ Until 2.1
     CSI ? 35 l / CSI ? 35 h -- font shifting functions
     OSC 50 ; Pt ST -- Set font
     Allow geometry to be specified in characters
-    Write client for daemon mode
 General
     Add 'always' value to some options to prevent overriding
     Allow disable rewrapping only for screen/part below cursor, while keep rewrapping scrollback
