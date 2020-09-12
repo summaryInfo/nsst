@@ -14,15 +14,19 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/un.h>
+#include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
-static void send_char(int fd, char c) {
-    for (int res; (res = send(fd, (char[1]){c}, 1, 0)) < 0 && errno == EAGAIN;);
-}
-
 #define MAX_OPTION_DESC 1024
+#define MAX_WAIT_LOOP 8
+#define STARTUP_DELAY 10000000LL
 
 static char buffer[MAX_OPTION_DESC + 1];
+
+inline static void send_char(int fd, char c) {
+    for (int res; (res = send(fd, (char[1]){c}, 1, 0)) < 0 && errno == EAGAIN;);
+}
 
 inline static void recv_response(int fd) {
     ssize_t res = 0;
@@ -250,12 +254,14 @@ int main(int argc, char **argv) {
             switch((res = fork())) {
             case 0:
                 setsid();
-                execl("nsst", "nsst", "-d", NULL);
+                execlp("nsst", "nsst", "-d", NULL);
             default:
                 _exit(res <= 0);
             }
         default:
-            break;
+            while(wait(NULL) < 0 && errno == EINTR);
+            for (int i = 0; stat(spath, &stt) < 0 && i < MAX_WAIT_LOOP; i++)
+                clock_nanosleep(CLOCK_MONOTONIC, 0, &(struct timespec){.tv_nsec = STARTUP_DELAY}, NULL);
         }
     }
 
