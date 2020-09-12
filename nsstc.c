@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/un.h>
@@ -48,7 +49,7 @@ _Noreturn void version(int fd) {
     exit(0);
 }
 
-static void parse_client_args(char **argv, char **cpath, char **spath) {
+static void parse_client_args(char **argv, char **cpath, char **spath, _Bool *need_daemon) {
     size_t ind = 1;
     char *arg, *opt;
 
@@ -67,13 +68,14 @@ static void parse_client_args(char **argv, char **cpath, char **spath) {
                 if (!*++arg) arg = argv[++ind];
                 if (!strncmp(opt, "config=" , 7)) *cpath = arg;
                 else if (!strncmp(opt, "socket=", 7)) *spath = arg;
+                else if (!strncmp(opt, "daemon", 7)) *need_daemon = 1;
             }
         } else while (argv[ind] && argv[ind][++cind]) {
             char letter = argv[ind][cind];
             // One letter options
             switch (letter) {
             case 'd':
-                /* ignore */
+                *need_daemon = 1;
                 break;
             case 'e':
                 return;
@@ -232,10 +234,30 @@ end:
 
 int main(int argc, char **argv) {
     char *cpath = NULL, *spath = "/tmp/nsst-sock0";
+    _Bool need_daemon = 0;
 
     (void)argc;
 
-    parse_client_args(argv, &cpath, &spath);
+    parse_client_args(argv, &cpath, &spath, &need_daemon);
+
+    struct stat stt;
+    if (need_daemon && stat(spath, &stt) < 0 && errno == ENOENT) {
+        int res;
+        switch (fork()) {
+        case -1:
+            return 1;
+        case 0:
+            switch((res = fork())) {
+            case 0:
+                setsid();
+                execl("nsst", "nsst", "-d", NULL);
+            default:
+                _exit(res <= 0);
+            }
+        default:
+            break;
+        }
+    }
 
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof addr);
