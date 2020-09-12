@@ -625,6 +625,8 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         term->predec_buf = newpb;
     }
 
+    struct attr dflt_sgr = { .fg = indirect_color(SPECIAL_FG), .bg = indirect_color(SPECIAL_BG) };
+
     { // Resize altscreen
 
         for (ssize_t i = height; i < term->height; i++)
@@ -634,11 +636,12 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         if (!new_back) die("Can't allocate lines");
         term->back_screen = new_back;
 
-        for (ssize_t i = 0; i < MIN(term->height, height); i++)
+        ssize_t minh = MIN(term->height, height);
+        for (ssize_t i = 0; i < minh; i++)
             term->back_screen[i] = realloc_line(term->back_screen[i], width);
 
         for (ssize_t i = term->height; i < height; i++)
-            term->back_screen[i] = create_line(term->sgr, width);
+            term->back_screen[i] = create_line(dflt_sgr, width);
 
         // Adjust altscreen saved cursor position
 
@@ -717,7 +720,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
             new_lines = calloc(nnlines, sizeof(*new_lines));
             if (!new_lines) die("Can't allocate line");
-            new_lines[0] = create_line(term->sgr, width);
+            new_lines[0] = create_line(dflt_sgr, width);
 
             ssize_t y2 = y, dy = 0;
             for (ssize_t dx = 0; y < term->height; y++) {
@@ -729,12 +732,13 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                     ll_translated = 1;
                 }
                 if (cursor_par == y) new_cur_par = dy;
+
                 uint32_t previd = ATTRID_MAX, newid = 0;
                 for (ssize_t x = 0; x < len; x++) {
                     // If last character of line is wide, soft wrap
                     if (dx == width - 1 && line->cell[x].wide) {
                         new_lines[dy]->wrapped = 1;
-                        if (dy < nnlines - 1) new_lines[++dy] = create_line(term->sgr, width);
+                        if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
                         dx = 0;
                     }
                     // Calculate new cursor...
@@ -762,7 +766,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                     // Advance line, soft wrap
                     if (++dx == width && (x < len - 1 || line->wrapped)) {
                         new_lines[dy]->wrapped = 1;
-                        if (dy < nnlines - 1) new_lines[++dy] = create_line(term->sgr, width);
+                        if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
                         dx = 0;
                     }
                 }
@@ -779,7 +783,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 }
                 // Advance line, hard wrap
                 if (!line->wrapped) {
-                    if (dy < nnlines - 1) new_lines[++dy] = create_line(term->sgr, width);
+                    if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
                     dx = 0;
                 }
 
@@ -853,7 +857,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
         // Allocate new empty lines
         for (ssize_t i = minh; i < height; i++)
-            new_lines[i] = create_line(term->sgr, width);
+            new_lines[i] = create_line(dflt_sgr, width);
 
         term->screen = new_lines;
     }
