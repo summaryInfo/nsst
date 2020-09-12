@@ -602,14 +602,19 @@ bool window_is_mapped(struct window *win) {
 }
 
 static void reload_window(struct window *win) {
-    // TODO Reload terminal palette here
-
     int16_t w = win->cfg.width, h = win->cfg.height;
+
+    //TODO Reload more options here
+
     char *cpath = win->cfg.config_path;
     win->cfg.config_path = NULL;
+
     init_instance_config(&win->cfg, cpath, 0);
+
     win->cfg.width = w, win->cfg.height = h;
+
     window_set_alpha(win, win->cfg.alpha);
+
     renderer_reload_font(win, 1);
 }
 
@@ -1580,6 +1585,16 @@ static void free_pending_launch(struct pending_launch *lnch) {
         free(lnch);
 }
 
+static bool send_pending_launch_resp(struct pending_launch *lnch, const char *str) {
+    int fd = ctx.pfds[lnch->poll_index].fd;
+    if (send(fd, str, strlen(str), 0) < 0) {
+        warn("Can't send responce to client, dropping");
+        free_pending_launch(lnch);
+        return 0;
+    }
+    return 1;
+}
+
 static void append_pending_launch(struct pending_launch *lnch) {
     int fd = ctx.pfds[lnch->poll_index].fd;
     char buffer[MAX_ARG_LEN + 1];
@@ -1592,15 +1607,15 @@ static void append_pending_launch(struct pending_launch *lnch) {
 
     buffer[len] = '\0';
 
-    if (buffer[0] == '\001' /* SOH */) {
+    if (buffer[0] == '\001' /* SOH */) /* Header */ {
         char *cpath = len > 1 ? buffer + 1 : NULL;
         init_instance_config(&lnch->cfg, cpath, 0);
-    } else if (buffer[0] == '\003' /* ETX */ && len == 1) { // End of configuration
+    } else if (buffer[0] == '\003' /* ETX */ && len == 1) /* End of configuration */ {
         if (lnch->args) lnch->args[lnch->argn] = NULL;
         lnch->cfg.argv = lnch->args;
         create_window(&lnch->cfg);
         free_pending_launch(lnch);
-    } else if (buffer[0] == '\035' /* GS */ && len > 1) { // Option
+    } else if (buffer[0] == '\035' /* GS */ && len > 1) /* Option */ {
         char *name_end = memchr(buffer + 1, '=', len);
         if (!name_end) {
             warn("Wrong option format: '%s'", buffer + 1);
@@ -1609,7 +1624,7 @@ static void append_pending_launch(struct pending_launch *lnch) {
 
         *name_end = '\0';
         set_option(&lnch->cfg, buffer + 1, name_end + 1, 1);
-    } else if (buffer[0] == '\036' /* RS */ && len > 1) { // Argument
+    } else if (buffer[0] == '\036' /* RS */ && len > 1) /* Argument */ {
         if (lnch->argn + 2 > lnch->argcap) {
             ssize_t newsz = ARGN_STEP(lnch->argcap);
             char **new = realloc(lnch->args, newsz*sizeof(*new));
@@ -1622,6 +1637,20 @@ static void append_pending_launch(struct pending_launch *lnch) {
         }
 
         lnch->args[lnch->argn++] = strdup(buffer + 1);
+    } else if (buffer[0] == '\005' /* ENQ */ && len == 1) /* Version text request */ {
+        const char *resps[] = {version_string(), "Features: ", features_string()};
+
+        for (size_t i = 0; i < sizeof resps/sizeof *resps; i++)
+            if (!send_pending_launch_resp(lnch, resps[i])) return; // Don't free pending_launch twice
+
+        free_pending_launch(lnch);
+    } else if (buffer[0] == '\025' /* NAK */ && len == 1) /* Usage text request */ {
+        ssize_t i = 0;
+
+        for (const char *part = usage_string(i++); part; part = usage_string(i++))
+            if (!send_pending_launch_resp(lnch, part)) return; // Don't free pending_launch twice
+
+        free_pending_launch(lnch);
     }
 }
 

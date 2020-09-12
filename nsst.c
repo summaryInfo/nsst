@@ -23,50 +23,18 @@
 #include <string.h>
 #include <unistd.h>
 
-static _Noreturn void usage(char *argv0, int code) {
+static _Noreturn void usage(const char *argv0, int code) {
     if (gconfig.log_level > 0 || code == EXIT_SUCCESS) {
-        printf("%s%s", argv0, " [-options] [-e] [command [args]]\n"
-            "Where options are:\n"
-                "\t--help, -h\t\t\t(Print this message and exit)\n"
-                "\t--version, -v\t\t\t(Print version and exit)\n"
-                "\t--color<N>=<color>, \t\t(Set palette color <N>, <N> is from 0 to 255)\n"
-                "\t--geometry=<value>, -g<value> \t(Window geometry, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>])\n"
-        );
-        for (size_t i = 0; i < o_MAX; i++)
-            printf("\t--%s=<value>%s\n", optmap[i].opt, optmap[i].descr);
-        printf("%s",
-            "For every boolean option --<X>=<Y>\n"
-                "\t--<X>, --<X>=yes, --<X>=y,  --<X>=true\n"
-            "are equivalent to --<X>=1, and\n"
-                "\t--no-<X>, --<X>=no, --<X>=n, --<X>=false\n"
-            "are equivalent to --<X>=0,\n"
-            "where 'yes', 'y', 'true', 'no', 'n' and 'false' are case independet\n"
-            "All options are also accept special value 'default' to reset to built-in default\n"
-        );
+        ssize_t i = 0;
+        do fputs(argv0, stdout);
+        while((argv0 = usage_string(i++)));
     }
     free_context();
     exit(code);
 }
 
 static _Noreturn void version(void) {
-    printf("%s"
-            "Features: nsst"
-#if USE_PPOLL
-            "+ppoll"
-#endif
-#if USE_BOXDRAWING
-            "+boxdrawing"
-#endif
-#if USE_X11SHM
-            "+mitshm"
-#endif
-#if USE_POSIX_SHM
-            "+posixshm"
-#endif
-#if USE_PRECOMPOSE
-            "+precompose"
-#endif
-            "\n", version_string());
+    printf("%sFeatures: %s", version_string(), features_string());
     free_context();
     exit(EXIT_SUCCESS);
 }
@@ -122,12 +90,7 @@ static void parse_options(struct instance_config *cfg, char **argv) {
                 break;
             case 'v':
                 version();
-            default:
-                // Has arguments
-                if (!argv[ind][++cind]) ind++, cind = 0;
-                if (!argv[ind]) usage(argv[0], EXIT_FAILURE);
-                arg = argv[ind] + cind;
-
+            default:;
                 const char *opt = NULL;
                 switch (letter) {
                 case 'C': goto next;
@@ -142,14 +105,18 @@ static void parse_options(struct instance_config *cfg, char **argv) {
                 case 'g': opt = "geometry"; break;
                 case 's': opt = "socket"; break;
                 }
+
                 if (opt) {
+                    // Has arguments
+                    if (!argv[ind][++cind]) ind++, cind = 0;
+                    if (!argv[ind]) usage(argv[0], EXIT_FAILURE);
+                    arg = argv[ind] + cind;
+
                     set_option(cfg, opt, arg, 1);
                     goto next;
                 }
-                // Treat all unknown options not having arguments
-                if (cind) cind--;
+
                 warn("Unknown option -%c", letter);
-                // Next option, same argv element
             }
         }
     next:

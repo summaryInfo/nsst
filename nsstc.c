@@ -15,13 +15,36 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-_Noreturn void usage(const char *argv0, int code) {
-    // TODO
+static void send_char(int fd, char c) {
+    for (int res; (res = send(fd, (char[1]){c}, 1, 0)) < 0 && errno == EAGAIN;);
+}
+
+#define MAX_OPTION_DESC 1024
+
+static char buffer[MAX_OPTION_DESC + 1];
+
+inline static void recv_response(int fd) {
+    ssize_t res = 0;
+    while ((res = recv(fd, buffer, sizeof buffer - 1, 0)) > 0) {
+        buffer[res] = '\0';
+        fputs(buffer, stdout);
+    }
+}
+
+_Noreturn void usage(int fd, const char *argv0, int code) {
+    send_char(fd, '\025' /* NAK */);
+
+    fputs(argv0, stdout);
+    recv_response(fd);
+
     exit(code);
 }
 
-_Noreturn void version(void) {
-    // TODO
+_Noreturn void version(int fd) {
+    send_char(fd, '\005' /* ENQ */);
+
+    recv_response(fd);
+
     exit(0);
 }
 
@@ -31,7 +54,7 @@ static void parse_client_args(char **argv, char **cpath, char **spath) {
 
     while (argv[ind] && argv[ind][0] == '-') {
         size_t cind = 0;
-        if (!argv[ind][1]) usage(argv[0], EXIT_FAILURE);
+        if (!argv[ind][1]) exit(EXIT_FAILURE);
         if (argv[ind][1] == '-') {
             if (!argv[ind][2]) {
                 ind++;
@@ -44,10 +67,6 @@ static void parse_client_args(char **argv, char **cpath, char **spath) {
                 if (!*++arg) arg = argv[++ind];
                 if (!strncmp(opt, "config=" , 7)) *cpath = arg;
                 else if (!strncmp(opt, "socket=", 7)) *spath = arg;
-            } else if (!strcmp(opt, "help")) {
-                usage(argv[0], EXIT_SUCCESS);
-            } else if (!strcmp(opt, "version")) {
-                version();
             }
         } else while (argv[ind] && argv[ind][++cind]) {
             char letter = argv[ind][cind];
@@ -58,23 +77,24 @@ static void parse_client_args(char **argv, char **cpath, char **spath) {
                 break;
             case 'e':
                 return;
-            case 'h':
-                usage(argv[0], EXIT_SUCCESS);
-            case 'v':
-                version();
+                // Ignore all options with arguments here
+            case 'C': case 's': case 'f':
+            case 'D': case 'o': case 'c':
+            case 't': case 'T': case 'V':
+            case 'H': case 'g': goto next;
+                break;
             default:
-                // Has arguments
-                if (!argv[ind][++cind]) ind++, cind = 0;
-                if (!argv[ind]) usage(argv[0], EXIT_FAILURE);
-                arg = argv[ind] + cind;
+                if (letter == 'C' || letter == 's') {
+                    // Has arguments
+                    if (!argv[ind][++cind]) ind++, cind = 0;
+                    if (!argv[ind]) exit(EXIT_FAILURE);
+                    arg = argv[ind] + cind;
 
-                switch (letter) {
-                case 'C': *cpath = arg; goto next;
-                case 's': *spath = arg; goto next;
+                    if (letter == 'C') *cpath = arg;
+                    else *spath = arg;
+
+                    goto next;
                 }
-
-                // Treat all unknown options not having arguments
-                if (cind) cind--;
             }
         }
 next:
@@ -82,11 +102,9 @@ next:
     }
 }
 
-#define MAX_ARG_LEN 512
-
 static void send_opt(int fd, char *opt, char *value) {
     struct iovec dvec[4] = {
-        { .iov_base = "\035", .iov_len = 1 },
+        { .iov_base = "\035" /* GS */, .iov_len = 1 },
         { .iov_base = opt, .iov_len = strlen(opt) },
         { .iov_base = "=", .iov_len = 1 },
         { .iov_base = value, .iov_len = strlen(value) },
@@ -102,7 +120,7 @@ static void send_opt(int fd, char *opt, char *value) {
 
 static void send_arg(int fd, char *arg) {
     struct iovec dvec[4] = {
-        { .iov_base = "\036", .iov_len = 1 },
+        { .iov_base = "\036" /* RS */, .iov_len = 1 },
         { .iov_base = arg, .iov_len = strlen(arg) },
     };
 
@@ -110,13 +128,13 @@ static void send_arg(int fd, char *arg) {
         .msg_iov = dvec,
         .msg_iovlen = sizeof dvec / sizeof *dvec
     };
-    
+
     for (int res; (res = sendmsg(fd, &hdr, 0)) < 0 && errno == EAGAIN;);
 }
 
 static void send_header(int fd, char *cpath) {
     struct iovec dvec[4] = {
-        { .iov_base = "\001", .iov_len = 1 },
+        { .iov_base = "\001" /* SOH */, .iov_len = 1 },
         { .iov_base = cpath, .iov_len = cpath ? strlen(cpath) : 0 },
     };
 
@@ -124,12 +142,8 @@ static void send_header(int fd, char *cpath) {
         .msg_iov = dvec,
         .msg_iovlen = 1 + !!cpath,
     };
-    
-    for (int res; (res = sendmsg(fd, &hdr, 0)) < 0 && errno == EAGAIN;);
-}
 
-static void send_footer(int fd) {
-    for (int res; (res = send(fd, "\003", 1, 0)) < 0 && errno == EAGAIN;);
+    for (int res; (res = sendmsg(fd, &hdr, 0)) < 0 && errno == EAGAIN;);
 }
 
 static void parse_server_args(char **argv, int fd) {
@@ -137,7 +151,7 @@ static void parse_server_args(char **argv, int fd) {
     char *arg, *opt;
     while (argv[ind] && argv[ind][0] == '-') {
         size_t cind = 0;
-        if (!argv[ind][1]) usage(argv[0], EXIT_FAILURE);
+        if (!argv[ind][1]) usage(fd, argv[0], EXIT_FAILURE);
         if (argv[ind][1] == '-') {
             if (!argv[ind][2]) {
                 ind++;
@@ -153,6 +167,10 @@ static void parse_server_args(char **argv, int fd) {
 
                 if (strcmp(opt, "config") && strcmp(opt, "socket"))
                     send_opt(fd, opt, arg);
+            } else if (!strcmp(opt, "help")) {
+                usage(fd, argv[0], EXIT_SUCCESS);
+            } else if (!strcmp(opt, "version")) {
+                version(fd);
             } else {
                 char *val = "true";
                 if (!strncmp(opt, "no-", 3))
@@ -167,14 +185,13 @@ static void parse_server_args(char **argv, int fd) {
                 /* ignore */
                 break;
             case 'e':
-                if (!argv[++ind]) usage(argv[0], EXIT_FAILURE);
+                if (!argv[++ind]) usage(fd, argv[0], EXIT_FAILURE);
                 goto end;
-            default:
-                // Has arguments
-                if (!argv[ind][++cind]) ind++, cind = 0;
-                if (!argv[ind]) usage(argv[0], EXIT_FAILURE);
-                arg = argv[ind] + cind;
-
+            case 'h':
+                usage(fd, argv[0], EXIT_SUCCESS);
+            case 'v':
+                version(fd);
+            default:;
                 char *opt = NULL;
                 switch (letter) {
                 case 'C':
@@ -190,6 +207,11 @@ static void parse_server_args(char **argv, int fd) {
                 case 'g': opt = "geometry"; break;
                 }
                 if (opt) {
+                    // Has arguments
+                    if (!argv[ind][++cind]) ind++, cind = 0;
+                    if (!argv[ind]) usage(fd, argv[0], EXIT_FAILURE);
+                    arg = argv[ind] + cind;
+
                     send_opt(fd, opt, arg);
                     goto next;
                 }
@@ -211,8 +233,10 @@ end:
 int main(int argc, char **argv) {
     char *cpath = NULL, *spath = "/tmp/nsst-sock0";
 
+    (void)argc;
+
     parse_client_args(argv, &cpath, &spath);
-    
+
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof addr);
     addr.sun_family = AF_UNIX;
@@ -231,7 +255,7 @@ int main(int argc, char **argv) {
 
     parse_server_args(argv, fd);
 
-    send_footer(fd);
+    send_char(fd, '\003' /* ETX */);
 
     return 0;
 

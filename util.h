@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
@@ -89,7 +90,10 @@ inline static bool intersect_with(struct rect *src, struct rect *dst) {
         }
 }
 
+/* Version information helper funcions */
 const char *version_string(void);
+const char *features_string(void);
+const char *usage_string(ssize_t idx);
 
 #define UTF8_MAX_LEN 4
 #define UTF_INVAL 0xfffd

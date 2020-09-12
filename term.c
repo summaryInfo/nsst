@@ -1785,7 +1785,6 @@ static void term_load_config(struct term *term) {
 
     term->mstate = (struct mouse_state) {0};
 
-    //TODO Do I really need duplicate options
     struct instance_config *cfg = window_cfg(term->win);
     term->mode = (struct term_mode) {
         .focused = term->mode.focused,
