@@ -44,22 +44,23 @@ static void handle_chld(int arg) {
     int status;
     char str[128];
     ssize_t len = 0;
-
-    pid_t pid = waitpid(-1, &status, WNOHANG);
     uint32_t loglevel = gconfig.log_level;
+    pid_t pid;
 
-    if (pid < 0) {
-        if (loglevel > 1) len = snprintf(str, sizeof str,
-                "[\033[33;1mWARN\033[m] Child wait failed");
-    } else if (WIFEXITED(status) && WEXITSTATUS(status)) {
-        if (loglevel > 2) len = snprintf(str, sizeof str,
-                "[\033[32;1mINFO\033[m] Child exited with status: %d\n", WEXITSTATUS(status));
-    } else if (WIFSIGNALED(status)) {
-        if (loglevel > 2) len = snprintf(str, sizeof str,
-                "[\033[32;1mINFO\033[m] Child terminated due to the signal: %d\n", WTERMSIG(status));
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        if (pid < 0) {
+            if (loglevel > 1) len = snprintf(str, sizeof str,
+                    "[\033[33;1mWARN\033[m] Child wait failed");
+        } else if (WIFEXITED(status) && WEXITSTATUS(status)) {
+            if (loglevel > 2) len = snprintf(str, sizeof str,
+                    "[\033[32;1mINFO\033[m] Child exited with status: %d\n", WEXITSTATUS(status));
+        } else if (WIFSIGNALED(status)) {
+            if (loglevel > 2) len = snprintf(str, sizeof str,
+                    "[\033[32;1mINFO\033[m] Child terminated due to the signal: %d\n", WTERMSIG(status));
+        }
+
+        if (len) (void)write(STDERR_FILENO, str, len);
     }
-
-    if (len) (void)write(STDERR_FILENO, str, len);
 
     (void)arg;
 }
