@@ -407,7 +407,7 @@ n_printer:
 void tty_hang(struct tty *tty) {
     if (tty->fd >= 0) {
         close(tty->fd);
-        if (tty->printerfd != STDOUT_FILENO)
+        if (tty->printerfd != STDOUT_FILENO && tty->printerfd >= 0)
             close(tty->printerfd);
         tty->fd = -1;
     }
