@@ -982,7 +982,7 @@ struct window *create_window(struct instance_config *cfg) {
 
     if (!renderer_reload_font(win, 0)) goto error;
 
-    win->term = create_term(win, win->cw, win->ch);
+    win->term = create_term(win, MAX(win->cw, 2), MAX(win->ch, 1));
     if (!win->term) goto error;
 
     window_set_default_props(win);
