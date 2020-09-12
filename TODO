@@ -1,4 +1,6 @@
-Until 2.1
+Until 2.2
+    Reload a part of terminal state
+    Add --no-fork option for daemon mode and fork by default in --daemon mode
     Recalculate non-rectangular selection position on resize
     CSI ? 35 l / CSI ? 35 h -- font shifting functions
     OSC 50 ; Pt ST -- Set font
