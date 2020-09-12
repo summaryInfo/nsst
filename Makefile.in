@@ -46,22 +46,21 @@ $(NAME): $(OBJ)
 $(NAME)c: nsstc.o
 	$(CCLD) $(CFLAGS) nsstc.o $(LDFLAGS) -o $@
 
-font.o: util.h config.h window.h boxdraw.h feature.h
-window-x11.o: util.h config.h term.h window.h window-x11.h line.h input.h mouse.h feature.h
-render-x11shm.o: util.h config.h term.h window.h window-x11.h line.h mouse.h image.h feature.h
-render-x11xrender.o: util.h config.h term.h window.h window-x11.h line.h mouse.h feature.h
-input.o: util.h config.h term.h input.h nrcs.h feature.h
-term.o: util.h config.h term.h tty.h line.h input.h mouse.h window.h nrcs.h feature.h
-nsst.o: util.h config.h term.h tty.h window.h feature.h
-util.o: util.h config.h feature.h precompose-table.h
-nrcs.o : nrcs.h feature.h
-config.o: config.h util.h line.h input.h feature.h
-boxdraw.o: boxdraw.h config.h font.h feature.h
-image.o: util.h image.h font.h feature.h
-mouse.o: config.h mouse.h window.h feature.h
-tty.o: config.h tty.h util.h feature.h
-line.o: line.h util.h feature.h
+boxdraw.o: feature.h config.h font.h line.h util.h nrcs.h boxdraw.h term.h window.h
+config.o: feature.h config.h font.h line.h util.h nrcs.h input.h window.h
+font.o: feature.h config.h font.h line.h util.h nrcs.h window.h
+image.o: feature.h util.h image.h font.h
+input.o: feature.h config.h font.h line.h util.h nrcs.h input.h term.h window.h
+line.o: feature.h line.h util.h
+mouse.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h
+nrcs.o: feature.h nrcs.h
+nsst.o: feature.h config.h font.h line.h util.h nrcs.h input.h tty.h window.h
 nsstc.o: feature.h
-
+render-x11shm.o: feature.h config.h font.h line.h util.h nrcs.h mouse.h term.h window.h window-x11.h
+render-x11xrender.o: feature.h config.h font.h line.h util.h nrcs.h mouse.h term.h window.h window-x11.h
+term.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h tty.h
+tty.o: feature.h config.h font.h line.h util.h nrcs.h tty.h
+util.o: feature.h config.h font.h line.h util.h nrcs.h precompose-table.h
+window-x11.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h window-x11.h
 
 .PHONY: all clean install install-strip uninstall force
