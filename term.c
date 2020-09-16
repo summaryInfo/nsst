@@ -31,7 +31,6 @@
 #define ESC_MAX_LONG_STR 0x10000000
 #define ESC_DUMP_MAX 768
 #define SGR_BUFSIZ 64
-#define UDK_MAX 37
 #define MAX_REPORT 1024
 #define PRINT_BLOCK_SIZE 256
 
@@ -491,7 +490,7 @@ static void term_free_scrollback(struct term *term) {
 void term_scroll_view(struct term *term, int16_t amount) {
     if (term->mode.altscreen) {
         if (term->mode.altscreen_scroll)
-            term_answerback(term, CSI"%d%c", abs(amount), amount > 0 ? 'A' : 'D');
+            term_answerback(term, CSI"%u%c", abs(amount), amount > 0 ? 'A' : 'D');
         return;
     }
 
@@ -1128,18 +1127,18 @@ static char *term_encode_sgr(char *dst, char *end, struct attr attr) {
     if (attr.strikethrough) FMT(";9");
 
     // Encode foreground color
-    if (color_idx(attr.fg) < 8) FMT(";%d", 30 + color_idx(attr.fg));
-    else if (color_idx(attr.fg) < 16) FMT(";%d", 90 + color_idx(attr.fg) - 8);
-    else if (color_idx(attr.fg) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";38:5:%d", color_idx(attr.fg));
+    if (color_idx(attr.fg) < 8) FMT(";%u", 30 + color_idx(attr.fg));
+    else if (color_idx(attr.fg) < 16) FMT(";%u", 90 + color_idx(attr.fg) - 8);
+    else if (color_idx(attr.fg) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";38:5:%u", color_idx(attr.fg));
     else if (color_idx(attr.fg) == SPECIAL_FG) /* FMT(";39") -- default, skip */;
-    else if (is_direct_color(attr.fg)) FMT(";38:2:%d:%d:%d", color_r(attr.fg), color_g(attr.fg), color_b(attr.fg));
+    else if (is_direct_color(attr.fg)) FMT(";38:2:%u:%u:%u", color_r(attr.fg), color_g(attr.fg), color_b(attr.fg));
 
     // Encode background color
-    if (color_idx(attr.bg) < 8) FMT(";%d", 40 + color_idx(attr.bg));
-    else if (color_idx(attr.bg) < 16) FMT(";%d", 100 + color_idx(attr.bg) - 8);
-    else if (color_idx(attr.bg) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";48:5:%d", color_idx(attr.bg));
+    if (color_idx(attr.bg) < 8) FMT(";%u", 40 + color_idx(attr.bg));
+    else if (color_idx(attr.bg) < 16) FMT(";%u", 100 + color_idx(attr.bg) - 8);
+    else if (color_idx(attr.bg) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";48:5:%u", color_idx(attr.bg));
     else if (color_idx(attr.bg) == SPECIAL_FG) /* FMT(";49") -- default, skip */;
-    else if (is_direct_color(attr.bg)) FMT(";48:2:%d:%d:%d", color_r(attr.bg), color_g(attr.bg), color_b(attr.bg));
+    else if (is_direct_color(attr.bg)) FMT(";48:2:%u:%u:%u", color_r(attr.bg), color_g(attr.bg), color_b(attr.bg));
 
     return dst;
 #undef FMT
@@ -1895,7 +1894,7 @@ static void term_do_reset(struct term *term, bool hard) {
 static void term_esc_dump(struct term *term, bool use_info) {
     if (use_info && !gconfig.trace_controls) return;
 
-    char *pref = use_info ? "Seq: " : "Unrecognized ";
+    const char *pref = use_info ? "Seq: " : "Unrecognized ";
 
     char buf[ESC_DUMP_MAX] = "^[";
     size_t pos = 2;
@@ -1916,7 +1915,7 @@ static void term_esc_dump(struct term *term, bool use_info) {
             if (term->esc.selector & P_MASK)
                 buf[pos++] = '<' + ((term->esc.selector & P_MASK) >> 6) - 1;
             for (size_t i = 0; i < term->esc.i; i++) {
-                pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%d", term->esc.param[i]);
+                pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%u", term->esc.param[i]);
                 if (i < term->esc.i - 1) buf[pos++] = term->esc.subpar_mask & (1 << (i + 1)) ? ':' : ';' ;
             }
             if (term->esc.selector & I0_MASK)
@@ -1991,7 +1990,7 @@ static void term_dispatch_da(struct term *term, uparam_t mode) {
         case 520: ver = 64; break;
         case 525: ver = 65; break;
         }
-        term_answerback(term, CSI">%d;%d;0c", ver, NSST_VERSION);
+        term_answerback(term, CSI">%u;%u;0c", ver, NSST_VERSION);
         break;
     }
     default: /* Primary DA */
@@ -2032,7 +2031,7 @@ static void term_dispatch_dsr(struct term *term) {
     if (term->esc.selector & P_MASK) {
         switch (term->esc.param[0]) {
         case 6: /* DECXCPR -- CSI ? Py ; Px ; R ; 1  */
-            term_answerback(term, CSI"%d;%d%sR",
+            term_answerback(term, CSI"%lu;%lu%sR",
                     term->c.y - term_min_oy(term) + 1,
                     term->c.x - term_min_ox(term) + 1,
                     term->vt_level >= 4 ? ";1" : "");
@@ -2043,7 +2042,7 @@ static void term_dispatch_dsr(struct term *term) {
             break;
         case 25: /* User defined keys lock */
             CHK_VT(2);
-            term_answerback(term, CSI"?%dn", 20 + term->kstate.udk_locked);
+            term_answerback(term, CSI"?%un", 20 + term->kstate.udk_locked);
             break;
         case 26: /* Keyboard language -- North American */
             CHK_VT(2);
@@ -2066,7 +2065,7 @@ static void term_dispatch_dsr(struct term *term) {
             break;
         case 63: /* DECCKSR, Memory checksum -- 0000 (hex) */
             CHK_VT(4);
-            term_answerback(term, DCS"%d!~0000"ST, PARAM(1, 0));
+            term_answerback(term, DCS"%u!~0000"ST, PARAM(1, 0));
             break;
         case 75: /* Data integrity -- Ready, no errors */
             CHK_VT(4);
@@ -2082,7 +2081,7 @@ static void term_dispatch_dsr(struct term *term) {
             term_answerback(term, CSI"0n");
             break;
         case 6: /* CPR -- CSI Py ; Px R */
-            term_answerback(term, CSI"%d;%dR",
+            term_answerback(term, CSI"%lu;%luR",
                     term->c.y - term_min_oy(term) + 1,
                     term->c.x - term_min_ox(term) + 1);
             break;
@@ -2228,50 +2227,50 @@ static void term_dispatch_dcs(struct term *term) {
                 break;
             }
             case 'r': /* -> DECSTBM */
-                term_answerback(term, DCS"1$r%d;%dr"ST, term->top + 1, term->bottom + 1);
+                term_answerback(term, DCS"1$r%lu;%lur"ST, term->top + 1, term->bottom + 1);
                 break;
             case 's': /* -> DECSLRM */
-                term_answerback(term, term->vt_level >= 4 ? DCS"1$r%d;%ds"ST :
+                term_answerback(term, term->vt_level >= 4 ? DCS"1$r%lu;%lus"ST :
                         DCS"0$r"ST, term->left + 1, term->right + 1);
                 break;
             case 't': /* -> DECSLPP */
                 // Can't report less than 24 lines
-                term_answerback(term, DCS"1$r%dt"ST, MAX(term->height, 24));
+                term_answerback(term, DCS"1$r%lut"ST, MAX(term->height, 24));
                 break;
             case '|' << 8 | '$': /* -> DECSCPP */
                 // It should be either 80 or 132 despite actual column count
                 // New apps use ioctl(TIOGWINSZ, ...) instead
-                term_answerback(term, DCS"1$r%d$|"ST, term->mode.columns_132 ? 132 : 80);
+                term_answerback(term, DCS"1$r%u$|"ST, term->mode.columns_132 ? 132 : 80);
                 break;
             case 'q' << 8 | '"': /* -> DECSCA */
-                term_answerback(term, DCS"1$r%d\"q"ST, 2 - (term->sgr.protected && !term->mode.protected));
+                term_answerback(term, DCS"1$r%u\"q"ST, 2 - (term->sgr.protected && !term->mode.protected));
                 break;
             case 'q' << 8 | ' ': /* -> DECSCUSR */
-                term_answerback(term, DCS"1$r%d q"ST, window_cfg(term->win)->cursor_shape);
+                term_answerback(term, DCS"1$r%u q"ST, window_cfg(term->win)->cursor_shape);
                 break;
             case '|' << 8 | '*': /* -> DECSLNS */
-                term_answerback(term, DCS"1$r%d*|"ST, term->height);
+                term_answerback(term, DCS"1$r%lu*|"ST, term->height);
                 break;
             case 'x' << 8 | '*': /* -> DECSACE */
                 term_answerback(term, term->vt_level < 4 ? DCS"0$r"ST :
-                        DCS"1$r%d*x"ST, term->mode.attr_ext_rectangle + 1);
+                        DCS"1$r%u*x"ST, term->mode.attr_ext_rectangle + 1);
                 break;
             case 'p' << 8 | '"': /* -> DECSCL */
-                term_answerback(term, DCS"1$r%d%s\"p"ST, 60 + MAX(term->vt_level, 1),
+                term_answerback(term, DCS"1$r%u%s\"p"ST, 60 + MAX(term->vt_level, 1),
                         term->vt_level >= 2 ? (term->mode.eight_bit ? ";2" : ";1") : "");
                 break;
             case 't' << 8 | ' ': /* -> DECSWBV */ {
                 uparam_t val = 8;
                 if (term->bvol == window_cfg(term->win)->bell_low_volume) val = 4;
                 else if (!term->bvol) val = 0;
-                term_answerback(term, DCS"1$r%d t"ST, val);
+                term_answerback(term, DCS"1$r%u t"ST, val);
                 break;
             }
             case 'u' << 8 | ' ': /* -> DECSMBV */ {
                 uparam_t val = 8;
                 if (term->mbvol == window_cfg(term->win)->bell_high_volume) val = 4;
                 else if (!term->mbvol) val = 0;
-                term_answerback(term, DCS"1$r%d u"ST, val);
+                term_answerback(term, DCS"1$r%u u"ST, val);
                 break;
             }
             default:
@@ -2321,12 +2320,12 @@ static void term_dispatch_dcs(struct term *term) {
         if (!strcmp((char *)dstr, "436F") || // "Co"
                 !strcmp((char *)dstr, "636F6C6F7266")) { // "colors"
             uint8_t tmp[16];
-            int len = snprintf((char *)tmp, sizeof tmp, "%d", PALETTE_SIZE - SPECIAL_PALETTE_SIZE);
+            int len = snprintf((char *)tmp, sizeof tmp, "%u", PALETTE_SIZE - SPECIAL_PALETTE_SIZE);
             *dend = '=';
             hex_encode(dend + 1, tmp, tmp + len);
             valid = 1;
         }
-        term_answerback(term, DCS"%d+r%s"ST, valid, dstr);
+        term_answerback(term, DCS"%u+r%s"ST, valid, dstr);
         break;
     }
     //case C('p') | I0('+'): /* XTSETTCAP */ // TODO Termcap
@@ -2391,7 +2390,7 @@ static void term_do_set_color(struct term *term, uint32_t sel, uint8_t *dstr, ui
     if (!strcmp((char *)dstr, "?")) {
         col = term->palette[cid];
 
-        term_answerback(term, OSC"%d;rgb:%04x/%04x/%04x"ST, sel,
+        term_answerback(term, OSC"%u;rgb:%04x/%04x/%04x"ST, sel,
                color_r(col) * 0x101, color_g(col) * 0x101, color_b(col) * 0x101);
     } else if ((col = parse_color(dstr, dend))) {
         term->palette[cid] = col;
@@ -2478,7 +2477,7 @@ static void term_dispatch_osc(struct term *term) {
                     case 15:idx = 8; break;
                 }
                 if (parg[0] == '?' && parg[1] == '\0') {
-                    term_answerback(term, OSC"%d;%d;rgb:%04x/%04x/%04x"ST, term->esc.selector,
+                    term_answerback(term, OSC"%u;%lu;rgb:%04x/%04x/%04x"ST, term->esc.selector,
                             idx - (term->esc.selector == 5) * SPECIAL_BOLD, color_r(term->palette[idx]) * 0x101,
                             color_g(term->palette[idx]) * 0x101, color_b(term->palette[idx]) * 0x101);
                 } else if ((col = parse_color(parg, pnext))) {
@@ -3507,18 +3506,18 @@ static void term_dispatch_window_op(struct term *term) {
         break;
     }
     case 11: /* Report state */
-        term_answerback(term, CSI"%dt", 1 + !window_is_mapped(term->win));
+        term_answerback(term, CSI"%ut", 1 + !window_is_mapped(term->win));
         break;
     case 13: /* Report position opetations */
         switch(PARAM(1,0)) {
             int16_t x, y;
         case 0: /* Report window position */
             window_get_dim_ext(term->win, dim_window_position, &x, &y);
-            term_answerback(term, CSI"3;%d;%dt", x, y);
+            term_answerback(term, CSI"3;%u;%ut", x, y);
             break;
         case 2: /* Report grid position */
             window_get_dim_ext(term->win, dim_grid_position, &x, &y);
-            term_answerback(term, CSI"3;%d;%dt", x, y);
+            term_answerback(term, CSI"3;%u;%ut", x, y);
             break;
         default:
             term_esc_dump(term, 0);
@@ -3529,11 +3528,11 @@ static void term_dispatch_window_op(struct term *term) {
             int16_t x, y;
         case 0: /* Report grid size */
             window_get_dim_ext(term->win, dim_grid_size, &x, &y);
-            term_answerback(term, CSI"4;%d;%dt", y, x);
+            term_answerback(term, CSI"4;%u;%ut", y, x);
             break;
         case 2: /* Report window size */
             window_get_dim(term->win, &x, &y);
-            term_answerback(term, CSI"4;%d;%dt", y, x);
+            term_answerback(term, CSI"4;%u;%ut", y, x);
             break;
         default:
             term_esc_dump(term, 0);
@@ -3542,24 +3541,24 @@ static void term_dispatch_window_op(struct term *term) {
     case 15: /* Report screen size */ {
         int16_t x, y;
         window_get_dim_ext(term->win, dim_screen_size, &x, &y);
-        term_answerback(term, CSI"5;%d;%dt", y, x);
+        term_answerback(term, CSI"5;%u;%ut", y, x);
         break;
     }
     case 16: /* Report cell size */ {
         int16_t x, y;
         window_get_dim_ext(term->win, dim_cell_size, &x, &y);
-        term_answerback(term, CSI"6;%d;%dt", y, x);
+        term_answerback(term, CSI"6;%u;%ut", y, x);
         break;
     }
     case 18: /* Report grid size (in cell units) */
-        term_answerback(term, CSI"8;%d;%dt", term->height, term->width);
+        term_answerback(term, CSI"8;%lu;%lut", term->height, term->width);
         break;
     case 19: /* Report screen size (in cell units) */ {
         int16_t s_w, s_h, c_w, c_h, b_w, b_h;
         window_get_dim_ext(term->win, dim_screen_size, &s_w, &s_h);
         window_get_dim_ext(term->win, dim_cell_size, &c_w, &c_h);
         window_get_dim_ext(term->win, dim_border, &b_w, &b_h);
-        term_answerback(term, CSI"9;%d;%dt", (s_h - 2*b_h)/c_h, (s_w - 2*b_w)/c_w);
+        term_answerback(term, CSI"9;%u;%ut", (s_h - 2*b_h)/c_h, (s_w - 2*b_w)/c_w);
         break;
     }
     case 20: /* Report icon label */
@@ -3661,7 +3660,7 @@ static void term_report_cursor(struct term *term) {
     if (nrcs_is_96(term->c.gn[2])) cg96 |= 4;
     if (nrcs_is_96(term->c.gn[3])) cg96 |= 8;
 
-    term_answerback(term, DCS"1$u%d;%d;1;%s;%c;%c;%d;%d;%c;%s%s%s%s"ST,
+    term_answerback(term, DCS"1$u%lu;%lu;1;%s;%c;%c;%u;%u;%c;%s%s%s%s"ST,
         /* line */ term->c.y + 1,
         /* column */ term->c.x + 1,
         /* attributes */ csgr,
@@ -3691,12 +3690,11 @@ static void term_report_tabs(struct term *term) {
                 }
                 tabs = tmp;
             }
-            len += snprintf(tabs + len, caps, len ? "/%d" : "%d", i + 1);
+            len += snprintf(tabs + len, caps, len ? "/%u" : "%u", i + 1);
         }
     }
 
-    if (!tabs) tabs = "";
-    term_answerback(term, DCS"2$u%s"ST, tabs);
+    term_answerback(term, DCS"2$u%s"ST, tabs ? tabs : "");
 }
 
 static void term_decode_sgr(struct term *term, size_t i, struct attr *mask, struct attr *sgr) {
@@ -3773,7 +3771,7 @@ inline static void store_mode(uint8_t modbits[], uparam_t mode, bool val) {
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
     else if (2000 <= mode && mode < 2007) modbits += 20;
     else {
-        warn("Can't save mode %d", mode);
+        warn("Can't save mode %u", mode);
         return;
     }
     if (val) *modbits |= 1 << (mode % 8);
@@ -3785,7 +3783,7 @@ inline static bool load_mode(uint8_t modbits[], uparam_t mode) {
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
     else if (2000 <= mode && mode < 2007) modbits += 20;
     else {
-        warn("Can't restore mode %d", mode);
+        warn("Can't restore mode %u", mode);
         return 0;
     }
     return (*modbits >> (mode % 8)) & 1;
@@ -4079,7 +4077,7 @@ static void term_dispatch_csi(struct term *term) {
     case C('x'): /* DECREQTPARAM */
         if (term->vt_version < 200) {
             uparam_t p = PARAM(0, 0);
-            if (p < 2) term_answerback(term, CSI"%d;1;1;128;128;1;0x", p + 2);
+            if (p < 2) term_answerback(term, CSI"%u;1;1;128;128;1;0x", p + 2);
         }
         break;
     case C('q') | I0(' '): /* DECSCUSR */ {
@@ -4118,11 +4116,11 @@ static void term_dispatch_csi(struct term *term) {
         break;
     case C('p') | I0('$'): /* RQM -> RPM */
         CHK_VT(3);
-        term_answerback(term, CSI"%d;%d$y", PARAM(0, 0), term_get_mode(term, 0, PARAM(0, 0)));
+        term_answerback(term, CSI"%u;%u$y", PARAM(0, 0), term_get_mode(term, 0, PARAM(0, 0)));
         break;
     case C('p') | P('?') | I0('$'): /* DECRQM -> DECRPM */
         CHK_VT(3);
-        term_answerback(term, CSI"?%d;%d$y", PARAM(0, 0), term_get_mode(term, 1, PARAM(0, 0)));
+        term_answerback(term, CSI"?%u;%u$y", PARAM(0, 0), term_get_mode(term, 1, PARAM(0, 0)));
         break;
     case C('r') | I0('$'): /* DECCARA */ {
         CHK_VT(4);
@@ -4197,7 +4195,7 @@ static void term_dispatch_csi(struct term *term) {
                 term_min_ox(term) + PARAM(5, term_max_ox(term) - term_min_ox(term)),
                 term_min_oy(term) + PARAM(4, term_max_oy(term) - term_min_oy(term)), term->checksum_mode);
         // DECRPCRA
-        term_answerback(term, DCS"%d!~%04X"ST, PARAM(0, 0), sum);
+        term_answerback(term, DCS"%u!~%04X"ST, PARAM(0, 0), sum);
         break;
     case C('y') | I0('#'): /* XTCHECKSUM */;
         p = PARAM(0, 0);
@@ -4292,7 +4290,7 @@ static void term_dispatch_csi(struct term *term) {
         }
         break;
     case C('u') | I0('&'): /* DECRQUPSS */
-        term_answerback(term, DCS"%d!u%s"ST, nrcs_is_96(term->upcs), nrcs_unparse(term->upcs));
+        term_answerback(term, DCS"%u!u%s"ST, nrcs_is_96(term->upcs), nrcs_unparse(term->upcs));
         break;
     case C('t') | I0(' '): /* DECSWBV */
         switch (PARAM(0, 1)) {

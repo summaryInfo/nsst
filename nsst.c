@@ -42,7 +42,8 @@ static _Noreturn void version(void) {
 static void parse_options(struct instance_config *cfg, char **argv) {
     size_t ind = 1;
 
-    char *arg, *opt;
+    char *arg;
+    const char *opt;
     while (argv[ind] && argv[ind][0] == '-') {
         size_t cind = 0;
         if (!argv[ind][1]) usage(argv[0], EXIT_FAILURE);

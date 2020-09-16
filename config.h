@@ -346,8 +346,8 @@ enum optidx {
 
 
 struct optmap_item {
-    char *opt;
-    char *descr;
+    const char *opt;
+    const char *descr;
 };
 
 extern struct optmap_item optmap[];

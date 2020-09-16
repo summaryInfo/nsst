@@ -44,7 +44,7 @@ struct mouse_state *term_get_mstate(struct term *term);
 struct window *term_window(struct term *term);
 int term_fd(struct term *term);
 void term_sendkey(struct term *term, const uint8_t *data, size_t size);
-void term_answerback(struct term *term, const char *str, ...);
+void term_answerback(struct term *term, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
 void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd);
 void term_damage(struct term *term, struct rect damage);
 void term_reset(struct term *term);

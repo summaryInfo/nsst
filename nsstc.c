@@ -53,7 +53,7 @@ _Noreturn void version(int fd) {
     exit(0);
 }
 
-static void parse_client_args(char **argv, char **cpath, char **spath, _Bool *need_daemon) {
+static void parse_client_args(char **argv, const char **cpath, const char **spath, _Bool *need_daemon) {
     size_t ind = 1;
     char *arg, *opt;
 
@@ -107,12 +107,13 @@ next:
     }
 }
 
-static void send_opt(int fd, char *opt, char *value) {
+static void send_opt(int fd, const char *opt, const char *value) {
+    // This API lacks const's but doesn't change values...
     struct iovec dvec[4] = {
-        { .iov_base = "\035" /* GS */, .iov_len = 1 },
-        { .iov_base = opt, .iov_len = strlen(opt) },
-        { .iov_base = "=", .iov_len = 1 },
-        { .iov_base = value, .iov_len = strlen(value) },
+        { .iov_base = (char *)"\035" /* GS */, .iov_len = 1 },
+        { .iov_base = (char *)opt, .iov_len = strlen(opt) },
+        { .iov_base = (char *)"=", .iov_len = 1 },
+        { .iov_base = (char *)value, .iov_len = strlen(value) },
     };
 
     struct msghdr hdr = {
@@ -125,7 +126,7 @@ static void send_opt(int fd, char *opt, char *value) {
 
 static void send_arg(int fd, char *arg) {
     struct iovec dvec[4] = {
-        { .iov_base = "\036" /* RS */, .iov_len = 1 },
+        { .iov_base = (char *)"\036" /* RS */, .iov_len = 1 },
         { .iov_base = arg, .iov_len = strlen(arg) },
     };
 
@@ -137,10 +138,10 @@ static void send_arg(int fd, char *arg) {
     for (int res; (res = sendmsg(fd, &hdr, 0)) < 0 && errno == EAGAIN;);
 }
 
-static void send_header(int fd, char *cpath) {
+static void send_header(int fd, const char *cpath) {
     struct iovec dvec[4] = {
-        { .iov_base = "\001" /* SOH */, .iov_len = 1 },
-        { .iov_base = cpath, .iov_len = cpath ? strlen(cpath) : 0 },
+        { .iov_base = (char *)"\001" /* SOH */, .iov_len = 1 },
+        { .iov_base = (char *)cpath, .iov_len = cpath ? strlen(cpath) : 0 },
     };
 
     struct msghdr hdr = {
@@ -153,7 +154,8 @@ static void send_header(int fd, char *cpath) {
 
 static void parse_server_args(char **argv, int fd) {
     size_t ind = 1;
-    char *arg, *opt;
+    char *arg;
+    const char *opt;
     while (argv[ind] && argv[ind][0] == '-') {
         size_t cind = 0;
         if (!argv[ind][1]) usage(fd, argv[0], EXIT_FAILURE);
@@ -177,7 +179,7 @@ static void parse_server_args(char **argv, int fd) {
             } else if (!strcmp(opt, "version")) {
                 version(fd);
             } else {
-                char *val = "true";
+                const char *val = "true";
                 if (!strncmp(opt, "no-", 3))
                     opt += 3, val = "false";
                 send_opt(fd, opt, val);
@@ -236,7 +238,7 @@ end:
 }
 
 int main(int argc, char **argv) {
-    char *cpath = NULL, *spath = "/tmp/nsst-sock0";
+    const char *cpath = NULL, *spath = "/tmp/nsst-sock0";
     _Bool need_daemon = 0;
 
     (void)argc;
