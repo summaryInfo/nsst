@@ -854,6 +854,10 @@ void set_default_dpi(double dpi) {
     default_dpi = dpi;
 }
 
+void set_default_utf8(bool set) {
+    default_utf8 = set;
+}
+
 void copy_config(struct instance_config *dst, struct instance_config *src) {
     *dst = *src;
     for (ssize_t i = 0; i < shortcut_MAX; i++)
