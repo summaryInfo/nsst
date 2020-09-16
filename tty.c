@@ -65,7 +65,7 @@ static void handle_chld(int arg) {
     (void)arg;
 }
 
-void exec_shell(char **args, char *sh, char *termname, char *luit) {
+_Noreturn void exec_shell(char **args, char *sh, char *termname, char *luit) {
 
     const struct passwd *pw;
     errno = 0;
@@ -349,7 +349,6 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
         dup2(slave, 2);
         close(slave);
         exec_shell(cfg->argv, cfg->shell, cfg->terminfo, do_luit ? cfg->luit : NULL);
-        break;
     default:
         /* Reset argv to not use it twice */
         cfg->argv = NULL;
@@ -397,7 +396,7 @@ n_printer:
         }
 
         if (tty->printerfd >= 0) {
-            int fl = fcntl(tty->printerfd, F_GETFL);
+            fl = fcntl(tty->printerfd, F_GETFL);
             if (fl >= 0) fcntl(tty->printerfd, F_SETFL, fl | O_CLOEXEC);
         }
     }

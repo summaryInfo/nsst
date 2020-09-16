@@ -126,11 +126,11 @@ void mouse_clear_selection(struct term* term) {
 
     update_selection(term, oldstate, old);
 
-    if (loc->targ != -1U) {
+    if (loc->targ != clip_invalid) {
         if (term_is_keep_selection_enabled(term)) return;
 
         window_set_clip(term_window(term), NULL, CLIP_TIME_NOW, loc->targ);
-        loc->targ = -1;
+        loc->targ = clip_invalid;
     }
 }
 

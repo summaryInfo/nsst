@@ -284,7 +284,7 @@ enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nr
 #define I1(i) (I0(i) << 5)
 #define E_MASK (0x7F)
 #define I1_MASK (0x1F << 14)
-#define NRC {if (!nrcs) return -1;}
+#define NRC {if (!nrcs) return nrcs_invalid;}
     selector &= (I1_MASK | E_MASK);
     if (!is96) {
         switch (vt_level) {
@@ -353,7 +353,7 @@ enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nr
             break;
         }
     }
-    return -1U;
+    return nrcs_invalid;
 #undef NRC
 }
 

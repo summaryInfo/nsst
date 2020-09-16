@@ -87,11 +87,10 @@ static void parse_options(struct instance_config *cfg, char **argv) {
                 return;
             case 'h':
                 usage(argv[0], EXIT_SUCCESS);
-                break;
             case 'v':
                 version();
             default:;
-                const char *opt = NULL;
+                opt = NULL;
                 switch (letter) {
                 case 'C': goto next;
                 case 'f': opt = "font"; break;

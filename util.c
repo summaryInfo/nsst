@@ -171,7 +171,7 @@ color_t parse_color(const uint8_t *str, const uint8_t *end) {
             return 0;
         }
         return col;
-    } else if (!strncasecmp((char*)str, "rgb:", 4)) {
+    } else if (!strncasecmp((const char*)str, "rgb:", 4)) {
         // Format rgb:R/G/B
         str += 4;
 

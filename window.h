@@ -44,14 +44,17 @@ enum clip_target {
     clip_clipboard,
     clip_secondary,
     clip_MAX,
+    clip_invalid = -1,
 };
 
 enum title_target {
     target_title = 1,
     target_icon_label = 2,
+    target_title_icon_label = target_title | target_icon_label,
 };
 
 enum window_action {
+    action_none,
     action_minimize,
     action_restore_minimized,
     action_maximize,

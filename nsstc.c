@@ -88,7 +88,6 @@ static void parse_client_args(char **argv, char **cpath, char **spath, _Bool *ne
             case 'D': case 'o': case 'c':
             case 't': case 'T': case 'V':
             case 'H': case 'g': goto next;
-                break;
             default:
                 if (letter == 'C' || letter == 's') {
                     // Has arguments
@@ -197,8 +196,8 @@ static void parse_server_args(char **argv, int fd) {
                 usage(fd, argv[0], EXIT_SUCCESS);
             case 'v':
                 version(fd);
-            default:;
-                char *opt = NULL;
+            default:
+                opt = NULL;
                 switch (letter) {
                 case 'C':
                 case 's': goto next;

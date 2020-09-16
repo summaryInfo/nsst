@@ -586,8 +586,8 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
                 } else if (value[0] >= 0x20 && value[0] < 0x30 && value[1] > 0x2F && value[1] < 0x7F && !value[3]) {
                     uint32_t sel = E(value[1]) | I0(value[0]);
                     val.e = nrcs_parse(sel, 0, 5, 1);
-                    if (val.e < 0) val.e = nrcs_parse(sel, 1, 5, 1);
-                    if (val.e < 0) goto e_value;
+                    if (val.e == nrcs_invalid) val.e = nrcs_parse(sel, 1, 5, 1);
+                    if (val.e == nrcs_invalid) goto e_value;
                     c->keyboard_nrcs = val.e;
                 } else goto e_value;
             }

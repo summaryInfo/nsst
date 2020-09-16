@@ -37,7 +37,6 @@
 #define INIT_PFD_NUM 16
 #define NUM_BORDERS 4
 #define NSST_CLASS "Nsst"
-#define OPT_NAME_MAX 32
 /* Need to be multiple of 4 */
 #define PASTE_BLOCK_SIZE 1024
 
@@ -108,7 +107,7 @@ static void handle_sigusr1(int sig) {
     (void)sig;
 }
 
-static void handle_term(int sig) {
+_Noreturn static void handle_term(int sig) {
     for (struct window *win = win_list_head; win; win = win->next)
         term_hang(win->term);
 
@@ -505,6 +504,7 @@ void window_action(struct window *win, enum window_action act) {
         break;
     case action_toggle_fullscreen:
         window_action(win, win->saved_geometry ? action_restore : action_fullscreen);
+    case action_none:
         break;
     }
 }
@@ -1105,6 +1105,11 @@ static void clip_copy(struct window *win) {
 }
 
 void window_set_clip(struct window *win, uint8_t *data, uint32_t time, enum clip_target target) {
+    if (target == clip_invalid) {
+        warn("Invalid clipboard target");
+        free(data);
+        return;
+    }
     if (data) {
         xcb_set_selection_owner(con, win->wid, target_to_atom(target), time);
         xcb_get_selection_owner_cookie_t so = xcb_get_selection_owner_unchecked(con, target_to_atom(target));

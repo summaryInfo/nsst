@@ -2141,7 +2141,7 @@ inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
         }
         sel |= E(c);
         if ((gn[i] = nrcs_parse(sel, (c96 >> i) & 1,
-                term->vt_level, term->mode.enable_nrcs)) == -1U) return 0;
+                term->vt_level, term->mode.enable_nrcs)) == nrcs_invalid) return 0;
     }
 
     // Everything is OK, load
@@ -2311,7 +2311,7 @@ static void term_dispatch_dcs(struct term *term) {
             break;
         }
         enum charset cs = nrcs_parse(sel, PARAM(0, 0), term->vt_level, term->mode.enable_nrcs);
-        if (cs != -1U) term->upcs = cs;
+        if (cs != nrcs_invalid) term->upcs = cs;
         break;
     }
     case C('q') | I0('+'): /* XTGETTCAP */ {
@@ -2347,17 +2347,17 @@ static enum clip_target decode_target(uint8_t targ, bool mode) {
     case 'c': return clip_clipboard;
     case 's': return mode ? clip_clipboard : clip_primary;
     default:
-        return -1;
+        return clip_invalid;
     }
 }
 
 static uint32_t selector_to_cid(uint32_t sel, bool rev) {
     switch(sel) {
-    case 10: return rev ? SPECIAL_BG : SPECIAL_FG; break;
-    case 11: return rev ? SPECIAL_FG : SPECIAL_BG; break;
-    case 12: return rev ? SPECIAL_CURSOR_BG : SPECIAL_CURSOR_FG; break;
-    case 17: return rev ? SPECIAL_SELECTED_FG : SPECIAL_SELECTED_BG; break;
-    case 19: return rev ? SPECIAL_SELECTED_BG : SPECIAL_SELECTED_FG; break;
+    case 10: return rev ? SPECIAL_BG : SPECIAL_FG;
+    case 11: return rev ? SPECIAL_FG : SPECIAL_BG;
+    case 12: return rev ? SPECIAL_CURSOR_BG : SPECIAL_CURSOR_FG;
+    case 17: return rev ? SPECIAL_SELECTED_FG : SPECIAL_SELECTED_BG;
+    case 19: return rev ? SPECIAL_SELECTED_BG : SPECIAL_SELECTED_FG;
     }
     warn("Unreachable");
     return 0;
@@ -2582,9 +2582,9 @@ static void term_dispatch_osc(struct term *term) {
                 window_paste_clip(term->win, decode_target(letter, toclip));
             } else {
                 if (base64_decode(parg, parg, dend) != dend) parg = NULL;
-                for (size_t i = 0; i < clip_MAX; i++) {
+                for (ssize_t i = 0; i < clip_MAX; i++) {
                     if (ts[i]) {
-                        if (i == term->mstate.targ) term->mstate.targ = -1;
+                        if (i == term->mstate.targ) term->mstate.targ = clip_invalid;
                         window_set_clip(term->win, parg ? (uint8_t *)strdup((char *)parg) : parg, CLIP_TIME_NOW, i);
                     }
                 }
@@ -3466,7 +3466,7 @@ static void term_dispatch_window_op(struct term *term) {
         term_damage_lines(term, 0, term->height);
         break;
     case 9: /* Maximize operations */ {
-        enum window_action act = -1;
+        enum window_action act = action_none;
 
         switch(PARAM(1, 0)) {
         case 0: /* Undo maximize */
@@ -3484,11 +3484,11 @@ static void term_dispatch_window_op(struct term *term) {
         default:
             term_esc_dump(term, 0);
         }
-        if (act >= 0) window_action(term->win, act);
+        window_action(term->win, act);
         break;
     }
     case 10: /* Fullscreen operations */ {
-        enum window_action act = -1;
+        enum window_action act = action_none;
 
         switch(PARAM(1, 0)) {
         case 0: /* Undo fullscreen */
@@ -3503,7 +3503,7 @@ static void term_dispatch_window_op(struct term *term) {
         default:
             term_esc_dump(term, 0);
         }
-        if (act >= 0) window_action(term->win, act);
+        window_action(term->win, act);
         break;
     }
     case 11: /* Report state */
@@ -4746,7 +4746,7 @@ static void term_dispatch_vt52_cup(struct term *term) {
     term->esc.state = esc_ground;
 }
 
-inline static bool term_dispatch(struct term *term, const uint8_t **start, const uint8_t *end) {
+inline static bool term_dispatch(struct term *term, const uint8_t ** start, const uint8_t *end) {
     // Fast path for graphical characters
     if (term->esc.state == esc_ground && !IS_CBYTE(**start))
         return term_dispatch_print(term, 0, 0, start, end);
@@ -5078,7 +5078,7 @@ void term_handle_focus(struct term *term, bool set) {
 
 static size_t encode_c1(uint8_t *out, const uint8_t *in, bool eightbit) {
     uint8_t *fmtp = out;
-    for (uint8_t *it = (uint8_t *)in; *it && fmtp - out < MAX_REPORT - 1; it++) {
+    for (const uint8_t *it = (const uint8_t *)in; *it && fmtp - out < MAX_REPORT - 1; it++) {
         if (IS_C1(*it) && !eightbit) {
             *fmtp++ = 0x1B;
             *fmtp++ = *it ^ 0xC0;
@@ -5127,7 +5127,7 @@ void term_answerback(struct term *term, const char *str, ...) {
 /* If len == 0 encodes C1 controls and determines length by NUL character */
 void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
     bool encode = !len;
-    if (!len) len = strlen((char *)str);
+    if (!len) len = strlen((const char *)str);
 
     if (!(term->mode.no_scroll_on_input) && term->view_pos.line) term_reset_view(term, 1);
 
