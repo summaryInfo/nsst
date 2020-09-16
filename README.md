@@ -20,7 +20,7 @@ This is an implementation of VT220-like X11 terminal emulator.
 * Configuration with symmetrical config file options and command line arguments
 * MIT-SHM and XRender backends (compile time option)
 * Compiles with `-flto` by default
-* No warnings with `-Wall -Wextra` (except `-Wimplicit-fallthrough`)
+* No warnings (see list of all enabled warnins in Makefile)
 * Rewraps text on resize (can be disabled by setting `rewrap` to false)
 
 See TODO file for things that are to be implemented.
