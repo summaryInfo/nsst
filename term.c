@@ -5062,7 +5062,7 @@ int term_fd(struct term *term) {
 }
 
 void term_break(struct term *term) {
-    return tty_break(&term->tty);
+    tty_break(&term->tty);
 }
 
 void term_reset(struct term *term) {

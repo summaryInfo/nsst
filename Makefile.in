@@ -6,7 +6,7 @@ SHAREDIR ?= @SHAREDIR@
 
 @VARS@
 
-CFLAGS += -std=c11 -Wall -Wextra -Wno-implicit-fallthrough
+CFLAGS += -std=c11 -Wall -Wextra -Wno-implicit-fallthrough -Wpedantic
 
 OBJ := @OBJECTS@
 

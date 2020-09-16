@@ -767,7 +767,7 @@ uint32_t get_win_gravity_from_config(bool nx, bool ny) {
     case 2: return XCB_GRAVITY_SOUTH_WEST;
     default: return XCB_GRAVITY_NORTH_EAST;
     }
-};
+}
 
 struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, struct instance_config *cfg, bool blink, bool selected) {
     struct cellspec res;
@@ -1051,7 +1051,7 @@ void free_window(struct window *win) {
 
     free_config(&win->cfg);
     free(win);
-};
+}
 
 bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_t yd, int16_t width, int16_t height, bool delay) {
     struct timespec cur;
@@ -1501,8 +1501,10 @@ static void handle_event(void) {
             }
             if (ev->format == 32 && ev->data.data32[0] == ctx.atom.WM_DELETE_WINDOW) {
                 free_window(win);
-                if (!win_list_head && !gconfig.daemon_mode)
-                    return free(event);
+                if (!win_list_head && !gconfig.daemon_mode) {
+                    free(event);
+                    return;
+                }
             }
             break;
         }
