@@ -61,7 +61,6 @@ struct global_config {
     bool trace_input : 1;
     bool trace_misc : 1;
     bool want_luit : 1;
-    bool utf8 : 1;
 };
 
 struct instance_config {

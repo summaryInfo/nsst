@@ -100,29 +100,36 @@ _Noreturn void exec_shell(char **args, char *sh, char *termname, char *luit) {
     signal(SIGALRM, SIG_DFL);
     signal(SIGPIPE, SIG_DFL);
 
-    // Disable job control signals by default
-    // like login does
+    /* Disable job control signals by default
+     * like login does */
 #ifdef SIGTSTP
     signal(SIGTSTP, SIG_IGN);
     signal(SIGTTIN, SIG_IGN);
     signal(SIGTTOU, SIG_IGN);
 #endif
 
-    // Launch LUIT if it is needed and accessable
+    /* Reformat argv to run luit
+     * If luit cannon be executed, just exit
+     * if user would want to run nsst with unsupported
+     * encoding without luit, it is possible
+     * to set allow_luit to zero */
     if (luit) {
         ssize_t narg = 0;
         for (char **arg = args; *arg; arg++) narg++;
         char **new_args = calloc(narg + 2, sizeof(*new_args));
-        if (new_args) {
-            new_args[0] = luit;
-            for (ssize_t i = 1; i <= narg; i++)
-                new_args[i] = args[i - 1];
-            args = new_args;
-            sh = new_args[0];
-        }
+        if (!new_args) _exit(2);
+        new_args[0] = luit;
+        for (ssize_t i = 1; i <= narg; i++)
+            new_args[i] = args[i - 1];
+        args = new_args;
+        sh = new_args[0];
     }
 
     execvp(sh, (char *const *)args);
+
+    if (luit && (errno == ENOENT || errno == EACCES))
+        fatal("Can't run luit at '%s'", luit);
+
     _exit(1);
 }
 
@@ -304,14 +311,11 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
 
     tio.c_cc[VERASE] = cfg->backspace_is_delete ? '\177' : '\010';
 
-    /* Check if we
-     * 1. Want to run luit (encoding is not supported)
-     * 2. Allowed to run it
-     * 3. Can run it */
-    bool do_luit = gconfig.want_luit && cfg->allow_luit && !access(cfg->luit, X_OK);
+    /* We will run luit if it is allowed and required */
+    bool luit = cfg->allow_luit && gconfig.want_luit;
 
     /* If we can and want to run luit we need to enable UTF-8 */
-    cfg->utf8 |= do_luit;
+    cfg->utf8 |= luit;
 
     /* If IUTF8 is defined, enable it by default,
      * when terminal itself is in UTF-8 mode */
@@ -348,7 +352,7 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
         dup2(slave, 1);
         dup2(slave, 2);
         close(slave);
-        exec_shell(cfg->argv, cfg->shell, cfg->terminfo, do_luit ? cfg->luit : NULL);
+        exec_shell(cfg->argv, cfg->shell, cfg->terminfo, luit ? cfg->luit : NULL);
     default:
         /* Reset argv to not use it twice */
         cfg->argv = NULL;
