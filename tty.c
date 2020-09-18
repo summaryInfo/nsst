@@ -331,8 +331,10 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
         return -1;
     }
 
+    int fld = fcntl(tty->fd, F_GETFD);
+    if (fld >= 0) fcntl(tty->fd, F_SETFD, fld | FD_CLOEXEC);
     int fl = fcntl(tty->fd, F_GETFL);
-    if (fl >= 0) fcntl(tty->fd, F_SETFL, fl | O_NONBLOCK | O_CLOEXEC);
+    if (fl >= 0) fcntl(tty->fd, F_SETFL, fl | O_NONBLOCK);
 
     switch ((tty->child = fork())) {
     case -1:

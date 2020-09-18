@@ -17,6 +17,7 @@
 #include "window-x11.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <poll.h>
 #include <signal.h>
@@ -1664,6 +1665,9 @@ static void append_pending_launch(struct pending_launch *lnch) {
 static void accept_pending_launch(void) {
     int fd = accept(ctx.pfds[1].fd, NULL, NULL);
 
+    int fl = fcntl(fd, F_GETFD);
+    if (fl >= 0) fcntl(fd, F_SETFD, fl | FD_CLOEXEC);
+
     struct pending_launch *lnch = calloc(1, sizeof(struct pending_launch));
     if (fd < 0 || !lnch || (lnch->poll_index = alloc_pollfd()) < 0) {
         close(fd);
@@ -1692,6 +1696,9 @@ void run(void) {
             warn("Can't create daemon socket: %s", strerror(errno));
             return;
         }
+
+        int fl = fcntl(fd, F_GETFD);
+        if (fl >= 0) fcntl(fd, F_SETFD, fl | FD_CLOEXEC);
 
         if (bind(fd, (struct sockaddr*)&addr,
                 offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path)) < 0) {
