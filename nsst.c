@@ -141,7 +141,17 @@ int main(int argc, char **argv) {
         // Builtin support for locales only include UTF-8, Latin-1 and ASCII
         // TODO: Check for supported NRCSs and prefer them to luit
         bool utf8 = !strncasecmp(charset, "UTF", 3) && (charset[3] == '8' || charset[4] == '8');
-        bool supported = !strcasecmp(charset, "ISO-8859-1") || !strcasecmp(charset, "ASCII");
+        bool supported = 0;
+        const char *lc_supported[] = {
+            "ASCII",
+            "US-ASCII",
+            "ANSI_X3.4-1968",
+            "ISO-8869-1",
+            "ISO8869-1",
+        };
+        for (size_t i = 0; !supported && i < sizeof(lc_supported)/sizeof(*lc_supported); i++)
+            supported |= !strcasecmp(charset, lc_supported[i]);
+
         set_default_utf8(utf8);
         gconfig.want_luit = !supported && !utf8;
     }
