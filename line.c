@@ -79,15 +79,15 @@ inline static void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
     if (!inc) inc = 8;
     switch(inc) do {
         dst += inc;
-        inc = 8;
-        case 8: dst[7] = c;
-        case 7: dst[6] = c;
-        case 6: dst[5] = c;
-        case 5: dst[4] = c;
-        case 4: dst[3] = c;
-        case 3: dst[2] = c;
-        case 2: dst[1] = c;
-        case 1: dst[0] = c;
+        inc = 8; /* fallthrough */
+    case 8: dst[7] = c; /* fallthrough */
+    case 7: dst[6] = c; /* fallthrough */
+    case 6: dst[5] = c; /* fallthrough */
+    case 5: dst[4] = c; /* fallthrough */
+    case 4: dst[3] = c; /* fallthrough */
+    case 3: dst[2] = c; /* fallthrough */
+    case 2: dst[1] = c; /* fallthrough */
+    case 1: dst[0] = c;
     } while(--i > 0);
 }
 

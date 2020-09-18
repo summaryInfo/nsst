@@ -1902,6 +1902,7 @@ static void term_esc_dump(struct term *term, bool use_info) {
         case esc_esc_entry:
         case esc_esc_1:
             buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
+            /* fallthrough */
         case esc_esc_2:
             buf[pos++] = 0x20 + ((term->esc.selector & I1_MASK) >> 14) - 1;
             buf[pos++] = E_MASK & term->esc.selector;
@@ -2548,13 +2549,14 @@ static void term_dispatch_osc(struct term *term) {
             dstr = str2 + 1;
             term->esc.selector++;
         }
-    }
+        /* fallthrough */
     case 11: /* Set VT100 background color */
     case 12: /* Set Cursor color */
     case 17: /* Set Highlight background color */
     case 19: /* Set Highlight foreground color */
         term_do_set_color(term, term->esc.selector, dstr, dend);
         break;
+    }
     case 110: /*Reset  VT100 foreground color */
     case 111: /*Reset  VT100 background color */
     case 112: /*Reset  Cursor color */
@@ -3145,6 +3147,7 @@ static void print_intercept(struct term *term) {
                 /* Eat sequence */
                 blk_start = term->tty.start;
             }
+            /* fallthrough */
         default:
             term->pr_state = pr_ground;
         }
@@ -3169,6 +3172,7 @@ static void term_dispatch_mc(struct term *term) {
         case 11: /* Print scrollback and screen */
             for (ssize_t i = 1; i <= term->sb_limit; i++)
                 term_print_line(term, line_at(term, -i));
+            /* fallthrough */
         case 10: /* Print screen */
             term_print_screen(term, 1);
             break;
@@ -3876,6 +3880,7 @@ static void term_dispatch_csi(struct term *term) {
                 term_free_scrollback(term);
                 break;
             }
+            /* fallthrough */
         default:
             term_esc_dump(term, 0);
         }
@@ -4231,6 +4236,7 @@ static void term_dispatch_csi(struct term *term) {
     case C('|') | I0('*'): /* DECSNLS */
         if (window_cfg(term->win)->allow_window_ops)
             term_request_resize(term, -1, PARAM(0, 24), 1);
+        break;
     case C('W') | P('?'): /* DECST8C */
         if (PARAM(0, 5) == 5) term_reset_tabs(term);
         else term_esc_dump(term, 0);
@@ -4257,6 +4263,7 @@ static void term_dispatch_csi(struct term *term) {
                     break;
                 case 1047: case 1049:
                     mode = 47;
+                    /* fallthrough */
                 default:
                     store_mode(term->saved_modbits, mode, val == modstate_enabled);
                 }
@@ -4284,6 +4291,7 @@ static void term_dispatch_csi(struct term *term) {
                 break;
             case 1047: case 1049:
                 mode = 47;
+                /* fallthrough */
             default:
                 term_srm(term, 1, mode, load_mode(term->saved_modbits, mode));
             }
@@ -4329,6 +4337,7 @@ static void term_dispatch_csi(struct term *term) {
             break;
         case 1:
             term->mstate.locator_oneshot = 1;
+            /* fallthrough */
         case 2:
             term->mstate.locator_enabled = 1;
             break;
@@ -4352,6 +4361,7 @@ static void term_dispatch_csi(struct term *term) {
             switch(PARAM(i, 0)) {
             case 0: /* Only explicit requests */
                 term->mstate.locator_report_press = 0;
+                /* fallthrough */
             case 4: /* Disable up */
                 term->mstate.locator_report_release = 0;
                 break;
@@ -4634,6 +4644,7 @@ static void term_dispatch_c0(struct term *term, uint32_t ch) {
         if (mouse_is_selected(term, term->c.x, term->c.y))
             mouse_clear_selection(term);
         term_put_cell(term, term->c.x, term->c.y, '?');
+        /* fallthrough */
     case 0x18: /* CAN */
         term_esc_finish_string(term);
         term->esc.state = esc_ground;
@@ -4772,17 +4783,20 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
         break;
     case esc_esc_entry:
         term_esc_start(term);
+        /* fallthrough */
     case esc_esc_1:
         if (0x20 <= ch && ch <= 0x2F) {
             term->esc.selector |= term->esc.state ==
                     esc_esc_entry ? I0(ch) : I1(ch);
             term->esc.state++;
         } else
+        /* fallthrough */
     case esc_esc_2:
         if (0x30 <= ch && ch <= 0x7E) {
             term->esc.selector |= E(ch);
             term_dispatch_esc(term);
         } else
+        /* fallthrough */
     case esc_esc_ignore:
         if (IS_C0(ch))
             term_dispatch_c0(term, ch);
@@ -4795,12 +4809,14 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
         break;
     case esc_dcs_entry:
         term_esc_start_string(term);
+        /* fallthrough */
     case esc_csi_entry:
         term_esc_start_seq(term);
         term->esc.state++;
         if (0x3C <= ch && ch <= 0x3F)
             term->esc.selector |= P(ch);
         else
+        /* fallthrough */
     case esc_csi_0:
     case esc_dcs_0:
         if (0x30 <= ch && ch <= 0x39)
@@ -4815,6 +4831,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
                 term->esc.subpar_mask |= 1 << term->esc.i;
             }
         } else
+        /* fallthrough */
     case esc_csi_1:
     case esc_dcs_1:
         if (0x20 <= ch && ch <= 0x2F) {
@@ -4822,6 +4839,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
                     term->esc.state == esc_dcs_0) ? I0(ch) : I1(ch);
             term->esc.state++;
         } else
+        /* fallthrough */
     case esc_csi_2:
     case esc_dcs_2:
         if (0x40 <= ch && ch <= 0x7E) {
@@ -4831,6 +4849,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
             else
                 term_dispatch_csi(term);
         } else
+        /* fallthrough */
     case esc_csi_ignore:
         if (IS_C0(ch)) {
             if (esc_dcs_entry > term->esc.state || term->esc.state > esc_dcs_2)
@@ -4851,14 +4870,17 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
             term->esc.selector = 1 + (ch == 'L');
             term->esc.state = esc_osc_2;
         } else
+        /* fallthrough */
     case esc_osc_1:
         if (0x30 <= ch && ch <= 0x39)
             term->esc.selector = (ch - 0x30) + term->esc.selector * 10;
         else
+        /* fallthrough */
     case esc_osc_2:
         if (ch == 0x3B)
             term->esc.state = esc_osc_string;
         else
+        /* fallthrough */
     case esc_ign_string:
         if (IS_STREND(ch))
             term_dispatch_c0(term, ch);
@@ -4888,6 +4910,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
         if (IS_C0(ch) && !IS_STREND(ch))
             /* ignore */;
         else
+        /* fallthrough */
     case esc_dcs_string:
         if (IS_STREND(ch))
             term_dispatch_c0(term, ch);
@@ -4929,6 +4952,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
         break;
     case esc_vt52_cup_0:
         term_esc_start_seq(term);
+        /* fallthrough */
     case esc_vt52_cup_1:
         if (IS_C0(ch))
             term_dispatch_c0(term, ch);

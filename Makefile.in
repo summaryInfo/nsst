@@ -6,13 +6,13 @@ SHAREDIR ?= @SHAREDIR@
 
 @VARS@
 
-CFLAGS += -std=c11 -Wall -Wextra -Wno-implicit-fallthrough -Wpedantic
+CFLAGS += -std=c11 -Wall -Wextra -Wpedantic
 CFLAGS += -Wno-unknown-warning-option -Walloca -Wno-aggressive-loop-optimizations
 CFLAGS += -Wdisabled-optimization -Wduplicated-branches -Wduplicated-cond
 CFLAGS += -Wignored-attributes  -Wincompatible-pointer-types
-CFLAGS += -Winit-self -Wwrite-strings -Wvla -Wformat=2
+CFLAGS += -Winit-self -Wwrite-strings -Wvla
 CFLAGS += -Wmissing-attributes -Wmissing-format-attribute -Wmissing-noreturn
-CFLAGS += -Wswitch-bool -Wpacked -Wshadow -Wno-format-nonliteral
+CFLAGS += -Wswitch-bool -Wpacked -Wshadow -Wformat-security
 CFLAGS += -Wswitch-unreachable -Wlogical-op -Wstringop-truncation
 CFLAGS += -Wbad-function-cast -Wnested-externs -Wstrict-prototypes
 

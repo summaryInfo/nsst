@@ -197,9 +197,12 @@ static void modify_others(uint32_t ch, uint32_t param, bool fmt, struct reply *r
 static void modify_cursor(uint32_t param, uint8_t level, struct reply *reply) {
     if (param) switch (level) {
     case 4: reply->priv = '>';
+        /* fallthrough */
     case 3: if (!reply->idx)
                 reply->param[reply->idx++] = 1;
+        /* fallthrough */
     case 2: reply->init = '\233';
+        /* fallthrough */
     case 1: reply->param[reply->idx++] = param;
     }
 }

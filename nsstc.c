@@ -256,6 +256,7 @@ int main(int argc, char **argv) {
             case 0:
                 setsid();
                 execlp("nsst", "nsst", "-d", NULL);
+                /* fallthrough */
             default:
                 _exit(res <= 0);
             }

@@ -390,6 +390,7 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
         src = sbm.buffer;
         if (pitch < 0) src -= pitch*(sbm.rows - 1);
         num_grays = sbm.num_grays;
+        /* fallthrough */
     case FT_PIXEL_MODE_GRAY:
         if (lcd) {
             for (size_t i = 0; i < glyph->height; i++) {

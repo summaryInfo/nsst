@@ -298,6 +298,7 @@ enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nr
             case E('2') | I1('%'): NRC; return nrcs_turkish;
             case E('4') | I1('&'): NRC; return nrcs_cyrillic;
             }
+            /* fallthrough */
         case 4: case 3:
             switch (selector) {
             case E('5') | I1('%'): return cs94_dec_sup_graph;
@@ -306,6 +307,7 @@ enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nr
             case E('>'): return cs94_dec_tech;
             case E('6') | I1('%'): NRC; return nrcs_portuguese;
             }
+            /* fallthrough */
         case 2:
             switch (selector) {
             case E('C'): NRC; return nrcs_finnish;
@@ -324,6 +326,7 @@ enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nr
             case E('6'): NRC; return nrcs_norwegian_dannish2;
             case E('<'): return cs94_dec_sup;
             }
+            /* fallthrough */
         case 1:
             switch (selector) {
             case E('A'): return cs94_british;
@@ -334,6 +337,7 @@ enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nr
             case E('2'): if (vt_level != 1) break;
                          return cs94_dec_altgraph;
             }
+            /* fallthrough */
         case 0: break;
         }
     } else {
@@ -345,10 +349,12 @@ enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nr
             case E('L'): return cs96_latin_cyrillic;
             case E('M'): return cs96_latin_5;
             }
+            /* fallthrough */
         case 4: case 3:
             switch (selector) {
             case E('A'): return cs96_latin_1;
             }
+            /* fallthrough */
         case 2: case 1: case 0:
             break;
         }
