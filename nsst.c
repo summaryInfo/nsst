@@ -143,6 +143,8 @@ int main(int argc, char **argv) {
         bool utf8 = !strncasecmp(charset, "UTF", 3) && (charset[3] == '8' || charset[4] == '8');
         bool supported = 0;
         const char *lc_supported[] = {
+            "C",
+            "POSIX"
             "ASCII",
             "US-ASCII",
             "ANSI_X3.4-1968",
