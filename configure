@@ -9,7 +9,7 @@ use_clang=0
 prefix=/usr/local
 name=nsst
 backend=x11shm
-vars='CFLAGS = -O2 -flto'
+vars='CFLAGS=-O2 -flto'
 version=20103
 
 # Test some features by trying compiling snippets
