@@ -829,7 +829,8 @@ struct window *find_shared_font(struct window *win, bool need_free) {
     for (struct window *src = win_list_head; src; src = src->next) {
         if ((src->cfg.font_size == win->cfg.font_size || (!win->cfg.font_size && src->cfg.font_size == ctx.font_size)) &&
                 src->cfg.dpi == win->cfg.dpi && src->cfg.force_scalable == win->cfg.force_scalable &&
-                src->cfg.gamma == win->cfg.gamma && !strcmp(win->cfg.font_name, src->cfg.font_name) && src != win) {
+                src->cfg.allow_subst_font == win->cfg.allow_subst_font && src->cfg.gamma == win->cfg.gamma &&
+                !strcmp(win->cfg.font_name, src->cfg.font_name) && src != win) {
             found_font = 1;
             found = src;
             if (win->font_pixmode == src->font_pixmode && win->cfg.font_spacing == src->cfg.font_spacing &&
@@ -841,7 +842,7 @@ struct window *find_shared_font(struct window *win, bool need_free) {
     }
 
     struct font *newf = found_font ? font_ref(found->font) :
-            create_font(win->cfg.font_name, win->cfg.font_size, win->cfg.dpi, win->cfg.gamma, win->cfg.force_scalable);
+            create_font(win->cfg.font_name, win->cfg.font_size, win->cfg.dpi, win->cfg.gamma, win->cfg.force_scalable, win->cfg.allow_subst_font);
     if (!newf) {
         warn("Can't create new font: %s", win->cfg.font_name);
         return NULL;

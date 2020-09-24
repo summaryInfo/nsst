@@ -238,7 +238,7 @@ static void load_face_list(struct font *font, struct face_list* faces, const cha
     free(tmp);
 }
 
-struct font *create_font(const char* descr, double size, double dpi, double gamma, bool force_scalable) {
+struct font *create_font(const char* descr, double size, double dpi, double gamma, bool force_scalable, bool allow_subst) {
     if (global.fonts++ == 0) {
         if (FcInit() == FcFalse)
             die("Can't initialize fontconfig");
@@ -260,6 +260,7 @@ struct font *create_font(const char* descr, double size, double dpi, double gamm
     font->size = size;
     font->gamma = gamma;
     font->force_scalable = force_scalable;
+    font->allow_subst_font = allow_subst;
 
 
     for (size_t i = 0; i < face_MAX; i++)
@@ -352,9 +353,7 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
     bool ordrev = ord == pixmode_bgr || ord == pixmode_bgrv;
     bool lcd = ord != pixmode_mono;
 
-    if (lcd && !ordv) FT_Render_Glyph(face->glyph, FT_RENDER_MODE_LCD);
-    else if (lcd && ordv) FT_Render_Glyph(face->glyph, FT_RENDER_MODE_LCD_V);
-    else FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
+    FT_Render_Glyph(face->glyph, lcd ? (ordv ? FT_RENDER_MODE_LCD_V : FT_RENDER_MODE_LCD_V) : FT_RENDER_MODE_NORMAL);
 
     size_t stride = face->glyph->bitmap.width;
 

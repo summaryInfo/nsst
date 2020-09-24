@@ -42,7 +42,7 @@ struct glyph {
 };
 
 
-struct font *create_font(const char* descr, double size, double dpi, double gamma, bool force_scalable);
+struct font *create_font(const char* descr, double size, double dpi, double gamma, bool force_scalable, bool allow_subst);
 void free_font(struct font *font);
 struct font *font_ref(struct font *font);
 struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t ch, enum face_name attr);
