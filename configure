@@ -8,7 +8,7 @@ use_posix_shm=0
 use_clang=0
 prefix=/usr/local
 name=nsst
-backend=x11shm
+backend=x11xrender
 vars='CFLAGS=-O2 -flto'
 version=20103
 
@@ -38,7 +38,7 @@ Usage: configure [options]
     --disable-precompose    disable unicode combining characters precomposition
     --enable-posix-shm      enable posix shared memory functions usage
     --disable-posix-shm     disble posix shared memory functions usa
-    --backend=<targ>        Rendering backend [x11shm]/x11xrender
+    --backend=<targ>        Rendering backend x11shm/[x11xrender]
     --use-clang             Configure to compile with clang/lld
 END
 }

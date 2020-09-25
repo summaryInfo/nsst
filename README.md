@@ -159,11 +159,12 @@ Alternatively do
 
 if you want to use it the machine you compile it on.
 These more aggressive optimization options works fine.
-It's more relevant for MIT-SHM backend (default one).
+It's more relevant for MIT-SHM backend.
 
 XRender backend is slightly faster in general,
 but a lot slower in some corner cases (e.g. small font and a lot of true color cells).
-Use `--backend=x11xrender` configure option to enable it.
+XRender backend is default.
+In order to switch to MIT-SHM backend use `--backend=x11shm`.
 
 See `./configure --help` for more.
 
