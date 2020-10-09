@@ -36,7 +36,7 @@ struct cell {
     uint32_t drawn : 1;
     uint32_t wide : 1;
     uint32_t attrid : 9;
-};
+} PACKED;
 
 struct attr {
     color_t fg;
@@ -52,9 +52,19 @@ struct attr {
             bool invisible : 1;
             bool reverse : 1;
             bool blink : 1;
+
             bool protected : 1;
+            /* Reserved fields, to guaranty
+             * that padding would be zero */
+            bool res9__ : 1;
+            bool res10__ : 1;
+            bool res11__ : 1;
+            bool res12__ : 1;
+            bool res13__ : 1;
+            bool res14__ : 1;
+            bool res15__ : 1;
         };
-    };
+    } PACKED;
 };
 
 struct line_attr {
