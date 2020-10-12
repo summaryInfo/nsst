@@ -3322,9 +3322,16 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
         uint32_t prev = -1U;
         const uint8_t *xstart = *start;
         enum charset glv = term->c.gn[term->c.gl_ss];
+
         bool utf8 = term->mode.utf8;
         bool fast_nrcs = utf8 && !window_cfg(term->win)->force_utf8_nrcs;
         bool skip_del = glv > cs96_latin_1 || (!term->mode.enable_nrcs && (glv == cs96_latin_1 || glv == cs94_british));
+
+        // Find the actual end of buffer
+        // to prevent checking that on each iteration
+        // (and also preload cache)
+        const uint8_t *chunk = xstart;
+        while (!IS_CBYTE(*chunk) && chunk < end) chunk++;
 
         do {
             const uint8_t *char_start = xstart;
@@ -3385,10 +3392,9 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
             }
 
             // If we have encountered control character, break
-            if (IS_CBYTE(*xstart)) break;
 
             // Since maxw < width == length of predec_buf, don't check it
-        } while(totalw < maxw && /* count < FD_BUF_SIZE && */ xstart < end);
+        } while(totalw < maxw && /* count < FD_BUF_SIZE && */ xstart < chunk);
 
         *start = xstart;
 
