@@ -3320,27 +3320,29 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
         }
     } else {
         uint32_t prev = -1U;
+        const uint8_t *xstart = *start;
+        enum charset glv = term->c.gn[term->c.gl_ss];
+        bool utf8 = term->mode.utf8;
+        bool fast_nrcs = utf8 && !window_cfg(term->win)->force_utf8_nrcs;
+        bool skip_del = glv > cs96_latin_1 || (!term->mode.enable_nrcs && (glv == cs96_latin_1 || glv == cs94_british));
 
         do {
-            const uint8_t *char_start = *start;
-            if (UNLIKELY((ch = decode_special(start, end, !term->mode.utf8)) < 0)) {
+            const uint8_t *char_start = xstart;
+            if (UNLIKELY((ch = decode_special(&xstart, end, !utf8)) < 0)) {
                 // If we encountered partial UTF-8,
                 // print all we have and return
                 res = 0;
                 break;
             }
 
-            enum charset glv = term->c.gn[term->c.gl_ss];
-
             // Skip DEL char if not 96 set
-            if (UNLIKELY(IS_DEL(ch)) && (glv > cs96_latin_1 || (!term->mode.enable_nrcs &&
-                    (glv == cs96_latin_1 || glv == cs94_british)))) continue;
+            if (UNLIKELY(IS_DEL(ch)) && skip_del) continue;
 
             // Decode nrcs
             // In theory this should be disabled while in UTF-8 mode, but
             // in practice applications use these symbols, so keep translating.
             // But decode only allow only DEC Graph in GL, unless configured otherwise
-            if (LIKELY(term->mode.utf8 && !window_cfg(term->win)->force_utf8_nrcs))
+            if (LIKELY(fast_nrcs))
                 ch = nrcs_decode_fast(glv, ch);
             else
                 ch = nrcs_decode(glv, term->c.gn[term->c.gr], term->upcs, ch, term->mode.enable_nrcs);
@@ -3363,14 +3365,14 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
                 // In those cases recalculate maxw
                 if (UNLIKELY(totalw + wid > maxw)) {
                     if (LIKELY(totalw || wid != 2)) {
-                        *start = char_start;
+                        xstart = char_start;
                         break;
                     } else if (term->c.x == term_max_x(term) - 1) {
                         maxw = term->mode.wrap ? term_max_x(term) - term_min_x(term) : wid;
                     } else if (term->c.x == term->width - 1) {
                         maxw = wid;
                     } else {
-                        *start = char_start;
+                        xstart = char_start;
                         break;
                     }
                 }
@@ -3383,10 +3385,12 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
             }
 
             // If we have encountered control character, break
-            if (IS_CBYTE(**start)) break;
+            if (IS_CBYTE(*xstart)) break;
 
             // Since maxw < width == length of predec_buf, don't check it
-        } while(totalw < maxw && /* count < FD_BUF_SIZE && */ *start < end);
+        } while(totalw < maxw && /* count < FD_BUF_SIZE && */ xstart < end);
+
+        *start = xstart;
 
         if (prev != -1U) term->prev_ch = prev; // For REP CSI
     }
