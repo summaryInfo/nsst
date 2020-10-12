@@ -469,20 +469,15 @@ struct glyph_cache {
     enum pixel_mode pixmode;
     size_t refc;
     struct glyph **tab;
-    size_t size;
-    size_t caps;
+    uint32_t size;
+    uint32_t caps;
 };
 
-static inline uint64_t ror64(uint64_t v, int r) {
-    return (v >> r) | (v << (64 - r));
-}
-
-uint64_t hash(uint64_t v) {
-    v ^= ror64(v, 25) ^ ror64(v, 50);
-    v *= 0xA24BAED4963EE407ULL;
-    v ^= ror64(v, 24) ^ ror64(v, 49);
-    v *= 0x9FB21C651E98DF25ULL;
-    return v ^ v >> 28;
+inline static uint32_t hash(uint32_t v) {
+    v = ((v >> 16) ^ v) * 0x45D9F3B;
+    v = ((v >> 16) ^ v) * 0x45D9F3B;
+    v = (v >> 16) ^ v;
+    return v;
 }
 
 struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmode, int16_t vspacing, int16_t hspacing, bool boxdraw) {
