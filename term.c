@@ -3328,6 +3328,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
         bool skip_del = glv > cs96_latin_1 || (!term->mode.enable_nrcs && (glv == cs96_latin_1 || glv == cs94_british));
 
         // Find the actual end of buffer
+        // (control character or number of characters)
         // to prevent checking that on each iteration
         // (and also preload cache)
         const uint8_t *chunk = xstart;
@@ -3390,8 +3391,6 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
                 totalw += wid;
                 *pbuf++ = ch;
             }
-
-            // If we have encountered control character, break
 
             // Since maxw < width == length of predec_buf, don't check it
         } while(totalw < maxw && /* count < FD_BUF_SIZE && */ xstart < chunk);
