@@ -77,6 +77,7 @@ struct line_attr {
 struct line {
     struct line_attr *attrs;
     ssize_t width;
+    ssize_t mwidth;
     bool force_damage;
     bool wrapped;
     struct cell cell[];
@@ -117,7 +118,7 @@ inline static void free_line(struct line *line) {
 inline static int16_t line_length(struct line *line) {
     int16_t max_x = line->width;
     if (!line->wrapped)
-        while (max_x > 0 && !line->cell[max_x - 1].ch) max_x--;
+        while (LIKELY(max_x > 0 && !line->cell[max_x - 1].ch)) max_x--;
     return max_x;
 }
 

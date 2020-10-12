@@ -765,6 +765,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                     // Advance line, soft wrap
                     if (++dx == width && (x < len - 1 || line->wrapped)) {
                         new_lines[dy]->wrapped = 1;
+                        new_lines[dy]->mwidth = width;
                         if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
                         dx = 0;
                     }
@@ -782,6 +783,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 }
                 // Advance line, hard wrap
                 if (!line->wrapped) {
+                    new_lines[dy]->mwidth = dx;
                     if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
                     dx = 0;
                 }
@@ -1207,6 +1209,12 @@ static void term_copy(struct term *term, int16_t xs, int16_t ys, int16_t xe, int
 
 static void term_fill(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, bool origin, uint32_t ch) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, origin);
+
+    if (!ch && xe == term->width) {
+        // Reset line lengths
+        for (int16_t i = ys; i < ye; i++)
+            term->screen[i]->mwidth = xs;
+    }
 
     for (; ys < ye; ys++) {
         struct line *line = term->screen[ys];
@@ -3322,7 +3330,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
             enum charset glv = term->c.gn[term->c.gl_ss];
 
             // Skip DEL char if not 96 set
-            if (IS_DEL(ch) && (glv > cs96_latin_1 || (!term->mode.enable_nrcs &&
+            if (UNLIKELY(IS_DEL(ch)) && (glv > cs96_latin_1 || (!term->mode.enable_nrcs &&
                     (glv == cs96_latin_1 || glv == cs94_british)))) continue;
 
             // Decode nrcs
@@ -3350,7 +3358,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
                 // Don't include char if its too wide, unless its a wide char
                 // at right margin, or autowrap is disabled, and we are at right size of the screen
                 // In those cases recalculate maxw
-                if (totalw + wid > maxw) {
+                if (UNLIKELY(totalw + wid > maxw)) {
                     if (LIKELY(totalw || wid != 2)) {
                         *start = char_start;
                         break;
@@ -3434,6 +3442,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
     }
 
     term->c.x += totalw;
+    line->mwidth = MAX(line->mwidth, term->c.x);
     term->c.pending = term->c.x == term_max_x(term);
     term->c.x -= term->c.pending;
 

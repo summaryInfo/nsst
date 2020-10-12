@@ -94,10 +94,7 @@ inline static void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
 struct line *create_line(struct attr attr, ssize_t width) {
     struct line *line = malloc(sizeof(*line) + (size_t)width * sizeof(line->cell[0]));
     if (!line) die("Can't allocate line");
-    line->width = 0;
-    line->wrapped = 0;
-    line->force_damage = 0;
-    line->attrs = NULL;
+    memset(line, 0, sizeof(*line));
     struct cell c = { .attrid = alloc_attr(line, attr) };
     for (ssize_t i = 0; i < width; i++) line->cell[i] = c;
     line->width = width;
@@ -119,7 +116,7 @@ struct line *realloc_line(struct line *line, ssize_t width) {
 
 struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     if (src2) {
-        ssize_t llen = MAX(line_length(src2), 1);
+        ssize_t llen = MAX(src2->mwidth, 1);
         ssize_t oldw = src1->width;
 
         if (llen + oldw > MAX_LINE_LEN) return NULL;
@@ -132,7 +129,7 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
 
         free_line(src2);
     } else if (opt) {
-        ssize_t llen = MAX(line_length(src1), 1);
+        ssize_t llen = MAX(src1->mwidth, 1);
         if (llen != src1->width)
             src1 = realloc_line(src1, llen);
     }
@@ -167,5 +164,6 @@ void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize
         memmove(dc, sc, len * sizeof(*sc));
         if (dmg) while (len--) dc++->drawn = 0;
     }
+    dst->mwidth = MAX(dst->mwidth, sx + len);
 }
 
