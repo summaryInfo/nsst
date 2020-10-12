@@ -1383,20 +1383,23 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
 
             if (save && !term->mode.altscreen && term->top == top) {
                 ssize_t scrolled = 0;
-                for (int16_t i = 0; i < amount; i++) {
+                for (int16_t i = 0; i < amount; i++)
                     scrolled -= term_append_history(term, term->screen[top + i], window_cfg(term->win)->minimize_scrollback);
-                    term->screen[top + i] = create_line(term->sgr, term->width);
-                }
+
+                memmove(term->screen + top, term->screen + top + amount, rest * sizeof(*term->screen));
+                for (int16_t i = 0; i < amount; i++)
+                    term->screen[bottom - 1 - i] = create_line(term->sgr, term->width);
 
                 if (scrolled < 0) /* View down, image up */ {
                     term_damage_lines(term, term->height + scrolled, term->height);
                     window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled, 0);
                     mouse_scroll_view(term, scrolled);
                 }
-            } else term_erase(term, 0, top, term->width, top + amount, 0);
-
-            for (int16_t i = 0; i < rest; i++)
-                SWAP(struct line *, term->screen[top + i], term->screen[top + amount + i]);
+            } else {
+                term_erase(term, 0, top, term->width, top + amount, 0);
+                for (int16_t i = 0; i < rest; i++)
+                    SWAP(struct line *, term->screen[top + i], term->screen[top + amount + i]);
+            }
 
             if (term->view_pos.line || !window_shift(term->win,
                     0, top + amount, 0, top, term->width, bottom - top - amount, 1)) {
