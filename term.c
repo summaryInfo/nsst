@@ -902,10 +902,17 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             }
             term->view_pos.line = MAX(MIN(0, term->view_pos.line), -term->sb_limit);
 
-            // Restore view offset
+            // Restore view offset...
+
             term->view = 0;
-            ssize_t vline = term->view_pos.line;
-            while (vline++ < 0) term->view += line_segments(line_at(term, vline - 1), 0, term->width);
+
+            // ..counting whole lines...
+            for (ssize_t vline = term->view_pos.line + 1; vline < 0; vline++)
+                term->view += line_segments(line_at(term, vline), 0, term->width);
+
+            // ..and partial virtual lines
+            struct line *ln = line_at(term, term->view_pos.line);
+            term->view -= line_segments(ln, 0, term->width) - line_segments(ln, term->view_pos.offset, term->width);
         }
     }
 
