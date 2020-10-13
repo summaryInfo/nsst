@@ -353,7 +353,7 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
     bool ordrev = ord == pixmode_bgr || ord == pixmode_bgrv;
     bool lcd = ord != pixmode_mono;
 
-    FT_Render_Glyph(face->glyph, lcd ? (ordv ? FT_RENDER_MODE_LCD_V : FT_RENDER_MODE_LCD_V) : FT_RENDER_MODE_NORMAL);
+    FT_Render_Glyph(face->glyph, lcd ? (ordv ? FT_RENDER_MODE_LCD_V : FT_RENDER_MODE_LCD) : FT_RENDER_MODE_NORMAL);
 
     size_t stride = face->glyph->bitmap.width;
 
