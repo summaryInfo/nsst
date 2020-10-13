@@ -7,7 +7,8 @@ SHAREDIR ?= @SHAREDIR@
 @VARS@
 
 CFLAGS += -std=c11 -Wall -Wextra -Wpedantic
-CFLAGS += -Wno-unknown-warning-option -Walloca -Wno-aggressive-loop-optimizations
+CFLAGS += -Wno-unknown-warning -Wno-unknown-warning-option
+CFLAGS += -Walloca -Wno-aggressive-loop-optimizations
 CFLAGS += -Wdisabled-optimization -Wduplicated-branches -Wduplicated-cond
 CFLAGS += -Wignored-attributes  -Wincompatible-pointer-types
 CFLAGS += -Winit-self -Wwrite-strings -Wvla
