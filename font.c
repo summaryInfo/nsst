@@ -402,9 +402,11 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
                 }
             }
         } else {
-            for (size_t i = 0; i < glyph->height; i++)
+            for (size_t i = 0; i < glyph->height; i++) {
                 for (size_t j = 0; j < glyph->width; j++)
                     glyph->data[stride*i + j] = 0xFF * pow(src[pitch*i + j] / (double)(num_grays - 1), gamma);
+                memset(glyph->data + stride*i + glyph->width, 0, stride - glyph->width);
+            }
         }
         if (face->glyph->bitmap.pixel_mode != FT_PIXEL_MODE_GRAY)
             FT_Bitmap_Done(global.library, &sbm);
