@@ -911,8 +911,10 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 term->view += line_segments(line_at(term, vline), 0, term->width);
 
             // ..and partial virtual lines
-            struct line *ln = line_at(term, term->view_pos.line);
-            term->view -= line_segments(ln, 0, term->width) - line_segments(ln, term->view_pos.offset, term->width);
+            if (term->view_pos.line < 0) {
+                struct line *ln = line_at(term, term->view_pos.line);
+                term->view += line_segments(ln, term->view_pos.offset, term->width);
+            }
         }
     }
 
