@@ -241,7 +241,7 @@ void init_context(void) {
 
     xcb_screen_iterator_t sit = xcb_setup_roots_iterator(xcb_get_setup(con));
     for (; sit.rem; xcb_screen_next(&sit))
-        if (screenp-- == 0)break;
+        if (!screenp--) break;
     if (screenp != -1) {
         xcb_disconnect(con);
         die("Can't find default screen");

@@ -110,11 +110,11 @@ inline static uint8_t tohexdigit(uint8_t c) {
 }
 
 inline static uint8_t fromhexdigit(uint8_t c) {
-    if (c - '0' < 10U)
+    if (c - (unsigned)'0' < 10U)
         return  c - '0';
-    else if (c - 'A' < 6U)
+    else if (c - (unsigned)'A' < 6U)
         return  10 + c - 'A';
-    else if (c - 'a' < 6U)
+    else if (c - (unsigned)'a' < 6U)
         return  10 + c - 'a';
     else
         return 0;
