@@ -50,7 +50,7 @@ uninstall:
 	rm -f $(BINDIR)/$(NAME)c
 
 $(NAME): $(OBJ)
-	$(CC) $(LDFLAGS) $(OBJ) $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ) $(LDLIBS) -o $@
 $(NAME)c: nsstc.o
 
 boxdraw.o: feature.h config.h font.h line.h util.h nrcs.h boxdraw.h term.h window.h
