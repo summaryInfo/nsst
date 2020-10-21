@@ -22,7 +22,7 @@ OBJ := @OBJECTS@
 LIBS != pkg-config @DEPS@ --libs
 INCLUES != pkg-config @DEPS@ --cflags
 
-LDFLAGS += -lrt -lm -lutil $(LIBS)
+LDLIBS += -lrt -lm -lutil $(LIBS)
 CFLAGS += $(INCLUES)
 
 
@@ -50,10 +50,8 @@ uninstall:
 	rm -f $(BINDIR)/$(NAME)c
 
 $(NAME): $(OBJ)
-	$(CCLD) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
-
+	$(CC) $(LDFLAGS) $(OBJ) $(LDLIBS) -o $@
 $(NAME)c: nsstc.o
-	$(CCLD) $(CFLAGS) nsstc.o $(LDFLAGS) -o $@
 
 boxdraw.o: feature.h config.h font.h line.h util.h nrcs.h boxdraw.h term.h window.h
 config.o: feature.h config.h font.h line.h util.h nrcs.h input.h window.h

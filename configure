@@ -88,9 +88,7 @@ for i; do
 done
 
 if [ "$use_clang" = 1 ]; then
-    vars="${vars}${nl}CCLD=clang -fuse-ld=/usr/bin/ld.lld${nl}CC=clang"
-else
-    vars="${vars}${nl}"'CCLD=$(CC)'
+    vars="${vars}${nl}LDFLAGS += -fuse-ld=/usr/bin/ld.lld${nl}CC=clang"
 fi
 
 [ x = x"$bindir" ] && bindir=${prefix}/bin
