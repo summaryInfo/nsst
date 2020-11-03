@@ -835,7 +835,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             else goto e_value;
         } else if (!strcmp(name, optmap[o_word_break].opt)) {
             if (c->word_separators) free(c->word_separators);
-            c->word_separators = parse_str(value, " \t!#$%^&*()_+-={}[]\\\"'|/?,.<>~`");
+            c->word_separators = parse_str(value, " \t!#$%^&*()+-={}[]\\\"'|/?,.;:<>~`");
         } else goto e_unknown;
         break;
     default:
