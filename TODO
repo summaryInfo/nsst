@@ -7,10 +7,15 @@ Until 2.2
     Allow geometry to be specified in characters
 Until 2.3
     Hyperlinks
+        URI matcher
+            Autodetection (--match-uri=off,manual,auto)
         Undelining
-        Clicking
-        OSC
-        Autodetection
+            during attribute decoding
+            save active ID somewhere
+        Mouse
+            Hovering during mouse move (--hightlight-uri)
+                Hover all with same ID
+            Clicking (--uri-click-mod)
     Pointer
         Shape
         CSI > Ps p -- XTSMPOINTER
