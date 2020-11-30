@@ -20,6 +20,11 @@ inline static bool attr_eq_prot(struct attr *a, struct attr *b) {
     return attr_eq(a,b) && a->protected == b->protected;
 }
 
+#if USE_URI
+/* from term.c */
+void term_uri_decref(struct term *term, uint32_t uri);
+#endif
+
 static void optimize_attributes(struct line *line) {
     static uint32_t buf[ATTRID_MAX];
     static bool filled;
@@ -43,6 +48,9 @@ static void optimize_attributes(struct line *line) {
                     if (attr_eq_prot(pal + k, pal + j)) pbuf[j] = k;
                 pbuf[i] = k++;
             }
+#if USE_URI
+            else uri_unref(pal[i].uri);
+#endif
         }
         line->attrs->size = k - 1;
 
@@ -69,6 +77,10 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
             line->attrs = new;
         }
     }
+
+#if USE_URI
+    if (attr.uri) uri_ref(attr.uri);
+#endif
 
     line->attrs->data[line->attrs->size++] = attr;
     return line->attrs->size;

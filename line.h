@@ -4,6 +4,7 @@
 
 #include "feature.h"
 
+#include "uri.h"
 #include "util.h"
 
 #include <stdbool.h>
@@ -42,8 +43,16 @@ struct attr {
     color_t fg;
     color_t bg;
     union {
-        uint16_t mask;
+        uint32_t mask;
         struct {
+            /* URI index in terminal URI table
+             * if this field is 0, theres no URI
+             * associated with attribute.
+             * This field is only used when
+             * USE_URI option is active */
+            uint32_t uri : 23;
+
+            /* Attributes */
             bool bold : 1;
             bool italic : 1;
             bool faint : 1;
@@ -52,19 +61,11 @@ struct attr {
             bool invisible : 1;
             bool reverse : 1;
             bool blink : 1;
-
             bool protected : 1;
-            /* Reserved fields, to guaranty
-             * that padding would be zero */
-            bool res9__ : 1;
-            bool res10__ : 1;
-            bool res11__ : 1;
-            bool res12__ : 1;
-            bool res13__ : 1;
-            bool res14__ : 1;
-            bool res15__ : 1;
         };
     } PACKED;
+    /* Total length of union above
+     * is assumed to be sizeof(uint32_t) */
 };
 
 struct line_attr {
@@ -111,7 +112,14 @@ inline static color_t color_apply_a(color_t c, double a) {
 }
 
 inline static void free_line(struct line *line) {
-    if (line) free(line->attrs);
+    if (line && line->attrs) {
+#if USE_URI
+        for (ssize_t i = 0; i < line->attrs->size; i++)
+            if (line->attrs->data[i].uri)
+                uri_unref(line->attrs->data[i].uri);
+#endif
+        free(line->attrs);
+    }
     free(line);
 }
 
@@ -135,12 +143,14 @@ inline static ssize_t line_segments(struct line *ln, ssize_t off, ssize_t w) {
     return n;
 }
 
+#define ATTR_MASK 0xF8000000
+
 inline static uint32_t attr_mask(struct attr *a) {
-    return a->mask;
+    return a->mask & ATTR_MASK;
 }
 
 inline static void attr_mask_set(struct attr *a, uint32_t mask) {
-    a->mask = mask;
+    a->mask = (a->mask & ~ATTR_MASK) | (mask & ATTR_MASK);
 }
 
 inline static struct attr attr_at(struct line *ln, ssize_t x) {
@@ -149,7 +159,7 @@ inline static struct attr attr_at(struct line *ln, ssize_t x) {
 }
 
 inline static bool attr_eq(struct attr *a, struct attr *b) {
-    return a->fg == b->fg && a->bg == b->bg && attr_mask(a) == attr_mask(b);
+    return a->fg == b->fg && a->bg == b->bg && a->mask == b->mask;
 }
 
 

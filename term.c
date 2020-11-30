@@ -12,6 +12,9 @@
 #include "nrcs.h"
 #include "term.h"
 #include "tty.h"
+#if USE_URI
+#    include "uri.h"
+#endif
 #include "window.h"
 
 #include <ctype.h>
@@ -205,8 +208,7 @@ struct term {
      * if term->mode.altscreen is set
      * screen points to alternate screen and back_screen points to main screen,
      * in opposite case screen points to main screen and back_screen points to
-     * alternate screen; same with saved_c/back_saved_c and saved_sgr/saved_back_sgr
-     * */
+     * alternate screen; same with saved_c/back_saved_c and saved_sgr/saved_back_sgr */
     struct line **screen;
     struct cursor saved_c;
     struct attr saved_sgr;
@@ -1335,9 +1337,17 @@ static void term_move_left(struct term *term, int16_t amount) {
 static void term_cursor_mode(struct term *term, bool mode) {
     if (mode) /* save */ {
         term->saved_c = term->c;
+#if USE_URI
+        uri_ref(term->sgr.uri);
+        uri_unref(term->saved_sgr.uri);
+#endif
         term->saved_sgr = term->sgr;
     } else /* restore */ {
         term->c = term->saved_c;
+#if USE_URI
+        uri_ref(term->saved_sgr.uri);
+        uri_unref(term->sgr.uri);
+#endif
         term->sgr = term->saved_sgr;
         term->c.x = MIN(term->c.x, term->width - 1);
         term->c.y = MIN(term->c.y, term->height - 1);
@@ -1858,6 +1868,13 @@ static void term_load_config(struct term *term) {
         .gl = 0, .gl_ss = 0, .gr = 2,
         .gn = {cs94_ascii, cs94_ascii, cs94_ascii, cs94_ascii}
     };
+
+#if USE_URI
+    uri_unref(term->sgr.uri);
+    uri_unref(term->saved_sgr.uri);
+    uri_unref(term->back_saved_sgr.uri);
+#endif
+
     term->sgr = term->saved_sgr = term->back_saved_sgr = (struct attr) {
         .fg = indirect_color(SPECIAL_FG),
         .bg = indirect_color(SPECIAL_BG),
@@ -2180,6 +2197,7 @@ inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
     term->sgr = (struct attr) {
         .fg = term->sgr.fg,
         .bg = term->sgr.bg,
+        .uri = term->sgr.uri,
         .protected = prot & 1,
         .bold = sgr0 & 1,
         .underlined = sgr0 & 2,
@@ -2559,6 +2577,35 @@ static void term_dispatch_osc(struct term *term) {
         else term_esc_dump(term, 0);
         break;
     }
+#if USE_URI
+    case 8: /* Set current URI */ {
+        char *uri = strchr((char *)dstr, ';');
+        if (!uri) {
+            term_esc_dump(term, 0);
+            break;
+        }
+        *uri++ = '\0';
+
+        /* Parse attributes */
+        char *val, *attr = (char *)dstr;
+        char *id = NULL, *id_end;
+        while (attr && *attr) {
+            if (!(val = strchr(attr, '='))) break;
+            /* At the moment, only id is handled */
+            if (!strncmp(attr, "id=", sizeof("id=") - 1)) {
+                id = val + 1;
+                id_end = attr = strchr(val, ':');
+                *id_end = '\0';
+            } else attr = strchr(val, ':');
+        }
+
+        uri_unref(term->sgr.uri);
+        term->sgr.uri = uri_add(uri, id);
+        if (id_end) id_end[-1] = ':';
+        uri[-1] = ';';
+        break;
+    }
+#endif
     case 10: /* Set VT100 foreground color */ {
         // OSC 10 can also have second argument that works as OSC 11
         uint8_t *str2;
@@ -2577,11 +2624,11 @@ static void term_dispatch_osc(struct term *term) {
         term_do_set_color(term, term->esc.selector, dstr, dend);
         break;
     }
-    case 110: /*Reset  VT100 foreground color */
-    case 111: /*Reset  VT100 background color */
-    case 112: /*Reset  Cursor color */
-    case 117: /*Reset  Highlight background color */
-    case 119: /*Reset  Highlight foreground color */
+    case 110: /* Reset VT100 foreground color */
+    case 111: /* Reset VT100 background color */
+    case 112: /* Reset Cursor color */
+    case 117: /* Reset Highlight background color */
+    case 119: /* Reset Highlight foreground color */
         term_do_reset_color(term);
         break;
     case 52: /* Manipulate selecion data */ {

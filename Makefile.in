@@ -58,16 +58,17 @@ config.o: feature.h config.h font.h line.h util.h nrcs.h input.h window.h
 font.o: feature.h config.h font.h line.h util.h nrcs.h window.h
 image.o: feature.h util.h image.h font.h
 input.o: feature.h config.h font.h line.h util.h nrcs.h input.h term.h window.h
-line.o: feature.h line.h util.h
-mouse.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h
+line.o: feature.h line.h uri.h util.h
+mouse.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h uri.h window.h
 nrcs.o: feature.h nrcs.h
 nsst.o: feature.h config.h font.h line.h util.h nrcs.h input.h tty.h window.h
 nsstc.o: feature.h
 render-x11shm.o: feature.h config.h font.h line.h util.h nrcs.h mouse.h term.h window.h window-x11.h
 render-x11xrender.o: feature.h config.h font.h line.h util.h nrcs.h mouse.h term.h window.h window-x11.h
-term.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h tty.h
+term.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h tty.h uri.h
 tty.o: feature.h config.h font.h line.h util.h nrcs.h tty.h
 util.o: feature.h config.h font.h line.h util.h nrcs.h precompose-table.h
 window-x11.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h window-x11.h
+uri.o: feature.h config.h uri.h font.h line.h util.h nrcs.h
 
 .PHONY: all clean install install-strip uninstall force

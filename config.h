@@ -50,6 +50,9 @@ enum keyboad_mapping {
 
 struct global_config {
     char *sockpath;
+#if USE_URI
+    char *open_command;
+#endif
 
     uint8_t log_level : 2;
 
@@ -287,6 +290,9 @@ enum optidx {
     o_modify_other_fmt,
     o_nrcs,
     o_numlock,
+#if USE_URI
+    o_open_command,
+#endif
 #if USE_BOXDRAWING
     o_override_boxdrawing,
 #endif

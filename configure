@@ -6,6 +6,7 @@ use_boxdrawing=1
 use_precompose=1
 use_posix_shm=0
 use_clang=0
+use_uri=1
 prefix=/usr/local
 name=nsst
 backend=x11xrender
@@ -34,6 +35,8 @@ Usage: configure [options]
     --disable-ppoll         disable ppoll in main loop, use poll instead
     --enable-boxdrawing     enable built-in box drawing characters [set]
     --disable-boxdrawing    disable built-in box drawing characters
+    --enable-uri            enable URI handling features [set]
+    --disable-uri           disable URI handling features
     --enable-precompose     enable unicode combining characters precomposition [set]
     --disable-precompose    disable unicode combining characters precomposition
     --enable-posix-shm      enable posix shared memory functions usage
@@ -57,6 +60,10 @@ for i; do
         use_boxdrawing=1 ;;
     --disable-boxdrawing)
         use_boxdrawing=0 ;;
+    --enable-uri)
+        use_uri=1 ;;
+    --disable-uri)
+        use_uri=0 ;;
     --enable-precompose)
         use_precompose=1 ;;
     --disable-precompose)
@@ -116,9 +123,8 @@ x11xrender)
     ;;
 esac
 
-if [ x"$use_boxdrawing" = x1 ]; then
-    objs="$objs boxdraw.o"
-fi
+[ x"$use_boxdrawing" = x1 ] && objs="$objs boxdraw.o"
+[ x"$use_uri" = x1 ] && objs="$objs uri.o"
 
 sed < "./feature.h.in" > "./feature.h" \
     -e "s:@USE_PPOLL@:$use_ppoll:g" \
@@ -126,6 +132,7 @@ sed < "./feature.h.in" > "./feature.h" \
     -e "s:@USE_X11SHM@:$use_x11shm:g" \
     -e "s:@USE_PRECOMPOSE@:$use_precompose:g" \
     -e "s:@USE_POSIX_SHM@:$use_posix_shm:g" \
+    -e "s:@USE_URI@:$use_uri:g" \
     -e "s:@VERSION@:$version:g"
 
 sed < "./Makefile.in" > "./Makefile" \
@@ -146,6 +153,7 @@ cat <<END
     sharedir................. $sharedir
     backend.................. $backend
     boxdrawing............... $use_boxdrawing
+    uri...................... $use_uri
     precompose............... $use_precompose
     ppoll.................... $use_ppoll
     posix shm................ $use_posix_shm

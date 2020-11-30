@@ -18,6 +18,9 @@
 /* Use posix shm interface */
 #define USE_POSIX_SHM @USE_POSIX_SHM@
 
+/* URI openning/parsing/highlighting */
+#define USE_URI @USE_URI@
+
 /* NSST Version number */
 #define NSST_VERSION @VERSION@
 

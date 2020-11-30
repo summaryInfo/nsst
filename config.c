@@ -121,6 +121,9 @@ struct optmap_item optmap[] = {
     [o_modify_other_fmt] = {"modify-other-fmt", "\t(Format of encoding modifers)"},
     [o_nrcs] = {"nrcs", "\t\t\t(Enable NRCSs support)"},
     [o_numlock] = {"numlock", "\t\t(Initial numlock state)"},
+#if USE_URI
+    [o_open_command] = {"open-cmd", "\t\t(A command used to open URIs when clicked)"},
+#endif
 #if USE_BOXDRAWING
     [o_override_boxdrawing] = {"override-boxdrawing", "\t(Use built-in box drawing characters)"},
 #endif
@@ -304,9 +307,14 @@ static bool parse_enum(const char *str, int *val, int dflt, int start, ...) {
     return 1;
 }
 
-static char *parse_str(const char *str, const char *dflt) {
-    if (!strcasecmp(str, "default")) return dflt ? strdup(dflt) : NULL;
-    else return strdup(str);
+static void parse_str(char **dst, const char *str, const char *dflt) {
+    char *res;
+    if (!strcasecmp(str, "default")) {
+        res = dflt ? strdup(dflt) : NULL;
+    } else res = strdup(str);
+
+    if (*dst) free(*dst);
+    *dst = res;
 }
 
 static bool parse_col(const char *str, color_t *val, color_t dflt) {
@@ -368,8 +376,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_bool(value, &val.b, 0)) c->alternate_scroll = val.b;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_answerback_string].opt)) {
-            if (c->answerback_string) free(c->answerback_string);
-            c->answerback_string = parse_str(value, "\006");
+            parse_str(&c->answerback_string, value, "\006");
         } else if (!strcmp(name, optmap[o_appcursor].opt)) {
             if (parse_bool(value, &val.b, 0)) c->appcursor = val.b;
             else goto e_value;
@@ -416,8 +423,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
         break;
     case 'c':
         if (!strcmp(name, optmap[o_config].opt)) {
-            if (c->config_path) free(c->config_path);
-            c->config_path = parse_str(value, NULL);
+            parse_str(&c->config_path, value, NULL);
         } else if (!strcmp(name, optmap[o_cursor_background].opt)) {
             if (parse_col(value, &val.c, color(SPECIAL_CURSOR_BG))) p[SPECIAL_CURSOR_BG] = val.c;
             else goto e_value;
@@ -435,8 +441,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_bool(value, &val.b, 0)) c->cut_lines = val.b;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_cwd].opt)) {
-            if (c->cwd) free(c->cwd);
-            c->cwd = parse_str(value, NULL);
+            parse_str(&c->cwd, value, NULL);
         } else if (sscanf(name, "color%u", &cnum) == 1 && cnum < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) {
             if (parse_col(value, &val.c, color(cnum))) p[cnum] = val.c;
             else goto e_value;
@@ -473,8 +478,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_int(value, &val.i, 0, 48, 10)) c->fkey_increment = val.i;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_font].opt)) {
-            if (c->font_name) free(c->font_name);
-            c->font_name = parse_str(value, "mono");
+            parse_str(&c->font_name, value, "mono");
         } else if (!strcmp(name, optmap[o_font_gamma].opt)) {
             if (parse_double(value, &val.f, 0.2, 2, 1)) c->gamma = val.f;
             else goto e_value;
@@ -488,8 +492,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_int(value, &val.i, -100, 100, 0)) c->font_spacing = val.i;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_force_mouse_mod].opt)) {
-            if (c->force_mouse_mod) free(c->force_mouse_mod);
-            c->force_mouse_mod = parse_str(value, "T");
+            parse_str(&c->force_mouse_mod, value, "T");
         } else if (!strcmp(name, optmap[o_force_nrcs].opt)) {
             if (parse_bool(value, &val.b, 0)) c->force_utf8_nrcs = val.b;
             else goto e_value;
@@ -535,44 +538,31 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_bool(value, &val.b, 0)) c->keep_selection = val.b;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_key_break].opt)) {
-            if (c->key[shortcut_break]) free(c->key[shortcut_break]);
-            c->key[shortcut_break] = parse_str(value, "Break");
+             parse_str(&c->key[shortcut_break], value, "Break");
         } else if (!strcmp(name, optmap[o_key_copy].opt)) {
-            if (c->key[shortcut_copy]) free(c->key[shortcut_copy]);
-            c->key[shortcut_copy] = parse_str(value, "T-C");
+             parse_str(&c->key[shortcut_copy], value, "T-C");
         } else if (!strcmp(name, optmap[o_key_dec_font].opt)) {
-            if (c->key[shortcut_font_down]) free(c->key[shortcut_font_down]);
-            c->key[shortcut_font_down] = parse_str(value, "T-Page_Down");
+             parse_str(&c->key[shortcut_font_down], value, "T-Page_Down");
         } else if (!strcmp(name, optmap[o_key_inc_font].opt)) {
-            if (c->key[shortcut_font_up]) free(c->key[shortcut_font_up]);
-            c->key[shortcut_font_up] = parse_str(value, "T-Page_Up");
+             parse_str(&c->key[shortcut_font_up], value, "T-Page_Up");
         } else if (!strcmp(name, optmap[o_key_new_window].opt)) {
-            if (c->key[shortcut_new_window]) free(c->key[shortcut_new_window]);
-            c->key[shortcut_new_window] = parse_str(value, "T-N");
+             parse_str(&c->key[shortcut_new_window], value, "T-N");
         } else if (!strcmp(name, optmap[o_key_numlock].opt)) {
-            if (c->key[shortcut_numlock]) free(c->key[shortcut_numlock]);
-            c->key[shortcut_numlock] = parse_str(value, "T-Num_Lock");
+             parse_str(&c->key[shortcut_numlock], value, "T-Num_Lock");
         } else if (!strcmp(name, optmap[o_key_paste].opt)) {
-            if (c->key[shortcut_paste]) free(c->key[shortcut_paste]);
-            c->key[shortcut_paste] = parse_str(value, "T-V");
+             parse_str(&c->key[shortcut_paste], value, "T-V");
         } else if (!strcmp(name, optmap[o_key_reload_config].opt)) {
-            if (c->key[shortcut_reload_config]) free(c->key[shortcut_reload_config]);
-            c->key[shortcut_reload_config] = parse_str(value, "T-X");
+             parse_str(&c->key[shortcut_reload_config], value, "T-X");
         } else if (!strcmp(name, optmap[o_key_reset].opt)) {
-            if (c->key[shortcut_reset]) free(c->key[shortcut_reset]);
-            c->key[shortcut_reset] = parse_str(value, "T-R");
+             parse_str(&c->key[shortcut_reset], value, "T-R");
         } else if (!strcmp(name, optmap[o_key_reset_font].opt)) {
-            if (c->key[shortcut_font_default]) free(c->key[shortcut_font_default]);
-            c->key[shortcut_font_default] = parse_str(value, "T-Home");
+             parse_str(&c->key[shortcut_font_default], value, "T-Home");
         } else if (!strcmp(name, optmap[o_key_reverse_video].opt)) {
-            if (c->key[shortcut_reverse_video]) free(c->key[shortcut_reverse_video]);
-            c->key[shortcut_reverse_video] = parse_str(value, "T-I");
+             parse_str(&c->key[shortcut_reverse_video], value, "T-I");
         } else if (!strcmp(name, optmap[o_key_scroll_down].opt)) {
-            if (c->key[shortcut_scroll_down]) free(c->key[shortcut_scroll_down]);
-            c->key[shortcut_scroll_down] = parse_str(value, "T-Down");
+             parse_str(&c->key[shortcut_scroll_down], value, "T-Down");
         } else if (!strcmp(name, optmap[o_key_scroll_up].opt)) {
-            if (c->key[shortcut_scroll_up]) free(c->key[shortcut_scroll_up]);
-            c->key[shortcut_scroll_up] = parse_str(value, "T-Up");
+             parse_str(&c->key[shortcut_scroll_up], value, "T-Up");
         } else if (!strcmp(name, optmap[o_keyboard_dialect].opt)) {
             if (!strcasecmp(value, "default")) c->keyboard_nrcs = cs94_ascii;
             else {
@@ -611,8 +601,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_bool(value, &val.b, 1)) c->allow_luit = val.b;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_luit_path].opt)) {
-            if (c->luit) free(c->luit);
-            c->luit = parse_str(value, "/usr/bin/luit");
+            parse_str(&c->luit, value, "/usr/bin/luit");
         } else goto e_unknown;
         break;
     case 'm':
@@ -663,14 +652,20 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             else goto e_value;
         } else goto e_unknown;
         break;
-#if USE_BOXDRAWING
     case 'o':
+#if USE_URI
+        if (!strcmp(name, optmap[o_open_command].opt)) {
+            parse_str(&g->open_command, value, "xdg-open");
+        } else
+#endif
+#if USE_BOXDRAWING
         if (!strcmp(name, optmap[o_override_boxdrawing].opt)) {
             if (parse_bool(value, &val.b, 0)) c->override_boxdraw = val.b;
             else goto e_value;
-        } else goto e_unknown;
-        break;
+        } else
 #endif
+        goto e_unknown;
+        break;
     case 'p':
         if (!strcmp(name, optmap[o_pixel_mode].opt)) {
             if (parse_enum(value, &val.e, pixmode_mono, pixmode_mono,
@@ -680,11 +675,9 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_bool(value, &val.b, 1)) c->print_attr = val.b;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_print_command].opt)) {
-            if (c->printer_cmd) free(c->printer_cmd);
-            c->printer_cmd = parse_str(value, NULL);
+            parse_str(&c->printer_cmd, value, NULL);
         } else if (!strcmp(name, optmap[o_printer_file].opt)) {
-            if (c->printer_file) free(c->printer_file);
-            c->printer_file = parse_str(value, NULL);
+            parse_str(&c->printer_file, value, NULL);
         } else goto e_unknown;
         break;
     case 'r':
@@ -728,8 +721,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_col(value, &val.c, color(SPECIAL_SELECTED_FG))) p[SPECIAL_SELECTED_FG] = val.c;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_shell].opt)) {
-            if (c->shell) free(c->shell);
-            c->shell = parse_str(value, "/bin/sh");
+            parse_str(&c->shell, value, "/bin/sh");
         } else if (!strcmp(name, optmap[o_smooth_scroll].opt)) {
             if (parse_bool(value, &val.b, 0)) c->smooth_scroll = val.b;
             else goto e_value;
@@ -762,8 +754,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             else goto e_value;
         } else if (!strcmp(name, optmap[o_socket].opt)) {
             if (allow_global) {
-                if (gconfig.sockpath) free(gconfig.sockpath);
-                gconfig.sockpath = parse_str(value, "/tmp/nsst-sock0");
+                parse_str(&g->sockpath, value, "/tmp/nsst-sock0");
             }
         } else goto e_unknown;
         break;
@@ -772,13 +763,11 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_int(value, &val.i, 1, 1000, 8)) c->tab_width = val.i;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_term_mod].opt)) {
-            if (c->term_mod) free(c->term_mod);
-            c->term_mod = parse_str(value, "SC");
+            parse_str(&c->term_mod, value, "SC");
         } else if (!strcmp(name, optmap[o_term_name].opt)) {
-            c->terminfo = parse_str(value, "xterm");
+            parse_str(&c->terminfo, value, "xterm");
         } else if (!strcmp(name, optmap[o_title].opt)) {
-            if (c->title) free(c->title);
-            c->title = parse_str(value, "Not So Simple Terminal");
+            parse_str(&c->title, value, "Not So Simple Terminal");
         } else if (!strcmp(name, optmap[o_trace_characters].opt)) {
             if (parse_bool(value, &val.b, 0) && allow_global) g->trace_characters = val.b;
         } else if (!strcmp(name, optmap[o_trace_controls].opt)) {
@@ -828,14 +817,12 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
         break;
     case 'w':
         if (!strcmp(name, optmap[o_window_class].opt)) {
-            if (c->window_class) free(c->window_class);
-            c->window_class = parse_str(value, NULL);
+            parse_str(&c->window_class, value, NULL);
         } else if (!strcmp(name, optmap[o_window_ops].opt)) {
             if (parse_bool(value, &val.b, 1)) c->allow_window_ops = val.b;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_word_break].opt)) {
-            if (c->word_separators) free(c->word_separators);
-            c->word_separators = parse_str(value, " \t!#$%^&*()+-={}[]\\\"'|/?,.;:<>~`");
+            parse_str(&c->word_separators, value, " \t!#$%^&*()+-={}[]\\\"'|/?,.;:<>~`");
         } else goto e_unknown;
         break;
     default:
