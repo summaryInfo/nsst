@@ -143,7 +143,10 @@ inline static ssize_t line_segments(struct line *ln, ssize_t off, ssize_t w) {
     return n;
 }
 
-#define ATTR_MASK 0xF8000000
+#define ATTR_MASK ((struct attr) {\
+    .bold = 1, .italic = 1, .faint = 1,\
+    .underlined = 1, .strikethrough = 1, .invisible = 1,\
+    .reverse = 1, .blink = 1, .protected = 1}.mask)
 
 inline static uint32_t attr_mask(struct attr *a) {
     return a->mask & ATTR_MASK;

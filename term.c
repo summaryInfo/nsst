@@ -3791,7 +3791,7 @@ static void term_decode_sgr(struct term *term, size_t i, struct attr *mask, stru
             SETFG(SPECIAL_FG);
             SETBG(SPECIAL_BG);
             attr_mask_set(sgr, 0);
-            attr_mask_set(mask, 0xFF);
+            attr_mask_set(mask, ATTR_MASK);
             break;
         case 1:  SET(bold); break;
         case 2:  SET(faint); break;
