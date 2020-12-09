@@ -5,6 +5,7 @@
 #include "feature.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -282,6 +283,11 @@ int main(int argc, char **argv) {
     }
 
     send_header(fd, cpath);
+
+    // Set current working directory for the terminal
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)))
+        send_opt(fd, "cwd", cwd);
 
     parse_server_args(argv, fd);
 
