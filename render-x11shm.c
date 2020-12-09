@@ -27,7 +27,9 @@
 struct render_context {
     bool has_shm;
     bool has_shm_pixmaps;
-} rctx;
+}
+
+static struct render_context rctx;
 
 static void resize_bounds(struct window *win, bool h_changed) {
     if (win->ren.bounds) {

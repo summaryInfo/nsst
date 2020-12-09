@@ -39,7 +39,9 @@ struct render_context {
     uint8_t *buffer;
     size_t bufsize;
     size_t bufpos;
-} rctx;
+};
+
+static struct render_context rctx;
 
 #define WORDS_IN_MESSAGE 256
 #define HEADER_WORDS ((sizeof(struct glyph_msg)+sizeof(uint32_t))/sizeof(uint32_t))
