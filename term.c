@@ -2600,7 +2600,7 @@ static void term_dispatch_osc(struct term *term) {
         }
 
         uri_unref(term->sgr.uri);
-        term->sgr.uri = uri_add(uri, id);
+        term->sgr.uri = uri_add(strdup(uri), id);
         if (id_end) id_end[-1] = ':';
         uri[-1] = ';';
         break;

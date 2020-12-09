@@ -10,6 +10,7 @@
 #include "uri.h"
 
 #include <assert.h>
+#include <ctype.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -44,27 +45,147 @@ struct uri_table {
     struct uri *uris;
 };
 
-struct uri_table table;
+static struct uri_table table;
 
 
-enum uri_match_result uri_match_next(struct uri_match_state *state, char ch) {
-    // TODO
-    return 0;
+enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
+#define MATCH(tab, ch) (!!((tab)[((ch) >> 5) - 1] & (1U << ((ch) & 0x1F))))
+    static uint32_t c_proto[] = {0x03FF6000, 0x07FFFFFE, 0x07FFFFFE}; // [\w\d\-.]
+    static uint32_t c_ext[] = {0xAFFFFFD2, 0x87FFFFFF, 0x47FFFFFE}; // [\w\d\-._~!$&'()*+,;=:@/?]
+
+    /* This code does not handle fancy unicode URIs that
+     * can be displayed by browsers, but only strictly complying
+     * that includes only subset of ASCII */
+
+    if (UNLIKELY(!adjust_buffer((void **)&stt->data, &stt->caps, stt->size + 1, 1))) {
+        uri_match_reset(stt);
+        return urim_ground;
+    }
+
+    // Only ASCII graphical characters are accepted
+    if (ch - 0x21U > 0x5DU) goto finish_nak;
+
+    stt->data[stt->size++] = ch;
+
+    switch(stt->state) {
+    case uris1_ground:
+        if (isalpha(ch)) {
+            stt->state++;
+            return (stt->res = urim_need_more);
+        }
+        break;
+    case uris1_proto:
+        if (MATCH(c_proto, ch)) {
+            return urim_need_more;
+        } else if (ch == ':') {
+            stt->state++;
+            return (stt->res = urim_need_more);
+        }
+        break;
+    case uris1_slash1:
+    case uris1_slash2:
+        if (ch == '/') {
+            stt->state++;
+            return (stt->res = urim_need_more);
+        }
+        break;
+    case uris1_user:
+        if (ch == '@') {
+            stt->state = uris1_host;
+            return (stt->res = urim_need_more);
+        }
+        else
+    case uris1_host:
+        if (ch == ':') {
+            stt->state = uris1_port;
+            return (stt->res = urim_need_more);
+        } else
+    case uris1_path:
+        if (ch == '/') {
+            stt->state = uris1_path;
+            return (stt->res = urim_may_finish);
+        } else if (ch == '?') {
+            stt->state = uris1_query;
+            return (stt->res = urim_may_finish);
+        } else
+    case uris1_query:
+        if (ch == '#') {
+            stt->state = uris1_fragment;
+            return (stt->res = urim_may_finish);
+        } else
+    case uris1_fragment:
+        if (ch == '%') {
+            stt->saved = stt->state;
+            stt->state = uris1_p_hex1;
+            return (stt->res = urim_need_more);
+        } else if (MATCH(c_ext, ch)) {
+            return (stt->res = urim_may_finish);
+        }
+        break;
+    case uris1_port:
+        if (ch == '/') {
+            stt->state = uris1_path;
+            return (stt->res = urim_may_finish);
+        } else if (ch == '?') {
+            stt->state = uris1_query;
+            return (stt->res = urim_may_finish);
+        } else if (ch == '#') {
+            stt->state = uris1_fragment;
+            return (stt->res = urim_may_finish);
+        } else if (isdigit(ch)) {
+            return (stt->res = urim_may_finish);
+        }
+        break;
+    case uris1_p_hex1:
+        if (isxdigit(ch)) {
+            stt->state++;
+            return (stt->res = urim_need_more);
+        }
+        break;
+    case uris1_p_hex2:
+        if (isxdigit(ch)) {
+            stt->state = stt->saved;
+            return (stt->res = urim_may_finish);
+        }
+        break;
+    }
+
+    if (stt->data && stt->size) {
+        // Last character was not part of URL,
+        // remove it (buffer should be cleared by outer code)
+        stt->data[--stt->size] = '\0';
+    }
+
+finish_nak:
+    stt->state = uris1_ground;
+    return (stt->res = stt->res == urim_may_finish ? urim_finished : urim_ground);
+#undef MATCH
 }
 
 void uri_match_reset(struct uri_match_state *state) {
-    // TODO
+    free(state->data);
+    *state = (struct uri_match_state){0};
+}
+
+char *uri_match_move(struct uri_match_state *state) {
+    char *res = state->data;
+    if (res) res[state->size] = '\0';
+    *state = (struct uri_match_state){0};
+    return res;
 }
 
 bool is_vaild_uri(const char *uri) {
-    struct uri_match_state stt = {};
-    enum uri_match_result res = urim_error;
+    if (!uri) return 0;
+
+    struct uri_match_state stt = {0};
+    enum uri_match_result res = urim_ground;
     do {
         res = uri_match_next(&stt, *uri++);
         if (res == urim_finished ||
-            res == urim_error) break;
+            res == urim_ground) break;
     } while (*uri);
 
+    uri_match_reset(&stt);
     return !*uri && res == urim_finished;
 }
 
@@ -78,12 +199,12 @@ bool is_vaild_uri(const char *uri) {
 #define URI_CAPS_STEP(x) ((x)?(4*(x)/3):8)
 
 /* If URI is invalid returns EMPTY_URI */
-uint32_t uri_add(const char *uri, const char *id) {
+uint32_t uri_add(char *uri, const char *id) {
     static size_t id_counter = 0;
 
     if (!is_vaild_uri(uri)) return EMPTY_URI;
 
-    char *id_s = NULL, *uri_s = NULL;
+    char *id_s = NULL;
     if (id) id_s = strdup(id);
     else if ((id_s = malloc(MAX_NUMBER_LEN + 2))) {
         snprintf(id_s, MAX_NUMBER_LEN + 2,
@@ -97,8 +218,6 @@ uint32_t uri_add(const char *uri, const char *id) {
             return i + 1;
         }
     }
-
-    if (!(uri_s = strdup(uri))) goto alloc_failed;
 
     struct uri *new = NULL;
     if (table.first_free) {
@@ -120,7 +239,7 @@ uint32_t uri_add(const char *uri, const char *id) {
 
     *new = (struct uri) {
         .refc = 1,
-        .uri = strdup(uri),
+        .uri = uri,
         .id = id ? strdup(id) : NULL,
         .next = 0,
     };
@@ -129,7 +248,7 @@ uint32_t uri_add(const char *uri, const char *id) {
     return new - table.uris + 1;
 
 alloc_failed:
-    free(uri_s);
+    free(uri);
     free(id_s);
     return EMPTY_URI;
 }
