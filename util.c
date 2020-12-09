@@ -268,6 +268,18 @@ uint8_t *base64_encode(uint8_t *dst, const uint8_t *buf, const uint8_t *end) {
     return dst;
 }
 
+#define CAPS_STEP(x) ((x)?4*(x)/3:8)
+
+bool adjust_buffer(void **buf, size_t *caps, size_t size, size_t elem) {
+    if (size > *caps) {
+        void *tmp = realloc(*buf, elem * MAX(CAPS_STEP(*caps), size));
+        if (!tmp) return 0;
+        *buf = tmp;
+        *caps = CAPS_STEP(*caps);
+    }
+    return 1;
+}
+
 const char *version_string(void) {
     static char str[32];
     if (!str[0]) {

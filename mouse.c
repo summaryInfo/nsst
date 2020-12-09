@@ -363,18 +363,6 @@ bool mouse_is_selected_2(struct term *term, int16_t x0, int16_t x1, ssize_t y) {
     }
 }
 
-
-inline static bool sel_adjust_buf(size_t *pos, size_t *cap, uint8_t **res) {
-    if (*pos + UTF8_MAX_LEN + 2 >= *cap) {
-        size_t new_cap = *cap * 3 / 2;
-        uint8_t *tmp = realloc(*res, new_cap);
-        if (!tmp) return 0;
-        *cap = new_cap;
-        *res = tmp;
-    }
-    return 1;
-}
-
 inline static int16_t line_len(struct line_view line) {
     int16_t max_x = line.width;
     if (!line.wrapped)
@@ -397,13 +385,13 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line_vie
         if (line.cell[j].ch) {
             size_t len = utf8_encode(line.cell[j].ch, buf, buf + UTF8_MAX_LEN);
             // 2 is space for '\n' and '\0'
-            if (!sel_adjust_buf(pos, cap, res)) return;
+            if (!adjust_buffer((void **)res, cap, *pos + len + 2, 1)) return;
             memcpy(*res + *pos, buf, len);
             *pos += len;
         }
     }
     if (!line.wrapped) {
-        if (!sel_adjust_buf(pos, cap, res)) return;
+        if (!adjust_buffer((void **)res, cap, *pos + 2, 1)) return;
         (*res)[(*pos)++] = '\n';
     }
 }
@@ -604,7 +592,8 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
                 mouse_report_locator(term, 2 + ev.button * 2 + (ev.event == mouse_event_release), ev.x, ev.y, ev.mask);
             }
         }
-    } else if (loc->mouse_mode != mouse_mode_none && (ev.mask & 0xFF) != force_mask && !term_get_kstate(term)->keyboad_vt52) {
+    } else if (loc->mouse_mode != mouse_mode_none &&
+            (ev.mask & 0xFF) != force_mask && !term_get_kstate(term)->keyboad_vt52) {
         enum mouse_mode md = loc->mouse_mode;
 
         if (loc->mouse_format != mouse_format_pixel)

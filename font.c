@@ -32,7 +32,7 @@
 struct font_context {
     size_t fonts;
     FT_Library library;
-} global;
+};
 
 struct face_list {
         size_t length;
@@ -58,6 +58,8 @@ struct patern_holder {
     FcPattern **pats;
 };
 
+static struct font_context global;
+
 void free_font(struct font *font) {
     if (--font->refs == 0) {
         for (size_t i = 0; i < face_MAX; i++) {
@@ -77,13 +79,10 @@ void free_font(struct font *font) {
 static void load_append_fonts(struct font *font, struct face_list *faces, struct patern_holder pats) {
     size_t new_size = faces->length + pats.length;
     if (new_size > faces->caps) {
-        FT_Face *new = realloc(faces->faces, (faces->length + pats.length)*sizeof(FT_Face));
-        if (!new) {
+        if (!adjust_buffer((void **)&faces->faces, &faces->caps, new_size, sizeof(FT_Face))) {
             warn("Can't relocate face list");
             return;
         }
-        faces->faces = new;
-        faces->caps += pats.length;
     }
 
     for (size_t i = 0; i < pats.length; i++) {
@@ -206,13 +205,10 @@ static void load_face_list(struct font *font, struct face_list* faces, const cha
 
 
         if (pats.length + 1 > pats.caps) {
-            FcPattern **new = realloc(pats.pats, sizeof(*pats.pats)*(pats.caps + CAPS_STEP));
-            if (!new) {
+            if(!adjust_buffer((void **)&pats.pats, &pats.caps, pats.length + 1, sizeof(*pats.pats))) {
                 warn("Out of memory");
                 continue;
             }
-            pats.caps += CAPS_STEP;
-            pats.pats = new;
         }
 
         FcValue pixsize;

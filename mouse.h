@@ -42,16 +42,16 @@ struct mouse_state {
 
     enum clip_target targ;
 
-    uint8_t button;
-    int16_t x;
     ssize_t y;
+    int16_t x;
+    uint8_t button;
 
-    uint32_t locator_enabled : 1;
-    uint32_t locator_oneshot : 1;
-    uint32_t locator_filter : 1;
-    uint32_t locator_pixels : 1;
-    uint32_t locator_report_press : 1;
-    uint32_t locator_report_release : 1;
+    bool locator_enabled : 1;
+    bool locator_oneshot : 1;
+    bool locator_filter : 1;
+    bool locator_pixels : 1;
+    bool locator_report_press : 1;
+    bool locator_report_release : 1;
 
     struct rect filter;
 
