@@ -1212,10 +1212,10 @@ static void handle_keydown(struct window *win, xkb_keycode_t keycode) {
         term_toggle_numlock(win->term);
         return;
     case shortcut_scroll_up:
-        term_scroll_view(win->term, -win->cfg.scroll_amount);
+        term_scroll_view(win->term, win->cfg.scroll_amount);
         return;
     case shortcut_scroll_down:
-        term_scroll_view(win->term, win->cfg.scroll_amount);
+        term_scroll_view(win->term, -win->cfg.scroll_amount);
         return;
     case shortcut_font_up:
     case shortcut_font_down:
