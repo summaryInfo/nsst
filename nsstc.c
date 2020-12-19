@@ -22,6 +22,7 @@
 #define MAX_OPTION_DESC 1024
 #define MAX_WAIT_LOOP 8
 #define STARTUP_DELAY 10000000LL
+#define SKIP_OPT ((void*)-1)
 
 static char buffer[MAX_OPTION_DESC + 1];
 
@@ -84,23 +85,22 @@ static void parse_client_args(char **argv, const char **cpath, const char **spat
                 break;
             case 'e':
                 return;
-                // Ignore all options with arguments here
-            case 'C': case 's': case 'f':
+            case 'f': case 's': case 'C':
             case 'D': case 'o': case 'c':
             case 't': case 'T': case 'V':
-            case 'H': case 'g': goto next;
+            case 'H': case 'g':
+                // Has arguments
+                if (!argv[ind][++cind]) ind++, cind = 0;
+                if (!argv[ind]) exit(EXIT_FAILURE);
+                arg = argv[ind] + cind;
+
+                // Ignore all options with arguments besides -C and -s here
+                if (letter == 'C') *cpath = arg;
+                else if (letter == 's') *spath = arg;
+
+                goto next;
             default:
-                if (letter == 'C' || letter == 's') {
-                    // Has arguments
-                    if (!argv[ind][++cind]) ind++, cind = 0;
-                    if (!argv[ind]) exit(EXIT_FAILURE);
-                    arg = argv[ind] + cind;
-
-                    if (letter == 'C') *cpath = arg;
-                    else *spath = arg;
-
-                    goto next;
-                }
+                /* nothing */;
             }
         }
 next:
@@ -203,7 +203,7 @@ static void parse_server_args(char **argv, int fd) {
                 opt = NULL;
                 switch (letter) {
                 case 'C':
-                case 's': goto next;
+                case 's': opt = SKIP_OPT; break;
                 case 'f': opt = "font"; break;
                 case 'D': opt = "term-name"; break;
                 case 'o': opt = "printer-file"; break;
@@ -220,7 +220,8 @@ static void parse_server_args(char **argv, int fd) {
                     if (!argv[ind]) usage(fd, argv[0], EXIT_FAILURE);
                     arg = argv[ind] + cind;
 
-                    send_opt(fd, opt, arg);
+                    if (opt != SKIP_OPT)
+                        send_opt(fd, opt, arg);
                     goto next;
                 }
                 // Treat all unknown options not having arguments

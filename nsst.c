@@ -23,6 +23,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#define SKIP_OPT ((void*)-1)
+
 static _Noreturn void usage(const char *argv0, int code) {
     if (gconfig.log_level > 0 || code == EXIT_SUCCESS) {
         ssize_t i = 0;
@@ -93,7 +95,7 @@ static void parse_options(struct instance_config *cfg, char **argv) {
             default:;
                 opt = NULL;
                 switch (letter) {
-                case 'C': goto next;
+                case 'C': opt = SKIP_OPT; break;
                 case 'f': opt = "font"; break;
                 case 'D': opt = "term-name"; break;
                 case 'o': opt = "printer-file"; break;
@@ -112,7 +114,9 @@ static void parse_options(struct instance_config *cfg, char **argv) {
                     if (!argv[ind]) usage(argv[0], EXIT_FAILURE);
                     arg = argv[ind] + cind;
 
-                    set_option(cfg, opt, arg, 1);
+                    if (opt != SKIP_OPT)
+                        set_option(cfg, opt, arg, 1);
+
                     goto next;
                 }
 
@@ -167,7 +171,7 @@ int main(int argc, char **argv) {
         if (!strncmp(argv[i], "--config=", sizeof "--config=" - 1) ||
                 !strncmp(argv[i], "-C", sizeof "-C" - 1)) {
             char *arg = argv[i] + (argv[i][1] == '-' ? sizeof "--config=" : sizeof "-C") - 1;
-            if (!*arg) arg = argv[++i];
+            if (!*arg) { arg = argv[++i]; warn("X %d %s\n", i, arg);}
             if (!arg) usage(argv[0], EXIT_FAILURE);
             cpath = arg;
         }
