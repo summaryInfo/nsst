@@ -19,7 +19,7 @@
 #define TIMEDIFF(t, d)  ((((d).tv_sec - (t).tv_sec) * SEC + ((d).tv_nsec - (t).tv_nsec)))
 #define TIMEINC(t, in) ((t).tv_sec += (in)/SEC), ((t).tv_nsec += (in)%SEC)
 
-#define LIKELY(x) (__builtin_expect((x), 1))
+#define LIKELY(x) (__builtin_expect(!!(x), 1))
 #define UNLIKELY(x) (__builtin_expect((x), 0))
 #define PACKED __attribute__((packed))
 
