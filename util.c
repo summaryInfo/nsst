@@ -271,7 +271,7 @@ uint8_t *base64_encode(uint8_t *dst, const uint8_t *buf, const uint8_t *end) {
 #define CAPS_STEP(x) ((x)?4*(x)/3:8)
 
 bool adjust_buffer(void **buf, size_t *caps, size_t size, size_t elem) {
-    if (size > *caps) {
+    if (UNLIKELY(size > *caps)) {
         void *tmp = realloc(*buf, elem * MAX(CAPS_STEP(*caps), size));
         if (!tmp) return 0;
         *buf = tmp;
