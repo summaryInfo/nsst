@@ -549,7 +549,7 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
                 /* We reached maximal number of saved lines,
                  * now term->scrollback functions as true cyclic buffer */
                 term->sb_top = (term->sb_top + 1) % term->sb_caps;
-                SWAP(struct line *, line, term->scrollback[term->sb_top]);
+                SWAP(line, term->scrollback[term->sb_top]);
                 free_line(line);
             } else {
                 /* More lines can be saved, term->scrollback is not cyclic yet */
@@ -594,9 +594,9 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
     // Ensure that term->back_screen is altscreen
     if (term->mode.altscreen) {
-        SWAP(struct cursor, term->back_saved_c, term->saved_c);
-        SWAP(struct attr, term->back_saved_sgr, term->saved_sgr);
-        SWAP(struct line **, term->back_screen, term->screen);
+        SWAP(term->back_saved_c, term->saved_c);
+        SWAP(term->back_saved_sgr, term->saved_sgr);
+        SWAP(term->back_screen, term->screen);
     }
 
     { // Notify application
@@ -937,9 +937,9 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     }
 
     if (term->mode.altscreen) {
-        SWAP(struct cursor, term->back_saved_c, term->saved_c);
-        SWAP(struct attr, term->back_saved_sgr, term->saved_sgr);
-        SWAP(struct line **, term->back_screen, term->screen);
+        SWAP(term->back_saved_c, term->saved_c);
+        SWAP(term->back_saved_sgr, term->saved_sgr);
+        SWAP(term->back_screen, term->screen);
     }
 
 }
@@ -1180,8 +1180,8 @@ static struct attr term_common_sgr(struct term *term, int16_t xs, int16_t ys, in
 }
 
 static void term_copy(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, int16_t xd, int16_t yd, bool origin) {
-    if (ye < ys) SWAP(int16_t, ye, ys);
-    if (xe < xs) SWAP(int16_t, xe, xs);
+    if (ye < ys) SWAP(ye, ys);
+    if (xe < xs) SWAP(xe, xs);
 
     if (origin) {
         xs = MAX(term_min_ox(term), MIN(xs, term_max_ox(term) - 1));
@@ -1356,9 +1356,9 @@ static void term_cursor_mode(struct term *term, bool mode) {
 
 static void term_swap_screen(struct term *term, bool damage) {
     term->mode.altscreen ^= 1;
-    SWAP(struct cursor, term->back_saved_c, term->saved_c);
-    SWAP(struct attr, term->back_saved_sgr, term->saved_sgr);
-    SWAP(struct line **, term->back_screen, term->screen);
+    SWAP(term->back_saved_c, term->saved_c);
+    SWAP(term->back_saved_sgr, term->saved_sgr);
+    SWAP(term->back_screen, term->screen);
     term_reset_view(term, damage);
     if (damage) mouse_clear_selection(term);
 }
@@ -1417,7 +1417,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
             } else {
                 term_erase(term, 0, top, term->width, top + amount, 0);
                 for (int16_t i = 0; i < rest; i++)
-                    SWAP(struct line *, term->screen[top + i], term->screen[top + amount + i]);
+                    SWAP(term->screen[top + i], term->screen[top + amount + i]);
             }
 
             if (term->view_pos.line || !window_shift(term->win,
@@ -1433,7 +1433,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
             term_erase(term, 0, bottom + amount, term->width, bottom, 0);
 
             for (int16_t i = 1; i <= rest; i++)
-                SWAP(struct line *, term->screen[bottom - i], term->screen[bottom + amount - i]);
+                SWAP(term->screen[bottom - i], term->screen[bottom + amount - i]);
 
             if (term->view_pos.line || !window_shift(term->win, 0, top,
                     0, top - amount, term->width, bottom - top + amount, 1)) {
@@ -1802,11 +1802,11 @@ static void term_set_vt52(struct term *term, bool set) {
 
 void term_set_reverse(struct term *term, bool set) {
     if (set ^ term->mode.reverse_video) {
-        SWAP(color_t, term->palette[SPECIAL_BG], term->palette[SPECIAL_FG]);
-        SWAP(color_t, term->palette[0], term->palette[7]);
-        SWAP(color_t, term->palette[8], term->palette[15]);
-        SWAP(color_t, term->palette[SPECIAL_CURSOR_BG], term->palette[SPECIAL_CURSOR_FG]);
-        SWAP(color_t, term->palette[SPECIAL_SELECTED_BG], term->palette[SPECIAL_SELECTED_FG]);
+        SWAP(term->palette[SPECIAL_BG], term->palette[SPECIAL_FG]);
+        SWAP(term->palette[0], term->palette[7]);
+        SWAP(term->palette[8], term->palette[15]);
+        SWAP(term->palette[SPECIAL_CURSOR_BG], term->palette[SPECIAL_CURSOR_FG]);
+        SWAP(term->palette[SPECIAL_SELECTED_BG], term->palette[SPECIAL_SELECTED_FG]);
         mouse_damage_selection(term);
         window_set_colors(term->win, term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
     }

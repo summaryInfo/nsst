@@ -263,7 +263,7 @@ static inline void merge_sort_fg(struct cell_desc *src, size_t size) {
             while (l_1 < h_1) dst[i++] = src[l_1++];
             while (l_2 < h_2) dst[i++] = src[l_2++];
         }
-        SWAP(struct cell_desc *, dst, src);
+        SWAP(dst, src);
     }
     if (dst < src) for (size_t i = 0; i < size; i++)
         dst[i] = src[i];
@@ -280,7 +280,7 @@ static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
             while (l_1 < h_1) dst[i++] = src[l_1++];
             while (l_2 < h_2) dst[i++] = src[l_2++];
         }
-        SWAP(struct cell_desc *, dst, src);
+        SWAP(dst, src);
     }
     if (dst < src) for (size_t i = 0; i < size; i++)
         dst[i] = src[i];
@@ -607,8 +607,8 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
 
     xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, 0, win->ren.pic2, 0, 0, 0, 0, 0, 0, common_w, common_h);
 
-    SWAP(xcb_pixmap_t, win->ren.pid1, win->ren.pid2);
-    SWAP(xcb_render_picture_t, win->ren.pic1, win->ren.pic2);
+    SWAP(win->ren.pid1, win->ren.pid2);
+    SWAP(win->ren.pic1, win->ren.pic2);
 
     xcb_render_free_picture(con, win->ren.pic2);
     xcb_free_pixmap(con, win->ren.pid2);

@@ -952,20 +952,20 @@ void parse_config(struct instance_config *cfg, bool allow_global) {
             while (ptr > value_start && isblank((unsigned)ptr[-1])) ptr--;
             value_end = ptr;
 
-            SWAP(char, *value_end, saved1);
-            SWAP(char, *name_end, saved2);
+            SWAP(*value_end, saved1);
+            SWAP(*name_end, saved2);
             set_option(cfg, name_start, value_start, allow_global);
-            SWAP(char, *name_end, saved2);
-            SWAP(char, *value_end, saved1);
+            SWAP(*name_end, saved2);
+            SWAP(*value_end, saved1);
         } else if (*ptr == '#') {
             while (ptr < end && *ptr != '\n') ptr++;
         } else {
 e_wrong_line:
             ptr = start;
             while(ptr < end && *ptr != '\n') ptr++;
-            SWAP(char, *ptr, saved1);
+            SWAP(*ptr, saved1);
             warn("Can't parse config line #%zd: %s", line_n, start);
-            SWAP(char, *ptr, saved1);
+            SWAP(*ptr, saved1);
             ptr++;
         }
     }

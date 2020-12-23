@@ -191,8 +191,8 @@ void mouse_scroll_selection(struct term *term, ssize_t amount, bool save) {
 
         bool swapped = loc->r.y0 > loc->r.y1;
         if (swapped) {
-            SWAP(ssize_t, loc->r.y0, loc->r.y1);
-            SWAP(ssize_t, loc->r.x0, loc->r.x1);
+            SWAP(loc->r.y0, loc->r.y1);
+            SWAP(loc->r.x0, loc->r.x1);
         }
 
 
@@ -217,8 +217,8 @@ void mouse_scroll_selection(struct term *term, ssize_t amount, bool save) {
 
 
         if (swapped) {
-            SWAP(ssize_t, loc->r.y0, loc->r.y1);
-            SWAP(ssize_t, loc->r.x0, loc->r.x1);
+            SWAP(loc->r.y0, loc->r.y1);
+            SWAP(loc->r.x0, loc->r.x1);
         }
 
         if (loc->n.y0 > loc->n.y1)
@@ -240,14 +240,14 @@ static void snap_selection(struct term *term) {
     loc->n.rect = loc->r.rect;
     if (loc->n.y1 <= loc->n.y0) {
         if (loc->n.y1 < loc->n.y0) {
-            SWAP(ssize_t, loc->n.y0, loc->n.y1);
-            SWAP(int16_t, loc->n.x0, loc->n.x1);
+            SWAP(loc->n.y0, loc->n.y1);
+            SWAP(loc->n.x0, loc->n.x1);
         } else if (loc->n.x1 < loc->n.x0) {
-            SWAP(int16_t, loc->n.x0, loc->n.x1);
+            SWAP(loc->n.x0, loc->n.x1);
         }
     }
     if (loc->n.rect && loc->n.x1 < loc->n.x0)
-            SWAP(int16_t, loc->n.x0, loc->n.x1);
+            SWAP(loc->n.x0, loc->n.x1);
 
     if (loc->snap != snap_none && loc->state == state_sel_pressed)
         loc->state = state_sel_progress;
@@ -502,8 +502,8 @@ void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, 
 }
 
 void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, iparam_t ye) {
-    if (xs > xe) SWAP(uparam_t, xs, xe);
-    if (ys > ye) SWAP(uparam_t, ys, ye);
+    if (xs > xe) SWAP(xs, xe);
+    if (ys > ye) SWAP(ys, ye);
 
     xe++, ye++;
 

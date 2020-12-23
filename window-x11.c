@@ -791,7 +791,7 @@ struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palet
     res.bg = direct_color(attr.bg, palette);
     res.fg = direct_color(attr.fg, palette);
     if (!attr.bold && attr.faint) res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
-    if (attr.reverse ^ selected) SWAP(color_t, res.fg, res.bg);
+    if (attr.reverse ^ selected) SWAP(res.fg, res.bg);
 
     // Apply background opacity
     if (color_idx(attr.bg) == SPECIAL_BG || cfg->blend_all_bg) res.bg = color_apply_a(res.bg, cfg->alpha);

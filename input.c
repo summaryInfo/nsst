@@ -377,7 +377,7 @@ static void dump_reply(struct term *term, struct reply *reply) {
         do str[strp++] = '0' + reply->param[i] % 10;
         while (reply->param[i] /= 10);
         for (size_t k = 0; k < (strp - j)/2; k++)
-            SWAP(uint8_t, str[j + k], str[strp - k - 1]);
+            SWAP(str[j + k], str[strp - k - 1]);
     }
     str[strp++] = reply->final;
     str[strp] = '\0';
