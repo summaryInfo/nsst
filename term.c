@@ -2588,7 +2588,7 @@ static void term_dispatch_osc(struct term *term) {
 
         /* Parse attributes */
         char *val, *attr = (char *)dstr;
-        char *id = NULL, *id_end;
+        char *id = NULL, *id_end = NULL;
         while (attr && *attr) {
             if (!(val = strchr(attr, '='))) break;
             /* At the moment, only id is handled */

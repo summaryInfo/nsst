@@ -94,12 +94,12 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
             stt->state = uris1_host;
             return (stt->res = urim_need_more);
         }
-        else
+        else //fallthrough
     case uris1_host:
         if (ch == ':') {
             stt->state = uris1_port;
             return (stt->res = urim_need_more);
-        } else
+        } else //fallthrough
     case uris1_path:
         if (ch == '/') {
             stt->state = uris1_path;
@@ -107,12 +107,12 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
         } else if (ch == '?') {
             stt->state = uris1_query;
             return (stt->res = urim_may_finish);
-        } else
+        } else //fallthrough
     case uris1_query:
         if (ch == '#') {
             stt->state = uris1_fragment;
             return (stt->res = urim_may_finish);
-        } else
+        } else //fallthrough
     case uris1_fragment:
         if (ch == '%') {
             stt->saved = stt->state;
@@ -271,8 +271,6 @@ void uri_unref(uint32_t id) {
         uri->next = table.first_free;
         table.first_free = id;
     }
-
-    assert(id >= 0);
 }
 
 void uri_open(uint32_t id) {
