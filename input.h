@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2021, Evgeny Baskov. All rights reserved */
 
 #ifndef INPUT_H_
 #define INPUT_H_ 1

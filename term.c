@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2021, Evgeny Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -292,6 +292,11 @@ struct term {
 
     /* XTerm checksum extension flags */
     struct checksum_mode checksum_mode;
+
+#if USE_URI
+    /* URI match state for URI autodetection */
+    struct uri_match_state uri_match;
+#endif
 
     /* User preferred charset */
     enum charset upcs;
@@ -1905,6 +1910,9 @@ static void term_do_reset(struct term *term, bool hard) {
     term_reset_margins(term);
     term_reset_tabs(term);
     keyboard_reset_udk(term);
+#if USE_URI
+    uri_match_reset(&term->uri_match);
+#endif
 
     // TODO Reset cursor shape to default
     window_set_mouse(term->win, 0);
@@ -5285,6 +5293,10 @@ void term_hang(struct term *term) {
 
 void free_term(struct term *term) {
     tty_hang(&term->tty);
+
+#if USE_URI
+    uri_match_reset(&term->uri_match);
+#endif
 
     term_free_scrollback(term);
 

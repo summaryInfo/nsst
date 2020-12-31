@@ -1,4 +1,5 @@
 Until 2.2
+    Use adjust buffer everywhere
     Reload a part of terminal state
     Add --no-fork option for daemon mode and fork by default in --daemon mode
     Recalculate non-rectangular selection position on resize
