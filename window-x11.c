@@ -1519,7 +1519,7 @@ static void handle_event(void) {
             xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
             if (!(win = window_for_xid(ev->window))) break;
             if (gconfig.trace_events) {
-                info("Event: event=ClientMessage window=0x%x state=%d", ev->window, ev->state);
+                info("Event: event=VisibilityNotify window=0x%x state=%d", ev->window, ev->state);
             }
             win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
             break;
