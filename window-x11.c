@@ -505,6 +505,7 @@ void window_action(struct window *win, enum window_action act) {
         break;
     case action_toggle_fullscreen:
         window_action(win, win->saved_geometry ? action_restore : action_fullscreen);
+        /* fallthrough */
     case action_none:
         break;
     }
