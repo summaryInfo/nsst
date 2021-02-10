@@ -407,6 +407,8 @@ n_printer:
         }
     }
 
+    tty->start = tty->end = tty->fd_buf;
+
     return tty->fd;
 }
 

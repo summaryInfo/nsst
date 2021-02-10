@@ -859,7 +859,9 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         if (new_lines != term->screen) free(term->screen);
 
         // Resize line buffer
-        memmove(new_lines, new_lines + start, minh * sizeof(*new_lines));
+        // That 'if' is not strictly nessecery,
+        // but causes UBSAN warning
+        if (new_lines) memmove(new_lines, new_lines + start, minh * sizeof(*new_lines));
         new_lines = realloc(new_lines, height * sizeof(*new_lines));
         if (!new_lines)  die("Can't allocate lines");
 
@@ -4975,7 +4977,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
             do {
                 ssize_t len = 1;
                 if (ch >= 0xA0 && ch < 0xF8 && term->mode.utf8) {
-                    len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
+                    len += (uint8_t[11]){ 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 20];
                 }
                 if (len + *start >= end) return 0;
                 while (len--) {
@@ -5006,7 +5008,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
             do {
                 ssize_t len = 1;
                 if (ch >= 0xA0 && ch < 0xF8 && utf8) {
-                    len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
+                    len += (uint8_t[11]){ 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 20];
                 } else if ((term->esc.state == esc_dcs_string && IS_DEL(ch)) || IS_C0(ch)) {
                     ++*start, len = 0;
                 }
