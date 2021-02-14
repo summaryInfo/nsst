@@ -822,7 +822,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_bool(value, &val.b, 1)) c->allow_window_ops = val.b;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_word_break].opt)) {
-            parse_str(&c->word_separators, value, " \t!#$%^&*()+-={}[]\\\"'|/?,.;:<>~`");
+            parse_str(&c->word_separators, value, " \t!$^*()+={}[]\\\"'|,;<>~`");
         } else goto e_unknown;
         break;
     default:
