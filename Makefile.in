@@ -29,13 +29,14 @@ CFLAGS += $(INCLUES)
 all: $(NAME) $(NAME)c
 
 clean:
-	rm -rf *.o *.gcda $(NAME)
+	rm -rf *.o *.gcda $(NAME) $(NAME)c
 
 force: clean
 	$(MAKE) all
 
 install-strip: install
 	strip $(BINDIR)/$(NAME)
+	strip $(BINDIR)/$(NAME)c
 
 install: all
 	install -D $(NAME) $(BINDIR)/$(NAME)
