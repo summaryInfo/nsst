@@ -1516,6 +1516,24 @@ static void handle_event(void) {
             }
             break;
         }
+        case XCB_UNMAP_NOTIFY: {
+            xcb_unmap_notify_event_t *ev = (xcb_unmap_notify_event_t*)event;
+            if (!(win = window_for_xid(ev->window))) break;
+            if (gconfig.trace_events) {
+                info("Event: event=UnmapNotify window=0x%x", ev->window);
+            }
+            win->active = 0;
+            break;
+        }
+        case XCB_MAP_NOTIFY: {
+            xcb_map_notify_event_t *ev = (xcb_map_notify_event_t*)event;
+            if (!(win = window_for_xid(ev->window))) break;
+            if (gconfig.trace_events) {
+                info("Event: event=MapNotify window=0x%x", ev->window);
+            }
+            win->active = 1;
+            break;
+        }
         case XCB_VISIBILITY_NOTIFY: {
             xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
             if (!(win = window_for_xid(ev->window))) break;
@@ -1526,8 +1544,6 @@ static void handle_event(void) {
             break;
         }
         case XCB_KEY_RELEASE:
-        case XCB_MAP_NOTIFY:
-        case XCB_UNMAP_NOTIFY:
         case XCB_DESTROY_NOTIFY:
         case XCB_REPARENT_NOTIFY:
            /* ignore */
