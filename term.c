@@ -4976,8 +4976,8 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
             ch = *--*start;
             do {
                 ssize_t len = 1;
-                if (ch >= 0xA0 && ch < 0xF8 && term->mode.utf8) {
-                    len += (uint8_t[11]){ 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 20];
+                if (ch >= 0xC0 && ch < 0xF8 && term->mode.utf8) {
+                    len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
                 }
                 if (len + *start >= end) return 0;
                 while (len--) {
@@ -5007,8 +5007,8 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
                     && term->esc.state == esc_osc_string && term->esc.selector < 3);
             do {
                 ssize_t len = 1;
-                if (ch >= 0xA0 && ch < 0xF8 && utf8) {
-                    len += (uint8_t[11]){ 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 20];
+                if (ch >= 0xC0 && ch < 0xF8 && utf8) {
+                    len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
                 } else if ((term->esc.state == esc_dcs_string && IS_DEL(ch)) || IS_C0(ch)) {
                     ++*start, len = 0;
                 }
