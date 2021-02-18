@@ -27,7 +27,7 @@
 struct render_context {
     bool has_shm;
     bool has_shm_pixmaps;
-}
+};
 
 static struct render_context rctx;
 
@@ -42,7 +42,7 @@ static void resize_bounds(struct window *win, bool h_changed) {
                 r_dst[j++] = win->ren.bounds[i];
         win->ren.boundc = j;
         if (h_changed) {
-            SWAP(struct rect *, win->ren.bounds, r_dst);
+            SWAP(win->ren.bounds, r_dst);
             free(r_dst);
         }
     } else {
@@ -422,7 +422,7 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
 
     struct image new = create_shm_image(win, width, height);
     image_copy(new, (struct rect){0, 0, common_w, common_h}, win->ren.im, 0, 0);
-    SWAP(struct image, win->ren.im, new);
+    SWAP(win->ren.im, new);
     free_shm_image(&new);
 
     resize_bounds(win, delta_y);
