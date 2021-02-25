@@ -1394,7 +1394,7 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, bool pno
 static void handle_event(void) {
     for (xcb_generic_event_t *event, *nextev = NULL; nextev || (event = xcb_poll_for_event(con)); free(event)) {
         if (nextev) event = nextev, nextev = NULL;
-        switch (event->response_type &= 0x7f) {
+        switch (event->response_type &= 0x7F) {
             struct window *win;
         case XCB_EXPOSE: {
             xcb_expose_event_t *ev = (xcb_expose_event_t *)event;
@@ -1431,12 +1431,11 @@ static void handle_event(void) {
                     event->full_sequence == nextev->full_sequence) {
                 free(nextev);
                 nextev = NULL;
-                continue;
             }
             break;
         }
         case XCB_KEY_PRESS: {
-            xcb_key_release_event_t *ev = (xcb_key_release_event_t *)event;
+            xcb_key_press_event_t *ev = (xcb_key_press_event_t *)event;
             if (!(win = window_for_xid(ev->event))) break;
             if (gconfig.trace_events) {
                 info("Event: event=KeyPress win=0x%x keycode=0x%x", ev->event, ev->detail);
@@ -1529,14 +1528,7 @@ static void handle_event(void) {
                     ev->window, ev->type, ev->data.data32[0], ev->data.data32[1],
                     ev->data.data32[2], ev->data.data32[3], ev->data.data32[4]);
             }
-            if (ev->format == 32 && ev->data.data32[0] == ctx.atom.WM_DELETE_WINDOW) {
-                free_window(win);
-                if (!win_list_head && !gconfig.daemon_mode) {
-                    free(event);
-                    free(nextev);
-                    return;
-                }
-            }
+            if (ev->format == 32 && ev->data.data32[0] == ctx.atom.WM_DELETE_WINDOW) free_window(win);
             break;
         }
         case XCB_UNMAP_NOTIFY: {
