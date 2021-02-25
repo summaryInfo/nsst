@@ -385,6 +385,10 @@ void window_set_sync(struct window *win, bool state) {
     win->sync_active = state;
 }
 
+void window_set_autorepeat(struct window *win, bool state) {
+    win->autorepeat = state;
+}
+
 void window_delay_redraw(struct window *win) {
     if (!win->wait_for_redraw) clock_gettime(CLOCK_TYPE, &win->last_wait_start);
     win->wait_for_redraw = 1;
@@ -945,6 +949,7 @@ struct window *create_window(struct instance_config *cfg) {
     win->bg = win->cfg.palette[cfg->reverse_video ? SPECIAL_FG : SPECIAL_BG];
     win->cursor_fg = win->cfg.palette[cfg->reverse_video ? SPECIAL_CURSOR_BG : SPECIAL_CURSOR_FG];
     win->bg_premul = color_apply_a(win->bg, win->cfg.alpha);
+    win->autorepeat = win->cfg.autorepeat;
     win->active = 1;
     win->focused = 1;
 
@@ -1387,11 +1392,12 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, bool pno
 }
 
 static void handle_event(void) {
-    for (xcb_generic_event_t *event; (event = xcb_poll_for_event(con)); free(event)) {
+    for (xcb_generic_event_t *event, *nextev = NULL; nextev || (event = xcb_poll_for_event(con)); free(event)) {
+        if (nextev) event = nextev, nextev = NULL;
         switch (event->response_type &= 0x7f) {
             struct window *win;
-        case XCB_EXPOSE:{
-            xcb_expose_event_t *ev = (xcb_expose_event_t*)event;
+        case XCB_EXPOSE: {
+            xcb_expose_event_t *ev = (xcb_expose_event_t *)event;
             if (!(win = window_for_xid(ev->window))) break;
             if (gconfig.trace_events) {
                 info("Event: event=Expose win=0x%x x=%x y=%d width=%d height=%d",
@@ -1400,8 +1406,8 @@ static void handle_event(void) {
             handle_expose(win, (struct rect){ev->x, ev->y, ev->width, ev->height});
             break;
         }
-        case XCB_CONFIGURE_NOTIFY:{
-            xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t*)event;
+        case XCB_CONFIGURE_NOTIFY: {
+            xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t *)event;
             if (!(win = window_for_xid(ev->window))) break;
             if (gconfig.trace_events) {
                 info("Event: event=ConfigureWindow win=0x%x x=%x y=%d width=%d"
@@ -1413,8 +1419,24 @@ static void handle_event(void) {
                 handle_resize(win, ev->width, ev->height);
             break;
         }
-        case XCB_KEY_PRESS:{
-            xcb_key_release_event_t *ev = (xcb_key_release_event_t*)event;
+        case XCB_KEY_RELEASE: {
+            xcb_key_release_event_t *ev = (xcb_key_release_event_t *)event;
+            if (!(win = window_for_xid(ev->event))) break;
+            if (gconfig.trace_events) {
+                info("Event: event=KeyRelease win=0x%x keycode=0x%x", ev->event, ev->detail);
+            }
+            /* Skip key repeats if disabled */
+            if (!win->autorepeat && (nextev = xcb_poll_for_queued_event(con)) &&
+                    (nextev->response_type &= 0x7F) == XCB_KEY_PRESS &&
+                    event->full_sequence == nextev->full_sequence) {
+                free(nextev);
+                nextev = NULL;
+                continue;
+            }
+            break;
+        }
+        case XCB_KEY_PRESS: {
+            xcb_key_release_event_t *ev = (xcb_key_release_event_t *)event;
             if (!(win = window_for_xid(ev->event))) break;
             if (gconfig.trace_events) {
                 info("Event: event=KeyPress win=0x%x keycode=0x%x", ev->event, ev->detail);
@@ -1423,8 +1445,8 @@ static void handle_event(void) {
             break;
         }
         case XCB_FOCUS_IN:
-        case XCB_FOCUS_OUT:{
-            xcb_focus_in_event_t *ev = (xcb_focus_in_event_t*)event;
+        case XCB_FOCUS_OUT: {
+            xcb_focus_in_event_t *ev = (xcb_focus_in_event_t *)event;
             if (!(win = window_for_xid(ev->event))) break;
             if (gconfig.trace_events) {
                 info("Event: event=%s win=0x%x", ev->response_type == XCB_FOCUS_IN ?
@@ -1436,7 +1458,7 @@ static void handle_event(void) {
         case XCB_BUTTON_RELEASE: /* All these events have same structure */
         case XCB_BUTTON_PRESS:
         case XCB_MOTION_NOTIFY: {
-            xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t*)event;
+            xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t *)event;
             if (!(win = window_for_xid(ev->event))) break;
             if (gconfig.trace_events) {
                 info("Event: event=%s mask=%d button=%d x=%d y=%d",
@@ -1458,7 +1480,7 @@ static void handle_event(void) {
             break;
         }
         case XCB_SELECTION_CLEAR: {
-            xcb_selection_clear_event_t *ev = (xcb_selection_clear_event_t*)event;
+            xcb_selection_clear_event_t *ev = (xcb_selection_clear_event_t *)event;
             if (!(win = window_for_xid(ev->owner))) break;
             if (gconfig.trace_events) {
                 info("Event: event=SelectionClear owner=0x%x selection=0x%x", ev->owner, ev->selection);
@@ -1468,7 +1490,7 @@ static void handle_event(void) {
             break;
         }
         case XCB_PROPERTY_NOTIFY: {
-            xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)event;
+            xcb_property_notify_event_t *ev = (xcb_property_notify_event_t *)event;
             if (!(win = window_for_xid(ev->window))) break;
             if (gconfig.trace_events) {
                 info("Event: event=PropertyNotify window=0x%x property=0x%x state=%d",
@@ -1480,7 +1502,7 @@ static void handle_event(void) {
             break;
         }
         case XCB_SELECTION_NOTIFY: {
-            xcb_selection_notify_event_t *ev = (xcb_selection_notify_event_t*)event;
+            xcb_selection_notify_event_t *ev = (xcb_selection_notify_event_t *)event;
             if (!(win = window_for_xid(ev->requestor))) break;
             if (gconfig.trace_events) {
                 info("Event: event=SelectionNotify owner=0x%x target=0x%x property=0x%x selection=0x%x",
@@ -1490,7 +1512,7 @@ static void handle_event(void) {
             break;
         }
         case XCB_SELECTION_REQUEST: {
-            xcb_selection_request_event_t *ev = (xcb_selection_request_event_t*)event;
+            xcb_selection_request_event_t *ev = (xcb_selection_request_event_t *)event;
             if (!(win = window_for_xid(ev->owner))) break;
             if (gconfig.trace_events) {
                 info("Event: event=SelectionRequest owner=0x%x requestor=0x%x target=0x%x property=0x%x selection=0x%x",
@@ -1500,7 +1522,7 @@ static void handle_event(void) {
             break;
         }
         case XCB_CLIENT_MESSAGE: {
-            xcb_client_message_event_t *ev = (xcb_client_message_event_t*)event;
+            xcb_client_message_event_t *ev = (xcb_client_message_event_t *)event;
             if (!(win = window_for_xid(ev->window))) break;
             if (gconfig.trace_events) {
                 info("Event: event=ClientMessage window=0x%x type=0x%x data=[0x%08x,0x%08x,0x%08x,0x%08x,0x%08x]",
@@ -1511,13 +1533,14 @@ static void handle_event(void) {
                 free_window(win);
                 if (!win_list_head && !gconfig.daemon_mode) {
                     free(event);
+                    free(nextev);
                     return;
                 }
             }
             break;
         }
         case XCB_UNMAP_NOTIFY: {
-            xcb_unmap_notify_event_t *ev = (xcb_unmap_notify_event_t*)event;
+            xcb_unmap_notify_event_t *ev = (xcb_unmap_notify_event_t *)event;
             if (!(win = window_for_xid(ev->window))) break;
             if (gconfig.trace_events) {
                 info("Event: event=UnmapNotify window=0x%x", ev->window);
@@ -1526,7 +1549,7 @@ static void handle_event(void) {
             break;
         }
         case XCB_MAP_NOTIFY: {
-            xcb_map_notify_event_t *ev = (xcb_map_notify_event_t*)event;
+            xcb_map_notify_event_t *ev = (xcb_map_notify_event_t *)event;
             if (!(win = window_for_xid(ev->window))) break;
             if (gconfig.trace_events) {
                 info("Event: event=MapNotify window=0x%x", ev->window);
@@ -1535,7 +1558,7 @@ static void handle_event(void) {
             break;
         }
         case XCB_VISIBILITY_NOTIFY: {
-            xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t*)event;
+            xcb_visibility_notify_event_t *ev = (xcb_visibility_notify_event_t *)event;
             if (!(win = window_for_xid(ev->window))) break;
             if (gconfig.trace_events) {
                 info("Event: event=VisibilityNotify window=0x%x state=%d", ev->window, ev->state);
@@ -1543,7 +1566,6 @@ static void handle_event(void) {
             win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
             break;
         }
-        case XCB_KEY_RELEASE:
         case XCB_DESTROY_NOTIFY:
         case XCB_REPARENT_NOTIFY:
            /* ignore */
@@ -1561,7 +1583,7 @@ static void handle_event(void) {
                     uint16_t sequence;
                     xcb_timestamp_t time;
                     uint8_t device_id;
-                } *xkb_ev = (struct _xkb_any_event*)event;
+                } *xkb_ev = (struct _xkb_any_event *)event;
 
                 if (gconfig.trace_events) {
                     info("Event: XKB Event %d", xkb_ev->xkb_type);
@@ -1570,14 +1592,14 @@ static void handle_event(void) {
                 if (xkb_ev->device_id == ctx.xkb_core_kbd) {
                     switch (xkb_ev->xkb_type) {
                     case XCB_XKB_NEW_KEYBOARD_NOTIFY: {
-                        xcb_xkb_new_keyboard_notify_event_t *ev = (xcb_xkb_new_keyboard_notify_event_t*)event;
+                        xcb_xkb_new_keyboard_notify_event_t *ev = (xcb_xkb_new_keyboard_notify_event_t *)event;
                         if (ev->changed & XCB_XKB_NKN_DETAIL_KEYCODES)
                     case XCB_XKB_MAP_NOTIFY:
                             update_keymap();
                         break;
                     }
                     case XCB_XKB_STATE_NOTIFY: {
-                        xcb_xkb_state_notify_event_t *ev = (xcb_xkb_state_notify_event_t*)event;
+                        xcb_xkb_state_notify_event_t *ev = (xcb_xkb_state_notify_event_t *)event;
                         xkb_state_update_mask(ctx.xkb_state, ev->baseMods, ev->latchedMods, ev->lockedMods,
                                               ev->baseGroup, ev->latchedGroup, ev->lockedGroup);
                         break;

@@ -197,12 +197,14 @@ struct instance_config {
     bool user_geometry : 1;
     bool allow_subst_font : 1;
     bool force_scalable : 1;
+    bool autorepeat : 1;
 #if USE_BOXDRAWING
     bool override_boxdraw : 1;
 #endif
 };
 
 enum optidx {
+    o_autorepeat,
     o_allow_alternate,
     o_allow_blinking,
     o_allow_modify_edit_keypad,

@@ -34,6 +34,7 @@ struct global_config gconfig = {
 };
 
 struct optmap_item optmap[] = {
+    [o_autorepeat] = {"autorepeat", "\t(Enable key autorepeat)"},
     [o_allow_alternate] = {"allow-alternate", "\t(Enable alternate screen)"},
     [o_allow_blinking] = {"allow-blinking", "\t(Allow blinking text and cursor)"},
     [o_allow_modify_edit_keypad] = {"allow-modify-edit-keypad", " (Allow modifing edit keypad keys)"},
@@ -351,7 +352,10 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
         } val;
         unsigned cnum;
     case 'a':
-        if (!strcmp(name, optmap[o_allow_alternate].opt)) {
+        if (!strcmp(name, optmap[o_autorepeat].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->autorepeat = val.b;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_allow_alternate].opt)) {
             if (parse_bool(value, &val.b, 1)) c->allow_altscreen = val.b;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_allow_blinking].opt)) {

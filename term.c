@@ -1919,6 +1919,7 @@ static void term_do_reset(struct term *term, bool hard) {
     // TODO Reset cursor shape to default
     window_set_mouse(term->win, 0);
     window_set_colors(term->win, term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
+    window_set_autorepeat(term->win, window_cfg(term->win)->autorepeat);
 
     if (hard) {
         term_erase(term, 0, 0, term->width, term->height, 0);
@@ -2732,7 +2733,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term_reset_pending(term);
             break;
         case 8: /* DECARM */
-            // IGNORE
+            window_set_autorepeat(term->win, set);
             break;
         case 9: /* X10 Mouse tracking */
             window_set_mouse(term->win, 0);

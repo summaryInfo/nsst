@@ -85,6 +85,7 @@ struct window {
     bool in_blink : 1;
     bool init_invert : 1;
     bool wait_for_redraw : 1;
+    bool autorepeat : 1;
 
     struct timespec last_scroll;
     struct timespec last_shift;

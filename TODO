@@ -46,7 +46,6 @@ Emulation
     Proper vt level restriction
     Is private mode 1044 semantics correct/sould it be implemented at all?
     VT220
-        CSI ? 8 l / CSI ? 8 h -- DECARM (When ported to wayland)
         DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST -- DECDLD
     SIXEL
         CSI ? 80 l / CSI ? 80 h -- DECSDM
