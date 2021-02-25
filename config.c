@@ -34,7 +34,7 @@ struct global_config gconfig = {
 };
 
 struct optmap_item optmap[] = {
-    [o_autorepeat] = {"autorepeat", "\t(Enable key autorepeat)"},
+    [o_autorepeat] = {"autorepeat", "\t\t(Enable key autorepeat)"},
     [o_allow_alternate] = {"allow-alternate", "\t(Enable alternate screen)"},
     [o_allow_blinking] = {"allow-blinking", "\t(Allow blinking text and cursor)"},
     [o_allow_modify_edit_keypad] = {"allow-modify-edit-keypad", " (Allow modifing edit keypad keys)"},
