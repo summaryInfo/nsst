@@ -1758,7 +1758,7 @@ void run(void) {
             warn("Poll error: %s", strerror(errno));
 
         // First check window system events
-        if (ctx.pfds[0].revents & POLLIN) handle_event();
+        handle_event();
 
         // Reload config if requested
         if (reload_config) do_reload_config();
