@@ -11,6 +11,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef __SSE2__
+#include <emmintrin.h>
+#endif
+
 #define MAX_LINE_LEN 16384
 #define MAX_EXTRA_PALETTE 511
 #define INIT_CAP 4
@@ -82,6 +86,35 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
 }
 
 inline static void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
+#ifdef __SSE2__
+    // Well... this looks ugly but its fast
+
+    static_assert(sizeof(struct cell) == sizeof(uint32_t), "Wrong size of cell");
+    int32_t pref = (4 - (((uintptr_t)dst/sizeof(uint32_t)) & 3)) & 3;
+    switch (pref) {
+    case 3: dst[2] = c; //fallthrough
+    case 2: dst[1] = c; //fallthrough
+    case 1: dst[0] = c; //fallthrough
+    case 0:;
+    }
+    dst += pref;
+    width -= pref;
+    if (width <= 0) return;
+
+    uint32_t cell_val;
+    memcpy(&cell_val, &c, sizeof cell_val);
+    const __m128i four_cells = _mm_set1_epi32(cell_val);
+    for (ssize_t i = 0; i < (width & ~3); i += 4)
+        _mm_stream_si128((__m128i *)&dst[i], four_cells);
+
+    dst += width & ~3;
+    switch (width & 3) {
+    case 3: dst[2] = c; //fallthrough
+    case 2: dst[1] = c; //fallthrough
+    case 1: dst[0] = c; //fallthrough
+    case 0:;
+    }
+#else
     ssize_t i = (width+7)/8, inc = width % 8;
     if (!inc) inc = 8;
     switch(inc) do {
@@ -96,6 +129,7 @@ inline static void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
     case 2: dst[1] = c; /* fallthrough */
     case 1: dst[0] = c;
     } while(--i > 0);
+#endif
 }
 
 struct line *create_line(struct attr attr, ssize_t width) {
@@ -103,7 +137,7 @@ struct line *create_line(struct attr attr, ssize_t width) {
     if (!line) die("Can't allocate line");
     memset(line, 0, sizeof(*line));
     struct cell c = { .attrid = alloc_attr(line, attr) };
-    for (ssize_t i = 0; i < width; i++) line->cell[i] = c;
+    fill_cells(line->cell, c, width);
     line->width = width;
     return line;
 }

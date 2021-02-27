@@ -3342,14 +3342,16 @@ inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bo
     return part;
 }
 
-static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, const uint8_t **start, const uint8_t *end) {
+static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep, const uint8_t **start, const uint8_t *end) {
     ssize_t res = 1;
 
     // Compute maximal with to be printed at once
-    ssize_t maxw = term_max_x(term) - term_min_x(term), totalw = 0;
+    register ssize_t maxw = term_max_x(term) - term_min_x(term), totalw = 0;
     int32_t *pbuf = term->predec_buf;
     if (!term->c.pending || !term->mode.wrap)
         maxw = (term->c.x >= term_max_x(term) ? term->width : term_max_x(term)) - term->c.x;
+
+    register int32_t ch = rune;
 
     // If rep > 0, we should perform REP CSI
     if (UNLIKELY(rep)) {
@@ -3425,7 +3427,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t ch, ssize_t rep, c
 
             prev = ch;
 
-            int32_t wid = wcwidth(ch);
+            register int32_t wid = wcwidth(ch);
             if(UNLIKELY(!wid)) {
                 // Don't put zero-width charactes
                 // to predecode buffer
