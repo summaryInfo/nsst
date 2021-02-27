@@ -10,7 +10,8 @@ use_uri=1
 prefix=/usr/local
 name=nsst
 backend=x11xrender
-vars='CFLAGS=-O2 -flto'
+cflags='-O2 -flto'
+vars=
 version=20105
 
 # Test some features by trying compiling snippets
@@ -87,7 +88,11 @@ for i; do
     --prefix=*)
         prefix="${i#--prefix=}" ;;
     [A-Za-z_]*=*)
-        vars="$vars$nl$i" ;;
+        if [ xCFLAGS = x"${i%%=*}" ]; then
+            cflags="${i#*=}"
+        else
+            vars="$vars$nl$i"
+        fi ;;
     *)
         help
         exit 1 ;;
@@ -97,6 +102,9 @@ done
 if [ "$use_clang" = 1 ]; then
     vars="${vars}${nl}LDFLAGS += -fuse-ld=/usr/bin/ld.lld${nl}CC=clang"
 fi
+
+vars="${vars}CFLAGS=$cflags"
+
 
 [ x = x"$bindir" ] && bindir=${prefix}/bin
 [ x = x"$mandir" ] && mandir=${prefix}/share/man
