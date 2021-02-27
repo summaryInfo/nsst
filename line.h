@@ -37,7 +37,7 @@ struct cell {
     uint32_t drawn : 1;
     uint32_t wide : 1;
     uint32_t attrid : 9;
-} PACKED ALINGED(sizeof(uint32_t));
+} PACKED ALIGNED(sizeof(uint32_t));
 
 struct attr {
     color_t fg;

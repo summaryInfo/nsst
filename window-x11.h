@@ -87,14 +87,14 @@ struct window {
     bool wait_for_redraw : 1;
     bool autorepeat : 1;
 
-    struct timespec last_scroll;
-    struct timespec last_shift;
-    struct timespec last_blink;
-    struct timespec last_sync;
-    struct timespec last_read;
-    struct timespec last_wait_start;
-    struct timespec last_draw;
-    struct timespec vbell_start;
+    struct timespec last_scroll ALIGNED(16);
+    struct timespec last_shift ALIGNED(16);
+    struct timespec last_blink ALIGNED(16);
+    struct timespec last_sync ALIGNED(16);
+    struct timespec last_read ALIGNED(16);
+    struct timespec last_wait_start ALIGNED(16);
+    struct timespec last_draw ALIGNED(16);
+    struct timespec vbell_start ALIGNED(16);
     int16_t damaged_y0;
     int16_t damaged_y1;
 

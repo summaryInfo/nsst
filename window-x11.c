@@ -1062,7 +1062,7 @@ void free_window(struct window *win) {
 }
 
 bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_t yd, int16_t width, int16_t height, bool delay) {
-    struct timespec cur;
+    static struct timespec cur ALIGNED(16);
     clock_gettime(CLOCK_TYPE, &cur);
 
     bool scrolled_recently = TIMEDIFF(win->last_shift, cur) <  SEC/2/win->cfg.fps;
@@ -1780,7 +1780,7 @@ void run(void) {
         }
 
         next_timeout = 30*SEC;
-        struct timespec cur;
+        struct timespec cur ALIGNED(16);
         clock_gettime(CLOCK_TYPE, &cur);
 
         // Then read for PTYs

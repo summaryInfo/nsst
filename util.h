@@ -22,7 +22,7 @@
 #define LIKELY(x) (__builtin_expect(!!(x), 1))
 #define UNLIKELY(x) (__builtin_expect((x), 0))
 #define PACKED __attribute__((packed))
-#define ALINGED(n) __attribute__((aligned(n)))
+#define ALIGNED(n) __attribute__((aligned(n)))
 
 #ifdef CLOCK_MONOTONIC_RAW
 #   define CLOCK_TYPE CLOCK_MONOTONIC_RAW
