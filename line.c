@@ -86,11 +86,11 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
 }
 
 inline static void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
-#ifdef __SSE2__
+#if defined(__SSE2__)
     // Well... this looks ugly but its fast
 
     static_assert(sizeof(struct cell) == sizeof(uint32_t), "Wrong size of cell");
-    int32_t pref = (4 - (((uintptr_t)dst/sizeof(uint32_t)) & 3)) & 3;
+    int32_t pref = MIN((4 - (intptr_t)(((uintptr_t)dst/sizeof(uint32_t)) & 3)) & 3, width);
     switch (pref) {
     case 3: dst[2] = c; //fallthrough
     case 2: dst[1] = c; //fallthrough
