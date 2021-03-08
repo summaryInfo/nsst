@@ -588,6 +588,9 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
 
 void term_resize(struct term *term, int16_t width, int16_t height) {
 
+    // Reset active URL
+    window_set_active_uri(term->win, EMPTY_URI, 0);
+
     // First try to read from tty to empty out input queue
     // since this is input from program not yet aware about resize
     if (!term->requested_resize) {
@@ -5277,6 +5280,8 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
 
 struct term *create_term(struct window *win, int16_t width, int16_t height) {
     struct term *term = calloc(1, sizeof(struct term));
+    if (!term) return NULL;
+
     term->win = win;
 
     if (tty_open(&term->tty, window_cfg(term->win)) < 0) {
