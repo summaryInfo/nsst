@@ -179,11 +179,11 @@ bool is_vaild_uri(const char *uri) {
 
     struct uri_match_state stt = {0};
     enum uri_match_result res = urim_ground;
-    do {
+    while (*uri) {
         res = uri_match_next(&stt, *uri++);
         if (res == urim_finished ||
             res == urim_ground) break;
-    } while (*uri);
+    }
 
     uri_match_reset(&stt);
     return !*uri && res == urim_may_finish;
@@ -215,9 +215,13 @@ uint32_t uri_add(char *uri, const char *id) {
     }
     if (!id_s) goto alloc_failed;
 
+    assert(!table.size || table.uris);
+
     for (size_t i = 0; i < table.size; i++) {
-        if (!strcmp(table.uris[i].uri, uri) && !strcmp(table.uris[i].id, id_s)) {
+        if (table.uris[i].uri && !strcmp(table.uris[i].uri, uri) &&
+                !strcmp(table.uris[i].id, id_s)) {
             free(id_s);
+            uri_ref(i + 1);
             return i + 1;
         }
     }
@@ -243,7 +247,7 @@ uint32_t uri_add(char *uri, const char *id) {
     *new = (struct uri) {
         .refc = 1,
         .uri = uri,
-        .id = id ? strdup(id) : NULL,
+        .id = id_s,
         .next = 0,
     };
 
@@ -269,6 +273,9 @@ void uri_ref(uint32_t id) {
 void uri_unref(uint32_t id) {
     struct uri *uri = &table.uris[id - 1];
     if (id && !--uri->refc) {
+        if (gconfig.trace_misc) {
+            warn("URI free %d", id);
+        }
         free(uri->uri);
         free(uri->id);
 
