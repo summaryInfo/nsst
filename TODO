@@ -1,4 +1,4 @@
-Until 2.2
+Until 2.3
     Underlines
         --uri-underline-color color
         Set underline color
@@ -7,7 +7,7 @@ Until 2.2
         --match-uri=off,manual,auto
     Reload a part of terminal state
     Add --no-fork option for daemon mode and fork by default in --daemon mode
-Until 2.3
+Until 2.4
     Recalculate non-rectangular selection position on resize
     CSI ? 35 l / CSI ? 35 h -- font shifting functions
     OSC 50 ; Pt ST -- Set font
