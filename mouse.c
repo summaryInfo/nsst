@@ -589,7 +589,7 @@ static void update_active_uri(struct term *term, struct mouse_event *ev) {
     window_set_active_uri(term_window(term), uri, is_button1_down(ev));
 
     uint32_t uri_mask = window_cfg(term_window(term))->uri_click_mask;
-    if (uri && ev->event == mouse_event_press && ev->button == 0 &&
+    if (uri && ev->event == mouse_event_release && ev->button == 0 &&
         (ev->mask & mask_mod_mask) == uri_mask) uri_open(uri);
 }
 #endif
