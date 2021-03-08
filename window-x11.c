@@ -373,10 +373,11 @@ void window_set_alpha(struct window *win, double alpha) {
 }
 
 void window_set_mouse(struct window *win, bool enabled) {
-    if (enabled)
-        win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
-    else
-        win->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
+#if USE_URI
+    window_set_active_uri(win, EMPTY_URI, 0);
+#endif
+    if (enabled) win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
+    else win->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
     xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
 }
 
