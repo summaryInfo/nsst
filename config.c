@@ -123,7 +123,9 @@ struct optmap_item optmap[] = {
     [o_nrcs] = {"nrcs", "\t\t\t(Enable NRCSs support)"},
     [o_numlock] = {"numlock", "\t\t(Initial numlock state)"},
 #if USE_URI
+    [o_allow_uris] = {"allow-uris", "\t(Allow URI parsing/clicking)"},
     [o_open_command] = {"open-cmd", "\t\t(A command used to open URIs when clicked)"},
+    [o_uri_click_mod] = {"uri-click-mod", "\t\t(keyboard modifer used to click-open URIs)"},
 #endif
 #if USE_BOXDRAWING
     [o_override_boxdrawing] = {"override-boxdrawing", "\t(Use built-in box drawing characters)"},
@@ -170,7 +172,6 @@ struct optmap_item optmap[] = {
     [o_underline_width] = {"underline-width", "\t(Text underline width)"},
     [o_underlined_color] = {"underlined-color", "\t(Special color of underlined text)"},
     [o_urgent_on_bell] = {"urgent-on-bell", "\t(Set window urgency on bell)"},
-    [o_uri_click_mod] = {"uri-click-mod", "\t\t(keyboard modifer used to click-open URIs)"},
     [o_use_utf8] = {"use-utf8", "\t\t(Enable UTF-8 I/O)"},
     [o_vertical_border] = {"vertical-border", "\t(Left and right borders)"},
     [o_visual_bell] = {"visual-bell", "\t\t(Whether bell should be visual or normal)"},
@@ -353,6 +354,11 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
         } val;
         unsigned cnum;
     case 'a':
+#if USE_URI
+        if (!strcmp(name, optmap[o_allow_uris].opt)) {
+            if (parse_bool(value, &val.b, 1)) c->allow_uris = val.b;
+        } else
+#endif
         if (!strcmp(name, optmap[o_autorepeat].opt)) {
             if (parse_bool(value, &val.b, 1)) c->autorepeat = val.b;
             else goto e_value;
@@ -791,9 +797,12 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
         } else goto e_unknown;
         break;
     case 'u':
+#if USE_URI
         if (!strcmp(name, optmap[o_uri_click_mod].opt)) {
             parse_str(&c->uri_click_mod, value, "");
-        } else if (!strcmp(name, optmap[o_underline_width].opt)) {
+        } else
+#endif
+        if (!strcmp(name, optmap[o_underline_width].opt)) {
             if (parse_int(value, &val.i, 0, 16, 1)) c->underline_width = val.i;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_underlined_color].opt)) {
@@ -870,7 +879,9 @@ void copy_config(struct instance_config *dst, struct instance_config *src) {
     dst->term_mod = src->term_mod ? strdup(src->term_mod) : NULL;
     dst->force_mouse_mod = src->force_mouse_mod ? strdup(src->force_mouse_mod) : NULL;
     dst->shell = src->shell ? strdup(src->shell) : NULL;
+#if USE_URI
     dst->uri_click_mod = src->uri_click_mod ? strdup(src->uri_click_mod) : NULL;
+#endif
     src->argv = NULL;
 }
 
@@ -891,7 +902,9 @@ void free_config(struct instance_config *src) {
     free(src->term_mod);
     free(src->force_mouse_mod);
     free(src->shell);
+#if USE_URI
     free(src->uri_click_mod);
+#endif
 }
 
 void parse_config(struct instance_config *cfg, bool allow_global) {

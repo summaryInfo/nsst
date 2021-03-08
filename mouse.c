@@ -572,6 +572,8 @@ static void update_active_uri(struct term *term, struct mouse_event *ev) {
     struct window *win = term_window(term);
     int16_t cw, ch, w, h, bw, bh;
 
+    if (!window_cfg(win)->allow_uris) return;
+
     window_get_dim_ext(win, dim_cell_size, &cw, &ch);
     window_get_dim_ext(win, dim_border, &bw, &bh);
     window_get_dim_ext(win, dim_grid_size, &w, &h);
@@ -586,9 +588,9 @@ static void update_active_uri(struct term *term, struct mouse_event *ev) {
         uint32_t lx = x + lv.cell - lv.line->cell;
         if (lx < lv.line->width) uri = attr_at(lv.line, lx).uri;
     }
-    window_set_active_uri(term_window(term), uri, is_button1_down(ev));
+    window_set_active_uri(win, uri, is_button1_down(ev));
 
-    uint32_t uri_mask = window_cfg(term_window(term))->uri_click_mask;
+    uint32_t uri_mask = window_cfg(win)->uri_click_mask;
     if (uri && ev->event == mouse_event_release && ev->button == 0 &&
         (ev->mask & mask_mod_mask) == uri_mask) uri_open(uri);
 }

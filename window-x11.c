@@ -795,7 +795,11 @@ struct cellspec describe_cell(struct cell cell, struct attr attr, struct instanc
     // TODO Better URI rendering 
     //      -- underline colors
     //      -- dotted underlines
-    bool has_uri = attr.uri && attr.uri == rcs->active_uri;
+#if USE_URI
+    bool has_uri = attr.uri && attr.uri == rcs->active_uri && cfg->allow_uris;
+#else
+    bool has_uri = 0;
+#endif
 
     // Check special colors
     if (UNLIKELY(cfg->special_bold) && rcs->palette[SPECIAL_BOLD] && attr.bold)

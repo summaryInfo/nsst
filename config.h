@@ -105,7 +105,9 @@ struct instance_config {
     char *term_mod;
     char *force_mouse_mod;
     char *shell;
+#if USE_URI
     char *uri_click_mod;
+#endif
 
     ssize_t tab_width;
     ssize_t scrollback_size;
@@ -200,6 +202,9 @@ struct instance_config {
     bool allow_subst_font : 1;
     bool force_scalable : 1;
     bool autorepeat : 1;
+#if USE_URI
+    bool allow_uris : 1;
+#endif
 #if USE_BOXDRAWING
     bool override_boxdraw : 1;
 #endif
@@ -295,7 +300,9 @@ enum optidx {
     o_nrcs,
     o_numlock,
 #if USE_URI
+    o_allow_uris,
     o_open_command,
+    o_uri_click_mod,
 #endif
 #if USE_BOXDRAWING
     o_override_boxdrawing,
@@ -342,7 +349,6 @@ enum optidx {
     o_underline_width,
     o_underlined_color,
     o_urgent_on_bell,
-    o_uri_click_mod,
     o_use_utf8,
     o_vertical_border,
     o_visual_bell,
