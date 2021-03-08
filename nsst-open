@@ -1,0 +1,11 @@
+#!/bin/sh
+
+HOSTNAME="$(uname -n)"
+file="${1#file://$HOSTNAME}"
+
+if [ x"${file}" != x"${1}" ]; then
+    xdg-open "$file"
+else
+    xdg-open "$1"
+fi
+
