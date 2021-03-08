@@ -94,8 +94,7 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
         if (ch == '@') {
             stt->state = uris1_host;
             return (stt->res = urim_need_more);
-        }
-        else //fallthrough
+        } else //fallthrough
     case uris1_host:
         if (ch == ':') {
             stt->state = uris1_port;
@@ -177,7 +176,6 @@ char *uri_match_move(struct uri_match_state *state) {
 
 bool is_vaild_uri(const char *uri) {
     if (!uri) return 0;
-    return *uri; //FIXME hax
 
     struct uri_match_state stt = {0};
     enum uri_match_result res = urim_ground;
@@ -188,7 +186,7 @@ bool is_vaild_uri(const char *uri) {
     } while (*uri);
 
     uri_match_reset(&stt);
-    return !*uri && res == urim_finished;
+    return !*uri && res == urim_may_finish;
 }
 
 /* We prefix internally generated IDs with BEL
