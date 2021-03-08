@@ -65,6 +65,14 @@ struct title_stack_item {
     char data[];
 };
 
+struct render_cell_state {
+    color_t *palette;
+    uint32_t active_uri : 23;
+    uint32_t dummy_ : 7;
+    bool blink : 1;
+    bool uri_pressed : 1;
+} PACKED ALIGNED(_Alignof(color_t *));
+
 struct window {
     struct window *prev, *next;
 
@@ -75,7 +83,6 @@ struct window {
 
     bool focused : 1;
     bool active : 1;
-    bool blink_state : 1;
     bool mouse_events : 1;
     bool force_redraw : 1;
     bool blink_commited : 1;
@@ -86,6 +93,7 @@ struct window {
     bool init_invert : 1;
     bool wait_for_redraw : 1;
     bool autorepeat : 1;
+    bool uri_damaged : 1;
 
     struct timespec last_scroll ALIGNED(16);
     struct timespec last_shift ALIGNED(16);
@@ -122,6 +130,7 @@ struct window {
     enum pixel_mode font_pixmode;
 
     struct term *term;
+    struct render_cell_state rcstate;
     size_t poll_index;
 
     struct title_stack_item *title_stack;
@@ -156,7 +165,7 @@ void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 void window_set_default_props(struct window *win);
 void handle_resize(struct window *win, int16_t width, int16_t height);
 struct window *find_shared_font(struct window *win, bool need_free);
-struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, struct instance_config *cfg, bool blink, bool selected);
+struct cellspec describe_cell(struct cell cell, struct attr attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected);
 
 #endif
 

@@ -300,6 +300,8 @@ mode state
 .It Fl \-override-boxdrawing Ns = Ns Ar bool
 Use built-in box drawing characters.
 Use this if font line drawing characters does not align or are missing
+.Ti Fl \-open-command Ns = Ns Ar path
+Executable or script used to open URIs when they are clicked
 .It Fl \-pixel-mode Ns = Ns Ar value
 Subpixels arrangement. Mono disables subpixel rendering
 .Ar Value
@@ -402,6 +404,8 @@ format is same as for
 .Fl \-colorN
 .It Fl \-urgent-on-bell Ns = Ns Ar bool
 Set ICCCM window urgency on bell
+.It Fl \-uri-mod Ns = Ns Ar mods
+Modifers required to click to URIs, empty by default
 .It Fl \-use-utf8 Ns = Ns Ar bool
 Enable UTF-8 mode. Enabled by default if current locale encoding is UTF-8
 .It Fl \-vertical-border Ns = Ns Ar pixels

@@ -286,14 +286,14 @@ static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
         dst[i] = src[i];
 }
 
-bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
+bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
 
     rctx.cbufpos = 0;
     rctx.bufpos = 0;
 
     bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1) && term_is_cursor_enabled(win->term);
 
-    if (cond_cblink) cursor |= win->blink_state;
+    if (cond_cblink) cursor |= win->rcstate.blink;
 
     // First redraw selected parts of padding to short lines
     struct line_offset vpos = term_get_view(win->term);
@@ -310,7 +310,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
     }
 
     if (rctx.bufpos) {
-        color_t c = palette[SPECIAL_SELECTED_BG] ? palette[SPECIAL_SELECTED_BG] : palette[SPECIAL_FG];
+        color_t c = win->rcstate.palette[SPECIAL_SELECTED_BG] ? win->rcstate.palette[SPECIAL_SELECTED_BG] : win->rcstate.palette[SPECIAL_FG];
         xcb_render_color_t col = MAKE_COLOR(color_apply_a(c, win->cfg.alpha));
         xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
             rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
@@ -333,7 +333,7 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
         for (int16_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
             struct cell cel = line.cell[i];
             struct attr attr = attr_at(line.line, i + line.cell - line.line->cell);
-            bool dirty = line.line->force_damage || !cel.drawn ||
+            bool dirty = line.line->force_damage || !cel.drawn || (win->uri_damaged && attr.uri) ||
                     (!win->blink_commited && (attr.blink || (cond_cblink && k == cur_y && i == cur_x)));
 
             struct cellspec spec;
@@ -344,7 +344,14 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
                 if (k == cur_y && i == cur_x && cursor && win->focused &&
                         ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block) attr.reverse ^= 1;
 
-                spec = describe_cell(cel, attr, palette, &win->cfg, win->blink_state, mouse_is_selected_in_view(win->term, i, k));
+                struct render_cell_state {
+                    bool blink : 1;
+                    bool selected : 1;
+                    uint32_t uri : 30;
+                };
+
+                bool selected = mouse_is_selected_in_view(win->term, i, k);
+                spec = describe_cell(cel, attr, &win->cfg, &win->rcstate, selected);
                 g =  spec.ch | (spec.face << 24);
 
                 bool fetched = glyph_cache_is_fetched(win->font_cache, g);

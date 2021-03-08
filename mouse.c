@@ -562,10 +562,44 @@ bool mouse_pending_scroll(struct term *term) {
     return loc->pending_scroll;
 }
 
+#if USE_URI
+inline static bool is_button1_down(struct mouse_event *ev) {
+    return (ev->event == mouse_event_press && ev->button == 0) ||
+           (ev->mask & mask_button_1 && (ev->event != mouse_event_release || ev->button != 0));
+}
+
+static void update_active_uri(struct term *term, struct mouse_event *ev) {
+    struct window *win = term_window(term);
+    int16_t cw, ch, w, h, bw, bh;
+
+    window_get_dim_ext(win, dim_cell_size, &cw, &ch);
+    window_get_dim_ext(win, dim_border, &bw, &bh);
+    window_get_dim_ext(win, dim_grid_size, &w, &h);
+
+    uint32_t uri = EMPTY_URI;
+    if ((ev->x >= bw && ev->x < w + bw) && (ev->y >= bh || ev->y < h + bh)) {
+        int16_t x = (ev->x - bw) / cw;
+        int16_t y = (ev->y - bh) / ch;
+
+        struct line_offset vpos = term_get_line_pos(term, y - term_view(term));
+        struct line_view lv = term_line_at(term, vpos);
+        uint32_t lx = x + lv.cell - lv.line->cell;
+        if (lx < lv.line->width) uri = attr_at(lv.line, lx).uri;
+    }
+    window_set_active_uri(term_window(term), uri, is_button1_down(ev));
+
+    uint32_t uri_mask = window_cfg(term_window(term))->uri_click_mask;
+    if (uri && ev->event == mouse_event_press && ev->button == 0 &&
+        (ev->mask & mask_mod_mask) == uri_mask) uri_open(uri);
+}
+#endif
+
 void mouse_handle_input(struct term *term, struct mouse_event ev) {
     struct mouse_state *loc = term_get_mstate(term);
     loc->pending_scroll = 0;
+
     uint32_t force_mask = window_cfg(term_window(term))->force_mouse_mask;
+
     /* Report mouse */
     if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & mask_mod_mask) != force_mask &&
             !term_get_kstate(term)->keyboad_vt52) {
@@ -593,7 +627,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
             }
         }
     } else if (loc->mouse_mode != mouse_mode_none &&
-            (ev.mask & 0xFF) != force_mask && !term_get_kstate(term)->keyboad_vt52) {
+            (ev.mask & mask_mod_mask) != force_mask && !term_get_kstate(term)->keyboad_vt52) {
         enum mouse_mode md = loc->mouse_mode;
 
         if (loc->mouse_format != mouse_format_pixel)
@@ -604,6 +638,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
         if (ev.event == mouse_event_motion) {
             if (md != mouse_mode_motion && md != mouse_mode_drag) return;
             if (md == mouse_mode_drag && loc->button == 3) return;
+            if (md != mouse_mode_motion && !(ev.mask & ~mask_mod_mask)) return;
             if (ev.x == loc->x && ev.y == loc->y) return;
             ev.button = loc->button + 32;
         } else {
@@ -654,13 +689,19 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
     /* Scroll view */
     } else if (ev.event == mouse_event_press && (ev.button == 3 || ev.button == 4)) {
         term_scroll_view(term, (2 *(ev.button == 3) - 1) * window_cfg(term_window(term))->scroll_amount);
+    /* Paste */
+    } else if (ev.button == 1 && ev.event == mouse_event_release) {
+        window_paste_clip(term_window(term), clip_primary);
     /* Select */
     } else if ((ev.event == mouse_event_press && ev.button == 0) ||
                (ev.event == mouse_event_motion && ev.mask & mask_button_1 &&
                     (loc->state == state_sel_progress || loc->state == state_sel_pressed)) ||
                (ev.event == mouse_event_release && ev.button == 0 &&
                     (loc->state == state_sel_progress))) {
-
+#if USE_URI
+        if (ev.event == mouse_event_press && ev.button == 0) update_active_uri(term, &ev);
+        else window_set_active_uri(term_window(term), EMPTY_URI, 0);
+#endif
         int16_t y = ev.y;
         adj_coords(term, &ev.x, &ev.y);
         change_selection(term, ev.event + 1, ev.x, ev.y, ev.mask & mask_mod_1);
@@ -670,8 +711,10 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
             loc->targ = term_is_select_to_clipboard_enabled(term) ? clip_clipboard : clip_primary;
             window_set_clip(term_window(term), selection_data(term), CLIP_TIME_NOW, loc->targ);
         }
-    /* Paste */
-    } else if (ev.button == 1 && ev.event == mouse_event_release) {
-        window_paste_clip(term_window(term), clip_primary);
+#if USE_URI
+    } else {
+        /* Update URI */
+        update_active_uri(term, &ev);
+#endif
     }
 }

@@ -10,13 +10,11 @@ Until 2.3
     Hyperlinks
         URI matcher
             Autodetection (--match-uri=off,manual,auto)
-        Undelining
-            during attribute decoding
-            save active ID somewhere
+            Fix matcher (!)
         Mouse
-            Hovering during mouse move (--hightlight-uri)
-                Hover all with same ID
-            Clicking (--uri-click-mod)
+            --hightlight-uri bool
+            --uri-underline-color color
+        Enabling terminal mouse protocol should reset active URI
     Pointer
         Shape
         CSI > Ps p -- XTSMPOINTER

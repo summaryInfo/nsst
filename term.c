@@ -970,7 +970,7 @@ bool term_redraw(struct term *term) {
 
     bool cursor = !term->prev_c_hidden && (!cl->cell[term->c.x].drawn  || cl->force_damage);
 
-    return window_submit_screen(term->win, term->palette, term->c.x, term->c.y, cursor, term->c.pending);
+    return window_submit_screen(term->win, term->c.x, term->c.y, cursor, term->c.pending);
 }
 
 /* Get min/max column/row */
@@ -1877,6 +1877,7 @@ static void term_load_config(struct term *term) {
     };
 
 #if USE_URI
+    window_set_mouse(term->win, 1);
     uri_unref(term->sgr.uri);
     uri_unref(term->saved_sgr.uri);
     uri_unref(term->back_saved_sgr.uri);
@@ -1917,7 +1918,7 @@ static void term_do_reset(struct term *term, bool hard) {
 #endif
 
     // TODO Reset cursor shape to default
-    window_set_mouse(term->win, 0);
+    window_set_mouse(term->win, USE_URI);
     window_set_colors(term->win, term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
     window_set_autorepeat(term->win, window_cfg(term->win)->autorepeat);
 
@@ -2736,7 +2737,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             window_set_autorepeat(term->win, set);
             break;
         case 9: /* X10 Mouse tracking */
-            window_set_mouse(term->win, 0);
+            window_set_mouse(term->win, USE_URI);
             term->mstate.mouse_mode = set ? mouse_mode_x10 : mouse_mode_none;
             break;
         case 10: /* Show toolbar */
@@ -2805,18 +2806,18 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->mode.preserve_display_132 = set;
             break;
         case 1000: /* X11 Mouse tracking */
-            window_set_mouse(term->win, 0);
+            window_set_mouse(term->win, USE_URI);
             term->mstate.mouse_mode = set ? mouse_mode_button : mouse_mode_none;
             break;
         case 1001: /* Highlight mouse tracking */
             // IGNORE
             break;
         case 1002: /* Cell motion mouse tracking on keydown */
-            window_set_mouse(term->win, 0);
+            window_set_mouse(term->win, USE_URI);
             term->mstate.mouse_mode = set ? mouse_mode_drag : mouse_mode_none;
             break;
         case 1003: /* All motion mouse tracking */
-            window_set_mouse(term->win, set);
+            window_set_mouse(term->win, set || USE_URI);
             term->mstate.mouse_mode = set ? mouse_mode_motion : mouse_mode_none;
             break;
         case 1004: /* Focus in/out events */
@@ -4370,7 +4371,7 @@ static void term_dispatch_csi(struct term *term) {
             case 9: case 1000: case 1001:
             case 1002: case 1003:
                 term->mstate.mouse_mode = term->saved_mouse_mode;
-                window_set_mouse(term->win, term->mstate.mouse_mode == mouse_mode_motion);
+                window_set_mouse(term->win, term->mstate.mouse_mode == mouse_mode_motion || USE_URI);
                 break;
             case 1050: case 1051: case 1052:
             case 1053: case 1060: case 1061:
@@ -5159,6 +5160,10 @@ struct mouse_state *term_get_mstate(struct term *term) {
 
 struct window *term_window(struct term *term) {
     return term->win;
+}
+
+color_t *term_palette(struct term *term) {
+    return term->palette;
 }
 
 bool term_is_reverse(struct term *term) {

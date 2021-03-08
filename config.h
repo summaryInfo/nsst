@@ -105,6 +105,7 @@ struct instance_config {
     char *term_mod;
     char *force_mouse_mod;
     char *shell;
+    char *uri_click_mod;
 
     ssize_t tab_width;
     ssize_t scrollback_size;
@@ -115,6 +116,7 @@ struct instance_config {
     enum charset keyboard_nrcs;
 
     uint32_t force_mouse_mask;
+    uint32_t uri_click_mask;
 
     int16_t vt_version;
     int16_t margin_bell_column;
@@ -340,6 +342,7 @@ enum optidx {
     o_underline_width,
     o_underlined_color,
     o_urgent_on_bell,
+    o_uri_click_mod,
     o_use_utf8,
     o_vertical_border,
     o_visual_bell,

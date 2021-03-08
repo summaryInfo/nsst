@@ -42,6 +42,7 @@ void term_toggle_numlock(struct term *term);
 struct keyboard_state *term_get_kstate(struct term *term);
 struct mouse_state *term_get_mstate(struct term *term);
 struct window *term_window(struct term *term);
+color_t *term_palette(struct term *term);
 int term_fd(struct term *term);
 void term_sendkey(struct term *term, const uint8_t *data, size_t size);
 void term_answerback(struct term *term, const char *str, ...) __attribute__ ((format (printf, 2, 3)));

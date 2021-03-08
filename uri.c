@@ -9,6 +9,7 @@
 #include "config.h"
 #include "uri.h"
 
+#include <errno.h>
 #include <assert.h>
 #include <ctype.h>
 #include <stdbool.h>
@@ -47,7 +48,7 @@ struct uri_table {
 
 static struct uri_table table;
 
-
+/* From window.c */
 enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
 #define MATCH(tab, ch) (!!((tab)[((ch) >> 5) - 1] & (1U << ((ch) & 0x1F))))
     static uint32_t c_proto[] = {0x03FF6000, 0x07FFFFFE, 0x07FFFFFE}; // [\w\d\-.]
@@ -176,6 +177,7 @@ char *uri_match_move(struct uri_match_state *state) {
 
 bool is_vaild_uri(const char *uri) {
     if (!uri) return 0;
+    return *uri; //FIXME hax
 
     struct uri_match_state stt = {0};
     enum uri_match_result res = urim_ground;
@@ -202,7 +204,10 @@ bool is_vaild_uri(const char *uri) {
 uint32_t uri_add(char *uri, const char *id) {
     static size_t id_counter = 0;
 
-    if (!is_vaild_uri(uri)) return EMPTY_URI;
+    if (!is_vaild_uri(uri)) {
+        if (*uri) warn("URI '%s' is invalid", uri);
+        return EMPTY_URI;
+    }
 
     char *id_s = NULL;
     if (id) id_s = strdup(id);
@@ -229,7 +234,7 @@ uint32_t uri_add(char *uri, const char *id) {
 
         if (table.size + 1 > table.caps) {
             struct uri *tmp = realloc(table.uris, URI_CAPS_STEP(table.caps)*sizeof(*tmp));
-            if (tmp) goto alloc_failed;
+            if (!tmp) goto alloc_failed;
             table.uris = tmp;
             table.caps = URI_CAPS_STEP(table.caps);
         }
@@ -244,8 +249,14 @@ uint32_t uri_add(char *uri, const char *id) {
         .next = 0,
     };
 
+    uint32_t uriid = new - table.uris + 1;
+    if (gconfig.trace_misc) {
+        if (id) info("URI new id=%d path='%s' name='%s'", uriid, uri, id);
+        else info("URI new id=%d path='%s' name=%zd (privite)", uriid, uri, id_counter);
+    }
+
     /* External ID is actually index + 1, not index*/
-    return new - table.uris + 1;
+    return uriid;
 
 alloc_failed:
     free(uri);
@@ -274,9 +285,14 @@ void uri_unref(uint32_t id) {
 }
 
 void uri_open(uint32_t id) {
-    if (id && fork() > 0) {
-        execl(gconfig.open_command, gconfig.open_command,
-              table.uris[id - 1].uri, NULL);
+    if (gconfig.trace_misc) {
+        info("URI open cmd='%s' id=%d path='%s'",
+                gconfig.open_command, id, id ? table.uris[id - 1].uri : "");
+    }
+    if (id && !fork()) {
+        execlp(gconfig.open_command,
+               gconfig.open_command,
+               table.uris[id - 1].uri, NULL);
         _exit(127);
     }
 }

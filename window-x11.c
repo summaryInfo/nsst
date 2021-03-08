@@ -373,12 +373,27 @@ void window_set_alpha(struct window *win, double alpha) {
 }
 
 void window_set_mouse(struct window *win, bool enabled) {
-   if (enabled)
+    if (enabled)
         win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
-   else
-       win->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
-   xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
+    else
+        win->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
+    xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
 }
+
+#if USE_URI
+void window_set_active_uri(struct window *win, uint32_t uri, bool pressed) {
+    win->uri_damaged |= win->rcstate.active_uri != uri ||
+                       (win->rcstate.uri_pressed != pressed && uri);
+    uri_ref(uri);
+    uri_unref(win->rcstate.active_uri);
+    win->rcstate.active_uri = uri;
+    win->rcstate.uri_pressed = pressed;
+
+    if (gconfig.trace_misc && win->uri_damaged) {
+        info("URI set active id=%d pressed=%d", uri, pressed);
+    }
+}
+#endif
 
 void window_set_sync(struct window *win, bool state) {
     if (state) clock_gettime(CLOCK_TYPE, &win->last_sync);
@@ -775,39 +790,45 @@ uint32_t get_win_gravity_from_config(bool nx, bool ny) {
     }
 }
 
-struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palette, struct instance_config *cfg, bool blink, bool selected) {
+struct cellspec describe_cell(struct cell cell, struct attr attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected) {
     struct cellspec res;
+    // TODO Better URI rendering 
+    //      -- underline colors
+    //      -- dotted underlines
+    bool has_uri = attr.uri && attr.uri == rcs->active_uri;
 
     // Check special colors
-    if (UNLIKELY(cfg->special_bold) && palette[SPECIAL_BOLD] && attr.bold)
-        attr.fg = palette[SPECIAL_BOLD], attr.bold = 0;
-    if (UNLIKELY(cfg->special_underline) && palette[SPECIAL_UNDERLINE] && attr.underlined)
-        attr.fg = palette[SPECIAL_UNDERLINE], attr.underlined = 0;
-    if (UNLIKELY(cfg->special_blink) && palette[SPECIAL_BLINK] && attr.blink)
-        attr.fg = palette[SPECIAL_BLINK], attr.blink = 0;
-    if (UNLIKELY(cfg->special_reverse) && palette[SPECIAL_REVERSE] && attr.reverse)
-        attr.fg = palette[SPECIAL_REVERSE], attr.reverse = 0;
-    if (UNLIKELY(cfg->special_italic) && palette[SPECIAL_ITALIC] && attr.italic)
-        attr.fg = palette[SPECIAL_ITALIC], attr.italic = 0;
+    if (UNLIKELY(cfg->special_bold) && rcs->palette[SPECIAL_BOLD] && attr.bold)
+        attr.fg = rcs->palette[SPECIAL_BOLD], attr.bold = 0;
+    if (UNLIKELY(cfg->special_underline) && rcs->palette[SPECIAL_UNDERLINE] && attr.underlined)
+        attr.fg = rcs->palette[SPECIAL_UNDERLINE], attr.underlined = 0;
+    if (UNLIKELY(cfg->special_blink) && rcs->palette[SPECIAL_BLINK] && attr.blink)
+        attr.fg = rcs->palette[SPECIAL_BLINK], attr.blink = 0;
+    if (UNLIKELY(cfg->special_reverse) && rcs->palette[SPECIAL_REVERSE] && attr.reverse)
+        attr.fg = rcs->palette[SPECIAL_REVERSE], attr.reverse = 0;
+    if (UNLIKELY(cfg->special_italic) && rcs->palette[SPECIAL_ITALIC] && attr.italic)
+        attr.fg = rcs->palette[SPECIAL_ITALIC], attr.italic = 0;
 
     // Calculate colors
 
     if (attr.bold && !attr.faint && color_idx(attr.fg) < 8) attr.fg = indirect_color(color_idx(attr.fg) + 8);
-    res.bg = direct_color(attr.bg, palette);
-    res.fg = direct_color(attr.fg, palette);
+    res.bg = direct_color(attr.bg, rcs->palette);
+    res.fg = direct_color(attr.fg, rcs->palette);
     if (!attr.bold && attr.faint) res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
-    if (attr.reverse ^ selected) SWAP(res.fg, res.bg);
+    if (attr.reverse ^ selected ^ (has_uri && rcs->uri_pressed)) SWAP(res.fg, res.bg);
 
     // Apply background opacity
     if (color_idx(attr.bg) == SPECIAL_BG || cfg->blend_all_bg) res.bg = color_apply_a(res.bg, cfg->alpha);
     if (UNLIKELY(cfg->blend_fg)) res.fg = color_apply_a(res.fg, cfg->alpha);
 
-    if ((!selected && attr.invisible) || (attr.blink && blink)) res.fg = res.bg;
+    if ((!selected && attr.invisible) || (attr.blink && rcs->blink)) res.fg = res.bg;
 
     // If selected colors are set use them
 
-    if (palette[SPECIAL_SELECTED_BG] && selected) res.bg = palette[SPECIAL_SELECTED_BG];
-    if (palette[SPECIAL_SELECTED_FG] && selected) res.fg = palette[SPECIAL_SELECTED_FG];
+    if (selected) {
+        if (rcs->palette[SPECIAL_SELECTED_BG]) res.bg = rcs->palette[SPECIAL_SELECTED_BG];
+        if (rcs->palette[SPECIAL_SELECTED_FG]) res.fg = rcs->palette[SPECIAL_SELECTED_FG];
+    }
 
     // Optimize rendering of U+2588 FULL BLOCK
 
@@ -821,7 +842,7 @@ struct cellspec describe_cell(struct cell cell, struct attr attr, color_t *palet
     if (cell.ch && attr.bold) res.face |= face_bold;
     if (cell.ch && attr.italic) res.face |= face_italic;
     res.wide = cell.wide;
-    res.underlined = attr.underlined && res.fg != res.bg;
+    res.underlined = (attr.underlined || has_uri) && res.fg != res.bg;
     res.stroke = attr.strikethrough && res.fg != res.bg;
 
     return res;
@@ -991,6 +1012,9 @@ struct window *create_window(struct instance_config *cfg) {
     if (!renderer_reload_font(win, 0)) goto error;
 
     win->term = create_term(win, MAX(win->cw, 2), MAX(win->ch, 1));
+    win->rcstate = (struct render_cell_state) {
+        .palette = term_palette(win->term),
+    };
     if (!win->term) goto error;
 
     window_set_default_props(win);
@@ -1056,6 +1080,10 @@ void free_window(struct window *win) {
         free(win->title_stack);
         win->title_stack = tmp;
     }
+
+#if USE_URI
+    uri_unref(win->rcstate.active_uri);
+#endif
 
     free_config(&win->cfg);
     free(win);
@@ -1828,7 +1856,7 @@ void run(void) {
             // Change blink state if blinking interval is expired
             if (win->active && win->cfg.allow_blinking &&
                     TIMEDIFF(win->last_blink, cur) > win->cfg.blink_time*1000LL) {
-                win->blink_state = !win->blink_state;
+                win->rcstate.blink = !win->rcstate.blink;
                 win->blink_commited = 0;
                 win->last_blink = cur;
             }

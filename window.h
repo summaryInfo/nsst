@@ -93,7 +93,7 @@ void run(void);
 struct window *create_window(struct instance_config *cfg);
 void free_window(struct window *win);
 
-bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
+bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
 bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_t yd, int16_t width, int16_t height, bool delay);
 void window_paste_clip(struct window *win, enum clip_target target);
 void window_delay_redraw(struct window *win);
@@ -110,6 +110,7 @@ void window_pop_title(struct window *win, enum title_target which);
 /* Both at the same time are not supported */
 void window_get_title(struct window *win, enum title_target which, char **name, bool *utf8);
 
+void window_set_active_uri(struct window *win, uint32_t uri, bool pressed);
 void window_set_mouse(struct window *win, bool enabled);
 void window_set_colors(struct window *win, color_t bg, color_t cursor_fg);
 void window_get_dim(struct window *win, int16_t *width, int16_t *height);

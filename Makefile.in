@@ -41,8 +41,9 @@ install-strip: install
 install: all
 	install -D $(NAME) $(BINDIR)/$(NAME)
 	install -D $(NAME)c $(BINDIR)/$(NAME)c
-	install -Dm 644 docs/nsst.conf $(SHAREDIR)/nsst/nsst.conf
-	install -Dm 644 docs/nsst.1 $(MANDIR)/man1/nsst.1
+	install -D nsst-open $(BINDIR)/$(NAME)-open
+	install -Dm 644 docs/nsst.conf $(SHAREDIR)/$(NAME)/nsst.conf
+	install -Dm 644 docs/nsst.1 $(MANDIR)/man1/$(NAME).1
 
 uninstall:
 	rm -rf $(SHAREDIR)/nsst

@@ -234,12 +234,12 @@ static void optimize_bounds(struct rect *bounds, size_t *boundc, bool fine_grain
     *boundc = j;
 }
 
-bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
+bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
 
     bool scrolled = win->ren.boundc;
     bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1) && term_is_cursor_enabled(win->term);
 
-    if (cond_cblink) cursor |= win->blink_state;
+    if (cond_cblink) cursor |= win->rcstate.blink;
 
     struct line_offset vpos = term_get_view(win->term);
     for (ssize_t k = 0; k < win->ch; k++, term_line_next(win->term, &vpos, 1)) {
@@ -250,8 +250,8 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
             struct cell cel = line.cell[i];
             struct attr attr = attr_at(line.line, i + line.cell - line.line->cell);
 
-            bool dirty = line.line->force_damage || !cel.drawn ||
-                    (!win->blink_commited && (attr.blink)) || (cond_cblink && k == cur_y && i == cur_x);
+            bool dirty = line.line->force_damage || !cel.drawn || (win->uri_damaged && attr.uri) ||
+                    (!win->blink_commited && (attr.blink || (cond_cblink && k == cur_y && i == cur_x)));
 
             struct cellspec spec;
             struct glyph *glyph = NULL;
@@ -262,7 +262,8 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
                         win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block)
                     attr.reverse ^= 1;
 
-                spec = describe_cell(cel, attr, palette, &win->cfg, win->blink_state, mouse_is_selected_in_view(win->term, i, k));
+                bool selected = mouse_is_selected_in_view(win->term, i, k);
+                spec = describe_cell(cel, attr, &win->cfg, &win->rcstate, selected);
 
                 if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face);
                 g_wide = glyph && glyph->x_off > win->char_width - win->cfg.font_spacing;
@@ -306,8 +307,8 @@ bool window_submit_screen(struct window *win, color_t *palette, int16_t cur_x, s
             if (win->cw > line.width) {
                 color_t c = win->bg_premul;
                 if (mouse_is_selected_in_view(win->term, win->cw - 1, k)) {
-                    c = palette[SPECIAL_SELECTED_BG];
-                    if (!c) c = palette[SPECIAL_FG];
+                    c = win->rcstate.palette[SPECIAL_SELECTED_BG];
+                    if (!c) c = win->rcstate.palette[SPECIAL_FG];
                     c = color_apply_a(c, win->cfg.alpha);
                 }
                 image_draw_rect(win->ren.im, (struct rect){
