@@ -1,18 +1,18 @@
 Until 2.2
-    Hyperlinks autodetection
-        --match-uri=off,manual,auto
-    Use adjust buffer everywhere
-    Reload a part of terminal state
-    Add --no-fork option for daemon mode and fork by default in --daemon mode
-    Recalculate non-rectangular selection position on resize
-    CSI ? 35 l / CSI ? 35 h -- font shifting functions
-    OSC 50 ; Pt ST -- Set font
-    Allow geometry to be specified in characters
-Until 2.3
     Underlines
         --uri-underline-color color
         Set underline color
         Curly and double underlines
+    Hyperlinks autodetection
+        --match-uri=off,manual,auto
+    Reload a part of terminal state
+    Add --no-fork option for daemon mode and fork by default in --daemon mode
+Until 2.3
+    Recalculate non-rectangular selection position on resize
+    CSI ? 35 l / CSI ? 35 h -- font shifting functions
+    OSC 50 ; Pt ST -- Set font
+    Allow geometry to be specified in characters
+    Use adjust buffer everywhere
     Pointer
         Shape
         CSI > Ps p -- XTSMPOINTER
@@ -37,6 +37,7 @@ Render
         Slow scrolling of full-color images (with small font in chafa)
         Use multiple separate buffers for background/lines/glyphs to sort less
     Wayland
+        *EVERYTHING*
 Emulation
     Encode NRCSs for printer autoprint mode
     Proper vt level restriction
