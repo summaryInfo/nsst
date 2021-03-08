@@ -1,4 +1,6 @@
 Until 2.2
+    Hyperlinks autodetection
+        --match-uri=off,manual,auto
     Use adjust buffer everywhere
     Reload a part of terminal state
     Add --no-fork option for daemon mode and fork by default in --daemon mode
@@ -7,14 +9,10 @@ Until 2.2
     OSC 50 ; Pt ST -- Set font
     Allow geometry to be specified in characters
 Until 2.3
-    Hyperlinks
-        URI matcher
-            Autodetection (--match-uri=off,manual,auto)
-            Fix matcher (!)
-        Mouse
-            --hightlight-uri bool
-            --uri-underline-color color
-        Enabling terminal mouse protocol should reset active URI
+    Underlines
+        --uri-underline-color color
+        Set underline color
+        Curly and double underlines
     Pointer
         Shape
         CSI > Ps p -- XTSMPOINTER
