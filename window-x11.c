@@ -1889,6 +1889,7 @@ void run(void) {
 
                 win->force_redraw = 0;
                 win->blink_commited = 1;
+                win->uri_damaged = 0;
             }
 
             if (!win->slow_mode) next_timeout = MIN(next_timeout,  remains);
