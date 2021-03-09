@@ -238,10 +238,10 @@ uint32_t uri_add(char *uri, const char *id) {
         // Convert privite id to string (non-human readable)
         uint32_t idn = id_counter++;
         *ptr++ = URI_ID_PREF;
-        do *ptr = ' ' + (idn & 63);
+        do *ptr++ = ' ' + (idn & 63);
         while (idn >>= 6);
         *ptr = '\0';
-    }
+    } else buf[0] = 0;
 
     // Lookup in hash table for speed
     uint32_t new_hash = hash(id) ^ hash(uri);
@@ -317,7 +317,7 @@ uint32_t uri_add(char *uri, const char *id) {
 
     uint32_t uriid = new - table.uris + 1;
     if (gconfig.trace_misc) {
-        if (id) info("URI new id=%d path='%s' name='%s'", uriid, uri, id);
+        if (!buf[0]) info("URI new id=%d path='%s' name='%s'", uriid, uri, id);
         else info("URI new id=%d path='%s' name=%zd (privite)", uriid, uri, id_counter);
     }
 
