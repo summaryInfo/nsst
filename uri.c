@@ -27,6 +27,7 @@ struct uri {
      * (when attribute gets deleted) or line deletion
      * and incremented on adding an attribute to the line */
     uint32_t refc;
+    uint32_t hash;
     /* URI string itself */
     char *uri;
     /* Assocciated ID */
@@ -47,6 +48,17 @@ struct uri_table {
 };
 
 static struct uri_table table;
+
+inline static uint32_t hash(char *str) {
+    // Murmur...
+    uint64_t h = 525201411107845655ULL;
+    while (*str) {
+        h ^= *str++;
+        h *= 0x5BD1E9955BD1E995;
+        h ^= h >> 47;
+    }
+    return h ^ (h >> 32);
+}
 
 /* From window.c */
 enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
@@ -217,8 +229,13 @@ uint32_t uri_add(char *uri, const char *id) {
 
     assert(!table.size || table.uris);
 
+    uint32_t new_hash = hash(id_s) ^ hash(uri);
+
+    // TODO Make this code use hash table for constant lookup
     for (size_t i = 0; i < table.size; i++) {
-        if (table.uris[i].uri && !strcmp(table.uris[i].uri, uri) &&
+        if (table.uris[i].hash == new_hash &&
+                table.uris[i].uri &&
+                !strcmp(table.uris[i].uri, uri) &&
                 !strcmp(table.uris[i].id, id_s)) {
             free(id_s);
             uri_ref(i + 1);
@@ -247,6 +264,7 @@ uint32_t uri_add(char *uri, const char *id) {
     *new = (struct uri) {
         .refc = 1,
         .uri = uri,
+        .hash = hash(uri) ^ hash(id_s),
         .id = id_s,
         .next = 0,
     };
