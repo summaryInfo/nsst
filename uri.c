@@ -57,7 +57,7 @@ struct uri_table {
 
 static struct uri_table table;
 
-inline static uint32_t hash(char *str) {
+inline static uint32_t hash(const char *str) {
     // Murmur...
     uint64_t h = 525201411107845655ULL;
     while (*str) {
@@ -212,9 +212,9 @@ bool is_vaild_uri(const char *uri) {
 /* We prefix internally generated IDs with BEL
  * since this character cannot appear in supplied string
  * (it terminates OSC sequence)*/
-#define URI_ID_PREF "\007"
+#define URI_ID_PREF '\007'
 
-#define MAX_NUMBER_LEN 10
+#define MAX_NUMBER_LEN 6
 
 #define URI_CAPS_STEP(x) ((x)?(4*(x)/3):8)
 #define URI_HASHTAB_CAPS_STEP(x) ((x)?3*(x)/2:16)
@@ -229,35 +229,38 @@ uint32_t uri_add(char *uri, const char *id) {
         return EMPTY_URI;
     }
 
-    char *id_s = (char *)id;
-    bool dupped = 0;
-    if (!id && (id_s = malloc(MAX_NUMBER_LEN + 2))) {
-        dupped = 1;
-        snprintf(id_s, MAX_NUMBER_LEN + 2,
-                 URI_ID_PREF"%0*zx", MAX_NUMBER_LEN, id_counter++);
+    // Generate internal identifier
+    // if not exiplicitly provided
+    char buf[MAX_NUMBER_LEN + 2];
+    if (LIKELY(!id)) {
+        char *ptr = buf;
+        id = buf;
+        // Convert privite id to string (non-human readable)
+        uint32_t idn = id_counter++;
+        *ptr++ = URI_ID_PREF;
+        do *ptr = ' ' + (idn & 63);
+        while (idn >>= 6);
+        *ptr = '\0';
     }
 
-    assert(!table.size || table.uris);
-
     // Lookup in hash table for speed
-    uint32_t new_hash = hash(id_s) ^ hash(uri), *slot = NULL;
-    if (table.hash_tab) {
-        slot = &table.hash_tab[new_hash % table.hash_tab_caps];
-        while (*slot != UINT32_MAX) {
-            struct uri *cand = &table.uris[*slot];
+    uint32_t new_hash = hash(id) ^ hash(uri);
+    if (LIKELY(table.hash_tab)) {
+        uint32_t slot = table.hash_tab[new_hash % table.hash_tab_caps];
+        while (slot != UINT32_MAX) {
+            struct uri *cand = &table.uris[slot];
             if (cand->hash == new_hash && cand->uri &&
-                    !strcmp(cand->uri, uri) && !strcmp(cand->id, id_s)) {
+                    !strcmp(cand->uri, uri) && !strcmp(cand->id, id)) {
                  free(uri);
-                 if (dupped) free(id_s);
-                 return *slot + 1;
+                 return slot + 1;
             }
-            assert(*slot != cand->next);
-            slot = &cand->next;
+            slot = cand->next;
         }
     }
 
     // Duplicate string it we haven't done it already
-    if (!dupped && !(id_s = strdup(id_s))) goto alloc_failed;
+    char *id_s = strdup(id);
+    if (!id_s) goto alloc_failed;
 
     struct uri *new = NULL;
     if (table.first_free) {
@@ -307,7 +310,7 @@ uint32_t uri_add(char *uri, const char *id) {
         table.hash_tab = newtab;
     }
 
-    slot = &table.hash_tab[new_hash % table.hash_tab_caps];
+    uint32_t *slot = &table.hash_tab[new_hash % table.hash_tab_caps];
     new->next = *slot;
     *slot = new - table.uris;
 
