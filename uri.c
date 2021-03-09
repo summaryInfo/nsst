@@ -338,7 +338,7 @@ void uri_unref(uint32_t id) {
     struct uri *uri = &table.uris[id - 1];
     if (id && !--uri->refc) {
         if (gconfig.trace_misc) {
-            warn("URI free %d", id);
+            info("URI free %d", id);
         }
         free(uri->uri);
         free(uri->id);
