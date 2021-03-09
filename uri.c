@@ -45,6 +45,14 @@ struct uri_table {
      * (stores index + 1, zero means the end) */
     size_t first_free;
     struct uri *uris;
+
+    // Since URIs should have
+    // fixed indices, we need
+    // to use separate array for
+    // hash table
+    // (not using pointer for consistency)
+    uint32_t *hash_tab;
+    size_t hash_tab_caps;
 };
 
 static struct uri_table table;
@@ -209,6 +217,7 @@ bool is_vaild_uri(const char *uri) {
 #define MAX_NUMBER_LEN 10
 
 #define URI_CAPS_STEP(x) ((x)?(4*(x)/3):8)
+#define URI_HASHTAB_CAPS_STEP(x) ((x)?3*(x)/2:16)
 
 /* If URI is invalid returns EMPTY_URI */
 uint32_t uri_add(char *uri, const char *id) {
@@ -216,32 +225,39 @@ uint32_t uri_add(char *uri, const char *id) {
 
     if (!is_vaild_uri(uri)) {
         if (*uri) warn("URI '%s' is invalid", uri);
+        free(uri);
         return EMPTY_URI;
     }
 
-    char *id_s = NULL;
-    if (id) id_s = strdup(id);
-    else if ((id_s = malloc(MAX_NUMBER_LEN + 2))) {
+    char *id_s = (char *)id;
+    bool dupped = 0;
+    if (!id && (id_s = malloc(MAX_NUMBER_LEN + 2))) {
+        dupped = 1;
         snprintf(id_s, MAX_NUMBER_LEN + 2,
                  URI_ID_PREF"%0*zx", MAX_NUMBER_LEN, id_counter++);
     }
-    if (!id_s) goto alloc_failed;
 
     assert(!table.size || table.uris);
 
-    uint32_t new_hash = hash(id_s) ^ hash(uri);
-
-    // TODO Make this code use hash table for constant lookup
-    for (size_t i = 0; i < table.size; i++) {
-        if (table.uris[i].hash == new_hash &&
-                table.uris[i].uri &&
-                !strcmp(table.uris[i].uri, uri) &&
-                !strcmp(table.uris[i].id, id_s)) {
-            free(id_s);
-            uri_ref(i + 1);
-            return i + 1;
+    // Lookup in hash table for speed
+    uint32_t new_hash = hash(id_s) ^ hash(uri), *slot = NULL;
+    if (table.hash_tab) {
+        slot = &table.hash_tab[new_hash % table.hash_tab_caps];
+        while (*slot != UINT32_MAX) {
+            struct uri *cand = &table.uris[*slot];
+            if (cand->hash == new_hash && cand->uri &&
+                    !strcmp(cand->uri, uri) && !strcmp(cand->id, id_s)) {
+                 free(uri);
+                 if (dupped) free(id_s);
+                 return *slot + 1;
+            }
+            assert(*slot != cand->next);
+            slot = &cand->next;
         }
     }
+
+    // Duplicate string it we haven't done it already
+    if (!dupped && !(id_s = strdup(id_s))) goto alloc_failed;
 
     struct uri *new = NULL;
     if (table.first_free) {
@@ -264,10 +280,37 @@ uint32_t uri_add(char *uri, const char *id) {
     *new = (struct uri) {
         .refc = 1,
         .uri = uri,
-        .hash = hash(uri) ^ hash(id_s),
+        .hash = new_hash,
         .id = id_s,
-        .next = 0,
+        .next = UINT32_MAX,
     };
+
+    // Insert URI into hash table
+    // (resizing if necessery)
+    if (UNLIKELY(4*table.size/3 > table.hash_tab_caps)) {
+        size_t new_caps = URI_HASHTAB_CAPS_STEP(table.hash_tab_caps);
+        uint32_t *newtab = malloc(new_caps * sizeof(*newtab));
+        if (!newtab) {
+            uri_unref(new - table.uris);
+            return EMPTY_URI;
+        }
+        memset(newtab, 0xFF, new_caps * sizeof(*newtab));
+        for (size_t i = 0; i < table.size; i++) {
+            if (table.uris[i].uri && new != &table.uris[i]) {
+                uint32_t *newidx = &newtab[table.uris[i].hash % new_caps];
+                table.uris[i].next = *newidx;
+                *newidx = i;
+            }
+        }
+        free(table.hash_tab);
+        table.hash_tab_caps = new_caps;
+        table.hash_tab = newtab;
+    }
+
+    slot = &table.hash_tab[new_hash % table.hash_tab_caps];
+    new->next = *slot;
+    *slot = new - table.uris;
+
 
     uint32_t uriid = new - table.uris + 1;
     if (gconfig.trace_misc) {
@@ -296,6 +339,13 @@ void uri_unref(uint32_t id) {
         }
         free(uri->uri);
         free(uri->id);
+
+        // Remove URI from hash table
+        uint32_t *slot = &table.hash_tab[uri->hash % table.hash_tab_caps];
+        while (*slot != UINT32_MAX && table.uris + *slot != uri) {
+            slot = &table.uris[*slot].next;
+        }
+        *slot = uri->next;
 
         uri->uri = NULL;
         uri->id = NULL;
