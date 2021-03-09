@@ -374,4 +374,14 @@ const char *uri_get(uint32_t id) {
     return id ? table.uris[id - 1].uri : "";
 }
 
+void uri_release_memory(void) {
+    for (size_t i = 0; i < table.size; i++) {
+        free(table.uris[i].uri);
+        free(table.uris[i].id);
+    }
+    free(table.uris);
+    free(table.hash_tab);
+    memset(&table, 0, sizeof(table));
+}
+
 #endif

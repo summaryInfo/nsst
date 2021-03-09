@@ -13,6 +13,7 @@
 #include "input.h"
 #include "mouse.h"
 #include "term.h"
+#include "uri.h"
 #include "util.h"
 #include "window-x11.h"
 
@@ -332,6 +333,8 @@ void free_context(void) {
 
     xcb_disconnect(con);
     memset(&con, 0, sizeof(con));
+
+    uri_release_memory();
 }
 
 struct instance_config *window_cfg(struct window *win) {

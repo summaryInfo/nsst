@@ -70,7 +70,7 @@ render-x11xrender.o: feature.h config.h font.h line.h util.h nrcs.h mouse.h term
 term.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h tty.h uri.h
 tty.o: feature.h config.h font.h line.h util.h nrcs.h tty.h
 util.o: feature.h config.h font.h line.h util.h nrcs.h precompose-table.h
-window-x11.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h window-x11.h
+window-x11.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h window-x11.h uri.h
 uri.o: feature.h config.h uri.h font.h line.h util.h nrcs.h
 
 .PHONY: all clean install install-strip uninstall force
