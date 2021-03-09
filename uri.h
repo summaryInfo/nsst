@@ -3,6 +3,7 @@
 #ifndef URI_H_
 #define URI_H_ 1
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -35,6 +36,7 @@ struct uri_match_state {
     size_t size;
     size_t caps;
     char *data;
+    bool no_copy;
 };
 
 #define EMPTY_URI 0

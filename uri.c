@@ -78,15 +78,16 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
      * can be displayed by browsers, but only strictly complying
      * that includes only subset of ASCII */
 
-    if (UNLIKELY(!adjust_buffer((void **)&stt->data, &stt->caps, stt->size + 1, 1))) {
-        uri_match_reset(stt);
-        return urim_ground;
-    }
-
     // Only ASCII graphical characters are accepted
     if (ch - 0x21U > 0x5DU) goto finish_nak;
 
-    stt->data[stt->size++] = ch;
+    if (!stt->no_copy) {
+        if (UNLIKELY(!adjust_buffer((void **)&stt->data, &stt->caps, stt->size + 1, 1))) {
+            uri_match_reset(stt);
+            return urim_ground;
+        }
+        stt->data[stt->size++] = ch;
+    }
 
     switch(stt->state) {
     case uris1_ground:
@@ -197,7 +198,7 @@ char *uri_match_move(struct uri_match_state *state) {
 bool is_vaild_uri(const char *uri) {
     if (!uri) return 0;
 
-    struct uri_match_state stt = {0};
+    struct uri_match_state stt = {.no_copy = 1};
     enum uri_match_result res = urim_ground;
     while (*uri) {
         res = uri_match_next(&stt, *uri++);
