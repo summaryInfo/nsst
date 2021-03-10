@@ -2678,6 +2678,29 @@ static void term_dispatch_osc(struct term *term) {
         } else term_esc_dump(term, 0);
         break;
     }
+    case 133: /* Shell integration */ {
+        if (dstr[1] && dstr[1] != ';') {
+            term_esc_dump(term, 0);
+            break;
+        }
+        switch (dstr[0]) {
+        case 'A': /* Prompt start */
+        case 'D': /* Command finished */
+            // Make sure shell plays well with rewrapping
+            if (term->c.x != term_min_x(term))
+                term_do_wrap(term);
+            if (term->c.y - 1 >= -term->sb_limit)
+                line_at(term, term->c.y - 1)->wrapped = 0;
+            break;
+        case 'B': /* Command start */
+        case 'C': /* Command executed */
+            /* nothing */
+            break;
+        default:
+            term_esc_dump(term, 0);
+        }
+        break;
+    }
     case 13001: /* Select background alpha */ {
         errno = 0;
         double res = strtod((char *)dstr, (char **)&dstr);
