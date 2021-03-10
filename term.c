@@ -5112,20 +5112,25 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
     return 1;
 }
 
+#define MAX_READS 4
+
 bool term_read(struct term *term) {
-    if (tty_refill(&term->tty) < 0 ||
-        term->tty.start >= term->tty.end) return 0;
+    size_t i = 0;
+    for (; i < MAX_READS; i++) {
+        if (tty_refill(&term->tty) < 0 ||
+            term->tty.start >= term->tty.end) break;
 
-    if (term->mode.print_controller)
-        print_intercept(term);
+        if (term->mode.print_controller)
+            print_intercept(term);
 
-    if (term->mode.scroll_on_output && term->view_pos.line)
-        term_reset_view(term, 1);
+        if (term->mode.scroll_on_output && term->view_pos.line)
+            term_reset_view(term, 1);
 
-    while (term->tty.start < term->tty.end)
-        if (!term_dispatch(term, (const uint8_t **)&term->tty.start, term->tty.end)) break;
+        while (term->tty.start < term->tty.end)
+            if (!term_dispatch(term, (const uint8_t **)&term->tty.start, term->tty.end)) break;
+    }
 
-    return 1;
+    return i;
 }
 
 void term_toggle_numlock(struct term *term) {

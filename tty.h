@@ -3,7 +3,7 @@
 #ifndef TTY_H_
 #define TTY_H_ 1
 
-#define FD_BUF_SIZE 4096
+#define FD_BUF_SIZE 16384
 
 #include "config.h"
 
