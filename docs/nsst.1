@@ -82,6 +82,9 @@ Allow modifing function keys in legacy keyboad layout
 Allow modifing keypad keys in legacy keyboad layout
 .It Fl \-allow-modify-misc Ns = Ns Ar bool
 Allow modifing miscelleneous keys in legacy keyboad layout
+.It Fl \-allow-uris Ns = Ns Ar bool
+Enable URI highlighting (enabled by default).
+This option is recognized only if box drawing characters support is compiled in
 .It Fl \-alpha Ns = Ns Ar opacity
 Backround opacity, requires compositor to be running
 .It Fl \-alternate-scroll Ns = Ns Ar bool
@@ -204,6 +207,9 @@ Don't clear X11 selection when unhighlighted
 Send break hotkey, initial value is Break
 .It Fl \-key-copy Ns = Ns Ar key
 Copy to clipboard hotkey, initial value is T-C
+.It Fl \-key-copy-uri Ns = Ns Ar key
+Copy hightlighted URI to clipboard hotkey, initial value is T-U.
+This is recognized only if URI support is compiled in
 .It Fl \-key-paste Ns = Ns Ar key
 Paste from clipboard hotkey, initial value is T-V
 .It Fl \-key-dec-font Ns = Ns Ar key
@@ -300,8 +306,10 @@ mode state
 .It Fl \-override-boxdrawing Ns = Ns Ar bool
 Use built-in box drawing characters.
 Use this if font line drawing characters does not align or are missing
+This option is recognized only if box drawing characters support is compiled in
 .Ti Fl \-open-command Ns = Ns Ar path
-Executable or script used to open URIs when they are clicked
+Executable or script used to open URIs when they are clicked.
+This option is recognized only if URI support is compiled in
 .It Fl \-pixel-mode Ns = Ns Ar value
 Subpixels arrangement. Mono disables subpixel rendering
 .Ar Value
@@ -402,13 +410,15 @@ Special color of underlined text.
 .It Fl \-unique-uris Ns = Ns Ar bool
 Make distinction between URIs with the same location.
 It consumes more memory but more precisely highlight URIs.
+This option is recognized only if URI support is compiled in
 .Ar Color
 format is same as for
 .Fl \-colorN
 .It Fl \-urgent-on-bell Ns = Ns Ar bool
 Set ICCCM window urgency on bell
-.It Fl \-uri-mod Ns = Ns Ar mods
-Modifers required to click to URIs, empty by default
+.It Fl \-uri-click-mod Ns = Ns Ar mods
+Modifers required to click to URIs, empty by default.
+This option is recognized only if URI support is compiled in
 .It Fl \-use-utf8 Ns = Ns Ar bool
 Enable UTF-8 mode. Enabled by default if current locale encoding is UTF-8
 .It Fl \-vertical-border Ns = Ns Ar pixels

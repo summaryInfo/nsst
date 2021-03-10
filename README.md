@@ -104,6 +104,7 @@ Default keybindings:
     key-reload-config=T-X
     key-reverse-video=T-I
     key-copy=T-C
+    key-copy-uri=T-U
     key-paste=T-V
 
 
