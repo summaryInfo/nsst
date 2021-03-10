@@ -5112,7 +5112,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
     return 1;
 }
 
-#define MAX_READS 4
+#define MAX_READS 8
 
 bool term_read(struct term *term) {
     size_t i = 0;

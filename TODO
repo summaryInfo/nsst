@@ -1,12 +1,18 @@
 Until 2.3
-    Underlines
-        --uri-underline-color color
-        Set underline color
-        Curly and double underlines
     Hyperlinks autodetection
         --match-uri=off,manual,auto
     Reload a part of terminal state
+        Mainly paletes
     Add --no-fork option for daemon mode and fork by default in --daemon mode
+    Underlines
+        58:2:... -- direct underline color
+        58:5:... -- 256-color underline
+        21 -- double underline
+        4:2 -- double underline
+        4:3 -- curly underline
+        4:4 -- dotted underline
+        4:5 -- dashed underline
+        --uri-underline-color color
 Until 2.4
     Recalculate non-rectangular selection position on resize
     CSI ? 35 l / CSI ? 35 h -- font shifting functions
