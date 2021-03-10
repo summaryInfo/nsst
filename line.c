@@ -64,6 +64,10 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
     if (attr_eq_prot(&attr, &(struct attr){ .fg = indirect_color(SPECIAL_FG), .bg = indirect_color(SPECIAL_BG)})) return 0;
     if (line->attrs && line->attrs->size && attr_eq_prot(line->attrs->data + line->attrs->size - 1, &attr)) return line->attrs->size;
 
+#if USE_URI
+    uri_ref(attr.uri);
+#endif
+
     if (!line->attrs || line->attrs->size + 1 >= line->attrs->caps) {
         optimize_attributes(line);
         if (!line->attrs || line->attrs->size + 1 >= line->attrs->caps) {
@@ -76,10 +80,6 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
             line->attrs = new;
         }
     }
-
-#if USE_URI
-    if (attr.uri) uri_ref(attr.uri);
-#endif
 
     line->attrs->data[line->attrs->size++] = attr;
     return line->attrs->size;

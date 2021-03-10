@@ -115,8 +115,7 @@ inline static void free_line(struct line *line) {
     if (line && line->attrs) {
 #if USE_URI
         for (ssize_t i = 0; i < line->attrs->size; i++)
-            if (line->attrs->data[i].uri)
-                uri_unref(line->attrs->data[i].uri);
+            uri_unref(line->attrs->data[i].uri);
 #endif
         free(line->attrs);
     }

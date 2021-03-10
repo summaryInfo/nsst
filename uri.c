@@ -256,6 +256,7 @@ uint32_t uri_add(char *uri, const char *id) {
             if (cand->hash == new_hash && cand->uri &&
                     !strcmp(cand->uri, uri) && !strcmp(cand->id, id)) {
                  free(uri);
+                 uri_ref(slot + 1);
                  return slot + 1;
             }
             slot = cand->next;
@@ -352,7 +353,8 @@ void uri_unref(uint32_t id) {
         while (*slot != UINT32_MAX && table.uris + *slot != uri) {
             slot = &table.uris[*slot].next;
         }
-        *slot = uri->next;
+        if (*slot != UINT32_MAX)
+            *slot = uri->next;
 
         uri->uri = NULL;
         uri->id = NULL;
