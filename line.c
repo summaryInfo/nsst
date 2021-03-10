@@ -21,13 +21,14 @@
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, MAX(3*(sz)/2, INIT_CAP))
 
 inline static bool attr_eq_prot(struct attr *a, struct attr *b) {
-    return attr_eq(a,b) && a->protected == b->protected;
+    static_assert(sizeof(struct attr) == 3*sizeof(uint32_t), "Wrong attribute size");
+    return a->fg == b->fg && a->bg == b->bg && a->mask == b->mask;
 }
 
 static void optimize_attributes(struct line *line) {
     static uint32_t buf[ATTRID_MAX];
     static bool filled;
-    if (!filled) {
+    if (UNLIKELY(!filled)) {
         memset(buf, 0xFF, sizeof buf);
         filled = 1;
     }

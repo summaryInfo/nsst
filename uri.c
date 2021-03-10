@@ -36,8 +36,7 @@ struct uri {
      * It is decremented during attributes optimization
      * (when attribute gets deleted) or line deletion
      * and incremented on adding an attribute to the line */
-    uint32_t refc;
-    uint32_t hash;
+    int64_t refc;
     /* URI string itself */
     char *uri;
     /* Assocciated ID */
@@ -46,6 +45,8 @@ struct uri {
      * free URIs cells in a list conatined in array
      * uri_ids */
     uint32_t next;
+    /* URI hash */
+    uint32_t hash;
 };
 
 struct uri_table {
@@ -332,7 +333,6 @@ uint32_t uri_add(char *uri, const char *id) {
         }
 
         new = &table.uris[table.size++];
-        table.count++;
     }
 
     *new = (struct uri) {
@@ -343,12 +343,15 @@ uint32_t uri_add(char *uri, const char *id) {
         .next = UINT32_MAX,
     };
 
+    table.count++;
+    uint32_t uriid = new - table.uris + 1;
+
     // Insert URI into hash table
     // (resizing if necessery)
     if (UNLIKELY(4*table.count/3 > table.hash_tab_caps)) {
         size_t new_caps = URI_HASHTAB_CAPS_STEP(table.hash_tab_caps);
         if (UNLIKELY(!realloc_hashtable(new_caps, new))) {
-            uri_unref(new - table.uris);
+            uri_unref(uriid);
             return EMPTY_URI;
         }
     }
@@ -358,7 +361,6 @@ uint32_t uri_add(char *uri, const char *id) {
     *slot = new - table.uris;
 
 
-    uint32_t uriid = new - table.uris + 1;
     if (gconfig.trace_misc) {
         if (!buf[0]) info("URI new id=%d path='%s' name='%s'", uriid, uri, id);
         else info("URI new id=%d path='%s' name=%zd (privite)", uriid, uri, id_counter);
@@ -374,11 +376,17 @@ alloc_failed:
 }
 
 void uri_ref(uint32_t id) {
+    if (id) assert(table.uris[id - 1].refc > 0);
     if (id) table.uris[id - 1].refc++;
 }
 
 void uri_unref(uint32_t id) {
     struct uri *uri = &table.uris[id - 1];
+    if (id) {
+        assert(uri->refc > 0);
+        assert(uri->uri);
+        assert(uri->id);
+    }
     if (id && !--uri->refc) {
         table.count--;
         if (gconfig.trace_misc) {
@@ -403,21 +411,30 @@ void uri_unref(uint32_t id) {
         uri->next = table.first_free;
         table.first_free = id;
 
-        return;
-
         /* Shrink hash table */
-        if (table.hash_tab_caps > 16 && table.count < table.hash_tab_caps/2)
+        if (3*table.hash_tab_caps/4 >= 32 && table.count < table.hash_tab_caps/2)
             realloc_hashtable(3*table.hash_tab_caps/4, NULL);
 
         /* Try shrinking table to free memory */
         // TODO May be add bias and shrink from the start?
+        // TODO Optimize to stop requiring full free list rebuilding
+        size_t old_size = table.size;
         while (table.size && !table.uris[table.size - 1].uri) table.size--;
-        size_t new_caps = 2*table.caps/3;
-        if (new_caps >= 8 && table.size < new_caps) {
-            struct uri *tmp = realloc(table.uris, new_caps*sizeof(*tmp));
-            if (!tmp) return;
-            table.uris = tmp;
-            table.caps = new_caps;
+        if (old_size != table.size) {
+            table.first_free = 0;
+            for (size_t i = 0; i < table.size; i++) {
+                if (!table.uris[i].uri) {
+                    table.uris[i].next = table.first_free;
+                    table.first_free = i + 1;
+                }
+            }
+            size_t new_caps = 2*table.caps/3;
+            if (new_caps >= 8 && table.size < new_caps) {
+                struct uri *tmp = realloc(table.uris, new_caps*sizeof(*tmp));
+                if (!tmp) return;
+                table.uris = tmp;
+                table.caps = new_caps;
+            }
         }
     }
 }
