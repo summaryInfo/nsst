@@ -68,15 +68,41 @@ struct uri_table {
 
 static struct uri_table table;
 
-inline static uint32_t hash(const char *str) {
-    // Murmur...
-    uint64_t h = 525201411107845655ULL;
-    while (*str) {
-        h ^= *str++;
-        h *= 0x5BD1E9955BD1E995;
-        h ^= h >> 47;
+// Murmur3 32-bit hash
+uint32_t hash(const char *data, ssize_t len) {
+#define MIX(x) (x *= 0xCC9E2D51, x = (x << 15) | (x >> 17), x *= 0x1B873593)
+#define FMIX(x) (x ^= x >> 16, x *= 0x85EBCA6B, x ^= x >> 13, x *= 0xC2B2AE35, x ^= x >> 16)
+    const ssize_t nblocks = len / 4;
+    const uint32_t *blocks = (const uint32_t *)data + nblocks;
+
+    uint32_t k1 = 0, h1 = 123;
+    for(ssize_t i = -nblocks; i; i++) {
+        k1 = blocks[i];
+        MIX(k1);
+        h1 ^= k1;
+        k1 = (k1 << 13) | (k1 >> 19);
+        h1 = h1*5 + 0xE6546B64;
     }
-    return h ^ (h >> 32);
+
+    const uint8_t * tail = (const uint8_t *)data + (len & ~3LU);
+    switch(len & 3) {
+    case 3:
+        k1 ^= tail[2] << 16;
+        // fallthrough
+    case 2:
+        k1 ^= tail[1] << 8;
+        // fallthrough
+    case 1:
+        k1 ^= tail[0];
+        MIX(k1);
+        h1 ^= k1;
+    };
+
+    h1 ^= len;
+    FMIX(h1);
+    return h1;
+#undef MIX
+#undef FMIX
 }
 
 /* From window.c */
@@ -97,8 +123,9 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
             uri_match_reset(stt);
             return urim_ground;
         }
-        stt->data[stt->size++] = ch;
+        stt->data[stt->size] = ch;
     }
+    stt->size++;
 
     switch(stt->state) {
     case uris1_ground:
@@ -182,10 +209,13 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
         break;
     }
 
-    if (stt->data && stt->size) {
-        // Last character was not part of URL,
-        // remove it (buffer should be cleared by outer code)
-        stt->data[--stt->size] = '\0';
+    if (stt->size) {
+        stt->size--;
+        if (stt->data) {
+            // Last character was not part of URL,
+            // remove it (buffer should be cleared by outer code)
+            stt->data[stt->size] = '\0';
+        }
     }
 
 finish_nak:
@@ -206,7 +236,7 @@ char *uri_match_move(struct uri_match_state *state) {
     return res;
 }
 
-bool is_vaild_uri(const char *uri) {
+size_t vaild_uri_len(const char *uri) {
     if (!uri) return 0;
 
     struct uri_match_state stt = {.no_copy = 1};
@@ -217,8 +247,8 @@ bool is_vaild_uri(const char *uri) {
             res == urim_ground) break;
     }
 
-    uri_match_reset(&stt);
-    return !*uri && res == urim_may_finish;
+    if (!*uri && res == urim_may_finish) return stt.size;
+    return 0;
 }
 
 static bool realloc_hashtable(size_t new_caps, struct uri *new) {
@@ -243,7 +273,8 @@ static bool realloc_hashtable(size_t new_caps, struct uri *new) {
 uint32_t uri_add(char *uri, const char *id) {
     static size_t id_counter = 0;
 
-    if (!is_vaild_uri(uri)) {
+    size_t uri_len = vaild_uri_len(uri), id_len = 0;
+    if (!uri_len) {
         if (*uri) warn("URI '%s' is invalid", uri);
         free(uri);
         return EMPTY_URI;
@@ -255,19 +286,18 @@ uint32_t uri_add(char *uri, const char *id) {
     buf[0] = 0;
     if (LIKELY(!id)) {
         if (gconfig.unique_uris) {
-            char *ptr = buf;
             id = buf;
-            *ptr++ = URI_ID_PREF;
+            buf[id_len++] = URI_ID_PREF;
             // Convert privite id to string (non-human readable)
             uint32_t idn = id_counter++;
-            do *ptr++ = ' ' + (idn & 63);
+            do buf[id_len++] = ' ' + (idn & 63);
             while (idn >>= 6);
-            *ptr = '\0';
+            buf[id_len] = '\0';
         } else id = "";
-    }
+    } else id_len = strlen(id);
 
     // Lookup in hash table for speed
-    uint32_t new_hash = hash(id) ^ hash(uri);
+    uint32_t new_hash = hash(id, id_len) ^ hash(uri, uri_len);
     if (LIKELY(table.hash_tab)) {
         uint32_t slot = table.hash_tab[new_hash % table.hash_tab_caps];
         while (slot != UINT32_MAX) {
