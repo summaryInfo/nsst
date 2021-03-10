@@ -2209,6 +2209,9 @@ inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
         .gl_ss = flags & 4 ? 3 : flags & 2 ? 2 : term->c.gl
     };
 
+#if USE_URI
+    uri_unref(term->sgr.uri);
+#endif
     term->sgr = (struct attr) {
         .fg = term->sgr.fg,
         .bg = term->sgr.bg,
@@ -5311,6 +5314,9 @@ void free_term(struct term *term) {
 
 #if USE_URI
     uri_match_reset(&term->uri_match);
+    uri_unref(term->sgr.uri);
+    uri_unref(term->saved_sgr.uri);
+    uri_unref(term->back_saved_sgr.uri);
 #endif
 
     term_free_scrollback(term);
