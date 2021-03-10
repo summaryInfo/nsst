@@ -239,6 +239,45 @@ end:
         send_arg(fd, argv[ind++]);
 }
 
+void do_fork(const char *spath) {
+    int res;
+    struct stat stt;
+    switch (fork()) {
+    case -1:
+        exit(1);
+    case 0:
+        switch((res = fork())) {
+        case 0:
+            setsid();
+            execlp("nsst", "nsst", "-d", NULL);
+            /* fallthrough */
+        default:
+            _exit(res <= 0);
+        }
+    default:
+        while(wait(NULL) < 0 && errno == EINTR);
+        for (int i = 0; stat(spath, &stt) < 0 && i < MAX_WAIT_LOOP; i++)
+            clock_nanosleep(CLOCK_MONOTONIC, 0, &(struct timespec){.tv_nsec = STARTUP_DELAY}, NULL);
+    }
+}
+
+int try_connect(const char *spath) {
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof addr);
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, spath, sizeof addr.sun_path - 1);
+
+    int fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+    if (fd < 0) return -1;
+
+    if (connect(fd, (struct sockaddr *)&addr,
+            offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path)) < 0) {
+        close(fd);
+        return -2;
+    }
+    return fd;
+}
+
 int main(int argc, char **argv) {
     const char *cpath = NULL, *spath = "/tmp/nsst-sock0";
     _Bool need_daemon = 0;
@@ -247,40 +286,15 @@ int main(int argc, char **argv) {
 
     parse_client_args(argv, &cpath, &spath, &need_daemon);
 
-    struct stat stt;
-    if (need_daemon && stat(spath, &stt) < 0 && errno == ENOENT) {
-        int res;
-        switch (fork()) {
-        case -1:
-            return 1;
-        case 0:
-            switch((res = fork())) {
-            case 0:
-                setsid();
-                execlp("nsst", "nsst", "-d", NULL);
-                /* fallthrough */
-            default:
-                _exit(res <= 0);
-            }
-        default:
-            while(wait(NULL) < 0 && errno == EINTR);
-            for (int i = 0; stat(spath, &stt) < 0 && i < MAX_WAIT_LOOP; i++)
-                clock_nanosleep(CLOCK_MONOTONIC, 0, &(struct timespec){.tv_nsec = STARTUP_DELAY}, NULL);
-        }
+    int fd = try_connect(spath);
+    if (fd < 0 && need_daemon) {
+        do_fork(spath);
+        fd = try_connect(spath);
     }
 
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof addr);
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, spath, sizeof addr.sun_path - 1);
-
-    int fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-    if (fd < 0) return 1;
-
-    if (connect(fd, (struct sockaddr *)&addr,
-            offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path)) < 0) {
-        perror("connect()");
-        return 2;
+    if (fd < 0) {
+        perror(fd == -2 ? "connect()" : "socket()");
+        return fd;
     }
 
     send_header(fd, cpath);
@@ -295,5 +309,4 @@ int main(int argc, char **argv) {
     send_char(fd, '\003' /* ETX */);
 
     return 0;
-
 }
