@@ -20,6 +20,16 @@
 #include <string.h>
 #include <unistd.h>
 
+/* We prefix internally generated IDs with BEL
+ * since this character cannot appear in supplied string
+ * (it terminates OSC sequence)*/
+#define URI_ID_PREF '\007'
+
+#define MAX_NUMBER_LEN 6
+
+#define URI_CAPS_STEP(x) ((x)?(4*(x)/3):8)
+#define URI_HASHTAB_CAPS_STEP(x) ((x)?3*(x)/2:16)
+
 /* URI table entry */
 struct uri {
     /* Number of attributes referencing this URI.
@@ -40,6 +50,7 @@ struct uri {
 
 struct uri_table {
     size_t size;
+    size_t count;
     size_t caps;
     /* free slot list for faster allocation
      * (stores index + 1, zero means the end) */
@@ -210,15 +221,23 @@ bool is_vaild_uri(const char *uri) {
     return !*uri && res == urim_may_finish;
 }
 
-/* We prefix internally generated IDs with BEL
- * since this character cannot appear in supplied string
- * (it terminates OSC sequence)*/
-#define URI_ID_PREF '\007'
+static bool realloc_hashtable(size_t new_caps, struct uri *new) {
+    uint32_t *newtab = malloc(new_caps * sizeof(*newtab));
+    if (!newtab) return 0;
 
-#define MAX_NUMBER_LEN 6
-
-#define URI_CAPS_STEP(x) ((x)?(4*(x)/3):8)
-#define URI_HASHTAB_CAPS_STEP(x) ((x)?3*(x)/2:16)
+    memset(newtab, 0xFF, new_caps * sizeof(*newtab));
+    for (size_t i = 0; i < table.size; i++) {
+        if (table.uris[i].uri && new != &table.uris[i]) {
+            uint32_t *newidx = &newtab[table.uris[i].hash % new_caps];
+            table.uris[i].next = *newidx;
+            *newidx = i;
+        }
+    }
+    free(table.hash_tab);
+    table.hash_tab_caps = new_caps;
+    table.hash_tab = newtab;
+    return 1;
+}
 
 /* If URI is invalid returns EMPTY_URI */
 uint32_t uri_add(char *uri, const char *id) {
@@ -283,6 +302,7 @@ uint32_t uri_add(char *uri, const char *id) {
         }
 
         new = &table.uris[table.size++];
+        table.count++;
     }
 
     *new = (struct uri) {
@@ -295,24 +315,12 @@ uint32_t uri_add(char *uri, const char *id) {
 
     // Insert URI into hash table
     // (resizing if necessery)
-    if (UNLIKELY(4*table.size/3 > table.hash_tab_caps)) {
+    if (UNLIKELY(4*table.count/3 > table.hash_tab_caps)) {
         size_t new_caps = URI_HASHTAB_CAPS_STEP(table.hash_tab_caps);
-        uint32_t *newtab = malloc(new_caps * sizeof(*newtab));
-        if (!newtab) {
+        if (UNLIKELY(!realloc_hashtable(new_caps, new))) {
             uri_unref(new - table.uris);
             return EMPTY_URI;
         }
-        memset(newtab, 0xFF, new_caps * sizeof(*newtab));
-        for (size_t i = 0; i < table.size; i++) {
-            if (table.uris[i].uri && new != &table.uris[i]) {
-                uint32_t *newidx = &newtab[table.uris[i].hash % new_caps];
-                table.uris[i].next = *newidx;
-                *newidx = i;
-            }
-        }
-        free(table.hash_tab);
-        table.hash_tab_caps = new_caps;
-        table.hash_tab = newtab;
     }
 
     uint32_t *slot = &table.hash_tab[new_hash % table.hash_tab_caps];
@@ -342,8 +350,9 @@ void uri_ref(uint32_t id) {
 void uri_unref(uint32_t id) {
     struct uri *uri = &table.uris[id - 1];
     if (id && !--uri->refc) {
+        table.count--;
         if (gconfig.trace_misc) {
-            info("URI free %d", id);
+            info("URI free %d (%zd left)", id, table.count);
         }
         free(uri->uri);
         free(uri->id);
@@ -363,6 +372,23 @@ void uri_unref(uint32_t id) {
          * just add to free list */
         uri->next = table.first_free;
         table.first_free = id;
+
+        return;
+
+        /* Shrink hash table */
+        if (table.hash_tab_caps > 16 && table.count < table.hash_tab_caps/2)
+            realloc_hashtable(3*table.hash_tab_caps/4, NULL);
+
+        /* Try shrinking table to free memory */
+        // TODO May be add bias and shrink from the start?
+        while (table.size && !table.uris[table.size - 1].uri) table.size--;
+        size_t new_caps = 2*table.caps/3;
+        if (new_caps >= 8 && table.size < new_caps) {
+            struct uri *tmp = realloc(table.uris, new_caps*sizeof(*tmp));
+            if (!tmp) return;
+            table.uris = tmp;
+            table.caps = new_caps;
+        }
     }
 }
 
