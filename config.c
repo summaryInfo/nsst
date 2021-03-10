@@ -126,6 +126,7 @@ struct optmap_item optmap[] = {
     [o_allow_uris] = {"allow-uris", "\t(Allow URI parsing/clicking)"},
     [o_open_command] = {"open-cmd", "\t\t(A command used to open URIs when clicked)"},
     [o_uri_click_mod] = {"uri-click-mod", "\t\t(keyboard modifer used to click-open URIs)"},
+    [o_unique_uris] = {"unique-uris", "\t(Make distinction between URIs with the same location)"},
 #endif
 #if USE_BOXDRAWING
     [o_override_boxdrawing] = {"override-boxdrawing", "\t(Use built-in box drawing characters)"},
@@ -800,6 +801,9 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
 #if USE_URI
         if (!strcmp(name, optmap[o_uri_click_mod].opt)) {
             parse_str(&c->uri_click_mod, value, "");
+        } else if (!strcmp(name, optmap[o_unique_uris].opt)) {
+            if (parse_bool(value, &val.b, 0)) g->unique_uris = val.b;
+            else goto e_value;
         } else
 #endif
         if (!strcmp(name, optmap[o_underline_width].opt)) {

@@ -64,6 +64,7 @@ struct global_config {
     bool trace_input : 1;
     bool trace_misc : 1;
     bool want_luit : 1;
+    bool unique_uris : 1;
 };
 
 struct instance_config {
@@ -303,6 +304,7 @@ enum optidx {
     o_allow_uris,
     o_open_command,
     o_uri_click_mod,
+    o_unique_uris,
 #endif
 #if USE_BOXDRAWING
     o_override_boxdrawing,

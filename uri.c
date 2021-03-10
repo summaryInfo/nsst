@@ -233,16 +233,19 @@ uint32_t uri_add(char *uri, const char *id) {
     // Generate internal identifier
     // if not exiplicitly provided
     char buf[MAX_NUMBER_LEN + 2];
+    buf[0] = 0;
     if (LIKELY(!id)) {
-        char *ptr = buf;
-        id = buf;
-        // Convert privite id to string (non-human readable)
-        uint32_t idn = id_counter++;
-        *ptr++ = URI_ID_PREF;
-        do *ptr++ = ' ' + (idn & 63);
-        while (idn >>= 6);
-        *ptr = '\0';
-    } else buf[0] = 0;
+        if (gconfig.unique_uris) {
+            char *ptr = buf;
+            id = buf;
+            *ptr++ = URI_ID_PREF;
+            // Convert privite id to string (non-human readable)
+            uint32_t idn = id_counter++;
+            do *ptr++ = ' ' + (idn & 63);
+            while (idn >>= 6);
+            *ptr = '\0';
+        } else id = "";
+    }
 
     // Lookup in hash table for speed
     uint32_t new_hash = hash(id) ^ hash(uri);
