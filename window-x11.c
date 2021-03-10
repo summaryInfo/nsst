@@ -334,7 +334,9 @@ void free_context(void) {
     xcb_disconnect(con);
     memset(&con, 0, sizeof(con));
 
+#if USE_URI
     uri_release_memory();
+#endif
 }
 
 struct instance_config *window_cfg(struct window *win) {

@@ -2595,8 +2595,8 @@ static void term_dispatch_osc(struct term *term) {
 #if USE_URI
     case 8: /* Set current URI */ {
         char *uri = strchr((char *)dstr, ';');
-        if (!uri) {
-            term_esc_dump(term, 0);
+        if (!uri || !(window_cfg(term->win)->allow_uris)) {
+            if (!uri) term_esc_dump(term, 0);
             break;
         }
         *uri++ = '\0';

@@ -52,6 +52,7 @@ struct global_config {
     char *sockpath;
 #if USE_URI
     char *open_command;
+    bool unique_uris : 1;
 #endif
 
     uint8_t log_level : 2;
@@ -64,7 +65,6 @@ struct global_config {
     bool trace_input : 1;
     bool trace_misc : 1;
     bool want_luit : 1;
-    bool unique_uris : 1;
 };
 
 struct instance_config {
