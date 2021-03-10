@@ -33,6 +33,9 @@ enum shortcut_action {
     shortcut_reset,
     shortcut_reload_config,
     shortcut_copy,
+#if USE_URI
+    shortcut_copy_uri,
+#endif
     shortcut_paste,
     shortcut_reverse_video,
     shortcut_MAX
@@ -305,6 +308,7 @@ enum optidx {
     o_open_command,
     o_uri_click_mod,
     o_unique_uris,
+    o_key_copy_uri,
 #endif
 #if USE_BOXDRAWING
     o_override_boxdrawing,

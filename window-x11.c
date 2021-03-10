@@ -1136,17 +1136,18 @@ inline static xcb_atom_t target_to_atom(enum clip_target target) {
     }
 }
 
-static void clip_copy(struct window *win) {
-    if (win->clipped[clip_primary]) {
-        uint8_t *dup = (uint8_t*)strdup((char *)win->clipped[clip_primary]);
-        if (dup) {
-            if (term_is_keep_clipboard_enabled(win->term)) {
-                uint8_t *dup2 = (uint8_t *)strdup((char *)dup);
-                free(win->clipboard);
-                win->clipboard = dup2;
-            }
-            window_set_clip(win, dup, CLIP_TIME_NOW, clip_clipboard);
+static void clip_copy(struct window *win, bool uri) {
+    const char *src = uri ? uri_get(win->rcstate.active_uri) :
+            strdup((char *)win->clipped[clip_primary]);
+    if (!src) return;
+    uint8_t *dup = (uint8_t *)strdup(src);
+    if (dup) {
+        if (term_is_keep_clipboard_enabled(win->term)) {
+            uint8_t *dup2 = (uint8_t *)strdup((char *)dup);
+            free(win->clipboard);
+            win->clipboard = dup2;
         }
+        window_set_clip(win, dup, CLIP_TIME_NOW, clip_clipboard);
     }
 }
 
@@ -1277,7 +1278,10 @@ static void handle_keydown(struct window *win, xkb_keycode_t keycode) {
         create_window(&win->cfg);
         return;
     case shortcut_copy:
-        clip_copy(win);
+        clip_copy(win, 0);
+        return;
+    case shortcut_copy_uri:
+        clip_copy(win, 1);
         return;
     case shortcut_paste:
         window_paste_clip(win, clip_clipboard);

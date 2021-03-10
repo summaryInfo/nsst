@@ -127,6 +127,7 @@ struct optmap_item optmap[] = {
     [o_open_command] = {"open-cmd", "\t\t(A command used to open URIs when clicked)"},
     [o_uri_click_mod] = {"uri-click-mod", "\t\t(keyboard modifer used to click-open URIs)"},
     [o_unique_uris] = {"unique-uris", "\t(Make distinction between URIs with the same location)"},
+    [o_key_copy_uri] = {"key-copy-uri", "\t(Copy underlying URL hotkey)"},
 #endif
 #if USE_BOXDRAWING
     [o_override_boxdrawing] = {"override-boxdrawing", "\t(Use built-in box drawing characters)"},
@@ -553,6 +554,10 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
              parse_str(&c->key[shortcut_break], value, "Break");
         } else if (!strcmp(name, optmap[o_key_copy].opt)) {
              parse_str(&c->key[shortcut_copy], value, "T-C");
+#if USE_URI
+        } else if (!strcmp(name, optmap[o_key_copy_uri].opt)) {
+             parse_str(&c->key[shortcut_copy_uri], value, "T-U");
+#endif
         } else if (!strcmp(name, optmap[o_key_dec_font].opt)) {
              parse_str(&c->key[shortcut_font_down], value, "T-Page_Down");
         } else if (!strcmp(name, optmap[o_key_inc_font].opt)) {
