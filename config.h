@@ -51,8 +51,11 @@ enum keyboad_mapping {
     keymap_MAX
 };
 
+#define MAX_DOMAIN_NAME 254
+
 struct global_config {
     char *sockpath;
+    char hostname[MAX_DOMAIN_NAME];
 #if USE_URI
     char *open_command;
     bool unique_uris : 1;

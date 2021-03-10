@@ -162,6 +162,10 @@ int main(int argc, char **argv) {
         gconfig.want_luit = !supported && !utf8;
     }
 
+    /* Initialize cached hostname
+     * (let's assume that it won't change when terminal is running) */
+    gethostname(gconfig.hostname, MAX_DOMAIN_NAME - 1);
+
     init_context();
     init_default_termios();
 

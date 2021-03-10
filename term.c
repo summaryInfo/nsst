@@ -25,6 +25,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
@@ -2592,6 +2594,29 @@ static void term_dispatch_osc(struct term *term) {
             case 4: window_cfg(term->win)->special_reverse = val; break;
             }
         }
+        else term_esc_dump(term, 0);
+        break;
+    }
+    case 7: /* Specify current directory */ {
+        const char *path = (char *)dstr;
+        const size_t filelen = sizeof "file://" - 1;
+        bool valid = 1;
+        if (!strncmp(path, "file://", filelen)) {
+            const char *pathstart = path + filelen;
+            path = strchr(pathstart, '/');
+            // Only support local host paths
+            valid = path && (path == pathstart || strncmp(gconfig.hostname, pathstart, path - pathstart));
+        } else {
+            // No realative paths allowed
+            valid = (*dstr == '/');
+        }
+        if (valid) {
+            struct stat stt;
+            // No symlinks...
+            valid = !stat(path, &stt) &&
+                    (stt.st_mode & S_IFMT) == S_IFDIR;
+        }
+        if (valid) set_option(window_cfg(term->win), "cwd", path, 0);
         else term_esc_dump(term, 0);
         break;
     }
