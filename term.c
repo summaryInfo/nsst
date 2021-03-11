@@ -2675,7 +2675,7 @@ static void term_dispatch_osc(struct term *term) {
         term_do_reset_color(term);
         break;
     case 52: /* Manipulate selecion data */ {
-        if (window_cfg(term->win)->allow_window_ops) break;
+        if (!window_cfg(term->win)->allow_window_ops) break;
 
         enum clip_target ts[clip_MAX] = {0};
         bool toclip = term->mode.select_to_clipboard;
