@@ -9,16 +9,6 @@
 #include "mouse.h"
 #include "window-x11.h"
 
-#if USE_POSIX_SHM
-#   include <errno.h>
-#   include <fcntl.h>
-#   include <sys/mman.h>
-#   include <sys/stat.h>
-#   include <unistd.h>
-#else
-#   include <sys/ipc.h>
-#   include <sys/shm.h>
-#endif
 #include <stdbool.h>
 #include <string.h>
 #include <xcb/shm.h>
@@ -52,102 +42,45 @@ static void resize_bounds(struct window *win, bool h_changed) {
     }
 }
 
-static struct image create_shm_image(struct window *win, int16_t width, int16_t height) {
-    struct image im = {
-        .width = width,
-        .height = height,
-        .shmid = -1,
-    };
-    size_t size = width * height * sizeof(color_t);
+// Returns old image
+static struct image create_mitshm_image(struct window *win, int16_t width, int16_t height) {
+    struct image old = win->ren.im;
+    xcb_void_cookie_t c;
 
-    if (rctx.has_shm) {
-#if USE_POSIX_SHM
-        char temp[] = "/nsst-XXXXXX";
-        int32_t attempts = 16;
+    win->ren.im = rctx.has_shm ? create_shm_image(width, height) : create_image(width, height);
 
-        do {
-            struct timespec cur;
-            clock_gettime(CLOCK_REALTIME, &cur);
-            uint64_t r = cur.tv_nsec;
-            for (int i = 0; i < 6; ++i, r >>= 5)
-                temp[6+i] = 'A' + (r & 15) + (r & 16) * 2;
-            im.shmid = shm_open(temp, O_RDWR | O_CREAT | O_EXCL, 0600);
-        } while (im.shmid < 0 && errno == EEXIST && attempts-- > 0);
-
-        shm_unlink(temp);
-
-        if (im.shmid < 0) return im;
-
-        if (ftruncate(im.shmid, size) < 0) goto error;
-
-        im.data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, im.shmid, 0);
-        if (im.data == MAP_FAILED) goto error;
-#else
-        im.shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0600);
-        if (im.shmid == -1) return im;
-
-        im.data = shmat(im.shmid, 0, 0);
-        if ((void *)im.data == (void *) -1) goto error;
-#endif
-
-        xcb_void_cookie_t c;
-        if (!win->ren.shm_seg) {
-            win->ren.shm_seg = xcb_generate_id(con);
-        } else {
-            if (rctx.has_shm_pixmaps && win->ren.shm_pixmap)
-                xcb_free_pixmap(con, win->ren.shm_pixmap);
-            c = xcb_shm_detach_checked(con, win->ren.shm_seg);
-            check_void_cookie(c);
-        }
+    if (!win->ren.shm_seg) {
+        win->ren.shm_seg = xcb_generate_id(con);
+    } else {
+        if (rctx.has_shm_pixmaps && win->ren.shm_pixmap)
+            xcb_free_pixmap(con, win->ren.shm_pixmap);
+        xcb_shm_detach_checked(con, win->ren.shm_seg);
+    }
 
 #if USE_POSIX_SHM
-        c = xcb_shm_attach_fd_checked(con, win->ren.shm_seg, dup(im.shmid), 0);
+    c = xcb_shm_attach_fd_checked(con, win->ren.shm_seg, dup(win->ren.im.shmid), 0);
 #else
-        c = xcb_shm_attach_checked(con, win->ren.shm_seg, im.shmid, 0);
+    c = xcb_shm_attach_checked(con, win->ren.shm_seg, win->ren.im.shmid, 0);
 #endif
+    if (check_void_cookie(c)) goto error;
+
+    if (rctx.has_shm_pixmaps) {
+        if (!win->ren.shm_pixmap)
+            win->ren.shm_pixmap = xcb_generate_id(con);
+        c = xcb_shm_create_pixmap(con, win->ren.shm_pixmap,
+                win->wid, width, height, TRUE_COLOR_ALPHA_DEPTH, win->ren.shm_seg, 0);
         if (check_void_cookie(c)) goto error;
-
-        if (rctx.has_shm_pixmaps) {
-            if (!win->ren.shm_pixmap)
-                win->ren.shm_pixmap = xcb_generate_id(con);
-            xcb_shm_create_pixmap(con, win->ren.shm_pixmap,
-                    win->wid, width, height, 32, win->ren.shm_seg, 0);
-        }
-
-        return im;
-    error:
-        warn("Can't create image");
-#if USE_POSIX_SHM
-        if (im.data != MAP_FAILED) munmap(im.data, size);
-        if (im.shmid >= 0) close(im.shmid);
-#else
-        if ((void *)im.data != (void *) -1) shmdt(im.data);
-        if (im.shmid != -1) shmctl(im.shmid, IPC_RMID, NULL);
-#endif
-        im.shmid = -1;
-        im.data = NULL;
-        return im;
-    } else {
-        im.data = malloc(size);
-        return im;
     }
+
+    return old;
+
+error:
+    free_image(&win->ren.im);
+    win->ren.im = old;
+    warn("Can't attach MITSHM image");
+    return (struct image) {0};
 }
 
-static void free_shm_image(struct image *im) {
-    if (rctx.has_shm) {
-#if USE_POSIX_SHM
-        if (im->data) munmap(im->data, im->width * im->height * sizeof(color_t));
-        if (im->shmid >= 0) close(im->shmid);
-#else
-        if (im->data) shmdt(im->data);
-        if (im->shmid != -1) shmctl(im->shmid, IPC_RMID, NULL);
-#endif
-    } else {
-        if (im->data) free(im->data);
-    }
-    im->shmid = -1;
-    im->data = NULL;
-}
 
 bool renderer_reload_font(struct window *win, bool need_free) {
     find_shared_font(win, need_free);
@@ -161,7 +94,7 @@ bool renderer_reload_font(struct window *win, bool need_free) {
 
         resize_bounds(win, 1);
 
-        win->ren.im = create_shm_image(win, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height));
+        create_mitshm_image(win, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height));
         if (!win->ren.im.data) {
             warn("Can't allocate image");
             return 0;
@@ -179,7 +112,7 @@ void renderer_free(struct window *win) {
     if (rctx.has_shm_pixmaps)
         xcb_free_pixmap(con, win->ren.shm_pixmap);
     if (win->ren.im.data)
-        free_shm_image(&win->ren.im);
+        free_image(&win->ren.im);
     free(win->ren.bounds);
 }
 
@@ -421,10 +354,9 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t common_w = MIN(width, width  - delta_x * win->char_width);
     int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth)) ;
 
-    struct image new = create_shm_image(win, width, height);
-    image_copy(new, (struct rect){0, 0, common_w, common_h}, win->ren.im, 0, 0);
-    SWAP(win->ren.im, new);
-    free_shm_image(&new);
+    struct image old = create_mitshm_image(win, width, height);
+    image_copy(win->ren.im, (struct rect){0, 0, common_w, common_h}, old, 0, 0);
+    free_image(&old);
 
     resize_bounds(win, delta_y);
 
