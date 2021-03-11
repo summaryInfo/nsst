@@ -1,9 +1,15 @@
 Until 2.3
+    Optimize MIT-SHM
+        Align image/glyph widths in 16 bytes (to simplify SSE blending)
+        Add SIMD-enabled image filling/glyph composind
+        Threaded rendering?
+    Refactor window/renderer code to separate X-independent parts
+    Reload a part of terminal state
+        Mainly palettes
+    Add --no-fork option for daemon mode and fork by default in --daemon mode
+Until 2.4
     Hyperlinks autodetection
         --match-uri=off,manual,auto
-    Reload a part of terminal state
-        Mainly paletes
-    Add --no-fork option for daemon mode and fork by default in --daemon mode
     Underlines
         58:2:... -- direct underline color
         58:5:... -- 256-color underline
@@ -14,7 +20,7 @@ Until 2.3
         4:4 -- dotted underline
         4:5 -- dashed underline
         --uri-underline-color color
-Until 2.4
+Until 2.5 (or later)
     Recalculate non-rectangular selection position on resize
     CSI ? 35 l / CSI ? 35 h -- font shifting functions
     OSC 50 ; Pt ST -- Set font
