@@ -357,7 +357,7 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
     if (lcd) stride *= 4;
     stride = (stride + 3) & ~3;
 
-    struct glyph *glyph = malloc(sizeof(*glyph) + stride * face->glyph->bitmap.rows);
+    struct glyph *glyph = aligned_alloc(CACHE_LINE, sizeof(*glyph) + stride * face->glyph->bitmap.rows);
     glyph->x = -face->glyph->bitmap_left;
     glyph->y = face->glyph->bitmap_top;
     glyph->width = face->glyph->bitmap.width;

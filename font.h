@@ -5,6 +5,8 @@
 
 #include "feature.h"
 
+#include "util.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -38,7 +40,7 @@ struct glyph {
     int16_t stride;
 
     int16_t pixmode;
-    uint8_t data[];
+    _Alignas(CACHE_LINE) uint8_t data[];
 };
 
 
