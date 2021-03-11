@@ -1684,6 +1684,7 @@ static void append_pending_launch(struct pending_launch *lnch) {
     ssize_t len = recv(fd, buffer, MAX_ARG_LEN, 0);
     if (len < 0) {
         warn("Can't recv argument: %s", strerror(errno));
+        free_pending_launch(lnch);
         return;
     }
 
