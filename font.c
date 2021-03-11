@@ -327,6 +327,8 @@ static void add_font_substitute(struct font *font, struct face_list *faces, enum
     FcPatternDestroy(final_pat);
 }
 
+#define GLYPH_STRIDE_ALIGNMENT 4
+
 struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t ch, enum face_name attr) {
     struct face_list *faces = &font->face_types[attr];
     int glyph_index = 0;
@@ -354,10 +356,10 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
     size_t stride = face->glyph->bitmap.width;
 
     if (face->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_LCD) stride /= 3;
+    stride = (stride + GLYPH_STRIDE_ALIGNMENT - 1) & ~(GLYPH_STRIDE_ALIGNMENT - 1);
     if (lcd) stride *= 4;
-    stride = (stride + 3) & ~3;
 
-    struct glyph *glyph = aligned_alloc(CACHE_LINE, sizeof(*glyph) + stride * face->glyph->bitmap.rows);
+    struct glyph *glyph = aligned_alloc(CACHE_LINE, (sizeof(*glyph) + stride * face->glyph->bitmap.rows + CACHE_LINE - 1) & ~(CACHE_LINE - 1));
     glyph->x = -face->glyph->bitmap_left;
     glyph->y = face->glyph->bitmap_top;
     glyph->width = face->glyph->bitmap.width;
@@ -396,6 +398,7 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
                     glyph->data[stride*i + 4*j + 2] = v;
                     glyph->data[stride*i + 4*j + 3] = v;
                 }
+                memset(glyph->data + stride*i + glyph->width, 0, stride - glyph->width);
             }
         } else {
             for (size_t i = 0; i < glyph->height; i++) {
@@ -417,6 +420,7 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
                 acc += glyph->data[4*j + stride*i + 2] = 0xFF * pow(src[pitch*(3*i+2*(1-ordrev)) + j] / 255., gamma);
                 glyph->data[4*j + stride*i + 3] = acc/3;
             }
+            memset(glyph->data + stride*i + glyph->width * 4, 0, stride - glyph->width * 4);
         }
         break;
     case FT_PIXEL_MODE_LCD:
@@ -429,6 +433,7 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
                 acc += glyph->data[4*j + stride*i + 2] = 0xFF * pow(src[pitch*i + 3*j + 2*(1-ordrev)] / 255., gamma);
                 glyph->data[4*j + stride*i + 3] = acc/3;
             }
+            memset(glyph->data + stride*i + glyph->width * 4, 0, stride - glyph->width * 4);
         }
         break;
     case FT_PIXEL_MODE_BGRA:
