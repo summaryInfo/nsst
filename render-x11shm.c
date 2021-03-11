@@ -47,29 +47,33 @@ static struct image create_mitshm_image(struct window *win, int16_t width, int16
     struct image old = win->ren.im;
     xcb_void_cookie_t c;
 
-    win->ren.im = rctx.has_shm ? create_shm_image(width, height) : create_image(width, height);
+    if (rctx.has_shm) {
+        win->ren.im = create_shm_image(width, height);
 
-    if (!win->ren.shm_seg) {
-        win->ren.shm_seg = xcb_generate_id(con);
-    } else {
-        if (rctx.has_shm_pixmaps && win->ren.shm_pixmap)
-            xcb_free_pixmap(con, win->ren.shm_pixmap);
-        xcb_shm_detach_checked(con, win->ren.shm_seg);
-    }
+        if (!win->ren.shm_seg) {
+            win->ren.shm_seg = xcb_generate_id(con);
+        } else {
+            if (rctx.has_shm_pixmaps && win->ren.shm_pixmap)
+                xcb_free_pixmap(con, win->ren.shm_pixmap);
+            xcb_shm_detach_checked(con, win->ren.shm_seg);
+        }
 
 #if USE_POSIX_SHM
-    c = xcb_shm_attach_fd_checked(con, win->ren.shm_seg, dup(win->ren.im.shmid), 0);
+        c = xcb_shm_attach_fd_checked(con, win->ren.shm_seg, dup(win->ren.im.shmid), 0);
 #else
-    c = xcb_shm_attach_checked(con, win->ren.shm_seg, win->ren.im.shmid, 0);
+        c = xcb_shm_attach_checked(con, win->ren.shm_seg, win->ren.im.shmid, 0);
 #endif
-    if (check_void_cookie(c)) goto error;
-
-    if (rctx.has_shm_pixmaps) {
-        if (!win->ren.shm_pixmap)
-            win->ren.shm_pixmap = xcb_generate_id(con);
-        c = xcb_shm_create_pixmap(con, win->ren.shm_pixmap,
-                win->wid, width, height, TRUE_COLOR_ALPHA_DEPTH, win->ren.shm_seg, 0);
         if (check_void_cookie(c)) goto error;
+
+        if (rctx.has_shm_pixmaps) {
+            if (!win->ren.shm_pixmap)
+                win->ren.shm_pixmap = xcb_generate_id(con);
+            c = xcb_shm_create_pixmap(con, win->ren.shm_pixmap,
+                    win->wid, STRIDE(width), height, TRUE_COLOR_ALPHA_DEPTH, win->ren.shm_seg, 0);
+            if (check_void_cookie(c)) goto error;
+        }
+    } else {
+        win->ren.im = create_image(width, height);
     }
 
     return old;
@@ -311,13 +315,14 @@ void renderer_update(struct window *win, struct rect rect) {
         xcb_copy_area(con, win->ren.shm_pixmap, win->wid, win->gc, rect.x, rect.y,
                 rect.x + win->cfg.left_border, rect.y + win->cfg.top_border, rect.width, rect.height);
     } else if (rctx.has_shm) {
-        xcb_shm_put_image(con, win->wid, win->gc, win->ren.im.width, win->ren.im.height, rect.x, rect.y, rect.width, rect.height,
-                rect.x + win->cfg.left_border, rect.y + win->cfg.top_border, 32, XCB_IMAGE_FORMAT_Z_PIXMAP, 0, win->ren.shm_seg, 0);
+        xcb_shm_put_image(con, win->wid, win->gc, STRIDE(win->ren.im.width), win->ren.im.height, rect.x, rect.y, rect.width, rect.height,
+                rect.x + win->cfg.left_border, rect.y + win->cfg.top_border, TRUE_COLOR_ALPHA_DEPTH, XCB_IMAGE_FORMAT_Z_PIXMAP, 0, win->ren.shm_seg, 0);
     } else {
         xcb_put_image(con, XCB_IMAGE_FORMAT_Z_PIXMAP, win->wid, win->gc,
-                win->ren.im.width, rect.height, win->cfg.left_border,
-                win->cfg.top_border + rect.y, 0, 32, rect.height * win->ren.im.width * sizeof(color_t),
-                (const uint8_t *)(win->ren.im.data+rect.y*win->ren.im.width));
+                STRIDE(win->ren.im.width), rect.height, win->cfg.left_border,
+                win->cfg.top_border + rect.y, 0, TRUE_COLOR_ALPHA_DEPTH,
+                rect.height * STRIDE(win->ren.im.width) * sizeof(color_t),
+                (const uint8_t *)(win->ren.im.data + rect.y*STRIDE(win->ren.im.width)));
     }
 }
 
@@ -352,7 +357,7 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t height = win->ch * (win->char_height + win->char_depth);
 
     int16_t common_w = MIN(width, width  - delta_x * win->char_width);
-    int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth)) ;
+    int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth));
 
     struct image old = create_mitshm_image(win, width, height);
     image_copy(win->ren.im, (struct rect){0, 0, common_w, common_h}, old, 0, 0);

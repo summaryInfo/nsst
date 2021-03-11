@@ -24,5 +24,8 @@ void free_image(struct image *im);
 struct image create_shm_image(int16_t width, int16_t height);
 struct image create_image(int16_t width, int16_t height);
 
+#define STRIDE_ALIGNMENT 4UL
+#define STRIDE(x) (((x) + STRIDE_ALIGNMENT - 1) & ~(STRIDE_ALIGNMENT - 1))
+
 #endif
 
