@@ -1,0 +1,17 @@
+# Hidden files (for autocomplion)
+.*
+
+# Objects
+*.o
+
+# All kinds of analyzers files
+*.gcda
+perf.data*
+
+# These files are generated
+Makefile
+feature.h
+
+# Binaries (with default names)
+nsst
+nsstc
