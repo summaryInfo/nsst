@@ -110,38 +110,72 @@ void image_draw_rect(struct image im, struct rect rect, color_t fg) {
         ssize_t width = rect.width, height = rect.height;
         ssize_t stride = STRIDE(im.width);
 #ifdef __SSE2__
-        color_t *ptr = im.data + rect.y*stride + rect.x;
+        color_t *ptr = im.data + rect.y*stride + (rect.x & ~3);
+
+        ssize_t prefix = -rect.x & 3;
+        ssize_t suffix = (rect.x + width) & 3;
+        ssize_t width4 = ((width + rect.x + 3) & ~3) - (rect.x & ~3);
+
         __m128i fg4 = _mm_set1_epi32(fg);
+        __m128i pmask = _mm_cmpgt_epi32(_mm_set1_epi32(prefix), _mm_setr_epi32(3,2,1,0));
+        __m128i smask = _mm_cmpgt_epi32(_mm_set1_epi32(suffix), _mm_setr_epi32(0,1,2,3));
+        __m128i pmask_fg = _mm_and_si128(fg4, pmask);
+        __m128i smask_fg = _mm_and_si128(fg4, smask);
 
-        // First, fill unaligned prefix
-        if (rect.x & 3) {
-            ssize_t w0 = (rect.x & ~3) - rect.x;
-            ssize_t w = 4 - (rect.x & 3);
-            __m128i mask = _mm_setr_epi32(0, -(w > 2 && width > w-3), -(w > 1 && width > w-2), -(w > 0 && width > w-1));
-            __m128i fgm = _mm_and_si128(fg4, mask);
-            for (ssize_t y = 0; y < height; y++) {
-                __m128i s = _mm_andnot_si128(mask, _mm_load_si128((__m128i *)&ptr[y * stride + w0]));
-                _mm_store_si128((__m128i *)&ptr[y * stride + w0], _mm_or_si128(s, fgm));
+        if (suffix && prefix) {
+            if (width4 > 8) /* big with unaligned suffix and prefix */ {
+                for (ssize_t y = 0; y < height; y++) {
+                    __m128i p = _mm_andnot_si128(pmask, _mm_load_si128((__m128i *)&ptr[y * stride]));
+                    _mm_store_si128((__m128i *)&ptr[y * stride], _mm_or_si128(p, pmask_fg));
+                    for (ssize_t x = 4; x < width4 - 4; x += 4)
+                        _mm_store_si128((__m128i *)&ptr[y * stride + x], fg4);
+                    __m128i s = _mm_andnot_si128(smask, _mm_load_si128((__m128i *)&ptr[y * stride + width4 - 4]));
+                    _mm_store_si128((__m128i *)&ptr[y * stride + width4 - 4], _mm_or_si128(s, smask_fg));
+                }
+            } else if (width4 > 4) /* small with unaligned suffix and prefix */ {
+                for (ssize_t y = 0; y < height; y++) {
+                    __m128i p = _mm_andnot_si128(pmask, _mm_load_si128((__m128i *)&ptr[y * stride]));
+                    _mm_store_si128((__m128i *)&ptr[y * stride], _mm_or_si128(p, pmask_fg));
+                    __m128i s = _mm_andnot_si128(smask, _mm_load_si128((__m128i *)&ptr[y * stride + 4]));
+                    _mm_store_si128((__m128i *)&ptr[y * stride + 4], _mm_or_si128(s, smask_fg));
+                }
+            } else /* less than 4, unaligned */ {
+                __m128i mask = _mm_and_si128(pmask, smask);
+                __m128i mask_fg = _mm_and_si128(fg4, mask);
+                for (ssize_t y = 0; y < height; y++) {
+                    __m128i s = _mm_andnot_si128(mask, _mm_load_si128((__m128i *)&ptr[y * stride]));
+                    _mm_store_si128((__m128i *)&ptr[y * stride], _mm_or_si128(s, mask_fg));
+                }
             }
-            width -= w;
-            ptr += w;
-        }
-        if (width <= 0) return;
-
-        // Then fill aligned part
-
-        ssize_t width4 = width & ~3UL;
-        ssize_t w = width & 3UL;
-        if (w) {
-            __m128i mask = _mm_setr_epi32(-(w > 0), -(w > 1), -(w > 2), 0);
-            __m128i fgm = _mm_and_si128(fg4, mask);
-            for (ssize_t y = 0; y < height; y++) {
-                for (ssize_t x = 0; x < width4; x += 4)
-                    _mm_store_si128((__m128i *)&ptr[y * stride + x], fg4);
-                __m128i s = _mm_andnot_si128(mask, _mm_load_si128((__m128i *)&ptr[y * stride + width4]));
-                _mm_store_si128((__m128i *)&ptr[y * stride + width4], _mm_or_si128(s, fgm));
+        } else if (suffix) {
+            if (width4 > 4) /* big with unaligned suffix */ {
+                for (ssize_t y = 0; y < height; y++) {
+                    for (ssize_t x = 0; x < width4 - 4; x += 4)
+                        _mm_store_si128((__m128i *)&ptr[y * stride + x], fg4);
+                    __m128i s = _mm_andnot_si128(smask, _mm_load_si128((__m128i *)&ptr[y * stride + width4 - 4]));
+                    _mm_store_si128((__m128i *)&ptr[y * stride + width4 - 4], _mm_or_si128(s, smask_fg));
+                }
+            } else /* small with unaligned suffix */ {
+                for (ssize_t y = 0; y < height; y++) {
+                    __m128i s = _mm_andnot_si128(smask, _mm_load_si128((__m128i *)&ptr[y * stride]));
+                    _mm_store_si128((__m128i *)&ptr[y * stride], _mm_or_si128(s, smask_fg));
+                }
             }
-        } else {
+        } else if (prefix) {
+            if (width4 > 4) /* big with unaligned prefix */ {
+                for (ssize_t y = 0; y < height; y++) {
+                    __m128i p = _mm_andnot_si128(pmask, _mm_load_si128((__m128i *)&ptr[y * stride]));
+                    _mm_store_si128((__m128i *)&ptr[y * stride], _mm_or_si128(p, pmask_fg));
+                    for (ssize_t x = 4; x < width4; x += 4)
+                        _mm_store_si128((__m128i *)&ptr[y * stride + x], fg4);
+                }
+            } else /* small with unaligned prefix */ {
+                for (ssize_t y = 0; y < height; y++) {
+                    __m128i p = _mm_andnot_si128(pmask, _mm_load_si128((__m128i *)&ptr[y * stride]));
+                    _mm_store_si128((__m128i *)&ptr[y * stride], _mm_or_si128(p, pmask_fg));
+                }
+            }
+        } else /* everything is aligned */ {
             for (ssize_t y = 0; y < height; y++) {
                 for (ssize_t x = 0; x < width4; x += 4)
                     _mm_store_si128((__m128i *)&ptr[y * stride + x], fg4);
@@ -158,7 +192,7 @@ void image_draw_rect(struct image im, struct rect rect, color_t fg) {
 #ifdef __SSE4_1__
 __attribute__((always_inline))
 inline static __m128i op_over4(__m128i bg8, __m128i fg16, uint32_t alpha) {
-    const __m128  m255 = (__m128)_mm_set1_epi32(0x00FF00FF);
+    const __m128i m255 = _mm_set1_epi32(0x00FF00FF);
     const __m128i zero = _mm_set1_epi32(0x00000000);
     const __m128i div  = _mm_set1_epi16(-32639);
     const __m128i allo = _mm_setr_epi32(0xFF00FF00, 0xFF00FF00, 0xFF01FF01, 0xFF01FF01);
@@ -174,8 +208,8 @@ inline static __m128i op_over4(__m128i bg8, __m128i fg16, uint32_t alpha) {
     __m128i mfg_1 = _mm_mullo_epi16(fg16, al_1);
 
     // 255-alpha
-    __m128i mal_0 = (__m128i)_mm_xor_ps(m255, (__m128)al_0);
-    __m128i mal_1 = (__m128i)_mm_xor_ps(m255, (__m128)al_1);
+    __m128i mal_0 = _mm_xor_si128(m255, al_0);
+    __m128i mal_1 = _mm_xor_si128(m255, al_1);
     // bg*(255-alpha)
     __m128i mbg_0 = _mm_mullo_epi16(_mm_cvtepu8_epi16(bg8), mal_0);
     __m128i mbg_1 = _mm_mullo_epi16(_mm_unpackhi_epi8(bg8, zero), mal_1);
@@ -192,7 +226,7 @@ inline static __m128i op_over4(__m128i bg8, __m128i fg16, uint32_t alpha) {
 
 __attribute__((always_inline))
 inline static __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) {
-    const __m128  m255 = (__m128)_mm_set1_epi32(0x00FF00FF);
+    const __m128i m255 = _mm_set1_epi32(0x00FF00FF);
     const __m128i zero = _mm_set1_epi32(0x00000000);
     const __m128i div  = _mm_set1_epi16(-32639);
 
@@ -204,8 +238,8 @@ inline static __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) 
     __m128i mfg_1 = _mm_mullo_epi16(fg16, al_1);
 
     // 255-alpha
-    __m128i mal_0 = (__m128i)_mm_xor_ps(m255, (__m128)al_0);
-    __m128i mal_1 = (__m128i)_mm_xor_ps(m255, (__m128)al_1);
+    __m128i mal_0 = _mm_xor_si128(m255, al_0);
+    __m128i mal_1 = _mm_xor_si128(m255, al_1);
     // bg*(255-alpha)
     __m128i mbg_0 = _mm_mullo_epi16(_mm_cvtepu8_epi16(bg8), mal_0);
     __m128i mbg_1 = _mm_mullo_epi16(_mm_unpackhi_epi8(bg8, zero), mal_1);
