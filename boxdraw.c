@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 static void draw_rect(struct glyph * glyph, bool lcd, int16_t xs, int16_t ys, int16_t xe, int16_t ye, uint8_t val) {
     if (xs < xe && ys < ye) {
@@ -36,8 +37,12 @@ struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t de
     if (!is_boxdraw(c)) return NULL;
 
     bool lcd = pixmode != pixmode_mono;
+#if USE_X11SHM
     size_t stride = (width + 3) & ~3;
     if (lcd) stride *= 4;
+#else
+    size_t stride = lcd ? width * 4 : (width + 3) & ~3;
+#endif
     struct glyph *glyph = aligned_alloc(CACHE_LINE, (sizeof(struct glyph) +
             stride * (height + depth) * sizeof(uint8_t) + CACHE_LINE - 1) & ~(CACHE_LINE - 1));
     if (!glyph) return NULL;

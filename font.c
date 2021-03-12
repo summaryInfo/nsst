@@ -356,8 +356,17 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
     size_t stride = face->glyph->bitmap.width;
 
     if (face->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_LCD) stride /= 3;
+    /* XRender required stride to be aligned exactly to 4,
+     * software renderer wants stride to be aligned to 4/16
+     * depending on whether subpixel rendering is off or on.
+     * */
+#if USE_X11SHM
     stride = (stride + GLYPH_STRIDE_ALIGNMENT - 1) & ~(GLYPH_STRIDE_ALIGNMENT - 1);
     if (lcd) stride *= 4;
+#else
+    if (lcd) stride *= 4;
+    stride = (stride + GLYPH_STRIDE_ALIGNMENT - 1) & ~(GLYPH_STRIDE_ALIGNMENT - 1);
+#endif
 
     struct glyph *glyph = aligned_alloc(CACHE_LINE, (sizeof(*glyph) + stride * face->glyph->bitmap.rows + CACHE_LINE - 1) & ~(CACHE_LINE - 1));
     glyph->x = -face->glyph->bitmap_left;
