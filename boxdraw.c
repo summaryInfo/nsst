@@ -36,8 +36,10 @@ struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t de
     if (!is_boxdraw(c)) return NULL;
 
     bool lcd = pixmode != pixmode_mono;
-    size_t stride = lcd ? 4*width : (width + 3) & ~3;
-    struct glyph *glyph = calloc(1, sizeof(struct glyph) + stride * (height + depth) * sizeof(uint8_t));
+    size_t stride = (width + 3) & ~3;
+    if (lcd) stride *= 4;
+    struct glyph *glyph = aligned_alloc(CACHE_LINE, (sizeof(struct glyph) +
+            stride * (height + depth) * sizeof(uint8_t) + CACHE_LINE - 1) & ~(CACHE_LINE - 1));
     if (!glyph) return NULL;
 
     glyph->y_off = 0;
@@ -47,6 +49,7 @@ struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t de
     glyph->x_off = glyph->width = width;
     glyph->stride = stride;
     glyph->pixmode = pixmode;
+    memset(glyph->data, 0, stride * (height + depth));
 
     enum {
         NOC = 1 << 1, // No center
