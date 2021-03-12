@@ -686,7 +686,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
     case 'p':
         if (!strcmp(name, optmap[o_pixel_mode].opt)) {
             if (parse_enum(value, &val.e, pixmode_mono, pixmode_mono,
-                    "mono", "bgr", "rgb", "bgrv", "rgbv", NULL)) c->modify_other_fmt = val.e;
+                    "mono", "bgr", "rgb", "bgrv", "rgbv", NULL)) c->pixel_mode = val.e;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_print_attributes].opt)) {
             if (parse_bool(value, &val.b, 1)) c->print_attr = val.b;
