@@ -124,6 +124,14 @@ _NOTE: These plans can change any time_
    * Option to report modifiers presses as `\e[0;<mods>u` or `\e[0;<mods>;1u`
    * Report `Super` (`mod4`) and `Hyper` (`mod5`) modifiers (as 16/32)
 
+### Shell integration
+
+* Select whole output or executed command
+
+* Mouse interaction with shell line editing (?)
+
+* Jumping between shell prompts in scrollback
+
 ### VTxxx/XTerm compatibility and emulation
 
 * Encode NRCSs for printer autoprint mode
