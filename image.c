@@ -277,6 +277,47 @@ inline static __m128i load_n_lower(void *src, int w) {
     }
 }
 
+__attribute__((always_inline))
+inline static void over_mask(void *dst, __m128i fg16, __m128i mask, void *palpha, int d, int s) {
+    uint32_t alpha = 0;
+    memcpy(&alpha, palpha, d);
+    __m128i pref = _mm_load_si128(dst);
+    __m128i dstm = _mm_andnot_si128(mask, pref);
+    __m128i srcm = _mm_and_si128(mask, op_over4(pref, fg16, alpha << s*8));
+    _mm_store_si128(dst, _mm_or_si128(srcm, dstm));
+}
+
+__attribute__((always_inline))
+inline static void over(void *dst, __m128i fg16, void *palpha) {
+    uint32_t alpha;
+    memcpy(&alpha, palpha, sizeof(alpha));
+    __m128i pref = _mm_load_si128(dst);
+    _mm_store_si128(dst, op_over4(pref, fg16, alpha));
+}
+
+__attribute__((always_inline))
+inline static void over_mask_subpix(void *dst, __m128i fg16, __m128i mask, void *palpha, int d, int s) {
+    __m128i alpha = (s ? load_n_higher : load_n_lower)(palpha, d);
+    __m128i pref = _mm_load_si128(dst);
+    __m128i dstm = _mm_andnot_si128(mask, pref);
+    __m128i srcm = _mm_and_si128(mask, op_over4_subpix(pref, fg16, alpha));
+    _mm_store_si128(dst, _mm_or_si128(srcm, dstm));
+}
+
+__attribute__((always_inline))
+inline static void over_subpix(void *dst, __m128i fg16, void *palpha) {
+    __m128i alpha = _mm_loadu_si128(palpha);
+    __m128i pref = _mm_load_si128(dst);
+    _mm_store_si128(dst, op_over4_subpix(pref, fg16, alpha));
+}
+
+__attribute__((always_inline))
+inline static void over_subpix_aligned(void *dst, __m128i fg16, void *palpha) {
+    __m128i alpha = _mm_load_si128(palpha);
+    __m128i pref = _mm_load_si128(dst);
+    _mm_store_si128(dst, op_over4_subpix(pref, fg16, alpha));
+}
+
 #else
 inline static void op_over(color_t *bg, color_t fg, uint8_t alpha) {
     *bg =
@@ -305,135 +346,157 @@ void image_compose_glyph(struct image im, int16_t dx, int16_t dy, struct glyph *
         ssize_t stride = STRIDE(im.width), gstride = glyph->stride;
 #if defined(__SSE4_1__)
         if (glyph->pixmode == pixmode_mono) {
-            uint8_t *aptr = glyph->data + j0 * gstride + i0;
-            color_t *dptr = im.data + rect.y * stride + rect.x;
-            const __m128i fg16 = _mm_cvtepu8_epi16(_mm_set1_epi32(fg));
+            uint8_t *aptr = glyph->data + j0 * gstride + i0  - (rect.x & 3);
+            color_t *dptr = im.data + rect.y * stride + (rect.x & ~3);
 
-            // First, blend unaligned prefix
-            if (rect.x & 3) {
-                ssize_t w = MIN(4 - (rect.x & 3), width);
-                ssize_t d = (rect.x & 3) * 8;
-                ssize_t w0 = (rect.x & ~3) - rect.x;
-                __m128i mask = _mm_setr_epi32(0, -(w > 2 && width > w-3), -(w > 1 && width > w-2), -(w > 0 && width > w-1));
+            ssize_t prefix = -rect.x & 3, nprefix = rect.x & 3;
+            ssize_t suffix = (rect.x + width) & 3;
+            ssize_t width4 = ((width + rect.x + 3) & ~3) - (rect.x & ~3);
 
-                for (ssize_t y = 0; y < height; y++) {
-                    uint32_t alpha;
-                    memcpy(&alpha, &aptr[gstride * y], sizeof alpha);
-                    __m128i bg = _mm_load_si128((__m128i *)&dptr[y * stride + w0]);
-                    __m128i bgm = _mm_andnot_si128(mask, bg);
-                    __m128i msk = _mm_and_si128(mask, op_over4(bg, fg16, alpha << d));
-                    _mm_store_si128((__m128i *)&dptr[y * stride + w0], _mm_or_si128(msk, bgm));
-                }
+            __m128i fg16 = _mm_cvtepu8_epi16(_mm_set1_epi32(fg));
+            __m128i pmask = _mm_cmpgt_epi32(_mm_set1_epi32(prefix), _mm_setr_epi32(3,2,1,0));
+            __m128i smask = _mm_cmpgt_epi32(_mm_set1_epi32(suffix), _mm_setr_epi32(0,1,2,3));
 
-                width -= w;
-                dptr += w;
-                aptr += w;
-            }
-            if (width <= 0) return;
-
-            // Then blend aligned part
-            ssize_t width4 = width & ~3;
-            ssize_t w = width - width4;
-            if (w) {
-                ssize_t lastalpha = width - 4;
-                ssize_t d = (width4 - lastalpha)*8;
-                __m128i mask = _mm_setr_epi32(-(w > 0), -(w > 1), -(w > 2), 0);
-                for (ssize_t y = 0; y < height; y++) {
-                    uint32_t alpha;
-                    for (ssize_t x = 0; x < width4; x += 4) {
-                        memcpy(&alpha, &aptr[gstride * y + x], sizeof alpha);
-                        __m128i bg = _mm_load_si128((__m128i *)&dptr[y * stride + x]);
-                        _mm_store_si128((__m128i *)&dptr[y * stride + x], op_over4(bg, fg16, alpha));
+            if (suffix && prefix) {
+                if (width4 > 8) /* big with unaligned suffix and prefix */ {
+                    for (ssize_t y = 0; y < height; y++) {
+                        over_mask(&dptr[y * stride], fg16, pmask, &aptr[y * gstride + nprefix], prefix, nprefix);
+                        for (ssize_t x = 4; x < width4 - 4; x += 4)
+                            over(&dptr[y * stride + x], fg16, &aptr[y * gstride + x]);
+                        over_mask(&dptr[y * stride + width4 - 4], fg16, smask, &aptr[y * gstride + width4 - 4], suffix, 0);
                     }
-                    memcpy(&alpha, &aptr[gstride * y + lastalpha], sizeof alpha);
-                    __m128i bg = _mm_load_si128((__m128i *)&dptr[y * stride + width4]);
-                    __m128i bgm = _mm_andnot_si128(mask, bg);
-                    __m128i msk = _mm_and_si128(mask, op_over4(bg, fg16, alpha >> d));
-                    _mm_store_si128((__m128i *)&dptr[y * stride + width4], _mm_or_si128(msk, bgm));
-                }
-            } else {
-                for (ssize_t y = 0; y < height; y++) {
-                    for (ssize_t x = 0; x < width4; x += 4) {
-                        uint32_t alpha;
-                        memcpy(&alpha, &aptr[gstride * y + x], sizeof alpha);
-                        __m128i bg = _mm_load_si128((__m128i *)&dptr[y * stride + x]);
-                        _mm_store_si128((__m128i *)&dptr[y * stride + x], op_over4(bg, fg16, alpha));
+                } else if (width4 > 4) /* small with unaligned suffix and prefix */ {
+                    for (ssize_t y = 0; y < height; y++) {
+                        over_mask(&dptr[y * stride], fg16, pmask, &aptr[y * gstride + nprefix], prefix, nprefix);
+                        over_mask(&dptr[y * stride + 4], fg16, smask, &aptr[y * gstride + 4], suffix, 0);
                     }
+                } else /* less than 4, unaligned */ {
+                    __m128i mask = _mm_and_si128(pmask, smask);
+                    for (ssize_t y = 0; y < height; y++) {
+                        over_mask(&dptr[y * stride], fg16, mask, &aptr[y * gstride + nprefix], width, nprefix);
+                    }
+                }
+            } else if (suffix) {
+                if (width4 > 4) /* big with unaligned suffix */ {
+                    for (ssize_t y = 0; y < height; y++) {
+                        for (ssize_t x = 0; x < width4 - 4; x += 4)
+                            over(&dptr[y * stride + x], fg16, &aptr[y * gstride + x]);
+                        over_mask(&dptr[y * stride + width4 - 4], fg16, smask, &aptr[y * gstride + width4 - 4], suffix, 0);
+                    }
+                } else /* small with unaligned suffix */ {
+                    for (ssize_t y = 0; y < height; y++) {
+                        over_mask(&dptr[y * stride], fg16, smask, &aptr[y * gstride], suffix, 0);
+                    }
+                }
+            } else if (prefix) {
+                if (width4 > 4) /* big with unaligned prefix */ {
+                    for (ssize_t y = 0; y < height; y++) {
+                        over_mask(&dptr[y * stride], fg16, pmask, &aptr[y * gstride + nprefix], prefix, nprefix);
+                        for (ssize_t x = 4; x < width4; x += 4)
+                            over(&dptr[y * stride + x], fg16, &aptr[y * gstride + x]);
+                    }
+                } else /* small with unaligned prefix */ {
+                    for (ssize_t y = 0; y < height; y++) {
+                        over_mask(&dptr[y * stride], fg16, pmask, &aptr[y * gstride + nprefix], prefix, nprefix);
+                    }
+                }
+            } else /* everything is aligned */ {
+                for (ssize_t y = 0; y < height; y++) {
+                    for (ssize_t x = 0; x < width4; x += 4)
+                        over(&dptr[y * stride + x], fg16, &aptr[y * gstride + x]);
                 }
             }
         } else {
-            uint8_t *aptr = glyph->data + j0 * gstride + 4*i0;
-            color_t *dptr = im.data + rect.y * stride + rect.x;
-            const __m128i fg16 = _mm_cvtepu8_epi16(_mm_set1_epi32(fg));
+            uint8_t *aptr = glyph->data + j0 * gstride + 4*(i0  - (rect.x & 3));
+            color_t *dptr = im.data + rect.y * stride + (rect.x & ~3);
 
-            // First, blend unaligned prefix
-            if (rect.x & 3) {
-                ssize_t w = MIN(4 - (rect.x & 3), width);
-                ssize_t w0 = (rect.x & ~3) - rect.x;
-                __m128i mask = _mm_setr_epi32(0, -(w > 2 && width > w-3), -(w > 1 && width > w-2), -(w > 0 && width > w-1));
-                for (ssize_t y = 0; y < height; y++) {
-                    __m128i alpha = load_n_higher(aptr + gstride * y, w);
-                    __m128i bg = _mm_load_si128((__m128i *)&dptr[y * stride + w0]);
-                    __m128i bgm = _mm_andnot_si128(mask, bg);
-                    __m128i msk = _mm_and_si128(mask, op_over4_subpix(bg, fg16, alpha));
-                    _mm_store_si128((__m128i *)&dptr[y * stride + w0], _mm_or_si128(msk, bgm));
-                }
-                width -= w;
-                dptr += w;
-                aptr += 4*w;
-            }
-            if (width <= 0) return;
+            ssize_t prefix = -rect.x & 3, nprefix = rect.x & 3;
+            ssize_t suffix = (rect.x + width) & 3;
+            ssize_t width4 = ((width + rect.x + 3) & ~3) - (rect.x & ~3);
 
-            // Then blend aligned part
-            ssize_t width4 = width & ~3, w = width & 3;
-            // Two cases depending on aptr alignment
-            if (w) {
-                __m128i mask = _mm_setr_epi32(-(w > 0), -(w > 1), -(w > 2), 0);
-                if ((uintptr_t)aptr & 15) {
-                    for (ssize_t y = 0; y < height; y++) {
-                        ssize_t x = 0;
-                        for (; x < width4; x += 4) {
-                            __m128i alpha = _mm_loadu_si128((__m128i *)&aptr[gstride * y + 4*x]);
-                            __m128i bg = _mm_load_si128((__m128i *)&dptr[y * stride + x]);
-                            _mm_store_si128((__m128i *)&dptr[y * stride + x], op_over4_subpix(bg, fg16, alpha));
+            __m128i fg16 = _mm_cvtepu8_epi16(_mm_set1_epi32(fg));
+            __m128i pmask = _mm_cmpgt_epi32(_mm_set1_epi32(prefix), _mm_setr_epi32(3,2,1,0));
+            __m128i smask = _mm_cmpgt_epi32(_mm_set1_epi32(suffix), _mm_setr_epi32(0,1,2,3));
+
+            bool a_aligned = !((uintptr_t)aptr & 15);
+            if (suffix && prefix) {
+                if (width4 > 8) /* big with unaligned suffix and prefix */ {
+                    if (a_aligned) {
+                        for (ssize_t y = 0; y < height; y++) {
+                            over_mask_subpix(&dptr[y * stride], fg16, pmask, &aptr[y * gstride + 4*nprefix], prefix, nprefix);
+                            for (ssize_t x = 4; x < width4 - 4; x += 4)
+                                over_subpix_aligned(&dptr[y * stride + x], fg16, &aptr[y * gstride + 4*x]);
+                            over_mask_subpix(&dptr[y * stride + width4 - 4], fg16, smask, &aptr[y * gstride + 4*(width4 - 4)], suffix, 0);
                         }
-                        __m128i alpha = load_n_lower(aptr +gstride * y + width4*4, w);
-                        __m128i bg = _mm_load_si128((__m128i *)&dptr[y * stride + width4]);
-                        __m128i bgm = _mm_andnot_si128(mask, bg);
-                        __m128i msk = _mm_and_si128(mask, op_over4_subpix(bg, fg16, alpha));
-                        _mm_store_si128((__m128i *)&dptr[y * stride + width4], _mm_or_si128(msk, bgm));
+                    } else {
+                        for (ssize_t y = 0; y < height; y++) {
+                            over_mask_subpix(&dptr[y * stride], fg16, pmask, &aptr[y * gstride + 4*nprefix], prefix, nprefix);
+                            for (ssize_t x = 4; x < width4 - 4; x += 4)
+                                over_subpix(&dptr[y * stride + x], fg16, &aptr[y * gstride + 4*x]);
+                            over_mask_subpix(&dptr[y * stride + width4 - 4], fg16, smask, &aptr[y * gstride + 4*(width4 - 4)], suffix, 0);
+                        }
+                    }
+                } else if (width4 > 4) /* small with unaligned suffix and prefix */ {
+                    for (ssize_t y = 0; y < height; y++) {
+                        over_mask_subpix(&dptr[y * stride], fg16, pmask, &aptr[y * gstride + 4*nprefix], prefix, nprefix);
+                        over_mask_subpix(&dptr[y * stride + 4], fg16, smask, &aptr[y * gstride + 4*4], suffix, 0);
+                    }
+                } else /* less than 4, unaligned */ {
+                    __m128i mask = _mm_and_si128(pmask, smask);
+                    for (ssize_t y = 0; y < height; y++) {
+                        over_mask_subpix(&dptr[y * stride], fg16, mask, &aptr[y * gstride + 4*nprefix], width, nprefix);
+                    }
+                }
+            } else if (suffix) {
+                if (width4 > 4) /* big with unaligned suffix */ {
+                    if (a_aligned) {
+                        for (ssize_t y = 0; y < height; y++) {
+                            for (ssize_t x = 0; x < width4 - 4; x += 4)
+                                over_subpix_aligned(&dptr[y * stride + x], fg16, &aptr[y * gstride + 4*x]);
+                            over_mask_subpix(&dptr[y * stride + width4 - 4], fg16, smask, &aptr[y * gstride + 4*(width4 - 4)], suffix, 0);
+                        }
+                    } else {
+                        for (ssize_t y = 0; y < height; y++) {
+                            for (ssize_t x = 0; x < width4 - 4; x += 4)
+                                over_subpix(&dptr[y * stride + x], fg16, &aptr[y * gstride + 4*x]);
+                            over_mask_subpix(&dptr[y * stride + width4 - 4], fg16, smask, &aptr[y * gstride + 4*(width4 - 4)], suffix, 0);
+                        }
+                    }
+                } else /* small with unaligned suffix */ {
+                    for (ssize_t y = 0; y < height; y++) {
+                        over_mask_subpix(&dptr[y * stride], fg16, smask, &aptr[y * gstride], suffix, 0);
+                    }
+                }
+            } else if (prefix) {
+                if (width4 > 4) /* big with unaligned prefix */ {
+                    if (a_aligned) {
+                        for (ssize_t y = 0; y < height; y++) {
+                            over_mask_subpix(&dptr[y * stride], fg16, pmask, &aptr[y * gstride + 4*nprefix], prefix, nprefix);
+                            for (ssize_t x = 4; x < width4; x += 4)
+                                over_subpix_aligned(&dptr[y * stride + x], fg16, &aptr[y * gstride + 4*x]);
+                        }
+                    } else {
+                        for (ssize_t y = 0; y < height; y++) {
+                            over_mask_subpix(&dptr[y * stride], fg16, pmask, &aptr[y * gstride + 4*nprefix], prefix, nprefix);
+                            for (ssize_t x = 4; x < width4; x += 4)
+                                over_subpix(&dptr[y * stride + x], fg16, &aptr[y * gstride + 4*x]);
+                        }
+                    }
+                } else /* small with unaligned prefix */ {
+                    for (ssize_t y = 0; y < height; y++) {
+                        over_mask_subpix(&dptr[y * stride], fg16, pmask, &aptr[y * gstride + 4*nprefix], prefix, nprefix);
+                    }
+                }
+            } else /* everything is aligned */ {
+                if (a_aligned) {
+                    for (ssize_t y = 0; y < height; y++) {
+                        for (ssize_t x = 0; x < width4; x += 4)
+                            over_subpix_aligned(&dptr[y * stride + x], fg16, &aptr[y * gstride + 4*x]);
                     }
                 } else {
                     for (ssize_t y = 0; y < height; y++) {
-                        ssize_t x = 0;
-                        for (; x < width4; x += 4) {
-                            __m128i alpha = _mm_load_si128((__m128i *)&aptr[gstride * y + 4*x]);
-                            __m128i bg = _mm_load_si128((__m128i *)&dptr[y * stride + x]);
-                            _mm_store_si128((__m128i *)&dptr[y * stride + x], op_over4_subpix(bg, fg16, alpha));
-                        }
-                        __m128i alpha = load_n_lower(aptr +gstride * y + width4*4, w);
-                        __m128i bg = _mm_load_si128((__m128i *)&dptr[y * stride + width4]);
-                        __m128i bgm = _mm_andnot_si128(mask, bg);
-                        __m128i msk = _mm_and_si128(mask, op_over4_subpix(bg, fg16, alpha));
-                        _mm_store_si128((__m128i *)&dptr[y * stride + width4], _mm_or_si128(msk, bgm));
-                    }
-                }
-            } else {
-                if ((uintptr_t)aptr & 15) {
-                    for (ssize_t y = 0; y < height; y++) {
-                        for (ssize_t x = 0; x < width4; x += 4) {
-                            __m128i alpha = _mm_loadu_si128((__m128i *)&aptr[gstride * y + 4*x]);
-                            __m128i bg = _mm_load_si128((__m128i *)&dptr[y * stride + x]);
-                            _mm_store_si128((__m128i *)&dptr[y * stride + x], op_over4_subpix(bg, fg16, alpha));
-                        }
-                    }
-                } else {
-                    for (ssize_t y = 0; y < height; y++) {
-                        for (ssize_t x = 0; x < width4; x += 4) {
-                            __m128i alpha = _mm_load_si128((__m128i *)&aptr[gstride * y + 4*x]);
-                            __m128i bg = _mm_load_si128((__m128i *)&dptr[y * stride + x]);
-                            _mm_store_si128((__m128i *)&dptr[y * stride + x], op_over4_subpix(bg, fg16, alpha));
-                        }
+                        for (ssize_t x = 0; x < width4; x += 4)
+                            over_subpix(&dptr[y * stride + x], fg16, &aptr[y * gstride + 4*x]);
                     }
                 }
             }
