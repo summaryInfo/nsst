@@ -55,7 +55,7 @@ Multiple fonts could be loaded by enumerating them in parameter like:
 
 Set `override-boxdrawing` to `true` if box drawing characters of font you use does not align.
 
-If font looks to blurry try setting `font-gamma` to value greater than `10000`.
+If font looks to blurry try setting `font-gamma` to value greater than `1`.
 
 Set pixelMode to your monitor's pixel alignment to enable subpixel rendering.
 
