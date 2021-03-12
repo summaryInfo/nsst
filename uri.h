@@ -41,7 +41,7 @@ struct uri_match_state {
 
 #define EMPTY_URI 0
 
-uint32_t uri_add(char *uri, const char *id);
+uint32_t uri_add(const char *uri, const char *id);
 void uri_ref(uint32_t uri);
 void uri_unref(uint32_t uri);
 void uri_open(uint32_t uri);

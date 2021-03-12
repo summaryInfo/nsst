@@ -5,6 +5,7 @@
 
 #include "feature.h"
 
+#include "hashtable.h"
 #include "util.h"
 
 #include <stdbool.h>
@@ -30,10 +31,9 @@ enum pixel_mode {
 };
 
 struct glyph {
-    // Hash table data
-    struct glyph *next;
-    uint32_t g;
+    ht_head_t head;
 
+    uint32_t g;
     uint16_t width, height;
     int16_t x, y;
     int16_t x_off, y_off;

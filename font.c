@@ -27,7 +27,6 @@
 
 #define CAPS_STEP 2
 #define HASH_INIT_CAP 167
-#define HASH_CAP_INC(x) (8*(x)/5)
 
 struct font_context {
     size_t fonts;
@@ -480,16 +479,16 @@ struct glyph_cache {
     bool override_boxdraw;
     enum pixel_mode pixmode;
     size_t refc;
-    struct glyph **tab;
-    uint32_t size;
-    uint32_t caps;
+
+    hashtable_t glyphs;
 };
 
-inline static uint32_t hash(uint32_t v) {
-    v = ((v >> 16) ^ v) * 0x45D9F3B;
-    v = ((v >> 16) ^ v) * 0x45D9F3B;
-    v = (v >> 16) ^ v;
-    return v;
+#define mkglyphkey(gl) ((struct glyph){ .head = { .hash = uint_hash32(gl)}, .g = (gl) })
+
+bool glyph_cmp(const ht_head_t *a, const ht_head_t *b) {
+    const struct glyph *ga = (const struct glyph *)a;
+    const struct glyph *gb = (const struct glyph *)b;
+    return ga->g == gb->g;
 }
 
 struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmode, int16_t vspacing, int16_t hspacing, bool boxdraw) {
@@ -498,16 +497,14 @@ struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmod
         warn("Can't allocate glyph cache");
         return NULL;
     }
-    cache->tab = calloc(HASH_INIT_CAP, sizeof(*cache->tab));
-    cache->caps = HASH_INIT_CAP;
     cache->refc = 1;
     cache->font = font;
     cache->vspacing = vspacing;
     cache->hspacing = hspacing;
     cache->override_boxdraw = boxdraw;
     cache->pixmode = pixmode;
-
-    if (!cache->tab) {
+    ht_init(&cache->glyphs, HASH_INIT_CAP, glyph_cmp);
+    if (!cache->glyphs.data) {
         free(cache);
         warn("Can't allocate glyph cache");
         return NULL;
@@ -547,21 +544,18 @@ void glyph_cache_get_dim(struct glyph_cache *cache, int16_t *w, int16_t *h, int1
 
 void free_glyph_cache(struct glyph_cache *cache) {
     if (!--cache->refc) {
-        for (size_t i = 0; i < cache->caps; i++)
-            for (struct glyph *next = NULL, *it = cache->tab[i]; it; it = next)
-                next = it->next, free(it);
-        free(cache->tab);
+        ht_iter_t it = ht_begin(&cache->glyphs);
+        while (ht_current(&it))
+            free(ht_erase_current(&it));
+        ht_free(&cache->glyphs);
         free(cache);
     }
 }
 
 struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face) {
-    uint32_t g = ch | (face << 24);
-    size_t h = hash(g);
-
-    struct glyph *res = cache->tab[h % cache->caps];
-    for (; res; res = res->next)
-        if (g == res->g) return res;
+    struct glyph dummy = mkglyphkey(ch | (face << 24));
+    ht_head_t **h = ht_lookup_ptr(&cache->glyphs, (ht_head_t *)&dummy);
+    if (*h) return (struct glyph *)*h;
 
     struct glyph *new;
 #if USE_BOXDRAWING
@@ -570,38 +564,15 @@ struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum fac
     else
 #endif
         new = font_render_glyph(cache->font, cache->pixmode, ch, face);
-
     if (!new) return NULL;
 
-    if (3*(cache->size + 1)/2 > cache->caps) {
-        size_t newc = HASH_CAP_INC(cache->caps);
-        struct glyph **newt = calloc(newc, sizeof(*newt));
-        if (!newt) return NULL;
-        for (size_t i = 0; i < cache->caps; i++) {
-            for (struct glyph *next = NULL, *it = cache->tab[i]; it; it = next) {
-                next = it->next;
-                size_t ha = hash(it->g);
-                it->next = newt[ha % newc];
-                newt[ha % newc] = it;
-            }
-        }
-        free(cache->tab);
-        cache->tab = newt;
-        cache->caps = newc;
-    }
+    new->g = dummy.g;
+    new->head = dummy.head;
 
-    new->g = g;
-    new->next = cache->tab[h % cache->caps];
-    cache->tab[h % cache->caps] = new;
-    cache->size++;
-
+    ht_insert_hint(&cache->glyphs, h, (ht_head_t *)new);
     return new;
 }
 
 bool glyph_cache_is_fetched(struct glyph_cache *cache, uint32_t ch) {
-    size_t h = hash(ch);
-    struct glyph *res = cache->tab[h % cache->caps];
-    for (; res; res = res->next)
-        if (ch == res->g) return 1;
-    return 0;
+    return ht_find(&cache->glyphs, (ht_head_t *)&mkglyphkey(ch));
 }

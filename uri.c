@@ -7,6 +7,7 @@
 #if USE_URI
 
 #include "config.h"
+#include "hashtable.h"
 #include "uri.h"
 
 #include <errno.h>
@@ -32,79 +33,33 @@
 
 /* URI table entry */
 struct uri {
+    ht_head_t head;
     /* Number of attributes referencing this URI.
      * It is decremented during attributes optimization
      * (when attribute gets deleted) or line deletion
      * and incremented on adding an attribute to the line */
     int64_t refc;
-    /* URI string itself */
-    char *uri;
+    uintptr_t slot;
     /* Assocciated ID */
     char *id;
-    /* this field is used for linking
-     * free URIs cells in a list conatined in array
-     * uri_ids */
-    uint32_t next;
-    /* URI hash */
-    uint32_t hash;
+    /* URI string itself */
+    char *uri;
 };
 
-struct uri_table {
+struct id_table {
     size_t size;
-    size_t count;
     size_t caps;
-    /* free slot list for faster allocation
-     * (stores index + 1, zero means the end) */
-    size_t first_free;
-    struct uri *uris;
-
-    // Since URIs should have
-    // fixed indices, we need
-    // to use separate array for
-    // hash table
-    // (not using pointer for consistency)
-    uint32_t *hash_tab;
-    size_t hash_tab_caps;
+    uintptr_t first_free;
+    struct slot {
+        struct uri *uri;
+        uintptr_t next;
+    } *slots;
 };
 
-static struct uri_table table;
+#define mkurikey(_id, idlen, _uri, urilen) ((const struct uri){ .head = (ht_head_t){ .hash = hash64(_id, idlen) ^ hash64(_uri, urilen) }, .id = _id, .uri = _uri})
 
-// Murmur3 32-bit hash
-uint32_t hash(const char *data, ssize_t len) {
-#define MIX(x) (x *= 0xCC9E2D51, x = (x << 15) | (x >> 17), x *= 0x1B873593)
-#define FMIX(x) (x ^= x >> 16, x *= 0x85EBCA6B, x ^= x >> 13, x *= 0xC2B2AE35, x ^= x >> 16)
-    const ssize_t nblocks = len / 4;
-    const uint32_t *blocks = (const uint32_t *)data + nblocks;
-
-    uint32_t k1 = 0, h1 = 123;
-    for(ssize_t i = -nblocks; i; i++) {
-        k1 = blocks[i];
-        MIX(k1);
-        h1 ^= k1;
-        k1 = (k1 << 13) | (k1 >> 19);
-        h1 = h1*5 + 0xE6546B64;
-    }
-
-    const uint8_t * tail = (const uint8_t *)data + (len & ~3LU);
-    switch(len & 3) {
-    case 3:
-        k1 ^= tail[2] << 16;
-        // fallthrough
-    case 2:
-        k1 ^= tail[1] << 8;
-        // fallthrough
-    case 1:
-        k1 ^= tail[0];
-        MIX(k1);
-        h1 ^= k1;
-    };
-
-    h1 ^= len;
-    FMIX(h1);
-    return h1;
-#undef MIX
-#undef FMIX
-}
+static struct id_table idtab;
+hashtable_t uritab;
 
 /* From window.c */
 enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
@@ -237,7 +192,7 @@ char *uri_match_move(struct uri_match_state *state) {
     return res;
 }
 
-size_t vaild_uri_len(const char *uri) {
+inline static size_t vaild_uri_len(const char *uri) {
     if (!uri) return 0;
 
     struct uri_match_state stt = {.no_copy = 1};
@@ -252,44 +207,56 @@ size_t vaild_uri_len(const char *uri) {
     return 0;
 }
 
-static bool realloc_hashtable(size_t new_caps, struct uri *new) {
-    uint32_t *newtab = malloc(new_caps * sizeof(*newtab));
-    if (!newtab) return 0;
-
-    memset(newtab, 0xFF, new_caps * sizeof(*newtab));
-    for (size_t i = 0; i < table.size; i++) {
-        if (table.uris[i].uri && new != &table.uris[i]) {
-            uint32_t *newidx = &newtab[table.uris[i].hash % new_caps];
-            table.uris[i].next = *newidx;
-            *newidx = i;
+inline static struct slot *alloc_slot(void) {
+    if (idtab.first_free != EMPTY_URI) {
+        struct slot *slot = &idtab.slots[idtab.first_free - 1];
+        idtab.first_free = slot->next;
+        return slot;
+    } else {
+        if (idtab.size + 1 > idtab.caps) {
+            size_t new_caps = URI_CAPS_STEP(idtab.caps);
+            struct slot *tmp = realloc(idtab.slots, new_caps*sizeof(*tmp));
+            if (!tmp)  return EMPTY_URI;
+            idtab.slots = tmp;
+            idtab.caps = new_caps;
         }
+        return &idtab.slots[idtab.size++];
     }
-    free(table.hash_tab);
-    table.hash_tab_caps = new_caps;
-    table.hash_tab = newtab;
-    return 1;
+}
+
+inline static void free_slot(struct slot *slot) {
+    slot->next = idtab.first_free;
+    idtab.first_free = slot - idtab.slots + 1;
+}
+
+__attribute__((hot))
+static bool uri_cmp(const ht_head_t *a, const ht_head_t *b) {
+    const struct uri *ua = (const struct uri *)a;
+    const struct uri *ub = (const struct uri *)b;
+    return !strcmp(ua->id, ub->id) && !strcmp(ua->uri, ub->uri);
 }
 
 /* If URI is invalid returns EMPTY_URI */
-uint32_t uri_add(char *uri, const char *id) {
+uint32_t uri_add(const char *uri, const char *id) {
     static size_t id_counter = 0;
+
+    if (!idtab.slots) ht_init(&uritab, HT_INIT_CAPS, uri_cmp);
 
     size_t uri_len = vaild_uri_len(uri), id_len = 0;
     if (!uri_len) {
         if (*uri) warn("URI '%s' is invalid", uri);
-        free(uri);
         return EMPTY_URI;
     }
 
-    // Generate internal identifier
-    // if not exiplicitly provided
+    /* Generate internal identifier
+     * if not exiplicitly provided */
     char buf[MAX_NUMBER_LEN + 2];
     buf[0] = 0;
     if (LIKELY(!id)) {
         if (gconfig.unique_uris) {
             id = buf;
             buf[id_len++] = URI_ID_PREF;
-            // Convert privite id to string (non-human readable)
+            /* Convert privite id to string (non-human readable) */
             uint32_t idn = id_counter++;
             do buf[id_len++] = ' ' + (idn & 63);
             while (idn >>= 6);
@@ -297,173 +264,107 @@ uint32_t uri_add(char *uri, const char *id) {
         } else id = "";
     } else id_len = strlen(id);
 
-    // Lookup in hash table for speed
-    uint32_t new_hash = hash(id, id_len) ^ hash(uri, uri_len);
-    if (LIKELY(table.hash_tab)) {
-        uint32_t slot = table.hash_tab[new_hash % table.hash_tab_caps];
-        while (slot != UINT32_MAX) {
-            struct uri *cand = &table.uris[slot];
-            if (cand->hash == new_hash && cand->uri &&
-                    !strcmp(cand->uri, uri) && !strcmp(cand->id, id)) {
-                 free(uri);
-                 uri_ref(slot + 1);
-                 return slot + 1;
-            }
-            slot = cand->next;
-        }
+
+    /* First, lookup URI in hash table */
+    const struct uri dummy = mkurikey((char *)id, id_len, (char *)uri, uri_len);
+    ht_head_t **h = ht_lookup_ptr(&uritab, (ht_head_t *)&dummy);
+    if (*h) {
+        struct uri *new = (struct uri *)*h;
+        uri_ref(new->slot);
+        return new->slot;
     }
 
-    // Duplicate string it we haven't done it already
-    char *id_s = strdup(id);
-    if (!id_s) goto alloc_failed;
+    /* Allocate URI hash table node */
 
-    struct uri *new = NULL;
-    if (table.first_free) {
-        /* We have available free slots in the pool */
-        new = &table.uris[table.first_free - 1];
-        table.first_free = new->next;
-    } else {
-        /* Need to allocate new */
+    struct uri *new = malloc(sizeof *new + uri_len + id_len + 2);
+    if (!new) goto alloc_failed;
 
-        if (table.size + 1 > table.caps) {
-            struct uri *tmp = realloc(table.uris, URI_CAPS_STEP(table.caps)*sizeof(*tmp));
-            if (!tmp) goto alloc_failed;
-            table.uris = tmp;
-            table.caps = URI_CAPS_STEP(table.caps);
-        }
+    /* Allocate id table slot */
+    struct slot *slot = alloc_slot();
+    if (!new) goto alloc_failed;
 
-        new = &table.uris[table.size++];
-    }
-
+    slot->uri = new;
     *new = (struct uri) {
+        .uri = (char *)new + sizeof *new,
+        .id = (char *)new + sizeof *new + uri_len + 1,
+        .head = dummy.head,
+        .slot = slot - idtab.slots + 1,
         .refc = 1,
-        .uri = uri,
-        .hash = new_hash,
-        .id = id_s,
-        .next = UINT32_MAX,
     };
 
-    table.count++;
-    uint32_t uriid = new - table.uris + 1;
+    memcpy(new->uri, uri, uri_len + 1);
+    memcpy(new->id, id, id_len + 1);
 
-    // Insert URI into hash table
-    // (resizing if necessery)
-    if (UNLIKELY(4*table.count/3 > table.hash_tab_caps)) {
-        size_t new_caps = URI_HASHTAB_CAPS_STEP(table.hash_tab_caps);
-        if (UNLIKELY(!realloc_hashtable(new_caps, new))) {
-            uri_unref(uriid);
-            return EMPTY_URI;
-        }
-    }
-
-    uint32_t *slot = &table.hash_tab[new_hash % table.hash_tab_caps];
-    new->next = *slot;
-    *slot = new - table.uris;
-
+    ht_insert_hint(&uritab, h, (ht_head_t *)new);
 
     if (gconfig.trace_misc) {
-        if (!buf[0]) info("URI new id=%d path='%s' name='%s'", uriid, uri, id);
-        else info("URI new id=%d path='%s' name=%zd (privite)", uriid, uri, id_counter);
+        if (!buf[0]) info("URI new id=%zd path='%s' name='%s'", new->slot, uri, id);
+        else info("URI new id=%zd path='%s' name=%zd (privite)", new->slot, uri, id_counter);
     }
 
     /* External ID is actually index + 1, not index*/
-    return uriid;
+    return new->slot;
 
 alloc_failed:
-    free(uri);
-    free(id_s);
+    free(new);
     return EMPTY_URI;
 }
 
 void uri_ref(uint32_t id) {
-    if (id) assert(table.uris[id - 1].refc > 0);
-    if (id) table.uris[id - 1].refc++;
+    if (id) {
+        struct uri *uri = idtab.slots[id - 1].uri;
+        assert(uri->refc > 0);
+        uri->refc++;
+    }
 }
 
 void uri_unref(uint32_t id) {
-    struct uri *uri = &table.uris[id - 1];
-    if (id) {
-        assert(uri->refc > 0);
-        assert(uri->uri);
-        assert(uri->id);
-    }
+    struct slot *slot = &idtab.slots[id - 1];
+    struct uri *uri = slot->uri;
+    assert(!id || uri->refc > 0);
     if (id && !--uri->refc) {
-        table.count--;
-        if (gconfig.trace_misc) {
-            info("URI free %d (%zd left)", id, table.count);
-        }
-        free(uri->uri);
-        free(uri->id);
+        if (gconfig.trace_misc)
+            info("URI free %d", id);
 
-        // Remove URI from hash table
-        uint32_t *slot = &table.hash_tab[uri->hash % table.hash_tab_caps];
-        while (*slot != UINT32_MAX && table.uris + *slot != uri) {
-            slot = &table.uris[*slot].next;
-        }
-        if (*slot != UINT32_MAX)
-            *slot = uri->next;
+        ht_erase(&uritab, (ht_head_t *)uri);
+        free_slot(slot);
+        free(uri);
 
-        uri->uri = NULL;
-        uri->id = NULL;
-
-        /* Not actually free,
-         * just add to free list */
-        uri->next = table.first_free;
-        table.first_free = id;
-
+#if 0 // TODO
         /* Shrink hash table */
         if (3*table.hash_tab_caps/4 >= 32 && table.count < table.hash_tab_caps/2)
             realloc_hashtable(3*table.hash_tab_caps/4, NULL);
+#endif
 
-        /* Try shrinking table to free memory */
-        // TODO May be add bias and shrink from the start?
-        // TODO Optimize to stop requiring full free list rebuilding
-        size_t old_size = table.size;
-        while (table.size && !table.uris[table.size - 1].uri) table.size--;
-        if (old_size != table.size) {
-            table.first_free = 0;
-            for (size_t i = 0; i < table.size; i++) {
-                if (!table.uris[i].uri) {
-                    table.uris[i].next = table.first_free;
-                    table.first_free = i + 1;
-                }
-            }
-            size_t new_caps = 2*table.caps/3;
-            if (new_caps >= 8 && table.size < new_caps) {
-                struct uri *tmp = realloc(table.uris, new_caps*sizeof(*tmp));
-                if (!tmp) return;
-                table.uris = tmp;
-                table.caps = new_caps;
-            }
-        }
     }
 }
 
 void uri_open(uint32_t id) {
     if (gconfig.trace_misc) {
         info("URI open cmd='%s' id=%d path='%s'",
-                gconfig.open_command, id, id ? table.uris[id - 1].uri : "");
+                gconfig.open_command, id, uri_get(id));
     }
     if (id && !fork()) {
         execlp(gconfig.open_command,
                gconfig.open_command,
-               table.uris[id - 1].uri, NULL);
+               uri_get(id), NULL);
         _exit(127);
     }
 }
 
 const char *uri_get(uint32_t id) {
-    return id ? table.uris[id - 1].uri : "";
+    return id ? idtab.slots[id - 1].uri->uri : "";
 }
 
 void uri_release_memory(void) {
-    for (size_t i = 0; i < table.size; i++) {
-        free(table.uris[i].uri);
-        free(table.uris[i].id);
-    }
-    free(table.uris);
-    free(table.hash_tab);
-    memset(&table, 0, sizeof(table));
+    ht_iter_t it = ht_begin(&uritab);
+    while(ht_current(&it))
+        free(ht_erase_current(&it));
+    ht_free(&uritab);
+    free(idtab.slots);
+
+    memset(&idtab, 0, sizeof(idtab));
+    memset(&uritab, 0, sizeof(uritab));
 }
 
 #endif

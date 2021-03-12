@@ -5,6 +5,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "config.h"
+#include "hashtable.h"
 #include "util.h"
 
 #include <ctype.h>
@@ -333,6 +334,31 @@ const char *usage_string(ssize_t idx) {
             "where 'yes', 'y', 'true', 'no', 'n' and 'false' are case independet\n"
             "All options are also accept special value 'default' to reset to built-in default\n";
     } else return NULL;
+}
+
+
+#define HT_LOAD_FACTOR(x) (4*(x)/3)
+#define HT_CAPS_STEP(x) (3*(x)/2)
+
+bool ht_adjust(struct hashtable *ht, intptr_t inc) {
+    ht->size += inc;
+
+    if (UNLIKELY(HT_LOAD_FACTOR(ht->size) > ht->caps)) {
+        struct hashtable tmp = {
+            .cmpfn = ht->cmpfn,
+            .caps = HT_CAPS_STEP(ht->caps),
+            .data = calloc(tmp.caps, sizeof(*ht->data)),
+        };
+        if (!tmp.data) return 0;
+
+        ht_iter_t it = ht_begin(ht);
+        while(ht_current(&it))
+            ht_insert(&tmp, ht_erase_current(&it));
+        free(ht->data);
+        *ht = tmp;
+    }
+
+    return 1;
 }
 
 #if USE_PRECOMPOSE
