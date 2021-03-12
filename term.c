@@ -365,6 +365,8 @@ struct term {
      * at once for faster parsing, and stored to this buffer
      * size of this buffer is equal to terminal width */
     int32_t *predec_buf;
+
+    bool scroll_damage;
 };
 
 /* Damage terminal screen, relative to view */
@@ -975,6 +977,11 @@ bool term_redraw(struct term *term) {
 
     bool cursor = !term->prev_c_hidden && (!cl->cell[term->c.x].drawn  || cl->force_damage);
 
+    if (term->scroll_damage) {
+        term_damage_lines(term, 0, term->height);
+        term->scroll_damage = 0;
+    }
+
     return window_submit_screen(term->win, term->c.x, term->c.y, cursor, term->c.pending);
 }
 
@@ -1432,11 +1439,14 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
                     SWAP(term->screen[top + i], term->screen[top + amount + i]);
             }
 
+            term->scroll_damage = 1;
+            /*
             if (term->view_pos.line || !window_shift(term->win,
                     0, top + amount, 0, top, term->width, bottom - top - amount, 1)) {
                 for (int16_t i = top; i < bottom - amount; i++)
                      term->screen[i]->force_damage = 1;
             }
+            */
 
         } else { /* down */
             amount = MAX(amount, -(bottom - top));
@@ -1447,11 +1457,14 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
             for (int16_t i = 1; i <= rest; i++)
                 SWAP(term->screen[bottom - i], term->screen[bottom + amount - i]);
 
+            term->scroll_damage = 1;
+            /*
             if (term->view_pos.line || !window_shift(term->win, 0, top,
                     0, top - amount, term->width, bottom - top + amount, 1)) {
                 for (int16_t i = top - amount; i < bottom; i++)
                      term->screen[i]->force_damage = 1;
             }
+            */
         }
         if (amount && !term->view_pos.line) window_delay_redraw(term->win);
     } else { // Slow scrolling with margins
@@ -3407,6 +3420,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
         maxw = (term->c.x >= term_max_x(term) ? term->width : term_max_x(term)) - term->c.x;
 
     register int32_t ch = rune;
+    bool has_any_wide = 0;
 
     // If rep > 0, we should perform REP CSI
     if (UNLIKELY(rep)) {
@@ -3421,6 +3435,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
             wid = 1 + (wid > 1);
 
             if (wid == 2) {
+                has_any_wide = 1;
                 // Wide cells are indicated as
                 // negative in predecode buffer
                 ch = -ch;
@@ -3510,7 +3525,10 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
                 }
                 // Wide cells are indicated as
                 // negative in predecode buffer
-                if (wid > 1) ch = -ch;
+                if (wid > 1) {
+                    ch = -ch;
+                    has_any_wide = 1;
+                }
 
                 totalw += wid;
                 *pbuf++ = ch;
@@ -3544,15 +3562,22 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
     if (mouse_is_selected_2(term, term->c.x, maxsx, term->c.y))
         mouse_clear_selection(term);
 
-    // Erase overwritten parts of wide characters
-    term_adjust_wide_left(term, term->c.x, term->c.y);
-    term_adjust_wide_right(term, term->c.x + totalw - 1, term->c.y);
-
     if (term->mode.margin_bell) {
         ssize_t bcol = term->right - window_cfg(term->win)->margin_bell_column;
         if (term->c.x < bcol && term->c.x + totalw >= bcol)
             window_bell(term->win, term->mbvol);
     }
+
+    // Erase overwritten parts of wide characters
+    term_adjust_wide_left(term, term->c.x, term->c.y);
+
+    term->c.x += totalw;
+    if (term->c.x < line->mwidth)
+        term_adjust_wide_right(term, term->c.x - 1, term->c.y);
+
+    line->mwidth = MAX(line->mwidth, term->c.x);
+    term->c.pending = term->c.x == term_max_x(term);
+    term->c.x -= term->c.pending;
 
     if (gconfig.trace_characters) {
         for (int32_t *p = term->predec_buf; p < pbuf; p++)
@@ -3566,21 +3591,22 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
     uint32_t attrid = alloc_attr(line, term->sgr);
 
     // Put charaters
-    for (int32_t *p = term->predec_buf; p < pbuf; p++) {
-        *cell = MKCELL(abs(*p), attrid);
+    if (!has_any_wide) {
+        for (int32_t *p = term->predec_buf; p < pbuf; p++)
+            *cell++ = MKCELL(*p, attrid);
+    } else {
+        for (int32_t *p = term->predec_buf; p < pbuf; p++) {
+            *cell = MKCELL(abs(*p), attrid);
 
-        // Put dummy character to the left of wide
-        if (UNLIKELY(*p < 0)) {
-            cell->wide = 1;
-            *++cell = MKCELL(0, attrid);
+            // Put dummy character to the left of wide
+            if (UNLIKELY(*p < 0)) {
+                cell->wide = 1;
+                *++cell = MKCELL(0, attrid);
+            }
+            cell++;
         }
-        cell++;
     }
 
-    term->c.x += totalw;
-    line->mwidth = MAX(line->mwidth, term->c.x);
-    term->c.pending = term->c.x == term_max_x(term);
-    term->c.x -= term->c.pending;
 
     return res;
 }
@@ -5114,6 +5140,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
 
 #define MAX_READS 8
 
+__attribute__((hot))
 bool term_read(struct term *term) {
     size_t i = 0;
     for (; i < MAX_READS; i++) {

@@ -34,6 +34,8 @@ Until 2.5 (or later)
         OSC 113 Pt ST -- Reset color mouse foreground color
         OSC 114 Pt ST -- Reset color mouse background color
 General
+    We need better storage for lines contents that just malloc,
+        to be able to scroll faster
     Add 'always' value to some options to prevent overriding
     Allow disable rewrapping only for screen/part below cursor, while keep rewrapping scrollback
     Do something with multi-line shell prompt eating history lines
