@@ -347,7 +347,7 @@ bool ht_adjust(struct hashtable *ht, intptr_t inc) {
         struct hashtable tmp = {
             .cmpfn = ht->cmpfn,
             .caps = HT_CAPS_STEP(ht->caps),
-            .data = calloc(tmp.caps, sizeof(*ht->data)),
+            .data = calloc(HT_CAPS_STEP(ht->caps), sizeof(*ht->data)),
         };
         if (!tmp.data) return 0;
 
@@ -357,6 +357,23 @@ bool ht_adjust(struct hashtable *ht, intptr_t inc) {
         free(ht->data);
         *ht = tmp;
     }
+
+    return 1;
+}
+
+bool ht_shrink(struct hashtable *ht, intptr_t new_caps) {
+    struct hashtable tmp = {
+        .cmpfn = ht->cmpfn,
+        .caps = new_caps,
+        .data = calloc(new_caps, sizeof(*ht->data)),
+    };
+    if (!tmp.data) return 0;
+
+    ht_iter_t it = ht_begin(ht);
+    while(ht_current(&it))
+        ht_insert(&tmp, ht_erase_current(&it));
+    free(ht->data);
+    *ht = tmp;
 
     return 1;
 }

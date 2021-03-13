@@ -34,6 +34,7 @@ struct ht_iter {
     ht_head_t **elem;
 };
 
+extern bool ht_shrink(struct hashtable *ht, intptr_t new_caps);
 extern bool ht_adjust(struct hashtable *ht, intptr_t inc);
 
 inline static ht_iter_t ht_begin(hashtable_t *ht) {

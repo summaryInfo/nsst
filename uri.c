@@ -330,12 +330,11 @@ void uri_unref(uint32_t id) {
         free_slot(slot);
         free(uri);
 
-#if 0 // TODO
         /* Shrink hash table */
-        if (3*table.hash_tab_caps/4 >= 32 && table.count < table.hash_tab_caps/2)
-            realloc_hashtable(3*table.hash_tab_caps/4, NULL);
-#endif
-
+        if (3*uritab.size/4 > HT_INIT_CAPS &&
+                uritab.size < uritab.caps/2) {
+            ht_shrink(&uritab, uritab.caps/2);
+        }
     }
 }
 
