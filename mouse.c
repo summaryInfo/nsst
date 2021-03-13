@@ -469,7 +469,7 @@ void mouse_scroll_view(struct term *term, ssize_t delta) {
     }
 }
 
-inline static void adj_coords(struct term *term, int16_t *x, int16_t *y) {
+inline static void adj_coords(struct term *term, int16_t *x, int16_t *y, bool pixel) {
     struct window *win = term_window(term);
     int16_t cw, ch, w, h, bw, bh;
 
@@ -477,8 +477,13 @@ inline static void adj_coords(struct term *term, int16_t *x, int16_t *y) {
     window_get_dim_ext(win, dim_border, &bw, &bh);
     window_get_dim_ext(win, dim_grid_size, &w, &h);
 
-    *x = MAX(0, MIN(w - 1, (*x - bw))) / cw;
-    *y = MAX(0, MIN(h - 1, (*y - bh))) / ch;
+    *x = MAX(0, MIN(w - 1, (*x - bw)));
+    *y = MAX(0, MIN(h - 1, (*y - bh)));
+
+    if (!pixel) {
+         *x /= cw;
+         *y /= ch;
+    }
 }
 
 void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask) {
@@ -496,7 +501,7 @@ void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, 
     if (x < bw || x >= w + bw || y < bh || y > h + bh) {
         if (evt == 1) term_answerback(term, CSI"0&w");
     } else {
-        if (!term_get_mstate(term)->locator_pixels) adj_coords(term, &x, &y);
+        adj_coords(term, &x, &y, term_get_mstate(term)->locator_pixels);
         term_answerback(term, CSI"%d;%d;%d;%d;1&w", evt, lmask, y + 1, x + 1);
     }
 }
@@ -632,8 +637,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
             (ev.mask & mask_mod_mask) != force_mask && !term_get_kstate(term)->keyboad_vt52) {
         enum mouse_mode md = loc->mouse_mode;
 
-        if (loc->mouse_format != mouse_format_pixel)
-            adj_coords(term, &ev.x, &ev.y);
+        adj_coords(term, &ev.x, &ev.y, loc->mouse_format == mouse_format_pixel);
 
         if (md == mouse_mode_x10 && ev.button > 2) return;
 
@@ -671,8 +675,8 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
             size_t off = 0;
             uint8_t buf[UTF8_MAX_LEN * 3 + 3];
             off += utf8_encode(ev.button + ' ', buf + off, buf + sizeof buf);
-            off += utf8_encode(ev.x + ' ', buf + off, buf + sizeof buf);
-            utf8_encode(ev.y + ' ', buf + off, buf + sizeof buf);
+            off += utf8_encode(ev.x + 1 + ' ', buf + off, buf + sizeof buf);
+            utf8_encode(ev.y + 1 + ' ', buf + off, buf + sizeof buf);
             term_answerback(term, CSI"%s%s",
                     term_get_kstate(term)->keyboard_mapping == keymap_sco ? ">M" : "M", buf);
             break;
@@ -705,7 +709,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
         else window_set_active_uri(term_window(term), EMPTY_URI, 0);
 #endif
         int16_t y = ev.y;
-        adj_coords(term, &ev.x, &ev.y);
+        adj_coords(term, &ev.x, &ev.y, 0);
         change_selection(term, ev.event + 1, ev.x, ev.y, ev.mask & mask_mod_1);
         pending_scroll(term, y, ev.event);
 
