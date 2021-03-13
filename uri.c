@@ -356,10 +356,12 @@ const char *uri_get(uint32_t id) {
 }
 
 void uri_release_memory(void) {
-    ht_iter_t it = ht_begin(&uritab);
-    while(ht_current(&it))
-        free(ht_erase_current(&it));
-    ht_free(&uritab);
+    if (uritab.data) {
+        ht_iter_t it = ht_begin(&uritab);
+        while(ht_current(&it))
+            free(ht_erase_current(&it));
+        ht_free(&uritab);
+    }
     free(idtab.slots);
 
     memset(&idtab, 0, sizeof(idtab));
