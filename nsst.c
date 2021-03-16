@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
         if (!strncmp(argv[i], "--config=", sizeof "--config=" - 1) ||
                 !strncmp(argv[i], "-C", sizeof "-C" - 1)) {
             char *arg = argv[i] + (argv[i][1] == '-' ? sizeof "--config=" : sizeof "-C") - 1;
-            if (!*arg) { arg = argv[++i]; warn("X %d %s\n", i, arg);}
+            if (!*arg) arg = argv[++i];
             if (!arg) usage(argv[0], EXIT_FAILURE);
             cpath = arg;
         }
