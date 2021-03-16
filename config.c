@@ -916,7 +916,7 @@ void free_config(struct instance_config *src) {
 #endif
 }
 
-void parse_config(struct instance_config *cfg, bool allow_global) {
+static void parse_config(struct instance_config *cfg, bool allow_global) {
     char pathbuf[PATH_MAX];
     const char *path = cfg->config_path;
     int fd = -1;

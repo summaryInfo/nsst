@@ -516,7 +516,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
     } else if (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode->delete_is_del)) {
         uint32_t deccode = fnkey_dec(k.sym, k.is_fkey, &reply);
         if (k.is_fkey && k.mask & mask_shift && mode->keyboard_mapping == keymap_vt220) {
-            struct udk udk = reply.param[0] < UDK_MAX ? mode->udk[reply.param[0]] : (struct udk){0};
+            struct udk udk = reply.param[0] < UDK_MAX ? mode->udk[reply.param[0]] : (struct udk){ NULL };
             if (udk.val) {
                 if (gconfig.trace_input)
                     info("Key str: '%s' ", udk.val);

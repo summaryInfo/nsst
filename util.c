@@ -382,12 +382,12 @@ bool ht_shrink(struct hashtable *ht, intptr_t new_caps) {
 
 #include "precompose-table.h"
 
-int pre1_cmpfn(const void * a, const void *b) {
+static int pre1_cmpfn(const void * a, const void *b) {
     const struct pre1_item *ai = a, *bi = b;
     if (ai->src != bi->src) return ai->src - bi->src;
     return ai->mod - bi->mod;
 }
-int pre2_cmpfn(const void * a, const void *b) {
+static int pre2_cmpfn(const void * a, const void *b) {
     const struct pre2_item *ai = a, *bi = b;
     if (ai->src != bi->src) return ai->src - bi->src;
     return ai->mod - bi->mod;
@@ -407,7 +407,7 @@ uint32_t try_precompose(uint32_t ch, uint32_t comb) {
 
 #else
 
-uint32_t try_precompose(uint32_t ch, uint32_t comb) { (void)comb; return ch; }
+static uint32_t try_precompose(uint32_t ch, uint32_t comb) { (void)comb; return ch; }
 
 #endif
 

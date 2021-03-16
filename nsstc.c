@@ -38,7 +38,7 @@ inline static void recv_response(int fd) {
     }
 }
 
-_Noreturn void usage(int fd, const char *argv0, int code) {
+static _Noreturn void usage(int fd, const char *argv0, int code) {
     send_char(fd, '\025' /* NAK */);
 
     fputs(argv0, stdout);
@@ -47,7 +47,7 @@ _Noreturn void usage(int fd, const char *argv0, int code) {
     exit(code);
 }
 
-_Noreturn void version(int fd) {
+static _Noreturn void version(int fd) {
     send_char(fd, '\005' /* ENQ */);
 
     recv_response(fd);
@@ -239,7 +239,7 @@ end:
         send_arg(fd, argv[ind++]);
 }
 
-void do_fork(const char *spath) {
+static void do_fork(const char *spath) {
     int res;
     struct stat stt;
     switch (fork()) {
@@ -261,7 +261,7 @@ void do_fork(const char *spath) {
     }
 }
 
-int try_connect(const char *spath) {
+static int try_connect(const char *spath) {
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof addr);
     addr.sun_family = AF_UNIX;

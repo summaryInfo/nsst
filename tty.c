@@ -66,7 +66,7 @@ static void handle_chld(int arg) {
     (void)arg;
 }
 
-_Noreturn void exec_shell(char **args, char *sh, char *termname, char *luit) {
+static _Noreturn void exec_shell(char **args, char *sh, char *termname, char *luit) {
 
     const struct passwd *pw;
     errno = 0;

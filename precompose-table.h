@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 
-struct pre1_item {
+static struct pre1_item {
     uint16_t src, mod, dst;
 } pre1_tab[] = {
     {0x003C, 0x0338,  0x226E},
@@ -1010,7 +1010,7 @@ struct pre1_item {
     {0xFB49, 0x05C2,  0xFB2D},
 };
 
-struct pre2_item {
+static struct pre2_item {
     uint32_t src, mod, dst;
 } pre2_tab[] = {
     {0x11099, 0x110BA, 0x1109A},

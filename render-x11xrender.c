@@ -154,12 +154,12 @@ void renderer_free(struct window *win) {
     xcb_render_free_glyph_set(con, win->ren.gsid);
 }
 
-void free_render_context() {
+void free_render_context(void) {
     free(rctx.buffer);
     free(rctx.cbuffer);
 }
 
-void init_render_context() {
+void init_render_context(void) {
     rctx.buffer = malloc(WORDS_IN_MESSAGE * sizeof(uint32_t));
     if (!rctx.buffer) {
         xcb_disconnect(con);

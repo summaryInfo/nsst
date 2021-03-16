@@ -75,4 +75,13 @@ bool term_is_paste_quote_enabled(struct term *term);
 bool term_is_cursor_enabled(struct term *term);
 bool term_is_reverse(struct term *term);
 
+/* These are only used in mouse.c */
+int16_t term_max_y(struct term *term);
+int16_t term_max_x(struct term *term);
+int16_t term_min_y(struct term *term);
+int16_t term_min_x(struct term *term);
+int16_t term_width(struct term *term);
+int16_t term_height(struct term *term);
+ssize_t term_view(struct term *term);
+
 #endif

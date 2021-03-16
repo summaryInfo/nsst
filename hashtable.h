@@ -93,7 +93,7 @@ inline static void ht_free(hashtable_t *ht) {
     assert(!ht->size);
 
     free(ht->data);
-    *ht = (hashtable_t){0};
+    *ht = (hashtable_t){ NULL };
 }
 
 inline static void ht_init(hashtable_t *ht, size_t caps, ht_cmpfn_t *cmpfn) {

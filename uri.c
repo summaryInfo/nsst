@@ -59,7 +59,7 @@ struct id_table {
 #define mkurikey(_id, idlen, _uri, urilen) ((const struct uri){ .head = (ht_head_t){ .hash = hash64(_id, idlen) ^ hash64(_uri, urilen) }, .id = _id, .uri = _uri})
 
 static struct id_table idtab;
-hashtable_t uritab;
+static hashtable_t uritab;
 
 /* From window.c */
 enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
@@ -216,7 +216,7 @@ inline static struct slot *alloc_slot(void) {
         if (idtab.size + 1 > idtab.caps) {
             size_t new_caps = URI_CAPS_STEP(idtab.caps);
             struct slot *tmp = realloc(idtab.slots, new_caps*sizeof(*tmp));
-            if (!tmp)  return EMPTY_URI;
+            if (!tmp)  return NULL;
             idtab.slots = tmp;
             idtab.caps = new_caps;
         }

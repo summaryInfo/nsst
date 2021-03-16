@@ -93,10 +93,10 @@ struct context {
     } *first_pending;
 };
 
-struct context ctx;
+static struct context ctx;
+static volatile sig_atomic_t reload_config;
 xcb_connection_t *con = NULL;
 struct window *win_list_head = NULL;
-volatile sig_atomic_t reload_config;
 
 static struct window *window_for_xid(xcb_window_t xid) {
     for (struct window *win = win_list_head; win; win = win->next)
@@ -687,7 +687,7 @@ void window_set_title(struct window *win, enum title_target which, const char *t
     if (which & target_icon_label) set_icon_label(win->wid, title, utf8);
 }
 
-char *get_full_property(xcb_window_t wid, xcb_atom_t prop, xcb_atom_t *type, size_t *psize) {
+static char *get_full_property(xcb_window_t wid, xcb_atom_t prop, xcb_atom_t *type, size_t *psize) {
     size_t left = 0, offset = 0, size = 0;
     char *data = NULL, *tmp;
     do {
@@ -787,7 +787,7 @@ void window_pop_title(struct window *win, enum title_target which) {
 }
 
 
-uint32_t get_win_gravity_from_config(bool nx, bool ny) {
+inline static uint32_t get_win_gravity_from_config(bool nx, bool ny) {
     switch (nx + 2 * ny) {
     case 0: return XCB_GRAVITY_NORTH_WEST;
     case 1: return XCB_GRAVITY_NORTH_EAST;
@@ -860,7 +860,7 @@ struct cellspec describe_cell(struct cell cell, struct attr attr, struct instanc
 
 struct window *find_shared_font(struct window *win, bool need_free) {
     bool found_font = 0, found_cache = 0;
-    struct window *found = 0;
+    struct window *found = NULL;
 
     for (struct window *src = win_list_head; src; src = src->next) {
         if ((src->cfg.font_size == win->cfg.font_size || (!win->cfg.font_size && src->cfg.font_size == ctx.font_size)) &&
@@ -948,7 +948,7 @@ void window_set_default_props(struct window *win) {
             XCB_ATOM_WM_HINTS, 8*sizeof(*wmhints), sizeof(wmhints)/sizeof(*wmhints), wmhints);
 }
 
-ssize_t alloc_pollfd(void) {
+static ssize_t alloc_pollfd(void) {
     if (ctx.pfdn + 1 > ctx.pfdcap) {
         struct pollfd *new = realloc(ctx.pfds, (ctx.pfdcap + INIT_PFD_NUM)*sizeof(*ctx.pfds));
         if (new) {

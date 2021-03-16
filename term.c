@@ -423,7 +423,7 @@ struct line_view term_line_at(struct term *term, struct line_offset pos) {
             .cell = ln->cell + pos.offset,
             .line = ln,
         };
-    } else return (struct line_view){0};
+    } else return (struct line_view){ NULL };
 }
 
 ssize_t term_line_next(struct term *term, struct line_offset *pos, ssize_t amount) {
@@ -1841,7 +1841,7 @@ void term_set_reverse(struct term *term, bool set) {
 
 static void term_load_config(struct term *term) {
 
-    term->mstate = (struct mouse_state) {0};
+    term->mstate = (struct mouse_state) {{0}};
 
     struct instance_config *cfg = window_cfg(term->win);
     term->mode = (struct term_mode) {

@@ -4,6 +4,12 @@
 
 #include "feature.h"
 
+/* Make linting always work for this
+ * file (force choosing the right renderer
+ * structure variant in window-x11.h)*/
+#undef USE_X11SHM
+#define USE_X11SHM 1
+
 #include "config.h"
 #include "font.h"
 #include "mouse.h"
@@ -120,11 +126,11 @@ void renderer_free(struct window *win) {
     free(win->ren.bounds);
 }
 
-void free_render_context() {
+void free_render_context(void) {
     /* nothing */
 }
 
-void init_render_context() {
+void init_render_context(void) {
     // That's kind of hack
     // Try guessing if DISPLAY refers to localhost
 

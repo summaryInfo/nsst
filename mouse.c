@@ -17,15 +17,6 @@
 #define SEL_INIT_SIZE 32
 #define CSI "\233"
 
-// From term.c
-int16_t term_max_y(struct term *term);
-int16_t term_max_x(struct term *term);
-int16_t term_min_y(struct term *term);
-int16_t term_min_x(struct term *term);
-int16_t term_width(struct term *term);
-int16_t term_height(struct term *term);
-ssize_t term_view(struct term *term);
-
 inline static size_t descomose_selection(struct rect dst[static 3], struct selected seld, struct rect bound, ssize_t pos) {
     size_t count = 0;
     int16_t x0 = seld.x0, x1 = seld.x1 + 1;
@@ -537,7 +528,7 @@ void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, 
     window_set_mouse(term_window(term), 1);
 }
 
-void pending_scroll(struct term *term, int16_t y, enum mouse_event_type event) {
+static void pending_scroll(struct term *term, int16_t y, enum mouse_event_type event) {
     struct mouse_state *loc = term_get_mstate(term);
     int16_t h, bh;
 

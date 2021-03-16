@@ -485,7 +485,7 @@ struct glyph_cache {
 
 #define mkglyphkey(gl) ((struct glyph){ .head = { .hash = uint_hash32(gl)}, .g = (gl) })
 
-bool glyph_cmp(const ht_head_t *a, const ht_head_t *b) {
+static bool glyph_cmp(const ht_head_t *a, const ht_head_t *b) {
     const struct glyph *ga = (const struct glyph *)a;
     const struct glyph *gb = (const struct glyph *)b;
     return ga->g == gb->g;
