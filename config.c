@@ -922,7 +922,7 @@ static void parse_config(struct instance_config *cfg, bool allow_global) {
     int fd = -1;
 
     /* Config file is search in following places:
-     * 1. sconf(SCONF_CONFIG_PATH) set with --config=
+     * 1. Path set with --config=
      * 2. $XDG_CONFIG_HOME/nsst.conf
      * 3. $HOME/.config/nsst.conf
      * If file is not found in those places, just give up */
