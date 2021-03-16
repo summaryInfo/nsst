@@ -731,6 +731,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
             nnlines = MAX(nnlines * 2, MAX(MAX(new_cur_par - cursor_par, approx_cy - height - 1), 0) + height * 2);
 
+            assert(nnlines);
             new_lines = calloc(nnlines, sizeof(*new_lines));
             if (!new_lines) die("Can't allocate line");
             new_lines[0] = create_line(dflt_sgr, width);
@@ -1841,7 +1842,7 @@ void term_set_reverse(struct term *term, bool set) {
 
 static void term_load_config(struct term *term) {
 
-    term->mstate = (struct mouse_state) {{0}};
+    term->mstate = (struct mouse_state) {0};
 
     struct instance_config *cfg = window_cfg(term->win);
     term->mode = (struct term_mode) {

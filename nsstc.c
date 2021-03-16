@@ -27,7 +27,7 @@
 static char buffer[MAX_OPTION_DESC + 1];
 
 inline static void send_char(int fd, char c) {
-    for (int res; (res = send(fd, (char[1]){c}, 1, 0)) < 0 && errno == EAGAIN;);
+    while (send(fd, (char[1]){c}, 1, 0) < 0 && errno == EAGAIN);
 }
 
 inline static void recv_response(int fd) {
@@ -122,7 +122,7 @@ static void send_opt(int fd, const char *opt, const char *value) {
         .msg_iovlen = sizeof dvec / sizeof *dvec
     };
 
-    for (int res; (res = sendmsg(fd, &hdr, 0)) < 0 && errno == EAGAIN;);
+    while (sendmsg(fd, &hdr, 0) < 0 && errno == EAGAIN);
 }
 
 static void send_arg(int fd, char *arg) {
@@ -136,7 +136,7 @@ static void send_arg(int fd, char *arg) {
         .msg_iovlen = sizeof dvec / sizeof *dvec
     };
 
-    for (int res; (res = sendmsg(fd, &hdr, 0)) < 0 && errno == EAGAIN;);
+    while (sendmsg(fd, &hdr, 0) < 0 && errno == EAGAIN);
 }
 
 static void send_header(int fd, const char *cpath) {
@@ -150,7 +150,7 @@ static void send_header(int fd, const char *cpath) {
         .msg_iovlen = 1 + !!cpath,
     };
 
-    for (int res; (res = sendmsg(fd, &hdr, 0)) < 0 && errno == EAGAIN;);
+    while (sendmsg(fd, &hdr, 0) < 0 && errno == EAGAIN);
 }
 
 static void parse_server_args(char **argv, int fd) {

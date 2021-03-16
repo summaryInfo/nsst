@@ -1138,10 +1138,9 @@ inline static xcb_atom_t target_to_atom(enum clip_target target) {
 
 static void clip_copy(struct window *win, bool uri) {
     const char *src = uri ? uri_get(win->rcstate.active_uri) :
-            strdup((char *)win->clipped[clip_primary]);
-    if (!src) return;
-    uint8_t *dup = (uint8_t *)strdup(src);
-    if (dup) {
+                (const char *)win->clipped[clip_primary];
+    uint8_t *dup;
+    if (src && (dup = (uint8_t *)strdup(src))) {
         if (term_is_keep_clipboard_enabled(win->term)) {
             uint8_t *dup2 = (uint8_t *)strdup((char *)dup);
             free(win->clipboard);
