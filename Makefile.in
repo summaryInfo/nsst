@@ -53,7 +53,9 @@ uninstall:
 
 $(NAME): $(OBJ)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ) $(LDLIBS) -o $@
+
 $(NAME)c: nsstc.o
+	$(CC) $(CFLAGS) $(LDFLAGS) nsstc.o -o $@
 
 boxdraw.o: feature.h config.h font.h line.h util.h nrcs.h boxdraw.h term.h window.h hashtable.h
 config.o: feature.h config.h font.h line.h util.h nrcs.h input.h window.h hashtable.h
