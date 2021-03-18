@@ -423,7 +423,7 @@ struct line_view term_line_at(struct term *term, struct line_offset pos) {
             .cell = ln->cell + pos.offset,
             .line = ln,
         };
-    } else return (struct line_view){ NULL };
+    } else return (struct line_view){ 0 };
 }
 
 ssize_t term_line_next(struct term *term, struct line_offset *pos, ssize_t amount) {

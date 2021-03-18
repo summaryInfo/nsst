@@ -103,7 +103,7 @@ if [ "$use_clang" = 1 ]; then
     vars="${vars}${nl}LDFLAGS += -fuse-ld=/usr/bin/ld.lld${nl}CC=clang"
 fi
 
-vars="${vars}CFLAGS=$cflags"
+vars="${vars}${nl}CFLAGS=$cflags"
 
 
 [ x = x"$bindir" ] && bindir=${prefix}/bin

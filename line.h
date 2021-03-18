@@ -30,14 +30,12 @@
 #define ATTRID_MAX 512
 #define ATTRID_DEFAULT 0
 
-typedef uint32_t color_t;
-
 struct cell {
     uint32_t ch : 21;
     uint32_t drawn : 1;
     uint32_t wide : 1;
     uint32_t attrid : 9;
-} PACKED ALIGNED(sizeof(uint32_t));
+};
 
 struct attr {
     color_t fg;

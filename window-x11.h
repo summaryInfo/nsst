@@ -71,7 +71,7 @@ struct render_cell_state {
     uint32_t dummy_ : 7;
     bool blink : 1;
     bool uri_pressed : 1;
-} PACKED ALIGNED(_Alignof(color_t *));
+};
 
 struct window {
     struct window *prev, *next;
