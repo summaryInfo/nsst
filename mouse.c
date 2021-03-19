@@ -530,14 +530,15 @@ void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, 
 
 static void pending_scroll(struct term *term, int16_t y, enum mouse_event_type event) {
     struct mouse_state *loc = term_get_mstate(term);
-    int16_t h, bh;
+    int16_t h, bh, ch;
 
     window_get_dim_ext(term_window(term), dim_border, NULL, &bh);
+    window_get_dim_ext(term_window(term), dim_cell_size, NULL, &ch);
     window_get_dim_ext(term_window(term), dim_grid_size, NULL, &h);
 
     if (event == mouse_event_motion) {
-        if (y - bh >= h) loc->pending_scroll = -1;
-        else if (y < bh) loc->pending_scroll = 1;
+        if (y - bh >= h) loc->pending_scroll = MIN(-1, (h + bh - y - ch + 1) / ch / 2);
+        else if (y < bh) loc->pending_scroll = MAX(1, (bh - y + ch - 1) / ch / 2);
         mouse_pending_scroll(term);
     }
 }
