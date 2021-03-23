@@ -175,7 +175,7 @@ void init_render_context(void) {
 
     // Check if XRender is present
     xcb_render_query_version_cookie_t vc = xcb_render_query_version(con, XCB_RENDER_MAJOR_VERSION, XCB_RENDER_MINOR_VERSION);
-    xcb_generic_error_t *err;
+    xcb_generic_error_t *err = NULL;
     xcb_render_query_version_reply_t *rep = xcb_render_query_version_reply(con, vc, &err);
     // Any version is OK, so don't check
     free(rep);

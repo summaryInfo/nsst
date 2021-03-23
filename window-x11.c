@@ -99,8 +99,12 @@ xcb_connection_t *con = NULL;
 struct window *win_list_head = NULL;
 
 static struct window *window_for_xid(xcb_window_t xid) {
-    for (struct window *win = win_list_head; win; win = win->next)
-        if (win->wid == xid) return win;
+    for (struct window *win = win_list_head; win; win = win->next) {
+        if (win->wid == xid) {
+            win->any_event_happend = 1;
+            return win;
+        }
+    }
     return NULL;
 }
 
@@ -123,7 +127,7 @@ _Noreturn static void handle_term(int sig) {
 
 static xcb_atom_t intern_atom(const char *atom) {
     xcb_atom_t at;
-    xcb_generic_error_t *err;
+    xcb_generic_error_t *err = NULL;
     xcb_intern_atom_cookie_t c = xcb_intern_atom(con, 0, strlen(atom), atom);
     xcb_intern_atom_reply_t *reply = xcb_intern_atom_reply(con, c, &err);
     if (err) {
@@ -235,7 +239,7 @@ void init_context(void) {
     for (size_t i = 1; i < INIT_PFD_NUM; i++)
         ctx.pfds[i].fd = -1;
 
-    int screenp;
+    int screenp = 0;
     con = xcb_connect(NULL, &screenp);
     ctx.pfds[0].events = POLLIN | POLLHUP;
     ctx.pfds[0].fd = xcb_get_file_descriptor(con);
@@ -1840,7 +1844,10 @@ void run(void) {
                     ctx.pfds[win->poll_index].fd = -ctx.pfds[win->poll_index].fd;
                     need_read = 1;
                 }
-                if (need_read && term_read(win->term)) win->last_read = cur;
+                if (need_read && term_read(win->term)) {
+                    win->last_read = cur;
+                    win->any_event_happend = 1;
+                }
                 if (win->wait_for_redraw) {
                     // If we are waiting for the frame to finish, we need to
                     // reduce poll timeout
@@ -1855,6 +1862,7 @@ void run(void) {
 
             // Scroll down selection
             bool pending_scroll = mouse_pending_scroll(win->term);
+            if (!win->any_event_happend && !pending_scroll) continue;
 
             // Deactivate syncronous update mode if it has expired
             if (UNLIKELY(win->sync_active) && TIMEDIFF(win->last_sync, cur) > win->cfg.sync_time*1000LL)
@@ -1902,6 +1910,7 @@ void run(void) {
                 win->slow_mode = !win->drawn_somthing;
 
                 win->force_redraw = 0;
+                win->any_event_happend = 0;
                 win->blink_commited = 1;
                 win->uri_damaged = 0;
             }
