@@ -512,7 +512,7 @@ struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmod
 
     int16_t total = 0, maxd = 0, maxh = 0;
     for (uint32_t i = ' '; i <= '~'; i++) {
-        struct glyph *g = glyph_cache_fetch(cache, i, face_normal);
+        struct glyph *g = glyph_cache_fetch(cache, i, face_normal, NULL);
 
         total += g->x_off;
         maxd = MAX(maxd, g->height - g->y);
@@ -552,10 +552,15 @@ void free_glyph_cache(struct glyph_cache *cache) {
     }
 }
 
-struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face) {
+struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face, bool *is_new) {
     struct glyph dummy = mkglyphkey(ch | (face << 24));
     ht_head_t **h = ht_lookup_ptr(&cache->glyphs, (ht_head_t *)&dummy);
-    if (*h) return (struct glyph *)*h;
+    if (*h) {
+        if (is_new) *is_new = 0;
+        return (struct glyph *)*h;
+    }
+
+    if (is_new) *is_new = 1;
 
     struct glyph *new;
 #if USE_BOXDRAWING
@@ -571,8 +576,4 @@ struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum fac
 
     ht_insert_hint(&cache->glyphs, h, (ht_head_t *)new);
     return new;
-}
-
-bool glyph_cache_is_fetched(struct glyph_cache *cache, uint32_t ch) {
-    return ht_find(&cache->glyphs, (ht_head_t *)&mkglyphkey(ch));
 }

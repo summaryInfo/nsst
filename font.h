@@ -53,9 +53,8 @@ int16_t font_get_size(struct font *font);
 struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode, int16_t vspacing, int16_t hspacing, bool boxdraw);
 struct glyph_cache *glyph_cache_ref(struct glyph_cache *ref);
 void free_glyph_cache(struct glyph_cache *cache);
-struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face);
 void glyph_cache_get_dim(struct glyph_cache *cache, int16_t *w, int16_t *h, int16_t *d);
-bool glyph_cache_is_fetched(struct glyph_cache *cache, uint32_t ch);
+struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face, bool *is_new);
 
 #endif
 

@@ -115,7 +115,7 @@ bool renderer_reload_font(struct window *win, bool need_free) {
         if (check_void_cookie(c)) warn("Can't create glyph set");
 
         for (uint32_t i = ' '; i <= '~'; i++) {
-            struct glyph *glyph = glyph_cache_fetch(win->font_cache, i, face_normal);
+            struct glyph *glyph = glyph_cache_fetch(win->font_cache, i, face_normal, NULL);
             glyph->x_off = win->char_width;
             register_glyph(win, i, glyph);
         }
@@ -417,10 +417,10 @@ void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
                 spec = describe_cell(cel, attr, &win->cfg, &win->rcstate, selected);
                 g =  spec.ch | (spec.face << 24);
 
-                bool fetched = glyph_cache_is_fetched(win->font_cache, g);
-                if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face);
+                bool is_new = 0;
+                if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face, &is_new);
 
-                if (!fetched && glyph) register_glyph(win, g, glyph);
+                if (UNLIKELY(is_new) && glyph) register_glyph(win, g, glyph);
 
                 g_wide = glyph && glyph->x_off > win->char_width - win->cfg.font_spacing;
             }
