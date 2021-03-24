@@ -1809,7 +1809,7 @@ void run(void) {
                 win->last_blink = cur;
             }
 
-            if (!win->any_event_happend && !pending_scroll && !win->blink_commited) continue;
+            if (!win->any_event_happend && !pending_scroll && win->blink_commited) continue;
 
             // Deactivate syncronous update mode if it has expired
             if (UNLIKELY(win->sync_active) && TIMEDIFF(win->last_sync, cur) > win->cfg.sync_time*1000LL)
