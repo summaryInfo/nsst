@@ -1,5 +1,7 @@
 /* Copyright (c) 2019-2021, Evgeny Baskov. All rights reserved */
 
+#define _XOPEN_SOURCE
+
 #include "feature.h"
 
 #include "config.h"
@@ -9,8 +11,9 @@
 
 #include <stdbool.h>
 #include <string.h>
-#include <xcb/xcb.h>
+#include <wchar.h>
 #include <xcb/render.h>
+#include <xcb/xcb.h>
 
 struct glyph_msg {
     uint8_t len;
@@ -19,26 +22,51 @@ struct glyph_msg {
     uint8_t data[];
 };
 
+struct element {
+    /* Only one structure is used
+     * for both text and rectangles
+     * in order to use only one non-generic
+     * sort function */
+    int16_t x;
+    int16_t y;
+    color_t color;
+    union {
+        /* Width and height of rectangle to draw */
+        struct {
+            int16_t width;
+            int16_t height;
+        };
+        /* Offset in glyphs buffer
+         * (And the sequence of glyphs is 0-terminated) */
+        uint32_t glyphs;
+    };
+};
+
+struct element_buffer {
+    struct element *data;
+    size_t size;
+    size_t caps;
+};
+
 struct render_context {
     xcb_render_pictformat_t pfargb;
     xcb_render_pictformat_t pfalpha;
 
-    struct cell_desc {
-        int16_t x;
-        int16_t y;
-        color_t bg;
-        color_t fg;
-        uint32_t glyph : 29;
-        uint32_t wide : 1;
-        uint32_t underlined : 1;
-        uint32_t strikethrough : 1;
-    } *cbuffer;
-    size_t cbufsize;
-    size_t cbufpos;
+    /* This buffer is used for:
+     *    - XRender glyph drawing requests construction
+     *    - XRender rectangle drawing requests construction
+     *    - XRender clip rectangles */
+    uint8_t *payload;
+    size_t payload_caps;
+    size_t payload_size;
 
-    uint8_t *buffer;
-    size_t bufsize;
-    size_t bufpos;
+    uint32_t *glyphs;
+    size_t glyphs_size;
+    size_t glyphs_caps;
+
+    struct element_buffer foreground_buf;
+    struct element_buffer background_buf;
+    struct element_buffer decoration_buf;
 };
 
 static struct render_context rctx;
@@ -57,8 +85,9 @@ static void register_glyph(struct window *win, uint32_t ch, struct glyph * glyph
     xcb_render_glyphinfo_t spec = {
         .width = glyph->width, .height = glyph->height,
         .x = glyph->x - win->cfg.font_spacing/2, .y = glyph->y - win->cfg.line_spacing/2,
-        .x_off = win->char_width, .y_off = glyph->y_off
+        .x_off = win->char_width*(1 + (wcwidth(ch & 0xFFFFFF) > 1)), .y_off = glyph->y_off
     };
+
     xcb_void_cookie_t c;
     c = xcb_render_add_glyphs_checked(con, win->ren.gsid, 1, &ch, &spec, glyph->height*glyph->stride, glyph->data);
     if (check_void_cookie(c))
@@ -154,24 +183,41 @@ void renderer_free(struct window *win) {
     xcb_render_free_glyph_set(con, win->ren.gsid);
 }
 
-void free_render_context(void) {
-    free(rctx.buffer);
-    free(rctx.cbuffer);
+static void free_elem_buffer(struct element_buffer *buf) {
+    free(buf->data);
+    *buf = (struct element_buffer){ 0 };
 }
 
+void free_render_context(void) {
+    free(rctx.payload);
+    free(rctx.glyphs);
+    free_elem_buffer(&rctx.foreground_buf);
+    free_elem_buffer(&rctx.background_buf);
+    free_elem_buffer(&rctx.decoration_buf);
+}
+
+#define INIT_GLYPHS_CAPS 128
+#define INIT_FG_CAPS 128
+#define INIT_BG_CAPS 256
+#define INIT_DEC_CAPS 16
+
 void init_render_context(void) {
-    rctx.buffer = malloc(WORDS_IN_MESSAGE * sizeof(uint32_t));
-    if (!rctx.buffer) {
+    rctx.payload = malloc(WORDS_IN_MESSAGE * sizeof(uint32_t));
+    if (!rctx.payload) {
         xcb_disconnect(con);
         die("Can't allocate buffer");
     }
-    rctx.bufsize = WORDS_IN_MESSAGE * sizeof(uint32_t);
-    rctx.cbuffer = malloc(128 * sizeof(rctx.cbuffer[0]));
-    if (!rctx.cbuffer) {
+    rctx.payload_caps = WORDS_IN_MESSAGE * sizeof(uint32_t);
+    rctx.glyphs = malloc(INIT_GLYPHS_CAPS * sizeof(rctx.glyphs[0]));
+    if (!rctx.glyphs) {
         xcb_disconnect(con);
         die("Can't allocate cbuffer");
     }
-    rctx.cbufsize = 128;
+    rctx.glyphs_caps = INIT_GLYPHS_CAPS;
+
+    adjust_buffer((void **)&rctx.foreground_buf.data, &rctx.foreground_buf.caps, INIT_FG_CAPS, sizeof(struct element));
+    adjust_buffer((void **)&rctx.background_buf.data, &rctx.background_buf.caps, INIT_BG_CAPS, sizeof(struct element));
+    adjust_buffer((void **)&rctx.decoration_buf.data, &rctx.decoration_buf.caps, INIT_DEC_CAPS, sizeof(struct element));
 
     // Check if XRender is present
     xcb_render_query_version_cookie_t vc = xcb_render_query_version(con, XCB_RENDER_MAJOR_VERSION, XCB_RENDER_MINOR_VERSION);
@@ -219,136 +265,153 @@ void init_render_context(void) {
 }
 
 static void push_rect(xcb_rectangle_t *rect) {
-    if (rctx.bufpos + sizeof(xcb_rectangle_t) >= rctx.bufsize) {
-        size_t new_size = MAX(3 * rctx.bufsize / 2, 16 * sizeof(xcb_rectangle_t));
-        uint8_t *new = realloc(rctx.buffer, new_size);
+    if (UNLIKELY(rctx.payload_size + sizeof(xcb_rectangle_t) >= rctx.payload_caps)) {
+        size_t new_size = 3 * rctx.payload_caps / 2;
+        uint8_t *new = realloc(rctx.payload, new_size);
         if (!new) return;
-        rctx.buffer = new;
-        rctx.bufsize = new_size;
+        rctx.payload_caps = new_size;
+        rctx.payload = new;
     }
 
-    memcpy(rctx.buffer + rctx.bufpos, rect, sizeof(xcb_rectangle_t));
-    rctx.bufpos += sizeof(xcb_rectangle_t);
+    memcpy(rctx.payload + rctx.payload_size, rect, sizeof(xcb_rectangle_t));
+    rctx.payload_size += sizeof(xcb_rectangle_t);
 }
 
-
-// Use custom shell sort implementation, sice it works faster
-
-static inline bool cmp_bg(const struct cell_desc *ad, const struct cell_desc *bd) {
-    if (ad->bg < bd->bg) return 1;
-    if (ad->bg > bd->bg) return 0;
-    if (ad->y < bd->y) return 1;
-    if (ad->y > bd->y) return 0;
-    if (ad->x < bd->x) return 1;
-    return 0;
+inline static void push_element(struct element_buffer *dst, struct element *elem) {
+    // We need buffer twice as big a the number of elements to
+    // be able to use merge sort efficiently
+    if (!adjust_buffer((void **)&dst->data, &dst->caps,
+                       2*(dst->size + 1), sizeof *elem)) return;
+    dst->data[dst->size++] = *elem;
 }
 
-static inline bool cmp_fg(const struct cell_desc *ad, const struct cell_desc *bd) {
-    if (ad->fg < bd->fg) return 1;
-    if (ad->fg > bd->fg) return 0;
-    if (ad->y < bd->y) return 1;
-    if (ad->y > bd->y) return 0;
-    if (ad->x < bd->x) return 1;
-    return 0;
+inline static uint32_t push_char(uint32_t ch) {
+    /* Character are pushed in buffer in reverse order,
+     * since lines are scanned in reverse order */
+    if (UNLIKELY(rctx.glyphs_size + 1 > rctx.glyphs_caps)) {
+        size_t new_caps = 4*rctx.glyphs_caps/3;
+        uint32_t *tmp = calloc(new_caps, sizeof(uint32_t));
+        if (!tmp) return UINT32_MAX;
+        memcpy(tmp + new_caps - rctx.glyphs_size, rctx.glyphs, rctx.glyphs_size*sizeof(uint32_t));
+        free(rctx.glyphs);
+        rctx.glyphs = tmp;
+        rctx.glyphs_caps = new_caps;
+    }
+
+    size_t new_pos = ++rctx.glyphs_size;
+    rctx.glyphs[rctx.glyphs_caps - new_pos] = ch;
+    return new_pos;
 }
 
-static inline void merge_sort_fg(struct cell_desc *src, size_t size) {
-    struct cell_desc *dst = src + size;
-    for (size_t k = 2; k < size; k += k) {
-        for (size_t i = 0; i < size; ) {
-            size_t l_1 = i, h_1 = MIN(i + k/2, size);
-            size_t l_2 = h_1, h_2 = MIN(i + k, size);
+inline static struct glyph_msg *start_msg(int16_t dx, int16_t dy) {
+    struct glyph_msg *head = (struct glyph_msg *)(rctx.payload + rctx.payload_size);
+    *head = (struct glyph_msg) {
+        .dx = dx,
+        .dy = dy,
+    };
+    rctx.payload_size += sizeof(*head);
+    return head;
+}
+
+inline static bool adjust_msg_buffer(void) {
+    if (UNLIKELY(rctx.payload_size + WORDS_IN_MESSAGE * sizeof(uint32_t) > rctx.payload_caps)) {
+        uint8_t *new = realloc(rctx.payload, rctx.payload_caps + WORDS_IN_MESSAGE * sizeof(uint32_t));
+        if (!new) return 0;
+        rctx.payload = new;
+        rctx.payload_caps  += WORDS_IN_MESSAGE * sizeof(uint32_t);
+    }
+    return 1;
+}
+
+inline static void sort_by_color(struct element_buffer *buf) {
+    struct element *dst = buf->data + buf->size, *src = buf->data;
+    for (size_t k = 2; k < buf->size; k += k) {
+        for (size_t i = 0; i < buf->size; ) {
+            size_t l_1 = i, h_1 = MIN(i + k/2, buf->size);
+            size_t l_2 = h_1, h_2 = MIN(i + k, buf->size);
             while (l_1 < h_1 && l_2 < h_2)
-                dst[i++] = src[cmp_fg(&src[l_1], &src[l_2]) ? l_1++ : l_2++];
+                dst[i++] = src[src[l_1].color < src[l_2].color ? l_1++ : l_2++];
             while (l_1 < h_1) dst[i++] = src[l_1++];
             while (l_2 < h_2) dst[i++] = src[l_2++];
         }
         SWAP(dst, src);
     }
-    if (dst < src) for (size_t i = 0; i < size; i++)
+    if (dst < src) for (size_t i = 0; i < buf->size; i++)
         dst[i] = src[i];
 }
 
-static inline void merge_sort_bg(struct cell_desc *src, size_t size) {
-    struct cell_desc *dst = src + size;
-    for (size_t k = 2; k < size; k += k) {
-        for (size_t i = 0; i < size; ) {
-            size_t l_1 = i, h_1 = MIN(i + k/2, size);
-            size_t l_2 = h_1, h_2 = MIN(i + k, size);
-            while (l_1 < h_1 && l_2 < h_2)
-                dst[i++] = src[cmp_bg(&src[l_1], &src[l_2]) ? l_1++ : l_2++];
-            while (l_1 < h_1) dst[i++] = src[l_1++];
-            while (l_2 < h_2) dst[i++] = src[l_2++];
+static void draw_cursor(struct window *win, int16_t cur_x, int16_t cur_y, bool on_margin) {
+    cur_x *= win->char_width;
+    cur_y *= win->char_depth + win->char_height;
+    xcb_rectangle_t rects[4] = {
+        {cur_x, cur_y, 1, win->char_height + win->char_depth},
+        {cur_x, cur_y, win->char_width, 1},
+        {cur_x + win->char_width - 1, cur_y, 1, win->char_height + win->char_depth},
+        {cur_x, cur_y + (win->char_depth + win->char_height - 1), win->char_width, 1}
+    };
+    size_t off = 0, count = 4;
+    if (win->focused) {
+        if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_bar) {
+            if (on_margin) {
+                off = 2;
+                rects[2].width = win->cfg.cursor_width;
+                rects[2].x -= win->cfg.cursor_width - 1;
+            } else
+                rects[0].width = win->cfg.cursor_width;
+            count = 1;
+        } else if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_underline) {
+            count = 1;
+            off = 3;
+            rects[3].height = win->cfg.cursor_shape;
+            rects[3].y -= win->cfg.cursor_shape - 1;
+        } else {
+            count = 0;
         }
-        SWAP(dst, src);
     }
-    if (dst < src) for (size_t i = 0; i < size; i++)
-        dst[i] = src[i];
+    if (count) {
+        xcb_render_color_t c = MAKE_COLOR(win->cursor_fg);
+        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_OVER, win->ren.pic1, c, count, rects + off);
+    }
 }
 
-bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
+void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool cond_cblink) {
+    rctx.foreground_buf.size = 0;
+    rctx.background_buf.size = 0;
+    rctx.decoration_buf.size = 0;
+    rctx.glyphs_size = 0;
 
-    rctx.cbufpos = 0;
-    rctx.bufpos = 0;
-
-    bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1) && term_is_cursor_enabled(win->term);
-
-    if (cond_cblink) cursor |= win->rcstate.blink;
-
-    // First redraw selected parts of padding to short lines
     struct line_offset vpos = term_get_view(win->term);
+    bool can_reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
     for (ssize_t k = 0; k < win->ch; k++, term_line_next(win->term, &vpos, 1)) {
         struct line_view line = term_line_at(win->term, vpos);
-        if (win->cw > line.width && mouse_is_selected_in_view(win->term, win->cw - 1, k)) {
-            push_rect(&(xcb_rectangle_t){
+        bool next_dirty = 0, first_in_line = 1;
+        if (win->cw > line.width) {
+            color_t color = mouse_is_selected_in_view(win->term, win->cw - 1, k) ? (win->rcstate.palette[SPECIAL_SELECTED_BG] ?
+                        win->rcstate.palette[SPECIAL_SELECTED_BG] : win->rcstate.palette[SPECIAL_FG]) : win->bg_premul;
+            push_element(&rctx.background_buf, &(struct element) {
                 .x = line.width * win->char_width,
                 .y = k * (win->char_height + win->char_depth),
+                .color = color,
                 .width = (win->cw - line.width) * win->char_width,
-                .height = win->char_height + win->char_depth
-            });
-        }
-    }
-
-    if (rctx.bufpos) {
-        color_t c = win->rcstate.palette[SPECIAL_SELECTED_BG] ? win->rcstate.palette[SPECIAL_SELECTED_BG] : win->rcstate.palette[SPECIAL_FG];
-        xcb_render_color_t col = MAKE_COLOR(color_apply_a(c, win->cfg.alpha));
-        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
-            rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
-    }
-    rctx.bufpos = 0;
-
-    vpos = term_get_view(win->term);
-    for (ssize_t k = 0; k < win->ch; k++, term_line_next(win->term, &vpos, 1)) {
-        struct line_view line = term_line_at(win->term, vpos);
-        bool next_dirty = 0;
-        if (win->cw > line.width && !mouse_is_selected_in_view(win->term, win->cw - 1, k)) {
-            push_rect(&(xcb_rectangle_t){
-                .x = line.width * win->char_width,
-                .y = k * (win->char_height + win->char_depth),
-                .width = (win->cw - line.width) * win->char_width,
-                .height = win->char_height + win->char_depth
+                .height = win->char_height + win->char_depth,
             });
             next_dirty = 1;
+            first_in_line = 0;
         }
+
+        bool cursor_line = cond_cblink && k == cur_y;
         for (int16_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
             struct cell cel = line.cell[i];
             struct attr attr = attr_at(line.line, i + line.cell - line.line->cell);
             bool dirty = line.line->force_damage || !cel.drawn || (win->uri_damaged && attr.uri) ||
-                    (!win->blink_commited && (attr.blink || (cond_cblink && k == cur_y && i == cur_x)));
+                    (!win->blink_commited && (attr.blink || (cursor_line && i == cur_x)));
 
             struct cellspec spec;
             struct glyph *glyph = NULL;
             bool g_wide = 0;
             uint32_t g = 0;
             if (dirty || next_dirty) {
-                if (k == cur_y && i == cur_x && cursor && win->focused &&
-                        ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block) attr.reverse ^= 1;
-
-                struct render_cell_state {
-                    bool blink : 1;
-                    bool selected : 1;
-                    uint32_t uri : 30;
-                };
+                if (k == cur_y && i == cur_x && can_reverse_cursor) attr.reverse ^= 1;
 
                 bool selected = mouse_is_selected_in_view(win->term, i, k);
                 spec = describe_cell(cel, attr, &win->cfg, &win->rcstate, selected);
@@ -362,23 +425,92 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                 g_wide = glyph && glyph->x_off > win->char_width - win->cfg.font_spacing;
             }
             if (dirty || (g_wide && next_dirty)) {
-                if (2*(rctx.cbufpos + 1) >= rctx.cbufsize) {
-                    size_t new_size = MAX(3 * rctx.cbufsize / 2, 2 * rctx.cbufpos + 1);
-                    struct cell_desc *new = realloc(rctx.cbuffer, new_size * sizeof(*rctx.cbuffer));
-                    if (!new) return 0;
-                    rctx.cbuffer = new;
-                    rctx.cbufsize = new_size;
+                int16_t y = k * (win->char_depth + win->char_height);
+
+                // Queue background, groupping by color
+
+                struct element *prev_bg = rctx.background_buf.data + rctx.background_buf.size - 1;
+                if (LIKELY(!first_in_line && prev_bg->color == spec.bg &&
+                        prev_bg->x == (i + 1)*win->char_width)) {
+                    prev_bg->x -= win->char_width;
+                    prev_bg->width += win->char_width;
+                } else {
+                    first_in_line = 0;
+                    push_element(&rctx.background_buf, &(struct element) {
+                        .x = i * win->char_width,
+                        .y = y,
+                        .color = spec.bg,
+                        .width = win->char_width,
+                        .height = win->char_height + win->char_depth,
+                    });
                 }
 
-                rctx.cbuffer[rctx.cbufpos++] = (struct cell_desc) {
-                    .x = i * win->char_width,
-                    .y = k * (win->char_height + win->char_depth),
-                    .fg = spec.fg, .bg = spec.bg,
-                    .glyph = g,
-                    .wide = spec.wide || g_wide,
-                    .underlined = spec.underlined,
-                    .strikethrough = spec.stroke
-                };
+                // Push character if present, groupping by color
+
+                if (spec.ch) {
+                    g |=  (uint32_t)spec.wide << 31;
+                    struct element *prev_fg = rctx.foreground_buf.data + rctx.foreground_buf.size - 1;
+                    if (LIKELY(rctx.foreground_buf.size && prev_fg->y == y + win->char_height &&
+                            prev_fg->color == spec.fg && prev_fg->x == (i + spec.wide + 1)*win->char_width)) {
+                        prev_fg->glyphs = push_char(g);
+                        prev_fg->x -= win->char_width*(1 + spec.wide);
+                    } else {
+                        push_char(0);
+                        push_element(&rctx.foreground_buf, &(struct element) {
+                            .x = i * win->char_width,
+                            .y = y + win->char_height,
+                            .color = spec.fg,
+                            .glyphs = push_char(g),
+                        });
+                    }
+                }
+
+
+                // Push strikethrough/underline rects, if present
+
+                if (UNLIKELY(spec.underlined)) {
+                    int16_t line_y = y + win->char_height + 1 + win->cfg.line_spacing/2;
+                    struct element *prev_dec = rctx.decoration_buf.data + rctx.decoration_buf.size - 1;
+                    if (rctx.decoration_buf.size && prev_dec->y == line_y  && prev_dec->color == spec.bg &&
+                            prev_dec->x == (i + 1)*win->char_width) {
+                        prev_dec->x -= win->char_width;
+                        prev_dec->width += win->char_width;
+                    } else if (rctx.decoration_buf.size > 1 && prev_dec[-1].y == line_y  && prev_dec[-1].color == spec.bg &&
+                            prev_dec[-1].x == (i + 1)*win->char_width) {
+                        prev_dec[-1].x -= win->char_width;
+                        prev_dec[-1].width += win->char_width;
+                    } else {
+                        push_element(&rctx.decoration_buf, &(struct element) {
+                            .x = i * win->char_width,
+                            .y = line_y,
+                            .color = spec.fg,
+                            .width = win->char_width,
+                            .height = win->cfg.underline_width,
+                        });
+                    }
+                }
+
+                if (UNLIKELY(spec.stroke)) {
+                    int16_t line_y = y + 2*win->char_height/3 - win->cfg.underline_width/2 + win->cfg.line_spacing/2;
+                    struct element *prev_dec = rctx.decoration_buf.data + rctx.decoration_buf.size - 1;
+                    if (rctx.decoration_buf.size && prev_dec->y == line_y  && prev_dec->color == spec.bg &&
+                            prev_dec->x == (i + 1)*win->char_width) {
+                        prev_dec->x -= win->char_width;
+                        prev_dec->width += win->char_width;
+                    } else if (rctx.decoration_buf.size > 1 && prev_dec[-1].y == line_y  && prev_dec[-1].color == spec.bg &&
+                            prev_dec[-1].x == (i + 1)*win->char_width) {
+                        prev_dec[-1].x -= win->char_width;
+                        prev_dec[-1].width += win->char_width;
+                    } else {
+                        push_element(&rctx.decoration_buf, &(struct element) {
+                            .x = i * win->char_width,
+                            .y = line_y,
+                            .color = spec.fg,
+                            .width = win->char_width,
+                            .height = win->cfg.underline_width,
+                        });
+                    }
+                }
 
                 line.cell[i].drawn = 1;
             }
@@ -387,200 +519,125 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
         // Only reset force flag for last part of the line
         if (is_last_line(line, win->cfg.rewrap)) line.line->force_damage = 0;
     }
+}
 
-    if (rctx.bufpos) {
-        xcb_render_color_t col = MAKE_COLOR(win->bg_premul);
-        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
-            rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
-    }
+static void draw_rects(struct window *win, struct element_buffer *buf) {
+    for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; ) {
+        color_t color = it ->color;
 
-    //qsort(rctx.cbuffer, rctx.cbufpos, sizeof(rctx.cbuffer[0]), cmp_by_bg);
-    //shell_sort_bg(rctx.cbuffer, rctx.cbufpos);
-    merge_sort_bg(rctx.cbuffer, rctx.cbufpos);
-
-    // Draw background
-    for (size_t i = 0; i < rctx.cbufpos; ) {
-        rctx.bufpos = 0;
-        size_t j = i;
-        while (i < rctx.cbufpos && rctx.cbuffer[i].bg == rctx.cbuffer[j].bg) {
-            size_t k = i;
-            do i++;
-            while (i < rctx.cbufpos && rctx.cbuffer[k].y == rctx.cbuffer[i].y &&
-                    rctx.cbuffer[i - 1].x + win->char_width == rctx.cbuffer[i].x &&
-                    rctx.cbuffer[k].bg == rctx.cbuffer[i].bg);
+        rctx.payload_size = 0;
+        do {
             push_rect(&(xcb_rectangle_t) {
-                .x = rctx.cbuffer[k].x,
-                .y = rctx.cbuffer[k].y,
-                .width = rctx.cbuffer[i - 1].x - rctx.cbuffer[k].x + win->char_width,
-                .height = win->char_depth + win->char_height
+                .x = it->x,
+                .y = it->y,
+                .width = it->width,
+                .height = it->height,
             });
+        } while (++it < end && it->color == color);
 
-        }
-        if (rctx.bufpos) {
-            xcb_render_color_t col = MAKE_COLOR(rctx.cbuffer[j].bg);
+        if (rctx.payload_size) {
+            xcb_render_color_t col = MAKE_COLOR(color);
             xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
-                rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
+                rctx.payload_size/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.payload);
         }
     }
+
+}
+
+bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
+
+    bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1) && term_is_cursor_enabled(win->term);
+    if (cond_cblink) cursor |= win->rcstate.blink;
+
+    prepare_multidraw(win, cur_x, cur_y, cursor, cond_cblink);
 
     // Set clip rectangles for text rendering
-    rctx.bufpos = 0;
-    for (size_t i = 0; i < rctx.cbufpos; ) {
-        while (i < rctx.cbufpos && !rctx.cbuffer[i].glyph) i++;
-        if (i >= rctx.cbufpos) break;
-        size_t k = i;
-        do i++;
-        while (i < rctx.cbufpos && rctx.cbuffer[k].y == rctx.cbuffer[i].y &&
-                rctx.cbuffer[i - 1].x + win->char_width == rctx.cbuffer[i].x && rctx.cbuffer[i].glyph);
+    rctx.payload_size = 0;
+    for (struct element *it = rctx.background_buf.data, *end = rctx.background_buf.data + rctx.background_buf.size; it < end; ) {
+        struct element *it2 = it;
+        do it2++;
+        while (it2 < end && it2->y == it->y &&
+                it2->x + it2->width == it2[-1].x);
         push_rect(&(xcb_rectangle_t) {
-            .x = rctx.cbuffer[k].x,
-            .y = rctx.cbuffer[k].y,
-            .width = rctx.cbuffer[i - 1].x - rctx.cbuffer[k].x + win->char_width*(1 + rctx.cbuffer[k].wide),
+            .x = it2[-1].x,
+            .y = it->y,
+            .width = it->x - it2[-1].x + it->width,
             .height = win->char_depth + win->char_height
         });
+        it = it2;
     }
-    if (rctx.bufpos)
+    if (rctx.payload_size)
         xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0,
-            rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
+            rctx.payload_size/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.payload);
 
-    merge_sort_fg(rctx.cbuffer, rctx.cbufpos);
+    sort_by_color(&rctx.foreground_buf);
+    sort_by_color(&rctx.background_buf);
+    sort_by_color(&rctx.decoration_buf);
 
-    // Draw chars
-    for (size_t i = 0; i < rctx.cbufpos; ) {
-        while (i < rctx.cbufpos && !rctx.cbuffer[i].glyph) i++;
-        if (i >= rctx.cbufpos) break;
+    // Draw background
+    draw_rects(win, &rctx.background_buf);
 
-        xcb_render_color_t col = MAKE_COLOR(rctx.cbuffer[i].fg);
+    // Draw characters
+    for (struct element *it = rctx.foreground_buf.data, *end = rctx.foreground_buf.data + rctx.foreground_buf.size; it < end; ) {
+        // Prepare pen
+        color_t color = it->color;
+        xcb_render_color_t col = MAKE_COLOR(color);
         xcb_rectangle_t rect2 = { .x = 0, .y = 0, .width = 1, .height = 1 };
         xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pen, col, 1, &rect2);
 
-        rctx.bufpos = 0;
-        int16_t ox = 0, oy = 0;
-        size_t j = i;
+        // Build payload...
 
-        while (i < rctx.cbufpos && rctx.cbuffer[i].fg == rctx.cbuffer[j].fg) {
-            if (rctx.bufpos + WORDS_IN_MESSAGE * sizeof(uint32_t) >= rctx.bufsize) {
-                uint8_t *new = realloc(rctx.buffer, rctx.bufsize + WORDS_IN_MESSAGE * sizeof(uint32_t));
-                if (!new) break;
-                rctx.buffer = new;
-                rctx.bufsize += WORDS_IN_MESSAGE * sizeof(uint32_t);
-            }
-            struct glyph_msg *head = (struct glyph_msg *)(rctx.buffer + rctx.bufpos);
-            rctx.bufpos += sizeof(*head);
-            size_t k = i;
-            *head = (struct glyph_msg){
-                .dx = rctx.cbuffer[k].x - ox,
-                .dy = rctx.cbuffer[k].y + win->char_height - oy
-            };
+        rctx.payload_size = 0;
+
+        int16_t old_x = 0, old_y = 0, x = it->x;
+        uint32_t *glyph = rctx.glyphs + rctx.glyphs_caps - it->glyphs;
+        for (;;) {
+            if (!adjust_msg_buffer()) break;
+
+            struct glyph_msg *head = start_msg(x - old_x, it->y - old_y);
+            old_x = x, old_y = it->y;
+
             do {
-                uint32_t glyph = rctx.cbuffer[i].glyph;
-                memcpy(rctx.buffer + rctx.bufpos, &glyph, sizeof(uint32_t));
-                rctx.bufpos += sizeof(uint32_t);
-                i++;
-            } while (i < rctx.cbufpos && rctx.cbuffer[k].y == rctx.cbuffer[i].y &&
-                    rctx.cbuffer[i - 1].x + win->char_width == rctx.cbuffer[i].x &&
-                    rctx.cbuffer[k].fg == rctx.cbuffer[i].fg &&
-                    rctx.cbuffer[i].glyph && i - k < CHARS_PER_MESG);
-            head->len = i - k;
+                uint32_t g = *glyph & ~(1U << 31);
+                memcpy(rctx.payload + rctx.payload_size, &g, sizeof *glyph);
+                rctx.payload_size += sizeof(uint32_t);
+                head->len++;
 
-            ox = rctx.cbuffer[i - 1].x + win->char_width;
-            oy = rctx.cbuffer[i - 1].y + win->char_height;
+                bool wide = *glyph & (1U << 31);
+                x += (1 + wide) * win->char_width;
+                old_x += (1 + wide) * win->char_width;
+            } while (*++glyph && head->len < CHARS_PER_MESG);
 
-            while (i < rctx.cbufpos && !rctx.cbuffer[i].glyph) i++;
+            if (!*glyph) {
+                if (++it >= end || color != it->color) break;
+                glyph = rctx.glyphs + rctx.glyphs_caps - it->glyphs;
+                x = it->x;
+            }
         }
-        if (rctx.bufpos)
+
+        // ..and send it
+
+        if (rctx.payload_size) {
             xcb_render_composite_glyphs_32(con, XCB_RENDER_PICT_OP_OVER,
-                                           win->ren.pen, win->ren.pic1, win->ren.pfglyph, win->ren.gsid,
-                                           0, 0, rctx.bufpos, rctx.buffer);
+                    win->ren.pen, win->ren.pic1, win->ren.pfglyph, win->ren.gsid,
+                    0, 0, rctx.payload_size, rctx.payload);
+        }
     }
 
-    if (rctx.cbufpos)
-        xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0, 1, &(xcb_rectangle_t){
+    if (rctx.foreground_buf.size)
+        xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0, 1, &(xcb_rectangle_t) {
                 0, 0, win->cw * win->char_width, win->ch * (win->char_height + win->char_depth)});
 
     // Draw underline and strikethrough lines
-    for (size_t i = 0; i < rctx.cbufpos; ) {
-        while (i < rctx.cbufpos && !rctx.cbuffer[i].underlined && !rctx.cbuffer[i].strikethrough) i++;
-        if (i >= rctx.cbufpos) break;
-        rctx.bufpos = 0;
-        size_t j = i;
-        while (i < rctx.cbufpos && rctx.cbuffer[j].fg == rctx.cbuffer[i].fg) {
-            while (i < rctx.cbufpos && rctx.cbuffer[j].fg == rctx.cbuffer[i].fg && !rctx.cbuffer[i].underlined) i++;
-            if (i >= rctx.cbufpos || !rctx.cbuffer[i].underlined) break;
-            size_t k = i;
-            do i++;
-            while (i < rctx.cbufpos && rctx.cbuffer[k].y == rctx.cbuffer[i].y &&
-                    rctx.cbuffer[i - 1].x + win->char_width == rctx.cbuffer[i].x &&
-                    rctx.cbuffer[k].fg == rctx.cbuffer[i].fg && rctx.cbuffer[i].underlined);
-            push_rect(&(xcb_rectangle_t) {
-                .x = rctx.cbuffer[k].x,
-                .y = rctx.cbuffer[k].y + win->char_height + 1 + win->cfg.line_spacing/2,
-                .width = rctx.cbuffer[i - 1].x + win->char_width - rctx.cbuffer[k].x,
-                .height = win->cfg.underline_width
-            });
-        }
-        i = j;
-        while (i < rctx.cbufpos && rctx.cbuffer[j].fg == rctx.cbuffer[i].fg) {
-            while (i < rctx.cbufpos && rctx.cbuffer[j].fg == rctx.cbuffer[i].fg && !(rctx.cbuffer[i].strikethrough)) i++;
-            if (i >= rctx.cbufpos || !rctx.cbuffer[i].strikethrough) break;
-            size_t k = i;
-            do i++;
-            while (i < rctx.cbufpos && rctx.cbuffer[k].y == rctx.cbuffer[i].y &&
-                    rctx.cbuffer[i - 1].x + win->char_width == rctx.cbuffer[i].x &&
-                    rctx.cbuffer[k].fg == rctx.cbuffer[i].fg && rctx.cbuffer[i].strikethrough);
-            push_rect(&(xcb_rectangle_t) {
-                .x = rctx.cbuffer[k].x,
-                .y = rctx.cbuffer[k].y + 2*win->char_height/3 - win->cfg.underline_width/2 + win->cfg.line_spacing/2,
-                .width = rctx.cbuffer[i - 1].x + win->char_width - rctx.cbuffer[k].x,
-                .height = win->cfg.underline_width
-            });
-        }
-        if (rctx.bufpos) {
-            xcb_render_color_t col = MAKE_COLOR(rctx.cbuffer[j].fg);
-            xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
-                rctx.bufpos/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.buffer);
-        }
-    }
+    draw_rects(win, &rctx.decoration_buf);
 
-    if (cursor) {
-        cur_x *= win->char_width;
-        cur_y *= win->char_depth + win->char_height;
-        xcb_rectangle_t rects[4] = {
-            {cur_x, cur_y, 1, win->char_height + win->char_depth},
-            {cur_x, cur_y, win->char_width, 1},
-            {cur_x + win->char_width - 1, cur_y, 1, win->char_height + win->char_depth},
-            {cur_x, cur_y + (win->char_depth + win->char_height - 1), win->char_width, 1}
-        };
-        size_t off = 0, count = 4;
-        if (win->focused) {
-            if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_bar) {
-                if (marg) {
-                    off = 2;
-                    rects[2].width = win->cfg.cursor_width;
-                    rects[2].x -= win->cfg.cursor_width - 1;
-                } else
-                    rects[0].width = win->cfg.cursor_width;
-                count = 1;
-            } else if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_underline) {
-                count = 1;
-                off = 3;
-                rects[3].height = win->cfg.cursor_shape;
-                rects[3].y -= win->cfg.cursor_shape - 1;
-            } else {
-                count = 0;
-            }
-        }
-        if (count) {
-            xcb_render_color_t c = MAKE_COLOR(win->cursor_fg);
-            xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_OVER, win->ren.pic1, c, count, rects + off);
-        }
-    }
+    if (cursor) draw_cursor(win, cur_x, cur_y, marg);
 
-    if (rctx.cbufpos)
+    if (rctx.background_buf.size)
         renderer_update(win, rect_scale_up((struct rect){0, 0, win->cw, win->ch},
                 win->char_width, win->char_height + win->char_depth));
 
-    return rctx.cbufpos;
+    return !!rctx.background_buf.size;
 }
 
 void renderer_update(struct window *win, struct rect rect) {
@@ -619,6 +676,8 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
 
     xcb_render_free_picture(con, win->ren.pic2);
     xcb_free_pixmap(con, win->ren.pid2);
+
+    static_assert(sizeof(struct rect) == sizeof(xcb_rectangle_t), "Rectangle types does not match");
 
     struct rect rectv[2];
     size_t rectc= 0;
