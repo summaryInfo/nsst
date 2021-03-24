@@ -319,10 +319,11 @@ void uri_ref(uint32_t id) {
 }
 
 void uri_unref(uint32_t id) {
+    if (!id) return;
     struct slot *slot = &idtab.slots[id - 1];
     struct uri *uri = slot->uri;
-    assert(!id || uri->refc > 0);
-    if (id && !--uri->refc) {
+    assert(uri->refc > 0);
+    if (!--uri->refc) {
         if (gconfig.trace_misc)
             info("URI free %d", id);
 
