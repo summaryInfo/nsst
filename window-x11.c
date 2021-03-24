@@ -1862,7 +1862,16 @@ void run(void) {
 
             // Scroll down selection
             bool pending_scroll = mouse_pending_scroll(win->term);
-            if (!win->any_event_happend && !pending_scroll) continue;
+
+            // Change blink state if blinking interval is expired
+            if (win->active && win->cfg.allow_blinking &&
+                    TIMEDIFF(win->last_blink, cur) > win->cfg.blink_time*1000LL) {
+                win->rcstate.blink = !win->rcstate.blink;
+                win->blink_commited = 0;
+                win->last_blink = cur;
+            }
+
+            if (!win->any_event_happend && !pending_scroll && !win->blink_commited) continue;
 
             // Deactivate syncronous update mode if it has expired
             if (UNLIKELY(win->sync_active) && TIMEDIFF(win->last_sync, cur) > win->cfg.sync_time*1000LL)
@@ -1873,14 +1882,6 @@ void run(void) {
                 term_set_reverse(win->term, win->init_invert);
                 win->in_blink = 0;
                 ctx.vbell_count--;
-            }
-
-            // Change blink state if blinking interval is expired
-            if (win->active && win->cfg.allow_blinking &&
-                    TIMEDIFF(win->last_blink, cur) > win->cfg.blink_time*1000LL) {
-                win->rcstate.blink = !win->rcstate.blink;
-                win->blink_commited = 0;
-                win->last_blink = cur;
             }
 
             // We need to skeep frame if redraw is not forced
