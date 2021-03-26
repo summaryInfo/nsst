@@ -285,8 +285,8 @@ uint32_t uri_add(const char *uri, const char *id) {
 
     slot->uri = new;
     *new = (struct uri) {
-        .uri = (char *)new + sizeof *new,
-        .id = (char *)new + sizeof *new + uri_len + 1,
+        .uri = (char *)(new + 1),
+        .id = (char *)(new + 1) + uri_len + 1,
         .head = dummy.head,
         .slot = slot - idtab.slots + 1,
         .refc = 1,
