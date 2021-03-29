@@ -48,6 +48,9 @@ void term_sendkey(struct term *term, const uint8_t *data, size_t size);
 void term_answerback(struct term *term, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
 void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd);
 void term_damage(struct term *term, struct rect damage);
+#if USE_URI
+void term_damage_uri(struct term *term, uint32_t uri);
+#endif
 void term_reset(struct term *term);
 void term_set_reverse(struct term *term, bool set);
 void term_break(struct term *term);
@@ -74,6 +77,7 @@ bool term_is_paste_nl_enabled(struct term *term);
 bool term_is_paste_quote_enabled(struct term *term);
 bool term_is_cursor_enabled(struct term *term);
 bool term_is_reverse(struct term *term);
+
 
 /* These are only used in mouse.c */
 int16_t term_max_y(struct term *term);

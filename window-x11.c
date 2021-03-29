@@ -392,14 +392,20 @@ void window_set_mouse(struct window *win, bool enabled) {
 
 #if USE_URI
 void window_set_active_uri(struct window *win, uint32_t uri, bool pressed) {
-    win->uri_damaged |= win->rcstate.active_uri != uri ||
+    bool uri_damaged = win->rcstate.active_uri != uri ||
                        (win->rcstate.uri_pressed != pressed && uri);
+
+    if (uri_damaged) {
+        term_damage_uri(win->term, win->rcstate.active_uri);
+        term_damage_uri(win->term, uri);
+    }
+
     uri_ref(uri);
     uri_unref(win->rcstate.active_uri);
     win->rcstate.active_uri = uri;
     win->rcstate.uri_pressed = pressed;
 
-    if (gconfig.trace_misc && win->uri_damaged) {
+    if (gconfig.trace_misc && uri_damaged) {
         info("URI set active id=%d pressed=%d", uri, pressed);
     }
 }
@@ -1851,7 +1857,6 @@ void run(void) {
                 win->force_redraw = 0;
                 win->any_event_happend = 0;
                 win->blink_commited = 1;
-                win->uri_damaged = 0;
             }
 
             if (!win->slow_mode) next_timeout = MIN(next_timeout,  remains);

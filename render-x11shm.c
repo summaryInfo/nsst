@@ -193,7 +193,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
             struct cell cel = line.cell[i];
             struct attr attr = attr_at(line.line, i + line.cell - line.line->cell);
 
-            bool dirty = line.line->force_damage || !cel.drawn || (win->uri_damaged && attr.uri) ||
+            bool dirty = line.line->force_damage || !cel.drawn ||
                     (!win->blink_commited && (attr.blink || (cond_cblink && k == cur_y && i == cur_x)));
 
             struct cellspec spec;

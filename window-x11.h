@@ -93,7 +93,6 @@ struct window {
     bool init_invert : 1;
     bool wait_for_redraw : 1;
     bool autorepeat : 1;
-    bool uri_damaged : 1;
     bool any_event_happend : 1;
 
     struct timespec last_scroll ALIGNED(16);

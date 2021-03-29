@@ -384,7 +384,7 @@ void term_damage(struct term *term, struct rect damage) {
                     else line.line->force_damage = 1;
                 }
                 term_line_next(term, &vpos, 1);
-            };
+            }
         }
     }
 }
@@ -396,6 +396,24 @@ void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd) {
     term_line_next(term, &vpos, ys);
     for (ssize_t i = ys; i < yd; i++, term_line_next(term, &vpos, 1))
         term_line_at(term, vpos).line->force_damage = 1;
+}
+
+void term_damage_uri(struct term *term, uint32_t uri) {
+    if (!uri) return;
+
+    // TODO Operate on lines, not on line views for better performance
+
+    struct line_offset vpos = term_get_view(term);
+    for (ssize_t i = 0; i < 0 + term->height; i++) {
+        struct line_view line = term_line_at(term, vpos);
+        if (line.line) {
+            for (ssize_t j = 0; j <  MIN(term->width, line.width); j++) {
+                if (attr_at(line.line, line.cell - line.line->cell + j).uri == uri)
+                    line.cell[j].drawn = 0;
+            }
+            term_line_next(term, &vpos, 1);
+        }
+    }
 }
 
 /* Returns true if next line will be next physical line
