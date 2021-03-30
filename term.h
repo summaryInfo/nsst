@@ -31,6 +31,11 @@ struct line_offset {
     ssize_t offset;
 };
 
+inline static struct attr line_view_attr_at(struct line_view view, ssize_t x) {
+    return view.cell[x].attrid ? view.line->attrs->data[view.cell[x].attrid - 1] :
+            (struct attr){ .fg = indirect_color(SPECIAL_FG), .bg = indirect_color(SPECIAL_BG)};
+}
+
 struct term *create_term(struct window *win, int16_t width, int16_t height);
 void free_term(struct term *term);
 bool term_redraw(struct term *term, bool blink_commited);

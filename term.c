@@ -401,14 +401,12 @@ void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd) {
 void term_damage_uri(struct term *term, uint32_t uri) {
     if (!uri) return;
 
-    // TODO Operate on lines, not on line views for better performance
-
     struct line_offset vpos = term_get_view(term);
     for (ssize_t i = 0; i < 0 + term->height; i++) {
         struct line_view line = term_line_at(term, vpos);
         if (line.line) {
             for (ssize_t j = 0; j <  MIN(term->width, line.width); j++) {
-                if (attr_at(line.line, line.cell - line.line->cell + j).uri == uri)
+                if (line_view_attr_at(line, j).uri == uri)
                     line.cell[j].drawn = 0;
             }
             term_line_next(term, &vpos, 1);

@@ -189,7 +189,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
         struct rect l_bound = {-1, k, 0, 1};
         for (int16_t i =  MIN(win->cw, line.width) - 1; i >= 0; i--) {
             struct cell cel = line.cell[i];
-            struct attr attr = attr_at(line.line, i + line.cell - line.line->cell);
+            struct attr attr = line_view_attr_at(line, i);
 
             bool dirty = line.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
 

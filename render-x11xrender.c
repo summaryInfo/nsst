@@ -400,9 +400,8 @@ void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool re
 
         for (int16_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
             struct cell cel = line.cell[i];
-            struct attr attr = attr_at(line.line, i + line.cell - line.line->cell);
-            bool dirty = line.line->force_damage || !cel.drawn ||
-                    (!win->blink_commited && attr.blink);
+            struct attr attr = line_view_attr_at(line, i);
+            bool dirty = line.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
 
             struct cellspec spec;
             struct glyph *glyph = NULL;
