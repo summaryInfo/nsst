@@ -33,7 +33,7 @@ struct line_offset {
 
 struct term *create_term(struct window *win, int16_t width, int16_t height);
 void free_term(struct term *term);
-bool term_redraw(struct term *term);
+bool term_redraw(struct term *term, bool blink_commited);
 void term_resize(struct term *term, int16_t width, int16_t height);
 void term_handle_focus(struct term *term, bool focused);
 void term_scroll_view(struct term *term, int16_t amount);

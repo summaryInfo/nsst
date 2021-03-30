@@ -977,11 +977,11 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
 }
 
-bool term_redraw(struct term *term) {
+bool term_redraw(struct term *term, bool blink_commited) {
     bool c_hidden = !term_is_cursor_enabled(term);
 
     if (term->c.x != term->prev_c_x || term->c.y != term->prev_c_y ||
-            term->prev_c_hidden != c_hidden || term->prev_c_view_changed) {
+            term->prev_c_hidden != c_hidden || term->prev_c_view_changed || !blink_commited) {
         if (!c_hidden) term->screen[term->c.y]->cell[term->c.x].drawn = 0;
         if ((!term->prev_c_hidden || term->prev_c_view_changed) && term->prev_c_y < term->height && term->prev_c_x < term->width)
             term->screen[term->prev_c_y]->cell[term->prev_c_x].drawn = 0;
@@ -994,13 +994,12 @@ bool term_redraw(struct term *term) {
 
     struct line *cl = term->screen[term->c.y];
 
-    bool cursor = !term->prev_c_hidden && (!cl->cell[term->c.x].drawn  || cl->force_damage);
-
     if (term->scroll_damage) {
         term_damage_lines(term, 0, term->height);
         term->scroll_damage = 0;
     }
 
+    bool cursor = !term->prev_c_hidden && (!cl->cell[term->c.x].drawn  || cl->force_damage);
     return window_submit_screen(term->win, term->c.x, term->c.y, cursor, term->c.pending);
 }
 

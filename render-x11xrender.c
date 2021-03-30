@@ -374,14 +374,13 @@ static void draw_cursor(struct window *win, int16_t cur_x, int16_t cur_y, bool o
     }
 }
 
-void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool cond_cblink) {
+void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool reverse_cursor) {
     rctx.foreground_buf.size = 0;
     rctx.background_buf.size = 0;
     rctx.decoration_buf.size = 0;
     rctx.glyphs_size = 0;
 
     struct line_offset vpos = term_get_view(win->term);
-    bool can_reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
     for (ssize_t k = 0; k < win->ch; k++, term_line_next(win->term, &vpos, 1)) {
         struct line_view line = term_line_at(win->term, vpos);
         bool next_dirty = 0, first_in_line = 1;
@@ -399,19 +398,18 @@ void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
             first_in_line = 0;
         }
 
-        bool cursor_line = cond_cblink && k == cur_y;
         for (int16_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
             struct cell cel = line.cell[i];
             struct attr attr = attr_at(line.line, i + line.cell - line.line->cell);
             bool dirty = line.line->force_damage || !cel.drawn ||
-                    (!win->blink_commited && (attr.blink || (cursor_line && i == cur_x)));
+                    (!win->blink_commited && attr.blink);
 
             struct cellspec spec;
             struct glyph *glyph = NULL;
             bool g_wide = 0;
             uint32_t g = 0;
             if (dirty || next_dirty) {
-                if (k == cur_y && i == cur_x && can_reverse_cursor) attr.reverse ^= 1;
+                if (k == cur_y && i == cur_x && reverse_cursor) attr.reverse ^= 1;
 
                 bool selected = mouse_is_selected_in_view(win->term, i, k);
                 spec = describe_cell(cel, attr, &win->cfg, &win->rcstate, selected);
@@ -545,11 +543,11 @@ static void draw_rects(struct window *win, struct element_buffer *buf) {
 }
 
 bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
-
+    bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
     bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1) && term_is_cursor_enabled(win->term);
     if (cond_cblink) cursor |= win->rcstate.blink;
 
-    prepare_multidraw(win, cur_x, cur_y, cursor, cond_cblink);
+    prepare_multidraw(win, cur_x, cur_y, reverse_cursor);
 
     // Set clip rectangles for text rendering
     rctx.payload_size = 0;
