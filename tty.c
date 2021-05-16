@@ -371,26 +371,26 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
         /* Printer command is more prioritized that file */
         if (cfg->printer_cmd) {
             int pip[2];
-            if (pipe(pip) < 0)  goto n_printer;
-
-            switch (fork()) {
-            case -1:
-                goto n_printer;
-            default:
-                dup2(pip[0], 0);
-                close(pip[1]);
-                close(pip[0]);
-                tty->printerfd = pip[0];
-                execl("/bin/sh", "/bin/sh", "-c", cfg->printer_cmd, NULL);
-                warn("Can't run print command: '%s'", cfg->printer_cmd);
-                return 127;
-            case 0:
-                signal(SIGPIPE, SIG_IGN);
-                close(pip[0]);
-                tty->printerfd = pip[1];
-            }
-            if (0) {
-n_printer:
+            pid_t pid = 0;
+            if (pipe(pip) >= 0 && (pid = fork()) >= 0) {
+                if (!pid) {
+                    dup2(pip[0], 0);
+                    close(pip[1]);
+                    close(pip[0]);
+                    tty->printerfd = pip[0];
+                    execl("/bin/sh", "/bin/sh", "-c", cfg->printer_cmd, NULL);
+                    warn("Can't run print command: '%s'", cfg->printer_cmd);
+                    return 127;
+                } else {
+                    signal(SIGPIPE, SIG_IGN);
+                    close(pip[0]);
+                    tty->printerfd = pip[1];
+                }
+            } else {
+                if (pid) {
+                    close(pip[0]);
+                    close(pip[1]);
+                }
                 warn("Can't run print command: '%s'", cfg->printer_cmd);
             }
         }
