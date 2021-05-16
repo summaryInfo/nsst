@@ -1333,7 +1333,7 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, bool pno
                             buf1[size++] = ch;
                 } else {
                     while (pos < end)
-                        size += utf8_encode(*pos++, buf1 + size, buf1 + BUFSIZ);
+                        size += utf8_encode(*pos++, buf1 + size, buf1 + sizeof buf1/sizeof *buf1);
                 }
 
                 data = buf1;
