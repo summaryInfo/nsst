@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
         bool supported = 0;
         const char *lc_supported[] = {
             "C",
-            "POSIX"
+            "POSIX",
             "ASCII",
             "US-ASCII",
             "ANSI_X3.4-1968",

@@ -100,7 +100,7 @@ for i; do
 done
 
 if [ "$use_clang" = 1 ]; then
-    vars="${vars}${nl}LDFLAGS += -fuse-ld=/usr/bin/ld.lld${nl}CC=clang"
+    vars="${vars}${nl}LDFLAGS += --ld-path=/usr/bin/ld.lld${nl}CC=clang"
 fi
 
 vars="${vars}${nl}CFLAGS=$cflags"
