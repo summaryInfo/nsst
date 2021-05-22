@@ -78,6 +78,8 @@ static _Noreturn void exec_shell(char **args, char *sh, char *termname, char *lu
     if (!(sh = getenv("SHELL")))
         sh = pw->pw_shell[0] ? pw->pw_shell : sh;
 
+    assert(sh);
+
     unsetenv("COLUMNS");
     unsetenv("LINES");
     unsetenv("TERMCAP");
