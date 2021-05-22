@@ -57,7 +57,7 @@ int poller_alloc_index(int fd, int events) {
     }
 
     poller.pfdn++;
-    ssize_t i = 2;
+    ssize_t i = 0;
     while (poller.pfds[i].fd != INT_MIN) i++;
 
     poller.pfds[i].fd = fd;
@@ -73,7 +73,7 @@ int poller_enable(int i, bool toggle) {
 }
 
 void poller_free_index(int i) {
-    poller.pfds[i].fd = -1;
+    poller.pfds[i].fd = INT_MIN;
     poller.pfdn--;
 }
 
