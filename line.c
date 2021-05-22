@@ -75,7 +75,10 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
             if (line->attrs && line->attrs->caps == MAX_EXTRA_PALETTE) return ATTRID_DEFAULT;
             size_t newc = line->attrs ? CAPS_INC_STEP(line->attrs->caps) : INIT_CAP;
             struct line_attr *new = realloc(line->attrs, sizeof(*new) + newc * sizeof(*new->data));
-            if (!new) return ATTRID_DEFAULT;
+            if (!new) {
+                uri_unref(attr.uri);
+                return ATTRID_DEFAULT;
+            }
             if (!line->attrs) new->size = 0;
             new->caps = newc;
             line->attrs = new;
