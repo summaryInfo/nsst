@@ -125,4 +125,8 @@ struct instance_config *window_cfg(struct window *win);
 
 #define CLIP_TIME_NOW 0
 
+bool init_daemon(void);
+void free_daemon(void);
+void daemon_process_clients(void);
+
 #endif

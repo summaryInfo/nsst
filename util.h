@@ -119,4 +119,15 @@ color_t parse_color(const uint8_t *str, const uint8_t *end);
 
 /* Unicode precomposition */
 uint32_t try_precompose(uint32_t ch, uint32_t comb);
+
+/* Poller interface, poller.c */
+void init_poller(void);
+void free_poller(void);
+int poller_alloc_index(int fd, int events);
+int poller_enable(int i, bool toggle);
+bool poller_is_enabled(int i);
+void poller_free_index(int i);
+void poller_poll(int64_t timeout);
+int poller_index_events(int i);
+
 #endif

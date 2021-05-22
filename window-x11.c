@@ -77,20 +77,7 @@ struct context {
     uint8_t xkb_base_event;
     uint8_t xkb_base_err;
 
-    struct pollfd *pfds;
-    size_t pfdn;
-    size_t pfdcap;
-
     size_t vbell_count;
-
-    struct pending_launch {
-        struct pending_launch *next, *prev;
-        ssize_t argn;
-        ssize_t argcap;
-        ssize_t poll_index;
-        char **args;
-        struct instance_config cfg;
-    } *first_pending;
 };
 
 static struct context ctx;
@@ -118,7 +105,7 @@ _Noreturn static void handle_term(int sig) {
         term_hang(win->term);
 
     if (gconfig.daemon_mode)
-        unlink(gconfig.sockpath);
+        free_daemon();
 
     (void)sig;
 
@@ -232,17 +219,12 @@ cleanup_context:
 
 /* Initialize global state object */
 void init_context(void) {
-    ctx.pfds = calloc(INIT_PFD_NUM, sizeof(struct pollfd));
-    if (!ctx.pfds) die("Can't allocate pfds");
-    ctx.pfdn = 2;
-    ctx.pfdcap = INIT_PFD_NUM;
-    for (size_t i = 1; i < INIT_PFD_NUM; i++)
-        ctx.pfds[i].fd = -1;
-
     int screenp = 0;
     con = xcb_connect(NULL, &screenp);
-    ctx.pfds[0].events = POLLIN | POLLHUP;
-    ctx.pfds[0].fd = xcb_get_file_descriptor(con);
+    if (!con) die("Can't connect to X server");
+
+    init_poller();
+    poller_alloc_index(xcb_get_file_descriptor(con), POLLIN | POLLHUP);
 
     xcb_screen_iterator_t sit = xcb_setup_roots_iterator(xcb_get_setup(con));
     for (; sit.rem; xcb_screen_next(&sit))
@@ -333,7 +315,7 @@ void free_context(void) {
         unlink(gconfig.sockpath);
 
     free_render_context();
-    free(ctx.pfds);
+    free_poller();
 
     xcb_disconnect(con);
     memset(&con, 0, sizeof(con));
@@ -427,7 +409,7 @@ void window_delay_redraw(struct window *win) {
 
 void window_request_scroll_flush(struct window *win) {
     clock_gettime(CLOCK_TYPE, &win->last_scroll);
-    ctx.pfds[win->poll_index].fd = -ctx.pfds[win->poll_index].fd;
+    poller_enable(win->poll_index, 0);
     win->force_redraw = 1;
     win->wait_for_redraw = 0;
 }
@@ -896,25 +878,6 @@ void window_set_default_props(struct window *win) {
             XCB_ATOM_WM_HINTS, 8*sizeof(*wmhints), sizeof(wmhints)/sizeof(*wmhints), wmhints);
 }
 
-static ssize_t alloc_pollfd(void) {
-    if (ctx.pfdn + 1 > ctx.pfdcap) {
-        struct pollfd *new = realloc(ctx.pfds, (ctx.pfdcap + INIT_PFD_NUM)*sizeof(*ctx.pfds));
-        if (new) {
-            for (size_t i = 0; i < INIT_PFD_NUM; i++) {
-                new[i + ctx.pfdcap].fd = -1;
-                new[i + ctx.pfdcap].events = 0;
-            }
-            ctx.pfdcap += INIT_PFD_NUM;
-            ctx.pfds = new;
-        } else return -1;
-    }
-
-    ctx.pfdn++;
-    size_t i = 2;
-    while (ctx.pfds[i].fd >= 0) i++;
-    return i;
-}
-
 /* Create new window */
 struct window *create_window(struct instance_config *cfg) {
     struct window *win = calloc(1, sizeof(struct window));
@@ -983,11 +946,8 @@ struct window *create_window(struct instance_config *cfg) {
     if (win_list_head) win_list_head->prev = win;
     win_list_head = win;
 
-    ssize_t i = alloc_pollfd();
-    if (i < 0) goto error;
-    ctx.pfds[i].events = POLLIN | POLLHUP;
-    ctx.pfds[i].fd = term_fd(win->term);
-    win->poll_index = i;
+    win->poll_index = poller_alloc_index(term_fd(win->term), POLLIN | POLLHUP);
+    if (win->poll_index < 0) goto error;
 
     xcb_map_window(con, win->wid);
     xcb_flush(con);
@@ -1017,11 +977,8 @@ void free_window(struct window *win) {
     if (win->prev) win->prev->next = win->next;
     else win_list_head =  win->next;
 
-    if (win->poll_index > 0) {
-        ctx.pfds[win->poll_index].fd = -1;
-        ctx.pfdn--;
-    }
-
+    if (win->poll_index > 0)
+        poller_free_index(win->poll_index);
     if (win->term)
         free_term(win->term);
     if (win->font_cache)
@@ -1594,158 +1551,12 @@ static void handle_event(void) {
     }
 }
 
-#define MAX_ARG_LEN 512
-#define INIT_ARGN 4
-#define ARGN_STEP(x) (MAX(INIT_ARGN, 3*(x)/2))
-#define NUM_PENDING 8
-
-static void free_pending_launch(struct pending_launch *lnch) {
-        if (lnch->next) lnch->next->prev = lnch->prev;
-        if (lnch->prev) lnch->prev->next = lnch->prev;
-        else ctx.first_pending = lnch->next;
-
-        close(ctx.pfds[lnch->poll_index].fd);
-        ctx.pfds[lnch->poll_index].fd = -1;
-
-        for (ssize_t i = 0; i < lnch->argn; i++)
-            free(lnch->args[i]);
-        free(lnch->args);
-        free_config(&lnch->cfg);
-        free(lnch);
-}
-
-static bool send_pending_launch_resp(struct pending_launch *lnch, const char *str) {
-    int fd = ctx.pfds[lnch->poll_index].fd;
-    if (send(fd, str, strlen(str), 0) < 0) {
-        warn("Can't send responce to client, dropping");
-        free_pending_launch(lnch);
-        return 0;
-    }
-    return 1;
-}
-
-static void append_pending_launch(struct pending_launch *lnch) {
-    int fd = ctx.pfds[lnch->poll_index].fd;
-    char buffer[MAX_ARG_LEN + 1];
-
-    ssize_t len = recv(fd, buffer, MAX_ARG_LEN, 0);
-    if (len < 0) {
-        warn("Can't recv argument: %s", strerror(errno));
-        free_pending_launch(lnch);
-        return;
-    }
-
-    buffer[len] = '\0';
-
-    if (buffer[0] == '\001' /* SOH */) /* Header */ {
-        char *cpath = len > 1 ? buffer + 1 : NULL;
-        init_instance_config(&lnch->cfg, cpath, 0);
-    } else if (buffer[0] == '\003' /* ETX */ && len == 1) /* End of configuration */ {
-        if (lnch->args) lnch->args[lnch->argn] = NULL;
-        lnch->cfg.argv = lnch->args;
-        create_window(&lnch->cfg);
-        free_pending_launch(lnch);
-    } else if (buffer[0] == '\035' /* GS */ && len > 1) /* Option */ {
-        char *name_end = memchr(buffer + 1, '=', len);
-        if (!name_end) {
-            warn("Wrong option format: '%s'", buffer + 1);
-            return;
-        }
-
-        *name_end = '\0';
-        set_option(&lnch->cfg, buffer + 1, name_end + 1, 1);
-    } else if (buffer[0] == '\036' /* RS */ && len > 1) /* Argument */ {
-        if (lnch->argn + 2 > lnch->argcap) {
-            ssize_t newsz = ARGN_STEP(lnch->argcap);
-            char **new = realloc(lnch->args, newsz*sizeof(*new));
-            if (!new) {
-                free_pending_launch(lnch);
-                return;
-            }
-            lnch->args = new;
-            lnch->argcap = newsz;
-        }
-
-        lnch->args[lnch->argn++] = strdup(buffer + 1);
-    } else if (buffer[0] == '\005' /* ENQ */ && len == 1) /* Version text request */ {
-        const char *resps[] = {version_string(), "Features: ", features_string()};
-
-        for (size_t i = 0; i < sizeof resps/sizeof *resps; i++)
-            if (!send_pending_launch_resp(lnch, resps[i])) return; // Don't free pending_launch twice
-
-        free_pending_launch(lnch);
-    } else if (buffer[0] == '\025' /* NAK */ && len == 1) /* Usage text request */ {
-        ssize_t i = 0;
-
-        for (const char *part = usage_string(i++); part; part = usage_string(i++))
-            if (!send_pending_launch_resp(lnch, part)) return; // Don't free pending_launch twice
-
-        free_pending_launch(lnch);
-    }
-}
-
-static void accept_pending_launch(void) {
-    int fd = accept(ctx.pfds[1].fd, NULL, NULL);
-
-    int fl = fcntl(fd, F_GETFD);
-    if (fl >= 0) fcntl(fd, F_SETFD, fl | FD_CLOEXEC);
-
-    struct pending_launch *lnch = calloc(1, sizeof(struct pending_launch));
-    if (fd < 0 || !lnch || (lnch->poll_index = alloc_pollfd()) < 0) {
-        close(fd);
-        free(lnch);
-        warn("Can't create pending launch: %s", strerror(errno));
-    } else {
-        ctx.pfds[lnch->poll_index].fd = fd;
-        ctx.pfds[lnch->poll_index].events = POLLIN | POLLHUP;
-
-        lnch->next = ctx.first_pending;
-        if (ctx.first_pending) ctx.first_pending->prev = lnch;
-        ctx.first_pending = lnch;
-    }
-}
-
 /* Start window logic, handling all windows in context */
 void run(void) {
-    if (gconfig.daemon_mode) {
-        struct sockaddr_un addr;
-        memset(&addr, 0, sizeof addr);
-        addr.sun_family = AF_UNIX;
-        strncpy(addr.sun_path, gconfig.sockpath, sizeof addr.sun_path - 1);
-
-        int fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-        if (fd < 0) {
-            warn("Can't create daemon socket: %s", strerror(errno));
-            return;
-        }
-
-        int fl = fcntl(fd, F_GETFD);
-        if (fl >= 0) fcntl(fd, F_SETFD, fl | FD_CLOEXEC);
-
-        if (bind(fd, (struct sockaddr*)&addr,
-                offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path)) < 0) {
-            warn("Can't bind daemon socket: %s", strerror(errno));
-            close(fd);
-            return;
-        }
-        if (listen(fd, NUM_PENDING) < 0) {
-            warn("Can't listen to daemon socket: %s", strerror(errno));
-            close(fd);
-            unlink(gconfig.sockpath);
-            return;
-        }
-
-        ctx.pfds[1].fd = fd;
-        ctx.pfds[1].events = POLLIN | POLLHUP;
-    }
+    if (gconfig.daemon_mode && !init_daemon()) return;
 
     for (int64_t next_timeout = SEC;;) {
-#if USE_PPOLL
-        if (ppoll(ctx.pfds, ctx.pfdcap, &(struct timespec){next_timeout / SEC, next_timeout % SEC}, NULL) < 0 && errno != EINTR)
-#else
-        if (poll(ctx.pfds, ctx.pfdcap, next_timeout/(SEC/1000)) < 0 && errno != EINTR)
-#endif
-            warn("Poll error: %s", strerror(errno));
+        poller_poll(next_timeout);
 
         // First check window system events
         handle_event();
@@ -1753,21 +1564,8 @@ void run(void) {
         // Reload config if requested
         if (reload_config) do_reload_config();
 
-        // Handle daemon requests
-        if (ctx.pfds[1].revents & POLLIN) accept_pending_launch();
-        else if (ctx.pfds[1].revents & (POLLERR | POLLNVAL | POLLHUP)) {
-            close(ctx.pfds[1].fd);
-            ctx.pfds[1].fd = -1;
-            unlink(gconfig.sockpath);
-            gconfig.daemon_mode = 0;
-        }
-
-        // Handle pending launches
-        for (struct pending_launch *holder = ctx.first_pending, *next; holder; holder = next) {
-            next = holder->next;
-            if (ctx.pfds[holder->poll_index].revents & POLLIN) append_pending_launch(holder);
-            else if (ctx.pfds[holder->poll_index].revents & (POLLERR | POLLHUP | POLLNVAL)) free_pending_launch(holder);
-        }
+        // Process connecting clients
+        daemon_process_clients();
 
         next_timeout = 30*SEC;
         struct timespec cur ALIGNED(16);
@@ -1776,16 +1574,17 @@ void run(void) {
         // Then read for PTYs
         for (struct window *win = win_list_head, *next; win; win = next) {
             next = win->next;
-            if (UNLIKELY(ctx.pfds[win->poll_index].revents & (POLLERR | POLLNVAL | POLLHUP))) {
+            int evt = poller_index_events(win->poll_index);
+            if (UNLIKELY(evt & (POLLERR | POLLNVAL | POLLHUP))) {
                 free_window(win);
             } else {
-                bool need_read = ctx.pfds[win->poll_index].revents & POLLIN;
+                bool need_read = evt & POLLIN;
                 // If we requested flush scroll, pty fd got disabled from polling
                 // to prevent active waiting loop. If smooth scroll timeout got expired
                 // we can enable it back and attempt to read from pty.
                 // If there is nothing to read it won't block since O_NONBLOCK is set for ptys
-                if (!need_read && ctx.pfds[win->poll_index].fd < 0 && TIMEDIFF(win->last_scroll, cur) > win->cfg.smooth_scroll_delay*1000LL) {
-                    ctx.pfds[win->poll_index].fd = -ctx.pfds[win->poll_index].fd;
+                if (!need_read && !poller_is_enabled(win->poll_index) && TIMEDIFF(win->last_scroll, cur) > win->cfg.smooth_scroll_delay*1000LL) {
+                    poller_enable(win->poll_index, 1);
                     need_read = 1;
                 }
                 if (need_read && term_read(win->term)) {
@@ -1869,5 +1668,5 @@ void run(void) {
         if ((!gconfig.daemon_mode && !win_list_head) || xcb_connection_has_error(con)) break;
     }
 
-    if (gconfig.daemon_mode) unlink(gconfig.sockpath);
+    if (gconfig.daemon_mode) free_daemon();
 }

@@ -131,7 +131,7 @@ struct window {
 
     struct term *term;
     struct render_cell_state rcstate;
-    size_t poll_index;
+    int poll_index;
 
     struct title_stack_item *title_stack;
 
