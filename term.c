@@ -219,6 +219,8 @@ struct term {
     struct cursor back_saved_c;
     struct attr back_saved_sgr;
 
+    struct line **temp_screen;
+
     /* Cyclic buffer for scrollback buffer,
      * it grows dynamically, and thus before
      * it has reached maximal size (sb_max_caps)
@@ -647,11 +649,15 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         }
     }
 
-    { // Resize predecode buffer
+    { // Resize predecode buffer and temporary screen buffer
 
         int32_t *newpb = realloc(term->predec_buf, width*sizeof(*newpb));
         if (!newpb) die("Can't allocate predecode buffer");
         term->predec_buf = newpb;
+
+        struct line **new_tmpsc = realloc(term->temp_screen, height*sizeof(*new_tmpsc));
+        if (!new_tmpsc) die("Can't allocate new temporary screen buffer");
+        term->temp_screen = new_tmpsc;
     }
 
     struct attr dflt_sgr = { .fg = indirect_color(SPECIAL_FG), .bg = indirect_color(SPECIAL_BG) };
@@ -1267,7 +1273,7 @@ static void term_fill(struct term *term, int16_t xs, int16_t ys, int16_t xe, int
         // Reset line wrapping state
         line->wrapped = 0;
         struct cell c = { .attrid = alloc_attr(line, term->sgr), .ch = ch };
-        for (int16_t i = xs; i < xe; i++) line->cell[i] = c;
+        fill_cells(line->cell + xs, c, xe - xs);
     }
 }
 
@@ -1451,8 +1457,9 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
                 }
             } else {
                 term_erase(term, 0, top, term->width, top + amount, 0);
-                for (int16_t i = 0; i < rest; i++)
-                    SWAP(term->screen[top + i], term->screen[top + amount + i]);
+                memcpy(term->temp_screen, term->screen + top, amount*sizeof(*term->temp_screen));
+                memmove(term->screen + top, term->screen + top + amount, rest*sizeof(term->temp_screen));
+                memcpy(term->screen + top + rest, term->temp_screen, amount*sizeof(*term->temp_screen));
             }
 
             term->scroll_damage = 1;
@@ -1470,8 +1477,9 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
 
             term_erase(term, 0, bottom + amount, term->width, bottom, 0);
 
-            for (int16_t i = 1; i <= rest; i++)
-                SWAP(term->screen[bottom - i], term->screen[bottom + amount - i]);
+            memcpy(term->temp_screen, term->screen + bottom + amount, -amount*sizeof(*term->temp_screen));
+            memmove(term->screen + top - amount, term->screen + top, rest*sizeof(term->temp_screen));
+            memcpy(term->screen + top, term->temp_screen, -amount*sizeof(*term->temp_screen));
 
             term->scroll_damage = 1;
             /*
@@ -3563,42 +3571,38 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
             term_do_wrap(term);
     } else term->c.x = MIN(term->c.x, term_max_x(term) - totalw);
 
+    ssize_t max_cx = term->c.x + totalw, cx = term->c.x;
+    ssize_t max_tx = term_max_x(term);
     struct line *line = term->screen[term->c.y];
-    struct cell *cell = &line->cell[term->c.x];
-    ssize_t maxsx = term->c.x + totalw;
+    struct cell *cell = &line->cell[cx];
 
     // Shift characters to the left if insert mode is enabled
-    if (term->mode.insert && term->c.x + totalw < term_max_x(term)) {
-        for (struct cell *c = cell + totalw; c - line->cell < term_max_x(term); c++) c->drawn = 0;
-        memmove(cell + totalw, cell, (term_max_x(term) - term->c.x - totalw)*sizeof(*cell));
-        maxsx = MAX(maxsx, term_max_x(term));
+    if (term->mode.insert && max_cx < max_tx) {
+        for (struct cell *c = cell + totalw; c - line->cell < max_tx; c++) c->drawn = 0;
+        memmove(cell + totalw, cell, (max_tx - max_cx)*sizeof(*cell));
+        max_cx = MAX(max_cx, max_tx);
     }
 
     // Clear selection if writing over it
-    if (mouse_is_selected_2(term, term->c.x, maxsx, term->c.y))
+    if (mouse_is_selected_2(term, cx, max_cx, term->c.y))
         mouse_clear_selection(term);
 
     if (term->mode.margin_bell) {
         ssize_t bcol = term->right - window_cfg(term->win)->margin_bell_column;
-        if (term->c.x < bcol && term->c.x + totalw >= bcol)
+        if (cx < bcol && max_cx >= bcol)
             window_bell(term->win, term->mbvol);
     }
 
     // Erase overwritten parts of wide characters
-    term_adjust_wide_left(term, term->c.x, term->c.y);
+    term_adjust_wide_left(term, cx, term->c.y);
 
-    term->c.x += totalw;
-    if (term->c.x < line->mwidth)
-        term_adjust_wide_right(term, term->c.x - 1, term->c.y);
+    cx += totalw;
+    if (cx < line->mwidth)
+        term_adjust_wide_right(term, cx - 1, term->c.y);
 
-    line->mwidth = MAX(line->mwidth, term->c.x);
-    term->c.pending = term->c.x == term_max_x(term);
-    term->c.x -= term->c.pending;
-
-    if (gconfig.trace_characters) {
-        for (int32_t *p = term->predec_buf; p < pbuf; p++)
-            info("Char: (%x) '%lc' ", abs(*p), abs(*p));
-    }
+    line->mwidth = MAX(line->mwidth, cx);
+    term->c.pending = cx == max_tx;
+    term->c.x = cx - term->c.pending;
 
     // Writing to the line resets its wrapping state
     line->wrapped = 0;
@@ -3623,6 +3627,10 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
         }
     }
 
+    if (gconfig.trace_characters) {
+        for (int32_t *p = term->predec_buf; p < pbuf; p++)
+            info("Char: (%x) '%lc' ", abs(*p), abs(*p));
+    }
 
     return res;
 }
@@ -5424,6 +5432,7 @@ void free_term(struct term *term) {
 
     free(term->screen);
     free(term->back_screen);
+    free(term->temp_screen);
 
     free(term->tabs);
     free(term->predec_buf);

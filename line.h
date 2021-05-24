@@ -7,10 +7,16 @@
 #include "uri.h"
 #include "util.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+
+#ifdef __SSE2__
+#include <emmintrin.h>
+#endif
 
 #define SPECIAL_PALETTE_SIZE 11
 #define PALETTE_SIZE (256 + SPECIAL_PALETTE_SIZE)
@@ -162,6 +168,52 @@ inline static bool attr_eq(struct attr *a, struct attr *b) {
     return a->fg == b->fg && a->bg == b->bg && a->mask == b->mask;
 }
 
+inline static void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
+#if defined(__SSE2__)
+    // Well... this looks ugly but its fast
+
+    static_assert(sizeof(struct cell) == sizeof(uint32_t), "Wrong size of cell");
+    int32_t pref = MIN((4 - (intptr_t)(((uintptr_t)dst/sizeof(uint32_t)) & 3)) & 3, width);
+    switch (pref) {
+    case 3: dst[2] = c; //fallthrough
+    case 2: dst[1] = c; //fallthrough
+    case 1: dst[0] = c; //fallthrough
+    case 0:;
+    }
+    dst += pref;
+    width -= pref;
+    if (width <= 0) return;
+
+    uint32_t cell_val;
+    memcpy(&cell_val, &c, sizeof cell_val);
+    const __m128i four_cells = _mm_set1_epi32(cell_val);
+    for (ssize_t i = 0; i < (width & ~3); i += 4)
+        _mm_stream_si128((__m128i *)&dst[i], four_cells);
+
+    dst += width & ~3;
+    switch (width & 3) {
+    case 3: dst[2] = c; //fallthrough
+    case 2: dst[1] = c; //fallthrough
+    case 1: dst[0] = c; //fallthrough
+    case 0:;
+    }
+#else
+    ssize_t i = (width+7)/8, inc = width % 8;
+    if (!inc) inc = 8;
+    switch(inc) do {
+        dst += inc;
+        inc = 8; /* fallthrough */
+    case 8: dst[7] = c; /* fallthrough */
+    case 7: dst[6] = c; /* fallthrough */
+    case 6: dst[5] = c; /* fallthrough */
+    case 5: dst[4] = c; /* fallthrough */
+    case 4: dst[3] = c; /* fallthrough */
+    case 3: dst[2] = c; /* fallthrough */
+    case 2: dst[1] = c; /* fallthrough */
+    case 1: dst[0] = c;
+    } while(--i > 0);
+#endif
+}
 
 #endif
 
