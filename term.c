@@ -1431,11 +1431,6 @@ static void term_scroll_horizontal(struct term *term, int16_t left, int16_t amou
 static void term_scroll(struct term *term, int16_t top, int16_t amount, bool save) {
     int16_t left = term_min_x(term), right = term_max_x(term), bottom = term_max_y(term);
 
-    if (top <= term->prev_c_y && term->prev_c_y < bottom && left <= term->prev_c_x && term->prev_c_x < right) {
-        term->screen[term->prev_c_y]->cell[term->prev_c_x].drawn = 0;
-        term->prev_c_y = MAX(top, MIN(bottom - 1, term->prev_c_y - amount));
-    }
-
     if (left == 0 && right == term->width) { // Fast scrolling without margins
         if (amount > 0) { /* up */
             amount = MIN(amount, (bottom - top));
@@ -1492,6 +1487,11 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
         }
         if (amount && !term->view_pos.line) window_delay_redraw(term->win);
     } else { // Slow scrolling with margins
+
+        if (top <= term->prev_c_y && term->prev_c_y < bottom && left <= term->prev_c_x && term->prev_c_x < right) {
+            term->screen[term->prev_c_y]->cell[term->prev_c_x].drawn = 0;
+            term->prev_c_y = MAX(top, MIN(bottom - 1, term->prev_c_y - amount));
+        }
 
         for (int16_t i = top; i < bottom; i++) {
             term_adjust_wide_left(term, left, i);
