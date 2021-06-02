@@ -184,11 +184,20 @@ int main(int argc, char **argv) {
     init_instance_config(&cfg, cpath, 1);
     parse_options(&cfg, argv);
 
-    if (!gconfig.daemon_mode) create_window(&cfg);
+    if (gconfig.daemon_mode) {
+        if (!init_daemon()) {
+            free_context();
+            return EXIT_FAILURE;
+        }
+    } else {
+        create_window(&cfg);
+    }
 
     free_config(&cfg);
 
     run();
+
+    if (gconfig.daemon_mode) free_daemon();
 
     free_context();
 

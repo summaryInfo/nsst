@@ -97,7 +97,7 @@ bool renderer_reload_font(struct window *win, bool need_free) {
 
     if (need_free) {
         handle_resize(win, win->cfg.width, win->cfg.height);
-        window_set_default_props(win);
+        window_platform_update_props(win);
     } else {
         win->cw = MAX(1, (win->cfg.width - 2*win->cfg.left_border) / win->char_width);
         win->ch = MAX(1, (win->cfg.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));

@@ -15,6 +15,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <xcb/xcb.h>
+#include <xkbcommon/xkbcommon.h>
 #if USE_X11SHM
 #   include <xcb/shm.h>
 #else
@@ -217,7 +218,10 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr attr, 
     return res;
 }
 
+/* Needs to be multiple of 4 */
+#define PASTE_BLOCK_SIZE 1024
 
+/* Renderer dependent functions */
 void init_render_context(void);
 void free_render_context(void);
 void renderer_free(struct window *win);
@@ -226,10 +230,35 @@ void renderer_update(struct window *win, struct rect rect);
 void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch);
 void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 
-void window_set_default_props(struct window *win);
+/* Platform dependent functions */
+void init_platform_context(void);
+void free_platform_context(void);
+void platform_context_get_screen_size(int16_t *x, int16_t *y);
+bool platform_context_has_error(void);
+void handle_event(void);
+bool init_platform_window(struct window *win);
+void free_platform_window(struct window *win);
+void window_platform_map(struct window *win);
+void window_platform_set_icon_label(xcb_window_t wid, const char *title, bool utf8);
+void window_platform_set_title(xcb_window_t wid, const char *title, bool utf8);
+void window_platform_bell(struct window *win, uint8_t vol);
+void window_platform_get_position(struct window *win, int16_t *x, int16_t *y);
+void window_platform_set_urgency(struct window *win, bool set);
+void window_platform_draw_rectangles(struct window *win, struct rect *rects, ssize_t rectc);
+void window_platform_update_colors(struct window *win);
+void window_platform_set_mouse(struct window *win, bool enabled);
+void window_platform_get_pointer(struct window *win, int32_t *x, int32_t *y, int32_t *mask);
+bool window_platform_set_clip(struct window *win, uint32_t time, enum clip_target target);
+void window_platform_update_props(struct window *win);
+
+/* Platform independent functions */
+void window_paste_data(struct window *win, uint8_t *data, ssize_t size, bool utf8, bool is_first, bool is_last);
+void handle_expose(struct window *win, struct rect damage);
+void handle_resize(struct window *win, int16_t width, int16_t height);
+void handle_focus(struct window *win, bool focused);
+void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t keycode);
 void handle_resize(struct window *win, int16_t width, int16_t height);
 struct window *find_shared_font(struct window *win, bool need_free);
-struct cellspec describe_cell(struct cell cell, struct attr attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected);
 
 #endif
 
