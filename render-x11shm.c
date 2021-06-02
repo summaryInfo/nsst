@@ -138,7 +138,7 @@ void init_render_context(void) {
     const char *local[] = { "localhost:", "127.0.0.1:", "unix:", };
     bool localhost = display[0] == ':';
     for (size_t i = 0; !localhost && i < sizeof(local)/sizeof(*local); i++)
-        localhost = local[i] == strstr(display, local[i]);
+        localhost = display == strstr(display, local[i]);
 
     if (localhost) {
         xcb_shm_query_version_cookie_t q = xcb_shm_query_version(con);
