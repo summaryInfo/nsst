@@ -3599,8 +3599,9 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
     cx += totalw;
     if (cx < line->mwidth)
         term_adjust_wide_right(term, cx - 1, term->c.y);
+    else
+        line->mwidth = cx;
 
-    line->mwidth = MAX(line->mwidth, cx);
     term->c.pending = cx == max_tx;
     term->c.x = cx - term->c.pending;
 
@@ -4950,7 +4951,51 @@ static void term_dispatch_vt52_cup(struct term *term) {
     term->esc.state = esc_ground;
 }
 
-inline static bool term_dispatch(struct term *term, const uint8_t ** start, const uint8_t *end) {
+
+inline static bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const uint8_t **start, const uint8_t *end) {
+    ch = *--*start;
+
+    bool utf8 = term->mode.utf8 || (term->mode.title_set_utf8 && !term->mode.title_set_hex
+            && term->esc.state == esc_osc_string && term->esc.selector < 3);
+    do {
+        ssize_t len = 1;
+
+        if (ch >= 0xC0 && ch < 0xF8 && utf8) {
+            len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
+        } else if ((term->esc.state == esc_dcs_string && IS_DEL(ch)) || IS_C0(ch)) {
+            ++*start, len = 0;
+        }
+
+        if (len + *start >= end) return 0;
+
+        if (term->esc.str_len + len >= term->esc.str_cap) {
+            size_t new_cap = STR_CAP_STEP(term->esc.str_cap);
+            if (new_cap > ESC_MAX_LONG_STR) break;
+
+            uint8_t *new = realloc(term->esc.str_ptr, new_cap + 1);
+            if (!new) break;
+
+            if (!term->esc.str_ptr)
+                memcpy(new, term->esc.str_data, term->esc.str_len);
+
+            term->esc.str_ptr = new;
+            term->esc.str_cap = new_cap;
+        }
+
+        while (len--) {
+            term_esc_str(term)[term->esc.str_len++] = ch;
+            ch = *++*start;
+            if ((ch & 0xA0) != 0x80) break;
+        }
+
+    } while (*start < end && !IS_STREND(ch) && !IS_C1(ch));
+
+    term_esc_str(term)[term->esc.str_len] = '\0';
+
+    return 1;
+}
+
+inline static bool term_dispatch(struct term *term, const uint8_t **start, const uint8_t *end) {
     // Fast path for graphical characters
     if (term->esc.state == esc_ground && !IS_CBYTE(**start))
         return term_dispatch_print(term, 0, 0, start, end);
@@ -5016,7 +5061,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
     case esc_dcs_0:
         if (0x30 <= ch && ch <= 0x39)
             term->esc.param[term->esc.i] = (ch - 0x30) +
-                MAX(term->esc.param[term->esc.i], 0) * 10;
+                MAX(term->esc.param[term->esc.i] * 10, 0);
         else if (ch == 0x3B) {
             if (term->esc.i < ESC_MAX_PARAM - 1)
                 term->esc.param[++term->esc.i] = -1;
@@ -5084,9 +5129,8 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
             ch = *--*start;
             do {
                 ssize_t len = 1;
-                if (ch >= 0xC0 && ch < 0xF8 && term->mode.utf8) {
+                if (ch >= 0xC0 && ch < 0xF8 && term->mode.utf8)
                     len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
-                }
                 if (len + *start >= end) return 0;
                 while (len--) {
                     ch = *++*start;
@@ -5109,36 +5153,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t ** start, cons
     case esc_dcs_string:
         if (IS_STREND(ch))
             term_dispatch_c0(term, ch);
-        else {
-            ch = *--*start;
-            bool utf8 = term->mode.utf8 || (term->mode.title_set_utf8 && !term->mode.title_set_hex
-                    && term->esc.state == esc_osc_string && term->esc.selector < 3);
-            do {
-                ssize_t len = 1;
-                if (ch >= 0xC0 && ch < 0xF8 && utf8) {
-                    len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
-                } else if ((term->esc.state == esc_dcs_string && IS_DEL(ch)) || IS_C0(ch)) {
-                    ++*start, len = 0;
-                }
-                if (len + *start >= end) return 0;
-                if (term->esc.str_len + len >= term->esc.str_cap) {
-                    size_t new_cap = STR_CAP_STEP(term->esc.str_cap);
-                    if (new_cap > ESC_MAX_LONG_STR) break;
-                    uint8_t *new = realloc(term->esc.str_ptr, new_cap + 1);
-                    if (!new) break;
-                    if (!term->esc.str_ptr) memcpy(new, term->esc.str_data, term->esc.str_len);
-                    term->esc.str_ptr = new;
-                    term->esc.str_cap = new_cap;
-                }
-                while (len--) {
-                    term_esc_str(term)[term->esc.str_len++] = ch;
-                    ch = *++*start;
-                    if ((ch & 0xA0) != 0x80) break;
-                }
-            } while (*start < end && !IS_STREND(ch) && !IS_C1(ch));
-            term_esc_str(term)[term->esc.str_len] = '\0';
-        }
-        break;
+        return term_dispatch_dcs_string(term, ch, start, end);
     case esc_vt52_entry:
         if (IS_C0(ch))
             term_dispatch_c0(term, ch);
