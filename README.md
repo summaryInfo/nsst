@@ -4,7 +4,7 @@ This is an implementation of VT220-like X11 terminal emulator.
 
 ## Features
 * Quite fast rendering
-    * Almost same latency as `XTerm`, which is a lot faster than other modern terminals
+    * Almost same latency as `XTerm`, which is a lot lower than for other modern terminals
     * Scrolling performance is on par with fastest terminals my system (`alacritty` and `urxvt`)
 * Small size and almost no dependencies
 * Uses xcb as X11 interface library
@@ -14,14 +14,17 @@ This is an implementation of VT220-like X11 terminal emulator.
 * Full keyboard mode from XTerm
 * Syncronous updates DCS
 * `OSC 13001 ; Po ST` "Set background opacity to `Po` (`Po` is floating point)"
-* Multiple terminal windows
-    * This would be extended to full daemon mode later
-    * `Shift-Ctrl-N` is default keybinding
+* Daemon mode (`urxvt`-like)
+    * Multiple terminal windows
+    * `Shift-Ctrl-N` is default keybinding to create new window in the same process
+    * `nsstc` client that can create new terminal daemon
+    * Daemon can be autolaunched by `nsstc` on demand (`nsstc -d ...`)
 * Configuration with symmetrical config file options and command line arguments
 * MIT-SHM and XRender backends (compile time option)
 * Compiles with `-flto` by default
 * No warnings (see list of all enabled warnins in Makefile)
 * Rewraps text on resize (can be disabled by setting `rewrap` to false)
+* URL support (no autodetection yet)
 
 See TODO file for things that are to be implemented.
 
@@ -29,19 +32,24 @@ See TODO file for things that are to be implemented.
 
 * `boxdraw.c` -- Boxdrawing characters rendering
 * `config.c` -- Configuration handling and storage
+* `daemon.c` -- Daemon code
 * `font.c` -- Font loading and glyph caching
 * `image.c` -- Image manipulation utilities
 * `input.c` -- Input handling code (more or less compatible with Xterm)
+* `line.c` -- Terminal lines manipulation functions
+* `mouse.c` -- Mouse events and selection handling
 * `nrcs.c` -- National replacement character sets logic
 * `nsst.c` -- `main` function and arguments parsing
-* `render-x11shm.c` -- X11 MIT-SHM backend
+* `nsstc.c` -- Thin client that is able to connect to nsst daemon
+* `poller.c` -- Event handling (`poll()` wrapper)
+* `render-x12shm.c` -- X11 MIT-SHM backend
 * `render-x11xrender.c` -- X11 XRender backend
 * `term.c` -- Terminal logic
+* `tty.c` -- Low level TTY/PTY code
+* `uri.c` -- URL storage and validation
 * `util.c` -- General utilities (encoding/decoding and logging)
+* `window.c` -- Common window code
 * `window-x11.c` -- X11 specific window code
-* `line.c` -- Line manipulation functions
-* `tty.c` -- low level TTY/PTY code
-* `mouse.c` -- Mouse events and selection handling
 
 ## Notes
 
