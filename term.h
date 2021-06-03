@@ -49,6 +49,7 @@ struct mouse_state *term_get_mstate(struct term *term);
 struct window *term_window(struct term *term);
 color_t *term_palette(struct term *term);
 int term_fd(struct term *term);
+void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool is_first, bool is_last);
 void term_sendkey(struct term *term, const uint8_t *data, size_t size);
 void term_answerback(struct term *term, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
 void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd);
@@ -67,9 +68,8 @@ struct line_offset term_get_line_pos(struct term *term, ssize_t y);
 ssize_t term_line_next(struct term *term, struct line_offset *pos, ssize_t amount);
 bool is_last_line(struct line_view line, bool rewrap);
 
-bool term_is_paste_requested(struct term *term);
-void term_paste_begin(struct term *term);
-void term_paste_end(struct term *term);
+/* Needs to be multiple of 4 */
+#define PASTE_BLOCK_SIZE 1024
 
 bool term_is_keep_clipboard_enabled(struct term *term);
 bool term_is_keep_selection_enabled(struct term *term);
@@ -78,10 +78,9 @@ bool term_is_bell_urgent_enabled(struct term *term);
 bool term_is_bell_raise_enabled(struct term *term);
 bool term_is_utf8_enabled(struct term *term);
 bool term_is_nrcs_enabled(struct term *term);
-bool term_is_paste_nl_enabled(struct term *term);
-bool term_is_paste_quote_enabled(struct term *term);
 bool term_is_cursor_enabled(struct term *term);
 bool term_is_reverse(struct term *term);
+
 
 
 /* These are only used in mouse.c */

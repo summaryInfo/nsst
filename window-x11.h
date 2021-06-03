@@ -218,9 +218,6 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr attr, 
     return res;
 }
 
-/* Needs to be multiple of 4 */
-#define PASTE_BLOCK_SIZE 1024
-
 /* Renderer dependent functions */
 void init_render_context(void);
 void free_render_context(void);
@@ -252,7 +249,6 @@ bool window_platform_set_clip(struct window *win, uint32_t time, enum clip_targe
 void window_platform_update_props(struct window *win);
 
 /* Platform independent functions */
-void window_paste_data(struct window *win, uint8_t *data, ssize_t size, bool utf8, bool is_first, bool is_last);
 void handle_expose(struct window *win, struct rect damage);
 void handle_resize(struct window *win, int16_t width, int16_t height);
 void handle_focus(struct window *win, bool focused);

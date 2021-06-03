@@ -5199,29 +5199,18 @@ bool term_read(struct term *term) {
     return i;
 }
 
-void term_toggle_numlock(struct term *term) {
-    term->kstate.allow_numlock = !term->kstate.allow_numlock;
-}
-
-bool term_is_paste_requested(struct term *term) {
+inline static bool is_osc52_reply(struct term *term) {
     return term->paste_from;
 }
 
-void term_paste_begin(struct term *term) {
-    /* If paste_from is not 0 application have requested
-     * OSC 52 selection contents reply */
-    if (term->paste_from)
-        term_answerback(term, OSC"52;%c;", term->paste_from);
-    /* Otherwise it's just paste (bracketed or not) */
-    else if (term->mode.bracketed_paste)
-        term_answerback(term, CSI"200~");
-}
+void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool is_first, bool is_last) {
+    static uint8_t leftover[3], leftover_len;
+    static uint8_t buf1[2*PASTE_BLOCK_SIZE];
+    static uint8_t buf2[4*PASTE_BLOCK_SIZE];
 
-void term_paste_end(struct term *term) {
-    /* If paste_from is not 0 application have requested
-     * OSC 52 selection contents reply
-     *
-     * Actually there's a race condition
+    assert(size < PASTE_BLOCK_SIZE);
+
+    /* There's a race condition
      * if user have requested paste and
      * before data have arrived an application
      * uses OSC 52. But it's really hard to deal with
@@ -5232,11 +5221,81 @@ void term_paste_end(struct term *term) {
      * But this race isn't that destructive and
      * rather rare to deal with
      */
-    if (term->paste_from) {
-        term_answerback(term, ST);
-        term->paste_from = 0;
-    } else if (term->mode.bracketed_paste)
-        term_answerback(term, CSI"201~");
+
+    uint8_t *pos = data, *end = data + size;
+
+    if (!size) return;
+
+    if (is_first) {
+        leftover_len = 0;
+        if (is_osc52_reply(term)) {
+            term_answerback(term, OSC"52;%c;", term->paste_from);
+        } else if (term->mode.bracketed_paste) {
+            term_answerback(term, CSI"200~");
+        }
+    }
+
+    if (!term->mode.paste_literal_nl)
+        while ((pos = memchr(pos, '\n', end - pos))) *pos++ = '\r';
+
+    if (utf8 ^ term->mode.utf8) {
+        pos = data;
+        size = 0;
+        if (utf8) {
+            uint32_t ch;
+            while (pos < end)
+                if (utf8_decode(&ch, (const uint8_t **)&pos, end))
+                    buf1[size++] = ch;
+        } else {
+            while (pos < end)
+                size += utf8_encode(*pos++, buf1 + size, buf1 + sizeof buf1/sizeof *buf1);
+        }
+
+        data = buf1;
+    }
+
+    if (is_osc52_reply(term)) {
+        while (leftover_len < 3 && size) leftover[leftover_len++] = *data++, size--;
+        size_t pre = base64_encode(buf2, leftover, leftover + leftover_len) - buf2;
+
+        if (size) {
+            if (!is_last) {
+                leftover_len = size % 3;
+                if (leftover_len > 0) leftover[0] = data[size - leftover_len], size--;
+                if (leftover_len > 1) leftover[1] = data[size - 1], size--;
+            }
+
+            size = base64_encode(buf2 + pre, data, data + size) - buf2;
+        }
+        data = buf2;
+    } else if (term->mode.paste_quote) {
+        bool quote_c1 = !term_is_utf8_enabled(term);
+        ssize_t i = 0, j = 0;
+        while (i < size) {
+            // Prefix control symbols with Ctrl-V
+            if (buf1[i] < 0x20 || buf1[i] == 0x7F ||
+                    (quote_c1 && buf1[i] > 0x7F && buf1[i] < 0xA0))
+                buf2[j++] = 0x16;
+            buf2[j++] = buf1[i++];
+        }
+        size = j;
+        data = buf2;
+    }
+
+    term_sendkey(term, data, size);
+
+    if (is_last) {
+        if (is_osc52_reply(term)) {
+            term_answerback(term, ST);
+            term->paste_from = 0;
+        } else if (term->mode.bracketed_paste) {
+            term_answerback(term, CSI"201~");
+        }
+    }
+}
+
+void term_toggle_numlock(struct term *term) {
+    term->kstate.allow_numlock = !term->kstate.allow_numlock;
 }
 
 bool term_is_keep_clipboard_enabled(struct term *term) {
@@ -5253,14 +5312,6 @@ bool term_is_select_to_clipboard_enabled(struct term *term) {
 
 bool term_is_utf8_enabled(struct term *term) {
     return term->mode.utf8;
-}
-
-bool term_is_paste_nl_enabled(struct term *term) {
-    return term->mode.paste_literal_nl;
-}
-
-bool term_is_paste_quote_enabled(struct term *term) {
-    return term->mode.paste_quote;
 }
 
 bool term_is_nrcs_enabled(struct term *term) {

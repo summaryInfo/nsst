@@ -87,14 +87,23 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
         win->bg = bg;
         win->bg_premul = color_apply_a(bg, win->cfg.alpha);
     }
-    if (cursor_fg) win->cursor_fg = cursor_fg;
 
-    if (bg && win->bg_premul != obg)
+    if (cursor_fg) {
+        win->cursor_fg = cursor_fg;
+    }
+
+    bool cfg_changed = cursor_fg && cursor_fg != ofg;
+    bool bg_changed = bg && win->bg_premul != obg;
+
+    if (bg_changed) {
         window_platform_update_colors(win);
+    }
 
-    if ((bg && win->bg_premul != obg) || (cursor_fg && cursor_fg != ofg)) {
+    if (cfg_changed || bg_changed) {
         // If reverse video is set via option
+        // during initiallization
         // win->term can be NULL at this point
+
         if (win->term) term_damage_lines(win->term, 0, win->ch);
         win->force_redraw = 1;
     }
@@ -635,72 +644,6 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
     keyboard_handle_input(key, win->term);
 }
 
-
-void window_paste_data(struct window *win, uint8_t *data, ssize_t size, bool utf8, bool is_first, bool is_last) {
-    static uint8_t leftover[3], leftover_len;
-    static uint8_t buf1[2*PASTE_BLOCK_SIZE];
-    static uint8_t buf2[4*PASTE_BLOCK_SIZE];
-
-    uint8_t *pos = data, *end = data + size;
-
-    if (!term_is_paste_nl_enabled(win->term))
-        while ((pos = memchr(pos, '\n', end - pos))) *pos++ = '\r';
-
-    if (size) {
-        if (is_first) {
-            leftover_len = 0;
-            term_paste_begin(win->term);
-        }
-
-        if (utf8 ^ term_is_utf8_enabled(win->term)) {
-            pos = data;
-            size = 0;
-            if (utf8) {
-                uint32_t ch;
-                while (pos < end)
-                    if (utf8_decode(&ch, (const uint8_t **)&pos, end))
-                        buf1[size++] = ch;
-            } else {
-                while (pos < end)
-                    size += utf8_encode(*pos++, buf1 + size, buf1 + sizeof buf1/sizeof *buf1);
-            }
-
-            data = buf1;
-        }
-
-        if (term_is_paste_requested(win->term)) {
-            while (leftover_len < 3 && size) leftover[leftover_len++] = *data++, size--;
-            size_t pre = base64_encode(buf2, leftover, leftover + leftover_len) - buf2;
-
-            if (size) {
-                if (!is_last) {
-                    leftover_len = size % 3;
-                    if (leftover_len > 0) leftover[0] = data[size - leftover_len], size--;
-                    if (leftover_len > 1) leftover[1] = data[size - 1], size--;
-                }
-
-                size = base64_encode(buf2 + pre, data, data + size) - buf2;
-            }
-            data = buf2;
-        } else if (term_is_paste_quote_enabled(win->term)) {
-            bool quote_c1 = !term_is_utf8_enabled(win->term);
-            ssize_t i = 0, j = 0;
-            while (i < size) {
-                // Prefix control symbols with Ctrl-V
-                if (buf1[i] < 0x20 || buf1[i] == 0x7F ||
-                        (quote_c1 && buf1[i] > 0x7F && buf1[i] < 0xA0))
-                    buf2[j++] = 0x16;
-                buf2[j++] = buf1[i++];
-            }
-            size = j;
-            data = buf2;
-        }
-
-        term_sendkey(win->term, data, size);
-
-        if (is_last) term_paste_end(win->term);
-    }
-}
 
 bool window_is_mapped(struct window *win) {
     return win->active;
