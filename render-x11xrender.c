@@ -541,41 +541,8 @@ static void draw_rects(struct window *win, struct element_buffer *buf) {
 
 }
 
-bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
-    bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
-    bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1) && term_is_cursor_enabled(win->term);
-    if (cond_cblink) cursor |= win->rcstate.blink;
-
-    prepare_multidraw(win, cur_x, cur_y, reverse_cursor);
-
-    // Set clip rectangles for text rendering
-    rctx.payload_size = 0;
-    for (struct element *it = rctx.background_buf.data, *end = rctx.background_buf.data + rctx.background_buf.size; it < end; ) {
-        struct element *it2 = it;
-        do it2++;
-        while (it2 < end && it2->y == it->y &&
-                it2->x + it2->width == it2[-1].x);
-        push_rect(&(xcb_rectangle_t) {
-            .x = it2[-1].x,
-            .y = it->y,
-            .width = it->x - it2[-1].x + it->width,
-            .height = win->char_depth + win->char_height
-        });
-        it = it2;
-    }
-    if (rctx.payload_size)
-        xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0,
-            rctx.payload_size/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.payload);
-
-    sort_by_color(&rctx.foreground_buf);
-    sort_by_color(&rctx.background_buf);
-    sort_by_color(&rctx.decoration_buf);
-
-    // Draw background
-    draw_rects(win, &rctx.background_buf);
-
-    // Draw characters
-    for (struct element *it = rctx.foreground_buf.data, *end = rctx.foreground_buf.data + rctx.foreground_buf.size; it < end; ) {
+static void draw_text(struct window *win, struct element_buffer *buf) {
+    for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; ) {
         // Prepare pen
         color_t color = it->color;
         xcb_render_color_t col = MAKE_COLOR(color);
@@ -620,10 +587,51 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                     0, 0, rctx.payload_size, rctx.payload);
         }
     }
+}
 
-    if (rctx.foreground_buf.size)
-        xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0, 1, &(xcb_rectangle_t) {
-                0, 0, win->cw * win->char_width, win->ch * (win->char_height + win->char_depth)});
+inline static void reset_clip(struct window *win) {
+    xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0, 1, &(xcb_rectangle_t) {
+            0, 0, win->cw * win->char_width, win->ch * (win->char_height + win->char_depth)});
+}
+
+inline static void set_clip(struct window *win, struct element_buffer *buf) {
+    rctx.payload_size = 0;
+    for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; ) {
+        struct element *it2 = it;
+        do it2++;
+        while (it2 < end && it2->y == it->y &&
+                it2->x + it2->width == it2[-1].x);
+        push_rect(&(xcb_rectangle_t) {
+            .x = it2[-1].x,
+            .y = it->y,
+            .width = it->x - it2[-1].x + it->width,
+            .height = win->char_depth + win->char_height
+        });
+        it = it2;
+    }
+    if (rctx.payload_size)
+        xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0,
+            rctx.payload_size/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.payload);
+}
+
+bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
+    bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
+    bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1) && term_is_cursor_enabled(win->term);
+    if (cond_cblink) cursor |= win->rcstate.blink;
+
+    prepare_multidraw(win, cur_x, cur_y, reverse_cursor);
+
+    sort_by_color(&rctx.foreground_buf);
+    sort_by_color(&rctx.background_buf);
+    sort_by_color(&rctx.decoration_buf);
+
+    set_clip(win, &rctx.background_buf);
+
+    // Draw cells backgrounds
+    draw_rects(win, &rctx.background_buf);
+    draw_text(win, &rctx.foreground_buf);
+
+    if (rctx.foreground_buf.size) reset_clip(win);
 
     // Draw underline and strikethrough lines
     draw_rects(win, &rctx.decoration_buf);
