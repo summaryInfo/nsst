@@ -77,10 +77,19 @@ struct render_cell_state {
 struct window {
     struct window *prev, *next;
 
-    xcb_window_t wid;
-    int32_t screen;
-    xcb_gcontext_t gc;
-    xcb_event_mask_t ev_mask;
+    /* These fields are X11-specific */
+    struct {
+        xcb_window_t wid;
+        xcb_gcontext_t gc;
+        xcb_event_mask_t ev_mask;
+
+        // Used to restore maximized window
+        bool saved_geometry;
+        int16_t saved_x;
+        int16_t saved_y;
+        int16_t saved_width;
+        int16_t saved_height;
+    };
 
     bool focused : 1;
     bool active : 1;
@@ -96,6 +105,9 @@ struct window {
     bool autorepeat : 1;
     bool any_event_happend : 1;
 
+    int16_t damaged_y0;
+    int16_t damaged_y1;
+
     struct timespec last_scroll ALIGNED(16);
     struct timespec last_shift ALIGNED(16);
     struct timespec last_blink ALIGNED(16);
@@ -104,15 +116,6 @@ struct window {
     struct timespec last_wait_start ALIGNED(16);
     struct timespec last_draw ALIGNED(16);
     struct timespec vbell_start ALIGNED(16);
-    int16_t damaged_y0;
-    int16_t damaged_y1;
-
-    // Used to restore maximized window
-    bool saved_geometry;
-    int16_t saved_x;
-    int16_t saved_y;
-    int16_t saved_width;
-    int16_t saved_height;
 
     color_t bg;
     color_t bg_premul;
@@ -223,30 +226,35 @@ void init_render_context(void);
 void free_render_context(void);
 void renderer_free(struct window *win);
 void renderer_update(struct window *win, struct rect rect);
- bool renderer_reload_font(struct window *win, bool need_free);
+bool renderer_reload_font(struct window *win, bool need_free);
 void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch);
 void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 
 /* Platform dependent functions */
-void init_platform_context(void);
-void free_platform_context(void);
-void platform_context_get_screen_size(int16_t *x, int16_t *y);
-bool platform_context_has_error(void);
-void handle_event(void);
-bool init_platform_window(struct window *win);
-void free_platform_window(struct window *win);
-void window_platform_map(struct window *win);
-void window_platform_set_icon_label(xcb_window_t wid, const char *title, bool utf8);
-void window_platform_set_title(xcb_window_t wid, const char *title, bool utf8);
-void window_platform_bell(struct window *win, uint8_t vol);
-void window_platform_get_position(struct window *win, int16_t *x, int16_t *y);
-void window_platform_set_urgency(struct window *win, bool set);
-void window_platform_draw_rectangles(struct window *win, struct rect *rects, ssize_t rectc);
-void window_platform_update_colors(struct window *win);
-void window_platform_set_mouse(struct window *win, bool enabled);
-void window_platform_get_pointer(struct window *win, int32_t *x, int32_t *y, int32_t *mask);
-bool window_platform_set_clip(struct window *win, uint32_t time, enum clip_target target);
-void window_platform_update_props(struct window *win);
+void platform_init_context(void);
+void platform_free_context(void);
+void platform_get_screen_size(int16_t *x, int16_t *y);
+bool platform_has_error(void);
+bool platform_init_window(struct window *win);
+void platform_free_window(struct window *win);
+void platform_map_window(struct window *win);
+void platform_set_icon_label(struct window *win, const char *title, bool utf8);
+void platform_set_title(struct window *win, const char *title, bool utf8);
+void platform_bell(struct window *win, uint8_t vol);
+void platform_get_position(struct window *win, int16_t *x, int16_t *y);
+void platform_set_urgency(struct window *win, bool set);
+void platform_draw_rect(struct window *win, struct rect *rects, ssize_t rectc);
+void platform_update_colors(struct window *win);
+void platform_enable_mouse_events(struct window *win, bool enabled);
+void platform_get_pointer(struct window *win, int32_t *x, int32_t *y, int32_t *mask);
+bool platform_set_clip(struct window *win, uint32_t time, enum clip_target target);
+void platform_update_window_props(struct window *win);
+void platform_window_action(struct window *win, enum window_action action);
+void platform_move_window(struct window *win, int16_t x, int16_t y);
+void platform_resize_window(struct window *win, int16_t width, int16_t height);
+void platform_get_title(struct window *win, enum title_target which, char **name, bool *utf8);
+void platform_paste(struct window *win, enum clip_target target);
+void platform_handle_events(void);
 
 /* Platform independent functions */
 void handle_expose(struct window *win, struct rect damage);
@@ -254,7 +262,9 @@ void handle_resize(struct window *win, int16_t width, int16_t height);
 void handle_focus(struct window *win, bool focused);
 void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t keycode);
 void handle_resize(struct window *win, int16_t width, int16_t height);
-struct window *find_shared_font(struct window *win, bool need_free);
+/* mouse event handler is defined elsewhere */
+
+struct window *window_find_shared_font(struct window *win, bool need_free);
 
 #endif
 

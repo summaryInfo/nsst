@@ -47,7 +47,7 @@ _Noreturn static void handle_term(int sig) {
 void init_context(void) {
     init_poller();
 
-    init_platform_context();
+    platform_init_context();
     init_render_context();
 
     sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART }, NULL);
@@ -66,7 +66,7 @@ void free_context(void) {
         unlink(gconfig.sockpath);
 
     free_render_context();
-    free_platform_context();
+    platform_free_context();
     free_poller();
 
     memset(&con, 0, sizeof(con));
@@ -96,7 +96,7 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
     bool bg_changed = bg && win->bg_premul != obg;
 
     if (bg_changed) {
-        window_platform_update_colors(win);
+        platform_update_colors(win);
     }
 
     if (cfg_changed || bg_changed) {
@@ -113,12 +113,25 @@ void window_set_mouse(struct window *win, bool enabled) {
 #if USE_URI
     window_set_active_uri(win, EMPTY_URI, 0);
 #endif
-    window_platform_set_mouse(win, enabled);
+    platform_enable_mouse_events(win, enabled);
 }
+
+void window_action(struct window *win, enum window_action act) {
+    platform_window_action(win, act);
+}
+
+void window_move(struct window *win, int16_t x, int16_t y) {
+    platform_move_window(win, x, y);
+}
+
+void window_resize(struct window *win, int16_t width, int16_t height) {
+    platform_resize_window(win, width, height);
+}
+
 
 void window_get_pointer(struct window *win, int16_t *px, int16_t *py, uint32_t *pmask) {
     int32_t x = 0, y = 0, mask = 0;
-    window_platform_get_pointer(win, &x, &y, &mask);
+    platform_get_pointer(win, &x, &y, &mask);
     if (px) *px = x;
     if (py) *py = y;
     if (pmask) *pmask = mask;
@@ -130,7 +143,7 @@ void window_set_clip(struct window *win, uint8_t *data, uint32_t time, enum clip
         free(data);
         return;
     }
-    if (data && !window_platform_set_clip(win, time, target)) {
+    if (data && !platform_set_clip(win, time, target)) {
         free(data);
         data = NULL;
     }
@@ -143,7 +156,6 @@ void window_set_alpha(struct window *win, double alpha) {
     win->cfg.alpha = MAX(MIN(1, alpha), 0);
     window_set_colors(win, win->bg, 0);
 }
-
 
 #if USE_URI
 void window_set_active_uri(struct window *win, uint32_t uri, bool pressed) {
@@ -194,8 +206,10 @@ void window_request_scroll_flush(struct window *win) {
 
 void window_bell(struct window *win, uint8_t vol) {
     if (!win->focused) {
-        if (term_is_bell_raise_enabled(win->term)) window_action(win, action_restore_minimized);
-        if (term_is_bell_urgent_enabled(win->term)) window_platform_set_urgency(win, 1);
+        if (term_is_bell_raise_enabled(win->term))
+            window_action(win, action_restore_minimized);
+        if (term_is_bell_urgent_enabled(win->term))
+            platform_set_urgency(win, 1);
     }
     if (win->cfg.visual_bell) {
         if (!win->in_blink) {
@@ -206,7 +220,7 @@ void window_bell(struct window *win, uint8_t vol) {
             term_set_reverse(win->term, !win->init_invert);
         }
     } else if (vol) {
-        window_platform_bell(win, vol);
+        platform_bell(win, vol);
     }
 }
 
@@ -215,7 +229,7 @@ void window_get_dim_ext(struct window *win, enum window_dimension which, int16_t
     switch (which) {
     case dim_window_position:
     case dim_grid_position:
-        window_platform_get_position(win, &x, &y);
+        platform_get_position(win, &x, &y);
         if (which == dim_grid_position) {
             x += win->cfg.left_border;
             y += win->cfg.top_border;
@@ -226,7 +240,7 @@ void window_get_dim_ext(struct window *win, enum window_dimension which, int16_t
         y = (win->char_height + win->char_depth) * win->ch;
         break;
     case dim_screen_size:
-        platform_context_get_screen_size(&x, &y);
+        platform_get_screen_size(&x, &y);
         break;
     case dim_cell_size:
         x = win->char_width;
@@ -240,6 +254,10 @@ void window_get_dim_ext(struct window *win, enum window_dimension which, int16_t
 
     if (width) *width = x;
     if (height) *height = y;
+}
+
+void window_get_title(struct window *win, enum title_target which, char **name, bool *utf8) {
+    platform_get_title(win, which, name, utf8);
 }
 
 void window_push_title(struct window *win, enum title_target which) {
@@ -279,11 +297,11 @@ void window_pop_title(struct window *win, enum title_target which) {
     if (top) {
         if (which & target_title) {
             for (it = top; it && !it->title_data; it = it->next);
-            if (it) window_platform_set_title(win->wid, it->title_data, it->title_utf8);
+            if (it) platform_set_title(win, it->title_data, it->title_utf8);
         }
         if (which & target_icon_label) {
             for (it = top; it && !it->icon_data; it = it->next);
-            if (it) window_platform_set_icon_label(win->wid, it->icon_data, it->icon_utf8);
+            if (it) platform_set_icon_label(win, it->icon_data, it->icon_utf8);
         }
         win->title_stack = top->next;
         free(top);
@@ -332,12 +350,12 @@ static void window_set_font(struct window *win, const char * name, int32_t size)
 void window_set_title(struct window *win, enum title_target which, const char *title, bool utf8) {
     if (!title) title = win->cfg.title;
 
-    if (which & target_title) window_platform_set_title(win->wid, title, utf8);
+    if (which & target_title) platform_set_title(win, title, utf8);
 
-    if (which & target_icon_label) window_platform_set_icon_label(win->wid, title, utf8);
+    if (which & target_icon_label) platform_set_icon_label(win, title, utf8);
 }
 
-struct window *find_shared_font(struct window *win, bool need_free) {
+struct window *window_find_shared_font(struct window *win, bool need_free) {
     bool found_font = 0, found_cache = 0;
     struct window *found = NULL;
 
@@ -405,7 +423,7 @@ struct window *create_window(struct instance_config *cfg) {
         return NULL;
     }
 
-    if (!init_platform_window(win)) goto error;
+    if (!platform_init_window(win)) goto error;
 
     if (!renderer_reload_font(win, 0)) goto error;
 
@@ -425,7 +443,7 @@ struct window *create_window(struct instance_config *cfg) {
     win->poll_index = poller_alloc_index(term_fd(win->term), POLLIN | POLLHUP);
     if (win->poll_index < 0) goto error;
 
-    window_platform_map(win);
+    platform_map_window(win);
     return win;
 
 error:
@@ -436,7 +454,7 @@ error:
 
 
 void free_window(struct window *win) {
-    free_platform_window(win);
+    platform_free_window(win);
 
     // Decrement count of currently blinking
     // windows if window gets freed during blink
@@ -517,7 +535,7 @@ static void redraw_borders(struct window *win, bool top_left, bool bottom_right)
         if (!bottom_right) count -= 2;
 
         //TODO Handle zero height
-        window_platform_draw_rectangles(win, borders + offset, count);
+        platform_draw_rect(win, borders + offset, count);
 }
 
 void handle_expose(struct window *win, struct rect damage) {
@@ -536,7 +554,7 @@ void handle_expose(struct window *win, struct rect damage) {
                 damaged[num_damaged++] = borders[i];
 
     // TODO Include borders in window
-    window_platform_draw_rectangles(win, damaged, num_damaged);
+    platform_draw_rect(win, damaged, num_damaged);
 
     struct rect inters = { 0, 0, width - win->cfg.left_border, height - win->cfg.top_border};
     damage = rect_shift(damage, -win->cfg.left_border, -win->cfg.top_border);
@@ -568,6 +586,10 @@ void handle_resize(struct window *win, int16_t width, int16_t height) {
 void handle_focus(struct window *win, bool focused) {
     win->focused = focused;
     term_handle_focus(win->term, focused);
+}
+
+void window_paste_clip(struct window *win, enum clip_target target) {
+    platform_paste(win, target);
 }
 
 static void clip_copy(struct window *win, bool uri) {
@@ -655,7 +677,7 @@ void run(void) {
         poller_poll(next_timeout);
 
         // First check window system events
-        handle_event();
+        platform_handle_events();
 
         // Reload config if requested
         if (reload_config) do_reload_config();
@@ -761,6 +783,6 @@ void run(void) {
         next_timeout = MAX(0, next_timeout);
         xcb_flush(con);
 
-        if ((!gconfig.daemon_mode && !win_list_head) || platform_context_has_error()) break;
+        if ((!gconfig.daemon_mode && !win_list_head) || platform_has_error()) break;
     }
 }

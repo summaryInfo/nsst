@@ -175,7 +175,7 @@ cleanup_context:
     return 0;
 }
 
-void init_platform_context(void) {
+void platform_init_context(void) {
     int screenp = 0;
     con = xcb_connect(NULL, &screenp);
     if (!con) die("Can't connect to X server");
@@ -250,7 +250,7 @@ void init_platform_context(void) {
     if (dpi > 0) set_default_dpi(dpi);
 }
 
-void free_platform_context(void) {
+void platform_free_context(void) {
     xkb_state_unref(ctx.xkb_state);
     xkb_keymap_unref(ctx.xkb_keymap);
     xkb_context_unref(ctx.xkb_ctx);
@@ -258,20 +258,20 @@ void free_platform_context(void) {
     xcb_disconnect(con);
 }
 
-void window_platform_update_colors(struct window *win) {
+void platform_update_colors(struct window *win) {
     uint32_t values2[2];
     values2[0] = values2[1] = win->bg_premul;
     xcb_change_window_attributes(con, win->wid, XCB_CW_BACK_PIXEL, values2);
     xcb_change_gc(con, win->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
 }
 
-void window_platform_set_mouse(struct window *win, bool enabled) {
+void platform_enable_mouse_events(struct window *win, bool enabled) {
     if (enabled) win->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
     else win->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
     xcb_change_window_attributes(con, win->wid, XCB_CW_EVENT_MASK, &win->ev_mask);
 }
 
-void window_resize(struct window *win, int16_t width, int16_t height) {
+void platform_resize_window(struct window *win, int16_t width, int16_t height) {
     if (win->cfg.height != height || win->cfg.width != width) {
         uint32_t vals[] = {width, height};
         xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
@@ -279,7 +279,7 @@ void window_resize(struct window *win, int16_t width, int16_t height) {
     }
 }
 
-void window_move(struct window *win, int16_t x, int16_t y) {
+void platform_move_window(struct window *win, int16_t x, int16_t y) {
     uint32_t vals[] = {x, y};
     xcb_configure_window(con, win->wid, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
 }
@@ -328,7 +328,7 @@ inline static void restore_pos(struct window *win) {
     }
 }
 
-void window_action(struct window *win, enum window_action act) {
+void platform_window_action(struct window *win, enum window_action act) {
     switch(act) {
         uint32_t val;
     case action_minimize:
@@ -385,7 +385,7 @@ void window_action(struct window *win, enum window_action act) {
     }
 }
 
-void window_platform_get_position(struct window *win, int16_t *x, int16_t *y) {
+void platform_get_position(struct window *win, int16_t *x, int16_t *y) {
     xcb_get_geometry_cookie_t gc = xcb_get_geometry(con, win->wid);
     xcb_get_geometry_reply_t *rep = xcb_get_geometry_reply(con, gc, NULL);
     if (rep) {
@@ -395,12 +395,12 @@ void window_platform_get_position(struct window *win, int16_t *x, int16_t *y) {
     }
 }
 
-void platform_context_get_screen_size(int16_t *x, int16_t *y) {
+void platform_get_screen_size(int16_t *x, int16_t *y) {
     *x = ctx.screen->width_in_pixels;
     *y = ctx.screen->height_in_pixels;
 }
 
-void window_platform_get_pointer(struct window *win, int32_t *px, int32_t *py, int32_t *pmask) {
+void platform_get_pointer(struct window *win, int32_t *px, int32_t *py, int32_t *pmask) {
     xcb_query_pointer_cookie_t c = xcb_query_pointer(con, win->wid);
     xcb_query_pointer_reply_t *qre = xcb_query_pointer_reply(con, c, NULL);
     if (qre) {
@@ -412,7 +412,7 @@ void window_platform_get_pointer(struct window *win, int32_t *px, int32_t *py, i
 }
 
 #define WM_HINTS_LEN 8
-void window_platform_set_urgency(struct window *win, bool set) {
+void platform_set_urgency(struct window *win, bool set) {
     xcb_get_property_cookie_t c = xcb_get_property(con, 0, win->wid, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 0, WM_HINTS_LEN);
     xcb_get_property_reply_t *rep = xcb_get_property_reply(con, c, NULL);
     if (rep) {
@@ -422,22 +422,21 @@ void window_platform_set_urgency(struct window *win, bool set) {
         xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 32, WM_HINTS_LEN, hints);
         free(rep);
     }
-
 }
 
-void window_platform_bell(struct window *win, uint8_t vol) {
+void platform_bell(struct window *win, uint8_t vol) {
     xcb_xkb_bell(con, XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_ID_DFLT_XI_CLASS,
             XCB_XKB_ID_DFLT_XI_ID, vol, 1, 0, 0, 0, XCB_ATOM_ANY, win->wid);
 }
 
-void window_platform_set_title(xcb_window_t wid, const char *title, bool utf8) {
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, wid,
+void platform_set_title(struct window *win, const char *title, bool utf8) {
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid,
         utf8 ? ctx.atom._NET_WM_NAME : XCB_ATOM_WM_NAME,
         utf8 ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
-void window_platform_set_icon_label(xcb_window_t wid, const char *title, bool utf8) {
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, wid,
+void platform_set_icon_label(struct window *win, const char *title, bool utf8) {
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid,
         utf8 ? ctx.atom._NET_WM_ICON_NAME : XCB_ATOM_WM_ICON_NAME,
         utf8 ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, 8, strlen(title), title);
 }
@@ -478,8 +477,7 @@ static char *get_full_property(xcb_window_t wid, xcb_atom_t prop, xcb_atom_t *ty
     return data;
 }
 
-/* there's no window_platform_get_title() */
-void window_get_title(struct window *win, enum title_target which, char **name, bool *utf8) {
+void platform_get_title(struct window *win, enum title_target which, char **name, bool *utf8) {
     xcb_atom_t type = XCB_ATOM_ANY;
     char *data = NULL;
     if (which & target_title) {
@@ -503,7 +501,7 @@ inline static uint32_t get_win_gravity_from_config(bool nx, bool ny) {
     }
 }
 
-void window_platform_update_props(struct window *win) {
+void platform_update_window_props(struct window *win) {
     uint32_t pid = getpid();
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom._NET_WM_PID, XCB_ATOM_CARDINAL, 32, 1, &pid);
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->wid, ctx.atom.WM_PROTOCOLS, XCB_ATOM_ATOM, 32, 1, &ctx.atom.WM_DELETE_WINDOW);
@@ -548,7 +546,7 @@ void window_platform_update_props(struct window *win) {
 }
 
 
-bool init_platform_window(struct window *win) {
+bool platform_init_window(struct window *win) {
     xcb_void_cookie_t c;
 
     win->ev_mask = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_VISIBILITY_CHANGE |
@@ -579,17 +577,17 @@ bool init_platform_window(struct window *win) {
     c = xcb_create_gc_checked(con, win->gc, win->wid, mask2, values2);
     if (check_void_cookie(c)) return 0;
 
-    window_platform_update_props(win);
+    platform_update_window_props(win);
 
     return 1;
 }
 
-void window_platform_map(struct window *win) {
+void platform_map_window(struct window *win) {
     xcb_map_window(con, win->wid);
     xcb_flush(con);
 }
 
-void free_platform_window(struct window *win) {
+void platform_free_window(struct window *win) {
     if (win->wid) {
         xcb_unmap_window(con, win->wid);
         renderer_free(win);
@@ -607,7 +605,7 @@ inline static xcb_atom_t target_to_atom(enum clip_target target) {
     }
 }
 
-bool window_platform_set_clip(struct window *win, uint32_t time, enum clip_target target) {
+bool platform_set_clip(struct window *win, uint32_t time, enum clip_target target) {
     xcb_set_selection_owner(con, win->wid, target_to_atom(target), time);
     xcb_get_selection_owner_cookie_t so = xcb_get_selection_owner_unchecked(con, target_to_atom(target));
     xcb_get_selection_owner_reply_t *rep = xcb_get_selection_owner_reply(con, so, NULL);
@@ -617,12 +615,12 @@ bool window_platform_set_clip(struct window *win, uint32_t time, enum clip_targe
     return res;
 }
 
-void window_paste_clip(struct window *win, enum clip_target target) {
+void platform_paste(struct window *win, enum clip_target target) {
     xcb_convert_selection(con, win->wid, target_to_atom(target),
           term_is_utf8_enabled(win->term) ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
 }
 
-void window_platform_draw_rectangles(struct window *win, struct rect *rects, ssize_t rectc) {
+void platform_draw_rect(struct window *win, struct rect *rects, ssize_t rectc) {
     static_assert(sizeof(struct rect) == sizeof(xcb_rectangle_t), "These structs should be compatible");
     if (rectc) xcb_poly_fill_rectangle(con, win->wid, win->gc, rectc, (xcb_rectangle_t *)rects);
 }
@@ -698,11 +696,11 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, bool pno
     xcb_delete_property(con, win->wid, prop);
 }
 
-bool platform_context_has_error(void) {
+bool platform_has_error(void) {
     return xcb_connection_has_error(con);
 }
 
-void handle_event(void) {
+void platform_handle_events(void) {
     for (xcb_generic_event_t *event, *nextev = NULL; nextev || (event = xcb_poll_for_event(con)); free(event)) {
         if (nextev) event = nextev, nextev = NULL;
         switch (event->response_type &= 0x7F) {

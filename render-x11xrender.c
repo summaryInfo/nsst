@@ -95,7 +95,7 @@ static void register_glyph(struct window *win, uint32_t ch, struct glyph * glyph
 }
 
 bool renderer_reload_font(struct window *win, bool need_free) {
-    struct window *found = find_shared_font(win, need_free);
+    struct window *found = window_find_shared_font(win, need_free);
 
     win->ren.pfglyph = win->cfg.pixel_mode ? rctx.pfargb : rctx.pfalpha;
 
@@ -123,7 +123,7 @@ bool renderer_reload_font(struct window *win, bool need_free) {
 
     if (need_free) {
         handle_resize(win, win->cfg.width, win->cfg.height);
-        window_platform_update_props(win);
+        platform_update_window_props(win);
     } else {
         win->cw = MAX(1, (win->cfg.width - 2*win->cfg.left_border) / win->char_width);
         win->ch = MAX(1, (win->cfg.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
