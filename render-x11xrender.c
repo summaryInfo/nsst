@@ -49,8 +49,11 @@ struct element_buffer {
 };
 
 struct render_context {
-    xcb_render_pictformat_t pfargb;
-    xcb_render_pictformat_t pfalpha;
+    /* X11-specific fields */
+    struct {
+        xcb_render_pictformat_t pfargb;
+        xcb_render_pictformat_t pfalpha;
+    };
 
     /* This buffer is used for:
      *    - XRender glyph drawing requests construction
@@ -81,7 +84,13 @@ static struct render_context rctx;
 #define CA(c) ((((c) >> 24) & 0xff) * 0x101)
 #define MAKE_COLOR(c) {.red=CR(c), .green=CG(c), .blue=CB(c), .alpha=CA(c)}
 
-static void register_glyph(struct window *win, uint32_t ch, struct glyph * glyph) {
+#define INIT_GLYPHS_CAPS 128
+#define INIT_FG_CAPS 128
+#define INIT_BG_CAPS 256
+#define INIT_DEC_CAPS 16
+#define INIT_PAYLOAD_CAPS (WORDS_IN_MESSAGE * sizeof(uint32_t))
+
+static void register_glyph(struct window *win, uint32_t ch, struct glyph *glyph) {
     xcb_render_glyphinfo_t spec = {
         .width = glyph->width, .height = glyph->height,
         .x = glyph->x - win->cfg.font_spacing/2, .y = glyph->y - win->cfg.line_spacing/2,
@@ -89,9 +98,65 @@ static void register_glyph(struct window *win, uint32_t ch, struct glyph * glyph
     };
 
     xcb_void_cookie_t c;
-    c = xcb_render_add_glyphs_checked(con, win->ren.gsid, 1, &ch, &spec, glyph->height*glyph->stride, glyph->data);
-    if (check_void_cookie(c))
-        warn("Can't add glyph");
+    c = xcb_render_add_glyphs_checked(con, win->ren.gsid, 1, &ch, &spec,
+                                      glyph->height*glyph->stride, glyph->data);
+    if (check_void_cookie(c)) warn("Can't add glyph");
+}
+
+inline static void do_draw_rects(struct window *win, struct rect *rects, ssize_t count, color_t color) {
+    if (!count) return;
+
+    static_assert(sizeof(struct rect) == sizeof(xcb_rectangle_t), "Rectangle types does not match");
+
+    xcb_render_color_t col = MAKE_COLOR(color);
+    xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC,
+            win->ren.pic1, col, count, (xcb_rectangle_t *)rects);
+}
+
+inline static void do_set_clip(struct window *win, struct rect *rects, ssize_t count) {
+    if (!count) return;
+    xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0,
+                                           count, (xcb_rectangle_t *)rects);
+}
+
+void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
+    int16_t delta_x = new_cw - win->cw;
+    int16_t delta_y = new_ch - win->ch;
+
+    win->cw = new_cw;
+    win->ch = new_ch;
+
+    int16_t width = win->cw * win->char_width;
+    int16_t height = win->ch * (win->char_height + win->char_depth);
+
+    int16_t common_w = MIN(width, width  - delta_x * win->char_width);
+    int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth)) ;
+
+    xcb_create_pixmap(con, TRUE_COLOR_ALPHA_DEPTH, win->ren.pid2, win->wid, width, height);
+    uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
+    uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
+    xcb_render_create_picture(con, win->ren.pic2, win->ren.pid2, rctx.pfargb, mask3, values3);
+
+    xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, 0, win->ren.pic2, 0, 0, 0, 0, 0, 0, common_w, common_h);
+
+    SWAP(win->ren.pid1, win->ren.pid2);
+    SWAP(win->ren.pic1, win->ren.pic2);
+
+    xcb_render_free_picture(con, win->ren.pic2);
+    xcb_free_pixmap(con, win->ren.pid2);
+
+    struct rect rectv[2];
+    size_t rectc = 0;
+
+    if (delta_y > 0)
+        rectv[rectc++] = (struct rect) { 0, win->ch - delta_y, MIN(win->cw, win->cw - delta_x), delta_y };
+    if (delta_x > 0)
+        rectv[rectc++] = (struct rect) { win->cw - delta_x, 0, delta_x, MAX(win->ch, win->ch - delta_y) };
+
+    for (size_t i = 0; i < rectc; i++)
+        rectv[i] = rect_scale_up(rectv[i], win->char_width, win->char_height + win->char_depth);
+
+    do_draw_rects(win, rectv, rectc, win->bg_premul);
 }
 
 bool renderer_reload_font(struct window *win, bool need_free) {
@@ -151,8 +216,7 @@ bool renderer_reload_font(struct window *win, bool need_free) {
             return 0;
         }
 
-        xcb_render_color_t color = MAKE_COLOR(win->bg_premul);
-        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, color, 1, &bound);
+        do_draw_rects(win, (struct rect *)&bound, 1, win->bg_premul);
 
         xcb_pixmap_t pid = xcb_generate_id(con);
         c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, pid, win->wid, 1, 1);
@@ -183,42 +247,7 @@ void renderer_free(struct window *win) {
     xcb_render_free_glyph_set(con, win->ren.gsid);
 }
 
-static void free_elem_buffer(struct element_buffer *buf) {
-    free(buf->data);
-    *buf = (struct element_buffer){ 0 };
-}
-
-void free_render_context(void) {
-    free(rctx.payload);
-    free(rctx.glyphs);
-    free_elem_buffer(&rctx.foreground_buf);
-    free_elem_buffer(&rctx.background_buf);
-    free_elem_buffer(&rctx.decoration_buf);
-}
-
-#define INIT_GLYPHS_CAPS 128
-#define INIT_FG_CAPS 128
-#define INIT_BG_CAPS 256
-#define INIT_DEC_CAPS 16
-
-void init_render_context(void) {
-    rctx.payload = malloc(WORDS_IN_MESSAGE * sizeof(uint32_t));
-    if (!rctx.payload) {
-        xcb_disconnect(con);
-        die("Can't allocate buffer");
-    }
-    rctx.payload_caps = WORDS_IN_MESSAGE * sizeof(uint32_t);
-    rctx.glyphs = malloc(INIT_GLYPHS_CAPS * sizeof(rctx.glyphs[0]));
-    if (!rctx.glyphs) {
-        xcb_disconnect(con);
-        die("Can't allocate cbuffer");
-    }
-    rctx.glyphs_caps = INIT_GLYPHS_CAPS;
-
-    adjust_buffer((void **)&rctx.foreground_buf.data, &rctx.foreground_buf.caps, INIT_FG_CAPS, sizeof(struct element));
-    adjust_buffer((void **)&rctx.background_buf.data, &rctx.background_buf.caps, INIT_BG_CAPS, sizeof(struct element));
-    adjust_buffer((void **)&rctx.decoration_buf.data, &rctx.decoration_buf.caps, INIT_DEC_CAPS, sizeof(struct element));
-
+void platform_init_render_context(void) {
     // Check if XRender is present
     xcb_render_query_version_cookie_t vc = xcb_render_query_version(con, XCB_RENDER_MAJOR_VERSION, XCB_RENDER_MINOR_VERSION);
     xcb_generic_error_t *err = NULL;
@@ -264,8 +293,115 @@ void init_render_context(void) {
     }
 }
 
-static void push_rect(xcb_rectangle_t *rect) {
-    if (UNLIKELY(rctx.payload_size + sizeof(xcb_rectangle_t) >= rctx.payload_caps)) {
+void renderer_update(struct window *win, struct rect rect) {
+    xcb_copy_area(con, win->ren.pid1, win->wid, win->gc, rect.x, rect.y,
+            rect.x + win->cfg.left_border, rect.y + win->cfg.top_border, rect.width, rect.height);
+}
+
+void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
+    xcb_copy_area(con, win->ren.pid1, win->ren.pid1, win->gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
+}
+
+inline static bool adjust_msg_buffer(void) {
+    if (UNLIKELY(rctx.payload_size + WORDS_IN_MESSAGE * sizeof(uint32_t) > rctx.payload_caps)) {
+        uint8_t *new = realloc(rctx.payload, rctx.payload_caps + WORDS_IN_MESSAGE * sizeof(uint32_t));
+        if (!new) return 0;
+        rctx.payload = new;
+        rctx.payload_caps  += WORDS_IN_MESSAGE * sizeof(uint32_t);
+    }
+    return 1;
+}
+
+inline static struct glyph_msg *start_msg(int16_t dx, int16_t dy) {
+    struct glyph_msg *head = (struct glyph_msg *)(rctx.payload + rctx.payload_size);
+    *head = (struct glyph_msg) {
+        .dx = dx,
+        .dy = dy,
+    };
+    rctx.payload_size += sizeof(*head);
+    return head;
+}
+
+static void draw_text(struct window *win, struct element_buffer *buf) {
+    for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; ) {
+        // Prepare pen
+        color_t color = it->color;
+        xcb_render_color_t col = MAKE_COLOR(color);
+        xcb_rectangle_t rect2 = { .x = 0, .y = 0, .width = 1, .height = 1 };
+        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pen, col, 1, &rect2);
+
+        // Build payload...
+
+        rctx.payload_size = 0;
+
+        int16_t old_x = 0, old_y = 0, x = it->x;
+        uint32_t *glyph = rctx.glyphs + rctx.glyphs_caps - it->glyphs;
+        for (;;) {
+            if (!adjust_msg_buffer()) break;
+
+            struct glyph_msg *head = start_msg(x - old_x, it->y - old_y);
+            old_x = x, old_y = it->y;
+
+            do {
+                uint32_t g = *glyph & ~(1U << 31);
+                memcpy(rctx.payload + rctx.payload_size, &g, sizeof *glyph);
+                rctx.payload_size += sizeof(uint32_t);
+                head->len++;
+
+                bool wide = *glyph & (1U << 31);
+                x += (1 + wide) * win->char_width;
+                old_x += (1 + wide) * win->char_width;
+            } while (*++glyph && head->len < CHARS_PER_MESG);
+
+            if (!*glyph) {
+                if (++it >= end || color != it->color) break;
+                glyph = rctx.glyphs + rctx.glyphs_caps - it->glyphs;
+                x = it->x;
+            }
+        }
+
+        // ..and send it
+
+        if (rctx.payload_size) {
+            xcb_render_composite_glyphs_32(con, XCB_RENDER_PICT_OP_OVER,
+                    win->ren.pen, win->ren.pic1, win->ren.pfglyph, win->ren.gsid,
+                    0, 0, rctx.payload_size, rctx.payload);
+        }
+    }
+}
+
+
+// X11-independent code is below
+
+
+inline static void free_elem_buffer(struct element_buffer *buf) {
+    free(buf->data);
+    *buf = (struct element_buffer){ 0 };
+}
+
+void free_render_context(void) {
+    free(rctx.payload);
+    free(rctx.glyphs);
+    free_elem_buffer(&rctx.foreground_buf);
+    free_elem_buffer(&rctx.background_buf);
+    free_elem_buffer(&rctx.decoration_buf);
+}
+
+void init_render_context(void) {
+    bool res = 1;
+    res &= adjust_buffer((void **)&rctx.payload, &rctx.payload_caps, INIT_PAYLOAD_CAPS, 1);
+    res &= adjust_buffer((void **)&rctx.glyphs, &rctx.glyphs_caps, INIT_GLYPHS_CAPS, sizeof(rctx.glyphs[0]));
+    res &= adjust_buffer((void **)&rctx.foreground_buf.data, &rctx.foreground_buf.caps, INIT_FG_CAPS, sizeof(struct element));
+    res &= adjust_buffer((void **)&rctx.background_buf.data, &rctx.background_buf.caps, INIT_BG_CAPS, sizeof(struct element));
+    res &= adjust_buffer((void **)&rctx.decoration_buf.data, &rctx.decoration_buf.caps, INIT_DEC_CAPS, sizeof(struct element));
+    if (!res) die("Can't allocate renderer buffers");
+
+    platform_init_render_context();
+}
+
+
+static void push_rect(struct rect *rect) {
+    if (UNLIKELY(rctx.payload_size + sizeof(*rect) >= rctx.payload_caps)) {
         size_t new_size = 3 * rctx.payload_caps / 2;
         uint8_t *new = realloc(rctx.payload, new_size);
         if (!new) return;
@@ -273,8 +409,8 @@ static void push_rect(xcb_rectangle_t *rect) {
         rctx.payload = new;
     }
 
-    memcpy(rctx.payload + rctx.payload_size, rect, sizeof(xcb_rectangle_t));
-    rctx.payload_size += sizeof(xcb_rectangle_t);
+    memcpy(rctx.payload + rctx.payload_size, rect, sizeof(*rect));
+    rctx.payload_size += sizeof(*rect);
 }
 
 inline static void push_element(struct element_buffer *dst, struct element *elem) {
@@ -303,26 +439,6 @@ inline static uint32_t push_char(uint32_t ch) {
     return new_pos;
 }
 
-inline static struct glyph_msg *start_msg(int16_t dx, int16_t dy) {
-    struct glyph_msg *head = (struct glyph_msg *)(rctx.payload + rctx.payload_size);
-    *head = (struct glyph_msg) {
-        .dx = dx,
-        .dy = dy,
-    };
-    rctx.payload_size += sizeof(*head);
-    return head;
-}
-
-inline static bool adjust_msg_buffer(void) {
-    if (UNLIKELY(rctx.payload_size + WORDS_IN_MESSAGE * sizeof(uint32_t) > rctx.payload_caps)) {
-        uint8_t *new = realloc(rctx.payload, rctx.payload_caps + WORDS_IN_MESSAGE * sizeof(uint32_t));
-        if (!new) return 0;
-        rctx.payload = new;
-        rctx.payload_caps  += WORDS_IN_MESSAGE * sizeof(uint32_t);
-    }
-    return 1;
-}
-
 inline static void sort_by_color(struct element_buffer *buf) {
     struct element *dst = buf->data + buf->size, *src = buf->data;
     for (size_t k = 2; k < buf->size; k += k) {
@@ -343,7 +459,7 @@ inline static void sort_by_color(struct element_buffer *buf) {
 static void draw_cursor(struct window *win, int16_t cur_x, int16_t cur_y, bool on_margin) {
     cur_x *= win->char_width;
     cur_y *= win->char_depth + win->char_height;
-    xcb_rectangle_t rects[4] = {
+    struct rect rects[4] = {
         {cur_x, cur_y, 1, win->char_height + win->char_depth},
         {cur_x, cur_y, win->char_width, 1},
         {cur_x + win->char_width - 1, cur_y, 1, win->char_height + win->char_depth},
@@ -368,13 +484,10 @@ static void draw_cursor(struct window *win, int16_t cur_x, int16_t cur_y, bool o
             count = 0;
         }
     }
-    if (count) {
-        xcb_render_color_t c = MAKE_COLOR(win->cursor_fg);
-        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_OVER, win->ren.pic1, c, count, rects + off);
-    }
+    do_draw_rects(win, rects + off, count, win->cursor_fg);
 }
 
-void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool reverse_cursor) {
+static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool reverse_cursor) {
     rctx.foreground_buf.size = 0;
     rctx.background_buf.size = 0;
     rctx.decoration_buf.size = 0;
@@ -518,90 +631,19 @@ void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool re
     }
 }
 
-static void draw_rects(struct window *win, struct element_buffer *buf) {
-    for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; ) {
-        color_t color = it ->color;
-
-        rctx.payload_size = 0;
-        do {
-            push_rect(&(xcb_rectangle_t) {
-                .x = it->x,
-                .y = it->y,
-                .width = it->width,
-                .height = it->height,
-            });
-        } while (++it < end && it->color == color);
-
-        if (rctx.payload_size) {
-            xcb_render_color_t col = MAKE_COLOR(color);
-            xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, col,
-                rctx.payload_size/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.payload);
-        }
-    }
-
+static void reset_clip(struct window *win) {
+    do_set_clip(win, &(struct rect){ 0, 0, win->cw * win->char_width,
+            win->ch * (win->char_height + win->char_depth)}, 1);
 }
 
-static void draw_text(struct window *win, struct element_buffer *buf) {
-    for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; ) {
-        // Prepare pen
-        color_t color = it->color;
-        xcb_render_color_t col = MAKE_COLOR(color);
-        xcb_rectangle_t rect2 = { .x = 0, .y = 0, .width = 1, .height = 1 };
-        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pen, col, 1, &rect2);
-
-        // Build payload...
-
-        rctx.payload_size = 0;
-
-        int16_t old_x = 0, old_y = 0, x = it->x;
-        uint32_t *glyph = rctx.glyphs + rctx.glyphs_caps - it->glyphs;
-        for (;;) {
-            if (!adjust_msg_buffer()) break;
-
-            struct glyph_msg *head = start_msg(x - old_x, it->y - old_y);
-            old_x = x, old_y = it->y;
-
-            do {
-                uint32_t g = *glyph & ~(1U << 31);
-                memcpy(rctx.payload + rctx.payload_size, &g, sizeof *glyph);
-                rctx.payload_size += sizeof(uint32_t);
-                head->len++;
-
-                bool wide = *glyph & (1U << 31);
-                x += (1 + wide) * win->char_width;
-                old_x += (1 + wide) * win->char_width;
-            } while (*++glyph && head->len < CHARS_PER_MESG);
-
-            if (!*glyph) {
-                if (++it >= end || color != it->color) break;
-                glyph = rctx.glyphs + rctx.glyphs_caps - it->glyphs;
-                x = it->x;
-            }
-        }
-
-        // ..and send it
-
-        if (rctx.payload_size) {
-            xcb_render_composite_glyphs_32(con, XCB_RENDER_PICT_OP_OVER,
-                    win->ren.pen, win->ren.pic1, win->ren.pfglyph, win->ren.gsid,
-                    0, 0, rctx.payload_size, rctx.payload);
-        }
-    }
-}
-
-inline static void reset_clip(struct window *win) {
-    xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0, 1, &(xcb_rectangle_t) {
-            0, 0, win->cw * win->char_width, win->ch * (win->char_height + win->char_depth)});
-}
-
-inline static void set_clip(struct window *win, struct element_buffer *buf) {
+static void set_clip(struct window *win, struct element_buffer *buf) {
     rctx.payload_size = 0;
     for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; ) {
         struct element *it2 = it;
         do it2++;
         while (it2 < end && it2->y == it->y &&
                 it2->x + it2->width == it2[-1].x);
-        push_rect(&(xcb_rectangle_t) {
+        push_rect(&(struct rect) {
             .x = it2[-1].x,
             .y = it->y,
             .width = it->x - it2[-1].x + it->width,
@@ -609,9 +651,25 @@ inline static void set_clip(struct window *win, struct element_buffer *buf) {
         });
         it = it2;
     }
-    if (rctx.payload_size)
-        xcb_render_set_picture_clip_rectangles(con, win->ren.pic1, 0, 0,
-            rctx.payload_size/sizeof(xcb_rectangle_t), (xcb_rectangle_t *)rctx.payload);
+    do_set_clip(win, (struct rect *)rctx.payload, rctx.payload_size/sizeof(struct rect));
+}
+
+static void draw_rects(struct window *win, struct element_buffer *buf) {
+    for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; ) {
+        color_t color = it ->color;
+
+        rctx.payload_size = 0;
+        do {
+            push_rect(&(struct rect) {
+                .x = it->x,
+                .y = it->y,
+                .width = it->width,
+                .height = it->height,
+            });
+        } while (++it < end && it->color == color);
+
+        do_draw_rects(win, (struct rect *)rctx.payload, rctx.payload_size/sizeof(struct rect), color);
+    }
 }
 
 bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
@@ -643,58 +701,4 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                 win->char_width, win->char_height + win->char_depth));
 
     return !!rctx.background_buf.size;
-}
-
-void renderer_update(struct window *win, struct rect rect) {
-    xcb_copy_area(con, win->ren.pid1, win->wid, win->gc, rect.x, rect.y,
-            rect.x + win->cfg.left_border, rect.y + win->cfg.top_border, rect.width, rect.height);
-}
-
-void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
-    xcb_copy_area(con, win->ren.pid1, win->ren.pid1, win->gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
-    /*
-    xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic, 0, win->ren.pic, sx, sy, 0, 0, dst.x, dst.y, dst.width, dst.height);
-    */
-}
-
-void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
-    int16_t delta_x = new_cw - win->cw;
-    int16_t delta_y = new_ch - win->ch;
-
-    win->cw = new_cw;
-    win->ch = new_ch;
-
-    int16_t width = win->cw * win->char_width;
-    int16_t height = win->ch * (win->char_height + win->char_depth);
-
-    int16_t common_w = MIN(width, width  - delta_x * win->char_width);
-    int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth)) ;
-    xcb_create_pixmap(con, TRUE_COLOR_ALPHA_DEPTH, win->ren.pid2, win->wid, width, height);
-    uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
-    uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
-    xcb_render_create_picture(con, win->ren.pic2, win->ren.pid2, rctx.pfargb, mask3, values3);
-
-    xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, 0, win->ren.pic2, 0, 0, 0, 0, 0, 0, common_w, common_h);
-
-    SWAP(win->ren.pid1, win->ren.pid2);
-    SWAP(win->ren.pic1, win->ren.pic2);
-
-    xcb_render_free_picture(con, win->ren.pic2);
-    xcb_free_pixmap(con, win->ren.pid2);
-
-    static_assert(sizeof(struct rect) == sizeof(xcb_rectangle_t), "Rectangle types does not match");
-
-    struct rect rectv[2];
-    size_t rectc= 0;
-
-    if (delta_y > 0)
-        rectv[rectc++] = (struct rect) { 0, win->ch - delta_y, MIN(win->cw, win->cw - delta_x), delta_y };
-    if (delta_x > 0)
-        rectv[rectc++] = (struct rect) { win->cw - delta_x, 0, delta_x, MAX(win->ch, win->ch - delta_y) };
-
-    for (size_t i = 0; i < rectc; i++)
-        rectv[i] = rect_scale_up(rectv[i], win->char_width, win->char_height + win->char_depth);
-
-    xcb_render_color_t color = MAKE_COLOR(win->bg_premul);
-    xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->ren.pic1, color, rectc, (xcb_rectangle_t*)rectv);
 }

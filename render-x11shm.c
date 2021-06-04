@@ -27,29 +27,8 @@ struct render_context {
 
 static struct render_context rctx;
 
-static void resize_bounds(struct window *win, bool h_changed) {
-    if (win->ren.bounds) {
-        size_t j = 0;
-        struct rect *r_dst = win->ren.bounds;
-        if (h_changed) r_dst = malloc(sizeof(struct rect) * 2 * win->ch);
-        if (!r_dst) die("Can't allocate bounds");
-        for (size_t i = 0; i < win->ren.boundc; i++)
-            if (intersect_with(&win->ren.bounds[i], &(struct rect){0, 0, win->cw, win->ch}))
-                r_dst[j++] = win->ren.bounds[i];
-        win->ren.boundc = j;
-        if (h_changed) {
-            SWAP(win->ren.bounds, r_dst);
-            free(r_dst);
-        }
-    } else {
-        win->ren.boundc = 0;
-        win->ren.bounds = malloc(sizeof(struct rect) * 2 * win->ch);
-        if (!win->ren.bounds) die("Can't allocate bounds");
-    }
-}
-
 // Returns old image
-static struct image create_mitshm_image(struct window *win, int16_t width, int16_t height) {
+static struct image renderer_create_image(struct window *win, int16_t width, int16_t height) {
     struct image old = win->ren.im;
     xcb_void_cookie_t c;
 
@@ -91,29 +70,20 @@ error:
     return (struct image) {0};
 }
 
-
-bool renderer_reload_font(struct window *win, bool need_free) {
-    window_find_shared_font(win, need_free);
-
-    if (need_free) {
-        handle_resize(win, win->cfg.width, win->cfg.height);
-        platform_update_window_props(win);
+void renderer_update(struct window *win, struct rect rect) {
+    if (rctx.has_shm_pixmaps) {
+        xcb_copy_area(con, win->ren.shm_pixmap, win->wid, win->gc, rect.x, rect.y,
+                rect.x + win->cfg.left_border, rect.y + win->cfg.top_border, rect.width, rect.height);
+    } else if (rctx.has_shm) {
+        xcb_shm_put_image(con, win->wid, win->gc, STRIDE(win->ren.im.width), win->ren.im.height, rect.x, rect.y, rect.width, rect.height,
+                rect.x + win->cfg.left_border, rect.y + win->cfg.top_border, TRUE_COLOR_ALPHA_DEPTH, XCB_IMAGE_FORMAT_Z_PIXMAP, 0, win->ren.shm_seg, 0);
     } else {
-        win->cw = MAX(1, (win->cfg.width - 2*win->cfg.left_border) / win->char_width);
-        win->ch = MAX(1, (win->cfg.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
-
-        resize_bounds(win, 1);
-
-        create_mitshm_image(win, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height));
-        if (!win->ren.im.data) {
-            warn("Can't allocate image");
-            return 0;
-        }
-
-        image_draw_rect(win->ren.im, (struct rect){0, 0, win->ren.im.width, win->ren.im.height}, win->bg_premul);
+        xcb_put_image(con, XCB_IMAGE_FORMAT_Z_PIXMAP, win->wid, win->gc,
+                STRIDE(win->ren.im.width), rect.height, win->cfg.left_border,
+                win->cfg.top_border + rect.y, 0, TRUE_COLOR_ALPHA_DEPTH,
+                rect.height * STRIDE(win->ren.im.width) * sizeof(color_t),
+                (const uint8_t *)(win->ren.im.data + rect.y*STRIDE(win->ren.im.width)));
     }
-
-    return 1;
 }
 
 void renderer_free(struct window *win) {
@@ -156,6 +126,56 @@ void init_render_context(void) {
         }
     }
 }
+
+
+// X11-independent code is below
+
+
+static void resize_bounds(struct window *win, bool h_changed) {
+    if (win->ren.bounds) {
+        size_t j = 0;
+        struct rect *r_dst = win->ren.bounds;
+        if (h_changed) r_dst = malloc(sizeof(struct rect) * 2 * win->ch);
+        if (!r_dst) die("Can't allocate bounds");
+        for (size_t i = 0; i < win->ren.boundc; i++)
+            if (intersect_with(&win->ren.bounds[i], &(struct rect){0, 0, win->cw, win->ch}))
+                r_dst[j++] = win->ren.bounds[i];
+        win->ren.boundc = j;
+        if (h_changed) {
+            SWAP(win->ren.bounds, r_dst);
+            free(r_dst);
+        }
+    } else {
+        win->ren.boundc = 0;
+        win->ren.bounds = malloc(sizeof(struct rect) * 2 * win->ch);
+        if (!win->ren.bounds) die("Can't allocate bounds");
+    }
+}
+
+bool renderer_reload_font(struct window *win, bool need_free) {
+    window_find_shared_font(win, need_free);
+
+    if (need_free) {
+        handle_resize(win, win->cfg.width, win->cfg.height);
+        platform_update_window_props(win);
+    } else {
+        win->cw = MAX(1, (win->cfg.width - 2*win->cfg.left_border) / win->char_width);
+        win->ch = MAX(1, (win->cfg.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
+
+        resize_bounds(win, 1);
+
+        renderer_create_image(win, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height));
+        if (!win->ren.im.data) {
+            warn("Can't allocate image");
+            return 0;
+        }
+
+        image_draw_rect(win->ren.im, (struct rect){0, 0, win->ren.im.width, win->ren.im.height}, win->bg_premul);
+    }
+
+    return 1;
+}
+
 
 static int rect_cmp(const void *a, const void *b) {
     return ((struct rect*)a)->y - ((struct rect*)b)->y;
@@ -313,31 +333,10 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
     return drawn_any;
 }
 
-void renderer_update(struct window *win, struct rect rect) {
-    if (rctx.has_shm_pixmaps) {
-        xcb_copy_area(con, win->ren.shm_pixmap, win->wid, win->gc, rect.x, rect.y,
-                rect.x + win->cfg.left_border, rect.y + win->cfg.top_border, rect.width, rect.height);
-    } else if (rctx.has_shm) {
-        xcb_shm_put_image(con, win->wid, win->gc, STRIDE(win->ren.im.width), win->ren.im.height, rect.x, rect.y, rect.width, rect.height,
-                rect.x + win->cfg.left_border, rect.y + win->cfg.top_border, TRUE_COLOR_ALPHA_DEPTH, XCB_IMAGE_FORMAT_Z_PIXMAP, 0, win->ren.shm_seg, 0);
-    } else {
-        xcb_put_image(con, XCB_IMAGE_FORMAT_Z_PIXMAP, win->wid, win->gc,
-                STRIDE(win->ren.im.width), rect.height, win->cfg.left_border,
-                win->cfg.top_border + rect.y, 0, TRUE_COLOR_ALPHA_DEPTH,
-                rect.height * STRIDE(win->ren.im.width) * sizeof(color_t),
-                (const uint8_t *)(win->ren.im.data + rect.y*STRIDE(win->ren.im.width)));
-    }
-}
-
 void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
     image_copy(win->ren.im, dst, win->ren.im, sx, sy);
 
     int16_t w = win->char_width, h = win->char_depth + win->char_height;
-
-    /*
-    xcb_copy_area(con, win->wid, win->wid, win->ren.gc, sx + win->left_border,
-                  sy + win->top_border, dst.x + win->left_border, dst.y + win->top_border, dst.width, dst.height);
-    */
 
     dst.height = (dst.height + dst.y + h - 1) / h;
     dst.height -= dst.y /= h;
@@ -362,7 +361,7 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t common_w = MIN(width, width  - delta_x * win->char_width);
     int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth));
 
-    struct image old = create_mitshm_image(win, width, height);
+    struct image old = renderer_create_image(win, width, height);
     image_copy(win->ren.im, (struct rect){0, 0, common_w, common_h}, old, 0, 0);
     free_image(&old);
 

@@ -360,6 +360,8 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
      * depending on whether subpixel rendering is off or on.
      * */
 #if USE_X11SHM
+    /* Soft renderer backend requires subpixel glyphs
+     * to be aligned on 16 bytes */
     stride = (stride + GLYPH_STRIDE_ALIGNMENT - 1) & ~(GLYPH_STRIDE_ALIGNMENT - 1);
     if (lcd) stride *= 4;
 #else
