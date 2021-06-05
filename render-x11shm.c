@@ -370,8 +370,6 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     win->cw = new_cw;
     win->ch = new_ch;
 
-    // TODO What is border with changes?
-
     int16_t width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1;
     int16_t height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1;
 
@@ -398,5 +396,4 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
         image_draw_rect(win->plat.im, (struct rect) { xw, 0, width - xw, xh }, win->bg_premul);
         win->redraw_borders = 1;
     }
-
 }

@@ -126,37 +126,27 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     win->cw = new_cw;
     win->ch = new_ch;
 
-    int16_t width = win->cw * win->char_width;
-    int16_t height = win->ch * (win->char_height + win->char_depth);
-
-    int16_t common_w = MIN(width, width  - delta_x * win->char_width);
-    int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth)) ;
+    int16_t width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1;
+    int16_t height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1;
 
     xcb_create_pixmap(con, TRUE_COLOR_ALPHA_DEPTH, win->plat.pid2, win->plat.wid, width, height);
     uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
     uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
     xcb_render_create_picture(con, win->plat.pic2, win->plat.pid2, rctx.pfargb, mask3, values3);
 
-    xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->plat.pic1, 0, win->plat.pic2, 0, 0, 0, 0, 0, 0, common_w, common_h);
-
     SWAP(win->plat.pid1, win->plat.pid2);
     SWAP(win->plat.pic1, win->plat.pic2);
 
+    do_draw_rects(win, &(struct rect){0, 0, width, height}, 1, win->bg_premul);
+
+    int16_t common_w = MIN(new_cw, new_cw - delta_x) * win->char_width;
+    int16_t common_h = MIN(new_ch, new_ch - delta_y) * (win->char_height + win->char_depth);
+    xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->plat.pic2, 0, win->plat.pic1,
+                         win->cfg.left_border, win->cfg.top_border, 0, 0,
+                         win->cfg.left_border, win->cfg.top_border, common_w, common_h);
+
     xcb_render_free_picture(con, win->plat.pic2);
     xcb_free_pixmap(con, win->plat.pid2);
-
-    struct rect rectv[2];
-    size_t rectc = 0;
-
-    if (delta_y > 0)
-        rectv[rectc++] = (struct rect) { 0, win->ch - delta_y, MIN(win->cw, win->cw - delta_x), delta_y };
-    if (delta_x > 0)
-        rectv[rectc++] = (struct rect) { win->cw - delta_x, 0, delta_x, MAX(win->ch, win->ch - delta_y) };
-
-    for (size_t i = 0; i < rectc; i++)
-        rectv[i] = rect_scale_up(rectv[i], win->char_width, win->char_height + win->char_depth);
-
-    do_draw_rects(win, rectv, rectc, win->bg_premul);
 }
 
 bool renderer_reload_font(struct window *win, bool need_free) {
@@ -193,7 +183,8 @@ bool renderer_reload_font(struct window *win, bool need_free) {
         win->cw = MAX(1, (win->cfg.width - 2*win->cfg.left_border) / win->char_width);
         win->ch = MAX(1, (win->cfg.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
 
-        xcb_rectangle_t bound = { 0, 0, win->cw*win->char_width, win->ch*(win->char_depth+win->char_height) };
+        xcb_rectangle_t bound = { 0, 0, (win->cw + 1)*win->char_width + 2*win->cfg.left_border - 1,
+                                 (win->ch + 1)*(win->char_depth + win->char_height) + 2*win->cfg.top_border - 1 };
 
         win->plat.pid1 = xcb_generate_id(con);
         win->plat.pid2 = xcb_generate_id(con);
@@ -236,6 +227,8 @@ bool renderer_reload_font(struct window *win, bool need_free) {
         }
         xcb_free_pixmap(con, pid);
     }
+
+    win->redraw_borders = 1;
 
     return 1;
 }
@@ -294,8 +287,7 @@ void platform_init_render_context(void) {
 }
 
 void renderer_update(struct window *win, struct rect rect) {
-    xcb_copy_area(con, win->plat.pid1, win->plat.wid, win->plat.gc, rect.x, rect.y,
-            rect.x + win->cfg.left_border, rect.y + win->cfg.top_border, rect.width, rect.height);
+    xcb_copy_area(con, win->plat.pid1, win->plat.wid, win->plat.gc, rect.x, rect.y, rect.x, rect.y, rect.width, rect.height);
 }
 
 void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
@@ -457,8 +449,8 @@ inline static void sort_by_color(struct element_buffer *buf) {
 }
 
 static void draw_cursor(struct window *win, int16_t cur_x, int16_t cur_y, bool on_margin) {
-    cur_x *= win->char_width;
-    cur_y *= win->char_depth + win->char_height;
+    cur_x = cur_x * win->char_width + win->cfg.left_border;
+    cur_y = cur_y * (win->char_depth + win->char_height) + win->cfg.top_border;
     struct rect rects[4] = {
         {cur_x, cur_y, 1, win->char_height + win->char_depth},
         {cur_x, cur_y, win->char_width, 1},
@@ -501,8 +493,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
             color_t color = mouse_is_selected_in_view(win->term, win->cw - 1, k) ? (win->rcstate.palette[SPECIAL_SELECTED_BG] ?
                         win->rcstate.palette[SPECIAL_SELECTED_BG] : win->rcstate.palette[SPECIAL_FG]) : win->bg_premul;
             push_element(&rctx.background_buf, &(struct element) {
-                .x = line.width * win->char_width,
-                .y = k * (win->char_height + win->char_depth),
+                .x = win->cfg.left_border + line.width * win->char_width,
+                .y = win->cfg.top_border + k * (win->char_height + win->char_depth),
                 .color = color,
                 .width = (win->cw - line.width) * win->char_width,
                 .height = win->char_height + win->char_depth,
@@ -547,8 +539,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                 } else {
                     first_in_line = 0;
                     push_element(&rctx.background_buf, &(struct element) {
-                        .x = i * win->char_width,
-                        .y = y,
+                        .x = win->cfg.left_border + i * win->char_width,
+                        .y = win->cfg.top_border + y,
                         .color = spec.bg,
                         .width = win->char_width,
                         .height = win->char_height + win->char_depth,
@@ -567,8 +559,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                     } else {
                         push_char(0);
                         push_element(&rctx.foreground_buf, &(struct element) {
-                            .x = i * win->char_width,
-                            .y = y + win->char_height,
+                            .x = win->cfg.left_border + i * win->char_width,
+                            .y = win->cfg.top_border + y + win->char_height,
                             .color = spec.fg,
                             .glyphs = push_char(g),
                         });
@@ -591,8 +583,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                         prev_dec[-1].width += win->char_width;
                     } else {
                         push_element(&rctx.decoration_buf, &(struct element) {
-                            .x = i * win->char_width,
-                            .y = line_y,
+                            .x = win->cfg.left_border + i * win->char_width,
+                            .y = win->cfg.top_border + line_y,
                             .color = spec.fg,
                             .width = win->char_width,
                             .height = win->cfg.underline_width,
@@ -613,8 +605,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                         prev_dec[-1].width += win->char_width;
                     } else {
                         push_element(&rctx.decoration_buf, &(struct element) {
-                            .x = i * win->char_width,
-                            .y = line_y,
+                            .x = win->cfg.left_border + i * win->char_width,
+                            .y = win->cfg.top_border + line_y,
                             .color = spec.fg,
                             .width = win->char_width,
                             .height = win->cfg.underline_width,
@@ -632,8 +624,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
 }
 
 static void reset_clip(struct window *win) {
-    do_set_clip(win, &(struct rect){ 0, 0, win->cw * win->char_width,
-            win->ch * (win->char_height + win->char_depth)}, 1);
+    do_set_clip(win, &(struct rect){ 0, 0, win->cfg.width, win->cfg.height}, 1);
 }
 
 static void set_clip(struct window *win, struct element_buffer *buf) {
@@ -689,16 +680,20 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
     draw_rects(win, &rctx.background_buf);
     draw_text(win, &rctx.foreground_buf);
 
-    if (rctx.foreground_buf.size) reset_clip(win);
+    if (rctx.background_buf.size) reset_clip(win);
 
     // Draw underline and strikethrough lines
     draw_rects(win, &rctx.decoration_buf);
 
     if (cursor) draw_cursor(win, cur_x, cur_y, marg);
 
-    if (rctx.background_buf.size)
-        renderer_update(win, rect_scale_up((struct rect){0, 0, win->cw, win->ch},
-                win->char_width, win->char_height + win->char_depth));
+    bool drawn = 0;
 
-    return !!rctx.background_buf.size;
+    if (rctx.background_buf.size || win->redraw_borders) {
+        renderer_update(win, (struct rect){0, 0, win->cfg.width, win->cfg.height});
+        win->redraw_borders = 0;
+        drawn = 1;
+    }
+
+    return drawn;
 }

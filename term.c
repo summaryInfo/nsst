@@ -902,11 +902,6 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         term->screen = new_lines;
     }
 
-    int16_t minh = MIN(height, term->height);
-    int16_t minw = MIN(width, term->width);
-    int16_t dx = width - term->width;
-    int16_t dy = height - term->height;
-
     // Set state
     term->width = width;
     term->height = height;
@@ -961,16 +956,9 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     if (!term->mode.altscreen && window_cfg(term->win)->rewrap) {
         // Just damage everything if rewrapping is enabled
         term_damage_lines(term, 0, term->height);
-    } else {
-        if (!term->mode.altscreen && !window_cfg(term->win)->rewrap) {
-            // Damage changed parts
-            if (dy > 0) term_damage(term, (struct rect) { 0, minh, minw, dy });
-            if (dx > 0) term_damage(term, (struct rect) { minw, 0, dx, height });
-        }
-        if (cur_moved){
-            term->back_screen[term->c.y]->cell[term->c.x].drawn = 0;
-            term->back_screen[term->c.y]->cell[MAX(term->c.x - 1, 0)].drawn = 0;
-        }
+    } else if (cur_moved) {
+        term->back_screen[term->c.y]->cell[term->c.x].drawn = 0;
+        term->back_screen[term->c.y]->cell[MAX(term->c.x - 1, 0)].drawn = 0;
     }
 
     if (term->mode.altscreen) {
