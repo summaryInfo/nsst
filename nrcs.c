@@ -3,6 +3,7 @@
 #include "feature.h"
 
 #include "nrcs.h"
+#include "util.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -10,23 +11,27 @@
 
 static const unsigned short *nrcs_trs[] = {
     /* [0x23] [0x40] [0x5B 0x5C 0x5D 0x5E 0x5F 0x60] [0x7B 0x7C 0x7D 0x7E] */
-    [nrcs_french_canadian] =   u"#àâçêî_ôéùèû",
-    [nrcs_finnish] =           u"#@ÄÖÅÜ_éäöåü",
-    [nrcs_german] =            u"#§ÄÖÜ^_`äöüß",
-    [nrcs_dutch] =             u"£¾ĳ½|^_`¨f¼´",
-    [nrcs_itallian] =          u"£§°çé^_ùàòèì",
-    [nrcs_swiss] =             u"ùàéçêîèôäöüû",
-    [nrcs_swedish] =           u"#ÉÆØÅÜ_éæøåü",
-    [nrcs_norwegian_dannish] = u"#ÄÆØÅÜ_äæøåü",
-    [nrcs_french] =            u"£à°ç§^_`éùè¨",
-    [nrcs_spannish] =          u"£§¡Ñ¿^_`°ñç~",
-    [nrcs_portuguese] =        u"#@ÃÇÕ^_`ãçõ~",
-    [nrcs_turkish] =           u"#İŞÖÇÜ_Ğşöçü",
+    [nrcs_french_canadian] =    u"#àâçêî_ôéùèû",
+    [nrcs_french_canadian2] =   u"#àâçêî_ôéùèû",
+    [nrcs_finnish] =            u"#@ÄÖÅÜ_éäöåü",
+    [nrcs_finnish2] =           u"#@ÄÖÅÜ_éäöåü",
+    [nrcs_german] =             u"#§ÄÖÜ^_`äöüß",
+    [nrcs_dutch] =              u"£¾ĳ½|^_`¨f¼´",
+    [nrcs_itallian] =           u"£§°çé^_ùàòèì",
+    [nrcs_swiss] =              u"ùàéçêîèôäöüû",
+    [nrcs_swedish] =            u"#ÉÆØÅÜ_éæøåü",
+    [nrcs_swedish2] =           u"#ÉÆØÅÜ_éæøåü",
+    [nrcs_norwegian_dannish] =  u"#ÄÆØÅÜ_äæøåü",
+    [nrcs_norwegian_dannish2] = u"#ÄÆØÅÜ_äæøåü",
+    [nrcs_norwegian_dannish3] = u"#ÄÆØÅÜ_äæøåü",
+    [nrcs_french] =             u"£à°ç§^_`éùè¨",
+    [nrcs_french2] =            u"£à°ç§^_`éùè¨",
+    [nrcs_spannish] =           u"£§¡Ñ¿^_`°ñç~",
+    [nrcs_portuguese] =         u"#@ÃÇÕ^_`ãçõ~",
+    [nrcs_turkish] =            u"#İŞÖÇÜ_Ğşöçü",
 };
 
-static const uint8_t trans_idx[] = {
-    0x23, 0x40, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x7B, 0x7C, 0x7D, 0x7E,
-};
+static const uint8_t trans_idx[] = { 0x23, 0x40, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x7B, 0x7C, 0x7D, 0x7E };
 
 static const unsigned short graph_tr[] = u" ◆▒␉␌␍␊°±␤␋┘┐┌└┼⎺⎻─⎼⎽├┤┴┬│≤≥π≠£·";
 
@@ -116,24 +121,13 @@ bool nrcs_encode(enum charset set, uint32_t *ch, bool nrcs) {
         }
         done |= *ch < 0x21 || *ch == 0x7F;
         break;
-    case nrcs_french_canadian2:
-        set = nrcs_french_canadian; break;
-    case nrcs_finnish2:
-        set = nrcs_finnish; break;
-    case nrcs_swedish2:
-        set = nrcs_swedish; break;
-    case nrcs_norwegian_dannish2:
-    case nrcs_norwegian_dannish3:
-        set = nrcs_norwegian_dannish; break;
-    case nrcs_french2:
-        set = nrcs_french; break;
     case nrcs_turkish:
         if (*ch == U'ğ') *ch = 0x26, done = 1;
         break;
     default:;
     }
 
-    if (set <= nrcs_turkish) {
+    if (set <= nrcs__impl_high) {
         for (size_t i = 0; i < sizeof(trans_idx)/sizeof(*trans_idx); i++) {
             if (nrcs_trs[set][i] == *ch) {
                 *ch = trans_idx[i];
@@ -149,7 +143,7 @@ bool nrcs_encode(enum charset set, uint32_t *ch, bool nrcs) {
 }
 
 uint32_t nrcs_decode_fast(enum charset gl, uint32_t ch) {
-    if (gl == cs94_dec_graph) {
+    if (UNLIKELY(gl == cs94_dec_graph)) {
         if (0x5F <= ch && ch <= 0x7E)
             ch = graph_tr[ch - 0x5F];
     }
@@ -208,22 +202,12 @@ uint32_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, uint32_
         if (0x20 < ch && ch < 0x7F)
             return tech_tr[ch - 0x21];
         return ch;
-    case nrcs_french_canadian2:
-        set = nrcs_french_canadian; break;
-    case nrcs_finnish2:
-        set = nrcs_finnish; break;
-    case nrcs_swedish2:
-        set = nrcs_swedish; break;
-    case nrcs_norwegian_dannish2:
-    case nrcs_norwegian_dannish3:
-        set = nrcs_norwegian_dannish; break;
-    case nrcs_french2:
-        set = nrcs_french; break;
     case nrcs_turkish:
         if ((ch & 0x7F) == 0x26) return U'ğ';
     default:;
     }
-    if (/* nrcs && */ set <= nrcs_turkish) {
+
+    if (/* nrcs && */ set <= nrcs__impl_high) {
         ch &= 0x7F;
         if (ch == 0x23) return nrcs_trs[set][0];
         if (ch == 0x40) return nrcs_trs[set][1];
@@ -232,6 +216,7 @@ uint32_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, uint32_
         if (0x7B <= ch && ch <= 0x7E)
             return nrcs_trs[set][8 + ch - 0x7B];
     }
+
     return ch;
 }
 

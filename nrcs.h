@@ -21,15 +21,16 @@ enum charset {
     nrcs_spannish,
     nrcs_portuguese,
     nrcs_turkish,
-    nrcs_hebrew, // Not implemented
-    nrcs_greek, // Not implemented
-    nrcs_cyrillic, // Not implemented
     nrcs_french_canadian2,
     nrcs_finnish2,
     nrcs_swedish2,
     nrcs_norwegian_dannish2,
     nrcs_norwegian_dannish3,
     nrcs_french2,
+    nrcs__impl_high = nrcs_french2,
+    nrcs_hebrew, // Not implemented
+    nrcs_greek, // Not implemented
+    nrcs_cyrillic, // Not implemented
 
     cs94_ascii,
     cs94_dec_altchars,

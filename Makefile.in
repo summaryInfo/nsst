@@ -65,7 +65,7 @@ image.o: feature.h util.h image.h font.h hashtable.h
 input.o: feature.h config.h font.h line.h util.h nrcs.h input.h term.h window.h hashtable.h
 line.o: feature.h line.h uri.h util.h
 mouse.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h uri.h window.h hashtable.h
-nrcs.o: feature.h nrcs.h
+nrcs.o: feature.h nrcs.h util.h
 nsstc.o: feature.h
 nsst.o: feature.h config.h font.h line.h util.h nrcs.h input.h tty.h window.h hashtable.h
 poller.o: feature.h config.h util.h
