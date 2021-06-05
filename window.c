@@ -307,8 +307,6 @@ void window_pop_title(struct window *win, enum title_target which) {
 static void reload_window(struct window *win) {
     int16_t w = win->cfg.width, h = win->cfg.height;
 
-    //TODO Reload more options here
-
     char *cpath = win->cfg.config_path;
     win->cfg.config_path = NULL;
 
@@ -317,6 +315,8 @@ static void reload_window(struct window *win) {
     win->cfg.width = w, win->cfg.height = h;
 
     window_set_alpha(win, win->cfg.alpha);
+    term_reload_config(win->term);
+    term_damage_lines(win->term, 0, win->ch);
 
     renderer_reload_font(win, 1);
 }

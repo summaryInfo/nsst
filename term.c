@@ -1848,6 +1848,34 @@ void term_set_reverse(struct term *term, bool set) {
     term->mode.reverse_video = set;
 }
 
+void term_reload_config(struct term *term) {
+    struct instance_config *cfg = window_cfg(term->win);
+
+    for (size_t i = 0; i < PALETTE_SIZE; i++)
+        term->palette[i] = cfg->palette[i];
+    term_set_reverse(term, cfg->reverse_video);
+
+    switch(cfg->bell_volume) {
+    case 0: term->bvol = 0; break;
+    case 1: term->bvol = cfg->bell_low_volume; break;
+    case 2: term->bvol = cfg->bell_high_volume;
+    }
+
+    switch(cfg->margin_bell_volume) {
+    case 0: term->mbvol = 0; break;
+    case 1: term->mbvol = cfg->margin_bell_low_volume; break;
+    case 2: term->mbvol = cfg->margin_bell_high_volume;
+    }
+
+    term->mode.no_scroll_on_input = !cfg->scroll_on_input;
+    term->mode.scroll_on_output = cfg->scroll_on_output;
+    term->mode.keep_clipboard = cfg->keep_clipboard;
+    term->mode.keep_selection = cfg->keep_selection;
+    term->mode.select_to_clipboard = cfg->select_to_clipboard;
+    term->mode.bell_raise = cfg->raise_on_bell;
+    term->mode.bell_urgent = cfg->urgency_on_bell;
+    term->mode.smooth_scroll = cfg->smooth_scroll;
+}
 
 static void term_load_config(struct term *term) {
 
@@ -1861,20 +1889,8 @@ static void term_load_config(struct term *term) {
         .title_set_utf8 = cfg->utf8,
         .disable_altscreen = !cfg->allow_altscreen,
         .wrap = cfg->wrap,
-        .no_scroll_on_input = !cfg->scroll_on_input,
-        .scroll_on_output = cfg->scroll_on_output,
         .enable_nrcs = cfg->allow_nrcs,
-        .keep_clipboard = cfg->keep_clipboard,
-        .keep_selection = cfg->keep_selection,
-        .select_to_clipboard = cfg->select_to_clipboard,
-        .bell_raise = cfg->raise_on_bell,
-        .bell_urgent = cfg->urgency_on_bell,
-        .smooth_scroll = cfg->smooth_scroll,
     };
-
-    for (size_t i = 0; i < PALETTE_SIZE; i++)
-        term->palette[i] = cfg->palette[i];
-    term_set_reverse(term, cfg->reverse_video);
 
     term->kstate = (struct keyboard_state) {
         .appcursor = cfg->appcursor,
@@ -1898,6 +1914,8 @@ static void term_load_config(struct term *term) {
         .allow_numlock = cfg->numlock,
     };
 
+    term_reload_config(term);
+
     term->upcs = cs96_latin_1;
     term->c = term->back_saved_c = term->saved_c = (struct cursor) {
         .gl = 0, .gl_ss = 0, .gr = 2,
@@ -1915,19 +1933,6 @@ static void term_load_config(struct term *term) {
         .fg = indirect_color(SPECIAL_FG),
         .bg = indirect_color(SPECIAL_BG),
     };
-
-    switch(cfg->bell_volume) {
-    case 0: term->bvol = 0; break;
-    case 1: term->bvol = cfg->bell_low_volume; break;
-    case 2: term->bvol = cfg->bell_high_volume;
-    }
-
-    switch(cfg->margin_bell_volume) {
-    case 0: term->mbvol = 0; break;
-    case 1: term->mbvol = cfg->margin_bell_low_volume; break;
-    case 2: term->mbvol = cfg->margin_bell_high_volume;
-    }
-
 }
 
 static void term_do_reset(struct term *term, bool hard) {
