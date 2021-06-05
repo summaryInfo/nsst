@@ -630,8 +630,8 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     }
 
     { // Notify application
-        int16_t wwidth, wheight;
-        window_get_dim(term->win, &wwidth, &wheight);
+        int16_t wwidth = window_cfg(term->win)->width;
+        int16_t wheight = window_cfg(term->win)->height;
         tty_set_winsz(&term->tty, width, height, wwidth, wheight);
     }
 
@@ -1787,20 +1787,18 @@ inline static void term_esc_finish_string(struct term *term) {
 }
 
 static void term_request_resize(struct term *term, int16_t w, int16_t h, bool in_cells) {
-    int16_t cur_w, cur_h, scr_w, scr_h;
-    window_get_dim(term->win, &cur_w, &cur_h);
-    window_get_dim_ext(term->win, dim_screen_size, &scr_w, &scr_h);
+    struct extent cur = window_get_size(term->win);
+    struct extent scr = window_get_screen_size(term->win);
 
     if (in_cells) {
-        int16_t ce_w, ce_h, bo_w, bo_h;
-        window_get_dim_ext(term->win, dim_cell_size, &ce_w, &ce_h);
-        window_get_dim_ext(term->win, dim_border, &bo_w, &bo_h);
-        if (w > 0) w = w * ce_w + bo_w * 2;
-        if (h > 0) h = h * ce_h + bo_h * 2;
+        struct extent ce = window_get_cell_size(term->win);
+        struct extent bo = window_get_border(term->win);
+        if (w > 0) w = w * ce.width + bo.width * 2;
+        if (h > 0) h = h * ce.height + bo.height * 2;
     }
 
-    w = !w ? scr_w : w < 0 ? cur_w : w;
-    h = !h ? scr_h : h < 0 ? cur_h : h;
+    w = !w ? scr.width : w < 0 ? cur.width : w;
+    h = !h ? scr.height : h < 0 ? cur.height : h;
 
     term->requested_resize = 1;
 
@@ -3710,55 +3708,54 @@ static void term_dispatch_window_op(struct term *term) {
         break;
     case 13: /* Report position opetations */
         switch(PARAM(1,0)) {
-            int16_t x, y;
-        case 0: /* Report window position */
-            window_get_dim_ext(term->win, dim_window_position, &x, &y);
-            term_answerback(term, CSI"3;%u;%ut", x, y);
+        case 0: /* Report window position */ {
+            struct extent ext = window_get_position(term->win);
+            term_answerback(term, CSI"3;%u;%ut", ext.width, ext.height);
             break;
-        case 2: /* Report grid position */
-            window_get_dim_ext(term->win, dim_grid_position, &x, &y);
-            term_answerback(term, CSI"3;%u;%ut", x, y);
+        }
+        case 2: /* Report grid position */ {
+            struct extent ext = window_get_grid_position(term->win);
+            term_answerback(term, CSI"3;%u;%ut", ext.width, ext.height);
             break;
+        }
         default:
             term_esc_dump(term, 0);
         }
         break;
     case 14: /* Report size operations */
         switch(PARAM(1,0)) {
-            int16_t x, y;
-        case 0: /* Report grid size */
-            window_get_dim_ext(term->win, dim_grid_size, &x, &y);
-            term_answerback(term, CSI"4;%u;%ut", y, x);
+        case 0: /* Report grid size */ {
+            struct extent ext = window_get_grid_size(term->win);
+            term_answerback(term, CSI"4;%u;%ut", ext.height, ext.width);
             break;
-        case 2: /* Report window size */
-            window_get_dim(term->win, &x, &y);
-            term_answerback(term, CSI"4;%u;%ut", y, x);
+        };
+        case 2: /* Report window size */ {
+            struct extent ext = window_get_size(term->win);
+            term_answerback(term, CSI"4;%u;%ut", ext.height, ext.width);
             break;
+        }
         default:
             term_esc_dump(term, 0);
         }
         break;
     case 15: /* Report screen size */ {
-        int16_t x, y;
-        window_get_dim_ext(term->win, dim_screen_size, &x, &y);
-        term_answerback(term, CSI"5;%u;%ut", y, x);
+        struct extent ext = window_get_screen_size(term->win);
+        term_answerback(term, CSI"5;%u;%ut", ext.height, ext.width);
         break;
     }
     case 16: /* Report cell size */ {
-        int16_t x, y;
-        window_get_dim_ext(term->win, dim_cell_size, &x, &y);
-        term_answerback(term, CSI"6;%u;%ut", y, x);
+        struct extent ext = window_get_cell_size(term->win);
+        term_answerback(term, CSI"6;%u;%ut", ext.height, ext.width);
         break;
     }
     case 18: /* Report grid size (in cell units) */
         term_answerback(term, CSI"8;%lu;%lut", term->height, term->width);
         break;
     case 19: /* Report screen size (in cell units) */ {
-        int16_t s_w, s_h, c_w, c_h, b_w, b_h;
-        window_get_dim_ext(term->win, dim_screen_size, &s_w, &s_h);
-        window_get_dim_ext(term->win, dim_cell_size, &c_w, &c_h);
-        window_get_dim_ext(term->win, dim_border, &b_w, &b_h);
-        term_answerback(term, CSI"9;%u;%ut", (s_h - 2*b_h)/c_h, (s_w - 2*b_w)/c_w);
+        struct extent s = window_get_screen_size(term->win);
+        struct extent c = window_get_cell_size(term->win);
+        struct extent b = window_get_border(term->win);
+        term_answerback(term, CSI"9;%u;%ut", (s.height - 2*b.height)/c.height, (s.width - 2*b.width)/c.width);
         break;
     }
     case 20: /* Report icon label */

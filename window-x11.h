@@ -24,7 +24,11 @@
 
 #define TRUE_COLOR_ALPHA_DEPTH 32
 
-struct renderer {
+struct platform_window {
+    xcb_window_t wid;
+    xcb_gcontext_t gc;
+    xcb_event_mask_t ev_mask;
+
 #if USE_X11SHM
     xcb_shm_seg_t shm_seg;
     xcb_pixmap_t shm_pixmap;
@@ -45,7 +49,25 @@ struct renderer {
     xcb_render_glyphset_t gsid;
     xcb_render_pictformat_t pfglyph;
 #endif
+
+    // Used to restore maximized window
+    struct rect saved;
 };
+
+extern xcb_connection_t *con;
+
+inline static bool check_void_cookie(xcb_void_cookie_t ck) {
+    xcb_generic_error_t *err = xcb_request_check(con, ck);
+    if (err) {
+        warn("[X11 Error] major=%"PRIu8", minor=%"PRIu16", error=%"PRIu8,
+                err->major_code, err->minor_code, err->error_code);
+        return 1;
+    }
+    free(err);
+    return 0;
+}
+
+// The code below is X11-independent
 
 struct cellspec {
     color_t fg;
@@ -76,20 +98,7 @@ struct render_cell_state {
 
 struct window {
     struct window *prev, *next;
-
-    /* These fields are X11-specific */
-    struct {
-        xcb_window_t wid;
-        xcb_gcontext_t gc;
-        xcb_event_mask_t ev_mask;
-
-        // Used to restore maximized window
-        bool saved_geometry;
-        int16_t saved_x;
-        int16_t saved_y;
-        int16_t saved_width;
-        int16_t saved_height;
-    };
+    struct platform_window plat;
 
     bool focused : 1;
     bool active : 1;
@@ -139,24 +148,11 @@ struct window {
 
     struct title_stack_item *title_stack;
 
-    struct renderer ren;
-
     // Window configuration
     struct instance_config cfg;
 };
 
-extern xcb_connection_t *con;
 extern struct window *win_list_head;
-
-inline static bool check_void_cookie(xcb_void_cookie_t ck) {
-    xcb_generic_error_t *err = xcb_request_check(con, ck);
-    if (err) {
-        warn("[X11 Error] major=%"PRIu8", minor=%"PRIu16", error=%"PRIu8, err->major_code, err->minor_code, err->error_code);
-        return 1;
-    }
-    free(err);
-    return 0;
-}
 
 FORCEINLINE
 inline static struct cellspec describe_cell(struct cell cell, struct attr attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected) {
@@ -233,7 +229,8 @@ void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 /* Platform dependent functions */
 void platform_init_context(void);
 void platform_free_context(void);
-void platform_get_screen_size(int16_t *x, int16_t *y);
+struct extent platform_get_screen_size(void);
+struct extent platform_get_position(struct window *win);
 bool platform_has_error(void);
 bool platform_init_window(struct window *win);
 void platform_free_window(struct window *win);
@@ -241,12 +238,11 @@ void platform_map_window(struct window *win);
 void platform_set_icon_label(struct window *win, const char *title, bool utf8);
 void platform_set_title(struct window *win, const char *title, bool utf8);
 void platform_bell(struct window *win, uint8_t vol);
-void platform_get_position(struct window *win, int16_t *x, int16_t *y);
 void platform_set_urgency(struct window *win, bool set);
 void platform_draw_rect(struct window *win, struct rect *rects, ssize_t rectc);
 void platform_update_colors(struct window *win);
 void platform_enable_mouse_events(struct window *win, bool enabled);
-void platform_get_pointer(struct window *win, int32_t *x, int32_t *y, int32_t *mask);
+void platform_get_pointer(struct window *win, struct extent *ext, int32_t *mask);
 bool platform_set_clip(struct window *win, uint32_t time, enum clip_target target);
 void platform_update_window_props(struct window *win);
 void platform_window_action(struct window *win, enum window_action action);

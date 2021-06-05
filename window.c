@@ -130,10 +130,11 @@ void window_resize(struct window *win, int16_t width, int16_t height) {
 
 
 void window_get_pointer(struct window *win, int16_t *px, int16_t *py, uint32_t *pmask) {
-    int32_t x = 0, y = 0, mask = 0;
-    platform_get_pointer(win, &x, &y, &mask);
-    if (px) *px = x;
-    if (py) *py = y;
+    struct extent ext = {0, 0};
+    int32_t mask = 0;
+    platform_get_pointer(win, &ext, &mask);
+    if (px) *px = ext.width;
+    if (py) *py = ext.height;
     if (pmask) *pmask = mask;
 }
 
@@ -224,36 +225,36 @@ void window_bell(struct window *win, uint8_t vol) {
     }
 }
 
-void window_get_dim_ext(struct window *win, enum window_dimension which, int16_t *width, int16_t *height) {
-    int16_t x = 0, y = 0;
-    switch (which) {
-    case dim_window_position:
-    case dim_grid_position:
-        platform_get_position(win, &x, &y);
-        if (which == dim_grid_position) {
-            x += win->cfg.left_border;
-            y += win->cfg.top_border;
-        }
-        break;
-    case dim_grid_size:
-        x = win->char_width * win->cw;
-        y = (win->char_height + win->char_depth) * win->ch;
-        break;
-    case dim_screen_size:
-        platform_get_screen_size(&x, &y);
-        break;
-    case dim_cell_size:
-        x = win->char_width;
-        y = win->char_depth + win->char_height;
-        break;
-    case dim_border:
-        x = win->cfg.left_border;
-        y = win->cfg.top_border;
-        break;
-    }
+struct extent window_get_position(struct window *win) {
+    return platform_get_position(win);
+}
 
-    if (width) *width = x;
-    if (height) *height = y;
+struct extent window_get_grid_position(struct window *win) {
+    struct extent res = platform_get_position(win);
+    res.width += win->cfg.left_border;
+    res.height += win->cfg.top_border;
+    return res;
+}
+
+struct extent window_get_grid_size(struct window *win) {
+    return (struct extent) { win->char_width * win->cw, (win->char_height + win->char_depth) * win->ch };
+}
+
+struct extent window_get_screen_size(struct window *win) {
+    (void)win;
+    return platform_get_screen_size();
+}
+
+struct extent window_get_cell_size(struct window *win) {
+    return (struct extent) { win->char_width, win->char_depth + win->char_height };
+}
+
+struct extent window_get_border(struct window *win) {
+    return (struct extent) { win->cfg.left_border, win->cfg.top_border };
+}
+
+struct extent window_get_size(struct window *win) {
+    return (struct extent) { win->cfg.width, win->cfg.height };
 }
 
 void window_get_title(struct window *win, enum title_target which, char **name, bool *utf8) {
@@ -562,7 +563,9 @@ void handle_expose(struct window *win, struct rect damage) {
 }
 
 void handle_resize(struct window *win, int16_t width, int16_t height) {
-    //Handle resize
+
+    if (win->cfg.width == width &&
+        win->cfg.height == height) return;
 
     win->cfg.width = width;
     win->cfg.height = height;

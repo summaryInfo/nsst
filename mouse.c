@@ -462,18 +462,16 @@ void mouse_scroll_view(struct term *term, ssize_t delta) {
 
 inline static void adj_coords(struct term *term, int16_t *x, int16_t *y, bool pixel) {
     struct window *win = term_window(term);
-    int16_t cw, ch, w, h, bw, bh;
+    struct extent c = window_get_cell_size(win);
+    struct extent b = window_get_border(win);
+    struct extent g = window_get_grid_size(win);
 
-    window_get_dim_ext(win, dim_cell_size, &cw, &ch);
-    window_get_dim_ext(win, dim_border, &bw, &bh);
-    window_get_dim_ext(win, dim_grid_size, &w, &h);
-
-    *x = MAX(0, MIN(w - 1, (*x - bw)));
-    *y = MAX(0, MIN(h - 1, (*y - bh)));
+    *x = MAX(0, MIN(g.width - 1, (*x - b.width)));
+    *y = MAX(0, MIN(g.height - 1, (*y - b.height)));
 
     if (!pixel) {
-         *x /= cw;
-         *y /= ch;
+         *x /= c.width;
+         *y /= c.height;
     }
 }
 
@@ -485,11 +483,11 @@ void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, 
     if (mask & mask_button_1) lmask |= 4;
     if (mask & mask_button_4) lmask |= 8;
 
-    int16_t w, h, bw, bh;
-    window_get_dim_ext(term_window(term), dim_border, &bw, &bh);
-    window_get_dim_ext(term_window(term), dim_grid_size, &w, &h);
+    struct window *win = term_window(term);
+    struct extent b = window_get_border(win);
+    struct extent g = window_get_grid_size(win);
 
-    if (x < bw || x >= w + bw || y < bh || y > h + bh) {
+    if (x < b.width || x >= g.width + b.width || y < b.height || y > g.height + b.height) {
         if (evt == 1) term_answerback(term, CSI"0&w");
     } else {
         adj_coords(term, &x, &y, term_get_mstate(term)->locator_pixels);
@@ -504,23 +502,22 @@ void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, 
     xe++, ye++;
 
     struct mouse_state *loc = term_get_mstate(term);
-
-    int16_t cw, ch, bw, bh, w, h;
-    window_get_dim_ext(term_window(term), dim_border, &bw, &bh);
-    window_get_dim_ext(term_window(term), dim_cell_size, &cw, &ch);
-    window_get_dim_ext(term_window(term), dim_grid_size, &w, &h);
+    struct window *win = term_window(term);
+    struct extent c = window_get_cell_size(win);
+    struct extent b = window_get_border(win);
+    struct extent g = window_get_grid_size(win);
 
     if (!loc->locator_pixels) {
-        xs = xs * cw + bw;
-        xe = xe * cw + bw;
-        ys = ys * ch + bh;
-        ye = ye * ch + bh;
+        xs = xs * c.width + b.width;
+        xe = xe * c.width + b.width;
+        ys = ys * c.height + b.height;
+        ye = ye * c.height + b.height;
     }
 
-    xs = MIN(xs, bw + w - 1);
-    xe = MIN(xe, bw + w);
-    ys = MIN(ys, bh + h - 1);
-    ye = MIN(ye, bh + h);
+    xs = MIN(xs, b.width + g.width - 1);
+    xe = MIN(xe, b.width + g.width);
+    ys = MIN(ys, b.height + g.height - 1);
+    ye = MIN(ye, b.height + g.height);
 
     loc->filter = (struct rect) { xs, ys, xe - xs, ye - ys };
     loc->locator_filter = 1;
@@ -530,15 +527,15 @@ void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, 
 
 static void pending_scroll(struct term *term, int16_t y, enum mouse_event_type event) {
     struct mouse_state *loc = term_get_mstate(term);
-    int16_t h, bh, ch;
 
-    window_get_dim_ext(term_window(term), dim_border, NULL, &bh);
-    window_get_dim_ext(term_window(term), dim_cell_size, NULL, &ch);
-    window_get_dim_ext(term_window(term), dim_grid_size, NULL, &h);
+    struct window *win = term_window(term);
+    struct extent c = window_get_cell_size(win);
+    struct extent b = window_get_border(win);
+    struct extent g = window_get_grid_size(win);
 
     if (event == mouse_event_motion) {
-        if (y - bh >= h) loc->pending_scroll = MIN(-1, (h + bh - y - ch + 1) / ch / 2);
-        else if (y < bh) loc->pending_scroll = MAX(1, (bh - y + ch - 1) / ch / 2);
+        if (y - b.height >= g.height) loc->pending_scroll = MIN(-1, (g.height + b.height - y - c.height + 1) / c.height / 2);
+        else if (y < b.height) loc->pending_scroll = MAX(1, (b.height - y + c.height - 1) / c.height / 2);
         mouse_pending_scroll(term);
     }
 }
@@ -567,18 +564,17 @@ inline static bool is_button1_down(struct mouse_event *ev) {
 
 static void update_active_uri(struct term *term, struct mouse_event *ev) {
     struct window *win = term_window(term);
-    int16_t cw, ch, w, h, bw, bh;
 
     if (!window_cfg(win)->allow_uris) return;
 
-    window_get_dim_ext(win, dim_cell_size, &cw, &ch);
-    window_get_dim_ext(win, dim_border, &bw, &bh);
-    window_get_dim_ext(win, dim_grid_size, &w, &h);
+    struct extent c = window_get_cell_size(win);
+    struct extent b = window_get_border(win);
+    struct extent g = window_get_grid_size(win);
 
     uint32_t uri = EMPTY_URI;
-    if ((ev->x >= bw && ev->x < w + bw) && (ev->y >= bh || ev->y < h + bh)) {
-        int16_t x = (ev->x - bw) / cw;
-        int16_t y = (ev->y - bh) / ch;
+    if ((ev->x >= b.width && ev->x < g.width + b.width) && (ev->y >= b.height || ev->y < g.height + b.height)) {
+        int16_t x = (ev->x - b.width) / c.width;
+        int16_t y = (ev->y - b.height) / c.height;
 
         struct line_offset vpos = term_get_line_pos(term, y - term_view(term));
         struct line_view lv = term_line_at(term, vpos);

@@ -67,14 +67,6 @@ enum window_action {
     action_raise,
 };
 
-enum window_dimension {
-    dim_window_position,
-    dim_grid_position,
-    dim_grid_size,
-    dim_screen_size,
-    dim_cell_size,
-    dim_border,
-};
 
 struct mouse_event {
     enum mouse_event_type event;
@@ -83,6 +75,11 @@ struct mouse_event {
     int16_t y;
     uint8_t button;
 };
+
+struct extent {
+    int16_t width, height;
+};
+
 
 typedef uint32_t color_t;
 
@@ -104,6 +101,14 @@ void window_action(struct window *win, enum window_action act);
 bool window_is_mapped(struct window *win);
 void window_bell(struct window *win, uint8_t vol);
 
+struct extent window_get_position(struct window *win);
+struct extent window_get_grid_position(struct window *win);
+struct extent window_get_grid_size(struct window *win);
+struct extent window_get_screen_size(struct window *win);
+struct extent window_get_cell_size(struct window *win);
+struct extent window_get_border(struct window *win);
+struct extent window_get_size(struct window *win);
+
 void window_set_title(struct window *win, enum title_target which, const char *name, bool utf8);
 void window_push_title(struct window *win, enum title_target which);
 void window_pop_title(struct window *win, enum title_target which);
@@ -113,8 +118,6 @@ void window_get_title(struct window *win, enum title_target which, char **name, 
 void window_set_active_uri(struct window *win, uint32_t uri, bool pressed);
 void window_set_mouse(struct window *win, bool enabled);
 void window_set_colors(struct window *win, color_t bg, color_t cursor_fg);
-void window_get_dim(struct window *win, int16_t *width, int16_t *height);
-void window_get_dim_ext(struct window *win, enum window_dimension which, int16_t *width, int16_t *height);
 void window_get_pointer(struct window *win, int16_t *px, int16_t *py, uint32_t *pmask);
 enum cursor_type window_get_cursor(struct window *win);
 void window_set_clip(struct window *win, uint8_t *data, uint32_t time, enum clip_target target);
