@@ -5,12 +5,6 @@ Roadmap
 
 _NOTE: These plans can change any time_
 
-### Until 2.3
-
-* Reload a part of terminal state when reloading configuration
-
-   * Mainly palettes (simplifies dynamic colorscheme reloading)
-
 ### Until 2.4
 
 * Hyperlinks autodetection
