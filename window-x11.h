@@ -113,6 +113,7 @@ struct window {
     bool wait_for_redraw : 1;
     bool autorepeat : 1;
     bool any_event_happend : 1;
+    bool redraw_borders : 1;
 
     int16_t damaged_y0;
     int16_t damaged_y1;
@@ -232,25 +233,24 @@ void platform_free_context(void);
 struct extent platform_get_screen_size(void);
 struct extent platform_get_position(struct window *win);
 bool platform_has_error(void);
+void platform_handle_events(void);
 bool platform_init_window(struct window *win);
 void platform_free_window(struct window *win);
-void platform_map_window(struct window *win);
-void platform_set_icon_label(struct window *win, const char *title, bool utf8);
-void platform_set_title(struct window *win, const char *title, bool utf8);
+bool platform_set_clip(struct window *win, uint32_t time, enum clip_target target);
 void platform_bell(struct window *win, uint8_t vol);
-void platform_set_urgency(struct window *win, bool set);
-void platform_draw_rect(struct window *win, struct rect *rects, ssize_t rectc);
-void platform_update_colors(struct window *win);
 void platform_enable_mouse_events(struct window *win, bool enabled);
 void platform_get_pointer(struct window *win, struct extent *ext, int32_t *mask);
-bool platform_set_clip(struct window *win, uint32_t time, enum clip_target target);
+void platform_get_title(struct window *win, enum title_target which, char **name, bool *utf8);
+void platform_map_window(struct window *win);
+void platform_move_window(struct window *win, int16_t x, int16_t y);
+void platform_paste(struct window *win, enum clip_target target);
+void platform_resize_window(struct window *win, int16_t width, int16_t height);
+void platform_set_icon_label(struct window *win, const char *title, bool utf8);
+void platform_set_title(struct window *win, const char *title, bool utf8);
+void platform_set_urgency(struct window *win, bool set);
+void platform_update_colors(struct window *win);
 void platform_update_window_props(struct window *win);
 void platform_window_action(struct window *win, enum window_action action);
-void platform_move_window(struct window *win, int16_t x, int16_t y);
-void platform_resize_window(struct window *win, int16_t width, int16_t height);
-void platform_get_title(struct window *win, enum title_target which, char **name, bool *utf8);
-void platform_paste(struct window *win, enum clip_target target);
-void platform_handle_events(void);
 
 /* Platform independent functions */
 void handle_expose(struct window *win, struct rect damage);

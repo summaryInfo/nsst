@@ -622,11 +622,6 @@ void platform_paste(struct window *win, enum clip_target target) {
           term_is_utf8_enabled(win->term) ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
 }
 
-void platform_draw_rect(struct window *win, struct rect *rects, ssize_t rectc) {
-    static_assert(sizeof(struct rect) == sizeof(xcb_rectangle_t), "These structs should be compatible");
-    if (rectc) xcb_poly_fill_rectangle(con, win->plat.wid, win->plat.gc, rectc, (xcb_rectangle_t *)rects);
-}
-
 static void send_selection_data(struct window *win, xcb_window_t req, xcb_atom_t sel, xcb_atom_t target, xcb_atom_t prop, xcb_timestamp_t time) {
     xcb_selection_notify_event_t ev;
     ev.property = XCB_NONE;

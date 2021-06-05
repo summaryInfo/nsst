@@ -179,11 +179,6 @@ void window_set_active_uri(struct window *win, uint32_t uri, bool pressed) {
 }
 #endif
 
-void window_get_dim(struct window *win, int16_t *width, int16_t *height) {
-    if (width) *width = win->cfg.width;
-    if (height) *height = win->cfg.height;
-}
-
 void window_set_sync(struct window *win, bool state) {
     if (state) clock_gettime(CLOCK_TYPE, &win->last_sync);
     win->sync_active = state;
@@ -510,10 +505,10 @@ bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_
 
     if (!height || !width) return 1;
 
-    ys *= win->char_height + win->char_depth;
-    yd *= win->char_height + win->char_depth;
-    xs *= win->char_width;
-    xd *= win->char_width;
+    ys = ys*(win->char_height + win->char_depth) + win->cfg.top_border;
+    yd = yd*(win->char_height + win->char_depth) + win->cfg.top_border;
+    xs = xs*win->char_width + win->cfg.left_border;
+    xd = xd*win->char_width + win->cfg.left_border;
     height *= win->char_depth + win->char_height;
     width *= win->char_width;
 
@@ -522,50 +517,12 @@ bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_
     return 1;
 }
 
-static void redraw_borders(struct window *win, bool top_left, bool bottom_right) {
-        int16_t width = win->cw * win->char_width + win->cfg.left_border;
-        int16_t height = win->ch * (win->char_height + win->char_depth) + win->cfg.top_border;
-        struct rect borders[NUM_BORDERS] = {
-            {0, 0, win->cfg.left_border, height},
-            {win->cfg.left_border, 0, width, win->cfg.top_border},
-            {width, 0, win->cfg.width - width, win->cfg.height},
-            {0, height, width, win->cfg.height - height},
-        };
-        size_t count = 4, offset = 0;
-        if (!top_left) count -= 2, offset += 2;
-        if (!bottom_right) count -= 2;
-
-        //TODO Handle zero height
-        platform_draw_rect(win, borders + offset, count);
-}
-
 void handle_expose(struct window *win, struct rect damage) {
-    int16_t width = win->cw * win->char_width + win->cfg.left_border;
-    int16_t height = win->ch * (win->char_height + win->char_depth) + win->cfg.top_border;
-
-    size_t num_damaged = 0;
-    struct rect damaged[NUM_BORDERS], borders[NUM_BORDERS] = {
-        {0, 0, win->cfg.left_border, height},
-        {win->cfg.left_border, 0, width, win->cfg.top_border},
-        {width, 0, win->cfg.width - width, win->cfg.height},
-        {0, height, width, win->cfg.height - height},
-    };
-    for (size_t i = 0; i < NUM_BORDERS; i++)
-        if (intersect_with(&borders[i], &damage))
-                damaged[num_damaged++] = borders[i];
-
-    // TODO Include borders in window
-    platform_draw_rect(win, damaged, num_damaged);
-
-    struct rect inters = { 0, 0, width - win->cfg.left_border, height - win->cfg.top_border};
-    damage = rect_shift(damage, -win->cfg.left_border, -win->cfg.top_border);
-    if (intersect_with(&inters, &damage)) renderer_update(win, inters);
+    if (intersect_with(&damage, &(struct rect) { 0, 0, win->cfg.width, win->cfg.height }))
+        renderer_update(win, damage);
 }
 
 void handle_resize(struct window *win, int16_t width, int16_t height) {
-
-    if (win->cfg.width == width &&
-        win->cfg.height == height) return;
 
     win->cfg.width = width;
     win->cfg.height = height;
@@ -581,9 +538,6 @@ void handle_resize(struct window *win, int16_t width, int16_t height) {
         clock_gettime(CLOCK_TYPE, &win->last_read);
         window_delay_redraw(win);
     }
-
-    if (delta_x < 0 || delta_y < 0)
-        redraw_borders(win, 0, 1);
 }
 
 void handle_focus(struct window *win, bool focused) {
@@ -763,8 +717,6 @@ void run(void) {
             int64_t remains = frame_time - TIMEDIFF(win->last_draw, cur);
 
             if (remains <= 10000LL || win->force_redraw || pending_scroll) {
-                if (win->force_redraw) redraw_borders(win, 1, 1);
-
                 remains = frame_time;
                 if ((win->drawn_somthing = term_redraw(win->term, win->blink_commited))) win->last_draw = cur;
 
