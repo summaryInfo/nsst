@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/un.h>
@@ -40,7 +41,34 @@ static struct pending_launch *first_pending;
 static int socket_index = 1;
 static int socket_fd = -1;
 
+static void daemonize(void) {
+    pid_t pid = fork();
+    if (pid > 0)
+        exit(0);
+    else if (pid < 0)
+        die("Can't fork() daemon: %s", strerror(errno));
+
+    if (setsid() < 0)
+        die("Can't setsid(): %s", strerror(errno));
+
+    pid = fork();
+    if (pid > 0)
+        exit(0);
+    else if (pid < 0)
+        die("Can't fork() daemon: %s", strerror(errno));
+
+    int devnull = open("/dev/null", O_RDONLY);
+    dup2(STDERR_FILENO, STDOUT_FILENO);
+    dup2(devnull, STDIN_FILENO);
+    close(devnull);
+
+    umask(0);
+    chdir("/");
+}
+
+
 bool init_daemon(void) {
+
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof addr);
     addr.sun_family = AF_UNIX;
@@ -70,6 +98,8 @@ bool init_daemon(void) {
 
     socket_fd = fd;
     socket_index = poller_alloc_index(fd, POLLIN | POLLHUP);
+
+    if (gconfig.fork) daemonize();
     return 1;
 }
 

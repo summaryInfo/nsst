@@ -71,6 +71,7 @@ struct global_config {
     bool trace_input : 1;
     bool trace_misc : 1;
     bool want_luit : 1;
+    bool fork : 1;
 };
 
 struct instance_config {
@@ -265,6 +266,7 @@ enum optidx {
     o_force_nrcs,
     o_force_scalable,
     o_foreground,
+    o_fork,
     o_fps,
     o_frame_wait_delay,
     o_has_meta,

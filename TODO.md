@@ -7,13 +7,9 @@ _NOTE: These plans can change any time_
 
 ### Until 2.3
 
-* Refactor window/renderer code to separate X-independent parts
-
 * Reload a part of terminal state when reloading configuration
 
    * Mainly palettes (simplifies dynamic colorscheme reloading)
-
-* Add `--no-fork` option for daemon mode and fork by default in `--daemon` mode
 
 ### Until 2.4
 

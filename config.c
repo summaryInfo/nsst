@@ -81,6 +81,7 @@ struct optmap_item optmap[] = {
     [o_force_nrcs] = {"force-nrcs", "\t\t(Enable NRCS translation when UTF-8 mode is enabled)"},
     [o_force_scalable] = {"force-scalable", "\t(Do not search for pixmap fonts)"},
     [o_foreground] = {"foreground", "\t\t(Default foreground color)"},
+    [o_fork] = {"fork", "\t\t(Fork in daemon mode)"},
     [o_fps] = {"fps", "\t\t\t(Window refresh rate)"},
     [o_frame_wait_delay] = {"frame-wait-delay", "\t(Maximal time since last application output before redraw)"},
     [o_has_meta] = {"has-meta", "\t\t(Handle meta/alt)"},
@@ -96,8 +97,8 @@ struct optmap_item optmap[] = {
     [o_key_numlock] = {"key-numlock", "\t\t('appkey' mode allow toggle hotkey)"},
     [o_key_paste] = {"key-paste", "\t\t(Paste from clipboard hotkey)"},
     [o_key_reload_config] = {"key-reload-config", "\t(Reload config hotkey)"},
-    [o_key_reset] = {"key-reset", "\t\t(Terminal reset hotkey)"},
     [o_key_reset_font] = {"key-reset-font", "\t(Reset font size hotkey)"},
+    [o_key_reset] = {"key-reset", "\t\t(Terminal reset hotkey)"},
     [o_key_reverse_video] = {"key-reverse-video", "\t(Toggle reverse video mode hotkey)"},
     [o_key_scroll_down] = {"key-scroll-down", "\t(Scroll down hotkey)"},
     [o_key_scroll_up] = {"key-scroll-up", "\t\t(Scroll up hotkey)"},
@@ -108,18 +109,18 @@ struct optmap_item optmap[] = {
     [o_log_level] = {"log-level","\t\t(Filering level of logged information)"},
     [o_luit] = {"luit", "\t\t\t(Run luit if terminal doesn't support encoding by itself)"},
     [o_luit_path] = {"luit-path", "\t\t(Path to luit executable)"},
-    [o_margin_bell] = {"margin-bell", "\t\t(Margin bell setting)"},
     [o_margin_bell_column] = {"margin-bell-column", "\t(Columnt at which margin bell rings when armed)"},
     [o_margin_bell_high_volume] = {"margin-bell-high-volume", " (High volume value for DECSMBV)"},
     [o_margin_bell_low_volume] = {"margin-bell-low-volume", "(Low volume value for DECSMBV)"},
+    [o_margin_bell] = {"margin-bell", "\t\t(Margin bell setting)"},
     [o_max_frame_time] = {"max-frame-time", "\t(Maximal time between frames in microseconds)"},
     [o_meta_sends_escape] = {"meta-sends-escape", "\t(Alt/Meta sends escape prefix instead of setting 8-th bit)"},
     [o_minimize_scrollback] = {"minimize-scrollback", "\t(Realloc lines to save memory; makes scrolling a little slower)"},
     [o_modify_cursor] = {"modify-cursor", "\t\t(Enable encoding modifiers for cursor keys)"},
     [o_modify_function] = {"modify-function", "\t(Enable encoding modifiers for function keys)"},
     [o_modify_keypad] = {"modify-keypad", "\t\t(Enable encoding modifiers keypad keys)"},
-    [o_modify_other] = {"modify-other", "\t\t(Enable encoding modifiers for other keys)"},
     [o_modify_other_fmt] = {"modify-other-fmt", "\t(Format of encoding modifers)"},
+    [o_modify_other] = {"modify-other", "\t\t(Enable encoding modifiers for other keys)"},
     [o_nrcs] = {"nrcs", "\t\t\t(Enable NRCSs support)"},
     [o_numlock] = {"numlock", "\t\t(Initial numlock state)"},
 #if USE_URI
@@ -514,6 +515,9 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             else goto e_value;
         } else if (!strcmp(name, optmap[o_foreground].opt)) {
             if (parse_col(value, &val.c, color(SPECIAL_FG))) p[SPECIAL_FG] = val.c;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_fork].opt)) {
+            if (parse_bool(value, &val.b, 1)) g->fork = val.b;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_fps].opt)) {
             if (parse_int(value, &val.i, 2, 1000, 60)) c->fps = val.i;
