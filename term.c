@@ -5169,7 +5169,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
 
 #define MAX_READS 8
 
-__attribute__((hot))
+HOT
 bool term_read(struct term *term) {
     size_t i = 0;
     for (; i < MAX_READS; i++) {

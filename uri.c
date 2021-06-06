@@ -229,7 +229,7 @@ inline static void free_slot(struct slot *slot) {
     idtab.first_free = slot - idtab.slots + 1;
 }
 
-__attribute__((hot))
+HOT
 static bool uri_cmp(const ht_head_t *a, const ht_head_t *b) {
     const struct uri *ua = (const struct uri *)a;
     const struct uri *ub = (const struct uri *)b;

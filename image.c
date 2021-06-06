@@ -190,7 +190,7 @@ void image_draw_rect(struct image im, struct rect rect, color_t fg) {
 }
 
 #ifdef __SSE4_1__
-__attribute__((always_inline))
+FORCEINLINE
 inline static __m128i op_over4(__m128i bg8, __m128i fg16, uint32_t alpha) {
     const __m128i m255 = _mm_set1_epi32(0x00FF00FF);
     const __m128i zero = _mm_set1_epi32(0x00000000);
@@ -224,7 +224,7 @@ inline static __m128i op_over4(__m128i bg8, __m128i fg16, uint32_t alpha) {
     return _mm_packus_epi16(div_0, div_1);
 }
 
-__attribute__((always_inline))
+FORCEINLINE
 inline static __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) {
     const __m128i m255 = _mm_set1_epi32(0x00FF00FF);
     const __m128i zero = _mm_set1_epi32(0x00000000);
@@ -254,7 +254,7 @@ inline static __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) 
     return _mm_packus_epi16(div_0, div_1);
 }
 
-__attribute__((always_inline))
+FORCEINLINE
 inline static __m128i load_n_higher(void *src, int w) {
     // TODO This definitly could be done better
     uint32_t *ptr = src;
@@ -266,7 +266,7 @@ inline static __m128i load_n_higher(void *src, int w) {
     }
 }
 
-__attribute__((always_inline))
+FORCEINLINE
 inline static __m128i load_n_lower(void *src, int w) {
     uint32_t *ptr = src;
     switch (w) {
@@ -277,7 +277,7 @@ inline static __m128i load_n_lower(void *src, int w) {
     }
 }
 
-__attribute__((always_inline))
+FORCEINLINE
 inline static void over_mask(void *dst, __m128i fg16, __m128i mask, void *palpha, int d, int s) {
     uint32_t alpha = 0;
     memcpy(&alpha, palpha, d);
@@ -287,7 +287,7 @@ inline static void over_mask(void *dst, __m128i fg16, __m128i mask, void *palpha
     _mm_store_si128(dst, _mm_or_si128(srcm, dstm));
 }
 
-__attribute__((always_inline))
+FORCEINLINE
 inline static void over(void *dst, __m128i fg16, void *palpha) {
     uint32_t alpha;
     memcpy(&alpha, palpha, sizeof(alpha));
@@ -295,7 +295,7 @@ inline static void over(void *dst, __m128i fg16, void *palpha) {
     _mm_store_si128(dst, op_over4(pref, fg16, alpha));
 }
 
-__attribute__((always_inline))
+FORCEINLINE
 inline static void over_mask_subpix(void *dst, __m128i fg16, __m128i mask, void *palpha, int d, int s) {
     __m128i alpha = (s ? load_n_higher : load_n_lower)(palpha, d);
     __m128i pref = _mm_load_si128(dst);
@@ -304,14 +304,14 @@ inline static void over_mask_subpix(void *dst, __m128i fg16, __m128i mask, void 
     _mm_store_si128(dst, _mm_or_si128(srcm, dstm));
 }
 
-__attribute__((always_inline))
+FORCEINLINE
 inline static void over_subpix(void *dst, __m128i fg16, void *palpha) {
     __m128i alpha = _mm_loadu_si128(palpha);
     __m128i pref = _mm_load_si128(dst);
     _mm_store_si128(dst, op_over4_subpix(pref, fg16, alpha));
 }
 
-__attribute__((always_inline))
+FORCEINLINE
 inline static void over_subpix_aligned(void *dst, __m128i fg16, void *palpha) {
     __m128i alpha = _mm_load_si128(palpha);
     __m128i pref = _mm_load_si128(dst);
