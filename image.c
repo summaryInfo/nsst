@@ -83,7 +83,7 @@ struct image create_shm_image(int16_t width, int16_t height) {
 #endif
     return im;
 error:
-    warn("Can't create image");
+    warn("Can't create image: %s", strerror(errno));
     free_image(&im);
     return im;
 }
