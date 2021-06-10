@@ -79,11 +79,12 @@ static void parse_options(struct instance_config *cfg, char **argv) {
             }
         } else while (argv[ind] && argv[ind][++cind]) {
             char letter = argv[ind][cind];
+            opt = NULL;
             // One letter options
             switch (letter) {
             case 'd':
                 gconfig.daemon_mode = 1;
-                break;
+                continue;
             case 'e':
                 if (!argv[++ind]) usage(argv[0], EXIT_FAILURE);
                 cfg->argv = &argv[ind];
@@ -92,38 +93,32 @@ static void parse_options(struct instance_config *cfg, char **argv) {
                 usage(argv[0], EXIT_SUCCESS);
             case 'v':
                 version();
-            default:;
-                opt = NULL;
-                switch (letter) {
-                case 'C': opt = SKIP_OPT; break;
-                case 'f': opt = "font"; break;
-                case 'D': opt = "term-name"; break;
-                case 'o': opt = "printer-file"; break;
-                case 'c': opt = "window-class"; break;
-                case 't':
-                case 'T': opt = "title"; break;
-                case 'V': opt = "vt-version"; break;
-                case 'H': opt = "scrollback-size"; break;
-                case 'g': opt = "geometry"; break;
-                case 's': opt = "socket"; break;
-                }
+            case 'C': opt = SKIP_OPT; break;
+            case 'f': opt = "font"; break;
+            case 'D': opt = "term-name"; break;
+            case 'o': opt = "printer-file"; break;
+            case 'c': opt = "window-class"; break;
+            case 't':
+            case 'T': opt = "title"; break;
+            case 'V': opt = "vt-version"; break;
+            case 'H': opt = "scrollback-size"; break;
+            case 'g': opt = "geometry"; break;
+            case 's': opt = "socket"; break;
+            }
 
-                if (opt) {
-                    // Has arguments
-                    if (!argv[ind][++cind]) ind++, cind = 0;
-                    if (!argv[ind]) usage(argv[0], EXIT_FAILURE);
-                    arg = argv[ind] + cind;
+            if (opt) {
+                // Has arguments
+                if (!argv[ind][++cind]) ind++, cind = 0;
+                if (!argv[ind]) usage(argv[0], EXIT_FAILURE);
+                arg = argv[ind] + cind;
 
-                    if (opt != SKIP_OPT)
-                        set_option(cfg, opt, arg, 1);
-
-                    goto next;
-                }
-
+                if (opt != SKIP_OPT)
+                    set_option(cfg, opt, arg, 1);
+                break;
+            } else {
                 warn("Unknown option -%c", letter);
             }
         }
-    next:
         if (argv[ind]) ind++;
     }
 

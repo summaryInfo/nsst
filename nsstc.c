@@ -99,8 +99,6 @@ static void parse_client_args(char **argv, const char **cpath, const char **spat
                 else if (letter == 's') *spath = arg;
 
                 goto next;
-            default:
-                /* nothing */;
             }
         }
 next:
@@ -187,11 +185,11 @@ static void parse_server_args(char **argv, int fd) {
             }
         } else while (argv[ind] && argv[ind][++cind]) {
             char letter = argv[ind][cind];
-            // One letter options
+            opt = NULL;
             switch (letter) {
             case 'd':
                 /* ignore */
-                break;
+                continue;
             case 'e':
                 if (!argv[++ind]) usage(fd, argv[0], EXIT_FAILURE);
                 goto end;
@@ -199,38 +197,34 @@ static void parse_server_args(char **argv, int fd) {
                 usage(fd, argv[0], EXIT_SUCCESS);
             case 'v':
                 version(fd);
-            default:
-                opt = NULL;
-                switch (letter) {
-                case 'C':
-                case 's': opt = SKIP_OPT; break;
-                case 'f': opt = "font"; break;
-                case 'D': opt = "term-name"; break;
-                case 'o': opt = "printer-file"; break;
-                case 'c': opt = "window-class"; break;
-                case 't':
-                case 'T': opt = "title"; break;
-                case 'V': opt = "vt-version"; break;
-                case 'H': opt = "scrollback-size"; break;
-                case 'g': opt = "geometry"; break;
-                }
-                if (opt) {
-                    // Has arguments
-                    if (!argv[ind][++cind]) ind++, cind = 0;
-                    if (!argv[ind]) usage(fd, argv[0], EXIT_FAILURE);
-                    arg = argv[ind] + cind;
-
-                    if (opt != SKIP_OPT)
-                        send_opt(fd, opt, arg);
-                    goto next;
-                }
-                // Treat all unknown options not having arguments
-                if (cind) cind--;
-                printf("[\033[33;1mWARN\033[m] Unknown option -%c\n", letter);
-                // Next option, same argv element
+            case 'C':
+            case 's': opt = SKIP_OPT; break;
+            case 'f': opt = "font"; break;
+            case 'D': opt = "term-name"; break;
+            case 'o': opt = "printer-file"; break;
+            case 'c': opt = "window-class"; break;
+            case 't':
+            case 'T': opt = "title"; break;
+            case 'V': opt = "vt-version"; break;
+            case 'H': opt = "scrollback-size"; break;
+            case 'g': opt = "geometry"; break;
             }
+
+            if (!opt) {
+                printf("[\033[33;1mWARN\033[m] Unknown option -%c\n", letter);
+                break;
+            }
+
+            if (!argv[ind][++cind]) ind++, cind = 0;
+            if (!argv[ind]) usage(fd, argv[0], EXIT_FAILURE);
+
+            arg = argv[ind] + cind;
+
+            if (opt != SKIP_OPT)
+                send_opt(fd, opt, arg);
+
+            break;
         }
-    next:
         if (argv[ind]) ind++;
     }
 
