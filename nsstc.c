@@ -226,7 +226,7 @@ static void parse_server_args(char **argv, int fd) {
                 }
                 // Treat all unknown options not having arguments
                 if (cind) cind--;
-                printf("Unknown option -%c", letter);
+                printf("[\033[33;1mWARN\033[m] Unknown option -%c\n", letter);
                 // Next option, same argv element
             }
         }

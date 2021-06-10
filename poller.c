@@ -31,7 +31,7 @@ struct poller poller;
 
 void init_poller(void) {
     poller.pfds = calloc(INIT_PFD_NUM, sizeof(struct pollfd));
-    if (!poller.pfds) die("Can't allocate pfds");
+    if (!poller.pfds) die("Can't allocate poller fds array");
     poller.pfdn = 2;
     poller.pfdcap = INIT_PFD_NUM;
     for (ssize_t i = 1; i < INIT_PFD_NUM; i++)
@@ -53,7 +53,7 @@ int poller_alloc_index(int fd, int events) {
             }
             poller.pfdcap += INIT_PFD_NUM;
             poller.pfds = new;
-        } else die("Cannot alloc poll fd");
+        } else die("Cannot alloc poller fd slot");
     }
 
     poller.pfdn++;
