@@ -1,5 +1,6 @@
 /* Copyright (c) 2019-2021, Evgeny Baskov. All rights reserved */
 
+#define _XOPEN_SOURCE 500
 #define _POSIX_C_SOURCE 200809L
 
 #include "feature.h"
@@ -23,8 +24,9 @@
 #define MAX_WAIT_LOOP 8
 #define STARTUP_DELAY 10000000LL
 #define SKIP_OPT ((void*)-1)
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
 
-static char buffer[MAX_OPTION_DESC + 1];
+static char buffer[MAX(MAX_OPTION_DESC, PATH_MAX) + 1];
 
 inline static void send_char(int fd, char c) {
     while (send(fd, (char[1]){c}, 1, 0) < 0 && errno == EAGAIN);
@@ -55,7 +57,7 @@ static _Noreturn void version(int fd) {
     exit(0);
 }
 
-static void parse_client_args(char **argv, const char **cpath, const char **spath, _Bool *need_daemon) {
+static void parse_client_args(char **argv, const char **cpath, const char **spath, _Bool *need_daemon, const char **cwd) {
     size_t ind = 1;
     char *arg, *opt;
 
@@ -75,6 +77,10 @@ static void parse_client_args(char **argv, const char **cpath, const char **spat
                 if (!strncmp(opt, "config=" , 7)) *cpath = arg;
                 else if (!strncmp(opt, "socket=", 7)) *spath = arg;
                 else if (!strncmp(opt, "daemon", 7)) *need_daemon = 1;
+                else if (!strncmp(opt, "cwd=", 4)) {
+                    if (!(*cwd = realpath(arg, buffer)))
+                        fprintf(stderr, "[\033[33;1mWARN\033[m] realpath(): %s\n", strerror(errno));
+                }
             }
         } else while (argv[ind] && argv[ind][++cind]) {
             char letter = argv[ind][cind];
@@ -171,8 +177,9 @@ static void parse_server_args(char **argv, int fd) {
                 *arg++ = '\0';
                 if (!*arg) arg = argv[++ind];
 
-                if (strcmp(opt, "config") && strcmp(opt, "socket"))
+                if (strcmp(opt, "config") && strcmp(opt, "socket") && strcmp(opt, "cwd")) {
                     send_opt(fd, opt, arg);
+                }
             } else if (!strcmp(opt, "help")) {
                 usage(fd, argv[0], EXIT_SUCCESS);
             } else if (!strcmp(opt, "version")) {
@@ -211,7 +218,7 @@ static void parse_server_args(char **argv, int fd) {
             }
 
             if (!opt) {
-                printf("[\033[33;1mWARN\033[m] Unknown option -%c\n", letter);
+                fprintf(stderr, "[\033[33;1mWARN\033[m] Unknown option -%c\n", letter);
                 break;
             }
 
@@ -278,7 +285,8 @@ int main(int argc, char **argv) {
 
     (void)argc;
 
-    parse_client_args(argv, &cpath, &spath, &need_daemon);
+    const char *pcwd = getcwd(buffer, sizeof(buffer));
+    parse_client_args(argv, &cpath, &spath, &need_daemon, &pcwd);
 
     int fd = try_connect(spath);
     if (fd < 0 && need_daemon) {
@@ -292,11 +300,7 @@ int main(int argc, char **argv) {
     }
 
     send_header(fd, cpath);
-
-    // Set current working directory for the terminal
-    char cwd[PATH_MAX];
-    if (getcwd(cwd, sizeof(cwd)))
-        send_opt(fd, "cwd", cwd);
+    if (pcwd) send_opt(fd, "cwd", pcwd);
 
     parse_server_args(argv, fd);
 
