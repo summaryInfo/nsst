@@ -34,9 +34,9 @@ struct font_context {
 };
 
 struct face_list {
-        size_t length;
-        size_t caps;
-        FT_Face *faces;
+    size_t length;
+    size_t caps;
+    FT_Face *faces;
 };
 
 struct font {
