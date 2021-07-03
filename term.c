@@ -5198,7 +5198,7 @@ void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool 
     static uint8_t buf1[2*PASTE_BLOCK_SIZE];
     static uint8_t buf2[4*PASTE_BLOCK_SIZE];
 
-    assert(size < PASTE_BLOCK_SIZE);
+    assert(size <= PASTE_BLOCK_SIZE);
 
     /* There's a race condition
      * if user have requested paste and
