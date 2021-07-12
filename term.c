@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
@@ -3425,6 +3426,47 @@ inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bo
     return part;
 }
 
+#define BLOCK_MASK 0x4040404040404040ULL
+
+inline static uint64_t read_block_mask(const uint8_t *start) {
+    uint64_t b = *(const uint64_t *)start;
+    return ((b | (b << 1)) & BLOCK_MASK) ^ BLOCK_MASK;
+}
+
+inline static const uint8_t *block_mask_offset(const uint8_t *start, const uint8_t *end, uint64_t b) {
+    return MIN(end, start + (ffsll(b) - sizeof(uint64_t) + 1)/sizeof(uint64_t));
+}
+
+inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end, ssize_t max_chunk) {
+    if (end - start >= (ssize_t)sizeof(uint64_t)) {
+        if (start + max_chunk < end) end = start + max_chunk;
+
+        ssize_t unaligned_prefix = (uintptr_t)start & (sizeof(uint64_t) - 1);
+        if (unaligned_prefix) {
+            uint64_t res = read_block_mask(start);
+            if (UNLIKELY(res))
+                return block_mask_offset(start, end, res);
+            start += sizeof(uint64_t) - unaligned_prefix;
+        }
+
+        // Process 8 aligned bytes at a time
+        // We have out-of bounds read here but it
+        // should be find since it it aligned
+        // and buffer size is a power of two
+
+        for (; start < end; start += sizeof(uint64_t)) {
+            uint64_t res = read_block_mask(start);
+            if (UNLIKELY(res))
+                return block_mask_offset(start, end, res);
+        }
+
+        return end;
+    } else {
+        while (start < end && !IS_CBYTE(*start)) start++;
+        return start;
+    }
+}
+
 static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep, const uint8_t **start, const uint8_t *end) {
     ssize_t res = 1;
 
@@ -3484,9 +3526,12 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
         // Find the actual end of buffer
         // (control character or number of characters)
         // to prevent checking that on each iteration
-        // (and also preload cache)
-        const uint8_t *chunk = xstart;
-        while (!IS_CBYTE(*chunk) && chunk < end) chunk++;
+        // and preload cache.
+        // Maximal possible size of the chunk is
+        // 4 times width of the lines since
+        // each UTF-8 can be at most 4 bytes single width
+
+        const uint8_t *chunk = find_chunk(xstart, end, maxw*4);
 
         do {
             const uint8_t *char_start = xstart;
