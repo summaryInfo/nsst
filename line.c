@@ -138,19 +138,31 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     return src1;
 }
 
-void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len, bool dmg) {
+void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len, bool dmg) {
     struct cell *sc = src->cell + sx, *dc = dst->cell + dx, c;
     if (dst != src) {
         uint32_t previd = ATTRID_MAX, newid = 0;
-        for (ssize_t i = 0; i < len; i++) {
-            c = *sc++;
-            c.drawn &= !dmg;
-            if (c.attrid) {
-                if (c.attrid != previd)
-                    newid = alloc_attr(dst, src->attrs->data[c.attrid - 1]);
-                c.attrid = newid;
+        if (dmg) {
+            for (ssize_t i = 0; i < len; i++) {
+                c = *sc++;
+                c.drawn = 0;
+                if (UNLIKELY(c.attrid)) {
+                    if (UNLIKELY(c.attrid != previd))
+                        newid = alloc_attr(dst, src->attrs->data[c.attrid - 1]);
+                    c.attrid = newid;
+                }
+                *dc++ = c;
             }
-            *dc++ = c;
+        } else {
+            for (ssize_t i = 0; i < len; i++) {
+                c = *sc++;
+                if (UNLIKELY(c.attrid)) {
+                    if (UNLIKELY(c.attrid != previd))
+                        newid = alloc_attr(dst, src->attrs->data[c.attrid - 1]);
+                    c.attrid = newid;
+                }
+                *dc++ = c;
+            }
         }
     } else {
         memmove(dc, sc, len * sizeof(*sc));
