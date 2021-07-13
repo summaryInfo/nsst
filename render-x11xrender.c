@@ -119,6 +119,20 @@ inline static void do_set_clip(struct window *win, struct rect *rects, ssize_t c
                                            count, (xcb_rectangle_t *)rects);
 }
 
+void renderer_recolor_border(struct window *win) {
+    int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
+    int bw = win->cfg.left_border, bh = win->cfg.top_border;
+
+    struct rect rects[] = {
+        {0, 0, win->cfg.width, win->cfg.top_border},
+        {0, bh, bw, win->ch*(ch + cd)},
+        {win->cw*cw + bw, bh, win->cfg.width - win->cw*cw - bw, win->ch*(ch + cd)},
+        {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh},
+    };
+
+    do_draw_rects(win, rects, sizeof rects/ sizeof *rects, win->bg_premul);
+}
+
 void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;

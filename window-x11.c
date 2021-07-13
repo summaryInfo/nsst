@@ -263,6 +263,7 @@ void platform_update_colors(struct window *win) {
     values2[0] = values2[1] = win->bg_premul;
     xcb_change_window_attributes(con, win->plat.wid, XCB_CW_BACK_PIXEL, values2);
     xcb_change_gc(con, win->plat.gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
+    renderer_recolor_border(win);
 }
 
 void platform_enable_mouse_events(struct window *win, bool enabled) {
