@@ -695,7 +695,7 @@ void run(void) {
 
             if (!win->any_event_happend && !pending_scroll && win->blink_commited) continue;
 
-            // Deactivate syncronous update mode if it has expired
+            // Deactivate synchronous update mode if it has expired
             if (UNLIKELY(win->sync_active) && TIMEDIFF(win->last_sync, cur) > win->cfg.sync_time*1000LL)
                 win->sync_active = 0, win->wait_for_redraw = 0;
 
@@ -707,7 +707,7 @@ void run(void) {
             }
 
             // We need to skeep frame if redraw is not forced
-            // and ether syncronous update is active, window is not visible
+            // and ether synchronous update is active, window is not visible
             // or we are waiting for frame to finish and maximal frame time is not expired
             if (!win->force_redraw && !pending_scroll) {
                 if (UNLIKELY(win->sync_active || !win->active)) continue;

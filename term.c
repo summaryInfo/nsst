@@ -2295,10 +2295,10 @@ static void term_dispatch_dcs(struct term *term) {
     switch (term->esc.selector) {
     case C('s') | P('='): /* iTerm2 synchronized updates */
         switch (PARAM(0,0)) {
-        case 1: /* Begin syncronous update */
+        case 1: /* Begin synchronous update */
             window_set_sync(term->win, 1);
             break;
-        case 2: /* End syncronous update */
+        case 2: /* End synchronous update */
             window_set_sync(term->win, 0);
             break;
         default:
@@ -3005,7 +3005,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
         case 2006: /* Paste literal NL */
             term->mode.paste_literal_nl = set;
             break;
-        case 2026: /* Syncronized updates */
+        case 2026: /* Synchronized updates */
             window_set_sync(term->win, set);
             break;
         default:

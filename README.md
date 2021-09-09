@@ -8,11 +8,11 @@ This is an implementation of VT220-like X11 terminal emulator.
     * Scrolling performance is on par with fastest terminals my system (`alacritty` and `urxvt`)
 * Small size and almost no dependencies
 * Uses xcb as X11 interface library
-    * A litle bit faster because of its asyncrony
+    * A litle bit faster because of its asynchrony
     * `size` including all loaded shared libs is only 80% of `st` on my system
 * Most escape sequences from XTerm are implemented
 * Full keyboard mode from XTerm
-* Syncronous updates DCS
+* Synchronous updates DCS
 * `OSC 13001 ; Po ST` "Set background opacity to `Po` (`Po` is floating point)"
 * Daemon mode (`urxvt`-like)
     * Multiple terminal windows
