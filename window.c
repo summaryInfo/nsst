@@ -184,6 +184,10 @@ void window_set_sync(struct window *win, bool state) {
     win->sync_active = state;
 }
 
+bool window_get_sync(struct window *win) {
+    return win->sync_active;
+}
+
 void window_set_autorepeat(struct window *win, bool state) {
     win->autorepeat = state;
 }

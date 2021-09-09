@@ -2,6 +2,7 @@
 
 #include "feature.h"
 
+#define _DEFAULT_SOURCE
 #define _XOPEN_SOURCE 700
 #include <assert.h>
 
@@ -2292,7 +2293,7 @@ static void term_dispatch_dcs(struct term *term) {
     uint8_t *dend = dstr + term->esc.str_len;
 
     switch (term->esc.selector) {
-    case C('s') | P('='): /* iTerm2 syncronous updates */
+    case C('s') | P('='): /* iTerm2 synchronized updates */
         switch (PARAM(0,0)) {
         case 1: /* Begin syncronous update */
             window_set_sync(term->win, 1);
@@ -3004,6 +3005,9 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
         case 2006: /* Paste literal NL */
             term->mode.paste_literal_nl = set;
             break;
+        case 2026: /* Syncronized updates */
+            window_set_sync(term->win, set);
+            break;
         default:
             return 0;
         }
@@ -3221,6 +3225,9 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             break;
         case 2006: /* Paste quote */
             val = MODSTATE(term->mode.paste_quote);
+            break;
+        case 2026: /* Synchronized update */
+            val = MODSTATE(window_get_sync(term->win));
             break;
         default:
             term_esc_dump(term, 0);
@@ -4006,7 +4013,9 @@ inline static void store_mode(uint8_t modbits[], uparam_t mode, bool val) {
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
     else if (2000 <= mode && mode < 2007) modbits += 20;
     else {
-        warn("Can't save mode %u", mode);
+        /* Don't save synchronized update state */
+        if (mode != 2026)
+            warn("Can't save mode %u", mode);
         return;
     }
     if (val) *modbits |= 1 << (mode % 8);
@@ -4018,7 +4027,9 @@ inline static bool load_mode(uint8_t modbits[], uparam_t mode) {
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
     else if (2000 <= mode && mode < 2007) modbits += 20;
     else {
-        warn("Can't restore mode %u", mode);
+        /* Don't restore synchronized update state */
+        if (mode != 2026)
+            warn("Can't restore mode %u", mode);
         return 0;
     }
     return (*modbits >> (mode % 8)) & 1;
