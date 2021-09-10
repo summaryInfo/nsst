@@ -737,9 +737,9 @@ void keyboard_parse_config(struct instance_config *cfg) {
 enum shortcut_action keyboard_find_shortcut(struct instance_config *cfg, struct key k) {
     enum shortcut_action action = shortcut_none + 1;
     for (; action < shortcut_MAX; action++)
-        if ((cfg->cshorts[action].ksym == k.sym ||
-             cfg->cshorts[action].ksym == k.ascii) &&
-            (k.mask & 0xFF) == cfg->cshorts[action].mask) return action;
-
+        if ((cfg->cshorts[action].ksym == k.sym || cfg->cshorts[action].ksym == k.ascii) &&
+                ((k.mask & (0xFF & ~mask_mod_2)) == cfg->cshorts[action].mask ||
+                (k.mask & 0xFF) == cfg->cshorts[action].mask))
+            return action;
     return shortcut_none;
 }
