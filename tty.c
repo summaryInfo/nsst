@@ -38,29 +38,38 @@
 
 #define TTY_MAX_WRITE 256
 
+/* Head of TTYs list with alive child process */
+static struct tty *first_tty, *last_tty;
+
 /* Default termios, initialized from main */
 static struct termios dtio;
 
 static void handle_chld(int arg) {
     int status;
-    char str[128];
-    ssize_t len = 0;
-    uint32_t loglevel = gconfig.log_level;
     pid_t pid;
 
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         if (pid < 0) {
-            if (loglevel > 1) len = snprintf(str, sizeof str,
-                    "[\033[33;1mWARN\033[m] Child wait failed");
-        } else if (WIFEXITED(status) && WEXITSTATUS(status)) {
-            if (loglevel > 2) len = snprintf(str, sizeof str,
-                    "[\033[32;1mINFO\033[m] Child exited with status: %d\n", WEXITSTATUS(status));
-        } else if (WIFSIGNALED(status)) {
-            if (loglevel > 2) len = snprintf(str, sizeof str,
-                    "[\033[32;1mINFO\033[m] Child terminated due to the signal: %d\n", WTERMSIG(status));
+            warn("Child wait failed");
+            break;
         }
 
-        if (len) (void)write(STDERR_FILENO, str, len);
+        if (WIFEXITED(status) && WEXITSTATUS(status))
+            info("Child exited with status: %d", WEXITSTATUS(status));
+        else if (WIFSIGNALED(status))
+            info("Child terminated due to the signal: %d\n", WTERMSIG(status));
+
+        for (struct tty *tty = first_tty; tty; tty = tty->next) {
+            if (tty->printer == pid) {
+                close(tty->printerfd);
+                tty->printerfd = -1;
+                break;
+            } else if (tty->child == pid) {
+                close(tty->fd);
+                tty->fd = -1;
+                break;
+            }
+        }
     }
 
     (void)arg;
@@ -305,6 +314,8 @@ void init_default_termios(void) {
     cfsetispeed(&dtio, rate);
     cfsetospeed(&dtio, rate);
 
+    sigaction(SIGCHLD, &(struct sigaction) {
+            .sa_handler = handle_chld, .sa_flags = SA_RESTART}, NULL);
 }
 
 int tty_open(struct tty *tty, struct instance_config *cfg) {
@@ -332,6 +343,15 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
         warn("Can't create pseudo terminal");
         tty->fd = -1;
         return -1;
+    }
+
+    if (last_tty) {
+        last_tty->next = tty;
+        tty->prev = last_tty;
+        last_tty = tty;
+    } else {
+        last_tty = tty;
+        first_tty = tty;
     }
 
     int fld = fcntl(tty->fd, F_GETFD);
@@ -362,8 +382,6 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
         /* Reset argv to not use it twice */
         cfg->argv = NULL;
         close(slave);
-        sigaction(SIGCHLD, &(struct sigaction){
-                .sa_handler = handle_chld, .sa_flags = SA_RESTART}, NULL);
     }
 
     /* Open printer file/pipe */
@@ -373,9 +391,8 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
         /* Printer command is more prioritized that file */
         if (cfg->printer_cmd) {
             int pip[2];
-            pid_t pid = 0;
-            if (pipe(pip) >= 0 && (pid = fork()) >= 0) {
-                if (!pid) {
+            if (pipe(pip) >= 0 && (tty->printer = fork()) >= 0) {
+                if (!tty->printer) {
                     dup2(pip[0], 0);
                     close(pip[1]);
                     close(pip[0]);
@@ -389,7 +406,7 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
                     tty->printerfd = pip[1];
                 }
             } else {
-                if (pid) {
+                if (tty->printer) {
                     close(pip[0]);
                     close(pip[1]);
                 }
@@ -416,17 +433,37 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
 }
 
 void tty_hang(struct tty *tty) {
+    if (tty->prev)
+        tty->prev->next = tty->next;
+    else if (first_tty == tty)
+        first_tty = tty->next;
+
+    if (tty->next)
+        tty->next->prev = tty->prev;
+    else if (last_tty == tty)
+        last_tty = tty->prev;
+
+    tty->next = tty->prev = NULL;
+
     if (tty->fd >= 0) {
         close(tty->fd);
-        if (tty->printerfd != STDOUT_FILENO && tty->printerfd >= 0)
-            close(tty->printerfd);
         tty->fd = -1;
     }
-    kill(tty->child, SIGHUP);
+
+    if (tty->child > 0)
+        kill(tty->child, SIGHUP);
+
+    if (tty->printerfd != STDOUT_FILENO && tty->printerfd >= 0) {
+        close(tty->printerfd);
+        tty->printerfd = -1;
+    }
+
+    if (tty->printer > 0)
+        kill(tty->printer, SIGHUP);
 }
 
 ssize_t tty_refill(struct tty *tty) {
-    if (tty->fd == -1) return -1;
+    if (UNLIKELY(tty->fd == -1)) return -1;
 
     ssize_t inc, sz = tty->end - tty->start;
 

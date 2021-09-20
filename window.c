@@ -7,11 +7,12 @@
 #include "mouse.h"
 #include "window-x11.h"
 
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 
@@ -44,6 +45,13 @@ _Noreturn static void handle_term(int sig) {
     _exit(EXIT_SUCCESS);
 }
 
+static void handle_hup(int sig) {
+    /* We need to ignore SIGHUPs sent by our children */
+    if (fcntl(STDOUT_FILENO, F_GETFD) < 0)
+        handle_term(sig);
+}
+
+
 void init_context(void) {
     init_poller();
 
@@ -51,6 +59,7 @@ void init_context(void) {
     init_render_context();
 
     sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART }, NULL);
+    sigaction(SIGHUP, &(struct sigaction) { .sa_handler = handle_hup, .sa_flags = SA_RESTART}, NULL);
 
     struct sigaction sa = { .sa_handler = handle_term };
     sigaction(SIGTERM, &sa, NULL);

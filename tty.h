@@ -12,8 +12,12 @@
 #include <unistd.h>
 
 struct tty {
+    struct tty *next;
+    struct tty *prev;
+
     pid_t child;
     int fd;
+    pid_t printer;
     int printerfd;
 
     uint8_t fd_buf[FD_BUF_SIZE];
