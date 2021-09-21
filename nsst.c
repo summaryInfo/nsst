@@ -3,7 +3,6 @@
 #include "feature.h"
 
 #define _GNU_SOURCE
-#define _POSIX_C_SOURCE 200809L
 
 #include "config.h"
 #include "feature.h"

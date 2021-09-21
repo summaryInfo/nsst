@@ -106,6 +106,23 @@ const char *usage_string(ssize_t idx);
 #define UTF8_MAX_LEN 4
 #define UTF_INVAL 0xfffd
 
+extern const uint8_t wide_table1_[1024];
+extern const uint8_t combining_table1_[496];
+extern const uint32_t width_data_[106][8];
+
+inline static bool iswide(uint32_t x) {
+    return (x - 0x1000U) < (0x40000U - 0x1000U) &&
+        width_data_[wide_table1_[x >> 8]][(x >> 5) & 0x7] & (1U << (x & 0x1F));
+}
+
+inline static bool iscombining(uint32_t x) {
+    return (x == 0xE0001U || (x - 0xE0020U) < 0x1D0U) ||
+        (x < 0x1F000U && width_data_[combining_table1_[x >> 8]][(x >> 5) & 0x7] & (1U << (x & 0x1F)));
+}
+
+int uwidth(uint32_t x);
+
+
 size_t utf8_encode(uint32_t u, uint8_t *buf, uint8_t *end);
 bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end);
 

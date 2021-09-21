@@ -3,7 +3,6 @@
 #include "feature.h"
 
 #define _DEFAULT_SOURCE
-#define _XOPEN_SOURCE 700
 #include <assert.h>
 
 #include "config.h"
@@ -368,7 +367,7 @@ struct term {
     /* Sequential graphical characters are decoded
      * at once for faster parsing, and stored to this buffer
      * size of this buffer is equal to terminal width */
-    int32_t *predec_buf;
+    uint32_t *predec_buf;
 
     bool scroll_damage;
 };
@@ -653,7 +652,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
     { // Resize predecode buffer and temporary screen buffer
 
-        int32_t *newpb = realloc(term->predec_buf, width*sizeof(*newpb));
+        uint32_t *newpb = realloc(term->predec_buf, width*sizeof(*newpb));
         if (!newpb) die("Can't allocate predecode buffer");
         term->predec_buf = newpb;
 
@@ -774,7 +773,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 uint32_t previd = ATTRID_MAX, newid = 0;
                 for (ssize_t x = 0; x < len; x++) {
                     // If last character of line is wide, soft wrap
-                    if (dx == width - 1 && line->cell[x].wide) {
+                    if (dx == width - 1 && cell_wide(&line->cell[x])) {
                         new_lines[dy]->wrapped = 1;
                         if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
                         dx = 0;
@@ -1086,7 +1085,10 @@ static uint16_t term_checksum(struct term *term, int16_t xs, int16_t ys, int16_t
                     if (!mode.eight_bit && ch < 0x80) ch |= 0x80;
                 }
                 ch &= 0xFF;
+            } else {
+                ch = compact2unicode(ch);
             }
+
             if (!(mode.no_attr)) {
                 if (attr.underlined) ch += 0x10;
                 if (attr.reverse) ch += 0x20;
@@ -1262,7 +1264,10 @@ static void term_fill(struct term *term, int16_t xs, int16_t ys, int16_t xe, int
         struct line *line = term->screen[ys];
         // Reset line wrapping state
         line->wrapped = 0;
-        struct cell c = { .attrid = alloc_attr(line, term->sgr), .ch = ch };
+        struct cell c = {
+            .attrid = alloc_attr(line, term->sgr),
+            .ch = unicode2compact(ch),
+        };
         fill_cells(line->cell + xs, c, xe - xs);
     }
 }
@@ -1293,7 +1298,7 @@ static void term_selective_erase(struct term *term, int16_t xs, int16_t ys, int1
         line->wrapped = 0;
         for (ssize_t i = xs; i < xe; i++)
             if (!attr_at(line,i).protected)
-                line->cell[i].ch = line->cell[i].drawn = line->cell[i].wide = 0;
+                line->cell[i] = MKCELL(0, line->cell[i].attrid);
     }
 }
 
@@ -1309,17 +1314,13 @@ inline static void term_put_cell(struct term *term, ssize_t x, ssize_t y, uint32
 inline static void term_adjust_wide_left(struct term *term, ssize_t x, ssize_t y) {
     if (x < 1) return;
     struct cell *cell = &term->screen[y]->cell[x - 1];
-    if (cell->wide) {
-        cell->wide = 0;
-        cell->drawn = 0;
-        cell->ch = 0;
-    }
+    if (cell_wide(cell)) *cell = MKCELL(0, cell->attrid);
 }
 
 inline static void term_adjust_wide_right(struct term *term, ssize_t x, ssize_t y) {
     if (x >= term->screen[y]->width - 1) return;
     struct cell *cell = &term->screen[y]->cell[x + 1];
-    if (cell[-1].wide) cell->drawn = 0;
+    if (cell_wide(cell-1)) cell->drawn = 0;
 }
 
 inline static void term_reset_pending(struct term *term) {
@@ -1683,8 +1684,8 @@ static void term_print_line(struct term *term, struct line *line) {
 
         //TODO Encode NRCS when UTF is disabled
         //for now just always print as UTF-8
-        if (c.ch < 0xA0) *pbuf++ = c.ch;
-        else pbuf += utf8_encode(c.ch, pbuf, pend);
+        if (c.ch < 0xA0) *pbuf++ = cell_get(&c);
+        else pbuf += utf8_encode(cell_get(&c), pbuf, pend);
 
         prev = attr;
 
@@ -3398,15 +3399,13 @@ static void term_precompose_at_cursor(struct term *term, uint32_t ch) {
 
     // Step back to previous cell
     if (term->c.x) cel--;
-    if (!cel->ch && term->c.x > 1 && cel[-1].wide) cel--;
+    if (!cel->ch && term->c.x > 1 && cell_wide(cel - 1)) cel--;
 
-    ch = try_precompose(cel->ch, ch);
+    ch = try_precompose(cell_get(cel), ch);
 
     // Only make cell dirty if precomposition happened
-    if (cel->ch != ch) {
-        cel->ch = ch;
-        cel->drawn = 0;
-    }
+    if (cell_get(cel) != ch)
+        cell_set(cel, ch);
 }
 
 inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bool raw) {
@@ -3479,31 +3478,22 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
 
     // Compute maximal with to be printed at once
     register ssize_t maxw = term_max_x(term) - term_min_x(term), totalw = 0;
-    int32_t *pbuf = term->predec_buf;
+    uint32_t *pbuf = term->predec_buf;
     if (!term->c.pending || !term->mode.wrap)
         maxw = (term->c.x >= term_max_x(term) ? term->width : term_max_x(term)) - term->c.x;
 
     register int32_t ch = rune;
-    bool has_any_wide = 0;
 
     // If rep > 0, we should perform REP CSI
     if (UNLIKELY(rep)) {
-        int32_t wid = wcwidth(ch);
+        int32_t wid = uwidth(ch);
         if (!wid) {
             // Don't put zero-width charactes
             // to predecode buffer
             if (!totalw) term_precompose_at_cursor(term, ch);
             res = 0;
         } else {
-            // Adjust width to be other 1 or 2
-            wid = 1 + (wid > 1);
-
             if (wid == 2) {
-                has_any_wide = 1;
-                // Wide cells are indicated as
-                // negative in predecode buffer
-                ch = -ch;
-
                 // Allow printing at least one wide char at right margin
                 // if autowrap is off
                 if (maxw == 1) maxw = wid;
@@ -3512,13 +3502,21 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
                 // wrapped so we can print a lot more
                 if (term->mode.wrap && term->c.x == term_max_x(term) - 1)
                     maxw = term_max_x(term) - term_min_x(term);
+
+                while (totalw + wid <= maxw && rep) {
+                    totalw += 2;
+                    *pbuf++ = ch;
+                    *pbuf++ = 0;
+                    rep--;
+                }
+            } else {
+                while (totalw + wid <= maxw && rep) {
+                    totalw++;
+                    *pbuf++ = ch;
+                    rep--;
+                }
             }
 
-            while (totalw + wid <= maxw && rep) {
-                totalw += wid;
-                *pbuf++ = ch;
-                rep--;
-            }
             res = rep;
         }
     } else {
@@ -3564,16 +3562,16 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
 
             prev = ch;
 
-            register int32_t wid = wcwidth(ch);
+            register int32_t wid = uwidth(ch);
             if(UNLIKELY(!wid)) {
                 // Don't put zero-width charactes
                 // to predecode buffer
                 if (!totalw) term_precompose_at_cursor(term, ch);
-                else pbuf[-1] = try_precompose(pbuf[-1], ch);
+                else {
+                    uint32_t *p = pbuf - 1 - !pbuf[-1];
+                    *p = unicode2compact(try_precompose(compact2unicode(*p), ch));
+                }
             } else {
-                // Adjust width to be other 1 or 2
-                wid = 1 + (wid > 1);
-
                 // Don't include char if its too wide, unless its a wide char
                 // at right margin, or autowrap is disabled, and we are at right size of the screen
                 // In those cases recalculate maxw
@@ -3590,15 +3588,12 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
                         break;
                     }
                 }
-                // Wide cells are indicated as
-                // negative in predecode buffer
-                if (wid > 1) {
-                    ch = -ch;
-                    has_any_wide = 1;
-                }
 
+                *pbuf++ = unicode2compact(ch);
                 totalw += wid;
-                *pbuf++ = ch;
+
+                if (wid > 1)
+                    *pbuf++ = 0;
             }
 
             // Since maxw < width == length of predec_buf, don't check it
@@ -3610,7 +3605,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
     }
 
     if (term->mode.wrap) {
-        if (term->c.pending || (term->c.x == term_max_x(term) - 1 && term->predec_buf[0] < 0))
+        if (term->c.pending || (term->c.x == term_max_x(term) - 1 && !term->predec_buf[1]))
             term_do_wrap(term);
     } else term->c.x = MIN(term->c.x, term_max_x(term) - totalw);
 
@@ -3655,25 +3650,13 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
     uint32_t attrid = alloc_attr(line, term->sgr);
 
     // Put charaters
-    if (!has_any_wide) {
-        for (int32_t *p = term->predec_buf; p < pbuf; p++)
-            *cell++ = MKCELL(*p, attrid);
-    } else {
-        for (int32_t *p = term->predec_buf; p < pbuf; p++) {
-            *cell = MKCELL(abs(*p), attrid);
-
-            // Put dummy character to the left of wide
-            if (UNLIKELY(*p < 0)) {
-                cell->wide = 1;
-                *++cell = MKCELL(0, attrid);
-            }
-            cell++;
-        }
-    }
+    for (uint32_t *p = term->predec_buf; p < pbuf; p++)
+        *cell++ = MKCELL(*p, attrid);
 
     if (gconfig.trace_characters) {
-        for (int32_t *p = term->predec_buf; p < pbuf; p++)
-            info("Char: (%x) '%lc' ", abs(*p), abs(*p));
+        for (uint32_t *p = term->predec_buf; p < pbuf; p++) {
+            info("Char: (%x) '%lc' ", *p, *p);
+        }
     }
 
     return res;

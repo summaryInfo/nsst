@@ -207,11 +207,11 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr attr, 
 
     // Calculate attributes
 
-    res.ch = cell.ch;
+    res.ch = cell_get(&cell);
     res.face = 0;
     if (cell.ch && attr.bold) res.face |= face_bold;
     if (cell.ch && attr.italic) res.face |= face_italic;
-    res.wide = cell.wide;
+    res.wide = cell_wide(&cell);
     res.underlined = (attr.underlined || has_uri) && res.fg != res.bg;
     res.stroke = attr.strikethrough && res.fg != res.bg;
 

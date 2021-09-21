@@ -10,6 +10,7 @@ _NOTE: These plans can change any time_
 * Hyperlinks autodetection
 
   * `--match-uri=<X>` where `<X>` is one of `off`,`manual`,`auto`
+  * Protocols matching
 
 * Underlines
 

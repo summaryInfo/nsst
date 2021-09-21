@@ -74,7 +74,7 @@ render-x11xrender.o: feature.h config.h font.h line.h util.h nrcs.h mouse.h term
 term.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h tty.h uri.h hashtable.h
 tty.o: feature.h config.h font.h line.h util.h nrcs.h tty.h hashtable.h
 uri.o: feature.h config.h uri.h font.h line.h util.h nrcs.h hashtable.h
-util.o: feature.h config.h font.h line.h util.h nrcs.h precompose-table.h hashtable.h
+util.o: feature.h config.h font.h line.h util.h nrcs.h precompose-table.h hashtable.h wide.h
 window-x11.o: feature.h config.h line.h util.h nrcs.h mouse.h term.h window.h window-x11.h uri.h
 window.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h window-x11.h uri.h
 

@@ -2,8 +2,6 @@
 
 #include "feature.h"
 
-#define _POSIX_C_SOURCE 200809L
-
 #include "config.h"
 #include "input.h"
 #include "mouse.h"
@@ -266,13 +264,13 @@ static void snap_selection(struct term *term) {
     } else if (loc->snap == snap_word) {
         if ((line = term_line_at(term, vpos)).line) {
             loc->n.x0 = MAX(MIN(loc->n.x0, line.width - 1), 0);
-            bool cat = is_separator(line.cell[loc->n.x0].ch, seps);
+            bool cat = is_separator(cell_get(&line.cell[loc->n.x0]), seps);
             while (1) {
                 while (loc->n.x0 > 0) {
-                    if (cat != is_separator(line.cell[loc->n.x0 - 1].ch, seps)) goto outer;
+                    if (cat != is_separator(cell_get(&line.cell[loc->n.x0 - 1]), seps)) goto outer;
                     loc->n.x0--;
                 }
-                if (cat == is_separator(line.cell[0].ch, seps) && !term_line_next(term, &vpos, -1)) {
+                if (cat == is_separator(cell_get(&line.cell[0]), seps) && !term_line_next(term, &vpos, -1)) {
                     line = term_line_at(term, vpos);
                     if (!line.wrapped) {
                         term_line_next(term, &vpos, 1);
@@ -288,7 +286,7 @@ outer:
 
     line = term_line_at(term, vpos);
     if (loc->n.x0 > 0 && loc->n.x0 < line.width)
-        loc->n.x0 -= !!(line.cell[loc->n.x0 - 1].wide);
+        loc->n.x0 -= cell_wide(&line.cell[loc->n.x0 - 1]);
 
     vpos = term_get_line_pos(term, loc->n.y1);
     if (loc->snap == snap_line) {
@@ -299,15 +297,15 @@ outer:
     } else if (loc->snap == snap_word) {
         if ((line = term_line_at(term, vpos)).line) {
             loc->n.x1 = MAX(MIN(loc->n.x1, line.width - 1), 0);
-            bool cat = is_separator(line.cell[loc->n.x1].ch, seps);
+            bool cat = is_separator(cell_get(&line.cell[loc->n.x1]), seps);
             while(1) {
                 while (loc->n.x1 < line.width - 1) {
-                    if (cat != is_separator(line.cell[loc->n.x1 + 1].ch, seps)) goto outer2;
+                    if (cat != is_separator(cell_get(&line.cell[loc->n.x1 + 1]), seps)) goto outer2;
                     loc->n.x1++;
                 }
                 if (line.wrapped && !term_line_next(term, &vpos, 1)) {
                     line = term_line_at(term, vpos);
-                    if (cat != is_separator(line.cell[0].ch, seps)) {
+                    if (cat != is_separator(cell_get(&line.cell[0]), seps)) {
                         term_line_next(term, &vpos, -1);
                         break;
                     }
@@ -321,7 +319,7 @@ outer2:
 
     line = term_line_at(term, vpos);
     if (loc->n.x1 < line.width)
-        loc->n.x1 += !!(line.cell[loc->n.x1].wide);
+        loc->n.x1 += cell_wide(&line.cell[loc->n.x1]);
 }
 
 bool mouse_is_selected(struct term *term, int16_t x, ssize_t y) {
@@ -342,7 +340,8 @@ bool mouse_is_selected(struct term *term, int16_t x, ssize_t y) {
 bool mouse_is_selected_2(struct term *term, int16_t x0, int16_t x1, ssize_t y) {
     struct mouse_state *loc = term_get_mstate(term);
 
-    if (loc->state == state_sel_none || loc->state == state_sel_pressed) return 0;
+    if (LIKELY(loc->state == state_sel_none) ||
+            loc->state == state_sel_pressed) return 0;
 
     if (loc->n.rect) {
         return (loc->n.x0 <= x1 && x0 <= loc->n.x1) &&
@@ -374,7 +373,7 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line_vie
     for (ssize_t j = x0; j < max_x; j++) {
         uint8_t buf[UTF8_MAX_LEN];
         if (line.cell[j].ch) {
-            size_t len = utf8_encode(line.cell[j].ch, buf, buf + UTF8_MAX_LEN);
+            size_t len = utf8_encode(cell_get(&line.cell[j]), buf, buf + UTF8_MAX_LEN);
             // 2 is space for '\n' and '\0'
             if (!adjust_buffer((void **)res, cap, *pos + len + 2, 1)) return;
             memcpy(*res + *pos, buf, len);

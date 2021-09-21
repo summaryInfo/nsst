@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <wchar.h>
 
 #ifdef __SSE2__
 #include <emmintrin.h>
@@ -33,14 +34,13 @@
 #define SPECIAL_SELECTED_FG 266
 
 #define MKCELL(c, a) ((struct cell) {.ch = (c), .attrid = (a)})
-#define ATTRID_MAX 512
+#define ATTRID_MAX 4096
 #define ATTRID_DEFAULT 0
 
 struct cell {
-    uint32_t ch : 21;
+    uint32_t ch : 19;
     uint32_t drawn : 1;
-    uint32_t wide : 1;
-    uint32_t attrid : 9;
+    uint32_t attrid : 12;
 };
 
 struct attr {
@@ -115,6 +115,46 @@ inline static color_t color_apply_a(color_t c, double a) {
     return mk_color(color_r(c)*a, color_g(c)*a, color_b(c)*a, 255*a);
 }
 
+/*
+ * Since Unicode does not allocate code points
+ * in planes 4-13 (and plane 14 contains only control characters),
+ * we can save a few bits for attributes by compressing unicode like:
+ *
+ *  [0x00000, 0x5FFFF] -> [0x00000, 0x5FFFF] (planes 0-4)
+ *  [0x60000, 0xEFFFF] -> nothing
+ *  [0xF0000,0x10FFFF] -> [0x60000, 0x7FFFF] (planes 15-16 -- PUA)
+ *
+ * And with this encoding scheme
+ * we can encode all defined characters only with 19 bits
+ *
+ * And so we have as much as 13 bits left for flags and attributes
+ */
+
+#define CELL_ENC_COMPACT_BASE 0x60000
+#define CELL_ENC_UTF8_BASE 0xF0000
+
+inline static uint32_t compact2unicode(uint32_t u) {
+    return u < CELL_ENC_COMPACT_BASE ? u : u + (CELL_ENC_UTF8_BASE - CELL_ENC_UTF8_BASE);
+}
+
+inline static uint32_t unicode2compact(uint32_t u) {
+    return u < CELL_ENC_UTF8_BASE ? u : u - (CELL_ENC_UTF8_BASE - CELL_ENC_UTF8_BASE);
+
+}
+
+inline static uint32_t cell_get(struct cell *cell) {
+    return compact2unicode(cell->ch);
+}
+
+inline static void cell_set(struct cell *cell, uint32_t ch) {
+    cell->drawn = 0;
+    cell->ch = unicode2compact(ch);
+}
+
+inline static bool cell_wide(struct cell *cell) {
+    return iswide(cell->ch);
+}
+
 inline static void free_line(struct line *line) {
     if (line && line->attrs) {
 #if USE_URI
@@ -136,7 +176,7 @@ inline static int16_t line_length(struct line *line) {
 inline static ssize_t line_width(struct line *ln, ssize_t off, ssize_t w) {
     off += w;
     if (off - 1 < ln->width)
-        off -= ln->cell[off - 1].wide;
+        off -= cell_wide(&ln->cell[off - 1]);
     return MIN(off, ln->width);
 }
 

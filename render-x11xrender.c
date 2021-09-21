@@ -1,7 +1,5 @@
 /* Copyright (c) 2019-2021, Evgeny Baskov. All rights reserved */
 
-#define _XOPEN_SOURCE
-
 #include "feature.h"
 
 #include "config.h"
@@ -94,7 +92,7 @@ static void register_glyph(struct window *win, uint32_t ch, struct glyph *glyph)
     xcb_render_glyphinfo_t spec = {
         .width = glyph->width, .height = glyph->height,
         .x = glyph->x - win->cfg.font_spacing/2, .y = glyph->y - win->cfg.line_spacing/2,
-        .x_off = win->char_width*(1 + (wcwidth(ch & 0xFFFFFF) > 1)), .y_off = glyph->y_off
+        .x_off = win->char_width*(1 + (uwidth(ch & 0xFFFFFF) > 1)), .y_off = glyph->y_off
     };
 
     xcb_void_cookie_t c;

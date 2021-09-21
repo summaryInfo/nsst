@@ -3,6 +3,8 @@
 #ifndef FEATURES_H_
 #define FEATURES_H_ 1
 
+#define _XOPEN_SOURCE 700
+
 /* This allows better frames timing */
 #define USE_PPOLL @USE_PPOLL@
 
