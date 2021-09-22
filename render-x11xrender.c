@@ -593,7 +593,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                             prev_dec[-1].x == (i + 1)*win->char_width) {
                         prev_dec[-1].x -= win->char_width;
                         prev_dec[-1].width += win->char_width;
-                    } else if (rctx.decoration_buf.size > 1 && prev_dec[-2].y == line_y  && prev_dec[-2].color == spec.ul &&
+                    } else if (rctx.decoration_buf.size > 2 && prev_dec[-2].y == line_y  && prev_dec[-2].color == spec.ul &&
                             prev_dec[-2].x == (i + 1)*win->char_width) {
                         prev_dec[-2].x -= win->char_width;
                         prev_dec[-2].width += win->char_width;
@@ -630,7 +630,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                             prev_dec[-1].x == (i + 1)*win->char_width) {
                         prev_dec[-1].x -= win->char_width;
                         prev_dec[-1].width += win->char_width;
-                    } else if (rctx.decoration_buf.size > 1 && prev_dec[-2].y == line_y  && prev_dec[-2].color == spec.ul &&
+                    } else if (rctx.decoration_buf.size > 2 && prev_dec[-2].y == line_y  && prev_dec[-2].color == spec.ul &&
                             prev_dec[-2].x == (i + 1)*win->char_width) {
                         prev_dec[-2].x -= win->char_width;
                         prev_dec[-2].width += win->char_width;
