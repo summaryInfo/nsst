@@ -563,8 +563,13 @@ void window_paste_clip(struct window *win, enum clip_target target) {
 }
 
 static void clip_copy(struct window *win, bool uri) {
-    const char *src = uri ? uri_get(win->rcstate.active_uri) :
-                (const char *)win->clipped[clip_primary];
+    const char *src = !uri ? (const char *)win->clipped[clip_primary] :
+#if USE_URI
+        uri_get(win->rcstate.active_uri);
+#else
+        NULL;
+#endif
+                ;
     uint8_t *dup;
     if (src && (dup = (uint8_t *)strdup(src))) {
         if (term_is_keep_clipboard_enabled(win->term)) {

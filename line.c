@@ -70,7 +70,9 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
             size_t newc = line->attrs ? CAPS_INC_STEP(line->attrs->caps) : INIT_CAP;
             struct line_attr *new = realloc(line->attrs, sizeof(*new) + newc * sizeof(*new->data));
             if (!new) {
+#if USE_URI
                 uri_unref(attr.uri);
+#endif
                 return ATTRID_DEFAULT;
             }
             if (!line->attrs) new->size = 0;

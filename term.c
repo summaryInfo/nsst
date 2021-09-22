@@ -611,8 +611,10 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
 
 void term_resize(struct term *term, int16_t width, int16_t height) {
 
+#if USE_URI
     // Reset active URL
     window_set_active_uri(term->win, EMPTY_URI, 0);
+#endif
 
     // First try to read from tty to empty out input queue
     // since this is input from program not yet aware about resize

@@ -14,7 +14,6 @@ _NOTE: These plans can change any time_
 
 * Underlines
   * `CSI 4:3 m` -- curly underline
-  * `--uri-underline-color` color
 
 ### Until 2.5 (or later)
 
