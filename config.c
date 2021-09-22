@@ -128,9 +128,17 @@ struct optmap_item optmap[] = {
     [o_uri_click_mod] = {"uri-click-mod", "\t\t(keyboard modifer used to click-open URIs)"},
     [o_unique_uris] = {"unique-uris", "\t(Make distinction between URIs with the same location)"},
     [o_key_copy_uri] = {"key-copy-uri", "\t(Copy underlying URL hotkey)"},
+#else
+    [o_allow_uris] = {"allow-uris", "\t(Allow URI parsing/clicking, ignored)"},
+    [o_open_command] = {"open-cmd", "\t\t(A command used to open URIs when clicked, ignored)"},
+    [o_uri_click_mod] = {"uri-click-mod", "\t\t(keyboard modifer used to click-open URIs, ignored)"},
+    [o_unique_uris] = {"unique-uris", "\t(Make distinction between URIs with the same location, ignored)"},
+    [o_key_copy_uri] = {"key-copy-uri", "\t(Copy underlying URL hotkey, ignored)"},
 #endif
 #if USE_BOXDRAWING
     [o_override_boxdrawing] = {"override-boxdrawing", "\t(Use built-in box drawing characters)"},
+#else
+    [o_override_boxdrawing] = {"override-boxdrawing", "\t(Use built-in box drawing characters, ignored)"},
 #endif
     [o_pixel_mode] = {"pixel-mode", "\t\t(Subpixel rendering config; mono, bgr, rgb, bgrv, or rgbv)"},
     [o_print_attributes] = {"print-attributes", "\t(Print cell attributes when printing is enabled)"},
@@ -171,9 +179,11 @@ struct optmap_item optmap[] = {
     [o_trace_input] = {"trace-input", "\t\t(Trace user input)"},
     [o_trace_misc] = {"trace-misc", "\t\t(Trace miscelleneous information)"},
     [o_triple_click_time] = {"triple-click-time", "\t(Time gap in microseconds in witch tree mouse presses will be considered triple)"},
-    [o_underline_width] = {"underline-width", "\t(Text underline width)"},
     [o_underlined_color] = {"underlined-color", "\t(Special color of underlined text)"},
+    [o_underline_width] = {"underline-width", "\t(Text underline width)"},
     [o_urgent_on_bell] = {"urgent-on-bell", "\t(Set window urgency on bell)"},
+    [o_uri_text_color] = {"uri-color", "\t(Special color of URI text)"},
+    [o_uri_underline_color] = {"uri-underline-color", "\t(Special color of URI underline)"},
     [o_use_utf8] = {"use-utf8", "\t\t(Enable UTF-8 I/O)"},
     [o_vertical_border] = {"vertical-border", "\t(Left and right borders)"},
     [o_visual_bell] = {"visual-bell", "\t\t(Whether bell should be visual or normal)"},
@@ -220,6 +230,8 @@ static color_t color(uint32_t n) {
         /* Invert text by default */
     case SPECIAL_SELECTED_BG:
     case SPECIAL_SELECTED_FG:
+    case SPECIAL_URI_TEXT:
+    case SPECIAL_URI_UNDERLINE:
         return 0;
     }
 
@@ -356,12 +368,9 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
         } val;
         unsigned cnum;
     case 'a':
-#if USE_URI
         if (!strcmp(name, optmap[o_allow_uris].opt)) {
             if (parse_bool(value, &val.b, 1)) c->allow_uris = val.b;
-        } else
-#endif
-        if (!strcmp(name, optmap[o_autorepeat].opt)) {
+        } else if (!strcmp(name, optmap[o_autorepeat].opt)) {
             if (parse_bool(value, &val.b, 1)) c->autorepeat = val.b;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_allow_alternate].opt)) {
@@ -557,10 +566,8 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
              parse_str(&c->key[shortcut_break], value, "Break");
         } else if (!strcmp(name, optmap[o_key_copy].opt)) {
              parse_str(&c->key[shortcut_copy], value, "T-C");
-#if USE_URI
         } else if (!strcmp(name, optmap[o_key_copy_uri].opt)) {
              parse_str(&c->key[shortcut_copy_uri], value, "T-U");
-#endif
         } else if (!strcmp(name, optmap[o_key_dec_font].opt)) {
              parse_str(&c->key[shortcut_font_down], value, "T-Page_Down");
         } else if (!strcmp(name, optmap[o_key_inc_font].opt)) {
@@ -673,18 +680,12 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
         } else goto e_unknown;
         break;
     case 'o':
-#if USE_URI
         if (!strcmp(name, optmap[o_open_command].opt)) {
             parse_str(&g->open_command, value, "nsst-open");
-        } else
-#endif
-#if USE_BOXDRAWING
-        if (!strcmp(name, optmap[o_override_boxdrawing].opt)) {
+        } else if (!strcmp(name, optmap[o_override_boxdrawing].opt)) {
             if (parse_bool(value, &val.b, 0)) c->override_boxdraw = val.b;
             else goto e_value;
-        } else
-#endif
-        goto e_unknown;
+        } else goto e_unknown;
         break;
     case 'p':
         if (!strcmp(name, optmap[o_pixel_mode].opt)) {
@@ -806,15 +807,18 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
         } else goto e_unknown;
         break;
     case 'u':
-#if USE_URI
         if (!strcmp(name, optmap[o_uri_click_mod].opt)) {
             parse_str(&c->uri_click_mod, value, "");
         } else if (!strcmp(name, optmap[o_unique_uris].opt)) {
             if (parse_bool(value, &val.b, 0)) g->unique_uris = val.b;
             else goto e_value;
-        } else
-#endif
-        if (!strcmp(name, optmap[o_underline_width].opt)) {
+        } else if (!strcmp(name, optmap[o_uri_underline_color].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_URI_UNDERLINE))) p[SPECIAL_URI_UNDERLINE] = val.c;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_uri_text_color].opt)) {
+            if (parse_col(value, &val.c, color(SPECIAL_URI_TEXT))) p[SPECIAL_URI_TEXT] = val.c;
+            else goto e_value;
+        } else if (!strcmp(name, optmap[o_underline_width].opt)) {
             if (parse_int(value, &val.i, 0, 16, 1)) c->underline_width = val.i;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_underlined_color].opt)) {
@@ -891,9 +895,7 @@ void copy_config(struct instance_config *dst, struct instance_config *src) {
     dst->term_mod = src->term_mod ? strdup(src->term_mod) : NULL;
     dst->force_mouse_mod = src->force_mouse_mod ? strdup(src->force_mouse_mod) : NULL;
     dst->shell = src->shell ? strdup(src->shell) : NULL;
-#if USE_URI
     dst->uri_click_mod = src->uri_click_mod ? strdup(src->uri_click_mod) : NULL;
-#endif
     src->argv = NULL;
 }
 
@@ -914,9 +916,7 @@ void free_config(struct instance_config *src) {
     free(src->term_mod);
     free(src->force_mouse_mod);
     free(src->shell);
-#if USE_URI
     free(src->uri_click_mod);
-#endif
 }
 
 static void parse_config(struct instance_config *cfg, bool allow_global) {

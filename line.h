@@ -19,7 +19,7 @@
 #include <emmintrin.h>
 #endif
 
-#define SPECIAL_PALETTE_SIZE 11
+#define SPECIAL_PALETTE_SIZE 13
 #define PALETTE_SIZE (256 + SPECIAL_PALETTE_SIZE)
 #define SPECIAL_BOLD 256
 #define SPECIAL_UNDERLINE 257
@@ -32,6 +32,8 @@
 #define SPECIAL_CURSOR_FG 264
 #define SPECIAL_SELECTED_BG 265
 #define SPECIAL_SELECTED_FG 266
+#define SPECIAL_URI_TEXT 267
+#define SPECIAL_URI_UNDERLINE 268
 
 #define ATTR_DEFAULT (struct attr){\
     .fg = indirect_color(SPECIAL_FG),\

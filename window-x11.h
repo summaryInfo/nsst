@@ -163,9 +163,10 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr attr, 
     //      -- underline colors
     //      -- dotted underlines
 #if USE_URI
-    bool has_uri = attr.uri && attr.uri == rcs->active_uri && cfg->allow_uris;
+    bool has_uri = attr.uri && cfg->allow_uris;
+    bool active_uri = attr.uri == rcs->active_uri;
 #else
-    bool has_uri = 0;
+    bool has_uri = 0, active_uri = 0;
 #endif
 
     // Check special colors
@@ -186,7 +187,7 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr attr, 
     res.bg = direct_color(attr.bg, rcs->palette);
     res.fg = direct_color(attr.fg, rcs->palette);
     if (!attr.bold && attr.faint) res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
-    if (attr.reverse ^ selected ^ (has_uri && rcs->uri_pressed)) SWAP(res.fg, res.bg);
+    if (attr.reverse ^ selected ^ (has_uri && active_uri && rcs->uri_pressed)) SWAP(res.fg, res.bg);
 
     res.ul = attr.ul != indirect_color(SPECIAL_BG) ? direct_color(attr.ul, rcs->palette) : res.fg;
 
@@ -197,13 +198,23 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr attr, 
         res.ul = color_apply_a(res.ul, cfg->alpha);
     }
 
-    if ((!selected && attr.invisible) || (attr.blink && rcs->blink)) res.fg = res.bg;
+    if ((!selected && attr.invisible) || (attr.blink && rcs->blink)) res.ul = res.fg = res.bg;
 
     // If selected colors are set use them
 
     if (selected) {
         if (rcs->palette[SPECIAL_SELECTED_BG]) res.bg = rcs->palette[SPECIAL_SELECTED_BG];
         if (rcs->palette[SPECIAL_SELECTED_FG]) res.fg = rcs->palette[SPECIAL_SELECTED_FG];
+    }
+
+    if (UNLIKELY(has_uri)) {
+        if (rcs->palette[SPECIAL_URI_TEXT])
+            res.fg = rcs->palette[SPECIAL_URI_TEXT];
+        if (active_uri) {
+            if (rcs->palette[SPECIAL_URI_UNDERLINE])
+                res.ul = rcs->palette[SPECIAL_URI_UNDERLINE];
+            res.underlined = 1;
+        }
     }
 
     // Optimize rendering of U+2588 FULL BLOCK
@@ -218,10 +229,7 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr attr, 
     if (cell.ch && attr.bold) res.face |= face_bold;
     if (cell.ch && attr.italic) res.face |= face_italic;
     res.wide = cell_wide(&cell);
-    if (res.fg != res.bg) {
-        if (has_uri) res.underlined = 1;
-        else res.underlined = attr.underlined;
-    }
+    if (res.ul != res.bg && !has_uri) res.underlined = attr.underlined;
     res.stroke = attr.strikethrough && res.fg != res.bg;
 
     return res;

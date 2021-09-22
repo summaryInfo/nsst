@@ -33,9 +33,7 @@ enum shortcut_action {
     shortcut_reset,
     shortcut_reload_config,
     shortcut_copy,
-#if USE_URI
     shortcut_copy_uri,
-#endif
     shortcut_paste,
     shortcut_reverse_video,
     shortcut_MAX
@@ -56,10 +54,9 @@ enum keyboad_mapping {
 struct global_config {
     char *sockpath;
     char hostname[MAX_DOMAIN_NAME];
-#if USE_URI
+
     char *open_command;
     bool unique_uris : 1;
-#endif
 
     uint8_t log_level : 2;
 
@@ -113,9 +110,7 @@ struct instance_config {
     char *term_mod;
     char *force_mouse_mod;
     char *shell;
-#if USE_URI
     char *uri_click_mod;
-#endif
 
     ssize_t tab_width;
     ssize_t scrollback_size;
@@ -210,27 +205,24 @@ struct instance_config {
     bool allow_subst_font : 1;
     bool force_scalable : 1;
     bool autorepeat : 1;
-#if USE_URI
     bool allow_uris : 1;
-#endif
-#if USE_BOXDRAWING
     bool override_boxdraw : 1;
-#endif
 };
 
 enum optidx {
-    o_autorepeat,
     o_allow_alternate,
     o_allow_blinking,
     o_allow_modify_edit_keypad,
     o_allow_modify_function,
     o_allow_modify_keypad,
     o_allow_modify_misc,
+    o_allow_uris,
     o_alpha,
     o_alternate_scroll,
     o_answerback_string,
     o_appcursor,
     o_appkey,
+    o_autorepeat,
     o_autowrap,
     o_background,
     o_backspace_is_del,
@@ -274,8 +266,11 @@ enum optidx {
     o_italic_color,
     o_keep_clipboard,
     o_keep_selection,
+    o_keyboard_dialect,
+    o_keyboard_mapping,
     o_key_break,
     o_key_copy,
+    o_key_copy_uri,
     o_key_dec_font,
     o_key_inc_font,
     o_key_new_window,
@@ -287,8 +282,6 @@ enum optidx {
     o_key_reverse_video,
     o_key_scroll_down,
     o_key_scroll_up,
-    o_keyboard_dialect,
-    o_keyboard_mapping,
     o_line_spacing,
     o_lock_keyboard,
     o_log_level,
@@ -308,32 +301,24 @@ enum optidx {
     o_modify_other_fmt,
     o_nrcs,
     o_numlock,
-#if USE_URI
-    o_allow_uris,
     o_open_command,
-    o_uri_click_mod,
-    o_unique_uris,
-    o_key_copy_uri,
-#endif
-#if USE_BOXDRAWING
     o_override_boxdrawing,
-#endif
     o_pixel_mode,
     o_print_attributes,
     o_print_command,
     o_printer_file,
     o_raise_on_bell,
-    o_reverse_video,
     o_reversed_color,
+    o_reverse_video,
     o_rewrap,
     o_scroll_amount,
+    o_scrollback_size,
     o_scroll_on_input,
     o_scroll_on_output,
-    o_scrollback_size,
-    o_select_scroll_time,
-    o_select_to_clipboard,
     o_selected_background,
     o_selected_foreground,
+    o_select_scroll_time,
+    o_select_to_clipboard,
     o_shell,
     o_smooth_scroll,
     o_smooth_scroll_delay,
@@ -357,9 +342,13 @@ enum optidx {
     o_trace_input,
     o_trace_misc,
     o_triple_click_time,
-    o_underline_width,
     o_underlined_color,
+    o_underline_width,
+    o_unique_uris,
     o_urgent_on_bell,
+    o_uri_click_mod,
+    o_uri_text_color,
+    o_uri_underline_color,
     o_use_utf8,
     o_vertical_border,
     o_visual_bell,

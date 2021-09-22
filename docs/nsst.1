@@ -409,13 +409,13 @@ Time gap in microseconds in witch tree mouse presses will be considered triple c
 Text underline width
 .It Fl \-underlined-color Ns = Ns Ar color
 Special color of underlined text.
+.Ar Color
+format is same as for
+.Fl \-colorN
 .It Fl \-unique-uris Ns = Ns Ar bool
 Make distinction between URIs with the same location.
 It consumes more memory but more precisely highlight URIs.
 This option is recognized only if URI support is compiled in
-.Ar Color
-format is same as for
-.Fl \-colorN
 .It Fl \-urgent-on-bell Ns = Ns Ar bool
 Set ICCCM window urgency on bell
 .It Fl \-uri-click-mod Ns = Ns Ar mods
@@ -423,6 +423,18 @@ Modifers required to click to URIs, empty by default.
 This option is recognized only if URI support is compiled in
 .It Fl \-use-utf8 Ns = Ns Ar bool
 Enable UTF-8 mode. Enabled by default if current locale encoding is UTF-8
+.It Fl \-uri-color Ns = Ns Ar color
+Special color of URI text.
+This option is recognized only if URI support is compiled in.
+.Ar Color
+format is same as for
+.Fl \-colorN
+.It Fl \-uri-underline-color Ns = Ns Ar color
+Special color of hovered URI underline.
+This option is recognized only if URI support is compiled in.
+.Ar Color
+format is same as for
+.Fl \-colorN
 .It Fl \-vertical-border Ns = Ns Ar pixels
 Left and right internal border width
 .It Fl \-visual-bell Ns = Ns Ar bool
