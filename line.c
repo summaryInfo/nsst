@@ -15,8 +15,8 @@
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, MAX(3*(sz)/2, INIT_CAP))
 
 inline static bool attr_eq_prot(struct attr *a, struct attr *b) {
-    static_assert(sizeof(struct attr) == 3*sizeof(uint32_t), "Wrong attribute size");
-    return a->fg == b->fg && a->bg == b->bg && a->mask == b->mask;
+    static_assert(sizeof(struct attr) == 4*sizeof(uint32_t), "Wrong attribute size");
+    return a->fg == b->fg && a->bg == b->bg && a->ul == b->ul && a->mask == b->mask;
 }
 
 static void optimize_attributes(struct line *line) {
@@ -56,7 +56,7 @@ static void optimize_attributes(struct line *line) {
 }
 
 uint32_t alloc_attr(struct line *line, struct attr attr) {
-    if (attr_eq_prot(&attr, &(struct attr){ .fg = indirect_color(SPECIAL_FG), .bg = indirect_color(SPECIAL_BG)})) return 0;
+    if (attr_eq_prot(&attr, &ATTR_DEFAULT)) return 0;
     if (line->attrs && line->attrs->size && attr_eq_prot(line->attrs->data + line->attrs->size - 1, &attr)) return line->attrs->size;
 
 #if USE_URI

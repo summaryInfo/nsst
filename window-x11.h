@@ -72,11 +72,12 @@ inline static bool check_void_cookie(xcb_void_cookie_t ck) {
 struct cellspec {
     color_t fg;
     color_t bg;
-    uint32_t ch;
-    uint8_t face;
-    bool underlined;
-    bool stroke;
-    bool wide;
+    color_t ul;
+    uint32_t ch : 24;
+    uint32_t face : 4;
+    uint32_t underlined : 2;
+    bool stroke : 1;
+    bool wide : 1;
 };
 
 struct title_stack_item {
@@ -187,9 +188,14 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr attr, 
     if (!attr.bold && attr.faint) res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
     if (attr.reverse ^ selected ^ (has_uri && rcs->uri_pressed)) SWAP(res.fg, res.bg);
 
+    res.ul = attr.ul != indirect_color(SPECIAL_BG) ? direct_color(attr.ul, rcs->palette) : res.fg;
+
     // Apply background opacity
     if (color_idx(attr.bg) == SPECIAL_BG || cfg->blend_all_bg) res.bg = color_apply_a(res.bg, cfg->alpha);
-    if (UNLIKELY(cfg->blend_fg)) res.fg = color_apply_a(res.fg, cfg->alpha);
+    if (UNLIKELY(cfg->blend_fg)) {
+        res.fg = color_apply_a(res.fg, cfg->alpha);
+        res.ul = color_apply_a(res.ul, cfg->alpha);
+    }
 
     if ((!selected && attr.invisible) || (attr.blink && rcs->blink)) res.fg = res.bg;
 
@@ -212,7 +218,10 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr attr, 
     if (cell.ch && attr.bold) res.face |= face_bold;
     if (cell.ch && attr.italic) res.face |= face_italic;
     res.wide = cell_wide(&cell);
-    res.underlined = (attr.underlined || has_uri) && res.fg != res.bg;
+    if (res.fg != res.bg) {
+        if (has_uri) res.underlined = 1;
+        else res.underlined = attr.underlined;
+    }
     res.stroke = attr.strikethrough && res.fg != res.bg;
 
     return res;

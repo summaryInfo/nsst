@@ -257,10 +257,17 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                 }
 
                 // Underline
-                if (spec.underlined) image_draw_rect(win->plat.im, r_under, spec.fg);
+                if (spec.underlined) {
+                    image_draw_rect(win->plat.im, r_under, spec.ul);
+                    if (spec.underlined > 1) {
+                        r_under.y += ul + 1;
+                        image_draw_rect(win->plat.im, r_under, spec.ul);
+                    }
+                    // TODO curly
+                }
 
                 // Strikethough
-                if (spec.stroke) image_draw_rect(win->plat.im, r_strike, spec.fg);
+                if (spec.stroke) image_draw_rect(win->plat.im, r_strike, spec.ul);
 
                 line.cell[i].drawn = 1;
 

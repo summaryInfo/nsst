@@ -13,15 +13,7 @@ _NOTE: These plans can change any time_
   * Protocols matching
 
 * Underlines
-
-  * `CSI 58:2:... m` -- direct underline color
-  * `CSI 58:5:... m` -- 256-color underline
-  * `CSI 59 m` -- reset underline color
-  * `CSI 21 m` -- double underline
-  * `CSI 4:2 m` -- double underline
   * `CSI 4:3 m` -- curly underline
-  * `CSI 4:4 m` -- dotted underline
-  * `CSI 4:5 m` -- dashed underline
   * `--uri-underline-color` color
 
 ### Until 2.5 (or later)
@@ -156,6 +148,8 @@ _NOTE: These plans can change any time_
 
 * Misc
 
+  * `CSI 4:4 m` -- dotted underline
+  * `CSI 4:5 m` -- dashed underline
   * `CSI ? 1039 l` / `CSI ? 1039 h` -- Alt sends escape (I don't want to differentiate between `Alt` and `Meta`)
   * `CSI ? 14 l` / `CSI ? 14 h` -- Cursor blinking XORing
   * `CSI Pm # p, CSI Pm # {` -- **XTPUSHSGR**

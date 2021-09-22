@@ -33,6 +33,10 @@
 #define SPECIAL_SELECTED_BG 265
 #define SPECIAL_SELECTED_FG 266
 
+#define ATTR_DEFAULT (struct attr){\
+    .fg = indirect_color(SPECIAL_FG),\
+    .bg = indirect_color(SPECIAL_BG),\
+    .ul = indirect_color(SPECIAL_BG) }
 #define MKCELL(c, a) ((struct cell) {.ch = (c), .attrid = (a)})
 #define ATTRID_MAX 4096
 #define ATTRID_DEFAULT 0
@@ -43,9 +47,15 @@ struct cell {
     uint32_t attrid : 12;
 };
 
+#define UNDERLINE_NONE 0
+#define UNDERLINE_SINGLE 1
+#define UNDERLINE_DOUBLE 2
+#define UNDERLINE_CURLY 3
+
 struct attr {
-    color_t fg;
     color_t bg;
+    color_t fg;
+    color_t ul;
     union {
         uint32_t mask;
         struct {
@@ -54,13 +64,13 @@ struct attr {
              * associated with attribute.
              * This field is only used when
              * USE_URI option is active */
-            uint32_t uri : 23;
+            uint32_t uri : 22;
 
             /* Attributes */
             bool bold : 1;
             bool italic : 1;
             bool faint : 1;
-            bool underlined : 1;
+            uint32_t underlined : 2;
             bool strikethrough : 1;
             bool invisible : 1;
             bool reverse : 1;
@@ -98,7 +108,6 @@ struct line *realloc_line(struct line *line, ssize_t width);
 struct line *concat_line(struct line *src1, struct line *src2, bool opt);
 void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len, bool dmg);
 
-
 inline static color_t indirect_color(uint32_t idx) { return idx; }
 inline static uint32_t color_idx(color_t c) { return c; }
 inline static bool is_direct_color(color_t c) { return c > PALETTE_SIZE; }
@@ -133,22 +142,22 @@ inline static color_t color_apply_a(color_t c, double a) {
 #define CELL_ENC_COMPACT_BASE 0x60000
 #define CELL_ENC_UTF8_BASE 0xF0000
 
-inline static uint32_t compact2unicode(uint32_t u) {
+inline static uint32_t uncompact(uint32_t u) {
     return u < CELL_ENC_COMPACT_BASE ? u : u + (CELL_ENC_UTF8_BASE - CELL_ENC_UTF8_BASE);
 }
 
-inline static uint32_t unicode2compact(uint32_t u) {
+inline static uint32_t compact(uint32_t u) {
     return u < CELL_ENC_UTF8_BASE ? u : u - (CELL_ENC_UTF8_BASE - CELL_ENC_UTF8_BASE);
 
 }
 
 inline static uint32_t cell_get(struct cell *cell) {
-    return compact2unicode(cell->ch);
+    return uncompact(cell->ch);
 }
 
 inline static void cell_set(struct cell *cell, uint32_t ch) {
     cell->drawn = 0;
-    cell->ch = unicode2compact(ch);
+    cell->ch = compact(ch);
 }
 
 inline static bool cell_wide(struct cell *cell) {
@@ -188,8 +197,9 @@ inline static ssize_t line_segments(struct line *ln, ssize_t off, ssize_t w) {
 
 #define ATTR_MASK ((struct attr) {\
     .bold = 1, .italic = 1, .faint = 1,\
-    .underlined = 1, .strikethrough = 1, .invisible = 1,\
+    .underlined = 3, .strikethrough = 1, .invisible = 1,\
     .reverse = 1, .blink = 1, .protected = 1}.mask)
+#define PROTECTED_MASK ((struct attr){ .protected = 1}.mask)
 
 inline static uint32_t attr_mask(struct attr *a) {
     return a->mask & ATTR_MASK;
@@ -200,12 +210,12 @@ inline static void attr_mask_set(struct attr *a, uint32_t mask) {
 }
 
 inline static struct attr attr_at(struct line *ln, ssize_t x) {
-    return ln->cell[x].attrid ? ln->attrs->data[ln->cell[x].attrid - 1] :
-            (struct attr){ .fg = indirect_color(SPECIAL_FG), .bg = indirect_color(SPECIAL_BG)};
+    return ln->cell[x].attrid ? ln->attrs->data[ln->cell[x].attrid - 1] : ATTR_DEFAULT;
 }
 
 inline static bool attr_eq(struct attr *a, struct attr *b) {
-    return a->fg == b->fg && a->bg == b->bg && a->mask == b->mask;
+    return a->fg == b->fg && a->bg == b->bg &&
+            a->ul == b->ul && !((a->mask ^ b->mask) & ~PROTECTED_MASK);
 }
 
 inline static void fill_cells(struct cell *dst, struct cell c, ssize_t width) {

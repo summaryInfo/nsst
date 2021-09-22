@@ -593,14 +593,29 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                             prev_dec[-1].x == (i + 1)*win->char_width) {
                         prev_dec[-1].x -= win->char_width;
                         prev_dec[-1].width += win->char_width;
+                    } else if (rctx.decoration_buf.size > 1 && prev_dec[-2].y == line_y  && prev_dec[-2].color == spec.ul &&
+                            prev_dec[-2].x == (i + 1)*win->char_width) {
+                        prev_dec[-2].x -= win->char_width;
+                        prev_dec[-2].width += win->char_width;
                     } else {
                         push_element(&rctx.decoration_buf, &(struct element) {
                             .x = win->cfg.left_border + i * win->char_width,
                             .y = win->cfg.top_border + line_y,
-                            .color = spec.fg,
+                            .color = spec.ul,
                             .width = win->char_width,
                             .height = win->cfg.underline_width,
                         });
+                        if (spec.underlined > 1) {
+                            push_element(&rctx.decoration_buf, &(struct element) {
+                                .x = win->cfg.left_border + i * win->char_width,
+                                .y = win->cfg.top_border + line_y + win->cfg.underline_width + 1,
+                                .color = spec.ul,
+                                .width = win->char_width,
+                                .height = win->cfg.underline_width,
+                            });
+                        }
+
+                        // TODO curly
                     }
                 }
 
@@ -611,15 +626,19 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                             prev_dec->x == (i + 1)*win->char_width) {
                         prev_dec->x -= win->char_width;
                         prev_dec->width += win->char_width;
-                    } else if (rctx.decoration_buf.size > 1 && prev_dec[-1].y == line_y  && prev_dec[-1].color == spec.bg &&
+                    } else if (rctx.decoration_buf.size > 1 && prev_dec[-1].y == line_y  && prev_dec[-1].color == spec.ul &&
                             prev_dec[-1].x == (i + 1)*win->char_width) {
                         prev_dec[-1].x -= win->char_width;
                         prev_dec[-1].width += win->char_width;
+                    } else if (rctx.decoration_buf.size > 1 && prev_dec[-2].y == line_y  && prev_dec[-2].color == spec.ul &&
+                            prev_dec[-2].x == (i + 1)*win->char_width) {
+                        prev_dec[-2].x -= win->char_width;
+                        prev_dec[-2].width += win->char_width;
                     } else {
                         push_element(&rctx.decoration_buf, &(struct element) {
                             .x = win->cfg.left_border + i * win->char_width,
                             .y = win->cfg.top_border + line_y,
-                            .color = spec.fg,
+                            .color = spec.ul,
                             .width = win->char_width,
                             .height = win->cfg.underline_width,
                         });

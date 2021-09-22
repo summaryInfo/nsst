@@ -431,13 +431,3 @@ static uint32_t try_precompose(uint32_t ch, uint32_t comb) { (void)comb; return 
 #endif
 
 #include "wide.h"
-
-int uwidth(uint32_t x) {
-    /* This variant wcwidth treats
-     * C0 and C1 characters as of width 1 */
-    if (LIKELY(x < 0x300)) return 1;
-    if (UNLIKELY(iscombining(x))) return 0;
-    if (iswide(x)) return 2;
-    return 1;
-}
-

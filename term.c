@@ -661,7 +661,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         term->temp_screen = new_tmpsc;
     }
 
-    struct attr dflt_sgr = { .fg = indirect_color(SPECIAL_FG), .bg = indirect_color(SPECIAL_BG) };
+    struct attr dflt_sgr = ATTR_DEFAULT;
 
     { // Resize altscreen
 
@@ -1086,7 +1086,7 @@ static uint16_t term_checksum(struct term *term, int16_t xs, int16_t ys, int16_t
                 }
                 ch &= 0xFF;
             } else {
-                ch = compact2unicode(ch);
+                ch = uncompact(ch);
             }
 
             if (!(mode.no_attr)) {
@@ -1099,7 +1099,7 @@ static uint16_t term_checksum(struct term *term, int16_t xs, int16_t ys, int16_t
                 if (attr.strikethrough) ch += 0x400;
                 if (attr.invisible) ch += 0x800;
             }
-            if (first || line->cell[i].ch || !attr_eq(&attr, &(struct attr){ .fg = attr.fg, .bg = attr.bg }))
+            if (first || line->cell[i].ch || !attr_eq(&attr, &(struct attr){ .fg = attr.fg, .bg = attr.bg, .ul = attr.ul }))
                 trm += ch + spc, spc = 0;
             else if (!line->cell[i].ch && notrim) spc += ' ';
 
@@ -1145,6 +1145,7 @@ static void term_apply_sgr(struct term *term, int16_t xs, int16_t ys, int16_t xe
             attr_mask_set(&newa, (attr_mask(&newa) & ~mmsk) | amsk);
             if (mask->fg) newa.fg = attr->fg;
             if (mask->bg) newa.bg = attr->bg;
+            if (mask->ul) newa.ul = attr->ul;
 
             line->cell[i].attrid = alloc_attr(line, newa);
             line->cell[i].drawn = 0;
@@ -1166,7 +1167,8 @@ static char *term_encode_sgr(char *dst, char *end, struct attr attr) {
     if (attr.bold) FMT(";1");
     if (attr.faint) FMT(";2");
     if (attr.italic) FMT(";3");
-    if (attr.underlined) FMT(";4");
+    if (attr.underlined == 1) FMT(";4");
+    else if (attr.underlined > 1) FMT(";4:%d", attr.underlined);
     if (attr.blink) FMT(";6");
     if (attr.reverse) FMT(";7");
     if (attr.invisible) FMT(";8");
@@ -1186,6 +1188,11 @@ static char *term_encode_sgr(char *dst, char *end, struct attr attr) {
     else if (color_idx(attr.bg) == SPECIAL_FG) /* FMT(";49") -- default, skip */;
     else if (is_direct_color(attr.bg)) FMT(";48:2:%u:%u:%u", color_r(attr.bg), color_g(attr.bg), color_b(attr.bg));
 
+    // Encode underline color
+    if (color_idx(attr.ul) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";58:5:%u", color_idx(attr.ul));
+    else if (color_idx(attr.ul) == SPECIAL_FG) /* FMT(";59") -- default, skip */;
+    else if (is_direct_color(attr.ul)) FMT(";58:2:%u:%u:%u", color_r(attr.ul), color_g(attr.ul), color_b(attr.ul));
+
     return dst;
 #undef FMT
 }
@@ -1194,20 +1201,22 @@ static struct attr term_common_sgr(struct term *term, int16_t xs, int16_t ys, in
     term_rect_pre(term, &xs, &ys, &xe, &ye);
 
     struct attr common = attr_at(term->screen[ys], xs);
-    bool has_common_fg = 1, has_common_bg = 1;
+    bool has_common_fg = 1, has_common_bg = 1, has_common_ul = 1;
 
     for (; ys < ye; ys++) {
         struct line *line = term->screen[ys];
         for (int16_t i = xs; i < xe; i++) {
             struct attr attr = attr_at(line, i);
             has_common_fg &= (common.fg == attr.fg);
-            has_common_fg &= (common.bg == attr.bg);
+            has_common_bg &= (common.bg == attr.bg);
+            has_common_ul &= (common.ul == attr.ul);
             attr_mask_set(&common, attr_mask(&common) & attr_mask(&attr));
         }
     }
 
     if (!has_common_bg) common.bg = indirect_color(SPECIAL_BG);
     if (!has_common_fg) common.fg = indirect_color(SPECIAL_FG);
+    if (!has_common_ul) common.ul = indirect_color(SPECIAL_BG);
 
     return common;
 }
@@ -1266,7 +1275,7 @@ static void term_fill(struct term *term, int16_t xs, int16_t ys, int16_t xe, int
         line->wrapped = 0;
         struct cell c = {
             .attrid = alloc_attr(line, term->sgr),
-            .ch = unicode2compact(ch),
+            .ch = compact(ch),
         };
         fill_cells(line->cell + xs, c, xe - xs);
     }
@@ -1932,10 +1941,7 @@ static void term_load_config(struct term *term) {
     uri_unref(term->back_saved_sgr.uri);
 #endif
 
-    term->sgr = term->saved_sgr = term->back_saved_sgr = (struct attr) {
-        .fg = indirect_color(SPECIAL_FG),
-        .bg = indirect_color(SPECIAL_BG),
-    };
+    term->sgr = term->saved_sgr = term->back_saved_sgr = ATTR_DEFAULT;
 }
 
 static void term_do_reset(struct term *term, bool hard) {
@@ -2248,6 +2254,7 @@ inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
     term->sgr = (struct attr) {
         .fg = term->sgr.fg,
         .bg = term->sgr.bg,
+        .ul = term->sgr.ul,
         .uri = term->sgr.uri,
         .protected = prot & 1,
         .bold = sgr0 & 1,
@@ -3569,7 +3576,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
                 if (!totalw) term_precompose_at_cursor(term, ch);
                 else {
                     uint32_t *p = pbuf - 1 - !pbuf[-1];
-                    *p = unicode2compact(try_precompose(compact2unicode(*p), ch));
+                    *p = compact(try_precompose(uncompact(*p), ch));
                 }
             } else {
                 // Don't include char if its too wide, unless its a wide char
@@ -3589,7 +3596,7 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
                     }
                 }
 
-                *pbuf++ = unicode2compact(ch);
+                *pbuf++ = compact(ch);
                 totalw += wid;
 
                 if (wid > 1)
@@ -3927,6 +3934,7 @@ static void term_decode_sgr(struct term *term, size_t i, struct attr *mask, stru
 #define RESET(f) (mask->f = 1, sgr->f = 0)
 #define SETFG(f) (mask->fg = 1, sgr->fg = indirect_color(f))
 #define SETBG(f) (mask->bg = 1, sgr->bg = indirect_color(f))
+#define SETUL(f) (mask->ul = 1, sgr->ul = indirect_color(f))
     do {
         uparam_t par = PARAM(i, 0);
         if ((term->esc.subpar_mask >> i) & 1) return;
@@ -3934,6 +3942,8 @@ static void term_decode_sgr(struct term *term, size_t i, struct attr *mask, stru
         case 0:
             SETFG(SPECIAL_FG);
             SETBG(SPECIAL_BG);
+            SETUL(SPECIAL_BG);
+            sgr->ul = 0, mask->ul = 1;
             attr_mask_set(sgr, 0);
             attr_mask_set(mask, ATTR_MASK);
             break;
@@ -3941,10 +3951,14 @@ static void term_decode_sgr(struct term *term, size_t i, struct attr *mask, stru
         case 2:  SET(faint); break;
         case 3:  SET(italic); break;
         case 21: /* <- should be double underlind */
+            mask->underlined = 1;
+            sgr->underlined = 2;
+            break;
         case 4:
-            if (i < term->esc.i && (term->esc.subpar_mask >> (i + 1)) & 1 &&
-                term->esc.param[++i] <= 0) RESET(underlined);
-            else SET(underlined);
+            if (i < term->esc.i && (term->esc.subpar_mask >> (i + 1)) & 1)
+                sgr->underlined = term->esc.param[++i];
+            else sgr->underlined = 1;
+            mask->underlined = 1;
             break;
         case 5:  /* <- should be slow blink */
         case 6:  SET(blink); break;
@@ -3973,6 +3987,10 @@ static void term_decode_sgr(struct term *term, size_t i, struct attr *mask, stru
             i += term_decode_color(term, i + 1, &sgr->bg, &mask->bg);
             break;
         case 49: SETBG(SPECIAL_BG); break;
+        case 58:
+            i += term_decode_color(term, i + 1, &sgr->ul, &mask->ul);
+            break;
+        case 59: SETUL(SPECIAL_BG); break;
         case 90: case 91: case 92: case 93:
         case 94: case 95: case 96: case 97:
             SETFG(par - 90); break;
@@ -3987,6 +4005,7 @@ static void term_decode_sgr(struct term *term, size_t i, struct attr *mask, stru
 #undef RESET
 #undef SETFG
 #undef SETBG
+#undef SETUL
 }
 
 // Utility functions for XTSAVE/XTRESTORE
