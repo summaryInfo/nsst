@@ -528,7 +528,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                 if (k == cur_y && i == cur_x && reverse_cursor) attr.reverse ^= 1;
 
                 bool selected = mouse_is_selected_in_view(win->term, i, k);
-                spec = describe_cell(cel, attr, &win->cfg, &win->rcstate, selected);
+                spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
                 g =  spec.ch | (spec.face << 24);
 
                 bool is_new = 0;

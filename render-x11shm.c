@@ -231,7 +231,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                     attr.reverse ^= 1;
 
                 bool selected = mouse_is_selected_in_view(win->term, i, k);
-                spec = describe_cell(cel, attr, &win->cfg, &win->rcstate, selected);
+                spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
 
                 if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face, NULL);
                 g_wide = glyph && glyph->x_off > win->char_width - win->cfg.font_spacing;

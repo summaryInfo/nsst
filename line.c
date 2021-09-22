@@ -4,6 +4,7 @@
 
 #include "line.h"
 #include "util.h"
+#include "hashtable.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -14,75 +15,107 @@
 #define INIT_CAP 4
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, MAX(3*(sz)/2, INIT_CAP))
 
-inline static bool attr_eq_prot(struct attr *a, struct attr *b) {
+const struct attr default_attr__ = {
+        .fg = SPECIAL_FG + 1,
+        .bg = SPECIAL_BG + 1,
+        .ul = SPECIAL_BG + 1
+};
+
+inline static bool attr_eq_prot(const struct attr *a, const struct attr *b) {
     static_assert(sizeof(struct attr) == 4*sizeof(uint32_t), "Wrong attribute size");
     return a->fg == b->fg && a->bg == b->bg && a->ul == b->ul && a->mask == b->mask;
 }
 
-static void optimize_attributes(struct line *line) {
-    static uint32_t buf[ATTRID_MAX];
-    static bool filled;
-    if (UNLIKELY(!filled)) {
-        memset(buf, 0xFF, sizeof buf);
-        filled = 1;
-    }
+inline static uint32_t attr_hash(struct attr *attr) {
+    return uint_hash32(attr->bg) ^
+            uint_hash32(attr->fg) ^
+            uint_hash32(attr->ul) ^
+            uint_hash32(attr->mask);
+}
 
-    if (line->attrs) {
-        uint32_t k = 1, *pbuf = buf - 1;
-        for (ssize_t i = 0; i < line->width; i++) {
-            uint32_t id = line->cell[i].attrid;
-            if (id) pbuf[id] = 0;
+inline static bool attr_empty(struct attr *attr) {
+    return attr->fg == 0;
+}
+
+static uint32_t insert_attr(struct line_attr *tab, struct attr *attr, uint32_t hash) {
+    size_t i = hash % tab->caps;
+    size_t i0 = i, caps = tab->caps;
+    do {
+        struct attr *pattr = &tab->data[i];
+        if (attr_empty(pattr)) {
+            *pattr = *attr;
+            return i + 1;
+        } else if (attr_eq_prot(pattr, attr)) {
+            return i + 1;
         }
 
-        struct attr *pal = line->attrs->data - 1;
-        for (ssize_t i = 1; i <= line->attrs->size; i++) {
-            if (!pbuf[i]) {
-                pal[k] = pal[i];
-                for (ssize_t j = i + 1; j <= line->attrs->size; j++)
-                    if (attr_eq_prot(pal + k, pal + j)) pbuf[j] = k;
-                pbuf[i] = k++;
-            }
+        if (++i >= caps) i -= caps;
+    } while (i0 != i);
+
+    return 0;
+}
+
+void free_attrs(struct line_attr *attrs) {
 #if USE_URI
-            else uri_unref(pal[i].uri);
+    for (ssize_t i = 0; i < attrs->caps; i++)
+        uri_unref(attrs->data[i].uri);
 #endif
-        }
-        line->attrs->size = k - 1;
 
-        for (ssize_t i = 0; i < line->width; i++) {
-            struct cell *c = &line->cell[i];
-            if (c->attrid) c->attrid = pbuf[c->attrid];
+    free(attrs);
+}
+
+static void move_attrtab(struct line_attr *dst, struct line *src) {
+    for (ssize_t i = 0; i < src->width; i++) {
+        uint32_t old_id = src->cell[i].attrid;
+        if (old_id == ATTRID_DEFAULT) continue;
+
+        struct attr *at = &src->attrs->data[old_id - 1];
+
+        if (!attr_empty(at)) {
+            at->bg = insert_attr(dst, at, attr_hash(at));
+            at->fg = 0;
+            at->uri = EMPTY_URI;
         }
+
+        src->cell[i].attrid = at->bg;
     }
+
+    free_attrs(src->attrs);
+    src->attrs = dst;
 }
 
 uint32_t alloc_attr(struct line *line, struct attr attr) {
-    if (attr_eq_prot(&attr, &ATTR_DEFAULT)) return 0;
-    if (line->attrs && line->attrs->size && attr_eq_prot(line->attrs->data + line->attrs->size - 1, &attr)) return line->attrs->size;
+    if (attr_eq_prot(&attr, &ATTR_DEFAULT)) return ATTRID_DEFAULT;
+
+    uint32_t hash = attr_hash(&attr);
+
+    if (!line->attrs) {
+        line->attrs = calloc(sizeof *line->attrs + INIT_CAP * sizeof *line->attrs->data, 1);
+        if (!line->attrs) return ATTRID_DEFAULT;
+        line->attrs->caps = INIT_CAP;
+    }
 
 #if USE_URI
     uri_ref(attr.uri);
 #endif
 
-    if (!line->attrs || line->attrs->size + 1 >= line->attrs->caps) {
-        optimize_attributes(line);
-        if (!line->attrs || line->attrs->size + 1 >= line->attrs->caps) {
-            if (line->attrs && line->attrs->caps == MAX_EXTRA_PALETTE) return ATTRID_DEFAULT;
-            size_t newc = line->attrs ? CAPS_INC_STEP(line->attrs->caps) : INIT_CAP;
-            struct line_attr *new = realloc(line->attrs, sizeof(*new) + newc * sizeof(*new->data));
-            if (!new) {
+    uint32_t id = insert_attr(line->attrs, &attr, hash);
+    if (id) return id;
+
+    size_t new_caps = CAPS_INC_STEP(line->attrs->caps);
+    struct line_attr *new = calloc(sizeof *new + new_caps * sizeof *new->data, 1);
+    if (!new) {
 #if USE_URI
-                uri_unref(attr.uri);
+        uri_unref(attr.uri);
 #endif
-                return ATTRID_DEFAULT;
-            }
-            if (!line->attrs) new->size = 0;
-            new->caps = newc;
-            line->attrs = new;
-        }
+        return ATTRID_DEFAULT;
     }
 
-    line->attrs->data[line->attrs->size++] = attr;
-    return line->attrs->size;
+    new->caps = new_caps;
+
+    move_attrtab(new, line);
+
+    return insert_attr(line->attrs, &attr, hash);
 }
 
 struct line *create_line(struct attr attr, ssize_t width) {
@@ -108,6 +141,33 @@ struct line *realloc_line(struct line *line, ssize_t width) {
     return new;
 }
 
+static void optimize_attributes(struct line *line) {
+
+    if (!line->attrs) return;
+
+    uint64_t used[(MAX_EXTRA_PALETTE + 1)/64] = {0};
+
+    for (ssize_t i = 0; i < line->width; i++) {
+        uint64_t id = line->cell[i].attrid;
+        used[id / 64] |= 1 << (id % 64);
+    }
+
+    ssize_t cnt = -(used[0] & 1);
+    for (size_t i = 0; i < sizeof used/sizeof *used; i++)
+        cnt += __builtin_popcountll(used[i]);
+
+    if (cnt) {
+        struct line_attr *new = calloc(sizeof *new + cnt*sizeof *new->data, 1);
+        if (!new) return;
+        new->caps = cnt;
+
+        move_attrtab(new, line);
+    } else {
+        free_attrs(line->attrs);
+        line->attrs = NULL;
+    }
+}
+
 struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     if (src2) {
         ssize_t llen = MAX(src2->mwidth, 1);
@@ -128,14 +188,7 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
             src1 = realloc_line(src1, llen);
     }
 
-    if (opt && src1->attrs) {
-        optimize_attributes(src1);
-        struct line_attr *attrs = realloc(src1->attrs, sizeof(*attrs) + sizeof(*attrs->data)*(src1->attrs->size));
-        if (attrs) {
-            src1->attrs = attrs;
-            attrs->caps = attrs->size;
-        } else warn("Can't allocate palette");
-    }
+    if (opt) optimize_attributes(src1);
 
     return src1;
 }

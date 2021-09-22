@@ -32,8 +32,7 @@ struct line_offset {
 };
 
 inline static struct attr line_view_attr_at(struct line_view view, ssize_t x) {
-    return view.cell[x].attrid ? view.line->attrs->data[view.cell[x].attrid - 1] :
-            (struct attr){ .fg = indirect_color(SPECIAL_FG), .bg = indirect_color(SPECIAL_BG)};
+    return view.cell[x].attrid ? view.line->attrs->data[view.cell[x].attrid - 1] : ATTR_DEFAULT;
 }
 
 struct term *create_term(struct window *win, int16_t width, int16_t height);

@@ -35,10 +35,9 @@
 #define SPECIAL_URI_TEXT 267
 #define SPECIAL_URI_UNDERLINE 268
 
-#define ATTR_DEFAULT (struct attr){\
-    .fg = indirect_color(SPECIAL_FG),\
-    .bg = indirect_color(SPECIAL_BG),\
-    .ul = indirect_color(SPECIAL_BG) }
+extern const struct attr default_attr__;
+
+#define ATTR_DEFAULT default_attr__
 #define MKCELL(c, a) ((struct cell) {.ch = (c), .attrid = (a)})
 #define ATTRID_MAX 4096
 #define ATTRID_DEFAULT 0
@@ -85,8 +84,8 @@ struct attr {
 };
 
 struct line_attr {
-    ssize_t size;
     ssize_t caps;
+    // TODO Make this refcounted
     struct attr data[];
 };
 
@@ -110,9 +109,9 @@ struct line *realloc_line(struct line *line, ssize_t width);
 struct line *concat_line(struct line *src1, struct line *src2, bool opt);
 void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len, bool dmg);
 
-inline static color_t indirect_color(uint32_t idx) { return idx; }
-inline static uint32_t color_idx(color_t c) { return c; }
-inline static bool is_direct_color(color_t c) { return c > PALETTE_SIZE; }
+inline static color_t indirect_color(uint32_t idx) { return idx + 1; }
+inline static uint32_t color_idx(color_t c) { return c - 1; }
+inline static bool is_direct_color(color_t c) { return c >= PALETTE_SIZE; }
 inline static color_t direct_color(color_t c, color_t *pal) { return is_direct_color(c) ? c : pal[color_idx(c)]; }
 
 inline static uint8_t color_r(color_t c) { return (c >> 16) & 0xFF; }
@@ -166,14 +165,11 @@ inline static bool cell_wide(struct cell *cell) {
     return iswide(cell->ch);
 }
 
+void free_attrs(struct line_attr *attrs);
+
 inline static void free_line(struct line *line) {
-    if (line && line->attrs) {
-#if USE_URI
-        for (ssize_t i = 0; i < line->attrs->size; i++)
-            uri_unref(line->attrs->data[i].uri);
-#endif
-        free(line->attrs);
-    }
+    if (line && line->attrs)
+        free_attrs(line->attrs);
     free(line);
 }
 
