@@ -19,11 +19,15 @@ _NOTE: These plans can change any time_
 
 * Keep non-rectangular selections on resize
 
-* `CSI ? 35 l` / `CSI ? 35 h` -- font shifting functions
+* Wayland
+
+* IME support
+
+* Allow geometry to be specified in characters
 
 * OSC 50 ; Pt ST -- Set font
 
-* Allow geometry to be specified in characters
+* `CSI ? 35 l` / `CSI ? 35 h` -- font shifting functions
 
 * Pointer (for X11)
 

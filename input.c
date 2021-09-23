@@ -250,6 +250,7 @@ static bool fnkey_hp(uint32_t ks, bool is_fkey, struct reply *reply) {
         else return 0;
     } else {
         switch (ks) {
+        case XKB_KEY_ISO_Left_Tab: res = 'Z'; break;
         case XKB_KEY_Up: res = 'A'; break;
         case XKB_KEY_Down: res = 'B'; break;
         case XKB_KEY_Right: res = 'C'; break;
@@ -283,6 +284,7 @@ static bool fnkey_sco(uint32_t ks, bool is_fkey, struct reply *reply) {
         else return 0;
     } else {
         switch (ks) {
+        case XKB_KEY_ISO_Left_Tab: res = 'Z'; break;
         case XKB_KEY_Up: res = 'A'; break;
         case XKB_KEY_Down: res = 'B'; break;
         case XKB_KEY_Right: res = 'C'; break;
@@ -315,6 +317,7 @@ static bool fnkey_sun(uint32_t ks, bool is_fkey, struct reply *reply) {
         } else return 0;
     } else {
         switch (ks) {
+        case XKB_KEY_ISO_Left_Tab: arg = 'Z'; break;
         case XKB_KEY_Help: arg = 196; break;
         case XKB_KEY_Menu: arg = 197; break;
         case XKB_KEY_Find: arg = 1; break;
