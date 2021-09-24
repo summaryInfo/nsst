@@ -204,7 +204,7 @@ void renderer_recolor_border(struct window *win) {
 bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
     bool scrolled = win->plat.boundc;
     bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1) && term_is_cursor_enabled(win->term);
-    if (cond_cblink) cursor |= win->rcstate.blink;
+    if (cond_cblink) cursor &= win->rcstate.blink;
 
     int cw = win->char_width, ch = win->char_height;
     int cd = win->char_depth, ul = win->cfg.underline_width;
