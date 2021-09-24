@@ -453,7 +453,7 @@ bool set_option(struct instance_config *c, const char *name, const char *value, 
             if (parse_col(value, &val.c, color(SPECIAL_CURSOR_FG))) p[SPECIAL_CURSOR_FG] = val.c;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_cursor_shape].opt)) {
-            if (parse_enum(value, &val.e, 6, 1, "blinking-block", "block",
+            if (parse_enum(value, &val.e, 2, 1, "blinking-block", "block",
                     "blinking-underline", "underline", "blinking-bar", "bar", NULL)) c->cursor_shape = val.e;
             else goto e_value;
         } else if (!strcmp(name, optmap[o_cursor_width].opt)) {
