@@ -203,6 +203,7 @@ void renderer_recolor_border(struct window *win) {
 
 bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
     bool scrolled = win->plat.boundc;
+    bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
     bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1) && term_is_cursor_enabled(win->term);
     if (cond_cblink) cursor &= win->rcstate.blink;
 
@@ -226,9 +227,11 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
             bool g_wide = 0;
             if (dirty || next_dirty) {
 
-                if (k == cur_y && i == cur_x && cursor &&
-                        win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block)
+                if (k == cur_y && i == cur_x && reverse_cursor) {
+                    attr.fg = win->rcstate.palette[SPECIAL_CURSOR_FG];
+                    attr.bg = win->rcstate.palette[SPECIAL_CURSOR_BG];
                     attr.reverse ^= 1;
+                }
 
                 bool selected = mouse_is_selected_in_view(win->term, i, k);
                 spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);

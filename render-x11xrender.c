@@ -525,7 +525,11 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
             bool g_wide = 0;
             uint32_t g = 0;
             if (dirty || next_dirty) {
-                if (k == cur_y && i == cur_x && reverse_cursor) attr.reverse ^= 1;
+                if (k == cur_y && i == cur_x && reverse_cursor) {
+                    attr.fg = win->rcstate.palette[SPECIAL_CURSOR_FG];
+                    attr.bg = win->rcstate.palette[SPECIAL_CURSOR_BG];
+                    attr.reverse ^= 1;
+                }
 
                 bool selected = mouse_is_selected_in_view(win->term, i, k);
                 spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
