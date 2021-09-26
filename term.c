@@ -618,10 +618,9 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
     // First try to read from tty to empty out input queue
     // since this is input from program not yet aware about resize
-    if (!term->requested_resize) {
+    if (!term->requested_resize)
         term_read(term);
-        term->requested_resize = 0;
-    }
+    term->requested_resize = 0;
 
     bool cur_moved = term->c.x == term->width - 1 && term->c.pending;
 
