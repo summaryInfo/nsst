@@ -95,10 +95,8 @@ static void register_glyph(struct window *win, uint32_t ch, struct glyph *glyph)
         .x_off = win->char_width*(1 + (uwidth(ch & 0xFFFFFF) > 1)), .y_off = glyph->y_off
     };
 
-    xcb_void_cookie_t c;
-    c = xcb_render_add_glyphs_checked(con, win->plat.gsid, 1, &ch, &spec,
-                                      glyph->height*glyph->stride, glyph->data);
-    if (check_void_cookie(c)) warn("Can't add glyph");
+    xcb_render_add_glyphs(con, win->plat.gsid, 1, &ch, &spec,
+                          glyph->height*glyph->stride, glyph->data);
 }
 
 inline static void do_draw_rects(struct window *win, struct rect *rects, ssize_t count, color_t color) {
