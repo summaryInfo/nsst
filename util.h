@@ -33,6 +33,19 @@
 #   define CLOCK_TYPE CLOCK_MONOTONIC
 #endif
 
+#define PROFILE_BEGIN do {\
+        struct timespec start__, end__; \
+        clock_gettime(CLOCK_TYPE, &start__);
+#define PROFILE_END(label) \
+        clock_gettime(CLOCK_TYPE, &end__); \
+        warn(label " took %lfms", TIMEDIFF(start__, end__)/1000.); \
+    } while(0)
+
+#define PROFILE_FUNC(f) \
+    PROFILE_BEGIN\
+    f; \
+    PROFILE_END(#f)
+
 typedef uint32_t color_t;
 struct rect {
     int16_t x;
