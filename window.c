@@ -202,8 +202,10 @@ void window_set_autorepeat(struct window *win, bool state) {
 }
 
 void window_delay_redraw(struct window *win) {
-    if (!win->wait_for_redraw) clock_gettime(CLOCK_TYPE, &win->last_wait_start);
-    win->wait_for_redraw = 1;
+    if (!win->wait_for_redraw) {
+        clock_gettime(CLOCK_TYPE, &win->last_wait_start);
+        win->wait_for_redraw = 1;
+    }
 }
 
 void window_request_scroll_flush(struct window *win) {
