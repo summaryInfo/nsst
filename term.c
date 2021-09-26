@@ -504,7 +504,10 @@ static void term_reset_view(struct term *term, bool damage) {
 }
 
 static void term_free_scrollback(struct term *term) {
-    if (term->scrollback) term_reset_view(term, 0);
+    if (term->scrollback) {
+        mouse_clear_selection(term);
+        term_reset_view(term, 0);
+    }
 
     for (ssize_t i = 1; i <= (term->sb_caps == term->sb_max_caps ? term->sb_caps : term->sb_limit); i++)
         free_line(line_at(term, -i));
@@ -914,7 +917,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     {  // Fixup view
 
         // Reposition view
-        if (window_cfg(term->win)->rewrap) {
+        if (window_cfg(term->win)->rewrap && !term->mode.altscreen) {
             if (to_bottom) {
                 // Stick to bottom
                 term->view_pos.offset = 0;
@@ -1397,12 +1400,12 @@ static void term_cursor_mode(struct term *term, bool mode) {
 }
 
 static void term_swap_screen(struct term *term, bool damage) {
+    mouse_clear_selection(term);
     term->mode.altscreen ^= 1;
     SWAP(term->back_saved_c, term->saved_c);
     SWAP(term->back_saved_sgr, term->saved_sgr);
     SWAP(term->back_screen, term->screen);
     term_reset_view(term, damage);
-    if (damage) mouse_clear_selection(term);
 }
 
 static void term_scroll_horizontal(struct term *term, int16_t left, int16_t amount) {
