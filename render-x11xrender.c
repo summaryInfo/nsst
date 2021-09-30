@@ -500,12 +500,16 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
         struct line_view line = term_line_at(win->term, vpos);
         bool next_dirty = 0, first_in_line = 1;
         if (win->cw > line.width) {
-            color_t color = mouse_is_selected_in_view(win->term, win->cw - 1, k) ? (win->rcstate.palette[SPECIAL_SELECTED_BG] ?
-                        win->rcstate.palette[SPECIAL_SELECTED_BG] : win->rcstate.palette[SPECIAL_FG]) : win->bg_premul;
+            color_t c = win->bg_premul;
+            if (mouse_is_selected(win->term, &line, win->cw - 1)) {
+                c = win->rcstate.palette[SPECIAL_SELECTED_BG];
+                if (!c) c = win->rcstate.palette[SPECIAL_FG];
+                c = color_apply_a(c, win->cfg.alpha);
+            }
             push_element(&rctx.background_buf, &(struct element) {
                 .x = win->cfg.left_border + line.width * win->char_width,
                 .y = win->cfg.top_border + k * (win->char_height + win->char_depth),
-                .color = color,
+                .color = c,
                 .width = (win->cw - line.width) * win->char_width,
                 .height = win->char_height + win->char_depth,
             });
@@ -529,7 +533,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                     attr.reverse ^= 1;
                 }
 
-                bool selected = mouse_is_selected_in_view(win->term, i, k);
+                bool selected = mouse_is_selected(win->term, &line, i);
                 spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
                 g =  spec.ch | (spec.face << 24);
 

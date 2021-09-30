@@ -233,7 +233,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                     attr.reverse ^= 1;
                 }
 
-                bool selected = mouse_is_selected_in_view(win->term, i, k);
+                bool selected = mouse_is_selected(win->term, &line, i);
                 spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
 
                 if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face, NULL);
@@ -283,7 +283,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
         if (l_bound.x >= 0 || (scrolled && win->cw > line.width)) {
             if (win->cw > line.width) {
                 color_t c = win->bg_premul;
-                if (mouse_is_selected_in_view(win->term, win->cw - 1, k)) {
+                if (mouse_is_selected(win->term, &line, win->cw - 1)) {
                     c = win->rcstate.palette[SPECIAL_SELECTED_BG];
                     if (!c) c = win->rcstate.palette[SPECIAL_FG];
                     c = color_apply_a(c, win->cfg.alpha);

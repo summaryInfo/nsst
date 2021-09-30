@@ -15,9 +15,12 @@ _NOTE: These plans can change any time_
 * Underlines
   * `CSI 4:3 m` -- curly underline
 
+* Keep non-rectangular selections on resize
+* Optimize resizing
+
 ### Until 2.5 (or later)
 
-* Keep non-rectangular selections on resize
+* Allow selecting over the end of the short line
 
 * Wayland
 

@@ -9,17 +9,38 @@
 #include <stdint.h>
 #include <time.h>
 
-struct selected {
-    int16_t x0;
-    ssize_t y0;
-    int16_t x1;
-    ssize_t y1;
-    bool rect;
+
+/* Single line can have multiple selected
+ * segments, lines that have selected segments
+ * are stored in this structure */
+
+struct line_segment {
+    int16_t offset;
+    int16_t length;
+    uint32_t next;
 };
 
+struct segments_head {
+    struct line *line;
+    bool new_line_flag;
+    uint32_t first_segment;
+};
+
+#define SEGMENT_FREE 0xFFFFFFFF
+
 struct mouse_state {
-    struct selected r;
-    struct selected n;
+    size_t seg_caps;
+    struct line_segment *seg_free;
+    struct line_segment *segs;
+
+
+    size_t seg_head_caps;
+    size_t seg_head_size;
+    struct segments_head *seg_heads;
+
+    struct line_offset start;
+    struct line_offset end;
+    bool rectangular;
 
     enum {
         snap_none,
@@ -42,9 +63,12 @@ struct mouse_state {
 
     enum clip_target targ;
 
-    ssize_t y;
-    int16_t x;
-    uint8_t button;
+    int16_t pointer_x;
+    int16_t pointer_y;
+
+    int16_t reported_x;
+    int16_t reported_y;
+    uint8_t reported_button;
 
     bool locator_enabled : 1;
     bool locator_oneshot : 1;
@@ -73,17 +97,25 @@ struct mouse_state {
 };
 
 void mouse_handle_input(struct term *term, struct mouse_event ev);
-void mouse_scroll_selection(struct term *term, ssize_t amount, bool save);
-void mouse_scroll_view(struct term *term, ssize_t delta);
-bool mouse_is_selected(struct term *term, int16_t x, ssize_t y);
-bool mouse_is_selected_2(struct term *term, int16_t x0, int16_t x1, ssize_t y);
-bool mouse_is_selected_in_view(struct term *term, int16_t x, ssize_t y);
-void mouse_clear_selection(struct term *term);
-void mouse_damage_selection(struct term *term);
-void mouse_selection_erase(struct term *term, struct rect rect);
+void mouse_view_scrolled(struct term *term);
+bool mouse_is_selected(struct term *term, struct line_view *view, int16_t x);
+void mouse_clear_selection(struct term *term, bool damage);
+void mouse_damage_selected(struct term *term, struct line *line);
 void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask);
 void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, iparam_t ye);
 bool mouse_pending_scroll(struct term *term);
+
+void mouse_concat_selections(struct term *term, struct line *dst, struct line *src);
+void mouse_realloc_selections(struct term *term, struct line *line, bool cut);
+void mouse_free_selections(struct term *term, struct line *line);
+void mouse_line_changed(struct term *term, struct line *line, int16_t x0, int16_t x1, bool damage);
+
+inline static bool mouse_has_selection(struct term *term) {
+    struct mouse_state *loc = term_get_mstate(term);
+    return loc->state != state_sel_none &&
+           loc->state != state_sel_pressed;
+}
+
 
 #endif
 

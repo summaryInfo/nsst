@@ -138,6 +138,7 @@ struct line *realloc_line(struct line *line, ssize_t width) {
     }
 
     new->width = width;
+    new->mwidth = MIN(width, new->mwidth);
     return new;
 }
 
@@ -170,7 +171,7 @@ static void optimize_attributes(struct line *line) {
 
 struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     if (src2) {
-        ssize_t llen = MAX(src2->mwidth, 1);
+        ssize_t llen = MIN(src2->mwidth + 1, src2->width);
         ssize_t oldw = src1->width;
 
         if (llen + oldw > MAX_LINE_LEN) return NULL;
@@ -180,16 +181,14 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
         copy_line(src1, oldw, src2, 0, llen, 1);
 
         src1->wrapped = src2->wrapped;
-
         free_line(src2);
     } else if (opt) {
-        ssize_t llen = MAX(src1->mwidth, 1);
+        ssize_t llen = MIN(src1->mwidth + 1, src1->width);
         if (llen != src1->width)
             src1 = realloc_line(src1, llen);
     }
 
     if (opt) optimize_attributes(src1);
-
     return src1;
 }
 

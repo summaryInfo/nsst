@@ -94,8 +94,9 @@ struct line {
     struct line_attr *attrs;
     ssize_t width;
     ssize_t mwidth;
-    bool force_damage;
-    bool wrapped;
+    bool force_damage : 1;
+    bool wrapped : 1;
+    uint32_t selection_index : 30;
     struct cell cell[];
 };
 
@@ -168,6 +169,11 @@ inline static bool cell_wide(struct cell *cell) {
 void free_attrs(struct line_attr *attrs);
 
 inline static void free_line(struct line *line) {
+
+    // If we are freeing line its selection
+    // should be reset
+    assert(!line->selection_index);
+
     if (line && line->attrs)
         free_attrs(line->attrs);
     free(line);

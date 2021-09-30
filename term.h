@@ -31,6 +31,10 @@ struct line_offset {
     ssize_t offset;
 };
 
+inline static ssize_t line_offset_cmp(struct line_offset a, struct line_offset b) {
+    return a.line == b.line ? a.offset - b.offset : a.line - b.line;
+}
+
 inline static struct attr line_view_attr_at(struct line_view view, ssize_t x) {
     return view.cell[x].attrid ? view.line->attrs->data[view.cell[x].attrid - 1] : ATTR_DEFAULT;
 }
@@ -62,6 +66,7 @@ void term_set_reverse(struct term *term, bool set);
 void term_break(struct term *term);
 void term_hang(struct term *term);
 
+struct line *term_raw_line_at(struct term *term, ssize_t y);
 struct line_view term_line_at(struct term *term, struct line_offset pos);
 struct line_offset term_get_view(struct term *term);
 struct line_offset term_get_line_pos(struct term *term, ssize_t y);
@@ -90,6 +95,5 @@ int16_t term_min_y(struct term *term);
 int16_t term_min_x(struct term *term);
 int16_t term_width(struct term *term);
 int16_t term_height(struct term *term);
-ssize_t term_view(struct term *term);
 
 #endif

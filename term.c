@@ -237,8 +237,6 @@ struct term {
     ssize_t sb_max_caps;
     /* Offset in scrollback lines */
     struct line_offset view_pos;
-    /* Virtual line number */
-    ssize_t view;
 
     /* VT52 mode saves current cursor G0-G3,GL,GR and origin
      * state, and current terminal mode, and restores on exit */
@@ -432,6 +430,10 @@ inline static struct line *line_at(struct term *term, ssize_t y) {
             term->scrollback[(term->sb_top + term->sb_caps + y + 1) % term->sb_caps];
 }
 
+struct line *term_raw_line_at(struct term *term, ssize_t y) {
+    return y < -term->sb_limit || y >= term->height ? NULL : line_at(term, y);
+}
+
 struct line_view term_line_at(struct term *term, struct line_offset pos) {
     if (pos.line >= -term->sb_limit && pos.line < term->height) {
         struct line *ln = line_at(term, pos.line);
@@ -493,24 +495,43 @@ struct line_offset term_get_line_pos(struct term *term, ssize_t y) {
 
 static void term_reset_view(struct term *term, bool damage) {
     term->prev_c_view_changed |= !term->view_pos.line;
-    ssize_t old_view = term->view;
     term->view_pos = (struct line_offset){0};
-    term->view = 0;
-    mouse_scroll_view(term, -old_view);
+    mouse_view_scrolled(term);
     if (damage) {
         for(ssize_t i = 0; i < term->height; i++)
             term->screen[i]->force_damage = 1;
     }
 }
 
+inline static struct line *term_concat_line(struct term *term, struct line *dst, struct line *src, bool opt) {
+    if (src && src->selection_index)
+        mouse_concat_selections(term, dst, src);
+    struct line *new = concat_line(dst, src, opt);
+    if (new->selection_index)
+        mouse_realloc_selections(term, new, 0);
+    return new;
+}
+
+inline static struct line *term_realloc_line(struct term *term, struct line *line, ssize_t width) {
+    bool cut = width < line->mwidth;
+    struct line *new = realloc_line(line, width);
+    if (new->selection_index)
+        mouse_realloc_selections(term, new, cut);
+    return new;
+}
+
 static void term_free_scrollback(struct term *term) {
     if (term->scrollback) {
-        mouse_clear_selection(term);
+        mouse_clear_selection(term, 0);
         term_reset_view(term, 0);
     }
 
-    for (ssize_t i = 1; i <= (term->sb_caps == term->sb_max_caps ? term->sb_caps : term->sb_limit); i++)
-        free_line(line_at(term, -i));
+    for (ssize_t i = 1; i <= (term->sb_caps == term->sb_max_caps ? term->sb_caps : term->sb_limit); i++) {
+        struct line *line = line_at(term, -i);
+        if (line->selection_index)
+            mouse_line_changed(term, line, 0, line->width, 0);
+        free_line(line);
+    }
     free(term->scrollback);
 
     term->scrollback = NULL;
@@ -535,8 +556,6 @@ void term_scroll_view(struct term *term, int16_t amount) {
         term->view_pos.line = 0;
     }
 
-    term->view += delta;
-
     if (delta > 0) /* View down, image up */ {
         window_shift(term->win, 0, 0, 0, delta, term->width, term->height - delta, 0);
         term_damage_lines(term, 0, delta);
@@ -545,7 +564,7 @@ void term_scroll_view(struct term *term, int16_t amount) {
         term_damage_lines(term, term->height + delta, term->height);
     }
 
-    mouse_scroll_view(term, delta);
+    mouse_view_scrolled(term);
     term->prev_c_view_changed |= old_viewr != !term->view_pos.line;
 }
 
@@ -555,14 +574,14 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
         struct line *tmp;
         /* If last line in history is wrapped concat current line to it */
         if (window_cfg(term->win)->rewrap && term->sb_limit &&
-                line_at(term, -1)->wrapped && (tmp = concat_line(line_at(term, -1), line, opt))) {
+                line_at(term, -1)->wrapped && (tmp = term_concat_line(term, line_at(term, -1), line, opt))) {
 
             term->scrollback[term->sb_top] = tmp;
-            if (term->view) term->view++;
-
         } else {
+            // TODO Need to damage screen if selection is reset
+
             /* Optimize line */
-            line = concat_line(line, NULL, opt);
+            line = term_concat_line(term, line, NULL, opt);
 
             if (term->sb_limit == term->sb_max_caps) {
                 /* If view points to the line that is to be freed, scroll it down */
@@ -571,7 +590,6 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
                         res = line_segments(line_at(term, -term->sb_limit), term->view_pos.offset, term->width);
                     else
                         res = 1;
-                    term->view -= res;
                     term->view_pos.line++;
                     term->view_pos.offset = 0;
                     term->prev_c_view_changed |= !term->view_pos.line;
@@ -581,6 +599,9 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
                  * now term->scrollback functions as true cyclic buffer */
                 term->sb_top = (term->sb_top + 1) % term->sb_caps;
                 SWAP(line, term->scrollback[term->sb_top]);
+
+                if (line->selection_index)
+                    mouse_line_changed(term, line, 0, line->width, 0);
                 free_line(line);
             } else {
                 /* More lines can be saved, term->scrollback is not cyclic yet */
@@ -590,6 +611,8 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
                     ssize_t new_cap = CBUF_STEP(term->sb_caps, term->sb_max_caps);
                     struct line **new = realloc(term->scrollback, new_cap * sizeof(*new));
                     if (!new) {
+                        if (line->selection_index)
+                            mouse_line_changed(term, line, 0, line->width, 0);
                         free_line(line);
                         return res;
                     }
@@ -603,12 +626,14 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
                 term->scrollback[term->sb_top] = line;
             }
 
-            if (term->view_pos.line) {
+            if (term->view_pos.line)
                 term->view_pos.line--;
-                term->view++;
-            }
         }
-    } else free_line(line);
+    } else {
+        if (line->selection_index)
+            mouse_line_changed(term, line, 0, line->width, 0);
+        free_line(line);
+    }
     return res;
 }
 
@@ -669,8 +694,12 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
     { // Resize altscreen
 
-        for (ssize_t i = height; i < term->height; i++)
-            free_line(term->back_screen[i]);
+        for (ssize_t i = height; i < term->height; i++) {
+            struct line *line = term->back_screen[i];
+            if (line->selection_index)
+                mouse_line_changed(term, line, 0, line->width, 0);
+            free_line(line);
+        }
 
         struct line **new_back = realloc(term->back_screen, height * sizeof(term->back_screen[0]));
         if (!new_back) die("Can't allocate lines");
@@ -678,7 +707,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
         ssize_t minh = MIN(term->height, height);
         for (ssize_t i = 0; i < minh; i++)
-            term->back_screen[i] = realloc_line(term->back_screen[i], width);
+            term->back_screen[i] = term_realloc_line(term, term->back_screen[i], width);
 
         for (ssize_t i = term->height; i < height; i++)
             term->back_screen[i] = create_line(dflt_sgr, width);
@@ -692,7 +721,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
     // Clear mouse selection
     // TODO Keep non-rectangular selection
-    mouse_clear_selection(term);
+    mouse_clear_selection(term, 0);
 
     // Find line of bottom left cell
     struct line_offset lower_left = term->view_pos;
@@ -825,6 +854,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 }
                 // Advance line, hard wrap
                 if (!line->wrapped) {
+                    assert(new_lines[dy]->mwidth <= new_lines[dy]->width);
                     new_lines[dy]->mwidth = dx;
                     if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
                     dx = 0;
@@ -832,6 +862,8 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
                 // Pop from scrollback
                 if (y < 0) term->scrollback[(term->sb_top + term->sb_caps + y + 1) % term->sb_caps] = NULL;
+
+                assert(!line->selection_index);
                 free_line(line);
             }
 
@@ -875,7 +907,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
             }
             for (ssize_t i = 0; i < minh; i++) {
                 if (new_lines[i + start]->width < width || window_cfg(term->win)->cut_lines) {
-                    new_lines[i + start] = realloc_line(new_lines[i + start], width);
+                    new_lines[i + start] = term_realloc_line(term, new_lines[i + start], width);
                 }
             }
         }
@@ -887,8 +919,10 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         if (term->c.pending) term->c.x = width - 1;
 
         // Free extra lines from bottom
-        for (ssize_t i = start + height; i < nnlines; i++)
+        for (ssize_t i = start + height; i < nnlines; i++) {
+            assert(!new_lines[i]->selection_index);
             free_line(new_lines[i]);
+        }
 
         // Free old line buffer
         if (new_lines != term->screen) free(term->screen);
@@ -940,20 +974,6 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                     term->view_pos.offset = 0;
             }
             term->view_pos.line = MAX(MIN(0, term->view_pos.line), -term->sb_limit);
-
-            // Restore view offset...
-
-            term->view = 0;
-
-            // ..counting whole lines...
-            for (ssize_t vline = term->view_pos.line + 1; vline < 0; vline++)
-                term->view += line_segments(line_at(term, vline), 0, term->width);
-
-            // ..and partial virtual lines
-            if (term->view_pos.line < 0) {
-                struct line *ln = line_at(term, term->view_pos.line);
-                term->view += line_segments(ln, term->view_pos.offset, term->width);
-            }
         }
     }
 
@@ -1064,7 +1084,10 @@ inline static void term_erase_pre(struct term *term, int16_t *xs, int16_t *ys, i
 
 
     if (!term->view_pos.line) window_delay_redraw(term->win);
-    mouse_selection_erase(term, (struct rect){ *xs, *ys, *xe - *xs, *ye - *ys});
+
+    if (!mouse_has_selection(term)) return;
+    for (ssize_t y = *ys; y < *ye; y++)
+        mouse_line_changed(term, term->screen[y], *xs, *xe, 0);
 }
 
 static uint16_t term_checksum(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct checksum_mode mode) {
@@ -1267,10 +1290,19 @@ static void term_copy(struct term *term, int16_t xs, int16_t ys, int16_t xe, int
 static void term_fill(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, bool origin, uint32_t ch) {
     term_erase_pre(term, &xs, &ys, &xe, &ye, origin);
 
+    // Reset line lengths
     if (!ch && xe == term->width) {
-        // Reset line lengths
-        for (int16_t i = ys; i < ye; i++)
+        for (int16_t i = ys; i < ye; i++) {
+            assert(xs <= term->screen[i]->width);
             term->screen[i]->mwidth = xs;
+        }
+    } else {
+        int16_t set_to = ch ? xe : xs;
+        for (int16_t i = ys; i < ye; i++) {
+            assert(set_to <= term->screen[i]->width);
+            if (term->screen[i]->mwidth <= xe)
+                term->screen[i]->mwidth = set_to;
+        }
     }
 
     for (; ys < ye; ys++) {
@@ -1313,15 +1345,6 @@ static void term_selective_erase(struct term *term, int16_t xs, int16_t ys, int1
             if (!attr_at(line,i).protected)
                 line->cell[i] = MKCELL(0, line->cell[i].attrid);
     }
-}
-
-inline static void term_put_cell(struct term *term, ssize_t x, ssize_t y, uint32_t ch) {
-    struct line *line = term->screen[y];
-
-    // Writing to the line resets its wrapping state
-    line->wrapped = 0;
-
-    line->cell[x] = MKCELL(ch, alloc_attr(line, term->sgr));
 }
 
 inline static void term_adjust_wide_left(struct term *term, ssize_t x, ssize_t y) {
@@ -1400,7 +1423,7 @@ static void term_cursor_mode(struct term *term, bool mode) {
 }
 
 static void term_swap_screen(struct term *term, bool damage) {
-    mouse_clear_selection(term);
+    mouse_clear_selection(term, 0);
     term->mode.altscreen ^= 1;
     SWAP(term->back_saved_c, term->saved_c);
     SWAP(term->back_saved_sgr, term->saved_sgr);
@@ -1452,7 +1475,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
                 if (scrolled < 0) /* View down, image up */ {
                     term_damage_lines(term, term->height + scrolled, term->height);
                     window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled, 0);
-                    mouse_scroll_view(term, scrolled);
+                    mouse_view_scrolled(term);
                 }
             } else {
                 term_erase(term, 0, top, term->width, top + amount, 0);
@@ -1518,7 +1541,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
                 if (scrolled < 0) /* View down, image up */ {
                     term_damage_lines(term, term->height + scrolled, term->height);
                     window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled, 0);
-                    mouse_scroll_view(term, scrolled);
+                    mouse_view_scrolled(term);
                 }
             }
 
@@ -1530,8 +1553,6 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
             term_erase(term, left, top, right, top + amount, 0);
         }
     }
-
-    mouse_scroll_selection(term, amount, save);
 
     if (term->mode.smooth_scroll && (term->scrolled += abs(amount)) > window_cfg(term->win)->smooth_scroll_step) {
         window_request_scroll_flush(term->win);
@@ -1586,6 +1607,7 @@ static void term_insert_cells(struct term *term, int16_t n) {
             line->cell[i].drawn = 0;
 
         term_erase(term, term->c.x, term->c.y, term->c.x + n, term->c.y + 1, 0);
+        mouse_line_changed(term, line, term_max_x(term) - n, term_max_x(term), 1);
     }
 
     term_reset_pending(term);
@@ -1607,6 +1629,7 @@ static void term_delete_cells(struct term *term, int16_t n) {
             line->cell[i].drawn = 0;
 
         term_erase(term, term_max_x(term) - n, term->c.y, term_max_x(term), term->c.y + 1, 0);
+        mouse_line_changed(term, line, term->c.x, term->c.x + n, 1);
     }
 
     term_reset_pending(term);
@@ -1858,7 +1881,8 @@ void term_set_reverse(struct term *term, bool set) {
         SWAP(term->palette[8], term->palette[15]);
         SWAP(term->palette[SPECIAL_CURSOR_BG], term->palette[SPECIAL_CURSOR_FG]);
         SWAP(term->palette[SPECIAL_SELECTED_BG], term->palette[SPECIAL_SELECTED_FG]);
-        mouse_damage_selection(term);
+        for (ssize_t i = 0; i < term->height; i++)
+            mouse_damage_selected(term, term->screen[i]);
         window_set_colors(term->win, term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
     }
     term->mode.reverse_video = set;
@@ -2480,7 +2504,8 @@ static void term_colors_changed(struct term *term, uint32_t sel, color_t col) {
             window_set_colors(term->win, 0, col);
         break;
     case 17: case 19:
-        mouse_damage_selection(term);
+        for (ssize_t i = 0; i < term->height; i++)
+            mouse_damage_selected(term, term->screen[i]);
     }
 }
 
@@ -3633,8 +3658,8 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
     }
 
     // Clear selection if writing over it
-    if (mouse_is_selected_2(term, cx, max_cx, term->c.y))
-        mouse_clear_selection(term);
+    if (mouse_has_selection(term))
+        mouse_line_changed(term, line, cx, term->mode.insert ? max_tx : max_cx, 1);
 
     if (term->mode.margin_bell) {
         ssize_t bcol = term->right - window_cfg(term->win)->margin_bell_column;
@@ -3648,8 +3673,10 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
     cx += totalw;
     if (cx < line->mwidth)
         term_adjust_wide_right(term, cx - 1, term->c.y);
-    else
+    else {
+        assert(cx <= line->width);
         line->mwidth = cx;
+    }
 
     term->c.pending = cx == max_tx;
     term->c.x = cx - term->c.pending;
@@ -4787,11 +4814,8 @@ static void term_dispatch_esc(struct term *term) {
     //    break;
     case E('8') | I0('#'): /* DECALN*/
         term_reset_margins(term);
-        mouse_clear_selection(term);
         term_move_to(term, 0, 0);
-        for (ssize_t i = 0; i < term->height; i++)
-            for (ssize_t j = 0; j < term->width; j++)
-                term_put_cell(term, j, i, 'E');
+        term_fill(term, 0, 0, term->width, term->height, 0, 'E');
         break;
     case E('@') | I0('%'): /* Disable UTF-8 */
         term->mode.utf8 = 0;
@@ -4888,9 +4912,11 @@ static void term_dispatch_c0(struct term *term, uint32_t ch) {
     case 0x1a: /* SUB */
         term_reset_pending(term);
         // Clear selection when selected cell is overwritten
-        if (mouse_is_selected(term, term->c.x, term->c.y))
-            mouse_clear_selection(term);
-        term_put_cell(term, term->c.x, term->c.y, '?');
+        struct line *line = line_at(term, term->c.y);
+        mouse_line_changed(term, line, term->c.x, term->c.x + 1, 1);
+        line->cell[term->c.x] = MKCELL('?', alloc_attr(line, term->sgr));
+        line->mwidth = MAX(line->mwidth, term->c.x);
+        line->wrapped = 0;
         /* fallthrough */
     case 0x18: /* CAN */
         term_esc_finish_string(term);
@@ -5397,10 +5423,6 @@ bool term_is_reverse(struct term *term) {
     return term->mode.reverse_video;
 }
 
-ssize_t term_view(struct term *term) {
-    return term->view;
-}
-
 int term_fd(struct term *term) {
     return term->tty.fd;
 }
@@ -5533,6 +5555,8 @@ void term_hang(struct term *term) {
 void free_term(struct term *term) {
     tty_hang(&term->tty);
 
+    mouse_clear_selection(term, 0);
+
 #if USE_URI
     uri_match_reset(&term->uri_match);
     uri_unref(term->sgr.uri);
@@ -5550,6 +5574,8 @@ void free_term(struct term *term) {
     free(term->screen);
     free(term->back_screen);
     free(term->temp_screen);
+    free(term->mstate.segs);
+    free(term->mstate.seg_heads);
 
     free(term->tabs);
     free(term->predec_buf);
