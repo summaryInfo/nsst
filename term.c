@@ -1526,24 +1526,6 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
 
         if (amount > 0) { /* up */
             amount = MIN(amount, bottom - top);
-
-            if (save && !term->mode.altscreen && term->top == top) {
-                ssize_t scrolled = 0;
-                for (int16_t i = 0; i < amount; i++) {
-                    ssize_t llen = line_length(term->screen[top + i]);
-                    struct line *ln = create_line(attr_at(term->screen[top + i], term_min_x(term)), llen);
-                    if (term_min_x(term) < llen)
-                        copy_line(ln, term_min_x(term), term->screen[top + i],
-                                term_min_x(term), MIN(term_max_x(term), llen) - term_min_x(term), 0);
-                    scrolled -= term_append_history(term, ln, 0);
-                }
-                if (scrolled < 0) /* View down, image up */ {
-                    term_damage_lines(term, term->height + scrolled, term->height);
-                    window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled, 0);
-                    mouse_view_scrolled(term);
-                }
-            }
-
             term_copy(term, left, top + amount, right, bottom, left, top, 0);
             term_erase(term, left, bottom - amount, right, bottom, 0);
         } else { /* down */
