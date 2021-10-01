@@ -854,7 +854,6 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 }
                 // Advance line, hard wrap
                 if (!line->wrapped) {
-                    assert(new_lines[dy]->mwidth <= new_lines[dy]->width);
                     new_lines[dy]->mwidth = dx;
                     if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
                     dx = 0;
@@ -1917,9 +1916,10 @@ void term_reload_config(struct term *term) {
     term->mode.smooth_scroll = cfg->smooth_scroll;
 }
 
-static void term_load_config(struct term *term) {
-
+static bool term_load_config(struct term *term) {
+    free_mouse(term);
     term->mstate = (struct mouse_state) {0};
+    if (!init_mouse(term)) return 0;
 
     struct instance_config *cfg = window_cfg(term->win);
     term->mode = (struct term_mode) {
@@ -1961,6 +1961,8 @@ static void term_load_config(struct term *term) {
         .gl = 0, .gl_ss = 0, .gr = 2,
         .gn = {cs94_ascii, cs94_ascii, cs94_ascii, cs94_ascii}
     };
+
+    return 1;
 
 #if USE_URI
     window_set_mouse(term->win, 1);
@@ -5536,7 +5538,11 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
         return NULL;
     }
 
-    term_load_config(term);
+    if (!term_load_config(term)) {
+        warn("Can't create mouse state");
+        free_term(term);
+        return NULL;
+    }
 
     term->vt_version = window_cfg(term->win)->vt_version;
     term->vt_level = term->vt_version / 100;
@@ -5555,7 +5561,7 @@ void term_hang(struct term *term) {
 void free_term(struct term *term) {
     tty_hang(&term->tty);
 
-    mouse_clear_selection(term, 0);
+    free_mouse(term);
 
 #if USE_URI
     uri_match_reset(&term->uri_match);
@@ -5574,8 +5580,6 @@ void free_term(struct term *term) {
     free(term->screen);
     free(term->back_screen);
     free(term->temp_screen);
-    free(term->mstate.segs);
-    free(term->mstate.seg_heads);
 
     free(term->tabs);
     free(term->predec_buf);

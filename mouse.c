@@ -15,84 +15,69 @@
 #define SEL_INIT_SIZE 32
 #define CSI "\233"
 
-#define foreach_segment(seg, loc, head) \
-        struct line_segment *seg; \
-        for (ssize_t next_seg__ = (head)->first_segment; \
-             next_seg__ == SEGMENT_FREE ? 0 : (seg = &(loc)->segs[next_seg__], next_seg__ = seg->next, 1); )
+#define foreach_segment_indexed(seg, idx, head) \
+    ssize_t idx = 0; for (struct segment *seg = (head)->segs; seg < (head)->segs + (head)->size ? (idx += seg->offset, 1) : 0; idx += seg->length, seg++)
 
-#define foreach_segment_indexed(seg, idx, loc, head) \
-        struct line_segment *seg = NULL; ssize_t idx = 0;\
-        for (ssize_t next_seg__ = (head)->first_segment; \
-             next_seg__ == SEGMENT_FREE ? 0 : (seg = &(loc)->segs[next_seg__], next_seg__ = seg->next, idx += seg->offset, 1); idx += seg->length)
 
-inline static struct segments_head *seg_head(struct mouse_state *loc, struct line *line) {
-    if (!line->selection_index) return NULL;
-    return &loc->seg_heads[line->selection_index - 1];
+inline static struct segments *seg_head(struct mouse_state *loc, struct line *line) {
+    /* First pointer is always 0,
+     * so we don't have to perform
+     * addition checks */
+    return loc->seg[line->selection_index];
 }
 
-inline static struct line_segment *alloc_seg(struct mouse_state *loc) {
-    if (!loc->seg_free) {
-        ssize_t oldcaps = loc->seg_caps;
-        if (!adjust_buffer((void **)&loc->segs, &loc->seg_caps,
-                           loc->seg_caps + 1, sizeof *loc->segs)) return NULL;
-        for (size_t i = oldcaps; i < loc->seg_caps - 1; i++)
-            loc->segs[i].next = i + 1;
-        loc->seg_free = loc->segs + oldcaps;
-        loc->segs[loc->seg_caps - 1].next = SEGMENT_FREE;
-    }
+inline static void free_segments(struct mouse_state *loc, struct segments *head) {
+    head->line->selection_index = SELECTION_EMPTY;
 
-    struct line_segment *new = loc->seg_free;
-    loc->seg_free = new->next != SEGMENT_FREE ? loc->segs + new->next : NULL;
-
-    new->next = SEGMENT_FREE;
-    new->offset = new->length = 0;
-    return new;
-}
-
-
-inline static void free_head(struct mouse_state *loc, struct segments_head *head, bool compact) {
-    /* NOTE This function does not touch selection_index
-     *      it needs to be reset manually */
-
-    foreach_segment(seg, loc, head) {
-        seg->next = loc->seg_free ? loc->seg_free - loc->segs : SEGMENT_FREE;
-        loc->seg_free = seg;
-    }
-
-    head->first_segment = SEGMENT_FREE;
-    head->new_line_flag = 0;
-
-    if (!compact) return;
+    free(head);
 
     /* Here we need to offset all selection below current by one
      * to keep selected lines heads continous.
      * FIXME Make heads be organized in double linked list */
 
-    struct segments_head *end = loc->seg_heads + loc->seg_head_size;
-    while (++head < end) {
-        *(head - 1)  = *head;
-        head->line->selection_index--;
+    struct segments **phead = loc->seg + head->line->selection_index;
+    struct segments **end = loc->seg + loc->seg_size;
+    while (++phead < end) {
+        *(phead - 1)  = *phead;
+        (*phead)->line->selection_index--;
     }
 
-    loc->seg_head_size--;
-    head->line = NULL;
+    loc->seg_size--;
 }
 
-inline static struct segments_head *alloc_head(struct mouse_state *loc, struct line *line) {
-    if (!adjust_buffer((void **)&loc->seg_heads, &loc->seg_head_caps,
-                       loc->seg_head_size + 1, sizeof *loc->seg_heads)) return NULL;
-    struct segments_head *head = loc->seg_heads + loc->seg_head_size++;
-    line->selection_index = loc->seg_head_size;
-    head->first_segment = SEGMENT_FREE;
-    head->new_line_flag = 1;
+#define SEGS_INIT_SIZE 2
+
+inline static struct segments *alloc_head(struct mouse_state *loc, struct line *line) {
+    if (!adjust_buffer((void **)&loc->seg, &loc->seg_caps,
+                       loc->seg_size + 2, sizeof *loc->seg)) return NULL;
+    struct segments *head = malloc(sizeof *head + sizeof *head->segs * SEGS_INIT_SIZE);
+
+    line->selection_index = loc->seg_size;
+    loc->seg[loc->seg_size++] = head;
     head->line = line;
+    head->size = 0;
+    head->caps = SEGS_INIT_SIZE;
+    head->new_line_flag = 1;
 
     return head;
 }
 
-static void append_segment(struct term *term, struct line *line, int16_t x0, int16_t x1) {
-    struct mouse_state *loc = term_get_mstate(term);
-    struct segments_head *head = seg_head(loc, line);
+inline static bool adjust_head(struct mouse_state *loc, struct segments **phead, ssize_t inc) {
+    struct segments *head = *phead;
+    if (head->size + inc > head->caps) {
+        ssize_t new_caps = MAX(4 * head->caps / 3, head->size + inc);
+        ssize_t idx = head->line->selection_index;
+        head = realloc(head, sizeof *head + new_caps * sizeof *head->segs);
+        if (!head) return 0;
+
+        *phead = loc->seg[idx] = head;
+        head->caps = new_caps;
+    }
+    return 1;
+}
+
+static void append_segment(struct mouse_state *loc, struct line *line, int16_t x0, int16_t x1) {
+    struct segments *head = seg_head(loc, line);
 
     // Clip if selecting over the line end
     // (clipped lines always have one space at the end)
@@ -102,24 +87,19 @@ static void append_segment(struct term *term, struct line *line, int16_t x0, int
 
     if (!head && !(head = alloc_head(loc, line))) return;
 
-    foreach_segment_indexed(seg, c_idx, loc, head);
 
-    if (!seg || x0 > c_idx) {
-        struct line_segment *new = alloc_seg(loc);
-        if (!new) return;
+    foreach_segment_indexed(seg, last_i, head);
 
-        new->offset = x0 -  c_idx;
-        new->length = x1 - x0;
-        if (seg) seg->next = new - loc->segs;
-        else head->first_segment = new - loc->segs;
-    } else if (c_idx == x0) {
-        seg->length += x1 - x0;
+    if (last_i == x0 && head->size) {
+        head->segs[head->size - 1].length += x1 - x0;
+    } else if (last_i <= x0) {
+        if (!adjust_head(loc, &head, 1)) return;
+        head->segs[head->size++] = (struct segment) {x0 - last_i, x1 - x0 };
     } else assert(0);
 }
 
-
 void mouse_concat_selections(struct term *term, struct line *dst, struct line *src) {
-    struct segments_head *src_head, *dst_head;
+    struct segments *src_head, *dst_head;
     struct mouse_state *loc = term_get_mstate(term);
 
     if (!(src_head = seg_head(loc, src))) return;
@@ -132,61 +112,50 @@ void mouse_concat_selections(struct term *term, struct line *dst, struct line *s
 
     assert(dst->selection_index + 1 == src->selection_index);
 
-    foreach_segment_indexed(seg, c_idx, loc, dst_head);
-
-    struct line_segment *first_src = &loc->segs[src_head->first_segment];
+    size_t offset = 0;
+    foreach_segment_indexed(seg, last_i, dst_head);
 
     /* Merge adjacent */
-    if (seg && c_idx == dst->width &&
-        src_head->first_segment != SEGMENT_FREE &&
-        first_src->offset == 0) {
-
-        seg->length += first_src->length;
-        src_head->first_segment = first_src->next;
-        first_src = &loc->segs[first_src->next];
+    if (src_head->size && !src_head->segs->offset && last_i == dst->width) {
+        dst_head->segs[dst_head->size - 1].length += src_head->segs[0].length;
+        src_head->size--;
+        offset = 1;
     }
 
     /* Append tail */
-    if (src_head->first_segment != SEGMENT_FREE) {
-        if (!seg) seg->next = src_head->first_segment;
-        else dst_head->first_segment = src_head->first_segment;
+    if (src_head->size && adjust_head(loc, &dst_head, src_head->size)) {
+        memcpy(dst_head->segs + dst_head->size,
+               src_head->segs + offset,
+               src_head->size * sizeof *src_head->segs);
 
         // NOTE dst width computation should be compatible with
         //      one in line_concat()
         // Also, this does not change if first segment was merged
-        first_src->offset += dst->width - c_idx;
+        dst_head->segs[dst_head->size].offset += dst->width - last_i;
+        dst_head->size += src_head->size;
     }
 
-    free_head(loc, src_head, 1);
-    src->selection_index = 0;
+    free_segments(loc, src_head);
+    src->selection_index = SELECTION_EMPTY;
 }
 
 void mouse_realloc_selections(struct term *term, struct line *line, bool cut) {
     struct mouse_state *loc = term_get_mstate(term);
-    struct segments_head *head = seg_head(loc, line);
+    struct segments *head = seg_head(loc, line);
     if (!head) return;
 
     head->line = line;
 
-    bool need_free = 0;
-    uint32_t *pseg = &head->first_segment;
-    foreach_segment_indexed(seg, c_idx, loc, head) {
-        if (need_free || c_idx > line->width) {
-            if (!need_free)
-                *pseg = SEGMENT_FREE;
-            need_free = 1;
-            seg->next = loc->seg_free ? loc->seg_free - loc->segs : SEGMENT_FREE;
-            loc->seg_free = seg;
-        } else if (c_idx + seg->length > line->width) {
-            need_free = 1;
-            seg->next = SEGMENT_FREE;
-            seg->length = line->width - c_idx;
+    foreach_segment_indexed(seg, idx, head) {
+        if (idx + seg->length > line->width) {
+            if (idx <= line->width)
+                seg++->length = line->width - idx;
+            head->size = seg - head->segs;
+            if (cut)
+                mouse_clear_selection(term, 0);
+            break;
         }
-        pseg = &seg->next;
     }
-
-    if (need_free && cut)
-        mouse_clear_selection(term, 0);
 }
 
 void mouse_clear_selection(struct term* term, bool damage) {
@@ -207,16 +176,14 @@ void mouse_clear_selection(struct term* term, bool damage) {
             term_line_next(term, &vpos, 1);
             prev = v.line;
         }
-
     }
 
-    for (size_t i = loc->seg_head_size; i > 0; i--) {
-        struct segments_head *head = &loc->seg_heads[i - 1];
-        head->line->selection_index = 0;
-        free_head(loc, head, 1);
+    for (size_t i = 1; i < loc->seg_size; i++) {
+        loc->seg[i]->line->selection_index = SELECTION_EMPTY;
+        free(loc->seg[i]);
     }
 
-    assert(!loc->seg_head_size);
+    loc->seg_size = 1;
 
     if (loc->targ != clip_invalid) {
         if (term_is_keep_selection_enabled(term)) return;
@@ -228,27 +195,27 @@ void mouse_clear_selection(struct term* term, bool damage) {
 
 void mouse_line_changed(struct term *term, struct line *line, int16_t x0, int16_t x1, bool damage) {
     struct mouse_state *loc = term_get_mstate(term);
-    struct segments_head *head = seg_head(loc, line);
+    struct segments *head = seg_head(loc, line);
     if (!head) return;
 
-    foreach_segment_indexed(seg, c_idx, loc, head) {
-        if (c_idx < x1 - 1 && c_idx + seg->length - 1 > x0) {
+    foreach_segment_indexed(seg, idx, head) {
+        if (idx < x1 - 1 && idx + seg->length - 1 > x0) {
             mouse_clear_selection(term, damage);
             return;
         }
     }
 }
 
-void mouse_damage_selected(struct term *term, struct line *line) {
-    struct mouse_state *loc = term_get_mstate(term);
-    struct segments_head *head = seg_head(loc, line);
-    if (!head) return;
-
-    struct cell *cell = line->cell;
-    foreach_segment_indexed(seg, c_idx, loc, head) {
-        for (ssize_t i = c_idx; i < seg->length + c_idx; i++)
+static void damage_head(struct segments *head) {
+    struct cell *cell = head->line->cell;
+    foreach_segment_indexed(seg, idx, head)
+        for (ssize_t i = idx; i < seg->length + idx; i++)
             cell[i].drawn = 0;
-    }
+}
+
+void mouse_damage_selected(struct term *term, struct line *line) {
+    struct segments *head = seg_head(term_get_mstate(term), line);
+    if (head) damage_head(head);
 }
 
 inline static bool is_separator(uint32_t ch, char *seps) {
@@ -365,24 +332,21 @@ inline static int16_t virtual_pos(struct term *term, struct line_offset *pos) {
     return orig.offset - pos->offset;
 }
 
-static void damage_changed(struct mouse_state *loc, struct segments_head *old, size_t old_size) {
-    for (size_t i = 0; i < old_size; i++) {
-        struct line *line = old[i].line;
-        struct segments_head *new_head = seg_head(loc, line);
+static void damage_changed(struct mouse_state *loc, struct segments **old, size_t old_size) {
+    for (size_t i = 1; i < old_size; i++) {
+        struct line *line = old[i]->line;
+        struct segments *new_head = seg_head(loc, line);
         if (!new_head) {
-            foreach_segment_indexed(seg, c_idx, loc, &old[i])
-                for (ssize_t j = c_idx; j < seg->length + c_idx; j++)
-                    line->cell[j].drawn = 0;
+            damage_head(old[i]);
         } else {
-            new_head->new_line_flag = 0;
-
-            struct line_segment *seg_new = &loc->segs[new_head->first_segment];
-            struct line_segment *seg_old = &loc->segs[old[i].first_segment];
-
+            struct segment *seg_new = new_head->segs, *seg_old = old[i]->segs;
+            struct segment *seg_new_end = seg_new + new_head->size, *seg_old_end = seg_old + old[i]->size;
             ssize_t new_start = seg_new->offset, old_start = seg_old->offset;
             ssize_t new_end = new_start + seg_new->length, old_end = old_start + seg_old->length;
 
-            for (; seg_new || seg_old;) {
+            new_head->new_line_flag = 0;
+
+            for (; seg_new < seg_new_end || seg_old < seg_old_end;) {
                 bool advance_new = 0, advance_old = 0;
                 ssize_t from = 0, to = 0;
 
@@ -409,41 +373,33 @@ static void damage_changed(struct mouse_state *loc, struct segments_head *old, s
                     line->cell[from++].drawn = 0;
 
                 if (advance_old) {
-                    if (seg_old && seg_old->next != SEGMENT_FREE) {
-                        seg_old = &loc->segs[seg_old->next];
+                    if (seg_old < seg_old_end) {
+                        seg_old++;
                         old_start = old_end + seg_old->offset;
                         old_end = old_start + seg_old->length;
                     } else {
-                        seg_old = NULL;
                         old_end = old_start = INTPTR_MAX;
                     }
                 }
                 if (advance_new) {
-                    if (seg_new && seg_new->next != SEGMENT_FREE) {
-                        seg_new = &loc->segs[seg_new->next];
+                    if (seg_new < seg_new_end) {
+                        seg_new++;
                         new_start = new_end + seg_new->offset;
                         new_end = new_start + seg_new->length;
                     } else {
-                        seg_new = NULL;
                         new_end = new_start = INTPTR_MAX;
                     }
                 }
             }
         }
-        free_head(loc, &old[i], 0);
+        free(old[i]);
     }
-
 
     free(old);
 
-    for (size_t i = 0; i < loc->seg_head_size; i++) {
-        if (!loc->seg_heads[i].new_line_flag) continue;
-        struct cell *cell = loc->seg_heads[i].line->cell;
-        foreach_segment_indexed(seg, c_idx, loc, &loc->seg_heads[i]) {
-            for (ssize_t j = c_idx; j < seg->length + c_idx; j++)
-                cell[j].drawn = 0;
-        }
-    }
+    for (size_t i = 1; i < loc->seg_size; i++)
+        if (loc->seg[i]->new_line_flag)
+            damage_head(loc->seg[i]);
 }
 
 static void decompose(struct term *term, struct line_offset start, struct line_offset end) {
@@ -460,18 +416,18 @@ static void decompose(struct term *term, struct line_offset start, struct line_o
 
         do {
             struct line *line = term_raw_line_at(term, vstart.line);
-            append_segment(term, line, vstart.offset + vstart_x, vstart.offset + vend_x + 1);
+            append_segment(loc, line, vstart.offset + vstart_x, vstart.offset + vend_x + 1);
             term_line_next(term, &vstart, 1);
         } while (line_offset_cmp(vstart, vend) <= 0);
 
     } else {
         for (; start.line < end.line; start.line++) {
             struct line *line = term_raw_line_at(term, start.line);
-            append_segment(term, line, start.offset, line->width);
+            append_segment(loc, line, start.offset, line->width);
             start.offset = 0;
         }
         struct line *line = term_raw_line_at(term, end.line);
-        append_segment(term, line, start.offset, end.offset + 1);
+        append_segment(loc, line, start.offset, end.offset + 1);
     }
 }
 
@@ -480,6 +436,28 @@ inline static struct line_offset absolute_pos(struct term *term, ssize_t x, ssiz
     term_line_next(term, &offset, y);
     offset.offset += x;
     return offset;
+}
+
+bool init_mouse(struct term *term) {
+    struct mouse_state *loc = term_get_mstate(term);
+
+    loc->seg_caps = 4;
+    loc->seg_size = 1;
+    loc->seg = calloc(sizeof *loc->seg, loc->seg_caps);
+    return loc->seg;
+}
+
+void free_mouse(struct term *term) {
+    struct mouse_state *loc = term_get_mstate(term);
+    for (size_t i = 1; i < loc->seg_size; i++) {
+        loc->seg[i]->line->selection_index = SELECTION_EMPTY;
+        free(loc->seg[i]);
+    }
+
+    free(loc->seg);
+    loc->seg_caps = 0;
+    loc->seg_size = 0;
+    loc->seg = NULL;
 }
 
 static void selection_changed(struct term *term, uint8_t state, bool rectangular) {
@@ -521,14 +499,12 @@ static void selection_changed(struct term *term, uint8_t state, bool rectangular
     if (loc->snap != snap_none && loc->state == state_sel_pressed)
         loc->state = state_sel_progress;
 
-    struct segments_head *prev_heads = loc->seg_heads;
-    size_t prev_size = loc->seg_head_size;
-    loc->seg_head_caps = 0;
-    loc->seg_head_size = 0;
-    loc->seg_heads = NULL;
+    struct segments **prev_heads = loc->seg;
+    size_t prev_size = loc->seg_size;
+    init_mouse(term);
 
-    for (size_t i = 0; i < prev_size; i++)
-        prev_heads[i].line->selection_index = 0;
+    for (size_t i = 1; i < prev_size; i++)
+        prev_heads[i]->line->selection_index = 0;
 
     if (loc->state == state_sel_progress || loc->state == state_sel_released)
         decompose(term, nstart, nend);
@@ -539,19 +515,20 @@ static void selection_changed(struct term *term, uint8_t state, bool rectangular
 
 bool mouse_is_selected(struct term *term, struct line_view *view, int16_t x) {
     struct mouse_state *loc = term_get_mstate(term);
-    struct segments_head *head = seg_head(loc, view->line);
+
+    struct segments *head = seg_head(loc, view->line);
     if (!head) return 0;
 
     // FIXME This should be optimized in renderer
 
     x += view->cell - view->line->cell;
 
-    foreach_segment_indexed(seg, c_idx, loc, head) {
-        if (c_idx > x) return 0;
-        if (c_idx + seg->length > x) return 1;
+    foreach_segment_indexed(seg, idx, head) {
+        if (idx > x) return 0;
+        if (idx + seg->length > x) return 1;
     }
 
-    if (c_idx >= view->line->width) return 1;
+    if (idx >= view->line->width) return 1;
     return 0;
 }
 
@@ -596,13 +573,13 @@ static uint8_t *selection_data(struct term *term) {
         if (!res) return NULL;
         size_t pos = 0, cap = SEL_INIT_SIZE;
 
-        for (size_t i = 0; i < loc->seg_head_size; i++) {
-            struct segments_head *head = &loc->seg_heads[i];
+        for (size_t i = 1; i < loc->seg_size; i++) {
+            struct segments *head = loc->seg[i];
             bool first = 1;
 
-            foreach_segment_indexed(seg, c_idx, loc, head) {
+            foreach_segment_indexed(seg, idx, head) {
                 append_line(&pos, &cap, &res, head->line,
-                            c_idx, c_idx + seg->length, first);
+                            idx, idx + seg->length, first);
                 first = 0;
             }
         }

@@ -9,34 +9,23 @@
 #include <stdint.h>
 #include <time.h>
 
-
-/* Single line can have multiple selected
- * segments, lines that have selected segments
- * are stored in this structure */
-
-struct line_segment {
-    int16_t offset;
-    int16_t length;
-    uint32_t next;
-};
-
-struct segments_head {
+struct segments {
     struct line *line;
     bool new_line_flag;
-    uint32_t first_segment;
+    uint16_t size;
+    uint16_t caps;
+    struct segment {
+        uint32_t offset;
+        uint32_t length;
+    } segs[];
 };
 
-#define SEGMENT_FREE 0xFFFFFFFF
+#define SELECTION_EMPTY 0
 
 struct mouse_state {
     size_t seg_caps;
-    struct line_segment *seg_free;
-    struct line_segment *segs;
-
-
-    size_t seg_head_caps;
-    size_t seg_head_size;
-    struct segments_head *seg_heads;
+    size_t seg_size;
+    struct segments **seg;
 
     struct line_offset start;
     struct line_offset end;
@@ -95,6 +84,9 @@ struct mouse_state {
         mouse_format_pixel
     } mouse_format;
 };
+
+void free_mouse(struct term *term);
+bool init_mouse(struct term *term);
 
 void mouse_handle_input(struct term *term, struct mouse_event ev);
 void mouse_view_scrolled(struct term *term);

@@ -94,9 +94,9 @@ struct line {
     struct line_attr *attrs;
     ssize_t width;
     ssize_t mwidth;
+    uint32_t selection_index : 30;
     bool force_damage : 1;
     bool wrapped : 1;
-    uint32_t selection_index : 30;
     struct cell cell[];
 };
 
