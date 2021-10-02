@@ -514,10 +514,9 @@ void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height) {
     height *= win->char_depth + win->char_height;
 
     int16_t xs = win->cfg.left_border;
-    int16_t xd = win->cw*win->char_width + win->cfg.left_border;
     int16_t width = win->cw*win->char_width;
 
-    renderer_copy(win, (struct rect){xd, yd, width, height}, xs, ys);
+    renderer_copy(win, (struct rect){xs, yd, width, height}, xs, ys);
 }
 
 void handle_expose(struct window *win, struct rect damage) {
