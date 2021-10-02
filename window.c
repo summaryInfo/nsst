@@ -503,29 +503,21 @@ void free_window(struct window *win) {
 }
 
 
-bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_t yd, int16_t width, int16_t height) {
-    static struct timespec cur ALIGNED(16);
-    clock_gettime(CLOCK_TYPE, &cur);
-
+void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height) {
     ys = MAX(0, MIN(ys, win->ch));
     yd = MAX(0, MIN(yd, win->ch));
-    xs = MAX(0, MIN(xs, win->cw));
-    xd = MAX(0, MIN(xd, win->cw));
     height = MIN(height, MIN(win->ch - ys, win->ch - yd));
-    width = MIN(width, MIN(win->cw - xs, win->cw - xd));
-
-    if (!height || !width) return 1;
+    if (!height) return;
 
     ys = ys*(win->char_height + win->char_depth) + win->cfg.top_border;
     yd = yd*(win->char_height + win->char_depth) + win->cfg.top_border;
-    xs = xs*win->char_width + win->cfg.left_border;
-    xd = xd*win->char_width + win->cfg.left_border;
     height *= win->char_depth + win->char_height;
-    width *= win->char_width;
+
+    int16_t xs = win->cfg.left_border;
+    int16_t xd = win->cw*win->char_width + win->cfg.left_border;
+    int16_t width = win->cw*win->char_width;
 
     renderer_copy(win, (struct rect){xd, yd, width, height}, xs, ys);
-
-    return 1;
 }
 
 void handle_expose(struct window *win, struct rect damage) {

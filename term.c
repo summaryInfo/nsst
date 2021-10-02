@@ -561,10 +561,10 @@ void term_scroll_view(struct term *term, int16_t amount) {
     }
 
     if (delta > 0) /* View down, image up */ {
-        window_shift(term->win, 0, 0, 0, delta, term->width, term->height - delta);
+        window_shift(term->win, 0, delta, term->height - delta);
         term_damage_lines(term, 0, delta);
     } else if (delta < 0) /* View down, image up */ {
-        window_shift(term->win, 0, -delta, 0, 0, term->width, term->height + delta);
+        window_shift(term->win, -delta, 0, term->height + delta);
         term_damage_lines(term, term->height + delta, term->height);
     }
 
@@ -909,10 +909,10 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         // Resize lines if rewrapping is disabled
         if (!window_cfg(term->win)->cut_lines) {
             if (scrolled) {
-                window_shift(term->win, 0, scrolled, 0, 0, term->width, term->height - scrolled);
+                window_shift(term->win, scrolled, 0, term->height - scrolled);
                 term_damage_lines(term, term->height - scrolled, term->height);
             } else if (start && !term->view_pos.line) {
-                window_shift(term->win, 0, start, 0, 0, MIN(term->width, width), height - start);
+                window_shift(term->win, start, 0, height - start);
             }
             for (ssize_t i = 0; i < minh; i++) {
                 if (new_lines[i + start]->width < width || window_cfg(term->win)->cut_lines) {
@@ -1474,7 +1474,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
 
                 if (scrolled < 0) /* View down, image up */ {
                     term_damage_lines(term, term->height + scrolled, term->height);
-                    window_shift(term->win, 0, -scrolled, 0, 0, term->width, term->height + scrolled);
+                    window_shift(term->win, -scrolled, 0, term->height + scrolled);
                     mouse_view_scrolled(term);
                 }
             } else {
