@@ -4897,13 +4897,7 @@ static void term_dispatch_c0(struct term *term, uint32_t ch) {
     case 0x17: /* ETB (IGNORE) */
         break;
     case 0x1a: /* SUB */
-        term_reset_pending(term);
-        // Clear selection when selected cell is overwritten
-        struct line *line = line_at(term, term->c.y);
-        mouse_line_changed(term, line, term->c.x, term->c.x + 1, 1);
-        line->cell[term->c.x] = MKCELL('?', alloc_attr(line, term->sgr));
-        line->mwidth = MAX(line->mwidth, term->c.x);
-        line->wrapped = 0;
+        term_dispatch_print(term, '?', 1, NULL, NULL);
         /* fallthrough */
     case 0x18: /* CAN */
         term_esc_finish_string(term);
