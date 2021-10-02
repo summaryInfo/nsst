@@ -717,6 +717,12 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         term->back_saved_c.x = MIN(MAX(term->back_saved_c.x, 0), width - 1);
         term->back_saved_c.y = MIN(MAX(term->back_saved_c.y, 0), height - 1);
         if (term->back_saved_c.pending) term->back_saved_c.x = width - 1;
+
+        if (term->mode.altscreen) {
+            term->c.x = MIN(MAX(term->c.x, 0), width - 1);
+            term->c.y = MIN(MAX(term->c.y, 0), height - 1);
+            if (term->c.pending) term->c.x = width - 1;
+        }
     }
 
     // Clear mouse selection
@@ -726,9 +732,9 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     // Find line of bottom left cell
     struct line_offset lower_left = term->view_pos;
     term_line_next(term, &lower_left, term->height - 1);
-    bool ll_translated = 0;
     bool to_top = term->view_pos.line <= -term->sb_limit;
     bool to_bottom = !term->view_pos.line;
+    bool ll_translated = to_top || to_bottom;
 
     {  // Resize main screen
 
@@ -746,7 +752,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
                 y = -1;
             }
 
-            bool cset = 0, csset = 0, aset = 0;
+            bool cset = term->mode.altscreen, csset = 0, aset = 0;
             ssize_t par_start = y, approx_cy = 0, dlta = 0;
 
             term->screen[term->height - 1]->wrapped = 0;
@@ -914,8 +920,10 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         // Adjust cursor
         term->saved_c.y = MAX(MIN(term->saved_c.y, height - 1), 0);
         if (term->saved_c.pending) term->saved_c.x = width - 1;
-        term->c.y = MAX(MIN(term->c.y, height - 1), 0);
-        if (term->c.pending) term->c.x = width - 1;
+        if (!term->mode.altscreen) {
+            term->c.y = MAX(MIN(term->c.y, height - 1), 0);
+            if (term->c.pending) term->c.x = width - 1;
+        }
 
         // Free extra lines from bottom
         for (ssize_t i = start + height; i < nnlines; i++) {
