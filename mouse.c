@@ -593,7 +593,7 @@ bool selection_pending_scroll(struct selection_state *sel, struct screen *scr) {
         clock_gettime(CLOCK_TYPE, &now);
         bool can_scroll = TIMEDIFF(sel->last_scroll, now) > cfg->select_scroll_time*1000LL;
         if (can_scroll) {
-            screen_scroll_view(scr, sel->win, sel->pending_scroll);
+            screen_scroll_view(scr, sel->pending_scroll);
             sel->last_scroll = now;
         }
     }

@@ -50,7 +50,6 @@ inline static bool is_last_line(struct line_view line, bool rewrap) {
 
 struct term *create_term(struct window *win, int16_t width, int16_t height);
 void free_term(struct term *term);
-bool term_redraw(struct term *term, bool blink_commited);
 void term_resize(struct term *term, int16_t width, int16_t height);
 void term_handle_focus(struct term *term, bool focused);
 bool term_read(struct term *term);
@@ -73,8 +72,9 @@ void term_hang(struct term *term);
 
 struct screen *term_screen(struct term *term);
 
+bool screen_redraw(struct screen *scr, bool blink_commited);
 void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd);
-void screen_scroll_view(struct screen *scr, struct window *win, int16_t amount);
+void screen_scroll_view(struct screen *scr, int16_t amount);
 struct line *screen_paragraph_at(struct screen *scr, ssize_t y);
 struct line_view screen_line_at(struct screen *scr, struct line_offset pos);
 struct line_offset screen_view(struct screen *scr);

@@ -726,7 +726,7 @@ void run(void) {
 
             if (remains <= 10000LL || win->force_redraw || pending_scroll) {
                 remains = frame_time;
-                if ((win->drawn_somthing = term_redraw(win->term, win->blink_commited))) win->last_draw = cur;
+                if ((win->drawn_somthing = screen_redraw(term_screen(win->term), win->blink_commited))) win->last_draw = cur;
 
                 if (gconfig.trace_misc && win->drawn_somthing) info("Redraw");
 
