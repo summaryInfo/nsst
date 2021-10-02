@@ -3475,7 +3475,7 @@ inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end
 
         ssize_t unaligned_prefix = (uintptr_t)start & (sizeof(uint64_t) - 1);
         if (unaligned_prefix) {
-            uint64_t res = read_block_mask(start);
+            uint64_t res = read_block_mask(start - unaligned_prefix) >> (unaligned_prefix * sizeof(uint64_t));
             if (UNLIKELY(res))
                 return block_mask_offset(start, end, res);
             start += sizeof(uint64_t) - unaligned_prefix;
