@@ -503,13 +503,9 @@ void free_window(struct window *win) {
 }
 
 
-bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_t yd, int16_t width, int16_t height, bool delay) {
+bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_t yd, int16_t width, int16_t height) {
     static struct timespec cur ALIGNED(16);
     clock_gettime(CLOCK_TYPE, &cur);
-
-    bool scrolled_recently = TIMEDIFF(win->last_shift, cur) <  SEC/2/win->cfg.fps;
-    win->last_shift = cur;
-    if (delay && scrolled_recently) return 0;
 
     ys = MAX(0, MIN(ys, win->ch));
     yd = MAX(0, MIN(yd, win->ch));

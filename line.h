@@ -108,7 +108,7 @@ struct line *realloc_line(struct line *line, ssize_t width);
 /* if src2 is NULL, it will relocate src1 to its length if opt == 1 */
 /* if opt == 1, line attributes will be minimized */
 struct line *concat_line(struct line *src1, struct line *src2, bool opt);
-void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len, bool dmg);
+void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len);
 
 inline static color_t indirect_color(uint32_t idx) { return idx + 1; }
 inline static uint32_t color_idx(color_t c) { return c - 1; }

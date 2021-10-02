@@ -178,7 +178,7 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
 
         src1 = realloc_line(src1, oldw + llen);
 
-        copy_line(src1, oldw, src2, 0, llen, 1);
+        copy_line(src1, oldw, src2, 0, llen);
 
         src1->wrapped = src2->wrapped;
         free_line(src2);
@@ -192,35 +192,23 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     return src1;
 }
 
-void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len, bool dmg) {
+void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len) {
     struct cell *sc = src->cell + sx, *dc = dst->cell + dx, c;
     if (dst != src) {
         uint32_t previd = ATTRID_MAX, newid = 0;
-        if (dmg) {
-            for (ssize_t i = 0; i < len; i++) {
-                c = *sc++;
-                c.drawn = 0;
-                if (UNLIKELY(c.attrid)) {
-                    if (UNLIKELY(c.attrid != previd))
-                        newid = alloc_attr(dst, src->attrs->data[c.attrid - 1]);
-                    c.attrid = newid;
-                }
-                *dc++ = c;
+        for (ssize_t i = 0; i < len; i++) {
+            c = *sc++;
+            c.drawn = 0;
+            if (UNLIKELY(c.attrid)) {
+                if (UNLIKELY(c.attrid != previd))
+                    newid = alloc_attr(dst, src->attrs->data[c.attrid - 1]);
+                c.attrid = newid;
             }
-        } else {
-            for (ssize_t i = 0; i < len; i++) {
-                c = *sc++;
-                if (UNLIKELY(c.attrid)) {
-                    if (UNLIKELY(c.attrid != previd))
-                        newid = alloc_attr(dst, src->attrs->data[c.attrid - 1]);
-                    c.attrid = newid;
-                }
-                *dc++ = c;
-            }
+            *dc++ = c;
         }
     } else {
         memmove(dc, sc, len * sizeof(*sc));
-        if (dmg) while (len--) dc++->drawn = 0;
+        while (len--) dc++->drawn = 0;
     }
     dst->mwidth = MAX(dst->mwidth, sx + len);
 }

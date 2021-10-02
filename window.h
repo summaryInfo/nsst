@@ -91,7 +91,7 @@ struct window *create_window(struct instance_config *cfg);
 void free_window(struct window *win);
 
 bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
-bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_t yd, int16_t width, int16_t height, bool delay);
+bool window_shift(struct window *win, int16_t xs, int16_t ys, int16_t xd, int16_t yd, int16_t width, int16_t height);
 void window_paste_clip(struct window *win, enum clip_target target);
 void window_delay_redraw(struct window *win);
 void window_request_scroll_flush(struct window *win);

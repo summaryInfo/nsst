@@ -120,7 +120,6 @@ struct window {
     int16_t damaged_y1;
 
     struct timespec last_scroll ALIGNED(16);
-    struct timespec last_shift ALIGNED(16);
     struct timespec last_blink ALIGNED(16);
     struct timespec last_sync ALIGNED(16);
     struct timespec last_read ALIGNED(16);
