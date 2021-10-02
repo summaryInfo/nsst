@@ -83,10 +83,7 @@ bool term_is_bell_urgent_enabled(struct term *term);
 bool term_is_bell_raise_enabled(struct term *term);
 bool term_is_utf8_enabled(struct term *term);
 bool term_is_nrcs_enabled(struct term *term);
-bool term_is_cursor_enabled(struct term *term);
 bool term_is_reverse(struct term *term);
-
-
 
 /* These are only used in mouse.c */
 int16_t term_max_y(struct term *term);

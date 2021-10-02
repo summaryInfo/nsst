@@ -702,7 +702,7 @@ static void draw_rects(struct window *win, struct element_buffer *buf) {
 
 bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
     bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
-    bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1) && term_is_cursor_enabled(win->term);
+    bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1);
     if (cond_cblink) cursor &= win->rcstate.blink;
 
     prepare_multidraw(win, cur_x, cur_y, reverse_cursor);

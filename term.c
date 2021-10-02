@@ -1002,7 +1002,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 }
 
 bool term_redraw(struct term *term, bool blink_commited) {
-    bool c_hidden = !term_is_cursor_enabled(term);
+    bool c_hidden = term->mode.hide_cursor || term->view_pos.line;
 
     if (term->c.x != term->prev_c_x || term->c.y != term->prev_c_y ||
             term->prev_c_hidden != c_hidden || term->prev_c_view_changed || !blink_commited) {
@@ -1050,10 +1050,6 @@ int16_t term_width(struct term *term) {
 
 int16_t term_height(struct term *term) {
     return term->height;
-}
-
-bool term_is_cursor_enabled(struct term *term) {
-    return !term->mode.hide_cursor && !term->view_pos.line;
 }
 
 /* Get min/max column/row WRT origin */
