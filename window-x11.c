@@ -791,7 +791,8 @@ void platform_handle_events(void) {
                 info("Event: event=SelectionClear owner=0x%x selection=0x%x", ev->owner, ev->selection);
             }
             // Clear even if set keep?
-            mouse_clear_selection(win->term, 1);
+            term_damage_selection(win->term);
+            selection_clear(term_get_sstate(win->term));
             break;
         }
         case XCB_PROPERTY_NOTIFY: {

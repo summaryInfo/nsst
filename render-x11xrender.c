@@ -501,7 +501,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
         bool next_dirty = 0, first_in_line = 1;
         if (win->cw > line.width) {
             color_t c = win->bg_premul;
-            if (mouse_is_selected(win->term, &line, win->cw - 1)) {
+            if (selection_is_selected(term_get_sstate(win->term), &line, win->cw - 1)) {
                 c = win->rcstate.palette[SPECIAL_SELECTED_BG];
                 if (!c) c = win->rcstate.palette[SPECIAL_FG];
                 c = color_apply_a(c, win->cfg.alpha);
@@ -533,7 +533,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                     attr.reverse ^= 1;
                 }
 
-                bool selected = mouse_is_selected(win->term, &line, i);
+                bool selected = selection_is_selected(term_get_sstate(win->term), &line, i);
                 spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
                 g =  spec.ch | (spec.face << 24);
 

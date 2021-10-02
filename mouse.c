@@ -19,14 +19,14 @@
     ssize_t idx = 0; for (struct segment *seg = (head)->segs; seg < (head)->segs + (head)->size ? (idx += seg->offset, 1) : 0; idx += seg->length, seg++)
 
 
-inline static struct segments *seg_head(struct mouse_state *loc, struct line *line) {
+inline static struct segments *seg_head(struct selection_state *sel, struct line *line) {
     /* First pointer is always 0,
      * so we don't have to perform
      * addition checks */
-    return loc->seg[line->selection_index];
+    return sel->seg[line->selection_index];
 }
 
-inline static void free_segments(struct mouse_state *loc, struct segments *head) {
+inline static void free_segments(struct selection_state *sel, struct segments *head) {
     head->line->selection_index = SELECTION_EMPTY;
 
     free(head);
@@ -35,25 +35,25 @@ inline static void free_segments(struct mouse_state *loc, struct segments *head)
      * to keep selected lines heads continous.
      * FIXME Make heads be organized in double linked list */
 
-    struct segments **phead = loc->seg + head->line->selection_index;
-    struct segments **end = loc->seg + loc->seg_size;
+    struct segments **phead = sel->seg + head->line->selection_index;
+    struct segments **end = sel->seg + sel->seg_size;
     while (++phead < end) {
         *(phead - 1)  = *phead;
         (*phead)->line->selection_index--;
     }
 
-    loc->seg_size--;
+    sel->seg_size--;
 }
 
 #define SEGS_INIT_SIZE 2
 
-inline static struct segments *alloc_head(struct mouse_state *loc, struct line *line) {
-    if (!adjust_buffer((void **)&loc->seg, &loc->seg_caps,
-                       loc->seg_size + 2, sizeof *loc->seg)) return NULL;
+inline static struct segments *alloc_head(struct selection_state *sel, struct line *line) {
+    if (!adjust_buffer((void **)&sel->seg, &sel->seg_caps,
+                       sel->seg_size + 2, sizeof *sel->seg)) return NULL;
     struct segments *head = malloc(sizeof *head + sizeof *head->segs * SEGS_INIT_SIZE);
 
-    line->selection_index = loc->seg_size;
-    loc->seg[loc->seg_size++] = head;
+    line->selection_index = sel->seg_size;
+    sel->seg[sel->seg_size++] = head;
     head->line = line;
     head->size = 0;
     head->caps = SEGS_INIT_SIZE;
@@ -62,7 +62,7 @@ inline static struct segments *alloc_head(struct mouse_state *loc, struct line *
     return head;
 }
 
-inline static bool adjust_head(struct mouse_state *loc, struct segments **phead, ssize_t inc) {
+inline static bool adjust_head(struct selection_state *sel, struct segments **phead, ssize_t inc) {
     struct segments *head = *phead;
     if (head->size + inc > head->caps) {
         ssize_t new_caps = MAX(4 * head->caps / 3, head->size + inc);
@@ -70,14 +70,14 @@ inline static bool adjust_head(struct mouse_state *loc, struct segments **phead,
         head = realloc(head, sizeof *head + new_caps * sizeof *head->segs);
         if (!head) return 0;
 
-        *phead = loc->seg[idx] = head;
+        *phead = sel->seg[idx] = head;
         head->caps = new_caps;
     }
     return 1;
 }
 
-static void append_segment(struct mouse_state *loc, struct line *line, int16_t x0, int16_t x1) {
-    struct segments *head = seg_head(loc, line);
+static void append_segment(struct selection_state *sel, struct line *line, int16_t x0, int16_t x1) {
+    struct segments *head = seg_head(sel, line);
 
     // Clip if selecting over the line end
     // (clipped lines always have one space at the end)
@@ -85,7 +85,7 @@ static void append_segment(struct mouse_state *loc, struct line *line, int16_t x
     if (x0 >= line->width) x0 = line->width - 1;
     if (x1 > line->width) x1 = line->width;
 
-    if (!head && !(head = alloc_head(loc, line))) return;
+    if (!head && !(head = alloc_head(sel, line))) return;
 
 
     foreach_segment_indexed(seg, last_i, head);
@@ -93,17 +93,16 @@ static void append_segment(struct mouse_state *loc, struct line *line, int16_t x
     if (last_i == x0 && head->size) {
         head->segs[head->size - 1].length += x1 - x0;
     } else if (last_i <= x0) {
-        if (!adjust_head(loc, &head, 1)) return;
+        if (!adjust_head(sel, &head, 1)) return;
         head->segs[head->size++] = (struct segment) {x0 - last_i, x1 - x0 };
     } else assert(0);
 }
 
-void mouse_concat_selections(struct term *term, struct line *dst, struct line *src) {
+void selection_concat(struct selection_state *sel, struct line *dst, struct line *src) {
     struct segments *src_head, *dst_head;
-    struct mouse_state *loc = term_get_mstate(term);
 
-    if (!(src_head = seg_head(loc, src))) return;
-    if (!(dst_head = seg_head(loc, dst))) {
+    if (!(src_head = seg_head(sel, src))) return;
+    if (!(dst_head = seg_head(sel, dst))) {
         dst->selection_index = src->selection_index;
         src->selection_index = 0;
         src_head->line = dst;
@@ -123,7 +122,7 @@ void mouse_concat_selections(struct term *term, struct line *dst, struct line *s
     }
 
     /* Append tail */
-    if (src_head->size && adjust_head(loc, &dst_head, src_head->size)) {
+    if (src_head->size && adjust_head(sel, &dst_head, src_head->size)) {
         memcpy(dst_head->segs + dst_head->size,
                src_head->segs + offset,
                src_head->size * sizeof *src_head->segs);
@@ -135,13 +134,12 @@ void mouse_concat_selections(struct term *term, struct line *dst, struct line *s
         dst_head->size += src_head->size;
     }
 
-    free_segments(loc, src_head);
+    free_segments(sel, src_head);
     src->selection_index = SELECTION_EMPTY;
 }
 
-void mouse_realloc_selections(struct term *term, struct line *line, bool cut) {
-    struct mouse_state *loc = term_get_mstate(term);
-    struct segments *head = seg_head(loc, line);
+void selection_relocated(struct selection_state *sel, struct line *line, bool cut) {
+    struct segments *head = seg_head(sel, line);
     if (!head) return;
 
     head->line = line;
@@ -151,59 +149,39 @@ void mouse_realloc_selections(struct term *term, struct line *line, bool cut) {
             if (idx <= line->width)
                 seg++->length = line->width - idx;
             head->size = seg - head->segs;
-            if (cut)
-                mouse_clear_selection(term, 0);
+            if (cut) selection_clear(sel);
             break;
         }
     }
 }
 
-void mouse_clear_selection(struct term* term, bool damage) {
-    struct mouse_state *loc = term_get_mstate(term);
+void selection_clear(struct selection_state *sel) {
+    if (sel->state == state_sel_none ||
+        sel->state == state_sel_pressed) return;
 
-    if (loc->state == state_sel_none ||
-        loc->state == state_sel_pressed) return;
+    sel->state = state_sel_none;
 
-    loc->state = state_sel_none;
-
-    if (damage) {
-        struct line_offset vpos = term_get_view(term);
-        struct line *prev = NULL;
-        for (ssize_t i = 0; i < term_height(term); i++) {
-            struct line_view v = term_line_at(term, vpos);
-            if (prev != v.line)
-                mouse_damage_selected(term, v.line);
-            term_line_next(term, &vpos, 1);
-            prev = v.line;
-        }
+    for (size_t i = 1; i < sel->seg_size; i++) {
+        sel->seg[i]->line->selection_index = SELECTION_EMPTY;
+        free(sel->seg[i]);
     }
 
-    for (size_t i = 1; i < loc->seg_size; i++) {
-        loc->seg[i]->line->selection_index = SELECTION_EMPTY;
-        free(loc->seg[i]);
-    }
+    sel->seg_size = 1;
 
-    loc->seg_size = 1;
-
-    if (loc->targ != clip_invalid) {
-        if (term_is_keep_selection_enabled(term)) return;
-
-        window_set_clip(term_window(term), NULL, CLIP_TIME_NOW, loc->targ);
-        loc->targ = clip_invalid;
+    if (sel->targ != clip_invalid && !sel->keep_selection) {
+        window_set_clip(sel->win, NULL, CLIP_TIME_NOW, sel->targ);
+        sel->targ = clip_invalid;
     }
 }
 
-void mouse_line_changed(struct term *term, struct line *line, int16_t x0, int16_t x1, bool damage) {
-    struct mouse_state *loc = term_get_mstate(term);
-    struct segments *head = seg_head(loc, line);
-    if (!head) return;
+bool selection_intersects(struct selection_state *sel, struct line *line, int16_t x0, int16_t x1) {
+    struct segments *head = seg_head(sel, line);
+    if (!head) return 0;
 
-    foreach_segment_indexed(seg, idx, head) {
-        if (idx < x1 - 1 && idx + seg->length - 1 > x0) {
-            mouse_clear_selection(term, damage);
-            return;
-        }
-    }
+    foreach_segment_indexed(seg, idx, head)
+        if (idx < x1 - 1 && idx + seg->length - 1 > x0)
+            return 1;
+    return 0;
 }
 
 static void damage_head(struct segments *head) {
@@ -213,8 +191,8 @@ static void damage_head(struct segments *head) {
             cell[i].drawn = 0;
 }
 
-void mouse_damage_selected(struct term *term, struct line *line) {
-    struct segments *head = seg_head(term_get_mstate(term), line);
+void selection_damage(struct selection_state *sel, struct line *line) {
+    struct segments *head = seg_head(sel, line);
     if (head) damage_head(head);
 }
 
@@ -225,11 +203,10 @@ inline static bool is_separator(uint32_t ch, char *seps) {
     return strstr(seps, (char *)cbuf);
 }
 
-static struct line_offset snap_backward(struct term *term, struct line_offset pos) {
-    char *seps = window_cfg(term_window(term))->word_separators;
-    struct mouse_state *loc = term_get_mstate(term);
+static struct line_offset snap_backward(struct selection_state *sel, struct term *term, struct line_offset pos) {
+    char *seps = window_cfg(sel->win)->word_separators;
 
-    if (loc->snap == snap_line) {
+    if (sel->snap == snap_line) {
         pos.offset = 0;
         struct line *prev_line;
         for (;;) {
@@ -237,7 +214,7 @@ static struct line_offset snap_backward(struct term *term, struct line_offset po
             if (!prev_line || !prev_line->wrapped) break;
             pos.line--;
         }
-    } else if (loc->snap == snap_word) {
+    } else if (sel->snap == snap_word) {
         struct line *line = term_raw_line_at(term, pos.line), *prev;
         if (pos.offset > line->width) pos.offset = line->width - 1;
         for (;;) {
@@ -274,17 +251,16 @@ static struct line_offset snap_backward(struct term *term, struct line_offset po
     return pos;
 }
 
-static struct line_offset snap_forward(struct term *term, struct line_offset pos) {
-    char *seps = window_cfg(term_window(term))->word_separators;
-    struct mouse_state *loc = term_get_mstate(term);
+static struct line_offset snap_forward(struct selection_state *sel, struct term *term, struct line_offset pos) {
+    char *seps = window_cfg(sel->win)->word_separators;
 
-    if (loc->snap == snap_line) {
+    if (sel->snap == snap_line) {
         struct line *next = term_raw_line_at(term, pos.line), *line;
         do line = next, next = term_raw_line_at(term, ++pos.line);
         while (next && line->wrapped);
         pos.line--;
         pos.offset = line->width - 1;
-    } else if (loc->snap == snap_word) {
+    } else if (sel->snap == snap_word) {
         struct line *line = term_raw_line_at(term, pos.line), *next;
         if (line->width < pos.offset) pos.offset = line->width - 1;
         for (;;) {
@@ -332,10 +308,17 @@ inline static int16_t virtual_pos(struct term *term, struct line_offset *pos) {
     return orig.offset - pos->offset;
 }
 
-static void damage_changed(struct mouse_state *loc, struct segments **old, size_t old_size) {
+inline static struct line_offset absolute_pos(struct term *term, ssize_t x, ssize_t y) {
+    struct line_offset offset = term_get_view(term);
+    term_line_next(term, &offset, y);
+    offset.offset += x;
+    return offset;
+}
+
+static void damage_changed(struct selection_state *sel, struct segments **old, size_t old_size) {
     for (size_t i = 1; i < old_size; i++) {
         struct line *line = old[i]->line;
-        struct segments *new_head = seg_head(loc, line);
+        struct segments *new_head = seg_head(sel, line);
         if (!new_head) {
             damage_head(old[i]);
         } else {
@@ -397,17 +380,13 @@ static void damage_changed(struct mouse_state *loc, struct segments **old, size_
 
     free(old);
 
-    for (size_t i = 1; i < loc->seg_size; i++)
-        if (loc->seg[i]->new_line_flag)
-            damage_head(loc->seg[i]);
+    for (size_t i = 1; i < sel->seg_size; i++)
+        if (sel->seg[i]->new_line_flag)
+            damage_head(sel->seg[i]);
 }
 
-static void decompose(struct term *term, struct line_offset start, struct line_offset end) {
-    struct mouse_state *loc = term_get_mstate(term);
-
-    // Rebuild
-
-    if (loc->rectangular) {
+static void decompose(struct selection_state *sel, struct term *term, struct line_offset start, struct line_offset end) {
+    if (sel->rectangular) {
         struct line_offset vstart = start, vend = end;
         int16_t vstart_x = virtual_pos(term, &vstart);
         int16_t vend_x = virtual_pos(term, &vend);
@@ -416,107 +395,94 @@ static void decompose(struct term *term, struct line_offset start, struct line_o
 
         do {
             struct line *line = term_raw_line_at(term, vstart.line);
-            append_segment(loc, line, vstart.offset + vstart_x, vstart.offset + vend_x + 1);
+            append_segment(sel, line, vstart.offset + vstart_x, vstart.offset + vend_x + 1);
             term_line_next(term, &vstart, 1);
         } while (line_offset_cmp(vstart, vend) <= 0);
 
     } else {
         for (; start.line < end.line; start.line++) {
             struct line *line = term_raw_line_at(term, start.line);
-            append_segment(loc, line, start.offset, line->width);
+            append_segment(sel, line, start.offset, line->width);
             start.offset = 0;
         }
         struct line *line = term_raw_line_at(term, end.line);
-        append_segment(loc, line, start.offset, end.offset + 1);
+        append_segment(sel, line, start.offset, end.offset + 1);
     }
 }
 
-inline static struct line_offset absolute_pos(struct term *term, ssize_t x, ssize_t y) {
-    struct line_offset offset = term_get_view(term);
-    term_line_next(term, &offset, y);
-    offset.offset += x;
-    return offset;
+bool init_selection(struct selection_state *sel, struct window *win) {
+    sel->seg_caps = 4;
+    sel->win = win;
+    sel->seg_size = 1;
+    sel->seg = calloc(sizeof *sel->seg, sel->seg_caps);
+    return sel->seg;
 }
 
-bool init_mouse(struct term *term) {
-    struct mouse_state *loc = term_get_mstate(term);
-
-    loc->seg_caps = 4;
-    loc->seg_size = 1;
-    loc->seg = calloc(sizeof *loc->seg, loc->seg_caps);
-    return loc->seg;
-}
-
-void free_mouse(struct term *term) {
-    struct mouse_state *loc = term_get_mstate(term);
-    for (size_t i = 1; i < loc->seg_size; i++) {
-        loc->seg[i]->line->selection_index = SELECTION_EMPTY;
-        free(loc->seg[i]);
+void free_selection(struct selection_state *sel) {
+    for (size_t i = 1; i < sel->seg_size; i++) {
+        sel->seg[i]->line->selection_index = SELECTION_EMPTY;
+        free(sel->seg[i]);
     }
 
-    free(loc->seg);
-    loc->seg_caps = 0;
-    loc->seg_size = 0;
-    loc->seg = NULL;
+    free(sel->seg);
+    sel->seg_caps = 0;
+    sel->seg_size = 0;
+    sel->seg = NULL;
 }
 
-static void selection_changed(struct term *term, uint8_t state, bool rectangular) {
-    struct mouse_state *loc = term_get_mstate(term);
-    struct instance_config *cfg = window_cfg(term_window(term));
-
-    struct line_offset pos = absolute_pos(term, loc->pointer_x, loc->pointer_y);
+static void selection_changed(struct selection_state *sel, struct term *term, uint8_t state, bool rectangular) {
+    struct instance_config *cfg = window_cfg(sel->win);
+    struct line_offset pos = absolute_pos(term, sel->pointer_x, sel->pointer_y);
 
     if (state == state_sel_pressed) {
-        loc->start = pos;
+        sel->start = pos;
 
         struct timespec now;
         clock_gettime(CLOCK_TYPE, &now);
 
-        if (TIMEDIFF(loc->click1, now) < cfg->triple_click_time*1000LL)
-            loc->snap = snap_line;
-        else if (TIMEDIFF(loc->click0, now) < cfg->double_click_time*1000LL)
-            loc->snap = snap_word;
+        if (TIMEDIFF(sel->click1, now) < cfg->triple_click_time*1000LL)
+            sel->snap = snap_line;
+        else if (TIMEDIFF(sel->click0, now) < cfg->double_click_time*1000LL)
+            sel->snap = snap_word;
         else
-            loc->snap = snap_none;
+            sel->snap = snap_none;
 
-        loc->click1 = loc->click0;
-        loc->click0 = now;
+        sel->click1 = sel->click0;
+        sel->click0 = now;
     }
 
-    loc->state = state;
-    loc->rectangular = rectangular;
-    loc->end = pos;
+    sel->state = state;
+    sel->rectangular = rectangular;
+    sel->end = pos;
 
-    struct line_offset nstart = loc->start;
-    struct line_offset nend = loc->end;
+    struct line_offset nstart = sel->start;
+    struct line_offset nend = sel->end;
 
     if (line_offset_cmp(nstart, nend) > 0)
         SWAP(nstart, nend);
 
-    nstart = snap_backward(term, nstart);
-    nend = snap_forward(term, nend);
+    nstart = snap_backward(sel, term, nstart);
+    nend = snap_forward(sel, term, nend);
 
-    if (loc->snap != snap_none && loc->state == state_sel_pressed)
-        loc->state = state_sel_progress;
+    if (sel->snap != snap_none && sel->state == state_sel_pressed)
+        sel->state = state_sel_progress;
 
-    struct segments **prev_heads = loc->seg;
-    size_t prev_size = loc->seg_size;
-    init_mouse(term);
+    struct segments **prev_heads = sel->seg;
+    size_t prev_size = sel->seg_size;
+    init_selection(sel, sel->win);
 
     for (size_t i = 1; i < prev_size; i++)
         prev_heads[i]->line->selection_index = 0;
 
-    if (loc->state == state_sel_progress || loc->state == state_sel_released)
-        decompose(term, nstart, nend);
+    if (sel->state == state_sel_progress || sel->state == state_sel_released)
+        decompose(sel, term, nstart, nend);
 
     // Make changed cells dirty
-    damage_changed(loc, prev_heads, prev_size);
+    damage_changed(sel, prev_heads, prev_size);
 }
 
-bool mouse_is_selected(struct term *term, struct line_view *view, int16_t x) {
-    struct mouse_state *loc = term_get_mstate(term);
-
-    struct segments *head = seg_head(loc, view->line);
+bool selection_is_selected(struct selection_state *sel, struct line_view *view, int16_t x) {
+    struct segments *head = seg_head(sel, view->line);
     if (!head) return 0;
 
     // FIXME This should be optimized in renderer
@@ -566,15 +532,14 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line *li
     }
 }
 
-static uint8_t *selection_data(struct term *term) {
-    struct mouse_state *loc = term_get_mstate(term);
-    if (loc->state == state_sel_released) {
+static uint8_t *selection_data(struct selection_state *sel) {
+    if (sel->state == state_sel_released) {
         uint8_t *res = malloc(SEL_INIT_SIZE * sizeof(*res));
         if (!res) return NULL;
         size_t pos = 0, cap = SEL_INIT_SIZE;
 
-        for (size_t i = 1; i < loc->seg_size; i++) {
-            struct segments *head = loc->seg[i];
+        for (size_t i = 1; i < sel->seg_size; i++) {
+            struct segments *head = sel->seg[i];
             bool first = 1;
 
             foreach_segment_indexed(seg, idx, head) {
@@ -589,14 +554,12 @@ static uint8_t *selection_data(struct term *term) {
     } else return NULL;
 }
 
-void mouse_view_scrolled(struct term *term) {
-    struct mouse_state *loc = term_get_mstate(term);
-    if (loc->state == state_sel_progress)
-        selection_changed(term, state_sel_progress, loc->rectangular);
+void selection_view_scrolled(struct selection_state *sel, struct term *term) {
+    if (sel->state == state_sel_progress)
+        selection_changed(sel, term, state_sel_progress, sel->rectangular);
 }
 
-inline static void adj_coords(struct term *term, int16_t *x, int16_t *y, bool pixel) {
-    struct window *win = term_window(term);
+inline static void adj_coords(struct window *win, int16_t *x, int16_t *y, bool pixel) {
     struct extent c = window_get_cell_size(win);
     struct extent b = window_get_border(win);
     struct extent g = window_get_grid_size(win);
@@ -608,6 +571,40 @@ inline static void adj_coords(struct term *term, int16_t *x, int16_t *y, bool pi
          *x /= c.width;
          *y /= c.height;
     }
+}
+
+static void pending_scroll(struct selection_state *sel, struct term *term, int16_t y, enum mouse_event_type event) {
+    struct extent c = window_get_cell_size(sel->win);
+    struct extent b = window_get_border(sel->win);
+    struct extent g = window_get_grid_size(sel->win);
+
+    if (event == mouse_event_motion) {
+        if (y - b.height >= g.height) sel->pending_scroll = MIN(-1, (g.height + b.height - y - c.height + 1) / c.height / 2);
+        else if (y < b.height) sel->pending_scroll = MAX(1, (b.height - y + c.height - 1) / c.height / 2);
+        selection_pending_scroll(sel, term);
+    }
+}
+
+bool selection_pending_scroll(struct selection_state *loc, struct term *term) {
+    struct instance_config *cfg = window_cfg(loc->win);
+
+    if (loc->pending_scroll && loc->state == state_sel_progress) {
+        struct timespec now;
+        clock_gettime(CLOCK_TYPE, &now);
+        bool can_scroll = TIMEDIFF(loc->last_scroll, now) > cfg->select_scroll_time*1000LL;
+        if (can_scroll) {
+            term_scroll_view(term, loc->pending_scroll);
+            loc->last_scroll = now;
+        }
+    }
+    return loc->pending_scroll;
+}
+
+bool is_selection_event(struct selection_state *sel, struct mouse_event *ev) {
+    return (ev->event == mouse_event_press && ev->button == 0) ||
+           (ev->event == mouse_event_motion && ev->mask & mask_button_1 &&
+            (sel->state == state_sel_progress || sel->state == state_sel_pressed)) ||
+           (ev->event == mouse_event_release && ev->button == 0 && sel->state == state_sel_progress);
 }
 
 void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask) {
@@ -625,7 +622,7 @@ void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, 
     if (x < b.width || x >= g.width + b.width || y < b.height || y > g.height + b.height) {
         if (evt == 1) term_answerback(term, CSI"0&w");
     } else {
-        adj_coords(term, &x, &y, term_get_mstate(term)->locator_pixels);
+        adj_coords(win, &x, &y, term_get_mstate(term)->locator_pixels);
         term_answerback(term, CSI"%d;%d;%d;%d;1&w", evt, lmask, y + 1, x + 1);
     }
 }
@@ -658,37 +655,6 @@ void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, 
     loc->locator_filter = 1;
 
     window_set_mouse(term_window(term), 1);
-}
-
-static void pending_scroll(struct term *term, int16_t y, enum mouse_event_type event) {
-    struct mouse_state *loc = term_get_mstate(term);
-
-    struct window *win = term_window(term);
-    struct extent c = window_get_cell_size(win);
-    struct extent b = window_get_border(win);
-    struct extent g = window_get_grid_size(win);
-
-    if (event == mouse_event_motion) {
-        if (y - b.height >= g.height) loc->pending_scroll = MIN(-1, (g.height + b.height - y - c.height + 1) / c.height / 2);
-        else if (y < b.height) loc->pending_scroll = MAX(1, (b.height - y + c.height - 1) / c.height / 2);
-        mouse_pending_scroll(term);
-    }
-}
-
-bool mouse_pending_scroll(struct term *term) {
-    struct mouse_state *loc = term_get_mstate(term);
-    struct instance_config *cfg = window_cfg(term_window(term));
-
-    if (loc->pending_scroll && loc->state == state_sel_progress) {
-        struct timespec now;
-        clock_gettime(CLOCK_TYPE, &now);
-        bool can_scroll = TIMEDIFF(loc->last_scroll, now) > cfg->select_scroll_time*1000LL;
-        if (can_scroll) {
-            term_scroll_view(term, loc->pending_scroll);
-            loc->last_scroll = now;
-        }
-    }
-    return loc->pending_scroll;
 }
 
 #if USE_URI
@@ -728,8 +694,8 @@ static void update_active_uri(struct term *term, struct mouse_event *ev) {
 
 void mouse_handle_input(struct term *term, struct mouse_event ev) {
     struct mouse_state *loc = term_get_mstate(term);
-
-    loc->pending_scroll = 0;
+    struct selection_state *sel = term_get_sstate(term);
+    sel->pending_scroll = 0;
 
     uint32_t force_mask = window_cfg(term_window(term))->force_mouse_mask;
 
@@ -763,7 +729,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
             (ev.mask & mask_mod_mask) != force_mask && !term_get_kstate(term)->keyboad_vt52) {
         enum mouse_mode md = loc->mouse_mode;
 
-        adj_coords(term, &ev.x, &ev.y, loc->mouse_format == mouse_format_pixel);
+        adj_coords(term_window(term), &ev.x, &ev.y, loc->mouse_format == mouse_format_pixel);
 
         if (md == mouse_mode_x10 && ev.button > 2) return;
 
@@ -820,31 +786,27 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
         loc->reported_y = ev.y;
     /* Scroll view */
     } else if (ev.event == mouse_event_press && (ev.button == 3 || ev.button == 4)) {
-        term_scroll_view(term, (2 *(ev.button == 3) - 1) * window_cfg(term_window(term))->scroll_amount);
+        term_scroll_view(term, (2 *(ev.button == 3) - 1) * window_cfg(sel->win)->scroll_amount);
     /* Paste */
     } else if (ev.button == 1 && ev.event == mouse_event_release) {
         window_paste_clip(term_window(term), clip_primary);
     /* Select */
-    } else if ((ev.event == mouse_event_press && ev.button == 0) ||
-               (ev.event == mouse_event_motion && ev.mask & mask_button_1 &&
-                    (loc->state == state_sel_progress || loc->state == state_sel_pressed)) ||
-               (ev.event == mouse_event_release && ev.button == 0 &&
-                    (loc->state == state_sel_progress))) {
+    } else if (is_selection_event(sel, &ev)) {
 #if USE_URI
         if (ev.event == mouse_event_press && ev.button == 0) update_active_uri(term, &ev);
         else window_set_active_uri(term_window(term), EMPTY_URI, 0);
 #endif
         int16_t y = ev.y;
-        adj_coords(term, &ev.x, &ev.y, 0);
-        loc->pointer_x = ev.x;
-        loc->pointer_y = ev.y;
+        adj_coords(sel->win, &ev.x, &ev.y, 0);
+        sel->pointer_x = ev.x;
+        sel->pointer_y = ev.y;
 
-        selection_changed(term, ev.event + 1, ev.mask & mask_mod_1);
-        pending_scroll(term, y, ev.event);
+        selection_changed(term_get_sstate(term), term, ev.event + 1, ev.mask & mask_mod_1);
+        pending_scroll(sel, term, y, ev.event);
 
         if (ev.event == mouse_event_release) {
-            loc->targ = term_is_select_to_clipboard_enabled(term) ? clip_clipboard : clip_primary;
-            window_set_clip(term_window(term), selection_data(term), CLIP_TIME_NOW, loc->targ);
+            sel->targ = sel->select_to_clipboard ? clip_clipboard : clip_primary;
+            window_set_clip(sel->win, selection_data(sel), CLIP_TIME_NOW, sel->targ);
         }
 #if USE_URI
     } else {

@@ -141,9 +141,7 @@ struct term_mode {
     bool title_set_hex : 1;
     bool title_query_hex : 1;
     bool bracketed_paste : 1;
-    bool keep_selection : 1;
     bool keep_clipboard : 1;
-    bool select_to_clipboard : 1;
     bool reverse_wrap : 1;
     bool led_num_lock : 1;
     bool led_caps_lock : 1;
@@ -274,8 +272,10 @@ struct term {
      * of selection being pasted from */
     uint8_t paste_from;
 
-    /* Mouse and selection state */
+    /* Mouse state */
     struct mouse_state mstate;
+    /* Selection state */
+    struct selection_state sstate;
     /* Keyboard state */
     struct keyboard_state kstate;
     /* TTY State, input buffer and
@@ -407,9 +407,16 @@ static void damage_cursor(struct term *term) {
     cursor_line(term)->cell[term->c.x].drawn = 0;
 }
 
-static void term_damage_selection(struct term *term) {
-    for (ssize_t i = 0; i < term->height; i++)
-        mouse_damage_selected(term, term->screen[i]);
+void term_damage_selection(struct term *term) {
+    struct line_offset vpos = term_get_view(term);
+    struct line *prev = NULL;
+    for (ssize_t i = 0; i < term_height(term); i++) {
+        struct line_view v = term_line_at(term, vpos);
+        if (prev != v.line)
+            selection_damage(&term->sstate, v.line);
+        term_line_next(term, &vpos, 1);
+        prev = v.line;
+    }
 }
 
 void term_damage_uri(struct term *term, uint32_t uri) {
@@ -509,7 +516,7 @@ struct line_offset term_get_line_pos(struct term *term, ssize_t y) {
 static void term_reset_view(struct term *term, bool damage) {
     term->prev_c_view_changed |= !term->view_pos.line;
     term->view_pos = (struct line_offset){0};
-    mouse_view_scrolled(term);
+    selection_view_scrolled(&term->sstate, term);
     if (damage) {
         for(ssize_t i = 0; i < term->height; i++)
             term->screen[i]->force_damage = 1;
@@ -518,10 +525,10 @@ static void term_reset_view(struct term *term, bool damage) {
 
 inline static struct line *term_concat_line(struct term *term, struct line *dst, struct line *src, bool opt) {
     if (src && src->selection_index)
-        mouse_concat_selections(term, dst, src);
+        selection_concat(&term->sstate, dst, src);
     struct line *new = concat_line(dst, src, opt);
     if (new->selection_index)
-        mouse_realloc_selections(term, new, 0);
+        selection_relocated(&term->sstate, new, 0);
     return new;
 }
 
@@ -529,20 +536,20 @@ inline static struct line *term_realloc_line(struct term *term, struct line *lin
     bool cut = width < line->mwidth;
     struct line *new = realloc_line(line, width);
     if (new->selection_index)
-        mouse_realloc_selections(term, new, cut);
+        selection_relocated(&term->sstate, new, cut);
     return new;
 }
 
 static void term_free_scrollback(struct term *term) {
     if (term->scrollback) {
-        mouse_clear_selection(term, 0);
+        selection_clear(&term->sstate);
         term_reset_view(term, 0);
     }
 
     for (ssize_t i = 1; i <= (term->sb_caps == term->sb_max_caps ? term->sb_caps : term->sb_limit); i++) {
         struct line *line = line_at(term, -i);
         if (line->selection_index)
-            mouse_line_changed(term, line, 0, line->width, 0);
+            selection_clear(&term->sstate);
         free_line(line);
     }
     free(term->scrollback);
@@ -577,7 +584,7 @@ void term_scroll_view(struct term *term, int16_t amount) {
         term_damage_lines(term, term->height + delta, term->height);
     }
 
-    mouse_view_scrolled(term);
+    selection_view_scrolled(&term->sstate, term);
     term->prev_c_view_changed |= old_viewr != !term->view_pos.line;
 }
 
@@ -614,7 +621,7 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
                 SWAP(line, term->scrollback[term->sb_top]);
 
                 if (line->selection_index)
-                    mouse_line_changed(term, line, 0, line->width, 0);
+                    selection_clear(&term->sstate);
                 free_line(line);
             } else {
                 /* More lines can be saved, term->scrollback is not cyclic yet */
@@ -625,7 +632,7 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
                     struct line **new = realloc(term->scrollback, new_cap * sizeof(*new));
                     if (!new) {
                         if (line->selection_index)
-                            mouse_line_changed(term, line, 0, line->width, 0);
+                            selection_clear(&term->sstate);
                         free_line(line);
                         return res;
                     }
@@ -644,7 +651,7 @@ static ssize_t term_append_history(struct term *term, struct line *line, bool op
         }
     } else {
         if (line->selection_index)
-            mouse_line_changed(term, line, 0, line->width, 0);
+            selection_clear(&term->sstate);
         free_line(line);
     }
     return res;
@@ -710,7 +717,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         for (ssize_t i = height; i < term->height; i++) {
             struct line *line = term->back_screen[i];
             if (line->selection_index)
-                mouse_line_changed(term, line, 0, line->width, 0);
+                selection_clear(&term->sstate);
             free_line(line);
         }
 
@@ -740,7 +747,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
     // Clear mouse selection
     // TODO Keep non-rectangular selection
-    mouse_clear_selection(term, 0);
+    selection_clear(&term->sstate);
 
     // Find line of bottom left cell
     struct line_offset lower_left = term->view_pos;
@@ -1102,9 +1109,14 @@ inline static void term_erase_pre(struct term *term, int16_t *xs, int16_t *ys, i
 
     if (!term->view_pos.line) window_delay_redraw(term->win);
 
-    if (!mouse_has_selection(term)) return;
-    for (ssize_t y = *ys; y < *ye; y++)
-        mouse_line_changed(term, term->screen[y], *xs, *xe, 0);
+    if (!selection_active(&term->sstate)) return;
+    for (ssize_t y = *ys; y < *ye; y++) {
+        if (selection_intersects(&term->sstate, term->screen[y], *xs, *xe)) {
+            term_damage_selection(term);
+            selection_clear(&term->sstate);
+            break;
+        }
+    }
 }
 
 static uint16_t term_checksum(struct term *term, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct checksum_mode mode) {
@@ -1438,7 +1450,7 @@ static void term_cursor_mode(struct term *term, bool mode) {
 }
 
 static void term_swap_screen(struct term *term, bool damage) {
-    mouse_clear_selection(term, 0);
+    selection_clear(&term->sstate);
     term->mode.altscreen ^= 1;
     SWAP(term->back_saved_c, term->saved_c);
     SWAP(term->back_saved_sgr, term->saved_sgr);
@@ -1486,7 +1498,7 @@ static void term_scroll(struct term *term, int16_t top, int16_t amount, bool sav
                 if (scrolled < 0) /* View down, image up */ {
                     term_damage_lines(term, term->height + scrolled, term->height);
                     window_shift(term->win, -scrolled, 0, term->height + scrolled);
-                    mouse_view_scrolled(term);
+                    selection_view_scrolled(&term->sstate, term);
                 }
             } else {
                 term_erase(term, 0, top, term->width, top + amount, 0);
@@ -1579,7 +1591,10 @@ static void term_insert_cells(struct term *term, int16_t n) {
             line->cell[i].drawn = 0;
 
         term_erase(term, term->c.x, term->c.y, term->c.x + n, term->c.y + 1, 0);
-        mouse_line_changed(term, line, term_max_x(term) - n, term_max_x(term), 1);
+        if (selection_intersects(&term->sstate, line, term_max_x(term) - n, term_max_x(term))) {
+            term_damage_selection(term);
+            selection_clear(&term->sstate);
+        }
     }
 
     term_reset_pending(term);
@@ -1600,7 +1615,10 @@ static void term_delete_cells(struct term *term, int16_t n) {
             line->cell[i].drawn = 0;
 
         term_erase(term, term_max_x(term) - n, term->c.y, term_max_x(term), term->c.y + 1, 0);
-        mouse_line_changed(term, line, term->c.x, term->c.x + n, 1);
+        if (selection_intersects(&term->sstate, line, term->c.x, term->c.x + n)) {
+            term_damage_selection(term);
+            selection_clear(&term->sstate);
+        }
     }
 
     term_reset_pending(term);
@@ -1879,17 +1897,19 @@ void term_reload_config(struct term *term) {
     term->mode.no_scroll_on_input = !cfg->scroll_on_input;
     term->mode.scroll_on_output = cfg->scroll_on_output;
     term->mode.keep_clipboard = cfg->keep_clipboard;
-    term->mode.keep_selection = cfg->keep_selection;
-    term->mode.select_to_clipboard = cfg->select_to_clipboard;
     term->mode.bell_raise = cfg->raise_on_bell;
     term->mode.bell_urgent = cfg->urgency_on_bell;
     term->mode.smooth_scroll = cfg->smooth_scroll;
+
+    term->sstate.keep_selection = cfg->keep_selection;
+    term->sstate.select_to_clipboard = cfg->select_to_clipboard;
 }
 
 static bool term_load_config(struct term *term) {
-    free_mouse(term);
+    free_selection(&term->sstate);
+    if (!init_selection(&term->sstate, term->win)) return 0;
+
     term->mstate = (struct mouse_state) {0};
-    if (!init_mouse(term)) return 0;
 
     struct instance_config *cfg = window_cfg(term->win);
     term->mode = (struct term_mode) {
@@ -2715,7 +2735,7 @@ static void term_dispatch_osc(struct term *term) {
         if (!window_cfg(term->win)->allow_window_ops) break;
 
         enum clip_target ts[clip_MAX] = {0};
-        bool toclip = term->mode.select_to_clipboard;
+        bool toclip = term->sstate.select_to_clipboard;
         uint8_t *parg = dstr, letter = 0;
         for (; parg < dend && *parg !=  ';'; parg++) {
             if (strchr("pqsc", *parg)) {
@@ -2732,7 +2752,7 @@ static void term_dispatch_osc(struct term *term) {
                 if (base64_decode(parg, parg, dend) != dend) parg = NULL;
                 for (ssize_t i = 0; i < clip_MAX; i++) {
                     if (ts[i]) {
-                        if (i == term->mstate.targ) term->mstate.targ = clip_invalid;
+                        if (i == term->sstate.targ) term->sstate.targ = clip_invalid;
                         window_set_clip(term->win, parg ? (uint8_t *)strdup((char *)parg) : parg, CLIP_TIME_NOW, i);
                     }
                 }
@@ -2949,10 +2969,10 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->kstate.backspace_is_del = set;
             break;
         case 1040: /* Don't clear X11 PRIMARY selection */
-            term->mode.keep_selection = set;
+            term->sstate.keep_selection = set;
             break;
         case 1041: /* Use CLIPBOARD instead of PRIMARY */
-            term->mode.select_to_clipboard = set;
+            term->sstate.select_to_clipboard = set;
             break;
         case 1042: /* Urgency on bell */
             term->mode.bell_urgent = set;
@@ -3180,10 +3200,10 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = MODSTATE(term->kstate.backspace_is_del);
             break;
         case 1040: /* Don't clear X11 PRIMARY selecion */
-            val = MODSTATE(term->mode.keep_selection);
+            val = MODSTATE(term->sstate.keep_selection);
             break;
         case 1041: /* Use CLIPBOARD instead of PRIMARY */
-            val = MODSTATE(term->mode.select_to_clipboard);
+            val = MODSTATE(term->sstate.select_to_clipboard);
             break;
         case 1042: /* Urgency on bell */
             val = MODSTATE(term->mode.bell_urgent);
@@ -3628,8 +3648,10 @@ static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep,
     }
 
     // Clear selection if writing over it
-    if (mouse_has_selection(term))
-        mouse_line_changed(term, line, cx, term->mode.insert ? max_tx : max_cx, 1);
+    if (selection_intersects(&term->sstate, line, cx, term->mode.insert ? max_tx : max_cx)) {
+        term_damage_selection(term);
+        selection_clear(&term->sstate);
+    }
 
     if (term->mode.margin_bell) {
         ssize_t bcol = term->right - window_cfg(term->win)->margin_bell_column;
@@ -5343,14 +5365,6 @@ bool term_is_keep_clipboard_enabled(struct term *term) {
     return term->mode.keep_clipboard;
 }
 
-bool term_is_keep_selection_enabled(struct term *term) {
-    return term->mode.keep_selection;
-}
-
-bool term_is_select_to_clipboard_enabled(struct term *term) {
-    return term->mode.select_to_clipboard;
-}
-
 bool term_is_utf8_enabled(struct term *term) {
     return term->mode.utf8;
 }
@@ -5373,6 +5387,10 @@ struct keyboard_state *term_get_kstate(struct term *term) {
 
 struct mouse_state *term_get_mstate(struct term *term) {
     return &term->mstate;
+}
+
+struct selection_state *term_get_sstate(struct term *term) {
+    return &term->sstate;
 }
 
 struct window *term_window(struct term *term) {
@@ -5523,7 +5541,7 @@ void term_hang(struct term *term) {
 void free_term(struct term *term) {
     tty_hang(&term->tty);
 
-    free_mouse(term);
+    free_selection(&term->sstate);
 
 #if USE_URI
     uri_match_reset(&term->uri_match);

@@ -23,38 +23,6 @@ struct segments {
 #define SELECTION_EMPTY 0
 
 struct mouse_state {
-    size_t seg_caps;
-    size_t seg_size;
-    struct segments **seg;
-
-    struct line_offset start;
-    struct line_offset end;
-    bool rectangular;
-
-    enum {
-        snap_none,
-        snap_word,
-        snap_line,
-    } snap;
-
-    enum {
-        state_sel_none,
-        state_sel_pressed = mouse_event_press + 1,
-        state_sel_released = mouse_event_release + 1,
-        state_sel_progress = mouse_event_motion + 1,
-    } state;
-
-    struct timespec click0;
-    struct timespec click1;
-
-    struct timespec last_scroll;
-    int32_t pending_scroll;
-
-    enum clip_target targ;
-
-    int16_t pointer_x;
-    int16_t pointer_y;
-
     int16_t reported_x;
     int16_t reported_y;
     uint8_t reported_button;
@@ -85,29 +53,65 @@ struct mouse_state {
     } mouse_format;
 };
 
-void free_mouse(struct term *term);
-bool init_mouse(struct term *term);
-
 void mouse_handle_input(struct term *term, struct mouse_event ev);
-void mouse_view_scrolled(struct term *term);
-bool mouse_is_selected(struct term *term, struct line_view *view, int16_t x);
-void mouse_clear_selection(struct term *term, bool damage);
-void mouse_damage_selected(struct term *term, struct line *line);
 void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask);
 void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, iparam_t ye);
-bool mouse_pending_scroll(struct term *term);
 
-void mouse_concat_selections(struct term *term, struct line *dst, struct line *src);
-void mouse_realloc_selections(struct term *term, struct line *line, bool cut);
-void mouse_free_selections(struct term *term, struct line *line);
-void mouse_line_changed(struct term *term, struct line *line, int16_t x0, int16_t x1, bool damage);
+struct selection_state {
+    struct window *win;
 
-inline static bool mouse_has_selection(struct term *term) {
-    struct mouse_state *loc = term_get_mstate(term);
-    return loc->state != state_sel_none &&
-           loc->state != state_sel_pressed;
+    size_t seg_caps;
+    size_t seg_size;
+    struct segments **seg;
+
+    struct line_offset start;
+    struct line_offset end;
+    bool rectangular;
+
+    enum {
+        snap_none,
+        snap_word,
+        snap_line,
+    } snap;
+
+    enum {
+        state_sel_none,
+        state_sel_pressed = mouse_event_press + 1,
+        state_sel_released = mouse_event_release + 1,
+        state_sel_progress = mouse_event_motion + 1,
+    } state;
+
+    struct timespec click0;
+    struct timespec click1;
+    struct timespec last_scroll;
+
+    int32_t pending_scroll;
+    int16_t pointer_x;
+    int16_t pointer_y;
+
+    enum clip_target targ;
+
+    bool keep_selection;
+    bool select_to_clipboard;
+};
+
+void free_selection(struct selection_state *sel);
+bool init_selection(struct selection_state *sel, struct window *win);
+
+void selection_view_scrolled(struct selection_state *sel, struct term *term);
+bool selection_is_selected(struct selection_state *sel, struct line_view *view, int16_t x);
+void selection_clear(struct selection_state *sel);
+void selection_damage(struct selection_state *sel, struct line *line);
+void selection_concat(struct selection_state *sel, struct line *dst, struct line *src);
+void selection_relocated(struct selection_state *sel, struct line *line, bool cut);
+void selection_free(struct selection_state *sel, struct line *line);
+bool selection_intersects(struct selection_state *sel, struct line *line, int16_t x0, int16_t x1);
+bool selection_pending_scroll(struct selection_state *sel, struct term *term);
+
+inline static bool selection_active(struct selection_state *sel) {
+    return sel->state != state_sel_none &&
+           sel->state != state_sel_pressed;
 }
-
 
 #endif
 

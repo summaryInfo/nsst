@@ -687,7 +687,7 @@ void run(void) {
             next_timeout = MIN(next_timeout, (win->in_blink ? win->cfg.visual_bell_time : win->cfg.blink_time)*1000LL);
 
             // Scroll down selection
-            bool pending_scroll = mouse_pending_scroll(win->term);
+            bool pending_scroll = selection_pending_scroll(term_get_sstate(win->term), win->term);
 
             // Change blink state if blinking interval is expired
             if (win->active && win->cfg.allow_blinking &&

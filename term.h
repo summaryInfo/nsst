@@ -50,12 +50,14 @@ void term_reload_config(struct term *term);
 void term_toggle_numlock(struct term *term);
 struct keyboard_state *term_get_kstate(struct term *term);
 struct mouse_state *term_get_mstate(struct term *term);
+struct selection_state *term_get_sstate(struct term *term);
 struct window *term_window(struct term *term);
 color_t *term_palette(struct term *term);
 int term_fd(struct term *term);
 void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool is_first, bool is_last);
 void term_sendkey(struct term *term, const uint8_t *data, size_t size);
 void term_answerback(struct term *term, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
+void term_damage_selection(struct term *term);
 void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd);
 void term_damage(struct term *term, struct rect damage);
 #if USE_URI
@@ -77,8 +79,6 @@ bool is_last_line(struct line_view line, bool rewrap);
 #define PASTE_BLOCK_SIZE 1024
 
 bool term_is_keep_clipboard_enabled(struct term *term);
-bool term_is_keep_selection_enabled(struct term *term);
-bool term_is_select_to_clipboard_enabled(struct term *term);
 bool term_is_bell_urgent_enabled(struct term *term);
 bool term_is_bell_raise_enabled(struct term *term);
 bool term_is_utf8_enabled(struct term *term);
