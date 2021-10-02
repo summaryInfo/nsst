@@ -1952,8 +1952,6 @@ static bool term_load_config(struct term *term) {
         .gn = {cs94_ascii, cs94_ascii, cs94_ascii, cs94_ascii}
     };
 
-    return 1;
-
 #if USE_URI
     window_set_mouse(term->win, 1);
     uri_unref(term->sgr.uri);
@@ -1962,6 +1960,7 @@ static bool term_load_config(struct term *term) {
 #endif
 
     term->sgr = term->saved_sgr = term->back_saved_sgr = ATTR_DEFAULT;
+    return 1;
 }
 
 static void term_do_reset(struct term *term, bool hard) {
