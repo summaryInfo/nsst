@@ -14,6 +14,9 @@
 #include <sys/types.h>
 #include <time.h>
 
+struct term;
+struct screen;
+
 typedef uint32_t uparam_t;
 typedef int32_t iparam_t;
 
@@ -39,13 +42,19 @@ inline static struct attr line_view_attr_at(struct line_view view, ssize_t x) {
     return view.cell[x].attrid ? view.line->attrs->data[view.cell[x].attrid - 1] : ATTR_DEFAULT;
 }
 
+/* Returns true if next line will be next physical line
+ * and not continuation part of current physical line */
+inline static bool is_last_line(struct line_view line, bool rewrap) {
+    return !rewrap || line.cell - line.line->cell + line.width >= line.line->width;
+}
+
 struct term *create_term(struct window *win, int16_t width, int16_t height);
 void free_term(struct term *term);
 bool term_redraw(struct term *term, bool blink_commited);
 void term_resize(struct term *term, int16_t width, int16_t height);
 void term_handle_focus(struct term *term, bool focused);
-void term_scroll_view(struct term *term, int16_t amount);
 bool term_read(struct term *term);
+void term_scroll_view(struct term *term, int16_t amount);
 void term_reload_config(struct term *term);
 void term_toggle_numlock(struct term *term);
 struct keyboard_state *term_get_kstate(struct term *term);
@@ -57,23 +66,24 @@ int term_fd(struct term *term);
 void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool is_first, bool is_last);
 void term_sendkey(struct term *term, const uint8_t *data, size_t size);
 void term_answerback(struct term *term, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
-void term_damage_selection(struct term *term);
-void term_damage_lines(struct term *term, ssize_t ys, ssize_t yd);
-void term_damage(struct term *term, struct rect damage);
-#if USE_URI
-void term_damage_uri(struct term *term, uint32_t uri);
-#endif
 void term_reset(struct term *term);
 void term_set_reverse(struct term *term, bool set);
 void term_break(struct term *term);
 void term_hang(struct term *term);
 
-struct line *term_raw_line_at(struct term *term, ssize_t y);
-struct line_view term_line_at(struct term *term, struct line_offset pos);
-struct line_offset term_get_view(struct term *term);
-struct line_offset term_get_line_pos(struct term *term, ssize_t y);
-ssize_t term_line_next(struct term *term, struct line_offset *pos, ssize_t amount);
-bool is_last_line(struct line_view line, bool rewrap);
+struct screen *term_screen(struct term *term);
+
+void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd);
+void screen_scroll_view(struct screen *scr, struct window *win, int16_t amount);
+struct line *screen_paragraph_at(struct screen *scr, ssize_t y);
+struct line_view screen_line_at(struct screen *scr, struct line_offset pos);
+struct line_offset screen_view(struct screen *scr);
+struct line_offset screen_line_iter(struct screen *scr, ssize_t y);
+ssize_t screen_advance_iter(struct screen *scr, struct line_offset *pos, ssize_t amount);
+void screen_damage_selection(struct screen *scr);
+#if USE_URI
+void screen_damage_uri(struct screen *scr, uint32_t uri);
+#endif
 
 /* Needs to be multiple of 4 */
 #define PASTE_BLOCK_SIZE 1024
@@ -84,13 +94,5 @@ bool term_is_bell_raise_enabled(struct term *term);
 bool term_is_utf8_enabled(struct term *term);
 bool term_is_nrcs_enabled(struct term *term);
 bool term_is_reverse(struct term *term);
-
-/* These are only used in mouse.c */
-int16_t term_max_y(struct term *term);
-int16_t term_max_x(struct term *term);
-int16_t term_min_y(struct term *term);
-int16_t term_min_x(struct term *term);
-int16_t term_width(struct term *term);
-int16_t term_height(struct term *term);
 
 #endif

@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include <time.h>
 
+struct screen;
+
 struct segments {
     struct line *line;
     bool new_line_flag;
@@ -98,7 +100,7 @@ struct selection_state {
 void free_selection(struct selection_state *sel);
 bool init_selection(struct selection_state *sel, struct window *win);
 
-void selection_view_scrolled(struct selection_state *sel, struct term *term);
+void selection_view_scrolled(struct selection_state *sel, struct screen *scr);
 bool selection_is_selected(struct selection_state *sel, struct line_view *view, int16_t x);
 void selection_clear(struct selection_state *sel);
 void selection_damage(struct selection_state *sel, struct line *line);
@@ -106,7 +108,7 @@ void selection_concat(struct selection_state *sel, struct line *dst, struct line
 void selection_relocated(struct selection_state *sel, struct line *line, bool cut);
 void selection_free(struct selection_state *sel, struct line *line);
 bool selection_intersects(struct selection_state *sel, struct line *line, int16_t x0, int16_t x1);
-bool selection_pending_scroll(struct selection_state *sel, struct term *term);
+bool selection_pending_scroll(struct selection_state *sel, struct screen *scr);
 
 inline static bool selection_active(struct selection_state *sel) {
     return sel->state != state_sel_none &&

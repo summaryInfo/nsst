@@ -495,9 +495,10 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
     rctx.decoration_buf.size = 0;
     rctx.glyphs_size = 0;
 
-    struct line_offset vpos = term_get_view(win->term);
-    for (ssize_t k = 0; k < win->ch; k++, term_line_next(win->term, &vpos, 1)) {
-        struct line_view line = term_line_at(win->term, vpos);
+    struct screen *scr = term_screen(win->term);
+    struct line_offset vpos = screen_view(scr);
+    for (ssize_t k = 0; k < win->ch; k++, screen_advance_iter(scr, &vpos, 1)) {
+        struct line_view line = screen_line_at(scr, vpos);
         bool next_dirty = 0, first_in_line = 1;
         if (win->cw > line.width) {
             color_t c = win->bg_premul;

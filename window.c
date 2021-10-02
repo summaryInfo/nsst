@@ -113,7 +113,7 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
         // during initiallization
         // win->term can be NULL at this point
 
-        if (win->term) term_damage_lines(win->term, 0, win->ch);
+        if (win->term) screen_damage_lines(term_screen(win->term), 0, win->ch);
         win->force_redraw = 1;
     }
 }
@@ -173,8 +173,9 @@ void window_set_active_uri(struct window *win, uint32_t uri, bool pressed) {
                        (win->rcstate.uri_pressed != pressed && uri);
 
     if (uri_damaged) {
-        term_damage_uri(win->term, win->rcstate.active_uri);
-        term_damage_uri(win->term, uri);
+        struct screen *scr = term_screen(win->term);
+        screen_damage_uri(scr, win->rcstate.active_uri);
+        screen_damage_uri(scr, uri);
     }
 
     uri_ref(uri);
@@ -331,7 +332,7 @@ static void reload_window(struct window *win) {
 
     window_set_alpha(win, win->cfg.alpha);
     term_reload_config(win->term);
-    term_damage_lines(win->term, 0, win->ch);
+    screen_damage_lines(term_screen(win->term), 0, win->ch);
 
     renderer_reload_font(win, 1);
 }
@@ -353,7 +354,7 @@ static void window_set_font(struct window *win, const char * name, int32_t size)
 
     if (reload) {
         renderer_reload_font(win, 1);
-        term_damage_lines(win->term, 0, win->ch);
+        screen_damage_lines(term_screen(win->term), 0, win->ch);
         win->force_redraw = 1;
     }
 }
@@ -686,7 +687,7 @@ void run(void) {
             next_timeout = MIN(next_timeout, (win->in_blink ? win->cfg.visual_bell_time : win->cfg.blink_time)*1000LL);
 
             // Scroll down selection
-            bool pending_scroll = selection_pending_scroll(term_get_sstate(win->term), win->term);
+            bool pending_scroll = selection_pending_scroll(term_get_sstate(win->term), term_screen(win->term));
 
             // Change blink state if blinking interval is expired
             if (win->active && win->cfg.allow_blinking &&

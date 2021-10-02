@@ -791,7 +791,7 @@ void platform_handle_events(void) {
                 info("Event: event=SelectionClear owner=0x%x selection=0x%x", ev->owner, ev->selection);
             }
             // Clear even if set keep?
-            term_damage_selection(win->term);
+            screen_damage_selection(term_screen(win->term));
             selection_clear(term_get_sstate(win->term));
             break;
         }
