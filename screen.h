@@ -213,8 +213,8 @@ void screen_print_screen(struct screen *scr, bool force_ext);
 void screen_print_line(struct screen *scr, struct line *line);
 void screen_set_margin_bell_volume(struct screen *scr, uint8_t vol);
 uint8_t screen_get_margin_bell_volume(struct screen *scr);
-ssize_t screen_dispatch_print(struct screen *scr, int32_t rune, ssize_t rep,
-                              const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs);
+ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs);
+ssize_t screen_dispatch_rep(struct screen *scr, int32_t rune, ssize_t rep);
 
 char *encode_sgr(char *dst, char *end, struct attr *attr);
 
@@ -386,17 +386,13 @@ inline static struct cursor *screen_cursor(struct screen *scr) {
     return &scr->c;
 }
 
-inline static ssize_t screen_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs) {
-    return screen_dispatch_print(scr, 0, 0, start, end, utf8, nrcs);
-}
-
 inline static void screen_rep(struct screen *scr, ssize_t rep) {
     while (rep > 0)
-        rep = screen_dispatch_print(scr, scr->prev_ch, rep, NULL, NULL, 0, 0);
+        rep = screen_dispatch_rep(scr, scr->prev_ch, rep);
 }
 
 inline static void screen_putchar(struct screen *scr, uint32_t ch) {
-    screen_dispatch_print(scr, ch, 1, NULL, NULL, 1, 0);
+    screen_dispatch_rep(scr, ch, 1);
 }
 
 inline static bool screen_altscreen(struct screen *scr) {

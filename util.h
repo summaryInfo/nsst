@@ -129,8 +129,8 @@ inline static bool iswide(uint32_t x) {
 }
 
 inline static bool iscombining(uint32_t x) {
-    return (x == 0xE0001U || (x - 0xE0020U) < 0x1D0U) ||
-        (x < 0x1F000U && width_data_[combining_table1_[x >> 8]][(x >> 5) & 0x7] & (1U << (x & 0x1F)));
+    return x >= 0x300 && ((x == 0xE0001U || (x - 0xE0020U) < 0x1D0U) ||
+        (x < 0x1F000U && width_data_[combining_table1_[x >> 8]][(x >> 5) & 0x7] & (1U << (x & 0x1F))));
 }
 
 inline static int uwidth(uint32_t x) {
@@ -138,8 +138,7 @@ inline static int uwidth(uint32_t x) {
      * C0 and C1 characters as of width 1 */
     if (LIKELY(x < 0x300)) return 1;
     if (UNLIKELY(iscombining(x))) return 0;
-    if (iswide(x)) return 2;
-    return 1;
+    return 1 + iswide(x);
 }
 
 

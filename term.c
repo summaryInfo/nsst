@@ -3172,7 +3172,7 @@ inline static bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
 inline static bool term_dispatch(struct term *term, const uint8_t **start, const uint8_t *end) {
     // Fast path for graphical characters
     if (term->esc.state == esc_ground && !IS_CBYTE(**start))
-        return screen_print(&term->scr, start, end, term->mode.utf8, term->mode.enable_nrcs);
+        return screen_dispatch_print(&term->scr, start, end, term->mode.utf8, term->mode.enable_nrcs);
 
     uint8_t ch = *(*start)++;
 
@@ -3617,13 +3617,13 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
             if (IS_C1(ch)) {
                 pre2[2] = *start++ ^ 0xC0;
                 ptmp = pre2;
-                while (ptmp < pre2 + 3 && screen_print(&term->scr, &ptmp, pre2 + 3, utf8, nrcs));
+                while (ptmp < pre2 + 3 && screen_dispatch_print(&term->scr, &ptmp, pre2 + 3, utf8, nrcs));
             } else if ((IS_C0(ch) && ch != '\n' && ch != '\t' && ch != '\r') || IS_DEL(ch)) {
                 pre1[1] = *start++ ^ 0x40;
                 ptmp = pre1;
-                while (ptmp < pre1 + 2 && screen_print(&term->scr, &ptmp, pre1 + 2, utf8, nrcs));
+                while (ptmp < pre1 + 2 && screen_dispatch_print(&term->scr, &ptmp, pre1 + 2, utf8, nrcs));
             } else {
-                if (!screen_print(&term->scr, &start, end, utf8, nrcs)) break;
+                if (!screen_dispatch_print(&term->scr, &start, end, utf8, nrcs)) break;
             }
         }
     }
