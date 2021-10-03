@@ -39,7 +39,7 @@
 #define TTY_MAX_WRITE 256
 
 /* Head of TTYs list with alive child process */
-static struct tty *first_tty, *last_tty;
+static struct watcher *first_child;
 
 /* Default termios, initialized from main */
 static struct termios dtio;
@@ -59,14 +59,10 @@ static void handle_chld(int arg) {
         else if (WIFSIGNALED(status))
             info("Child terminated due to the signal: %d\n", WTERMSIG(status));
 
-        for (struct tty *tty = first_tty; tty; tty = tty->next) {
-            if (tty->printer == pid) {
-                close(tty->printerfd);
-                tty->printerfd = -1;
-                break;
-            } else if (tty->child == pid) {
-                close(tty->fd);
-                tty->fd = -1;
+        for (struct watcher *w = first_child; w; w = w->next) {
+            if (w->child == pid) {
+                close(w->fd);
+                w->fd = -1;
                 break;
             }
         }
@@ -318,6 +314,35 @@ void init_default_termios(void) {
             .sa_handler = handle_chld, .sa_flags = SA_RESTART}, NULL);
 }
 
+static void add_watcher(struct watcher *w) {
+    w->next = first_child;
+    w->prev = NULL;
+
+    if (first_child)
+        first_child->prev = w;
+    first_child = w;
+}
+
+static void remove_watcher(struct watcher *w) {
+    if (w->next) w->next->prev = w->prev;
+    if (w->prev) w->prev->next = w->next;
+    else if (first_child == w) first_child = w->next;
+    w->next = w->prev = NULL;
+
+    if (w->fd >= 0) {
+        close(w->fd);
+        w->fd = -1;
+    }
+
+    if (w->child > 0)
+        kill(w->child, SIGHUP);
+}
+
+void hang_watched_children(void) {
+    while (first_child)
+        remove_watcher(first_child);
+}
+
 int tty_open(struct tty *tty, struct instance_config *cfg) {
     /* Configure PTY */
 
@@ -339,32 +364,23 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
 #endif
 
     int slave;
-    if (openpty(&tty->fd, &slave, NULL, &tio, NULL) < 0) {
+    if (openpty(&tty->w.fd, &slave, NULL, &tio, NULL) < 0) {
         warn("Can't create pseudo terminal");
-        tty->fd = -1;
+        tty->w.fd = -1;
         return -1;
     }
 
-    if (last_tty) {
-        last_tty->next = tty;
-        tty->prev = last_tty;
-        last_tty = tty;
-    } else {
-        last_tty = tty;
-        first_tty = tty;
-    }
+    int fld = fcntl(tty->w.fd, F_GETFD);
+    if (fld >= 0) fcntl(tty->w.fd, F_SETFD, fld | FD_CLOEXEC);
+    int fl = fcntl(tty->w.fd, F_GETFL);
+    if (fl >= 0) fcntl(tty->w.fd, F_SETFL, fl | O_NONBLOCK);
 
-    int fld = fcntl(tty->fd, F_GETFD);
-    if (fld >= 0) fcntl(tty->fd, F_SETFD, fld | FD_CLOEXEC);
-    int fl = fcntl(tty->fd, F_GETFL);
-    if (fl >= 0) fcntl(tty->fd, F_SETFL, fl | O_NONBLOCK);
-
-    switch ((tty->child = fork())) {
+    switch ((tty->w.child = fork())) {
     case -1:
         close(slave);
-        close(tty->fd);
+        close(tty->w.fd);
         warn("Can't fork");
-        tty->fd = -1;
+        tty->w.fd = -1;
         return -1;
     case 0:
         setsid();
@@ -384,86 +400,20 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
         close(slave);
     }
 
-    /* Open printer file/pipe */
-    if (tty->fd >= 0) {
-        tty->printerfd = -1;
-
-        /* Printer command is more prioritized that file */
-        if (cfg->printer_cmd) {
-            int pip[2];
-            if (pipe(pip) >= 0 && (tty->printer = fork()) >= 0) {
-                if (!tty->printer) {
-                    dup2(pip[0], 0);
-                    close(pip[1]);
-                    close(pip[0]);
-                    tty->printerfd = pip[0];
-                    execl("/bin/sh", "/bin/sh", "-c", cfg->printer_cmd, NULL);
-                    warn("Can't run print command: '%s'", cfg->printer_cmd);
-                    return 127;
-                } else {
-                    signal(SIGPIPE, SIG_IGN);
-                    close(pip[0]);
-                    tty->printerfd = pip[1];
-                }
-            } else {
-                if (tty->printer) {
-                    close(pip[0]);
-                    close(pip[1]);
-                }
-                warn("Can't run print command: '%s'", cfg->printer_cmd);
-            }
-        }
-
-        if (tty->printerfd < 0 && cfg->printer_file) {
-            if (cfg->printer_file[0] == '-' && !cfg->printer_file[1])
-                tty->printerfd = STDOUT_FILENO;
-            else
-                tty->printerfd = open(cfg->printer_file, O_WRONLY | O_CREAT, 0660);
-        }
-
-        if (tty->printerfd >= 0) {
-            fl = fcntl(tty->printerfd, F_GETFL);
-            if (fl >= 0) fcntl(tty->printerfd, F_SETFL, fl | O_CLOEXEC);
-        }
-    }
-
     tty->start = tty->end = tty->fd_buf;
 
-    return tty->fd;
+    if (tty->w.child > 0)
+        add_watcher(&tty->w);
+
+    return tty->w.fd;
 }
 
 void tty_hang(struct tty *tty) {
-    if (tty->prev)
-        tty->prev->next = tty->next;
-    else if (first_tty == tty)
-        first_tty = tty->next;
-
-    if (tty->next)
-        tty->next->prev = tty->prev;
-    else if (last_tty == tty)
-        last_tty = tty->prev;
-
-    tty->next = tty->prev = NULL;
-
-    if (tty->fd >= 0) {
-        close(tty->fd);
-        tty->fd = -1;
-    }
-
-    if (tty->child > 0)
-        kill(tty->child, SIGHUP);
-
-    if (tty->printerfd != STDOUT_FILENO && tty->printerfd >= 0) {
-        close(tty->printerfd);
-        tty->printerfd = -1;
-    }
-
-    if (tty->printer > 0)
-        kill(tty->printer, SIGHUP);
+    remove_watcher(&tty->w);
 }
 
 ssize_t tty_refill(struct tty *tty) {
-    if (UNLIKELY(tty->fd == -1)) return -1;
+    if (UNLIKELY(tty->w.fd == -1)) return -1;
 
     ssize_t inc, sz = tty->end - tty->start;
 
@@ -473,7 +423,7 @@ ssize_t tty_refill(struct tty *tty) {
         tty->start = tty->fd_buf;
     }
 
-    if ((inc = read(tty->fd, tty->end, sizeof(tty->fd_buf) - sz)) < 0) {
+    if ((inc = read(tty->w.fd, tty->end, sizeof(tty->fd_buf) - sz)) < 0) {
         if (errno != EAGAIN) {
             warn("Can't read from tty");
             tty_hang(tty);
@@ -491,7 +441,7 @@ inline static void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t le
     ssize_t res, lim = TTY_MAX_WRITE;
     struct pollfd pfd = {
         .events = POLLIN | POLLOUT,
-        .fd = tty->fd
+        .fd = tty->w.fd
     };
     while (len) {
         if (poll(&pfd, 1, -1) < 0 && errno != EINTR) {
@@ -500,7 +450,7 @@ inline static void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t le
             return;
         }
         if (pfd.revents & POLLOUT) {
-            if ((res = write(tty->fd, buf, MIN(lim, len))) < 0) {
+            if ((res = write(tty->w.fd, buf, MIN(lim, len))) < 0) {
                 warn("Can't write to from tty");
                 tty_hang(tty);
                 return;
@@ -519,7 +469,7 @@ inline static void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t le
 }
 
 void tty_write(struct tty *tty, const uint8_t *buf, size_t len, bool crlf) {
-    if (tty->fd == -1) return;
+    if (tty->w.fd == -1) return;
 
     const uint8_t *next;
 
@@ -539,7 +489,7 @@ void tty_write(struct tty *tty, const uint8_t *buf, size_t len, bool crlf) {
 }
 
 void tty_break(struct tty *tty) {
-    if (tcsendbreak(tty->fd, 0))
+    if (tcsendbreak(tty->w.fd, 0))
         warn("Can't send break");
 }
 
@@ -551,27 +501,135 @@ void tty_set_winsz(struct tty *tty, int16_t width, int16_t height, int16_t wwidt
         .ws_ypixel = wheight
     };
 
-    if (ioctl(tty->fd, TIOCSWINSZ, &wsz) < 0) {
+    if (ioctl(tty->w.fd, TIOCSWINSZ, &wsz) < 0) {
         warn("Can't change tty size");
         tty_hang(tty);
     }
 }
 
-void tty_print_string(struct tty *tty, const uint8_t *str, ssize_t size) {
+void printer_print_string(struct printer *pr, const uint8_t *str, ssize_t size) {
     ssize_t wri = 0, res;
     do {
-        res = write(tty->printerfd, str, size);
+        res = write(pr->w.fd, str, size);
         if (res < 0) {
             warn("Printer error");
-            if (tty->printerfd != STDOUT_FILENO)
-                close(tty->printerfd);
-            tty->printerfd = -1;
+            if (pr->w.fd != STDOUT_FILENO)
+                close(pr->w.fd);
+            pr->w.fd = -1;
             break;
         }
         wri += res;
     } while(wri < size);
 }
 
-bool tty_has_printer(struct tty *tty) {
-    return tty->printerfd >= 0;
+bool printer_is_available(struct printer *pr) {
+    return pr->w.fd >= 0;
 }
+
+void free_printer(struct printer *pr) {
+    remove_watcher(&pr->w);
+}
+
+void init_printer(struct printer *pr, struct instance_config *cfg) {
+    pr->w.fd = -1;
+
+    /* Printer command is more prioritized that file */
+    if (cfg->printer_cmd) {
+        int pip[2];
+        if (pipe(pip) >= 0 && (pr->w.child = fork()) >= 0) {
+            if (!pr->w.child) {
+                dup2(pip[0], 0);
+                close(pip[1]);
+                close(pip[0]);
+                pr->w.fd = pip[0];
+                execl("/bin/sh", "/bin/sh", "-c", cfg->printer_cmd, NULL);
+                warn("Can't run print command: '%s'", cfg->printer_cmd);
+                _exit(127);
+            } else {
+                signal(SIGPIPE, SIG_IGN);
+                close(pip[0]);
+                pr->w.fd = pip[1];
+            }
+        } else {
+            if (pr->w.child) {
+                close(pip[0]);
+                close(pip[1]);
+            }
+            warn("Can't run print command: '%s'", cfg->printer_cmd);
+        }
+    }
+
+    if (pr->w.fd < 0 && cfg->printer_file) {
+        if (cfg->printer_file[0] == '-' && !cfg->printer_file[1])
+            pr->w.fd = STDOUT_FILENO;
+        else
+            pr->w.fd = open(cfg->printer_file, O_WRONLY | O_CREAT, 0660);
+    }
+
+    if (pr->w.fd >= 0) {
+        int fl = fcntl(pr->w.fd, F_GETFL);
+        if (fl >= 0) fcntl(pr->w.fd, F_SETFL, fl | O_CLOEXEC);
+    }
+
+    if (pr->w.child > 0)
+        add_watcher(&pr->w);
+}
+
+void printer_intercept(struct printer *pr, const uint8_t **start, const uint8_t *end) {
+    if (!pr->print_controller) return;
+
+    /* If terminal is in controller mode
+     * all input is redirected to printer except for
+     * NUL, XON, XOFF (that are eaten) and 4 sequences:
+     * CSI"5i", ESC"[5i", CSI"[4i", ESC"[4i",
+     * first two of which are no-ops,
+     * and second two disabled printer controller */
+
+    const uint8_t *blk_start = *start;
+    while (*start < end) {
+        uint8_t ch;
+        switch ((ch = *(*start)++)) {
+        case 0x11: /* XON */
+        case 0x13: /* XOFF */
+        case 0x00: /* NUL */
+            if (blk_start < *start - 1)
+                printer_print_string(pr, blk_start, *start - 1 - blk_start);
+            blk_start = *start;
+            break;
+        case 0x9B: /* CSI */
+        case 0x1B: /* ESC */
+            if (blk_start < *start - 1)
+                printer_print_string(pr, blk_start, *start - 1 - blk_start);
+            blk_start = *start - 1;
+            if (ch == 0x1B) pr->state = pr_esc;
+            else pr->state = pr_csi;
+            break;
+        case '[':
+            if (pr->state == pr_esc) pr->state = pr_bracket;
+            else pr->state = pr_ground;
+            break;
+        case '4':
+        case '5':
+            if (pr->state == pr_bracket || pr->state == pr_csi) {
+                pr->state = ch == '4' ? pr_4 : pr_5;
+            } else pr->state = pr_ground;
+            break;
+        case 'i':
+            if (pr->state == pr_4) {
+                /* Disable printer controller mode */
+                pr->print_controller = 0;
+                return;
+            } else if (pr->state == pr_5) {
+                /* Eat sequence */
+                blk_start = *start;
+            }
+            /* fallthrough */
+        default:
+            pr->state = pr_ground;
+        }
+    }
+
+    if (blk_start < end && pr->state == pr_ground)
+        printer_print_string(pr, blk_start, end - blk_start);
+}
+

@@ -71,7 +71,8 @@ nsst.o: feature.h config.h font.h line.h util.h nrcs.h input.h tty.h window.h ha
 poller.o: feature.h config.h util.h
 render-x11shm.o: feature.h config.h font.h line.h util.h nrcs.h mouse.h term.h window.h window-x11.h hashtable.h
 render-x11xrender.o: feature.h config.h font.h line.h util.h nrcs.h mouse.h term.h window.h window-x11.h hashtable.h
-term.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h tty.h uri.h hashtable.h
+term.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h tty.h uri.h hashtable.h screen.h
+screen.o : feature.h config.h line.h util.h nrcs.h mouse.h term.h window.h uri.h hashtable.h screen.h
 tty.o: feature.h config.h font.h line.h util.h nrcs.h tty.h hashtable.h
 uri.o: feature.h config.h uri.h font.h line.h util.h nrcs.h hashtable.h
 util.o: feature.h config.h font.h line.h util.h nrcs.h precompose-table.h hashtable.h wide.h

@@ -217,6 +217,18 @@ inline static struct attr attr_at(struct line *ln, ssize_t x) {
     return ln->cell[x].attrid ? ln->attrs->data[ln->cell[x].attrid - 1] : ATTR_DEFAULT;
 }
 
+inline static void adjust_wide_left(struct line *line, ssize_t x) {
+    if (x < 1) return;
+    struct cell *cell = line->cell + x - 1;
+    if (cell_wide(cell)) *cell = MKCELL(0, cell->attrid);
+}
+
+inline static void adjust_wide_right(struct line *line, ssize_t x) {
+    if (x >= line->width - 1) return;
+    struct cell *cell = &line->cell[x + 1];
+    if (cell_wide(cell - 1)) cell->drawn = 0;
+}
+
 inline static bool attr_eq(struct attr *a, struct attr *b) {
     return a->fg == b->fg && a->bg == b->bg &&
             a->ul == b->ul && !((a->mask ^ b->mask) & ~PROTECTED_MASK);

@@ -111,7 +111,8 @@ vars="${vars}${nl}CFLAGS=$cflags"
 [ x = x"$sharedir" ] && sharedir=${prefix}/share
 
 deps="fontconfig freetype2 xkbcommon"
-objs="nsst.o util.o font.o term.o tty.o line.o config.o mouse.o input.o nrcs.o daemon.o poller.o window.o"
+objs="nsst.o util.o font.o term.o screen.o tty.o line.o config.o"
+objs="$objs mouse.o input.o nrcs.o daemon.o poller.o window.o"
 
 case "$backend" in
 x11shm)

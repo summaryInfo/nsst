@@ -2,9 +2,10 @@
 
 #include "feature.h"
 
-#include "term.h"
 #include "input.h"
 #include "mouse.h"
+#include "term.h"
+#include "tty.h"
 #include "window-x11.h"
 
 #include <fcntl.h>
@@ -34,8 +35,7 @@ static void handle_sigusr1(int sig) {
 }
 
 _Noreturn static void handle_term(int sig) {
-    for (struct window *win = win_list_head; win; win = win->next)
-        term_hang(win->term);
+    hang_watched_children();
 
     if (gconfig.daemon_mode)
         free_daemon();

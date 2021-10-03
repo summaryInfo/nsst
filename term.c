@@ -10,6 +10,7 @@
 #include "line.h"
 #include "mouse.h"
 #include "nrcs.h"
+#include "screen.h"
 #include "term.h"
 #include "tty.h"
 #if USE_URI
@@ -38,7 +39,6 @@
 #define ESC_DUMP_MAX 768
 #define SGR_BUFSIZ 64
 #define MAX_REPORT 1024
-#define PRINT_BLOCK_SIZE 256
 
 #define CSI "\x9B"
 #define OSC "\x9D"
@@ -46,17 +46,10 @@
 #define ESC "\x1B"
 #define ST "\x9C"
 
-#define IS_C1(c) ((uint32_t)(c) - 0x80U < 0x20U)
-#define IS_C0(c) ((c) < 0x20U)
-#define IS_CBYTE(c) (!((uint32_t)(c) & 0x60))
-#define IS_DEL(c) ((c) == 0x7FU)
-#define IS_STREND(c) ((c) == 0x1B || (c) == 0x1A || (c) == 0x18 || (c) == 0x07)
-
 #define TABSR_INIT_CAP 48
 #define TABSR_CAP_STEP(x) (4*(x)/3)
 #define TABSR_MAX_ENTRY 6
 
-#define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
 #define STR_CAP_STEP(x) (4*(x)/3)
 #define PARAM(i, d) (term->esc.param[i] > 0 ? (uparam_t)term->esc.param[i] : (uparam_t)(d))
 #define CHK_VT(v) { if (term->vt_level < (v)) break; }
@@ -95,47 +88,11 @@ enum mode_status {
     modstate_aways_disabled,
 };
 
-struct cursor {
-    /* Curosr position */
-    ssize_t x;
-    ssize_t y;
-
-    /* Character sets */
-    uint32_t gl;
-    uint32_t gr;
-    uint32_t gl_ss;
-    enum charset gn[4];
-
-    bool origin : 1;
-
-    /* Pending wrap flag
-     * is used to match DEC VT terminals
-     * wrapping behaviour */
-    bool pending : 1;
-};
-
-struct screen_mode {
-    bool altscreen : 1;
-    bool lr_margins : 1;
-    bool disable_altscreen : 1;
-    bool rewrap : 1;
-    bool cut_lines : 1;
-    bool minimize_scrollback : 1;
-    bool hide_cursor : 1;
-    bool enable_nrcs : 1;
-    bool attr_ext_rectangle : 1;
-    bool smooth_scroll : 1;
-    bool wrap : 1;
-    bool reverse_wrap : 1;
-};
-
 struct term_mode {
     bool echo : 1;
     bool crlf : 1;
     bool focused : 1;
-    bool utf8 : 1;
     bool reverse_video : 1;
-    bool insert : 1;
     bool sixel : 1;
     bool eight_bit : 1;
     bool protected : 1;
@@ -145,6 +102,7 @@ struct term_mode {
     bool columns_132 : 1;
     bool preserve_display_132 : 1;
     bool disable_columns_132 : 1;
+    bool enable_nrcs : 1;
     bool title_set_utf8 : 1;
     bool title_query_utf8 : 1;
     bool title_set_hex : 1;
@@ -154,27 +112,13 @@ struct term_mode {
     bool led_num_lock : 1;
     bool led_caps_lock : 1;
     bool led_scroll_lock : 1;
-    bool xterm_more_hack : 1;
     bool allow_change_font : 1;
     bool paste_quote : 1;
     bool paste_literal_nl : 1;
-    bool margin_bell : 1;
     bool bell_raise : 1;
     bool bell_urgent : 1;
-    bool print_extend : 1;
-    bool print_form_feed : 1;
-    bool print_auto : 1;
-    bool print_controller : 1;
     bool altscreen_scroll : 1;
-};
-
-struct checksum_mode {
-    bool positive : 1;
-    bool no_attr : 1;
-    bool no_trim : 1;
-    bool no_implicit : 1;
-    bool wide : 1;
-    bool eight_bit : 1;
+    bool utf8 : 1;
 };
 
 /* Parsing state
@@ -192,89 +136,6 @@ enum escape_state {
     esc_vt52_entry, esc_vt52_cup_0, esc_vt52_cup_1,
 };
 
-/* Printer controller mode
- * parser state */
-enum pr_state {
-    pr_ground,
-    pr_csi,
-    pr_esc,
-    pr_bracket,
-    pr_5,
-    pr_4,
-    pr_ignore,
-};
-
-/* There are two screens, and corresponding
- * saved cursor (saved_c, back_saved_c) and SGR states (saved_sgr, back_saved_sgr),
- * if term->scr.mode.altscreen is set
- * scr.screen points to alternate screen and scr.back_screen points to main screen,
- * in opposite case screen points to main screen and back_screen points to
- * alternate screen; same with saved_c/back_saved_c and saved_sgr/saved_back_sgr */
-
-struct screen {
-    struct line **screen;
-    struct line **back_screen;
-    struct line **temp_screen;
-
-    /* Cyclic buffer for scrollback buffer,
-     * it grows dynamically, and thus before
-     * it has reached maximal size (sb_max_caps)
-     * functions as simple array */
-    struct line **scrollback;
-    /* First line offset */
-    ssize_t sb_top;
-    /* Number of lines */
-    ssize_t sb_limit;
-    /* Capacity */
-    ssize_t sb_caps;
-    /* Maximal capacity */
-    ssize_t sb_max_caps;
-
-    /* Offset in scrollback lines */
-    struct line_offset view_pos;
-
-    /* Margins */
-    ssize_t top;
-    ssize_t bottom;
-    ssize_t left;
-    ssize_t right;
-
-    /* Terminal screen dimentions */
-    ssize_t width;
-    ssize_t height;
-
-    /* Smooth scroll acumulator */
-    ssize_t scrolled;
-
-    /* Flags specific to screen */
-    struct screen_mode mode;
-
-    /* Previous cursor state
-     * Used for effective cursor invalidation */
-    ssize_t prev_c_x;
-    ssize_t prev_c_y;
-    bool prev_c_hidden;
-    bool prev_c_view_changed;
-
-    /* Selection state */
-    struct selection_state sstate;
-
-    /* Cursor state */
-    struct cursor back_saved_c;
-    struct cursor saved_c;
-    struct cursor c;
-
-    /* Graphics renderition state */
-    struct attr back_saved_sgr;
-    struct attr saved_sgr;
-    struct attr sgr;
-
-    bool scroll_damage;
-
-    /* Terminal window pointer */
-    struct window *win;
-};
-
 struct term {
     struct screen scr;
 
@@ -284,19 +145,12 @@ struct term {
     struct term_mode vt52_saved_mode;
     struct screen_mode vt52_saved_screen_mode;
 
-    /* Tabstop positions */
-    bool *tabs;
-
     /* If this flag is set application
      * already knows that terminal window
      * would be resized, so it would be
      * incorrect to read from terminal before
      * resize */
     bool requested_resize;
-
-    /* Last written character
-     * Used for REP */
-    uint32_t prev_ch;
 
     /* OSC 52 character description
      * of selection being pasted from */
@@ -306,8 +160,7 @@ struct term {
     struct mouse_state mstate;
     /* Keyboard state */
     struct keyboard_state kstate;
-    /* TTY State, input buffer and
-     * printer state */
+    /* TTY State, input buffer */
     struct tty tty;
 
     /* Terminal modes, most of DECSET/DECRST and RM/SM modes
@@ -322,12 +175,8 @@ struct term {
     struct uri_match_state uri_match;
 #endif
 
-    /* User preferred charset */
-    enum charset upcs;
-
-    /* Bell/margin bell volume */
+    /* Bell volume */
     uint8_t bvol;
-    uint8_t mbvol;
 
     /* This is compressed bit array,
      * that stores encoded modes for
@@ -369,9 +218,6 @@ struct term {
         uint8_t *str_ptr;
     } esc;
 
-    /* Printer controller mode has its own state */
-    enum pr_state pr_state;
-
     /* Emulated VT version, like 420 */
     uint16_t vt_version;
     /* Emulation level, usually vt_version/100 */
@@ -379,1368 +225,7 @@ struct term {
 
     /* Global color palette */
     color_t palette[PALETTE_SIZE];
-
-    /* Sequential graphical characters are decoded
-     * at once for faster parsing, and stored to this buffer
-     * size of this buffer is equal to terminal width */
-    uint32_t *predec_buf;
 };
-
-/* Damage terminal screen, relative to view
- * Faster version for whole lines */
-void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd) {
-    struct line_offset vpos = screen_view(scr);
-    screen_advance_iter(scr, &vpos, ys);
-    for (ssize_t i = ys; i < yd; i++, screen_advance_iter(scr, &vpos, 1))
-        screen_line_at(scr, vpos).line->force_damage = 1;
-}
-
-inline static struct line *screen_cursor_line(struct screen *scr) {
-    return scr->screen[scr->c.y];
-}
-
-static void screen_damage_cursor(struct screen *scr) {
-    screen_cursor_line(scr)->cell[scr->c.x].drawn = 0;
-}
-
-void screen_damage_selection(struct screen *scr) {
-    struct line_offset vpos = screen_view(scr);
-    struct line *prev = NULL;
-    for (ssize_t i = 0; i < scr->height; i++) {
-        struct line_view v = screen_line_at(scr, vpos);
-        if (prev != v.line)
-            selection_damage(&scr->sstate, v.line);
-        screen_advance_iter(scr, &vpos, 1);
-        prev = v.line;
-    }
-}
-
-void screen_damage_uri(struct screen *scr, uint32_t uri) {
-    if (!uri) return;
-
-    struct line_offset vpos = screen_view(scr);
-    for (ssize_t i = 0; i < 0 + scr->height; i++) {
-        struct line_view line = screen_line_at(scr, vpos);
-        if (line.line) {
-            for (ssize_t j = 0; j <  MIN(scr->width, line.width); j++) {
-                if (line_view_attr_at(line, j).uri == uri)
-                    line.cell[j].drawn = 0;
-            }
-            screen_advance_iter(scr, &vpos, 1);
-        }
-    }
-}
-
-/* Internal function to address terminal screen and
- * scrollback buffer continuously
- * Lines with y >= 0 are on screen
- * Line with y < 0 are saved line # -y */
-inline static struct line *line_at(struct screen *scr, ssize_t y) {
-    return y >= 0 ? scr->screen[y] : scr->scrollback[(scr->sb_top + scr->sb_caps + y + 1) % scr->sb_caps];
-}
-
-struct line *screen_paragraph_at(struct screen *scr, ssize_t y) {
-    return y < -scr->sb_limit || y >= scr->height ? NULL : line_at(scr, y);
-}
-
-struct line_view screen_line_at(struct screen *scr, struct line_offset pos) {
-    if (pos.line >= -scr->sb_limit && pos.line < scr->height) {
-        struct line *ln = line_at(scr, pos.line);
-        ssize_t wid = line_width(ln, pos.offset, scr->width);
-        return (struct line_view) {
-            .width = wid - pos.offset,
-            .wrapped = ln->wrapped || wid < ln->width,
-            .cell = ln->cell + pos.offset,
-            .line = ln,
-        };
-    } else return (struct line_view){ 0 };
-}
-
-ssize_t screen_advance_iter(struct screen *scr, struct line_offset *pos, ssize_t amount) {
-    struct line *ln;
-    if (scr->mode.rewrap) {
-        // Rewrapping is enabled
-        if (amount < 0) {
-            if (pos->line - 1 < -scr->sb_limit) return amount;
-            ln = line_at(scr, pos->line);
-            // TODO Litle optimization
-            amount += line_segments(ln, 0, scr->width) - line_segments(ln, pos->offset, scr->width);
-            pos->offset = 0;
-            while (amount < 0) {
-                if (pos->line - 1 < -scr->sb_limit) return amount;
-                ln = line_at(scr, --pos->line);
-                amount += line_segments(ln, 0, scr->width);
-            }
-        }
-        if (amount > 0) {
-            if (pos->line >= scr->height) return amount;
-            ln = line_at(scr, pos->line);
-            while (pos->line < scr->height && amount) {
-                if ((pos->offset = line_width(ln, pos->offset, scr->width)) >= ln->width) {
-                    pos->offset = 0;
-                    if (pos->line + 1 >= scr->height) break;
-                    ln = line_at(scr, ++pos->line);
-                }
-                amount--;
-            }
-        }
-    } else {
-        ssize_t new = MAX(-scr->sb_limit, MIN(amount + pos->line, scr->height - 1));
-        amount -= new - pos->line;
-        *pos = (struct line_offset) { new, 0 };
-    }
-    return amount;
-}
-
-struct line_offset screen_view(struct screen *scr) {
-    return scr->view_pos;
-}
-
-struct line_offset screen_line_iter(struct screen *scr, ssize_t y) {
-    struct line_offset pos = {0, 0};
-    screen_advance_iter(scr, &pos, y);
-    return pos;
-}
-
-static void screen_reset_view(struct screen *scr, bool damage) {
-    scr->prev_c_view_changed |= !scr->view_pos.line;
-    scr->view_pos = (struct line_offset){0};
-    selection_view_scrolled(&scr->sstate, scr);
-
-    if (!damage) return;
-
-    for(ssize_t i = 0; i < scr->height; i++)
-        scr->screen[i]->force_damage = 1;
-}
-
-inline static struct line *screen_concat_line(struct screen *scr, struct line *dst, struct line *src, bool opt) {
-    if (src && src->selection_index)
-        selection_concat(&scr->sstate, dst, src);
-    struct line *new = concat_line(dst, src, opt);
-    if (new->selection_index)
-        selection_relocated(&scr->sstate, new, 0);
-    return new;
-}
-
-inline static struct line *screen_realloc_line(struct screen *scr, struct line *line, ssize_t width) {
-    bool cut = width < line->mwidth;
-    struct line *new = realloc_line(line, width);
-    if (new->selection_index)
-        selection_relocated(&scr->sstate, new, cut);
-    return new;
-}
-
-static void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
-    if (scr->scrollback) {
-        selection_clear(&scr->sstate);
-        screen_reset_view(scr, 0);
-    }
-
-    for (ssize_t i = 1; i <= (scr->sb_caps == scr->sb_max_caps ? scr->sb_caps : scr->sb_limit); i++) {
-        struct line *line = line_at(scr, -i);
-        if (line->selection_index)
-            selection_clear(&scr->sstate);
-        free_line(line);
-    }
-    free(scr->scrollback);
-
-    scr->scrollback = NULL;
-    scr->sb_max_caps = max_size;
-    scr->sb_caps = 0;
-    scr->sb_limit = 0;
-    scr->sb_top = -1;
-}
-
-void screen_scroll_view(struct screen *scr, int16_t amount) {
-    bool old_viewr = !scr->view_pos.line;
-
-    ssize_t delta = screen_advance_iter(scr, &scr->view_pos, -amount) + amount;
-    if (scr->view_pos.line > 0) {
-        delta += scr->view_pos.line;
-        scr->view_pos.line = 0;
-    }
-
-    if (delta > 0) /* View down, image up */ {
-        window_shift(scr->win, 0, delta, scr->height - delta);
-        screen_damage_lines(scr, 0, delta);
-    } else if (delta < 0) /* View down, image up */ {
-        window_shift(scr->win, -delta, 0, scr->height + delta);
-        screen_damage_lines(scr, scr->height + delta, scr->height);
-    }
-
-   selection_view_scrolled(&scr->sstate, scr);
-    scr->prev_c_view_changed |= old_viewr != !scr->view_pos.line;
-}
-
-static ssize_t screen_append_history(struct screen *scr, struct line *line, bool opt) {
-    ssize_t res = 0;
-    if (scr->sb_max_caps > 0) {
-        struct line *tmp;
-        /* If last line in history is wrapped concat current line to it */
-        if (scr->mode.rewrap && scr->sb_limit &&
-                line_at(scr, -1)->wrapped && (tmp = screen_concat_line(scr, line_at(scr, -1), line, opt))) {
-
-            scr->scrollback[scr->sb_top] = tmp;
-        } else {
-            // TODO Need to damage screen if selection is reset
-
-            /* Optimize line */
-            line = screen_concat_line(scr, line, NULL, opt);
-
-            if (scr->sb_limit == scr->sb_max_caps) {
-                /* If view points to the line that is to be freed, scroll it down */
-                if (scr->view_pos.line == -scr->sb_max_caps) {
-                    if (scr->mode.rewrap)
-                        res = line_segments(line_at(scr, -scr->sb_limit), scr->view_pos.offset, scr->width);
-                    else
-                        res = 1;
-                    scr->view_pos.line++;
-                    scr->view_pos.offset = 0;
-                    scr->prev_c_view_changed |= !scr->view_pos.line;
-                }
-
-                /* We reached maximal number of saved lines,
-                 * now scr->scrollback functions as true cyclic buffer */
-                scr->sb_top = (scr->sb_top + 1) % scr->sb_caps;
-                SWAP(line, scr->scrollback[scr->sb_top]);
-
-                if (line->selection_index)
-                    selection_clear(&scr->sstate);
-                free_line(line);
-            } else {
-                /* More lines can be saved, scr->scrollback is not cyclic yet */
-
-                /* Adjust capacity as needed */
-                if (scr->sb_limit + 1 >= scr->sb_caps) {
-                    ssize_t new_cap = CBUF_STEP(scr->sb_caps, scr->sb_max_caps);
-                    struct line **new = realloc(scr->scrollback, new_cap * sizeof(*new));
-                    if (!new) {
-                        if (line->selection_index)
-                            selection_clear(&scr->sstate);
-                        free_line(line);
-                        return res;
-                    }
-                    scr->sb_caps = new_cap;
-                    scr->scrollback = new;
-                }
-
-                /* And just save line */
-                scr->sb_limit++;
-                scr->sb_top = (scr->sb_top + 1) % scr->sb_caps;
-                scr->scrollback[scr->sb_top] = line;
-            }
-
-            if (scr->view_pos.line)
-                scr->view_pos.line--;
-        }
-    } else {
-        if (line->selection_index)
-            selection_clear(&scr->sstate);
-        free_line(line);
-    }
-    return res;
-}
-
-inline static ssize_t term_width(struct term *term) {
-    return term->scr.width;
-}
-
-inline static ssize_t term_height(struct term *term) {
-    return term->scr.height;
-}
-
-inline static ssize_t screen_max_y(struct screen *scr) {
-    return scr->bottom + 1;
-}
-
-inline static ssize_t screen_min_y(struct screen *scr) {
-    return scr->top;
-}
-
-inline static ssize_t screen_max_x(struct screen *scr) {
-    return scr->mode.lr_margins ? scr->right + 1 : scr->width;
-}
-
-inline static ssize_t screen_min_x(struct screen *scr) {
-    return scr->mode.lr_margins ? scr->left : 0;
-}
-
-inline static ssize_t screen_max_ox(struct screen *scr) {
-    return (scr->mode.lr_margins && scr->c.origin) ? scr->right + 1: scr->width;
-}
-
-inline static ssize_t screen_min_ox(struct screen *scr) {
-    return (scr->mode.lr_margins && scr->c.origin) ? scr->left : 0;
-}
-
-inline static ssize_t screen_max_oy(struct screen *scr) {
-    return scr->c.origin ? scr->bottom + 1: scr->height;
-}
-
-inline static ssize_t screen_min_oy(struct screen *scr) {
-    return scr->c.origin ? scr->top : 0;
-}
-
-static void screen_resize(struct screen *scr, int16_t width, int16_t height) {
-#if USE_URI
-    // Reset active URL
-    window_set_active_uri(scr->win, EMPTY_URI, 0);
-#endif
-
-    // Ensure thatscr->back_screen is altscreen
-    if (scr->mode.altscreen) {
-        SWAP(scr->back_saved_c,scr->saved_c);
-        SWAP(scr->back_screen,scr->screen);
-        SWAP(scr->back_saved_sgr,scr->saved_sgr);
-    }
-
-    bool cur_moved = scr->c.x == scr->width - 1 && scr->c.pending;
-
-    // Resize temporary screen buffer
-    struct line **new_tmpsc = realloc(scr->temp_screen, height*sizeof(*new_tmpsc));
-    if (!new_tmpsc) die("Can't allocate new temporary screen buffer");
-    scr->temp_screen = new_tmpsc;
-
-    struct attr dflt_sgr = ATTR_DEFAULT;
-
-    { // Resize altscreen
-
-        for (ssize_t i = height; i < scr->height; i++) {
-            struct line *line = scr->back_screen[i];
-            if (line->selection_index)
-                selection_clear(&scr->sstate);
-            free_line(line);
-        }
-
-        struct line **new_back = realloc(scr->back_screen, height * sizeof(scr->back_screen[0]));
-        if (!new_back) die("Can't allocate lines");
-        scr->back_screen = new_back;
-
-        ssize_t minh = MIN(scr->height, height);
-        for (ssize_t i = 0; i < minh; i++)
-            scr->back_screen[i] = screen_realloc_line(scr, scr->back_screen[i], width);
-
-        for (ssize_t i = scr->height; i < height; i++)
-            scr->back_screen[i] = create_line(dflt_sgr, width);
-
-        // Adjust altscreen saved cursor position
-
-        scr->back_saved_c.x = MIN(MAX(scr->back_saved_c.x, 0), width - 1);
-        scr->back_saved_c.y = MIN(MAX(scr->back_saved_c.y, 0), height - 1);
-        if (scr->back_saved_c.pending) scr->back_saved_c.x = width - 1;
-
-        if (scr->mode.altscreen) {
-            scr->c.x = MIN(MAX(scr->c.x, 0), width - 1);
-            scr->c.y = MIN(MAX(scr->c.y, 0), height - 1);
-            if (scr->c.pending) scr->c.x = width - 1;
-        }
-    }
-
-
-    // Clear mouse selection
-    // TODO Keep non-rectangular selection
-    selection_clear(&scr->sstate);
-
-    // Find line of bottom left cell
-    struct line_offset lower_left = scr->view_pos;
-    screen_advance_iter(scr, &lower_left, scr->height - 1);
-    bool to_top = scr->view_pos.line <= -scr->sb_limit;
-    bool to_bottom = !scr->view_pos.line;
-    bool ll_translated = to_top || to_bottom;
-
-
-    {  // Resize main screen
-
-        struct line **new_lines = scr->screen;
-        ssize_t nnlines = scr->height, cursor_par = 0, new_cur_par = 0;
-
-        if (scr->width != width && scr->width && scr->mode.rewrap) {
-            ssize_t lline = 0, loff = 0, y= 0;
-            nnlines = 0;
-
-            // If first line of screen is continuation line,
-            // start with fist line of scrollback
-            if (scr->sb_limit && line_at(scr, -1)->wrapped) {
-                loff = line_at(scr, -1)->width;
-                y = -1;
-            }
-
-            bool cset = scr->mode.altscreen, csset = 0, aset = 0;
-            ssize_t par_start = y, approx_cy = 0, dlta = 0;
-
-            scr->screen[scr->height - 1]->wrapped = 0;
-
-            for (ssize_t i = 0; i < scr->height; i++) {
-                // Calculate new apporiximate cursor y
-                if (!aset && i == scr->c.y) {
-                    approx_cy = nnlines + (loff + scr->c.x) / width,
-                    new_cur_par = nnlines;
-                    cursor_par = par_start;
-                    aset = 1;
-                }
-                // Calculate new line number
-                if (!scr->screen[i]->wrapped) {
-                    ssize_t len = line_length(scr->screen[i]);
-                    scr->screen[i]->width = len;
-                    if (y && !nnlines) {
-                        dlta = (len + loff + width - 1)/width -
-                                (len + loff - line_at(scr, -1)->width + width - 1)/width;
-                    }
-                    nnlines += (len + loff + width - 1)/width;
-                    lline++;
-                    loff = 0;
-                    par_start = i + 1;
-                } else loff += scr->width;
-            }
-
-            new_cur_par -= dlta;
-
-            // Pop lines from scrollback so cursor row won't be changed
-            while (y - 1 > -scr->sb_limit && new_cur_par < cursor_par) {
-                struct line *line = line_at(scr, --y);
-                ssize_t delta = (line->width + width - 1) / width;
-                new_cur_par += delta;
-                approx_cy += delta;
-                nnlines += delta;
-            }
-
-            nnlines = MAX(nnlines * 2, MAX(MAX(new_cur_par - cursor_par, approx_cy - height - 1), 0) + height * 2);
-
-            assert(nnlines);
-            new_lines = calloc(nnlines, sizeof(*new_lines));
-            if (!new_lines) die("Can't allocate line");
-            new_lines[0] = create_line(dflt_sgr, width);
-
-            ssize_t y2 = y, dy = 0;
-            for (ssize_t dx = 0; y < scr->height; y++) {
-                struct line *line = line_at(scr, y);
-                ssize_t len = line->width;
-                if (!ll_translated && lower_left.line == y) {
-                    lower_left.line = dy;
-                    lower_left.offset = dx;
-                    ll_translated = 1;
-                }
-                if (cursor_par == y) new_cur_par = dy;
-
-                uint32_t previd = ATTRID_MAX, newid = 0;
-                for (ssize_t x = 0; x < len; x++) {
-                    // If last character of line is wide, soft wrap
-                    if (dx == width - 1 && cell_wide(&line->cell[x])) {
-                        new_lines[dy]->wrapped = 1;
-                        if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
-                        dx = 0;
-                    }
-                    // Calculate new cursor...
-                    if (!cset && scr->c.y == y && x == scr->c.x) {
-                        scr->c.y = dy;
-                        scr->c.x = dx;
-                        cset = 1;
-                    }
-                    // ..and saved cursor position
-                    if (!csset && scr->saved_c.y == y && x == scr->saved_c.x) {
-                        scr->saved_c.y = dy;
-                        scr->saved_c.x = dx;
-                        csset = 1;
-                    }
-
-                    // Copy cell
-                    struct cell c = line->cell[x];
-                    if (c.attrid) {
-                        if (c.attrid != previd)
-                            newid = alloc_attr(new_lines[dy], line->attrs->data[c.attrid - 1]);
-                        c.attrid = newid;
-                    };
-                    new_lines[dy]->cell[dx] = c;
-
-                    // Advance line, soft wrap
-                    if (++dx == width && (x < len - 1 || line->wrapped)) {
-                        new_lines[dy]->wrapped = 1;
-                        new_lines[dy]->mwidth = width;
-                        if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
-                        dx = 0;
-                    }
-                }
-                // If cursor is to the right of line end, need to check separately
-                if (!cset && scr->c.y == y && scr->c.x >= len) {
-                    scr->c.y = dy;
-                    scr->c.x = MIN(width - 1, scr->c.x - len + dx);
-                    cset = 1;
-                }
-                if (!csset && scr->saved_c.y == y && scr->saved_c.x >= len) {
-                    scr->saved_c.y = dy;
-                    scr->saved_c.x = MIN(width - 1, scr->saved_c.x - len + dx);
-                    csset = 1;
-                }
-                // Advance line, hard wrap
-                if (!line->wrapped) {
-                    new_lines[dy]->mwidth = dx;
-                    if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
-                    dx = 0;
-                }
-
-                // Pop from scrollback
-                if (y < 0) scr->scrollback[(scr->sb_top + scr->sb_caps + y + 1) % scr->sb_caps] = NULL;
-
-                assert(!line->selection_index);
-                free_line(line);
-            }
-
-            // Update scrollback data
-            if (scr->sb_limit) {
-                scr->sb_top = (scr->sb_top + y2 + scr->sb_caps) % scr->sb_caps;
-                scr->sb_limit += y2;
-            }
-            if (!ll_translated) lower_left.line -= y2;
-
-            if (dy < nnlines) dy++;
-
-            nnlines = dy;
-        }
-
-        // Push extra lines from top back to scrollback
-        ssize_t start = 0, scrolled = 0;
-        while (scr->c.y > height - 1 || new_cur_par > cursor_par) {
-            if (scr->sb_limit && line_at(scr, -1)->wrapped) {
-                if (lower_left.line >= 0) {
-                    if (!lower_left.line) lower_left.offset += line_at(scr, -1)->width;
-                    lower_left.line--;
-                }
-            } else lower_left.line--;
-
-            scrolled = screen_append_history(scr, new_lines[start++], scr->mode.minimize_scrollback);
-            new_cur_par--;
-            scr->c.y--;
-            scr->saved_c.y--;
-        }
-
-        ssize_t minh = MIN(nnlines - start, height);
-
-        // Resize lines if rewrapping is disabled
-        if (!scr->mode.cut_lines) {
-            if (scrolled) {
-                window_shift(scr->win, scrolled, 0, scr->height - scrolled);
-                screen_damage_lines(scr, scr->height - scrolled, scr->height);
-            } else if (start && !scr->view_pos.line) {
-                window_shift(scr->win, start, 0, height - start);
-            }
-            for (ssize_t i = 0; i < minh; i++) {
-                if (new_lines[i + start]->width < width || scr->mode.cut_lines) {
-                    new_lines[i + start] = screen_realloc_line(scr, new_lines[i + start], width);
-                }
-            }
-        }
-
-        // Adjust cursor
-        scr->saved_c.y = MAX(MIN(scr->saved_c.y, height - 1), 0);
-        if (scr->saved_c.pending) scr->saved_c.x = width - 1;
-        if (!scr->mode.altscreen) {
-            scr->c.y = MAX(MIN(scr->c.y, height - 1), 0);
-            if (scr->c.pending) scr->c.x = width - 1;
-        }
-
-        // Free extra lines from bottom
-        for (ssize_t i = start + height; i < nnlines; i++) {
-            assert(!new_lines[i]->selection_index);
-            free_line(new_lines[i]);
-        }
-
-        // Free old line buffer
-        if (new_lines != scr->screen) free(scr->screen);
-
-        // Resize line buffer
-        // That 'if' is not strictly nessecery,
-        // but causes UBSAN warning
-        if (new_lines) memmove(new_lines, new_lines + start, minh * sizeof(*new_lines));
-        new_lines = realloc(new_lines, height * sizeof(*new_lines));
-        if (!new_lines)  die("Can't allocate lines");
-
-        // Allocate new empty lines
-        for (ssize_t i = minh; i < height; i++)
-            new_lines[i] = create_line(dflt_sgr, width);
-
-        scr->screen = new_lines;
-    }
-
-    // Set state
-    scr->width = width;
-    scr->height = height;
-    scr->left = 0;
-    scr->top = 0;
-    scr->right = width - 1;
-    scr->bottom = height - 1;
-
-    {  // Fixup view
-
-        // Reposition view
-        if (scr->mode.rewrap && !scr->mode.altscreen) {
-            if (to_bottom) {
-                // Stick to bottom
-                scr->view_pos.offset = 0;
-                scr->view_pos.line = 0;
-            } else if (to_top) {
-                // Stick to top
-                scr->view_pos.offset = 0;
-                scr->view_pos.line = -scr->sb_limit;
-            } else {
-                // Keep line of lower left view cell at the bottom
-                lower_left.offset -= lower_left.offset % width;
-                ssize_t hei = height;
-                if (lower_left.line >= scr->height) {
-                    hei = MAX(0, hei - (lower_left.line - scr->height));
-                    lower_left.line = height - 1;
-                }
-                screen_advance_iter(scr, &lower_left, 1 - hei);
-                scr->view_pos = lower_left;
-                if (scr->view_pos.line >= 0 || scr->view_pos.line < -scr->sb_limit)
-                    scr->view_pos.offset = 0;
-            }
-            scr->view_pos.line = MAX(MIN(0, scr->view_pos.line), -scr->sb_limit);
-        }
-    }
-
-    // Damage screen
-    if (!scr->mode.altscreen && scr->mode.rewrap) {
-        // Just damage everything if rewrapping is enabled
-        screen_damage_lines(scr, 0, scr->height);
-    } else if (cur_moved) {
-        scr->back_screen[scr->c.y]->cell[scr->c.x].drawn = 0;
-        scr->back_screen[scr->c.y]->cell[MAX(scr->c.x - 1, 0)].drawn = 0;
-    }
-
-    if (scr->mode.altscreen) {
-        SWAP(scr->back_saved_c, scr->saved_c);
-        SWAP(scr->back_screen, scr->screen);
-        SWAP(scr->back_saved_sgr, scr->saved_sgr);
-    }
-
-}
-
-bool screen_redraw(struct screen *scr, bool blink_commited) {
-    bool c_hidden = scr->mode.hide_cursor || scr->view_pos.line;
-
-    if (scr->c.x != scr->prev_c_x || scr->c.y != scr->prev_c_y ||
-            scr->prev_c_hidden != c_hidden || scr->prev_c_view_changed || !blink_commited) {
-        if (!c_hidden) screen_damage_cursor(scr);
-        if ((!scr->prev_c_hidden || scr->prev_c_view_changed) &&
-                scr->prev_c_y < scr->height && scr->prev_c_x < scr->width)
-            scr->screen[scr->prev_c_y]->cell[scr->prev_c_x].drawn = 0;
-    }
-
-    scr->prev_c_x = scr->c.x;
-    scr->prev_c_y = scr->c.y;
-    scr->prev_c_hidden = c_hidden;
-    scr->prev_c_view_changed = 0;
-
-    if (scr->scroll_damage) {
-        screen_damage_lines(scr, 0, scr->height);
-        scr->scroll_damage = 0;
-    }
-
-    struct line *cl = screen_cursor_line(scr);
-    bool cursor = !scr->prev_c_hidden && (!cl->cell[scr->c.x].drawn  || cl->force_damage);
-
-    return window_submit_screen(scr->win, scr->c.x, scr->c.y, cursor, scr->c.pending);
-}
-
-static void screen_set_tb_margins(struct screen *scr, int16_t top, int16_t bottom) {
-    if (top < bottom) {
-        scr->top = MAX(0, MIN(scr->height - 1, top));
-        scr->bottom = MAX(0, MIN(scr->height - 1, bottom));
-    } else {
-        scr->top = 0;
-        scr->bottom = scr->height - 1;
-    }
-}
-
-static void screen_set_lr_margins(struct screen *scr, int16_t left, int16_t right) {
-    if (left < right) {
-        scr->left = MAX(0, MIN(scr->width - 1, left));
-        scr->right = MAX(0, MIN(scr->width - 1, right));
-    } else {
-        scr->left = 0;
-        scr->right = scr->width - 1;
-    }
-}
-
-static void screen_reset_margins(struct screen *scr) {
-    scr->top = 0;
-    scr->left = 0;
-    scr->bottom = scr->height - 1;
-    scr->right = scr->width - 1;
-}
-
-inline static void screen_rect_pre(struct screen *scr, int16_t *xs, int16_t *ys, int16_t *xe, int16_t *ye) {
-    *xs = MAX(screen_min_oy(scr), MIN(*xs, screen_max_ox(scr) - 1));
-    *xe = MAX(screen_min_oy(scr), MIN(*xe, screen_max_ox(scr)));
-    *ys = MAX(screen_min_oy(scr), MIN(*ys, screen_max_oy(scr) - 1));
-    *ye = MAX(screen_min_oy(scr), MIN(*ye, screen_max_oy(scr)));
-}
-
-inline static void screen_erase_pre(struct screen *scr, int16_t *xs, int16_t *ys, int16_t *xe, int16_t *ye, bool origin) {
-    if (origin) screen_rect_pre(scr, xs, ys, xe, ye);
-    else {
-        *xs = MAX(0, MIN(*xs, scr->width - 1));
-        *xe = MAX(0, MIN(*xe, scr->width));
-        *ys = MAX(0, MIN(*ys, scr->height - 1));
-        *ye = MAX(0, MIN(*ye, scr->height));
-    }
-
-    if (!scr->view_pos.line) window_delay_redraw(scr->win);
-
-    if (!selection_active(&scr->sstate)) return;
-    for (ssize_t y = *ys; y < *ye; y++) {
-        if (selection_intersects(&scr->sstate, scr->screen[y], *xs, *xe)) {
-            screen_damage_selection(scr);
-            selection_clear(&scr->sstate);
-            break;
-        }
-    }
-}
-
-static uint16_t screen_checksum(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct checksum_mode mode) {
-    screen_rect_pre(scr, &xs, &ys, &xe, &ye);
-
-    // TODO Test this thing
-
-    uint32_t res = 0, spc = 0, trm = 0;
-    enum charset gr = scr->c.gn[scr->c.gr];
-    bool first = 1, notrim = mode.no_trim;
-
-    for (; ys < ye; ys++) {
-        struct line *line = scr->screen[ys];
-        for (int16_t i = xs; i < xe; i++) {
-            uint32_t ch = line->cell[i].ch;
-            struct attr attr = attr_at(line, i);
-            if (!(mode.no_implicit) && !ch) ch = ' ';
-
-            if (!(mode.wide)) {
-                if (ch > 0x7F && gr != cs94_ascii) {
-                    nrcs_encode(gr, &ch, scr->mode.enable_nrcs);
-                    if (!mode.eight_bit && ch < 0x80) ch |= 0x80;
-                }
-                ch &= 0xFF;
-            } else {
-                ch = uncompact(ch);
-            }
-
-            if (!(mode.no_attr)) {
-                if (attr.underlined) ch += 0x10;
-                if (attr.reverse) ch += 0x20;
-                if (attr.blink) ch += 0x40;
-                if (attr.bold) ch += 0x80;
-                if (attr.italic) ch += 0x100;
-                if (attr.faint) ch += 0x200;
-                if (attr.strikethrough) ch += 0x400;
-                if (attr.invisible) ch += 0x800;
-            }
-            if (first || line->cell[i].ch || !attr_eq(&attr, &(struct attr){ .fg = attr.fg, .bg = attr.bg, .ul = attr.ul }))
-                trm += ch + spc, spc = 0;
-            else if (!line->cell[i].ch && notrim) spc += ' ';
-
-            res += ch;
-            first = notrim;
-        }
-        if (!notrim) spc = first = 0;
-    }
-
-    if (!notrim) res = trm;
-    return mode.positive ? res : -res;
-}
-
-static void screen_reverse_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct attr *attr) {
-    screen_erase_pre(scr, &xs, &ys, &xe, &ye, 1);
-    uint32_t mask = attr_mask(attr);
-
-    bool rect = scr->mode.attr_ext_rectangle;
-    for (; ys < ye; ys++) {
-        struct line *line = scr->screen[ys];
-        // TODO Optimize
-        for (int16_t i = xs; i < (rect || ys == ye - 1 ? xe : screen_max_ox(scr)); i++) {
-            struct attr newa = attr_at(line, i);
-            attr_mask_set(&newa, attr_mask(&newa) ^ mask);
-            line->cell[i].attrid = alloc_attr(line, newa);
-            line->cell[i].drawn = 0;
-        }
-        if (!rect) xs = screen_min_ox(scr);
-    }
-}
-
-static void screen_apply_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct attr *mask, struct attr *attr) {
-    screen_erase_pre(scr, &xs, &ys, &xe, &ye, 1);
-    uint32_t mmsk = attr_mask(mask);
-    uint32_t amsk = attr_mask(attr) & mmsk;
-
-    bool rect = scr->mode.attr_ext_rectangle;
-    for (; ys < ye; ys++) {
-        struct line *line = scr->screen[ys];
-        // TODO Optimize
-        for (int16_t i = xs; i < (rect || ys == ye - 1 ? xe : screen_max_ox(scr)); i++) {
-            struct attr newa = attr_at(line, i);
-            attr_mask_set(&newa, (attr_mask(&newa) & ~mmsk) | amsk);
-            if (mask->fg) newa.fg = attr->fg;
-            if (mask->bg) newa.bg = attr->bg;
-            if (mask->ul) newa.ul = attr->ul;
-
-            line->cell[i].attrid = alloc_attr(line, newa);
-            line->cell[i].drawn = 0;
-        }
-        if (!rect) xs = screen_min_ox(scr);
-    }
-
-}
-
-static struct attr screen_common_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
-    screen_rect_pre(scr, &xs, &ys, &xe, &ye);
-
-    struct attr common = attr_at(scr->screen[ys], xs);
-    bool has_common_fg = 1, has_common_bg = 1, has_common_ul = 1;
-
-    for (; ys < ye; ys++) {
-        struct line *line = scr->screen[ys];
-        for (int16_t i = xs; i < xe; i++) {
-            struct attr attr = attr_at(line, i);
-            has_common_fg &= (common.fg == attr.fg);
-            has_common_bg &= (common.bg == attr.bg);
-            has_common_ul &= (common.ul == attr.ul);
-            attr_mask_set(&common, attr_mask(&common) & attr_mask(&attr));
-        }
-    }
-
-    if (!has_common_bg) common.bg = indirect_color(SPECIAL_BG);
-    if (!has_common_fg) common.fg = indirect_color(SPECIAL_FG);
-    if (!has_common_ul) common.ul = indirect_color(SPECIAL_BG);
-
-    return common;
-}
-
-static void screen_copy(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, int16_t xd, int16_t yd, bool origin) {
-    if (ye < ys) SWAP(ye, ys);
-    if (xe < xs) SWAP(xe, xs);
-
-    if (origin) {
-        xs = MAX(screen_min_ox(scr), MIN(xs, screen_max_ox(scr) - 1));
-        ys = MAX(screen_min_oy(scr), MIN(ys, screen_max_oy(scr) - 1));
-        xd = MAX(screen_min_ox(scr), MIN(xd, screen_max_ox(scr) - 1));
-        yd = MAX(screen_min_oy(scr), MIN(yd, screen_max_oy(scr) - 1));
-        xe = MAX(screen_min_ox(scr), MIN(MIN(xe - xs + xd, screen_max_ox(scr)) - xd + xs, screen_max_ox(scr)));
-        ye = MAX(screen_min_oy(scr), MIN(MIN(ye - ys + yd, screen_max_oy(scr)) - yd + ys, screen_max_oy(scr)));
-    } else {
-        xs = MAX(0, MIN(xs, scr->width - 1));
-        ys = MAX(0, MIN(ys, scr->height - 1));
-        xd = MAX(0, MIN(xd, scr->width - 1));
-        yd = MAX(0, MIN(yd, scr->height - 1));
-        xe = MAX(0, MIN(MIN(xe - xs + xd, scr->width) - xd + xs, scr->width));
-        ye = MAX(0, MIN(MIN(ye - ys + yd, scr->height) - yd + ys, scr->height));
-    }
-
-    if (xs >= xe || ys >= ye) return;
-
-    if (yd <= ys) {
-        for (; ys < ye; ys++, yd++) {
-            struct line *sl = scr->screen[ys], *dl = scr->screen[yd];
-            dl->wrapped = 0; // Reset line wrapping state
-            copy_line(dl, xd, sl, xs, xe - xs);
-        }
-    } else {
-        for (yd += ye - ys; ys < ye; ye--, yd--) {
-            struct line *sl = scr->screen[ye - 1], *dl = scr->screen[yd - 1];
-            dl->wrapped = 0; // Reset line wrapping state
-            copy_line(dl, xd, sl, xs, xe - xs);
-        }
-    }
-}
-
-static void screen_fill(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, bool origin, uint32_t ch) {
-    screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin);
-
-    // Reset line lengths
-    if (!ch && xe == scr->width) {
-        for (int16_t i = ys; i < ye; i++) {
-            assert(xs <= scr->screen[i]->width);
-            scr->screen[i]->mwidth = xs;
-        }
-    } else {
-        int16_t set_to = ch ? xe : xs;
-        for (int16_t i = ys; i < ye; i++) {
-            assert(set_to <= scr->screen[i]->width);
-            if (scr->screen[i]->mwidth <= xe)
-                scr->screen[i]->mwidth = set_to;
-        }
-    }
-
-    for (; ys < ye; ys++) {
-        struct line *line = scr->screen[ys];
-        // Reset line wrapping state
-        line->wrapped = 0;
-        struct cell c = {
-            .attrid = alloc_attr(line, scr->sgr),
-            .ch = compact(ch),
-        };
-        fill_cells(line->cell + xs, c, xe - xs);
-    }
-}
-
-static void screen_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, bool origin) {
-    screen_fill(scr, xs, ys, xe, ye, origin, 0);
-}
-
-static void screen_protective_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, bool origin) {
-    screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin);
-
-    for (; ys < ye; ys++) {
-        struct line *line = scr->screen[ys];
-        // Reset line wrapping state
-        line->wrapped = 0;
-        struct cell c = { .attrid = alloc_attr(line, scr->sgr) };
-        for (int16_t i = xs; i < xe; i++)
-            if (!attr_at(line, i).protected) line->cell[i] = c;
-    }
-}
-
-static void screen_selective_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, bool origin) {
-    screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin);
-
-    for (; ys < ye; ys++) {
-        struct line *line = scr->screen[ys];
-        // Reset line wrapping state
-        line->wrapped = 0;
-        for (ssize_t i = xs; i < xe; i++)
-            if (!attr_at(line,i).protected)
-                line->cell[i] = MKCELL(0, line->cell[i].attrid);
-    }
-}
-
-inline static void adjust_wide_left(struct line *line, ssize_t x) {
-    if (x < 1) return;
-    struct cell *cell = line->cell + x - 1;
-    if (cell_wide(cell)) *cell = MKCELL(0, cell->attrid);
-}
-
-inline static void adjust_wide_right(struct line *line, ssize_t x) {
-    if (x >= line->width - 1) return;
-    struct cell *cell = &line->cell[x + 1];
-    if (cell_wide(cell - 1)) cell->drawn = 0;
-}
-
-inline static void screen_reset_pending(struct screen *scr) {
-    scr->c.pending = 0;
-}
-
-static void screen_move_to(struct screen *scr, int16_t x, int16_t y) {
-    scr->c.x = MIN(MAX(x, 0), scr->width - 1);
-    scr->c.y = MIN(MAX(y, 0), scr->height - 1);
-    screen_reset_pending(scr);
-}
-
-
-static void screen_bounded_move_to(struct screen *scr, int16_t x, int16_t y) {
-    scr->c.x = MIN(MAX(x, screen_min_x(scr)), screen_max_x(scr) - 1);
-    scr->c.y = MIN(MAX(y, screen_min_y(scr)), screen_max_y(scr) - 1);
-    screen_reset_pending(scr);
-}
-
-static void screen_move_left(struct screen *scr, int16_t amount) {
-    int16_t x = scr->c.x, y = scr->c.y,
-        first_left = x < screen_min_x(scr) ? 0 : screen_min_x(scr);
-
-
-    // This is a hack that allows using proper line editing with reverse wrap
-    // mode while staying compatible with VT100 wrapping mode
-    if (scr->mode.reverse_wrap) x += scr->c.pending;
-
-    if (amount > x - first_left && scr->mode.wrap && scr->mode.reverse_wrap) {
-        bool in_tbm = screen_min_y(scr) <= scr->c.y && scr->c.y < screen_max_y(scr);
-        int16_t height = in_tbm ? screen_max_y(scr) - screen_min_y(scr) : scr->height;
-        int16_t top = in_tbm ? screen_min_y(scr) : 0;
-
-        amount -= x - first_left;
-        x = screen_max_x(scr);
-        y -= 1 + amount/(screen_max_x(scr) - screen_min_x(scr));
-        amount %= screen_max_x(scr) - screen_min_x(scr);
-
-        y = (y - top) % height + top;
-        if (y < top) y += height;
-    }
-
-    (scr->c.x >= screen_min_x(scr) ? screen_bounded_move_to : screen_move_to)(scr, x - amount, y);
-}
-
-static void screen_save_cursor(struct screen *scr, bool mode) {
-    if (mode) /* save */ {
-        scr->saved_c = scr->c;
-#if USE_URI
-        uri_ref(scr->sgr.uri);
-        uri_unref(scr->saved_sgr.uri);
-#endif
-        scr->saved_sgr = scr->sgr;
-    } else /* restore */ {
-        scr->c = scr->saved_c;
-#if USE_URI
-        uri_ref(scr->saved_sgr.uri);
-        uri_unref(scr->sgr.uri);
-#endif
-        scr->sgr = scr->saved_sgr;
-        scr->c.x = MIN(scr->c.x, scr->width - 1);
-        scr->c.y = MIN(scr->c.y, scr->height - 1);
-    }
-}
-
-static void screen_swap_screen(struct screen *scr, bool damage) {
-    selection_clear(&scr->sstate);
-    scr->mode.altscreen ^= 1;
-    SWAP(scr->back_saved_c, scr->saved_c);
-    SWAP(scr->back_saved_sgr, scr->saved_sgr);
-    SWAP(scr->back_screen, scr->screen);
-    screen_reset_view(scr, damage);
-}
-
-static void screen_set_altscreen(struct screen *scr, bool set, bool clear, bool save) {
-    if (scr->mode.disable_altscreen) return;
-    if (set != scr->mode.altscreen) {
-        if (set && save) screen_save_cursor(scr, 1);
-        screen_swap_screen(scr, !set || !clear);
-        if (!set && save) screen_save_cursor(scr, 0);
-    }
-    if (set && clear) {
-        screen_erase(scr, 0, 0, scr->width, scr->height, 0);
-    }
-}
-
-static void screen_scroll_horizontal(struct screen *scr, int16_t left, int16_t amount) {
-    ssize_t top = screen_min_y(scr), right = screen_max_x(scr), bottom = screen_max_y(scr);
-
-    for (ssize_t i = top; i < bottom; i++) {
-        struct line *line = scr->screen[i];
-        adjust_wide_left(line, left);
-        adjust_wide_right(line, right - 1);
-    }
-
-    if (amount > 0) { /* left */
-        amount = MIN(amount, right - left);
-        screen_copy(scr, left + amount, top, right, bottom, left, top, 0);
-        screen_erase(scr, right - amount, top, right, bottom, 0);
-    } else { /* right */
-        amount = MIN(-amount, right - left);
-        screen_copy(scr, left, top, right - amount, bottom, left + amount, top, 0);
-        screen_erase(scr, left, top, left + amount, bottom, 0);
-    }
-}
-
-static void screen_scroll(struct screen *scr, int16_t top, int16_t amount, bool save) {
-    ssize_t left = screen_min_x(scr), right = screen_max_x(scr), bottom = screen_max_y(scr);
-
-    if (left == 0 && right == scr->width) { // Fast scrolling without margins
-        if (amount > 0) { /* up */
-            amount = MIN(amount, (bottom - top));
-            ssize_t rest = (bottom - top) - amount;
-
-            if (save && !scr->mode.altscreen && screen_min_y(scr) == top) {
-                ssize_t scrolled = 0;
-                for (ssize_t i = 0; i < amount; i++)
-                    scrolled -= screen_append_history(scr, scr->screen[top + i], scr->mode.minimize_scrollback);
-
-                memmove(scr->screen + top, scr->screen + top + amount, rest * sizeof(*scr->screen));
-                for (ssize_t i = 0; i < amount; i++)
-                    scr->screen[bottom - 1 - i] = create_line(scr->sgr, scr->width);
-
-                if (scrolled < 0) /* View down, image up */ {
-                    screen_damage_lines(scr, scr->height + scrolled, scr->height);
-                    window_shift(scr->win, -scrolled, 0, scr->height + scrolled);
-                    selection_view_scrolled(&scr->sstate, scr);
-                }
-            } else {
-                screen_erase(scr, 0, top, scr->width, top + amount, 0);
-                memcpy(scr->temp_screen, scr->screen + top, amount*sizeof(*scr->temp_screen));
-                memmove(scr->screen + top, scr->screen + top + amount, rest*sizeof(scr->temp_screen));
-                memcpy(scr->screen + top + rest, scr->temp_screen, amount*sizeof(*scr->temp_screen));
-            }
-
-            scr->scroll_damage = 1;
-        } else { /* down */
-            amount = MAX(amount, -(bottom - top));
-            ssize_t rest = (bottom - top) + amount;
-
-            screen_erase(scr, 0, bottom + amount, scr->width, bottom, 0);
-
-            memcpy(scr->temp_screen, scr->screen + bottom + amount, -amount*sizeof(*scr->temp_screen));
-            memmove(scr->screen + top - amount, scr->screen + top, rest*sizeof(scr->temp_screen));
-            memcpy(scr->screen + top, scr->temp_screen, -amount*sizeof(*scr->temp_screen));
-
-            scr->scroll_damage = 1;
-        }
-        if (amount && !scr->view_pos.line) window_delay_redraw(scr->win);
-    } else { // Slow scrolling with margins
-        for (ssize_t i = top; i < bottom; i++) {
-            struct line *line = scr->screen[i];
-            adjust_wide_left(line, left);
-            adjust_wide_right(line, right - 1);
-        }
-
-        if (amount > 0) { /* up */
-            amount = MIN(amount, bottom - top);
-            screen_copy(scr, left, top + amount, right, bottom, left, top, 0);
-            screen_erase(scr, left, bottom - amount, right, bottom, 0);
-        } else { /* down */
-            amount = MIN(-amount, bottom - top);
-            screen_copy(scr, left, top, right, bottom - amount, left, top + amount, 0);
-            screen_erase(scr, left, top, right, top + amount, 0);
-        }
-    }
-
-    if (scr->mode.smooth_scroll && (scr->scrolled += abs(amount)) > window_cfg(scr->win)->smooth_scroll_step) {
-        window_request_scroll_flush(scr->win);
-        scr->scrolled = 0;
-    }
-}
-
-inline static bool screen_cursor_in_region(struct screen *scr) {
-    return scr->c.x >= screen_min_x(scr) && scr->c.x < screen_max_x(scr) &&
-            scr->c.y >= screen_min_y(scr) && scr->c.y < screen_max_y(scr);
-}
-
-static void screen_insert_cells(struct screen *scr, int16_t n) {
-    if (screen_cursor_in_region(scr)) {
-        n = MAX(screen_min_x(scr), MIN(n, screen_max_x(scr) - scr->c.x));
-
-        struct line *line = screen_cursor_line(scr);
-        adjust_wide_left(line, scr->c.x);
-        adjust_wide_right(line, scr->c.x);
-
-        memmove(line->cell + scr->c.x + n, line->cell + scr->c.x,
-                (screen_max_x(scr) - scr->c.x - n) * sizeof(struct cell));
-        for (int16_t i = scr->c.x + n; i < screen_max_x(scr); i++)
-            line->cell[i].drawn = 0;
-
-        screen_erase(scr, scr->c.x, scr->c.y, scr->c.x + n, scr->c.y + 1, 0);
-        if (selection_intersects(&scr->sstate, line, screen_max_x(scr) - n, screen_max_x(scr))) {
-            screen_damage_selection(scr);
-            selection_clear(&scr->sstate);
-        }
-    }
-
-    screen_reset_pending(scr);
-}
-
-static void screen_delete_cells(struct screen *scr, int16_t n) {
-    // Do not check top/bottom margins, DCH sould work outside them
-    if (scr->c.x >= screen_min_x(scr) && scr->c.x < screen_max_x(scr)) {
-        n = MAX(0, MIN(n, screen_max_x(scr) - scr->c.x));
-
-        struct line *line = screen_cursor_line(scr);
-        adjust_wide_left(line, scr->c.x);
-        adjust_wide_right(line, scr->c.x + n - 1);
-
-        memmove(line->cell + scr->c.x, line->cell + scr->c.x + n,
-                (screen_max_x(scr) - scr->c.x - n) * sizeof(struct cell));
-        for (int16_t i = scr->c.x; i < screen_max_x(scr) - n; i++)
-            line->cell[i].drawn = 0;
-
-        screen_erase(scr, screen_max_x(scr) - n, scr->c.y, screen_max_x(scr), scr->c.y + 1, 0);
-        if (selection_intersects(&scr->sstate, line, scr->c.x, scr->c.x + n)) {
-            screen_damage_selection(scr);
-            selection_clear(&scr->sstate);
-        }
-    }
-
-    screen_reset_pending(scr);
-}
-
-static void screen_insert_lines(struct screen *scr, int16_t n) {
-    if (screen_cursor_in_region(scr))
-        screen_scroll(scr, scr->c.y, -n, 0);
-    screen_move_to(scr, screen_min_x(scr), scr->c.y);
-}
-
-static void screen_delete_lines(struct screen *scr, int16_t n) {
-    if (screen_cursor_in_region(scr))
-        screen_scroll(scr, scr->c.y, n, 0);
-    screen_move_to(scr, screen_min_x(scr), scr->c.y);
-}
-
-static void screen_insert_columns(struct screen *scr, int16_t n) {
-    if (screen_cursor_in_region(scr))
-        screen_scroll_horizontal(scr, scr->c.x, -n);
-}
-
-static void screen_delete_columns(struct screen *scr, int16_t n) {
-    if (screen_cursor_in_region(scr))
-        screen_scroll_horizontal(scr, scr->c.x, n);
-}
-
-static void screen_index_horizonal(struct screen *scr) {
-    if (scr->c.x == screen_max_x(scr) - 1 && screen_cursor_in_region(scr)) {
-        screen_scroll_horizontal(scr, screen_min_x(scr), 1);
-        screen_reset_pending(scr);
-    } else if (scr->c.x != screen_max_x(scr) - 1)
-        screen_move_to(scr, scr->c.x + 1, scr->c.y);
-}
-
-static void screen_rindex_horizonal(struct screen *scr) {
-    if (scr->c.x == screen_min_x(scr) && screen_cursor_in_region(scr)) {
-        screen_scroll_horizontal(scr, screen_min_x(scr), -1);
-        screen_reset_pending(scr);
-    } else if (scr->c.x != screen_min_x(scr))
-        screen_move_to(scr, scr->c.x - 1, scr->c.y);
-}
-
-static void screen_index(struct screen *scr) {
-    if (scr->c.y == screen_max_y(scr) - 1 && screen_cursor_in_region(scr)) {
-        screen_scroll(scr, screen_min_y(scr), 1, 1);
-
-        screen_reset_pending(scr);
-    } else if (scr->c.y != screen_max_y(scr) - 1)
-        screen_move_to(scr, scr->c.x, scr->c.y + 1);
-}
-
-static void screen_rindex(struct screen *scr) {
-    if (scr->c.y == screen_min_y(scr) && screen_cursor_in_region(scr)) {
-        screen_scroll(scr,  screen_min_y(scr), -1, 1);
-        screen_reset_pending(scr);
-    } else if (scr->c.y != screen_min_y(scr))
-        screen_move_to(scr, scr->c.x, scr->c.y - 1);
-}
-
-static void screen_cr(struct screen *scr) {
-    screen_move_to(scr, scr->c.x < screen_min_x(scr) ?
-            screen_min_ox(scr) : screen_min_x(scr), scr->c.y);
-}
-
-static char *term_encode_sgr(char *dst, char *end, struct attr attr) {
-#define FMT(...) dst += snprintf(dst, end - dst, __VA_ARGS__)
-#define MAX_SGR_LEN 54
-    // Maximal length sequence is "0;1;2;3;4;6;7;8;9;38:2:255:255:255;48:2:255:255:255"
-
-    // Reset everything
-    FMT("0");
-
-    // Encode attributes
-    if (attr.bold) FMT(";1");
-    if (attr.faint) FMT(";2");
-    if (attr.italic) FMT(";3");
-    if (attr.underlined == 1) FMT(";4");
-    else if (attr.underlined > 1) FMT(";4:%d", attr.underlined);
-    if (attr.blink) FMT(";6");
-    if (attr.reverse) FMT(";7");
-    if (attr.invisible) FMT(";8");
-    if (attr.strikethrough) FMT(";9");
-
-    // Encode foreground color
-    if (color_idx(attr.fg) < 8) FMT(";%u", 30 + color_idx(attr.fg));
-    else if (color_idx(attr.fg) < 16) FMT(";%u", 90 + color_idx(attr.fg) - 8);
-    else if (color_idx(attr.fg) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";38:5:%u", color_idx(attr.fg));
-    else if (color_idx(attr.fg) == SPECIAL_FG) /* FMT(";39") -- default, skip */;
-    else if (is_direct_color(attr.fg)) FMT(";38:2:%u:%u:%u", color_r(attr.fg), color_g(attr.fg), color_b(attr.fg));
-
-    // Encode background color
-    if (color_idx(attr.bg) < 8) FMT(";%u", 40 + color_idx(attr.bg));
-    else if (color_idx(attr.bg) < 16) FMT(";%u", 100 + color_idx(attr.bg) - 8);
-    else if (color_idx(attr.bg) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";48:5:%u", color_idx(attr.bg));
-    else if (color_idx(attr.bg) == SPECIAL_FG) /* FMT(";49") -- default, skip */;
-    else if (is_direct_color(attr.bg)) FMT(";48:2:%u:%u:%u", color_r(attr.bg), color_g(attr.bg), color_b(attr.bg));
-
-    // Encode underline color
-    if (color_idx(attr.ul) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";58:5:%u", color_idx(attr.ul));
-    else if (color_idx(attr.ul) == SPECIAL_FG) /* FMT(";59") -- default, skip */;
-    else if (is_direct_color(attr.ul)) FMT(";58:2:%u:%u:%u", color_r(attr.ul), color_g(attr.ul), color_b(attr.ul));
-
-    return dst;
-#undef FMT
-}
-
-static void term_print_line(struct term *term, struct line *line) {
-    if (!tty_has_printer(&term->tty)) return;
-
-    uint8_t buf[PRINT_BLOCK_SIZE];
-    uint8_t *pbuf = buf, *pend = buf + PRINT_BLOCK_SIZE;
-
-    struct attr prev = {0};
-
-    for (int16_t i = 0; i < line_length(line); i++) {
-        struct cell c = line->cell[i];
-        struct attr attr = attr_at(line, i);
-
-        if (window_cfg(term->scr.win)->print_attr && (!attr_eq(&prev, &attr) || !i)) {
-            /* Print SGR state, if it have changed */
-            *pbuf++ = '\033';
-            *pbuf++ = '[';
-            pbuf = (uint8_t *)term_encode_sgr((char *)pbuf, (char *)pend, attr);
-            *pbuf++ = 'm';
-        }
-
-        /* Print blanks as ASCII space */
-        if (!c.ch) c.ch = ' ';
-
-        //TODO Encode NRCS when UTF is disabled
-        //for now just always print as UTF-8
-        if (c.ch < 0xA0) *pbuf++ = cell_get(&c);
-        else pbuf += utf8_encode(cell_get(&c), pbuf, pend);
-
-        prev = attr;
-
-        /* If theres no more space for next char, flush buffer */
-        if (pbuf + MAX_SGR_LEN + UTF8_MAX_LEN + 1 >= pend) {
-            tty_print_string(&term->tty, buf, pbuf - buf);
-            pbuf = buf;
-        }
-    }
-
-    *pbuf++ = '\n';
-    tty_print_string(&term->tty, buf, pbuf - buf);
-}
-
-static void term_print_screen(struct term *term, bool ext) {
-    if (!tty_has_printer(&term->tty)) return;
-
-    int16_t top = ext ? 0 : screen_min_y(&term->scr);
-    int16_t bottom = (ext ? term_height(term) : screen_max_y(&term->scr)) - 1;
-
-    while (top < bottom)
-        term_print_line(term, line_at(&term->scr, top++));
-
-    if (term->mode.print_form_feed)
-        tty_print_string(&term->tty, (uint8_t[]){'\f'}, 1);
-}
-
-inline static void term_do_wrap(struct term *term) {
-    screen_cursor_line(&term->scr)->wrapped = 1;
-    if (term->mode.print_auto)
-        term_print_line(term, screen_cursor_line(&term->scr));
-    screen_index(&term->scr);
-    screen_cr(&term->scr);
-}
-
-static void term_tabs(struct term *term, int16_t n) {
-    //TODO CHT is not affected by DECCOM but CBT is?
-
-    if (n >= 0) {
-        if (term->mode.xterm_more_hack && term->scr.c.pending)
-            term_do_wrap(term);
-        while (term->scr.c.x < screen_max_x(&term->scr) - 1 && n--) {
-            do term->scr.c.x++;
-            while (term->scr.c.x < screen_max_x(&term->scr) - 1 && !term->tabs[term->scr.c.x]);
-        }
-    } else {
-        while (term->scr.c.x > screen_min_ox(&term->scr) && n++) {
-            do term->scr.c.x--;
-            while (term->scr.c.x > screen_min_ox(&term->scr) && !term->tabs[term->scr.c.x]);
-        }
-    }
-}
-
-static void term_reset_tabs(struct term *term) {
-    memset(term->tabs, 0, term_width(term) * sizeof(term->tabs[0]));
-    int16_t tabw = window_cfg(term->scr.win)->tab_width;
-    for (int16_t i = tabw; i < term_width(term); i += tabw)
-        term->tabs[i] = 1;
-}
-
-
-// <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-// <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-// <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-// <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-
 
 inline static void term_esc_start(struct term *term) {
     term->esc.selector = 0;
@@ -1771,12 +256,13 @@ inline static void term_esc_finish_string(struct term *term) {
 }
 
 static void term_request_resize(struct term *term, int16_t w, int16_t h, bool in_cells) {
-    struct extent cur = window_get_size(term->scr.win);
-    struct extent scr = window_get_screen_size(term->scr.win);
+    struct window *win = screen_window(&term->scr);
+    struct extent cur = window_get_size(win);
+    struct extent scr = window_get_screen_size(win);
 
     if (in_cells) {
-        struct extent ce = window_get_cell_size(term->scr.win);
-        struct extent bo = window_get_border(term->scr.win);
+        struct extent ce = window_get_cell_size(win);
+        struct extent bo = window_get_border(win);
         if (w > 0) w = w * ce.width + bo.width * 2;
         if (h > 0) h = h * ce.height + bo.height * 2;
     }
@@ -1786,32 +272,37 @@ static void term_request_resize(struct term *term, int16_t w, int16_t h, bool in
 
     term->requested_resize = 1;
 
-    window_resize(term->scr.win, w, h);
+    window_resize(win, w, h);
 }
 
 static void term_set_132(struct term *term, bool set) {
-    screen_reset_margins(&term->scr);
-    screen_move_to(&term->scr, screen_min_ox(&term->scr), screen_min_oy(&term->scr));
+    struct screen *scr = &term->scr;
+    screen_reset_margins(scr);
+    screen_move_to(scr, screen_min_ox(scr), screen_min_oy(scr));
     if (!(term->mode.preserve_display_132))
-        screen_erase(&term->scr, 0, 0, term_width(term), term_height(term), 0);
-    if (window_cfg(term->scr.win)->allow_window_ops)
+        screen_erase(scr, 0, 0, screen_width(scr), screen_height(scr), 0);
+    if (window_cfg(screen_window(scr))->allow_window_ops)
         term_request_resize(term, set ? 132 : 80, 24, 1);
     term->mode.columns_132 = set;
 }
 
 static void term_set_vt52(struct term *term, bool set) {
+    // This thing is mess...
+    struct screen *scr = &term->scr;
+    struct screen_mode *smode = &scr->mode;
     if (set) {
         term->kstate.keyboad_vt52 = 1;
         term->vt_level = 0;
-        term->vt52_saved_c = term->scr.c;
+        term->vt52_saved_c = *screen_cursor(scr);
         term->vt52_saved_mode = term->mode;
-        term->vt52_saved_screen_mode = term->scr.mode;
+        term->vt52_saved_screen_mode = *smode;
 
-        term->scr.c = (struct cursor) {
-            .x = term->scr.c.x,
-            .y = term->scr.c.y,
-            .pending = term->scr.c.pending,
-            .gl = term->scr.c.gl_ss = 0,
+        *screen_cursor(scr) = (struct cursor) {
+            .x = screen_cursor(scr)->x,
+            .y = screen_cursor(scr)->y,
+            .pending = screen_cursor(scr)->pending,
+            .gl = 0,
+            .gl_ss = 0,
             .gr = 2,
             .gn = { cs94_ascii, cs94_ascii, cs94_ascii, cs94_dec_graph }
         };
@@ -1819,7 +310,7 @@ static void term_set_vt52(struct term *term, bool set) {
             .focused = term->mode.focused,
             .reverse_video = term->mode.reverse_video,
         };
-        term->scr.mode = (struct screen_mode) {
+        *smode  = (struct screen_mode) {
             .wrap = 1
         };
         screen_set_altscreen(&term->scr, 0, 0, 0);
@@ -1827,13 +318,16 @@ static void term_set_vt52(struct term *term, bool set) {
     } else {
         term->kstate.keyboad_vt52 = 0;
         term->vt_level = 1;
-        term->vt52_saved_c.x = term->scr.c.x;
-        term->vt52_saved_c.y = term->scr.c.y;
-        term->vt52_saved_c.pending = term->scr.c.pending;
-        term->scr.c = term->vt52_saved_c;
+        struct cursor *c = screen_cursor(scr);
+        term->vt52_saved_c.x = c->x;
+        term->vt52_saved_c.y = c->y;
+        term->vt52_saved_c.pending = c->pending;
+        *screen_cursor(scr) = term->vt52_saved_c;
+
+        *smode = term->vt52_saved_screen_mode;
+        bool alt = screen_altscreen(scr);
+        smode->altscreen = 0;
         term->mode = term->vt52_saved_mode;
-        bool alt = term->scr.mode.altscreen;
-        term->scr.mode.altscreen = 0;
         screen_set_altscreen(&term->scr, alt, 0, 0);
     }
 }
@@ -1845,13 +339,46 @@ void term_set_reverse(struct term *term, bool set) {
         SWAP(term->palette[8], term->palette[15]);
         SWAP(term->palette[SPECIAL_CURSOR_BG], term->palette[SPECIAL_CURSOR_FG]);
         SWAP(term->palette[SPECIAL_SELECTED_BG], term->palette[SPECIAL_SELECTED_FG]);
-        window_set_colors(term->scr.win, term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
+        window_set_colors(screen_window(&term->scr), term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
     }
     term->mode.reverse_video = set;
 }
 
-void term_reload_config(struct term *term) {
-    struct instance_config *cfg = window_cfg(term->scr.win);
+static void term_load_config(struct term *term, bool reset) {
+    struct instance_config *cfg = window_cfg(screen_window(&term->scr));
+
+    if (reset) {
+        term->mstate = (struct mouse_state) {0};
+
+        term->mode = (struct term_mode) {
+            .focused = term->mode.focused,
+            .title_query_utf8 = cfg->utf8,
+            .title_set_utf8 = cfg->utf8,
+            .utf8 = cfg->utf8,
+        };
+
+        term->kstate = (struct keyboard_state) {
+            .appcursor = cfg->appcursor,
+            .appkey = cfg->appkey,
+            .backspace_is_del = cfg->backspace_is_delete,
+            .delete_is_del = cfg->delete_is_delete,
+            .fkey_inc_step = cfg->fkey_increment,
+            .has_meta = cfg->has_meta,
+            .keyboard_mapping = cfg->mapping,
+            .keylock = cfg->lock,
+            .meta_escape = cfg->meta_is_esc,
+            .modkey_cursor = cfg->modify_cursor,
+            .modkey_fn = cfg->modify_function,
+            .modkey_keypad = cfg->modify_keypad,
+            .modkey_other = cfg->modify_other,
+            .modkey_other_fmt = cfg->modify_other_fmt,
+            .modkey_legacy_allow_edit_keypad = cfg->allow_legacy_edit,
+            .modkey_legacy_allow_function = cfg->allow_legacy_function,
+            .modkey_legacy_allow_keypad = cfg->allow_legacy_keypad,
+            .modkey_legacy_allow_misc = cfg->allow_legacy_misc,
+            .allow_numlock = cfg->numlock,
+        };
+    }
 
     for (size_t i = 0; i < PALETTE_SIZE; i++)
         term->palette[i] = cfg->palette[i];
@@ -1863,121 +390,56 @@ void term_reload_config(struct term *term) {
     case 2: term->bvol = cfg->bell_high_volume;
     }
 
-    switch(cfg->margin_bell_volume) {
-    case 0: term->mbvol = 0; break;
-    case 1: term->mbvol = cfg->margin_bell_low_volume; break;
-    case 2: term->mbvol = cfg->margin_bell_high_volume;
-    }
-
     term->mode.no_scroll_on_input = !cfg->scroll_on_input;
     term->mode.scroll_on_output = cfg->scroll_on_output;
     term->mode.keep_clipboard = cfg->keep_clipboard;
     term->mode.bell_raise = cfg->raise_on_bell;
     term->mode.bell_urgent = cfg->urgency_on_bell;
-
-    term->scr.sstate.keep_selection = cfg->keep_selection;
-    term->scr.sstate.select_to_clipboard = cfg->select_to_clipboard;
-
-    term->scr.mode.smooth_scroll = cfg->smooth_scroll;
-    term->scr.mode.rewrap = cfg->rewrap;
-    term->scr.mode.cut_lines = cfg->cut_lines;
-    term->scr.mode.minimize_scrollback = cfg->minimize_scrollback;
 }
 
-static bool term_load_config(struct term *term) {
-    free_selection(&term->scr.sstate);
-    if (!init_selection(&term->scr.sstate, term->scr.win)) return 0;
-
-    term->mstate = (struct mouse_state) {0};
-
-    struct instance_config *cfg = window_cfg(term->scr.win);
-    term->mode = (struct term_mode) {
-        .focused = term->mode.focused,
-        .utf8 = cfg->utf8,
-        .title_query_utf8 = cfg->utf8,
-        .title_set_utf8 = cfg->utf8,
-    };
-
-    term->scr.mode = (struct screen_mode) {
-        .disable_altscreen = !cfg->allow_altscreen,
-        .enable_nrcs = cfg->allow_nrcs,
-        .wrap = cfg->wrap,
-    };
-
-    term->kstate = (struct keyboard_state) {
-        .appcursor = cfg->appcursor,
-        .appkey = cfg->appkey,
-        .backspace_is_del = cfg->backspace_is_delete,
-        .delete_is_del = cfg->delete_is_delete,
-        .fkey_inc_step = cfg->fkey_increment,
-        .has_meta = cfg->has_meta,
-        .keyboard_mapping = cfg->mapping,
-        .keylock = cfg->lock,
-        .meta_escape = cfg->meta_is_esc,
-        .modkey_cursor = cfg->modify_cursor,
-        .modkey_fn = cfg->modify_function,
-        .modkey_keypad = cfg->modify_keypad,
-        .modkey_other = cfg->modify_other,
-        .modkey_other_fmt = cfg->modify_other_fmt,
-        .modkey_legacy_allow_edit_keypad = cfg->allow_legacy_edit,
-        .modkey_legacy_allow_function = cfg->allow_legacy_function,
-        .modkey_legacy_allow_keypad = cfg->allow_legacy_keypad,
-        .modkey_legacy_allow_misc = cfg->allow_legacy_misc,
-        .allow_numlock = cfg->numlock,
-    };
-
-    term_reload_config(term);
-
-    term->upcs = cs96_latin_1;
-    term->scr.c = term->scr.back_saved_c = term->scr.saved_c = (struct cursor) {
-        .gl = 0, .gl_ss = 0, .gr = 2,
-        .gn = {cs94_ascii, cs94_ascii, cs94_ascii, cs94_ascii}
-    };
-
-#if USE_URI
-    window_set_mouse(term->scr.win, 1);
-    uri_unref(term->scr.sgr.uri);
-    uri_unref(term->scr.saved_sgr.uri);
-    uri_unref(term->scr.back_saved_sgr.uri);
-#endif
-
-    term->scr.sgr = term->scr.saved_sgr = term->scr.back_saved_sgr = ATTR_DEFAULT;
-    return 1;
+void term_reload_config(struct term *term) {
+    screen_load_config(&term->scr, 0);
+    term_load_config(term, 0);
 }
 
 static void term_do_reset(struct term *term, bool hard) {
-    if (term->mode.columns_132) term_set_132(term, 0);
-    screen_set_altscreen(&term->scr, 0, 0, 0);
+    struct screen *scr = &term->scr;
+    struct window *win = screen_window(scr);
 
-    ssize_t cx = term->scr.c.x, cy = term->scr.c.y;
-    bool cpending = term->scr.c.pending;
+    if (term->mode.columns_132)
+        term_set_132(term, 0);
+    screen_set_altscreen(scr, 0, 0, 0);
 
-    term_load_config(term);
-    screen_reset_margins(&term->scr);
-    term_reset_tabs(term);
+    ssize_t cx, cy;
+    bool cpending;
+    screen_store_cursor_position(scr, &cx, &cy, &cpending);
+
+    screen_load_config(scr, 1);
+    screen_reset_margins(scr);
+    screen_reset_tabs(scr);
+
+    term_load_config(term, 1);
     keyboard_reset_udk(term);
 #if USE_URI
     uri_match_reset(&term->uri_match);
 #endif
 
     // TODO Reset cursor shape to default
-    window_set_mouse(term->scr.win, USE_URI);
-    window_set_colors(term->scr.win, term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
-    window_set_autorepeat(term->scr.win, window_cfg(term->scr.win)->autorepeat);
+    window_set_mouse(win, USE_URI);
+    window_set_colors(win, term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
+    window_set_autorepeat(win, window_cfg(win)->autorepeat);
 
     if (hard) {
-        screen_erase(&term->scr, 0, 0, term_width(term), term_height(term), 0);
-        screen_free_scrollback(&term->scr, window_cfg(term->scr.win)->scrollback_size);
+        screen_erase(scr, 0, 0, screen_width(scr), screen_height(scr), 0);
+        screen_free_scrollback(scr, window_cfg(win)->scrollback_size);
 
-        term->vt_version = window_cfg(term->scr.win)->vt_version;
+        term->vt_version = window_cfg(win)->vt_version;
         term->vt_level = term->vt_version / 100;
         if (!term->vt_level) term_set_vt52(term, 1);
 
-        window_set_title(term->scr.win, target_icon_label | target_title, NULL, term->mode.title_set_utf8);
+        window_set_title(win, target_icon_label | target_title, NULL, term->mode.title_set_utf8);
     } else {
-        term->scr.c.x = cx;
-        term->scr.c.y = cy;
-        term->scr.c.pending = cpending;
+        screen_load_cursor_position(scr, cx, cy, cpending);
     }
 
     term->esc.state = esc_ground;
@@ -2121,17 +583,18 @@ static void term_dispatch_da(struct term *term, uparam_t mode) {
 }
 
 static void term_dispatch_dsr(struct term *term) {
+    struct screen *scr = &term->scr;
     if (term->esc.selector & P_MASK) {
         switch (term->esc.param[0]) {
         case 6: /* DECXCPR -- CSI ? Py ; Px ; R ; 1  */
             term_answerback(term, CSI"%lu;%lu%sR",
-                    term->scr.c.y - screen_min_oy(&term->scr) + 1,
-                    term->scr.c.x - screen_min_ox(&term->scr) + 1,
+                    screen_cursor_y(scr) - screen_min_oy(scr) + 1,
+                    screen_cursor_x(scr) - screen_min_ox(scr) + 1,
                     term->vt_level >= 4 ? ";1" : "");
             break;
         case 15: /* Printer status -- Has printer*/
             CHK_VT(2);
-            term_answerback(term, tty_has_printer(&term->tty) ? CSI"?10n" : CSI"?13n");
+            term_answerback(term, printer_is_available(screen_printer(scr)) ? CSI"?10n" : CSI"?13n");
             break;
         case 25: /* User defined keys lock */
             CHK_VT(2);
@@ -2175,14 +638,15 @@ static void term_dispatch_dsr(struct term *term) {
             break;
         case 6: /* CPR -- CSI Py ; Px R */
             term_answerback(term, CSI"%lu;%luR",
-                    term->scr.c.y - screen_min_oy(&term->scr) + 1,
-                    term->scr.c.x - screen_min_ox(&term->scr) + 1);
+                    screen_cursor_y(scr) - screen_min_oy(scr) + 1,
+                    screen_cursor_x(scr) - screen_min_ox(scr) + 1);
             break;
         }
     }
 }
 
 inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
+    struct screen *scr = &term->scr;
     // Cursor Y
     ssize_t y = strtoul(dstr, &dstr, 10);
     if (!dstr || *dstr++ != ';') return 0;
@@ -2233,30 +697,29 @@ inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
         }
         sel |= E(c);
         if ((gn[i] = nrcs_parse(sel, (c96 >> i) & 1,
-                term->vt_level, term->scr.mode.enable_nrcs)) == nrcs_invalid) return 0;
+                term->vt_level, term->mode.enable_nrcs)) == nrcs_invalid) return 0;
     }
 
     // Everything is OK, load
-
-    term->scr.c = (struct cursor) {
-        .x = MIN(x, term_width(term) - 1),
-        .y = MIN(y, term_height(term) - 1),
+    *screen_cursor(scr) = (struct cursor) {
+        .x = MIN(x, screen_width(scr) - 1),
+        .y = MIN(y, screen_height(scr) - 1),
         .origin = flags & 1,
         .pending = !!(flags & 8),
         .gn = { gn[0], gn[1], gn[2], gn[3] },
         .gl = gl,
         .gr = gr,
-        .gl_ss = flags & 4 ? 3 : flags & 2 ? 2 : term->scr.c.gl
+        .gl_ss = flags & 4 ? 3 : flags & 2 ? 2 : screen_cursor(scr)->gl
     };
 
 #if USE_URI
-    uri_unref(term->scr.sgr.uri);
+    uri_unref(screen_sgr(scr)->uri);
 #endif
-    term->scr.sgr = (struct attr) {
-        .fg = term->scr.sgr.fg,
-        .bg = term->scr.sgr.bg,
-        .ul = term->scr.sgr.ul,
-        .uri = term->scr.sgr.uri,
+    *screen_sgr(scr) = (struct attr) {
+        .fg = screen_sgr(scr)->fg,
+        .bg = screen_sgr(scr)->bg,
+        .ul = screen_sgr(scr)->ul,
+        .uri = screen_sgr(scr)->uri,
         .protected = prot & 1,
         .bold = sgr0 & 1,
         .underlined = sgr0 & 2,
@@ -2272,10 +735,11 @@ inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
 }
 
 inline static bool term_parse_tabs_report(struct term *term, const uint8_t *dstr, const uint8_t *dend) {
-    memset(term->tabs, 0, term_width(term)*sizeof(*term->tabs));
+    screen_clear_tabs(&term->scr);
     for (ssize_t tab = 0; dstr <= dend; dstr++) {
         if (*dstr == '/' || dstr == dend) {
-            if (tab - 1 < term_width(term)) term->tabs[tab - 1] = 1;
+            if (tab - 1 < screen_width(&term->scr))
+                screen_set_tab(&term->scr, tab - 1, 1);
             tab = 0;
         } else if (isdigit(*dstr)) {
             tab = 10 * tab + *dstr - '0';
@@ -2285,6 +749,8 @@ inline static bool term_parse_tabs_report(struct term *term, const uint8_t *dstr
 }
 
 static void term_dispatch_dcs(struct term *term) {
+    struct screen *scr = &term->scr;
+
     // Fixup parameter count
     term->esc.i += term->esc.param[term->esc.i] >= 0;
 
@@ -2305,10 +771,10 @@ static void term_dispatch_dcs(struct term *term) {
     case C('s') | P('='): /* iTerm2 synchronized updates */
         switch (PARAM(0,0)) {
         case 1: /* Begin synchronous update */
-            window_set_sync(term->scr.win, 1);
+            window_set_sync(screen_window(scr), 1);
             break;
         case 2: /* End synchronous update */
-            window_set_sync(term->scr.win, 0);
+            window_set_sync(screen_window(scr), 0);
             break;
         default:
             term_esc_dump(term, 0);
@@ -2320,20 +786,20 @@ static void term_dispatch_dcs(struct term *term) {
             switch(id) {
             case 'm': /* -> SGR */ {
                 char sgr[SGR_BUFSIZ];
-                term_encode_sgr(sgr, sgr + sizeof sgr, term->scr.sgr);
+                encode_sgr(sgr, sgr + sizeof sgr, screen_sgr(scr));
                 term_answerback(term, DCS"1$r%sm"ST, sgr);
                 break;
             }
             case 'r': /* -> DECSTBM */
-                term_answerback(term, DCS"1$r%lu;%lur"ST, screen_min_y(&term->scr) + 1, screen_max_y(&term->scr));
+                term_answerback(term, DCS"1$r%lu;%lur"ST, screen_min_y(scr) + 1, screen_max_y(scr));
                 break;
             case 's': /* -> DECSLRM */
                 term_answerback(term, term->vt_level >= 4 ? DCS"1$r%lu;%lus"ST :
-                        DCS"0$r"ST, screen_min_x(&term->scr) + 1, screen_max_x(&term->scr));
+                        DCS"0$r"ST, screen_min_x(scr) + 1, screen_max_x(scr));
                 break;
             case 't': /* -> DECSLPP */
                 // Can't report less than 24 lines
-                term_answerback(term, DCS"1$r%lut"ST, MAX(term_height(term), 24));
+                term_answerback(term, DCS"1$r%lut"ST, MAX(screen_height(scr), 24));
                 break;
             case '|' << 8 | '$': /* -> DECSCPP */
                 // It should be either 80 or 132 despite actual column count
@@ -2341,17 +807,18 @@ static void term_dispatch_dcs(struct term *term) {
                 term_answerback(term, DCS"1$r%u$|"ST, term->mode.columns_132 ? 132 : 80);
                 break;
             case 'q' << 8 | '"': /* -> DECSCA */
-                term_answerback(term, DCS"1$r%u\"q"ST, 2 - (term->scr.sgr.protected && !term->mode.protected));
+                term_answerback(term, DCS"1$r%u\"q"ST, 2 - (screen_sgr(scr)->protected && !term->mode.protected));
                 break;
             case 'q' << 8 | ' ': /* -> DECSCUSR */
-                term_answerback(term, DCS"1$r%u q"ST, window_cfg(term->scr.win)->cursor_shape);
+                term_answerback(term, DCS"1$r%u q"ST, window_cfg(screen_window(scr))->cursor_shape);
                 break;
             case '|' << 8 | '*': /* -> DECSLNS */
-                term_answerback(term, DCS"1$r%lu*|"ST, term_height(term));
+                term_answerback(term, DCS"1$r%lu*|"ST, screen_height(scr));
                 break;
-            case 'x' << 8 | '*': /* -> DECSACE */
+            case 'x' << 8 | '*': /* -> DECSACE */;
+                struct screen_mode *smode = &scr->mode;
                 term_answerback(term, term->vt_level < 4 ? DCS"0$r"ST :
-                        DCS"1$r%u*x"ST, term->scr.mode.attr_ext_rectangle + 1);
+                        DCS"1$r%u*x"ST, smode->attr_ext_rectangle + 1);
                 break;
             case 'p' << 8 | '"': /* -> DECSCL */
                 term_answerback(term, DCS"1$r%u%s\"p"ST, 60 + MAX(term->vt_level, 1),
@@ -2359,15 +826,13 @@ static void term_dispatch_dcs(struct term *term) {
                 break;
             case 't' << 8 | ' ': /* -> DECSWBV */ {
                 uparam_t val = 8;
-                if (term->bvol == window_cfg(term->scr.win)->bell_low_volume) val = 4;
+                if (term->bvol == window_cfg(screen_window(scr))->bell_low_volume) val = 4;
                 else if (!term->bvol) val = 0;
                 term_answerback(term, DCS"1$r%u t"ST, val);
                 break;
             }
             case 'u' << 8 | ' ': /* -> DECSMBV */ {
-                uparam_t val = 8;
-                if (term->mbvol == window_cfg(term->scr.win)->bell_high_volume) val = 4;
-                else if (!term->mbvol) val = 0;
+                uparam_t val = screen_get_margin_bell_volume(scr) * 4;
                 term_answerback(term, DCS"1$r%u u"ST, val);
                 break;
             }
@@ -2407,8 +872,8 @@ static void term_dispatch_dcs(struct term *term) {
             term_esc_dump(term, 0);
             break;
         }
-        enum charset cs = nrcs_parse(sel, PARAM(0, 0), term->vt_level, term->scr.mode.enable_nrcs);
-        if (cs != nrcs_invalid) term->upcs = cs;
+        enum charset cs = nrcs_parse(sel, PARAM(0, 0), term->vt_level, term->mode.enable_nrcs);
+        if (cs != nrcs_invalid) screen_set_upcs(scr, cs);
         break;
     }
     case C('q') | I0('+'): /* XTGETTCAP */ {
@@ -2461,20 +926,21 @@ static uint32_t selector_to_cid(uint32_t sel, bool rev) {
 }
 
 static void term_colors_changed(struct term *term, uint32_t sel, color_t col) {
+    struct window *win = screen_window(&term->scr);
     switch(sel) {
     case 10:
         if(term->mode.reverse_video)
-            window_set_colors(term->scr.win, col, 0);
+            window_set_colors(win, col, 0);
         break;
     case 11:
         if(!(term->mode.reverse_video))
-            window_set_colors(term->scr.win, term->palette[SPECIAL_CURSOR_BG] = col, 0);
+            window_set_colors(win, term->palette[SPECIAL_CURSOR_BG] = col, 0);
         else
-            window_set_colors(term->scr.win, 0, term->palette[SPECIAL_CURSOR_FG] = col);
+            window_set_colors(win, 0, term->palette[SPECIAL_CURSOR_FG] = col);
         break;
     case 12:
         if(!(term->mode.reverse_video))
-            window_set_colors(term->scr.win, 0, col);
+            window_set_colors(win, 0, col);
         break;
     case 17: case 19:
         screen_damage_selection(&term->scr);
@@ -2500,10 +966,10 @@ static void term_do_set_color(struct term *term, uint32_t sel, uint8_t *dstr, ui
 static void term_do_reset_color(struct term *term) {
     uint32_t cid = selector_to_cid(term->esc.selector - 100, term->mode.reverse_video);
 
-    term->palette[cid] = window_cfg(term->scr.win)->palette[selector_to_cid(term->esc.selector - 100, 0)];
-
+    color_t *palette = window_cfg(screen_window(&term->scr))->palette;
+    term->palette[cid] = palette[selector_to_cid(term->esc.selector - 100, 0)];
     term_colors_changed(term, term->esc.selector - 100, term->esc.selector == 111 ?
-            window_cfg(term->scr.win)->palette[SPECIAL_CURSOR_BG] : term->palette[cid]);
+            palette[SPECIAL_CURSOR_BG] : term->palette[cid]);
 }
 
 inline static bool is_osc_state(uint32_t state) {
@@ -2519,6 +985,8 @@ static void term_dispatch_osc(struct term *term) {
 
     uint8_t *dstr = term_esc_str(term);
     uint8_t *dend = dstr + term->esc.str_len;
+    struct screen *scr = &term->scr;
+    struct instance_config *cfg = window_cfg(screen_window(scr));
 
     switch (term->esc.selector) {
         color_t col;
@@ -2549,7 +1017,7 @@ static void term_dispatch_osc(struct term *term) {
                 dstr = res;
             }
         }
-        window_set_title(term->scr.win, 3 - term->esc.selector, (char *)dstr, term->mode.utf8);
+        window_set_title(screen_window(scr), 3 - term->esc.selector, (char *)dstr, term->mode.utf8);
         free(res);
         break;
     }
@@ -2609,14 +1077,14 @@ static void term_dispatch_osc(struct term *term) {
                     case 15:idx = 8; break;
                 }
                 if (!errno && !*s_end && s_end != dstr && idx < PALETTE_SIZE - SPECIAL_PALETTE_SIZE + 5)
-                    term->palette[idx] = window_cfg(term->scr.win)->palette[idx];
+                    term->palette[idx] = cfg->palette[idx];
                 else term_esc_dump(term, 0);
                 if (pnext != dend) *pnext = ';';
                 dstr = pnext + 1;
             } while (pnext != dend);
         } else {
             for (size_t i = 0; i < PALETTE_SIZE - SPECIAL_PALETTE_SIZE + 5; i++)
-                term->palette[i] = window_cfg(term->scr.win)->palette[i];
+                term->palette[i] = cfg->palette[i];
         }
         break;
     }
@@ -2626,11 +1094,11 @@ static void term_dispatch_osc(struct term *term) {
         uparam_t idx, val;
         if (sscanf((char *)dstr, "%"SCNparam";%"SCNparam"%zn", &idx, &val, &n) == 2 && n == dend - dstr && idx < 5) {
             switch (idx) {
-            case 0: window_cfg(term->scr.win)->special_bold = val; break;
-            case 1: window_cfg(term->scr.win)->special_blink = val; break;
-            case 2: window_cfg(term->scr.win)->special_underline = val; break;
-            case 3: window_cfg(term->scr.win)->special_italic = val; break;
-            case 4: window_cfg(term->scr.win)->special_reverse = val; break;
+            case 0: cfg->special_bold = val; break;
+            case 1: cfg->special_blink = val; break;
+            case 2: cfg->special_underline = val; break;
+            case 3: cfg->special_italic = val; break;
+            case 4: cfg->special_reverse = val; break;
             }
         }
         else term_esc_dump(term, 0);
@@ -2655,14 +1123,14 @@ static void term_dispatch_osc(struct term *term) {
             valid = !stat(path, &stt) &&
                     (stt.st_mode & S_IFMT) == S_IFDIR;
         }
-        if (valid) set_option(window_cfg(term->scr.win), "cwd", path, 0);
+        if (valid) set_option(cfg, "cwd", path, 0);
         else term_esc_dump(term, 0);
         break;
     }
 #if USE_URI
     case 8: /* Set current URI */ {
         char *uri = strchr((char *)dstr, ';');
-        if (!uri || !(window_cfg(term->scr.win)->allow_uris)) {
+        if (!uri || !(cfg->allow_uris)) {
             if (!uri) term_esc_dump(term, 0);
             break;
         }
@@ -2681,8 +1149,8 @@ static void term_dispatch_osc(struct term *term) {
             } else attr = strchr(val, ':');
         }
 
-        uri_unref(term->scr.sgr.uri);
-        term->scr.sgr.uri = uri_add(uri, id);
+        uri_unref(screen_sgr(scr)->uri);
+        screen_sgr(scr)->uri = uri_add(uri, id);
         if (id_end) id_end[-1] = ':';
         uri[-1] = ';';
         break;
@@ -2714,10 +1182,10 @@ static void term_dispatch_osc(struct term *term) {
         term_do_reset_color(term);
         break;
     case 52: /* Manipulate selecion data */ {
-        if (!window_cfg(term->scr.win)->allow_window_ops) break;
+        if (!cfg->allow_window_ops) break;
 
         enum clip_target ts[clip_MAX] = {0};
-        bool toclip = term->scr.sstate.select_to_clipboard;
+        bool toclip = screen_selection(scr)->select_to_clipboard;
         uint8_t *parg = dstr, letter = 0;
         for (; parg < dend && *parg !=  ';'; parg++) {
             if (strchr("pqsc", *parg)) {
@@ -2729,13 +1197,13 @@ static void term_dispatch_osc(struct term *term) {
             if (!letter) ts[decode_target((letter = 's'), toclip)] = 1;
             if (!strcmp("?", (char*)parg)) {
                 term->paste_from = letter;
-                window_paste_clip(term->scr.win, decode_target(letter, toclip));
+                window_paste_clip(screen_window(scr), decode_target(letter, toclip));
             } else {
                 if (base64_decode(parg, parg, dend) != dend) parg = NULL;
                 for (ssize_t i = 0; i < clip_MAX; i++) {
                     if (ts[i]) {
-                        if (i == term->scr.sstate.targ) term->scr.sstate.targ = clip_invalid;
-                        window_set_clip(term->scr.win, parg ? (uint8_t *)strdup((char *)parg) : parg, CLIP_TIME_NOW, i);
+                        if (i == screen_selection(scr)->targ) screen_selection(scr)->targ = clip_invalid;
+                        window_set_clip(screen_window(scr), parg ? (uint8_t *)strdup((char *)parg) : parg, CLIP_TIME_NOW, i);
                     }
                 }
             }
@@ -2751,10 +1219,9 @@ static void term_dispatch_osc(struct term *term) {
         case 'A': /* Prompt start */
         case 'D': /* Command finished */
             // Make sure shell plays well with rewrapping
-            if (term->scr.c.x != screen_min_x(&term->scr))
-                term_do_wrap(term);
-            if (term->scr.c.y - 1 >= -term->scr.sb_limit)
-                line_at(&term->scr, term->scr.c.y - 1)->wrapped = 0;
+            if (screen_cursor_x(scr) != screen_min_x(scr))
+                screen_do_wrap(scr);
+            screen_unwrap_line(scr, screen_cursor_y(scr) - 1);
             break;
         case 'B': /* Command start */
         case 'C': /* Command executed */
@@ -2775,7 +1242,7 @@ static void term_dispatch_osc(struct term *term) {
         // For compatibiliry with older versions,
         // if res is not normalized, assume it to be 8-bit value
         if (res > 1) res /= 255;
-        window_set_alpha(term->scr.win, res);
+        window_set_alpha(screen_window(scr), res);
         break;
     }
     //case 50: /* Set Font */ // TODO OSC 50
@@ -2798,6 +1265,8 @@ static void term_dispatch_osc(struct term *term) {
 }
 
 static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
+    struct screen *scr = &term->scr;
+    struct screen_mode *smode = &scr->mode;
     if (private) {
         switch (mode) {
         case 0: /* Default - nothing */
@@ -2813,31 +1282,30 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
                 term_set_132(term, set);
             break;
         case 4: /* DECSCLM */
-            term->scr.mode.smooth_scroll = set;
+            smode->smooth_scroll = set;
             break;
         case 5: /* DECSCNM */
             term_set_reverse(term, set);
             break;
         case 6: /* DECCOM */
-            term->scr.c.origin = set;
-            screen_move_to(&term->scr, screen_min_ox(&term->scr), screen_min_oy(&term->scr));
+            screen_set_origin(scr, set);
             break;
         case 7: /* DECAWM */
-            term->scr.mode.wrap = set;
-            screen_reset_pending(&term->scr);
+            smode->wrap = set;
+            screen_reset_pending(scr);
             break;
         case 8: /* DECARM */
-            window_set_autorepeat(term->scr.win, set);
+            window_set_autorepeat(screen_window(scr), set);
             break;
         case 9: /* X10 Mouse tracking */
-            window_set_mouse(term->scr.win, USE_URI);
+            window_set_mouse(screen_window(scr), USE_URI);
             term->mstate.mouse_mode = set ? mouse_mode_x10 : mouse_mode_none;
             break;
         case 10: /* Show toolbar */
             // IGNORE - There is no toolbar
             break;
         case 12: /* Start blinking cursor */;
-            enum cursor_type *shp = &window_cfg(term->scr.win)->cursor_shape;
+            enum cursor_type *shp = &window_cfg(screen_window(scr))->cursor_shape;
             *shp = ((*shp + 1) & ~1) - set;
             break;
         case 13: /* Start blinking cursor (menu item) */
@@ -2845,15 +1313,14 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             // IGNORE
             break;
         case 18: /* DECPFF */
-            term->mode.print_form_feed = set;
+            smode->print_form_feed = set;
             break;
         case 19: /* DECREX */
-            term->mode.print_extend = set;
+            smode->print_extend = set;
             break;
         case 25: /* DECTCEM */
-            if (set ^ term->scr.mode.hide_cursor)
-                screen_damage_cursor(&term->scr);
-            term->scr.mode.hide_cursor = !set;
+            screen_damage_cursor(scr);
+            smode->hide_cursor = !set;
             break;
         case 30: /* Show scrollbar */
             // IGNORE - There is no scrollbar
@@ -2865,20 +1332,20 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->mode.disable_columns_132 = !set;
             break;
         case 41: /* XTerm more(1) hack */
-            term->mode.xterm_more_hack = set;
+            smode->xterm_more_hack = set;
             break;
         case 42: /* DECNRCM */
             CHK_VT(3);
-            term->scr.mode.enable_nrcs = set;
+            term->mode.enable_nrcs = set;
             break;
         case 44: /* Margin bell */
-            term->mode.margin_bell = set;
+            smode->margin_bell = set;
             break;
         case 45: /* Reverse wrap */
-            term->scr.mode.reverse_wrap = set;
+            smode->reverse_wrap = set;
             break;
         case 47: /* Enable altscreen */
-            screen_set_altscreen(&term->scr, set, 0, 0);
+            screen_set_altscreen(scr, set, 0, 0);
             break;
         case 66: /* DECNKM */
             term->kstate.appkey = set;
@@ -2888,7 +1355,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             break;
         case 69: /* DECLRMM */
             CHK_VT(4);
-            term->scr.mode.lr_margins = set;
+            smode->lr_margins = set;
             break;
         //case 80: /* DECSDM */ //TODO SIXEL
         //    break;
@@ -2897,18 +1364,18 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->mode.preserve_display_132 = set;
             break;
         case 1000: /* X11 Mouse tracking */
-            window_set_mouse(term->scr.win, USE_URI);
+            window_set_mouse(screen_window(scr), USE_URI);
             term->mstate.mouse_mode = set ? mouse_mode_button : mouse_mode_none;
             break;
         case 1001: /* Highlight mouse tracking */
             // IGNORE
             break;
         case 1002: /* Cell motion mouse tracking on keydown */
-            window_set_mouse(term->scr.win, USE_URI);
+            window_set_mouse(screen_window(scr), USE_URI);
             term->mstate.mouse_mode = set ? mouse_mode_drag : mouse_mode_none;
             break;
         case 1003: /* All motion mouse tracking */
-            window_set_mouse(term->scr.win, set || USE_URI);
+            window_set_mouse(screen_window(scr), set || USE_URI);
             term->mstate.mouse_mode = set ? mouse_mode_motion : mouse_mode_none;
             break;
         case 1004: /* Focus in/out events */
@@ -2949,10 +1416,10 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->kstate.backspace_is_del = set;
             break;
         case 1040: /* Don't clear X11 PRIMARY selection */
-            term->scr.sstate.keep_selection = set;
+            screen_selection(scr)->keep_selection = set;
             break;
         case 1041: /* Use CLIPBOARD instead of PRIMARY */
-            term->scr.sstate.select_to_clipboard = set;
+            screen_selection(scr)->select_to_clipboard = set;
             break;
         case 1042: /* Urgency on bell */
             term->mode.bell_urgent = set;
@@ -2964,17 +1431,17 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->mode.keep_clipboard = set;
             break;
         case 1046: /* Allow altscreen */
-            if (!set) screen_set_altscreen(&term->scr, 0, 0, 0);
-            term->scr.mode.disable_altscreen = !set;
+            if (!set) screen_set_altscreen(scr, 0, 0, 0);
+            smode->disable_altscreen = !set;
             break;
         case 1047: /* Enable altscreen and clear screen */
-            screen_set_altscreen(&term->scr, set, 1, 0);
+            screen_set_altscreen(scr, set, 1, 0);
             break;
         case 1048: /* Save cursor  */
-            screen_save_cursor(&term->scr, set);
+            screen_save_cursor(scr, set);
             break;
         case 1049: /* Save cursor and switch to altscreen */
-            screen_set_altscreen(&term->scr, set, 1, 1);
+            screen_set_altscreen(scr, set, 1, 1);
             break;
         case 1050: /* termcap function keys */
             // TODO Termcap
@@ -3004,7 +1471,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->mode.paste_literal_nl = set;
             break;
         case 2026: /* Synchronized updates */
-            window_set_sync(term->scr.win, set);
+            window_set_sync(screen_window(scr), set);
             break;
         default:
             return 0;
@@ -3017,7 +1484,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->kstate.keylock = set;
             break;
         case 4: /* IRM */
-            term->mode.insert = set;
+            smode->insert = set;
             break;
         case 12: /* SRM */
             term->mode.echo = set;
@@ -3033,6 +1500,8 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
 }
 
 static enum mode_status term_get_mode(struct term *term, bool private, uparam_t mode) {
+    struct screen *scr = &term->scr;
+    struct screen_mode *smode = &scr->mode;
     enum mode_status val = modstate_unrecognized;
 #define MODSTATE(x) (modstate_enabled + !(x))
     if (private) {
@@ -3047,16 +1516,16 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = MODSTATE(term->mode.columns_132);
             break;
         case 4: /* DECSCLM */
-            val = MODSTATE(term->scr.mode.smooth_scroll);
+            val = MODSTATE(smode->smooth_scroll);
             break;
         case 5: /* DECCNM */
             val = MODSTATE(term->mode.reverse_video);
             break;
         case 6: /* DECCOM */
-            val = MODSTATE(term->scr.c.origin);
+            val = MODSTATE(screen_cursor(scr)->origin);
             break;
         case 7: /* DECAWM */
-            val = MODSTATE(term->scr.mode.wrap);
+            val = MODSTATE(smode->wrap);
             break;
         case 8: /* DECARM */
             val = modstate_aways_disabled;
@@ -3068,20 +1537,20 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = modstate_aways_disabled;
             break;
         case 12: /* Start blinking cursor */
-            val = MODSTATE(window_cfg(term->scr.win)->cursor_shape & 1);
+            val = MODSTATE(window_cfg(screen_window(scr))->cursor_shape & 1);
             break;
         case 13: /* Start blinking cursor (menu item) */
         case 14: /* Enable XORG of control sequence and menu for blinking */
             val = modstate_aways_disabled;
             break;
         case 18: /* DECPFF */
-            val = MODSTATE(term->mode.print_form_feed);
+            val = MODSTATE(smode->print_form_feed);
             break;
         case 19: /* DECREX */
-            val = MODSTATE(term->mode.print_extend);
+            val = MODSTATE(smode->print_extend);
             break;
         case 25: /* DECTCEM */
-            val = MODSTATE(!term->scr.mode.hide_cursor);
+            val = MODSTATE(!smode->hide_cursor);
             break;
         case 30: /* Show scrollbar */
             val = modstate_aways_disabled;
@@ -3093,19 +1562,19 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = MODSTATE(!term->mode.disable_columns_132);
             break;
         case 41: /* XTerm more(1) hack */
-            val = MODSTATE(term->mode.xterm_more_hack);
+            val = MODSTATE(smode->xterm_more_hack);
             break;
         case 42: /* DECNRCM */
-            val = MODSTATE(term->scr.mode.enable_nrcs);
+            val = MODSTATE(term->mode.enable_nrcs);
             break;
         case 44: /* Margin bell */
-            val = MODSTATE(term->mode.margin_bell);
+            val = MODSTATE(smode->margin_bell);
             break;
         case 45: /* Reverse wrap */
-            val = MODSTATE(term->scr.mode.reverse_wrap);
+            val = MODSTATE(smode->reverse_wrap);
             break;
         case 47: /* Enable altscreen */
-            val = MODSTATE(term->scr.mode.altscreen);
+            val = MODSTATE(smode->altscreen);
             break;
         case 66: /* DECNKM */
             val = MODSTATE(term->kstate.appkey);
@@ -3114,7 +1583,7 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = MODSTATE(!term->kstate.backspace_is_del);
             break;
         case 69: /* DECLRMM */
-            val = MODSTATE(term->scr.mode.lr_margins);
+            val = MODSTATE(smode->lr_margins);
             break;
         case 80: /* DECSDM */ //TODO SIXEL
             val = modstate_aways_disabled;
@@ -3171,10 +1640,10 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = MODSTATE(term->kstate.backspace_is_del);
             break;
         case 1040: /* Don't clear X11 PRIMARY selecion */
-            val = MODSTATE(term->scr.sstate.keep_selection);
+            val = MODSTATE(screen_selection(scr)->keep_selection);
             break;
         case 1041: /* Use CLIPBOARD instead of PRIMARY */
-            val = MODSTATE(term->scr.sstate.select_to_clipboard);
+            val = MODSTATE(screen_selection(scr)->select_to_clipboard);
             break;
         case 1042: /* Urgency on bell */
             val = MODSTATE(term->mode.bell_urgent);
@@ -3186,16 +1655,16 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = MODSTATE(term->mode.keep_clipboard);
             break;
         case 1046: /* Allow altscreen */
-            val = MODSTATE(!term->scr.mode.disable_altscreen);
+            val = MODSTATE(!smode->disable_altscreen);
             break;
         case 1047: /* Enable altscreen and clear screen */
-            val = MODSTATE(term->scr.mode.altscreen);
+            val = MODSTATE(smode->altscreen);
             break;
         case 1048: /* Save cursor */
             val = modstate_aways_enabled;
             break;
         case 1049: /* Save cursor and switch to altscreen */
-            val = MODSTATE(term->scr.mode.altscreen);
+            val = MODSTATE(smode->altscreen);
             break;
         case 1050: /* termcap function keys */
             val = modstate_aways_disabled; //TODO Termcap
@@ -3225,7 +1694,7 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = MODSTATE(term->mode.paste_quote);
             break;
         case 2026: /* Synchronized update */
-            val = MODSTATE(window_get_sync(term->scr.win));
+            val = MODSTATE(window_get_sync(screen_window(scr)));
             break;
         default:
             term_esc_dump(term, 0);
@@ -3253,7 +1722,7 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = modstate_disabled; /* reset */
             break;
         case 4: /* IRM */
-            val = MODSTATE(term->mode.insert); /* reset/set */
+            val = MODSTATE(smode->insert); /* reset/set */
             break;
         case 12: /* SRM */
             val = MODSTATE(term->mode.echo); /* reset/set */
@@ -3269,98 +1738,46 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
     return val;
 }
 
-static void print_intercept(struct term *term) {
-    /* If terminal is in controller mode
-     * all input is redirected to printer except for
-     * NUL, XON, XOFF (that are eaten) and 4 sequences:
-     * CSI"5i", ESC"[5i", CSI"[4i", ESC"[4i",
-     * first two of which are no-ops,
-     * and second two disabled printer controller */
-
-    uint8_t *blk_start = term->tty.start, ch;
-    while (term->tty.start < term->tty.end) {
-        switch ((ch = *term->tty.start++)) {
-        case 0x11: /* XON */
-        case 0x13: /* XOFF */
-        case 0x00: /* NUL */
-            if (blk_start < term->tty.start - 1)
-                tty_print_string(&term->tty, blk_start, term->tty.start - 1 - blk_start);
-            blk_start = term->tty.start;
-            break;
-        case 0x9B: /* CSI */
-        case 0x1B: /* ESC */
-            if (blk_start < term->tty.start - 1)
-                tty_print_string(&term->tty, blk_start, term->tty.start - 1 - blk_start);
-            blk_start = term->tty.start - 1;
-            if (ch == 0x1B) term->pr_state = pr_esc;
-            else term->pr_state = pr_csi;
-            break;
-        case '[':
-            if (term->pr_state == pr_esc) term->pr_state = pr_bracket;
-            else term->pr_state = pr_ground;
-            break;
-        case '4':
-        case '5':
-            if (term->pr_state == pr_bracket || term->pr_state == pr_csi) {
-                term->pr_state = ch == '4' ? pr_4 : pr_5;
-            } else term->pr_state = pr_ground;
-            break;
-        case 'i':
-            if (term->pr_state == pr_4) {
-                /* Disable printer controller mode */
-                term->mode.print_controller = 0;
-                return;
-            } else if (term->pr_state == pr_5) {
-                /* Eat sequence */
-                blk_start = term->tty.start;
-            }
-            /* fallthrough */
-        default:
-            term->pr_state = pr_ground;
-        }
-    }
-
-    if (blk_start < term->tty.end && term->pr_state == pr_ground)
-        tty_print_string(&term->tty, blk_start, term->tty.end - blk_start);
-}
-
-static void term_dispatch_mc(struct term *term) {
-    if (term->esc.selector & P_MASK) {
-        switch (PARAM(0, 0)) {
+static void term_dispatch_mc(struct term *term, bool private, uparam_t func) {
+    struct screen *scr = &term->scr;
+    struct screen_mode *smode = &scr->mode;
+    struct printer *pr = screen_printer(scr);
+    if (private) {
+        switch (func) {
         case 1: /* Print current line */
-            term_print_line(term, screen_cursor_line(&term->scr));
+            screen_print_line(scr, screen_cursor_line(scr));
             break;
         case 4: /* Disable autoprint */
-            term->mode.print_auto = 0;
+            smode->print_auto = 0;
             break;
         case 5: /* Enable autoprint */
-            term->mode.print_auto = 1;
+            smode->print_auto = 1;
             break;
         case 11: /* Print scrollback and screen */
-            for (ssize_t i = 1; i <= term->scr.sb_limit; i++)
-                term_print_line(term, line_at(&term->scr, -i));
+            for (ssize_t i = screen_scrollback_top(scr); i < 0; i++)
+                screen_print_line(scr, line_at(scr, i));
             /* fallthrough */
         case 10: /* Print screen */
-            term_print_screen(term, 1);
+            screen_print_screen(scr, 1);
             break;
         default:
             term_esc_dump(term, 0);
         }
     } else {
-        switch (PARAM(0, 0)) {
+        switch (func) {
         case 0: /* Print screen */
-            term_print_screen(term, term->mode.print_extend);
+            screen_print_screen(scr, 0);
             break;
         case 4: /* Disable printer */
             // Well, this is never reached...
             // but let it be here anyways
-            term->mode.print_controller = 0;
+            pr->print_controller = 0;
             break;
         case 5: /* Enable printer */
-            if (tty_has_printer(&term->tty)) {
-                term->mode.print_controller = 1;
-                term->pr_state = pr_ground;
-                print_intercept(term);
+            if (printer_is_available(screen_printer(scr))) {
+                pr->print_controller = 1;
+                pr->state = pr_ground;
+                printer_intercept(pr, (const uint8_t **)&term->tty.start, term->tty.end);
             }
             break;
         default:
@@ -3391,306 +1808,35 @@ static void term_dispatch_tmode(struct term *term, bool set) {
     }
 }
 
-static void screen_precompose_at_cursor(struct screen *scr, uint32_t ch) {
-    struct cell *cel = &screen_cursor_line(scr)->cell[scr->c.x];
-
-    // Step back to previous cell
-    if (scr->c.x) cel--;
-    if (!cel->ch && scr->c.x > 1 && cell_wide(cel - 1)) cel--;
-
-    ch = try_precompose(cell_get(cel), ch);
-
-    // Only make cell dirty if precomposition happened
-    if (cell_get(cel) != ch)
-        cell_set(cel, ch);
-}
-
-inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bool raw) {
-    uint32_t part = *(*buf)++, i;
-    if (LIKELY(part < 0xC0 || raw)) return part;
-    if (UNLIKELY(part > 0xF7)) return UTF_INVAL;
-
-    uint32_t len = (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(part >> 3U) - 24];
-
-    if (*buf + len > end) {
-        (*buf)--;
-        return -1;
-    }
-
-    part &= 0x7F >> len;
-    for (i = len; i--;) {
-        if (UNLIKELY((**buf & 0xC0) != 0x80)) return UTF_INVAL;
-        part = (part << 6) | (*(*buf)++ & 0x3F);
-    }
-
-    static const uint32_t maxv[] = {0x80, 0x800, 0x10000, 0x110000};
-    if (UNLIKELY(part >= maxv[len] || part - 0xD800 < 0xE000 - 0xD800)) return UTF_INVAL;
-
-    return part;
-}
-
-#define BLOCK_MASK 0x4040404040404040ULL
-
-inline static uint64_t read_block_mask(const uint8_t *start) {
-    uint64_t b = *(const uint64_t *)start;
-    return ((b | (b << 1)) & BLOCK_MASK) ^ BLOCK_MASK;
-}
-
-inline static const uint8_t *block_mask_offset(const uint8_t *start, const uint8_t *end, uint64_t b) {
-    return MIN(end, start + (ffsll(b) - sizeof(uint64_t) + 1)/sizeof(uint64_t));
-}
-
-inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end, ssize_t max_chunk) {
-    if (end - start >= (ssize_t)sizeof(uint64_t)) {
-        if (start + max_chunk < end) end = start + max_chunk;
-
-        ssize_t unaligned_prefix = (uintptr_t)start & (sizeof(uint64_t) - 1);
-        if (unaligned_prefix) {
-            uint64_t res = read_block_mask(start - unaligned_prefix) >> (unaligned_prefix * sizeof(uint64_t));
-            if (UNLIKELY(res))
-                return block_mask_offset(start, end, res);
-            start += sizeof(uint64_t) - unaligned_prefix;
-        }
-
-        // Process 8 aligned bytes at a time
-        // We have out-of bounds read here but it
-        // should be find since it it aligned
-        // and buffer size is a power of two
-
-        for (; start < end; start += sizeof(uint64_t)) {
-            uint64_t res = read_block_mask(start);
-            if (UNLIKELY(res))
-                return block_mask_offset(start, end, res);
-        }
-
-        return end;
-    } else {
-        while (start < end && !IS_CBYTE(*start)) start++;
-        return start;
-    }
-}
-
-static ssize_t term_dispatch_print(struct term *term, int32_t rune, ssize_t rep, const uint8_t **start, const uint8_t *end) {
-    ssize_t res = 1;
-    struct screen *scr = &term->scr;
-
-    // Compute maximal with to be printed at once
-    register ssize_t maxw = screen_max_x(&term->scr) - screen_min_x(&term->scr), totalw = 0;
-    uint32_t *pbuf = term->predec_buf;
-    if (!scr->c.pending || !scr->mode.wrap)
-        maxw = (scr->c.x >= screen_max_x(&term->scr) ? term_width(term) : screen_max_x(&term->scr)) - scr->c.x;
-
-    register int32_t ch = rune;
-
-    // If rep > 0, we should perform REP CSI
-    if (UNLIKELY(rep)) {
-        int32_t wid = uwidth(ch);
-        if (!wid) {
-            // Don't put zero-width charactes
-            // to predecode buffer
-            if (!totalw) screen_precompose_at_cursor(scr, ch);
-            res = 0;
-        } else {
-            if (wid == 2) {
-                // Allow printing at least one wide char at right margin
-                // if autowrap is off
-                if (maxw == 1) maxw = wid;
-
-                // If autowrap is on, in this case line will be
-                // wrapped so we can print a lot more
-                if (scr->mode.wrap && scr->c.x == screen_max_x(&term->scr) - 1)
-                    maxw = screen_max_x(&term->scr) - screen_min_x(&term->scr);
-
-                while (totalw + wid <= maxw && rep) {
-                    totalw += 2;
-                    *pbuf++ = ch;
-                    *pbuf++ = 0;
-                    rep--;
-                }
-            } else {
-                while (totalw + wid <= maxw && rep) {
-                    totalw++;
-                    *pbuf++ = ch;
-                    rep--;
-                }
-            }
-
-            res = rep;
-        }
-    } else {
-        uint32_t prev = -1U;
-        const uint8_t *xstart = *start;
-        enum charset glv = scr->c.gn[scr->c.gl_ss];
-
-        bool utf8 = term->mode.utf8;
-        bool fast_nrcs = utf8 && !window_cfg(scr->win)->force_utf8_nrcs;
-        bool skip_del = glv > cs96_latin_1 || (!scr->mode.enable_nrcs && (glv == cs96_latin_1 || glv == cs94_british));
-
-        // Find the actual end of buffer
-        // (control character or number of characters)
-        // to prevent checking that on each iteration
-        // and preload cache.
-        // Maximal possible size of the chunk is
-        // 4 times width of the lines since
-        // each UTF-8 can be at most 4 bytes single width
-
-        const uint8_t *chunk = find_chunk(xstart, end, maxw*4);
-
-        do {
-            const uint8_t *char_start = xstart;
-            if (UNLIKELY((ch = decode_special(&xstart, end, !utf8)) < 0)) {
-                // If we encountered partial UTF-8,
-                // print all we have and return
-                res = 0;
-                break;
-            }
-
-            // Skip DEL char if not 96 set
-            if (UNLIKELY(IS_DEL(ch)) && skip_del) continue;
-
-            // Decode nrcs
-            // In theory this should be disabled while in UTF-8 mode, but
-            // in practice applications use these symbols, so keep translating.
-            // But decode only allow only DEC Graph in GL, unless configured otherwise
-            if (LIKELY(fast_nrcs))
-                ch = nrcs_decode_fast(glv, ch);
-            else
-                ch = nrcs_decode(glv, scr->c.gn[scr->c.gr], term->upcs, ch, scr->mode.enable_nrcs);
-            scr->c.gl_ss = scr->c.gl; // Reset single shift
-
-            prev = ch;
-
-            register int32_t wid = uwidth(ch);
-            if(UNLIKELY(!wid)) {
-                // Don't put zero-width charactes
-                // to predecode buffer
-                if (!totalw) screen_precompose_at_cursor(scr, ch);
-                else {
-                    uint32_t *p = pbuf - 1 - !pbuf[-1];
-                    *p = compact(try_precompose(uncompact(*p), ch));
-                }
-            } else {
-                // Don't include char if its too wide, unless its a wide char
-                // at right margin, or autowrap is disabled, and we are at right size of the screen
-                // In those cases recalculate maxw
-                if (UNLIKELY(totalw + wid > maxw)) {
-                    if (LIKELY(totalw || wid != 2)) {
-                        xstart = char_start;
-                        break;
-                    } else if (scr->c.x == screen_max_x(&term->scr) - 1) {
-                        maxw = scr->mode.wrap ? screen_max_x(&term->scr) - screen_min_x(&term->scr) : wid;
-                    } else if (scr->c.x == term_width(term) - 1) {
-                        maxw = wid;
-                    } else {
-                        xstart = char_start;
-                        break;
-                    }
-                }
-
-                *pbuf++ = compact(ch);
-                totalw += wid;
-
-                if (wid > 1)
-                    *pbuf++ = 0;
-            }
-
-            // Since maxw < width == length of predec_buf, don't check it
-        } while(totalw < maxw && /* count < FD_BUF_SIZE && */ xstart < chunk);
-
-        *start = xstart;
-
-        if (prev != -1U) term->prev_ch = prev; // For REP CSI
-    }
-
-    if (scr->mode.wrap) {
-        if (scr->c.pending || (scr->c.x == screen_max_x(&term->scr) - 1 && !term->predec_buf[1]))
-            term_do_wrap(term);
-    } else scr->c.x = MIN(scr->c.x, screen_max_x(&term->scr) - totalw);
-
-    ssize_t max_cx = scr->c.x + totalw, cx = scr->c.x;
-    ssize_t max_tx = screen_max_x(&term->scr);
-    struct line *line = screen_cursor_line(&term->scr);
-    struct cell *cell = &line->cell[cx];
-
-    // Shift characters to the left if insert mode is enabled
-    if (term->mode.insert && max_cx < max_tx) {
-        for (struct cell *c = cell + totalw; c - line->cell < max_tx; c++) c->drawn = 0;
-        memmove(cell + totalw, cell, (max_tx - max_cx)*sizeof(*cell));
-        max_cx = MAX(max_cx, max_tx);
-    }
-
-    // Clear selection if writing over it
-    if (selection_intersects(&scr->sstate, line, cx, term->mode.insert ? max_tx : max_cx)) {
-        screen_damage_selection(&term->scr);
-        selection_clear(&scr->sstate);
-    }
-
-    if (term->mode.margin_bell) {
-        ssize_t bcol = screen_max_x(&term->scr) - window_cfg(scr->win)->margin_bell_column;
-        if (cx < bcol && max_cx >= bcol)
-            window_bell(scr->win, term->mbvol);
-    }
-
-    // Erase overwritten parts of wide characters
-    adjust_wide_left(line, cx);
-
-    cx += totalw;
-    if (cx < line->mwidth)
-        adjust_wide_right(line, cx - 1);
-    else {
-        assert(cx <= line->width);
-        line->mwidth = cx;
-    }
-
-    scr->c.pending = cx == max_tx;
-    scr->c.x = cx - scr->c.pending;
-
-    // Writing to the line resets its wrapping state
-    line->wrapped = 0;
-
-    // Allocate color for cell
-    uint32_t attrid = alloc_attr(line, scr->sgr);
-
-    // Put charaters
-    for (uint32_t *p = term->predec_buf; p < pbuf; p++)
-        *cell++ = MKCELL(*p, attrid);
-
-    if (gconfig.trace_characters) {
-        for (uint32_t *p = term->predec_buf; p < pbuf; p++) {
-            info("Char: (%x) '%lc' ", *p, *p);
-        }
-    }
-
-    return res;
-}
-
 static void term_dispatch_window_op(struct term *term) {
+    struct screen *scr = &term->scr;
+    struct window *win = screen_window(scr);
     uparam_t pa = PARAM(0, 24);
     // Only title operations allowed by default
-    if (!window_cfg(term->scr.win)->allow_window_ops && (pa < 20 || pa > 23)) return;
+    if (!window_cfg(win)->allow_window_ops && (pa < 20 || pa > 23)) return;
 
     switch (pa) {
     case 1: /* Undo minimize */
-        window_action(term->scr.win, action_restore_minimized);
+        window_action(win, action_restore_minimized);
         break;
     case 2: /* Minimize */
-        window_action(term->scr.win, action_minimize);
+        window_action(win, action_minimize);
         break;
     case 3: /* Move */
-        window_move(term->scr.win, PARAM(1,0), PARAM(2,0));
+        window_move(win, PARAM(1,0), PARAM(2,0));
         break;
     case 4: /* Resize */
     case 8: /* Resize (in cell units) */
         term_request_resize(term, term->esc.param[2], term->esc.param[1], pa == 8);
         break;
     case 5: /* Raise */
-        window_action(term->scr.win, action_raise);
+        window_action(win, action_raise);
         break;
     case 6: /* Lower */
-        window_action(term->scr.win, action_lower);
+        window_action(win, action_lower);
         break;
     case 7: /* Refresh */
-        screen_damage_lines(&term->scr, 0, term_height(term));
+        screen_damage_lines(scr, 0, screen_height(scr));
         break;
     case 9: /* Maximize operations */ {
         enum window_action act = action_none;
@@ -3711,7 +1857,7 @@ static void term_dispatch_window_op(struct term *term) {
         default:
             term_esc_dump(term, 0);
         }
-        window_action(term->scr.win, act);
+        window_action(win, act);
         break;
     }
     case 10: /* Fullscreen operations */ {
@@ -3730,21 +1876,21 @@ static void term_dispatch_window_op(struct term *term) {
         default:
             term_esc_dump(term, 0);
         }
-        window_action(term->scr.win, act);
+        window_action(win, act);
         break;
     }
     case 11: /* Report state */
-        term_answerback(term, CSI"%ut", 1 + !window_is_mapped(term->scr.win));
+        term_answerback(term, CSI"%ut", 1 + !window_is_mapped(win));
         break;
     case 13: /* Report position opetations */
         switch(PARAM(1,0)) {
         case 0: /* Report window position */ {
-            struct extent ext = window_get_position(term->scr.win);
+            struct extent ext = window_get_position(win);
             term_answerback(term, CSI"3;%u;%ut", ext.width, ext.height);
             break;
         }
         case 2: /* Report grid position */ {
-            struct extent ext = window_get_grid_position(term->scr.win);
+            struct extent ext = window_get_grid_position(win);
             term_answerback(term, CSI"3;%u;%ut", ext.width, ext.height);
             break;
         }
@@ -3755,12 +1901,12 @@ static void term_dispatch_window_op(struct term *term) {
     case 14: /* Report size operations */
         switch(PARAM(1,0)) {
         case 0: /* Report grid size */ {
-            struct extent ext = window_get_grid_size(term->scr.win);
+            struct extent ext = window_get_grid_size(win);
             term_answerback(term, CSI"4;%u;%ut", ext.height, ext.width);
             break;
         };
         case 2: /* Report window size */ {
-            struct extent ext = window_get_size(term->scr.win);
+            struct extent ext = window_get_size(win);
             term_answerback(term, CSI"4;%u;%ut", ext.height, ext.width);
             break;
         }
@@ -3769,22 +1915,22 @@ static void term_dispatch_window_op(struct term *term) {
         }
         break;
     case 15: /* Report screen size */ {
-        struct extent ext = window_get_screen_size(term->scr.win);
+        struct extent ext = window_get_screen_size(win);
         term_answerback(term, CSI"5;%u;%ut", ext.height, ext.width);
         break;
     }
     case 16: /* Report cell size */ {
-        struct extent ext = window_get_cell_size(term->scr.win);
+        struct extent ext = window_get_cell_size(win);
         term_answerback(term, CSI"6;%u;%ut", ext.height, ext.width);
         break;
     }
     case 18: /* Report grid size (in cell units) */
-        term_answerback(term, CSI"8;%lu;%lut", term_height(term), term_width(term));
+        term_answerback(term, CSI"8;%lu;%lut", screen_height(scr), screen_width(scr));
         break;
     case 19: /* Report screen size (in cell units) */ {
-        struct extent s = window_get_screen_size(term->scr.win);
-        struct extent c = window_get_cell_size(term->scr.win);
-        struct extent b = window_get_border(term->scr.win);
+        struct extent s = window_get_screen_size(win);
+        struct extent c = window_get_cell_size(win);
+        struct extent b = window_get_border(win);
         term_answerback(term, CSI"9;%u;%ut", (s.height - 2*b.height)/c.height, (s.width - 2*b.width)/c.width);
         break;
     }
@@ -3792,7 +1938,7 @@ static void term_dispatch_window_op(struct term *term) {
     case 21: /* Report title */ {
         bool tutf8;
         uint8_t *res = NULL, *res2 = NULL, *tit = NULL;
-        window_get_title(term->scr.win, pa == 20 ? target_icon_label : target_title, (char **)&tit, &tutf8);
+        window_get_title(win, pa == 20 ? target_icon_label : target_title, (char **)&tit, &tutf8);
         if (!tit) {
             warn("Can't get title");
             term_answerback(term, OSC"%c"ST, pa == 20 ? 'L' : 'l');
@@ -3831,7 +1977,7 @@ static void term_dispatch_window_op(struct term *term) {
         case 0: /* Title and icon label */
         case 1: /* Icon label */
         case 2: /* Title */
-            window_push_title(term->scr.win, 3 - PARAM(1, 0));
+            window_push_title(win, 3 - PARAM(1, 0));
             break;
         default:
             term_esc_dump(term, 0);
@@ -3842,7 +1988,7 @@ static void term_dispatch_window_op(struct term *term) {
         case 0: /* Title and icon label */
         case 1: /* Icon label */
         case 2: /* Title */
-            window_pop_title(term->scr.win, 3 - PARAM(1, 0));
+            window_pop_title(win, 3 - PARAM(1, 0));
             break;
         default:
             term_esc_dump(term, 0);
@@ -3859,55 +2005,58 @@ static void term_dispatch_window_op(struct term *term) {
 }
 
 static void term_report_cursor(struct term *term) {
-    char csgr[3] = { 0x40, 0, 0 };
-    if (term->scr.sgr.bold) csgr[0] |= 1;
-    if (term->scr.sgr.underlined) csgr[0] |= 2;
-    if (term->scr.sgr.blink) csgr[0] |= 4;
-    if (term->scr.sgr.reverse) csgr[0] |= 8;
+    struct attr *sgr = screen_sgr(&term->scr);
+    struct cursor *c = screen_cursor(&term->scr);
 
-    if (window_cfg(term->scr.win)->extended_cir) {
+    char csgr[3] = { 0x40, 0, 0 };
+    if (sgr->bold) csgr[0] |= 1;
+    if (sgr->underlined) csgr[0] |= 2;
+    if (sgr->blink) csgr[0] |= 4;
+    if (sgr->reverse) csgr[0] |= 8;
+
+    if (window_cfg(screen_window(&term->scr))->extended_cir) {
         csgr[0] |= 0x20;
         csgr[1] |= 0x40;
         // Extended byte
-        if (term->scr.sgr.italic) csgr[1] |= 1;
-        if (term->scr.sgr.faint) csgr[1] |= 2;
-        if (term->scr.sgr.strikethrough) csgr[1] |= 4;
-        if (term->scr.sgr.invisible) csgr[1] |= 8;
+        if (sgr->italic) csgr[1] |= 1;
+        if (sgr->faint) csgr[1] |= 2;
+        if (sgr->strikethrough) csgr[1] |= 4;
+        if (sgr->invisible) csgr[1] |= 8;
     }
 
     char cflags = 0x40;
-    if (term->scr.c.origin) cflags |= 1; // origin
-    if (term->scr.c.gl_ss == 2 && term->scr.c.gl != 2) cflags |= 2; // ss2
-    if (term->scr.c.gl_ss == 3 && term->scr.c.gl != 3) cflags |= 4; // ss3
-    if (term->scr.c.pending) cflags |= 8; // pending wrap
+    if (c->origin) cflags |= 1; // origin
+    if (c->gl_ss == 2 && c->gl != 2) cflags |= 2; // ss2
+    if (c->gl_ss == 3 && c->gl != 3) cflags |= 4; // ss3
+    if (c->pending) cflags |= 8; // pending wrap
 
     char cg96 = 0x40;
-    if (nrcs_is_96(term->scr.c.gn[0])) cg96 |= 1;
-    if (nrcs_is_96(term->scr.c.gn[1])) cg96 |= 2;
-    if (nrcs_is_96(term->scr.c.gn[2])) cg96 |= 4;
-    if (nrcs_is_96(term->scr.c.gn[3])) cg96 |= 8;
+    if (nrcs_is_96(c->gn[0])) cg96 |= 1;
+    if (nrcs_is_96(c->gn[1])) cg96 |= 2;
+    if (nrcs_is_96(c->gn[2])) cg96 |= 4;
+    if (nrcs_is_96(c->gn[3])) cg96 |= 8;
 
     term_answerback(term, DCS"1$u%lu;%lu;1;%s;%c;%c;%u;%u;%c;%s%s%s%s"ST,
-        /* line */ term->scr.c.y + 1,
-        /* column */ term->scr.c.x + 1,
+        /* line */ c->y + 1,
+        /* column */ c->x + 1,
         /* attributes */ csgr,
-        /* cell protection */ 0x40 + term->scr.sgr.protected,
+        /* cell protection */ 0x40 + sgr->protected,
         /* flags */ cflags,
-        /* gl */ term->scr.c.gl,
-        /* gr */ term->scr.c.gr,
+        /* gl */ c->gl,
+        /* gr */ c->gr,
         /* cs size */ cg96,
-        /* g0 */ nrcs_unparse(term->scr.c.gn[0]),
-        /* g1 */ nrcs_unparse(term->scr.c.gn[1]),
-        /* g2 */ nrcs_unparse(term->scr.c.gn[2]),
-        /* g3 */ nrcs_unparse(term->scr.c.gn[3]));
+        /* g0 */ nrcs_unparse(c->gn[0]),
+        /* g1 */ nrcs_unparse(c->gn[1]),
+        /* g2 */ nrcs_unparse(c->gn[2]),
+        /* g3 */ nrcs_unparse(c->gn[3]));
 }
 
 static void term_report_tabs(struct term *term) {
     size_t caps = TABSR_INIT_CAP, len = 0;
     char *tabs = malloc(caps), *tmp;
 
-    for (int16_t i = 0; tabs && i < term_width(term); i++) {
-        if (term->tabs[i]) {
+    for (int16_t i = 0; tabs && i < screen_width(&term->scr); i++) {
+        if (screen_has_tab(&term->scr, i)) {
             if (len + TABSR_MAX_ENTRY > caps) {
                 tmp = realloc(tabs, caps = TABSR_CAP_STEP(caps));
                 if (!tmp) {
@@ -4034,6 +2183,7 @@ inline static bool load_mode(uint8_t modbits[], uparam_t mode) {
 static void term_dispatch_csi(struct term *term) {
     // Fixup parameter count
     term->esc.i += term->esc.param[term->esc.i] >= 0;
+    struct screen *scr = &term->scr;
 
     term_esc_dump(term, 1);
 
@@ -4042,57 +2192,55 @@ static void term_dispatch_csi(struct term *term) {
 
     switch (term->esc.selector) {
     case C('@'): /* ICH */
-        screen_insert_cells(&term->scr, PARAM(0, 1));
+        screen_insert_cells(scr, PARAM(0, 1));
         break;
     case C('@') | I0(' '): /* SL */
-        if (screen_cursor_in_region(&term->scr))
-            screen_scroll_horizontal(&term->scr, screen_min_x(&term->scr), PARAM(0, 1));
+        if (screen_cursor_in_region(scr))
+            screen_scroll_horizontal(scr, screen_min_x(scr), PARAM(0, 1));
         break;
     case C('A'): /* CUU */
-        (term->scr.c.y >= screen_min_y(&term->scr) ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, term->scr.c.x, term->scr.c.y - PARAM(0, 1));
+        (screen_cursor_y(scr) >= screen_min_y(scr) ? screen_bounded_move_to : screen_move_to)
+                (scr, screen_cursor_x(scr), screen_cursor_y(scr) - PARAM(0, 1));
         break;
     case C('A') | I0(' '): /* SR */
-        if (screen_cursor_in_region(&term->scr))
-            screen_scroll_horizontal(&term->scr, screen_min_x(&term->scr), -PARAM(0, 1));
+        if (screen_cursor_in_region(scr))
+            screen_scroll_horizontal(scr, screen_min_x(scr), -PARAM(0, 1));
         break;
     case C('B'): /* CUD */
-        (term->scr.c.y < screen_max_y(&term->scr) ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, term->scr.c.x, term->scr.c.y + PARAM(0, 1));
+        (screen_cursor_y(scr) < screen_max_y(scr) ? screen_bounded_move_to : screen_move_to)
+                (scr, screen_cursor_x(scr), screen_cursor_y(scr) + PARAM(0, 1));
         break;
     case C('e'): /* VPR */
-        (term->scr.c.origin ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, term->scr.c.x, term->scr.c.y + PARAM(0, 1));
+        screen_move_width_origin(scr, screen_cursor_x(scr), screen_cursor_y(scr) + PARAM(0, 1));
         break;
     case C('C'): /* CUF */
-        (term->scr.c.x < screen_max_x(&term->scr) ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, term->scr.c.x + PARAM(0, 1),  term->scr.c.y);
+        (screen_cursor_x(scr) < screen_max_x(scr) ? screen_bounded_move_to : screen_move_to)
+                (scr, screen_cursor_x(scr) + PARAM(0, 1),  screen_cursor_y(scr));
         break;
     case C('D'): /* CUB */
-        screen_move_left(&term->scr, PARAM(0, 1));
+        screen_move_left(scr, PARAM(0, 1));
         break;
     case C('E'): /* CNL */
-        (term->scr.c.y < screen_max_y(&term->scr) ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, term->scr.c.x, term->scr.c.y + PARAM(0, 1));
-        screen_cr(&term->scr);
+        (screen_cursor_y(scr) < screen_max_y(scr) ? screen_bounded_move_to : screen_move_to)
+                (scr, screen_cursor_x(scr), screen_cursor_y(scr) + PARAM(0, 1));
+        screen_cr(scr);
         break;
     case C('F'): /* CPL */
-        (term->scr.c.y >= screen_min_y(&term->scr) ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, term->scr.c.x, term->scr.c.y - PARAM(0, 1));
-        screen_cr(&term->scr);
+        (screen_cursor_y(scr) >= screen_min_y(scr) ? screen_bounded_move_to : screen_move_to)
+                (scr, screen_cursor_x(scr), screen_cursor_y(scr) - PARAM(0, 1));
+        screen_cr(scr);
         break;
     case C('`'): /* HPA */
     case C('G'): /* CHA */
-        (term->scr.c.origin ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, screen_min_ox(&term->scr) + PARAM(0, 1) - 1, term->scr.c.y);
+        screen_move_width_origin(scr, screen_min_ox(scr) + PARAM(0, 1) - 1, screen_cursor_y(scr));
         break;
     case C('H'): /* CUP */
     case C('f'): /* HVP */
-        (term->scr.c.origin ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, screen_min_ox(&term->scr) + PARAM(1, 1) - 1, screen_min_oy(&term->scr) + PARAM(0, 1) - 1);
+        screen_move_width_origin(scr, screen_min_ox(scr) + PARAM(1, 1) - 1,
+                                 screen_min_oy(scr) + PARAM(0, 1) - 1);
         break;
     case C('I'): /* CHT */
-        term_tabs(term, PARAM(0, 1));
+        screen_tabs(scr, PARAM(0, 1));
         break;
     case C('J') | P('?'): /* DECSED */
     case C('J'): /* ED */ {
@@ -4101,28 +2249,28 @@ static void term_dispatch_csi(struct term *term) {
                 term->mode.protected ? screen_protective_erase : screen_erase;
         switch(PARAM(0, 0)) {
         case 0: /* Below */
-            adjust_wide_left(screen_cursor_line(&term->scr), term->scr.c.x);
-            erase(&term->scr, term->scr.c.x, term->scr.c.y, term_width(term), term->scr.c.y + 1, 0);
-            erase(&term->scr, 0, term->scr.c.y + 1, term_width(term), term_height(term), 0);
+            adjust_wide_left(screen_cursor_line(scr), screen_cursor_x(scr));
+            erase(scr, screen_cursor_x(scr), screen_cursor_y(scr), screen_width(scr), screen_cursor_y(scr) + 1, 0);
+            erase(scr, 0, screen_cursor_y(scr) + 1, screen_width(scr), screen_height(scr), 0);
             break;
         case 1: /* Above */
-            adjust_wide_right(screen_cursor_line(&term->scr), term->scr.c.x);
-            erase(&term->scr, 0, term->scr.c.y, term->scr.c.x + 1, term->scr.c.y + 1, 0);
-            erase(&term->scr, 0, 0, term_width(term), term->scr.c.y, 0);
+            adjust_wide_right(screen_cursor_line(scr), screen_cursor_x(scr));
+            erase(scr, 0, screen_cursor_y(scr), screen_cursor_x(scr) + 1, screen_cursor_y(scr) + 1, 0);
+            erase(scr, 0, 0, screen_width(scr), screen_cursor_y(scr), 0);
             break;
         case 2: /* All */
-            erase(&term->scr, 0, 0, term_width(term), term_height(term), 0);
+            erase(scr, 0, 0, screen_width(scr), screen_height(scr), 0);
             break;
         case 3: /* Scrollback */
-            if (window_cfg(term->scr.win)->allow_erase_scrollback && !term->scr.mode.altscreen) {
-                screen_free_scrollback(&term->scr, window_cfg(term->scr.win)->scrollback_size);
+            if (window_cfg(screen_window(scr))->allow_erase_scrollback && !screen_altscreen(scr)) {
+                screen_free_scrollback(scr, window_cfg(screen_window(scr))->scrollback_size);
                 break;
             }
             /* fallthrough */
         default:
             term_esc_dump(term, 0);
         }
-        screen_reset_pending(&term->scr);
+        screen_reset_pending(scr);
         break;
     }
     case C('K') | P('?'): /* DECSEL */
@@ -4132,56 +2280,54 @@ static void term_dispatch_csi(struct term *term) {
                 term->mode.protected ? screen_protective_erase : screen_erase;
         switch (PARAM(0, 0)) {
         case 0: /* To the right */
-            adjust_wide_left(screen_cursor_line(&term->scr), term->scr.c.x);
-            erase(&term->scr, term->scr.c.x, term->scr.c.y, term_width(term), term->scr.c.y + 1, 0);
+            adjust_wide_left(screen_cursor_line(scr), screen_cursor_x(scr));
+            erase(scr, screen_cursor_x(scr), screen_cursor_y(scr), screen_width(scr), screen_cursor_y(scr) + 1, 0);
             break;
         case 1: /* To the left */
-            adjust_wide_right(screen_cursor_line(&term->scr), term->scr.c.x);
-            erase(&term->scr, 0, term->scr.c.y, term->scr.c.x + 1, term->scr.c.y + 1, 0);
+            adjust_wide_right(screen_cursor_line(scr), screen_cursor_x(scr));
+            erase(scr, 0, screen_cursor_y(scr), screen_cursor_x(scr) + 1, screen_cursor_y(scr) + 1, 0);
             break;
         case 2: /* Whole */
-            erase(&term->scr, 0, term->scr.c.y, term_width(term), term->scr.c.y + 1, 0);
+            erase(scr, 0, screen_cursor_y(scr), screen_width(scr), screen_cursor_y(scr) + 1, 0);
             break;
         default:
             term_esc_dump(term, 0);
         }
-        screen_reset_pending(&term->scr);
+        screen_reset_pending(scr);
         break;
     }
     case C('L'): /* IL */
-        screen_insert_lines(&term->scr, PARAM(0, 1));
+        screen_insert_lines(scr, PARAM(0, 1));
         break;
     case C('M'): /* DL */
-        screen_delete_lines(&term->scr, PARAM(0, 1));
+        screen_delete_lines(scr, PARAM(0, 1));
         break;
     case C('P'): /* DCH */
-        screen_delete_cells(&term->scr, PARAM(0, 1));
+        screen_delete_cells(scr, PARAM(0, 1));
         break;
     case C('S'): /* SU */
-        screen_scroll(&term->scr, screen_min_y(&term->scr), PARAM(0, 1), 0);
+        screen_scroll(scr, screen_min_y(scr), PARAM(0, 1), 0);
         break;
     case C('T') | P('>'): /* XTRMTITLE */
         term_dispatch_tmode(term, 0);
         break;
     case C('T'): /* SD */
     case C('^'): /* SD */
-        screen_scroll(&term->scr, screen_min_y(&term->scr), -PARAM(0, 1), 0);
+        screen_scroll(scr, screen_min_y(scr), -PARAM(0, 1), 0);
         break;
     case C('X'): /* ECH */
         (term->mode.protected ? screen_protective_erase : screen_erase)
-                (&term->scr, term->scr.c.x, term->scr.c.y, term->scr.c.x + PARAM(0, 1), term->scr.c.y + 1, 0);
-        screen_reset_pending(&term->scr);
+                (scr, screen_cursor_x(scr), screen_cursor_y(scr), screen_cursor_x(scr) + PARAM(0, 1), screen_cursor_y(scr) + 1, 0);
+        screen_reset_pending(scr);
         break;
     case C('Z'): /* CBT */
-        term_tabs(term, -PARAM(0, 1));
+        screen_tabs(scr, -PARAM(0, 1));
         break;
     case C('a'): /* HPR */
-        (term->scr.c.origin ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, term->scr.c.x + PARAM(0, 1), term->scr.c.y + PARAM(1, 0));
+        screen_move_width_origin(scr, screen_cursor_x(scr) + PARAM(0, 1), screen_cursor_y(scr) + PARAM(1, 0));
         break;
     case C('b'): /* REP */
-        for (uparam_t i = PARAM(0, 1); i > 0;)
-            i = term_dispatch_print(term, term->prev_ch, i, NULL, NULL);
+        screen_rep(scr, PARAM(0, 1));
         break;
     case C('c'): /* DA1 */
     case C('c') | P('>'): /* DA2 */
@@ -4190,16 +2336,15 @@ static void term_dispatch_csi(struct term *term) {
         term_dispatch_da(term, term->esc.selector & P_MASK);
         break;
     case C('d'): /* VPA */
-        (term->scr.c.origin ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, term->scr.c.x, screen_min_oy(&term->scr) + PARAM(0, 1) - 1);
+        screen_move_width_origin(scr, screen_cursor_x(scr), screen_min_oy(scr) + PARAM(0, 1) - 1);
         break;
     case C('g'): /* TBC */
         switch (PARAM(0, 0)) {
         case 0:
-            term->tabs[term->scr.c.x] = 0;
+            screen_set_tab(scr, screen_cursor_x(scr), 0);
             break;
         case 3:
-            memset(term->tabs, 0, term_width(term) * sizeof(term->tabs[0]));
+            screen_clear_tabs(scr);
             break;
         default:
             term_esc_dump(term, 0);
@@ -4213,7 +2358,7 @@ static void term_dispatch_csi(struct term *term) {
         break;
     case C('i'): /* MC */
     case C('i') | P('?'): /* MC */
-        term_dispatch_mc(term);
+        term_dispatch_mc(term, term->esc.selector & P_MASK, PARAM(0, 0));
         break;
     case C('l'): /* RM */
     case C('l') | P('?'):/* DECRST */
@@ -4245,7 +2390,7 @@ static void term_dispatch_csi(struct term *term) {
                 break;
             }
         } else {
-            struct instance_config *cfg = window_cfg(term->scr.win);
+            struct instance_config *cfg = window_cfg(screen_window(scr));
             if (inone || p == 0) {
                 term->kstate.modkey_legacy_allow_keypad = cfg->allow_legacy_keypad;
                 term->kstate.modkey_legacy_allow_edit_keypad = cfg->allow_legacy_edit;
@@ -4260,7 +2405,7 @@ static void term_dispatch_csi(struct term *term) {
         break;
     }
     case C('m'): /* SGR */
-        term_decode_sgr(term, 0, &(struct attr){0}, &term->scr.sgr);
+        term_decode_sgr(term, 0, &(struct attr){0}, screen_sgr(scr));
         break;
     case C('n') | P('>'): /* Disable key modifires, xterm */ {
             uparam_t p = term->esc.param[0];
@@ -4297,16 +2442,14 @@ static void term_dispatch_csi(struct term *term) {
         }
         break;
     case C('r'): /* DECSTBM */
-        screen_set_tb_margins(&term->scr, PARAM(0, 1) - 1, PARAM(1, term_height(term)) - 1);
-        screen_move_to(&term->scr, screen_min_ox(&term->scr), screen_min_oy(&term->scr));
+        screen_set_tb_margins(scr, PARAM(0, 1) - 1, PARAM(1, screen_height(scr)) - 1);
+        screen_move_to(scr, screen_min_ox(scr), screen_min_oy(scr));
         break;
     case C('s'): /* DECSLRM/(SCOSC) */
-        if (term->scr.mode.lr_margins) {
-            screen_set_lr_margins(&term->scr, PARAM(0, 1) - 1, PARAM(1, term_width(term)) - 1);
-            screen_move_to(&term->scr, screen_min_ox(&term->scr), screen_min_oy(&term->scr));
-        } else {
-            screen_save_cursor(&term->scr, 1);
-        }
+        if (screen_set_lr_margins(scr, PARAM(0, 1) - 1, PARAM(1, screen_width(scr)) - 1))
+            screen_move_to(scr, screen_min_ox(scr), screen_min_oy(scr));
+        else
+            screen_save_cursor(scr, 1);
         break;
     case C('t'): /* XTWINOPS, xterm */
         term_dispatch_window_op(term);
@@ -4315,7 +2458,7 @@ static void term_dispatch_csi(struct term *term) {
         term_dispatch_tmode(term, 1);
         break;
     case C('u'): /* (SCORC) */
-        screen_save_cursor(&term->scr, 0);
+        screen_save_cursor(scr, 0);
         break;
     case C('x'): /* DECREQTPARAM */
         if (term->vt_version < 200) {
@@ -4325,7 +2468,7 @@ static void term_dispatch_csi(struct term *term) {
         break;
     case C('q') | I0(' '): /* DECSCUSR */ {
         enum cursor_type csr = PARAM(0, 1);
-        if (csr < 7) window_cfg(term->scr.win)->cursor_shape = csr;
+        if (csr < 7) window_cfg(screen_window(scr))->cursor_shape = csr;
         break;
     }
     case C('p') | I0('!'): /* DECSTR */
@@ -4349,10 +2492,10 @@ static void term_dispatch_csi(struct term *term) {
     case C('q') | I0('"'): /* DECSCA */
         switch (PARAM(0, 2)) {
         case 1:
-            term->scr.sgr.protected = 1;
+            screen_sgr(scr)->protected = 1;
             break;
         case 0: case 2:
-            term->scr.sgr.protected = 0;
+            screen_sgr(scr)->protected = 0;
             break;
         }
         term->mode.protected = 0;
@@ -4369,34 +2512,34 @@ static void term_dispatch_csi(struct term *term) {
         CHK_VT(4);
         struct attr mask = {0}, sgr = {0};
         term_decode_sgr(term, 4, &mask, &sgr);
-        screen_apply_sgr(&term->scr, screen_min_ox(&term->scr) + PARAM(1, 1) - 1, screen_min_oy(&term->scr) + PARAM(0, 1) - 1,
-                screen_min_ox(&term->scr) + PARAM(3, screen_max_ox(&term->scr) - screen_min_ox(&term->scr)),
-                screen_min_oy(&term->scr) + PARAM(2, screen_max_oy(&term->scr) - screen_min_oy(&term->scr)), &mask, &sgr);
+        screen_apply_sgr(scr, screen_min_ox(scr) + PARAM(1, 1) - 1, screen_min_oy(scr) + PARAM(0, 1) - 1,
+                screen_min_ox(scr) + PARAM(3, screen_max_ox(scr) - screen_min_ox(scr)),
+                screen_min_oy(scr) + PARAM(2, screen_max_oy(scr) - screen_min_oy(scr)), &mask, &sgr);
         break;
     }
     case C('t') | I0('$'): /* DECRARA */ {
         CHK_VT(4);
         struct attr mask = {0}, sgr = {0};
         term_decode_sgr(term, 4, &mask, &sgr);
-        screen_reverse_sgr(&term->scr, screen_min_ox(&term->scr) + PARAM(1, 1) - 1, screen_min_oy(&term->scr) + PARAM(0, 1) - 1,
-                screen_min_ox(&term->scr) + PARAM(3, screen_max_ox(&term->scr) - screen_min_ox(&term->scr)),
-                screen_min_oy(&term->scr) + PARAM(2, screen_max_oy(&term->scr) - screen_min_oy(&term->scr)), &mask);
+        screen_reverse_sgr(scr, screen_min_ox(scr) + PARAM(1, 1) - 1, screen_min_oy(scr) + PARAM(0, 1) - 1,
+                screen_min_ox(scr) + PARAM(3, screen_max_ox(scr) - screen_min_ox(scr)),
+                screen_min_oy(scr) + PARAM(2, screen_max_oy(scr) - screen_min_oy(scr)), &mask);
         break;
     }
     case C('v') | I0('$'): /* DECCRA */
         CHK_VT(4);
-        screen_copy(&term->scr, screen_min_ox(&term->scr) + PARAM(1, 1) - 1, screen_min_oy(&term->scr) + PARAM(0, 1) - 1,
-                screen_min_ox(&term->scr) + PARAM(3, screen_max_ox(&term->scr) - screen_min_ox(&term->scr)),
-                screen_min_oy(&term->scr) + PARAM(2, screen_max_oy(&term->scr) - screen_min_oy(&term->scr)),
-                screen_min_ox(&term->scr) + PARAM(6, 1) - 1, screen_min_oy(&term->scr) + PARAM(5, 1) - 1, 1);
+        screen_copy(scr, screen_min_ox(scr) + PARAM(1, 1) - 1, screen_min_oy(scr) + PARAM(0, 1) - 1,
+                screen_min_ox(scr) + PARAM(3, screen_max_ox(scr) - screen_min_ox(scr)),
+                screen_min_oy(scr) + PARAM(2, screen_max_oy(scr) - screen_min_oy(scr)),
+                screen_min_ox(scr) + PARAM(6, 1) - 1, screen_min_oy(scr) + PARAM(5, 1) - 1, 1);
         break;
     case C('|') | I0('#'): /* XTREPORTSGR */ {
         CHK_VT(4);
-        struct attr sgr = screen_common_sgr(&term->scr, screen_min_ox(&term->scr) + PARAM(1, 1) - 1, screen_min_oy(&term->scr) + PARAM(0, 1) - 1,
-                screen_min_ox(&term->scr) + PARAM(3, screen_max_ox(&term->scr) - screen_min_ox(&term->scr)),
-                screen_min_oy(&term->scr) + PARAM(2, screen_max_oy(&term->scr) - screen_min_oy(&term->scr)));
+        struct attr sgr = screen_common_sgr(scr, screen_min_ox(scr) + PARAM(1, 1) - 1, screen_min_oy(scr) + PARAM(0, 1) - 1,
+                screen_min_ox(scr) + PARAM(3, screen_max_ox(scr) - screen_min_ox(scr)),
+                screen_min_oy(scr) + PARAM(2, screen_max_oy(scr) - screen_min_oy(scr)));
         char str[SGR_BUFSIZ];
-        term_encode_sgr(str, str + sizeof str, sgr);
+        encode_sgr(str, str + sizeof str, &sgr);
         term_answerback(term, CSI"%sm", str);
         break;
     }
@@ -4414,29 +2557,29 @@ static void term_dispatch_csi(struct term *term) {
         break;
     case C('x') | I0('$'): /* DECFRA */
         CHK_VT(4);
-        screen_fill(&term->scr, screen_min_ox(&term->scr) + PARAM(2, 1) - 1, screen_min_oy(&term->scr) + PARAM(1, 1) - 1,
-                screen_min_ox(&term->scr) + PARAM(4, screen_max_ox(&term->scr) - screen_min_ox(&term->scr)),
-                screen_min_oy(&term->scr) + PARAM(3, screen_max_oy(&term->scr) - screen_min_oy(&term->scr)), 1, PARAM(0, 0));
+        screen_fill(scr, screen_min_ox(scr) + PARAM(2, 1) - 1, screen_min_oy(scr) + PARAM(1, 1) - 1,
+                screen_min_ox(scr) + PARAM(4, screen_max_ox(scr) - screen_min_ox(scr)),
+                screen_min_oy(scr) + PARAM(3, screen_max_oy(scr) - screen_min_oy(scr)), 1, PARAM(0, 0));
         break;
     case C('z') | I0('$'): /* DECERA */
         CHK_VT(4);
         (term->mode.protected ? screen_protective_erase : screen_erase)
-                (&term->scr, screen_min_ox(&term->scr) + PARAM(1, 1) - 1, screen_min_oy(&term->scr) + PARAM(0, 1) - 1,
-                screen_min_ox(&term->scr) + PARAM(3, screen_max_ox(&term->scr) - screen_min_ox(&term->scr)),
-                screen_min_oy(&term->scr) + PARAM(2, screen_max_oy(&term->scr) - screen_min_oy(&term->scr)), 1);
+                (scr, screen_min_ox(scr) + PARAM(1, 1) - 1, screen_min_oy(scr) + PARAM(0, 1) - 1,
+                screen_min_ox(scr) + PARAM(3, screen_max_ox(scr) - screen_min_ox(scr)),
+                screen_min_oy(scr) + PARAM(2, screen_max_oy(scr) - screen_min_oy(scr)), 1);
         break;
     case C('{') | I0('$'): /* DECSERA */
         CHK_VT(4);
         (term->mode.protected ? screen_erase : screen_selective_erase)
-                (&term->scr, screen_min_ox(&term->scr) + PARAM(1, 1) - 1, screen_min_oy(&term->scr) + PARAM(0, 1) - 1,
-                screen_min_ox(&term->scr) + PARAM(3, screen_max_ox(&term->scr) - screen_min_ox(&term->scr)),
-                screen_min_oy(&term->scr) + PARAM(2, screen_max_oy(&term->scr) - screen_min_oy(&term->scr)), 1);
+                (scr, screen_min_ox(scr) + PARAM(1, 1) - 1, screen_min_oy(scr) + PARAM(0, 1) - 1,
+                screen_min_ox(scr) + PARAM(3, screen_max_ox(scr) - screen_min_ox(scr)),
+                screen_min_oy(scr) + PARAM(2, screen_max_oy(scr) - screen_min_oy(scr)), 1);
         break;
     case C('y') | I0('*'): /* DECRQCRA */
         CHK_VT(4);
-        uint16_t sum = screen_checksum(&term->scr, screen_min_ox(&term->scr) + PARAM(3, 1) - 1, screen_min_oy(&term->scr) + PARAM(2, 1) - 1,
-                screen_min_ox(&term->scr) + PARAM(5, screen_max_ox(&term->scr) - screen_min_ox(&term->scr)),
-                screen_min_oy(&term->scr) + PARAM(4, screen_max_oy(&term->scr) - screen_min_oy(&term->scr)), term->checksum_mode);
+        uint16_t sum = screen_checksum(scr, screen_min_ox(scr) + PARAM(3, 1) - 1, screen_min_oy(scr) + PARAM(2, 1) - 1,
+                screen_min_ox(scr) + PARAM(5, screen_max_ox(scr) - screen_min_ox(scr)),
+                screen_min_oy(scr) + PARAM(4, screen_max_oy(scr) - screen_min_oy(scr)), term->checksum_mode, term->mode.enable_nrcs);
         // DECRPCRA
         term_answerback(term, DCS"%u!~%04X"ST, PARAM(0, 0), sum);
         break;
@@ -4453,30 +2596,31 @@ static void term_dispatch_csi(struct term *term) {
         break;
     case C('}') | I0('\''): /* DECIC */
         CHK_VT(4);
-        screen_insert_columns(&term->scr, PARAM(0, 1));
+        screen_insert_columns(scr, PARAM(0, 1));
         break;
     case C('~') | I0('\''): /* DECDC */
         CHK_VT(4);
-        screen_delete_columns(&term->scr, PARAM(0, 1));
+        screen_delete_columns(scr, PARAM(0, 1));
         break;
     case C('x') | I0('*'): /* DECSACE */
         CHK_VT(4);
+        struct screen_mode *smode = &scr->mode;
         switch (PARAM(0, 1)) {
-        case 1: term->scr.mode.attr_ext_rectangle = 0; break;
-        case 2: term->scr.mode.attr_ext_rectangle = 1; break;
+        case 1: smode->attr_ext_rectangle = 0; break;
+        case 2: smode->attr_ext_rectangle = 1; break;
         default: term_esc_dump(term, 0);
         }
         break;
     case C('|') | I0('$'): /* DECSCPP */
-        if (window_cfg(term->scr.win)->allow_window_ops)
+        if (window_cfg(screen_window(scr))->allow_window_ops)
             term_request_resize(term, PARAM(0, 80), -1, 1);
         break;
     case C('|') | I0('*'): /* DECSNLS */
-        if (window_cfg(term->scr.win)->allow_window_ops)
+        if (window_cfg(screen_window(scr))->allow_window_ops)
             term_request_resize(term, -1, PARAM(0, 24), 1);
         break;
     case C('W') | P('?'): /* DECST8C */
-        if (PARAM(0, 5) == 5) term_reset_tabs(term);
+        if (PARAM(0, 5) == 5) screen_reset_tabs(scr);
         else term_esc_dump(term, 0);
         break;
     case C('s') | P('?'): /* XTSAVE */
@@ -4497,7 +2641,7 @@ static void term_dispatch_csi(struct term *term) {
                     term->saved_keyboard_type = term->kstate.keyboard_mapping;
                     break;
                 case 1048:
-                    screen_save_cursor(&term->scr, 1);
+                    screen_save_cursor(scr, 1);
                     break;
                 case 1047: case 1049:
                     mode = 47;
@@ -4518,14 +2662,14 @@ static void term_dispatch_csi(struct term *term) {
             case 9: case 1000: case 1001:
             case 1002: case 1003:
                 term->mstate.mouse_mode = term->saved_mouse_mode;
-                window_set_mouse(term->scr.win, term->mstate.mouse_mode == mouse_mode_motion || USE_URI);
+                window_set_mouse(screen_window(scr), term->mstate.mouse_mode == mouse_mode_motion || USE_URI);
                 break;
             case 1050: case 1051: case 1052:
             case 1053: case 1060: case 1061:
                 term->kstate.keyboard_mapping = term->saved_keyboard_type;
                 break;
             case 1048:
-                screen_save_cursor(&term->scr, 0);
+                screen_save_cursor(scr, 0);
                 break;
             case 1047: case 1049:
                 mode = 47;
@@ -4535,8 +2679,9 @@ static void term_dispatch_csi(struct term *term) {
             }
         }
         break;
-    case C('u') | I0('&'): /* DECRQUPSS */
-        term_answerback(term, DCS"%u!u%s"ST, nrcs_is_96(term->upcs), nrcs_unparse(term->upcs));
+    case C('u') | I0('&'): /* DECRQUPSS */;
+        enum charset upcs = screen_get_upcs(scr);
+        term_answerback(term, DCS"%u!u%s"ST, nrcs_is_96(upcs), nrcs_unparse(upcs));
         break;
     case C('t') | I0(' '): /* DECSWBV */
         switch (PARAM(0, 1)) {
@@ -4544,27 +2689,19 @@ static void term_dispatch_csi(struct term *term) {
             term->bvol = 0;
             break;
         case 2: case 3: case 4:
-            term->bvol = window_cfg(term->scr.win)->bell_low_volume;
+            term->bvol = window_cfg(screen_window(scr))->bell_low_volume;
             break;
         default:
-            term->bvol = window_cfg(term->scr.win)->bell_high_volume;
+            term->bvol = window_cfg(screen_window(scr))->bell_high_volume;
         }
         break;
-    case C('u') | I0(' '): /* DECSMBV */
-        switch (PARAM(0, 8)) {
-        case 1:
-            term->mbvol = 0;
-            break;
-        case 2: case 3: case 4:
-            term->mbvol = window_cfg(term->scr.win)->margin_bell_low_volume;
-            break;
-        default:
-            term->mbvol = window_cfg(term->scr.win)->margin_bell_high_volume;
-        }
+    case C('u') | I0(' '): /* DECSMBV */;
+        int16_t vol = PARAM(0, 8);
+        screen_set_margin_bell_volume(scr, (vol > 1) + (vol > 4));
         break;
     case C('w') | I0('\''): /* DECEFR */ {
         int16_t x, y;
-        window_get_pointer(term->scr.win, &x, &y, NULL);
+        window_get_pointer(screen_window(scr), &x, &y, NULL);
         mouse_set_filter(term, PARAM(1, y), PARAM(0, x), PARAM(3, y), PARAM(4, x));
         break;
     }
@@ -4620,7 +2757,7 @@ static void term_dispatch_csi(struct term *term) {
     case C('|') | I0('\''): /* DECRQLP */ {
         int16_t x, y;
         uint32_t mask;
-        window_get_pointer(term->scr.win, &x, &y, &mask);
+        window_get_pointer(screen_window(scr), &x, &y, &mask);
         mouse_report_locator(term, 1, x, y, mask);
         break;
     }
@@ -4647,39 +2784,40 @@ static void term_dispatch_esc(struct term *term) {
             term_esc_dump(term, 1);
     }
 
+    struct screen *scr = &term->scr;
     switch (term->esc.selector) {
     case E('D'): /* IND */
-        screen_index(&term->scr);
+        screen_index(scr);
         break;
     case E('E'): /* NEL */
-        screen_index(&term->scr);
-        screen_cr(&term->scr);
+        screen_index(scr);
+        screen_cr(scr);
         break;
     case E('F'): /* HP Home Down */
-        screen_move_to(&term->scr, screen_min_ox(&term->scr), screen_max_oy(&term->scr));
+        screen_move_to(scr, screen_min_ox(scr), screen_max_oy(scr));
         break;
     case E('H'): /* HTS */
-        term->tabs[term->scr.c.x] = 1;
+        screen_set_tab(scr, screen_cursor_x(scr), 1);
         break;
     case E('M'): /* RI */
-        screen_rindex(&term->scr);
+        screen_rindex(scr);
         break;
     case E('N'): /* SS2 */
-        term->scr.c.gl_ss = 2;
+        screen_set_gl(scr, 2, 1);
         break;
     case E('O'): /* SS3 */
-        term->scr.c.gl_ss = 3;
+        screen_set_gl(scr, 3, 1);
         break;
     case E('P'): /* DCS */
         term->esc.state = esc_dcs_entry;
         term->esc.old_state = 0;
         return;
     case E('V'): /* SPA */
-        term->scr.sgr.protected = 1;
+        screen_sgr(scr)->protected = 1;
         term->mode.protected = 1;
         break;
     case E('W'): /* EPA */
-        term->scr.sgr.protected = 0;
+        screen_sgr(scr)->protected = 0;
         term->mode.protected = 1;
         break;
     case E('Z'): /* DECID */
@@ -4707,17 +2845,17 @@ static void term_dispatch_esc(struct term *term) {
         return;
     case E('6'): /* DECBI */
         CHK_VT(4);
-        screen_rindex_horizonal(&term->scr);
+        screen_rindex_horizonal(scr);
         break;
     case E('7'): /* DECSC */
-        screen_save_cursor(&term->scr, 1);
+        screen_save_cursor(scr, 1);
         break;
     case E('8'): /* DECRC */
-        screen_save_cursor(&term->scr, 0);
+        screen_save_cursor(scr, 0);
         break;
     case E('9'): /* DECFI */
         CHK_VT(4);
-        screen_index_horizonal(&term->scr);
+        screen_index_horizonal(scr);
         break;
     case E('='): /* DECKPAM */
         term->kstate.appkey = 1;
@@ -4734,25 +2872,25 @@ static void term_dispatch_esc(struct term *term) {
         term->esc.old_state = 0;
         return;
     case E('l'): /* HP Memory lock */
-        screen_set_tb_margins(&term->scr, term->scr.c.y, screen_max_y(&term->scr) - 1);
+        screen_set_tb_margins(scr, screen_cursor_y(scr), screen_max_y(scr) - 1);
         break;
     case E('m'): /* HP Memory unlock */
-        screen_set_tb_margins(&term->scr, 0, screen_max_y(&term->scr) - 1);
+        screen_set_tb_margins(scr, 0, screen_max_y(scr) - 1);
         break;
     case E('n'): /* LS2 */
-        term->scr.c.gl = term->scr.c.gl_ss = 2;
+        screen_set_gl(scr, 2, 0);
         break;
     case E('o'): /* LS3 */
-        term->scr.c.gl = term->scr.c.gl_ss = 3;
+        screen_set_gl(scr, 3, 0);
         break;
     case E('|'): /* LS3R */
-        term->scr.c.gr = 3;
+        screen_set_gr(scr, 3);
         break;
     case E('}'): /* LS2R */
-        term->scr.c.gr = 2;
+        screen_set_gr(scr, 2);
         break;
     case E('~'): /* LS1R */
-        term->scr.c.gr = 1;
+        screen_set_gr(scr, 1);
         break;
     case E('F') | I0(' '): /* S7C1T */
         CHK_VT(2);
@@ -4764,12 +2902,12 @@ static void term_dispatch_esc(struct term *term) {
         break;
     case E('L') | I0(' '): /* ANSI_LEVEL_1 */
     case E('M') | I0(' '): /* ANSI_LEVEL_2 */
-        term->scr.c.gn[1] = cs94_ascii;
-        term->scr.c.gr = 1;
+        screen_set_charset(scr, 1, cs94_ascii);
+        screen_set_gr(scr, 1);
         /* fallthrough */
     case E('N') | I0(' '): /* ANSI_LEVEL_3 */
-        term->scr.c.gn[0] = cs94_ascii;
-        term->scr.c.gl = term->scr.c.gl_ss = 0;
+        screen_set_charset(scr, 0, cs94_ascii);
+        screen_set_gl(scr, 0, 0);
         break;
     //case E('3') | I0('#'): /* DECDHL */
     //case E('4') | I0('#'): /* DECDHL */
@@ -4777,9 +2915,9 @@ static void term_dispatch_esc(struct term *term) {
     //case E('6') | I0('#'): /* DECDWL */
     //    break;
     case E('8') | I0('#'): /* DECALN*/
-        screen_reset_margins(&term->scr);
-        screen_move_to(&term->scr, 0, 0);
-        screen_fill(&term->scr, 0, 0, term_width(term), term_height(term), 0, 'E');
+        screen_reset_margins(scr);
+        screen_move_to(scr, 0, 0);
+        screen_fill(scr, 0, 0, screen_width(scr), screen_height(scr), 0, 'E');
         break;
     case E('@') | I0('%'): /* Disable UTF-8 */
         term->mode.utf8 = 0;
@@ -4796,14 +2934,14 @@ static void term_dispatch_esc(struct term *term) {
         case I0('+'): /* G3D4 */
         case I0('('): /* GZD4 */
         case I0(')'): /* G1D4 */
-            if ((set = nrcs_parse(term->esc.selector, 0, term->vt_level, term->scr.mode.enable_nrcs)) > 0)
-                term->scr.c.gn[((term->esc.selector & I0_MASK) - I0('(')) >> 9] = set;
+            if ((set = nrcs_parse(term->esc.selector, 0, term->vt_level, term->mode.enable_nrcs)) > 0)
+                screen_set_charset(scr, ((term->esc.selector & I0_MASK) - I0('(')) >> 9, set);
             break;
         case I0('-'): /* G1D6 */
         case I0('.'): /* G2D6 */
         case I0('/'): /* G3D6 */
-            if ((set = nrcs_parse(term->esc.selector, 1, term->vt_level, term->scr.mode.enable_nrcs)) > 0)
-                term->scr.c.gn[1 + (((term->esc.selector & I0_MASK) - I0('-')) >> 9)] = set;
+            if ((set = nrcs_parse(term->esc.selector, 1, term->vt_level, term->mode.enable_nrcs)) > 0)
+                screen_set_charset(scr, 1 + (((term->esc.selector & I0_MASK) - I0('-')) >> 9), set);
             break;
         default:
             term_esc_dump(term, 0);
@@ -4820,6 +2958,7 @@ static void term_dispatch_c0(struct term *term, uint32_t ch) {
     if (gconfig.trace_controls && ch != 0x1B)
         info("Seq: ^%c", ch ^ 0x40);
 
+    struct screen *scr = &term->scr;
     switch (ch) {
     case 0x00: /* NUL (IGNORE) */
     case 0x01: /* SOH (IGNORE) */
@@ -4828,7 +2967,7 @@ static void term_dispatch_c0(struct term *term, uint32_t ch) {
     case 0x04: /* EOT (IGNORE) */
         break;
     case 0x05: /* ENQ */
-        term_answerback(term, "%s", window_cfg(term->scr.win)->answerback_string);
+        term_answerback(term, "%s", window_cfg(screen_window(scr))->answerback_string);
         break;
     case 0x06: /* ACK (IGNORE) */
         break;
@@ -4837,31 +2976,30 @@ static void term_dispatch_c0(struct term *term, uint32_t ch) {
             term_dispatch_dcs(term);
         else if (is_osc_state(term->esc.state))
             term_dispatch_osc(term);
-        else window_bell(term->scr.win, term->bvol);
+        else window_bell(screen_window(scr), term->bvol);
         break;
     case 0x08: /* BS */
-        screen_move_left(&term->scr, 1);
+        screen_move_left(scr, 1);
         break;
     case 0x09: /* HT */
-        term_tabs(term, 1);
+        screen_tabs(scr, 1);
         break;
     case 0x0a: /* LF */
     case 0x0b: /* VT */
     case 0x0c: /* FF */
-        if (term->mode.print_auto)
-            term_print_line(term, screen_cursor_line(&term->scr));
-        screen_index(&term->scr);
-        if (term->mode.crlf) screen_cr(&term->scr);
+        screen_autoprint(scr, screen_cursor_line(scr));
+        screen_index(scr);
+        if (term->mode.crlf) screen_cr(scr);
         break;
     case 0x0d: /* CR */
-        screen_cr(&term->scr);
+        screen_cr(scr);
         break;
     case 0x0e: /* SO/LS1 */
-        term->scr.c.gl = term->scr.c.gl_ss = 1;
+        screen_set_gl(scr, 1, 0);
         if (!term->vt_level) term->esc.state = esc_ground;
         break;
     case 0x0f: /* SI/LS0 */
-        term->scr.c.gl = term->scr.c.gl_ss = 0;
+        screen_set_gl(scr, 0, 0);
         if (!term->vt_level) term->esc.state = esc_ground;
         break;
     case 0x10: /* DLE (IGNORE) */
@@ -4874,7 +3012,7 @@ static void term_dispatch_c0(struct term *term, uint32_t ch) {
     case 0x17: /* ETB (IGNORE) */
         break;
     case 0x1a: /* SUB */
-        term_dispatch_print(term, '?', 1, NULL, NULL);
+        screen_putchar(scr, '?');
         /* fallthrough */
     case 0x18: /* CAN */
         term_esc_finish_string(term);
@@ -4896,6 +3034,7 @@ static void term_dispatch_c0(struct term *term, uint32_t ch) {
 }
 
 static void term_dispatch_vt52(struct term *term, uint32_t ch) {
+    struct screen *scr = &term->scr;
     switch (ch) {
     case '<':
         if (term->vt_version >= 100)
@@ -4908,55 +3047,54 @@ static void term_dispatch_vt52(struct term *term, uint32_t ch) {
         term->kstate.appkey = 0;
         break;
     case 'A':
-        (term->scr.c.origin ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, term->scr.c.x, term->scr.c.y - 1);
+        screen_move_width_origin(scr, screen_cursor_x(scr),
+                                 screen_cursor_y(scr) - 1);
         break;
     case 'B':
-        (term->scr.c.origin ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, term->scr.c.x, term->scr.c.y + 1);
+        screen_move_width_origin(scr, screen_cursor_x(scr),
+                                 screen_cursor_y(scr) + 1);
         break;
     case 'C':
-        (term->scr.c.origin ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, term->scr.c.x + 1, term->scr.c.y);
+        screen_move_width_origin(scr, screen_cursor_x(scr) + 1,
+                                 screen_cursor_y(scr));
         break;
     case 'D':
-        (term->scr.c.origin ? screen_bounded_move_to : screen_move_to)
-                (&term->scr, term->scr.c.x - 1, term->scr.c.y);
+        screen_move_width_origin(scr, screen_cursor_x(scr) - 1,
+                                 screen_cursor_y(scr));
         break;
     case 'F':
-        term->scr.c.gl = term->scr.c.gl_ss = 1;
+        screen_set_gl(scr, 1, 0);
         break;
     case 'G':
-        term->scr.c.gl = term->scr.c.gl_ss = 0;
+        screen_set_gl(scr, 0, 0);
         break;
     case 'H':
-        screen_move_to(&term->scr, screen_min_ox(&term->scr), screen_min_oy(&term->scr));
+        screen_move_to(scr, screen_min_ox(scr), screen_min_oy(scr));
         break;
     case 'I':
-        screen_rindex(&term->scr);
+        screen_rindex(scr);
         break;
     case 'J':
-        adjust_wide_left(screen_cursor_line(&term->scr), term->scr.c.x);
-        screen_erase(&term->scr, term->scr.c.x, term->scr.c.y, term_width(term), term->scr.c.y + 1, 0);
-        screen_erase(&term->scr, 0, term->scr.c.y + 1, term_width(term), term_height(term), 0);
+        adjust_wide_left(screen_cursor_line(scr), screen_cursor_x(scr));
+        screen_erase(scr, screen_cursor_x(scr), screen_cursor_y(scr),
+                     screen_width(scr), screen_cursor_y(scr) + 1, 0);
+        screen_erase(scr, 0, screen_cursor_y(scr) + 1,
+                     screen_width(scr), screen_height(scr), 0);
         break;
     case 'K':
-        adjust_wide_left(screen_cursor_line(&term->scr), term->scr.c.x);
-        screen_erase(&term->scr, term->scr.c.x, term->scr.c.y, term_width(term), term->scr.c.y + 1, 0);
+        adjust_wide_left(screen_cursor_line(scr), screen_cursor_x(scr));
+        screen_erase(scr, screen_cursor_x(scr), screen_cursor_y(scr),
+                     screen_width(scr), screen_cursor_y(scr) + 1, 0);
         break;
     case 'V': /* Print cursor line */
-        term_print_line(term, screen_cursor_line(&term->scr));
+        screen_print_line(scr, screen_cursor_line(scr));
         break;
     case 'W': /* Enable printer controller mode */
-        if (tty_has_printer(&term->tty)) {
-            term->mode.print_controller = 1;
-            term->pr_state = pr_ground;
-            print_intercept(term);
-        }
+        term_dispatch_mc(term, 0, 5);
         break;
     case 'X': /* Disable printer printer controller mdoe */
         // This is never reached...
-        term->mode.print_controller = 0;
+        term_dispatch_mc(term, 0, 4);
         break;
     case 'Y':
         term->esc.state = esc_vt52_cup_0;
@@ -4965,13 +3103,13 @@ static void term_dispatch_vt52(struct term *term, uint32_t ch) {
         term_answerback(term, ESC"/Z");
         break;
     case ']': /* Print screen */
-        term_print_screen(term, term->mode.print_extend);
+        term_dispatch_mc(term, 0, 0);
         break;
     case '^': /* Autoprint on */
-        term->mode.print_auto = 1;
+        term_dispatch_mc(term, 1, 5);
         break;
     case '_': /* Autoprint off */
-        term->mode.print_auto = 0;
+        term_dispatch_mc(term, 1, 4);
         break;
     default:
         warn("Unrecognized ^[%c", ch);
@@ -4981,8 +3119,9 @@ static void term_dispatch_vt52(struct term *term, uint32_t ch) {
 }
 
 static void term_dispatch_vt52_cup(struct term *term) {
-    (term->scr.c.origin ? screen_bounded_move_to : screen_move_to)
-            (&term->scr, screen_min_ox(&term->scr) + term->esc.param[1], screen_min_oy(&term->scr) + term->esc.param[0]);
+    struct screen *scr = &term->scr;
+    screen_move_width_origin(scr, screen_min_ox(scr) + term->esc.param[1],
+                             screen_min_oy(scr) + term->esc.param[0]);
     term->esc.state = esc_ground;
 }
 
@@ -5033,7 +3172,7 @@ inline static bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
 inline static bool term_dispatch(struct term *term, const uint8_t **start, const uint8_t *end) {
     // Fast path for graphical characters
     if (term->esc.state == esc_ground && !IS_CBYTE(**start))
-        return term_dispatch_print(term, 0, 0, start, end);
+        return screen_print(&term->scr, start, end, term->mode.utf8, term->mode.enable_nrcs);
 
     uint8_t ch = *(*start)++;
 
@@ -5221,10 +3360,9 @@ bool term_read(struct term *term) {
         if (tty_refill(&term->tty) < 0 ||
             term->tty.start >= term->tty.end) break;
 
-        if (term->mode.print_controller)
-            print_intercept(term);
+        printer_intercept(screen_printer(&term->scr), (const uint8_t **)&term->tty.start, term->tty.end);
 
-        if (term->mode.scroll_on_output && term->scr.view_pos.line)
+        if (term->mode.scroll_on_output)
             screen_reset_view(&term->scr, 1);
 
         while (term->tty.start < term->tty.end)
@@ -5342,7 +3480,7 @@ bool term_is_utf8_enabled(struct term *term) {
 }
 
 bool term_is_nrcs_enabled(struct term *term) {
-    return term->scr.mode.enable_nrcs;
+    return term->mode.enable_nrcs;
 }
 
 bool term_is_bell_urgent_enabled(struct term *term) {
@@ -5366,11 +3504,11 @@ struct mouse_state *term_get_mstate(struct term *term) {
 }
 
 struct selection_state *term_get_sstate(struct term *term) {
-    return &term->scr.sstate;
+    return screen_selection(&term->scr);
 }
 
 struct window *term_window(struct term *term) {
-    return term->scr.win;
+    return screen_window(&term->scr);
 }
 
 color_t *term_palette(struct term *term) {
@@ -5382,7 +3520,7 @@ bool term_is_reverse(struct term *term) {
 }
 
 int term_fd(struct term *term) {
-    return term->tty.fd;
+    return term->tty.w.fd;
 }
 
 void term_break(struct term *term) {
@@ -5401,7 +3539,7 @@ void term_handle_focus(struct term *term, bool set) {
 }
 
 void term_scroll_view(struct term *term, int16_t amount) {
-    if (term->scr.mode.altscreen) {
+    if (screen_altscreen(&term->scr)) {
         if (term->mode.altscreen_scroll)
             term_answerback(term, CSI"%u%c", abs(amount), amount > 0 ? 'A' : 'D');
         return;
@@ -5460,10 +3598,10 @@ void term_answerback(struct term *term, const char *str, ...) {
 
 /* If len == 0 encodes C1 controls and determines length by NUL character */
 void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
-    bool encode = !len;
+    bool encode = !len, utf8 = term->mode.utf8, nrcs = term->mode.enable_nrcs;
     if (!len) len = strlen((const char *)str);
 
-    if (!(term->mode.no_scroll_on_input) && term->scr.view_pos.line)
+    if (!term->mode.no_scroll_on_input)
         screen_reset_view(&term->scr, 1);
 
     uint8_t rep[MAX_REPORT];
@@ -5479,13 +3617,13 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
             if (IS_C1(ch)) {
                 pre2[2] = *start++ ^ 0xC0;
                 ptmp = pre2;
-                while (ptmp < pre2 + 3 && term_dispatch_print(term, 0, 0, &ptmp, pre2 + 3));
+                while (ptmp < pre2 + 3 && screen_print(&term->scr, &ptmp, pre2 + 3, utf8, nrcs));
             } else if ((IS_C0(ch) && ch != '\n' && ch != '\t' && ch != '\r') || IS_DEL(ch)) {
                 pre1[1] = *start++ ^ 0x40;
                 ptmp = pre1;
-                while (ptmp < pre1 + 2 && term_dispatch_print(term, 0, 0, &ptmp, pre1 + 2));
+                while (ptmp < pre1 + 2 && screen_print(&term->scr, &ptmp, pre1 + 2, utf8, nrcs));
             } else {
-                if (!term_dispatch_print(term, 0, 0, &start, end)) break;
+                if (!screen_print(&term->scr, &start, end, utf8, nrcs)) break;
             }
         }
     }
@@ -5494,6 +3632,8 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
 }
 
 void term_resize(struct term *term, int16_t width, int16_t height) {
+    struct screen *scr = &term->scr;
+
     // First try to read from tty to empty out input queue
     // since this is input from program not yet aware about resize
     if (!term->requested_resize)
@@ -5501,49 +3641,32 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     term->requested_resize = 0;
 
     // Notify application
-    int16_t wwidth = window_cfg(term->scr.win)->width;
-    int16_t wheight = window_cfg(term->scr.win)->height;
+    int16_t wwidth = window_cfg(screen_window(scr))->width;
+    int16_t wheight = window_cfg(screen_window(scr))->height;
     tty_set_winsz(&term->tty, width, height, wwidth, wheight);
 
-    // Resize tabs
-    bool *new_tabs = realloc(term->tabs, width * sizeof(*term->tabs));
-    if (!new_tabs) die("Can't alloc tabs");
-    term->tabs = new_tabs;
-
-    if (width > term_width(term)) {
-        memset(new_tabs + term_width(term), 0, (width - term_width(term)) * sizeof(new_tabs[0]));
-        ssize_t tab = term_width(term) ? term_width(term) - 1: 0, tabw = window_cfg(term->scr.win)->tab_width;
-        while (tab > 0 && !new_tabs[tab]) tab--;
-        while ((tab += tabw) < width) new_tabs[tab] = 1;
-    }
-
-    // Resize predecode buffer
-    uint32_t *newpb = realloc(term->predec_buf, width*sizeof(*newpb));
-    if (!newpb) die("Can't allocate predecode buffer");
-    term->predec_buf = newpb;
-
-    screen_resize(&term->scr, width, height);
+    screen_resize(scr, width, height);
 }
 
 struct term *create_term(struct window *win, int16_t width, int16_t height) {
     struct term *term = calloc(1, sizeof(struct term));
     if (!term) return NULL;
 
-    term->scr.win = win;
-
-    if (tty_open(&term->tty, window_cfg(term->scr.win)) < 0) {
+    if (tty_open(&term->tty, window_cfg(win)) < 0) {
         warn("Can't create tty");
         free_term(term);
         return NULL;
     }
 
-    if (!term_load_config(term)) {
-        warn("Can't create mouse state");
+    if (!init_screen(&term->scr, win)) {
+        warn("Can't allocate selection state");
         free_term(term);
         return NULL;
     }
 
-    term->vt_version = window_cfg(term->scr.win)->vt_version;
+    term_load_config(term, 1);
+
+    term->vt_version = window_cfg(win)->vt_version;
     term->vt_level = term->vt_version / 100;
     if (!term->vt_level) term_set_vt52(term, 1);
 
@@ -5560,27 +3683,11 @@ void term_hang(struct term *term) {
 void free_term(struct term *term) {
     tty_hang(&term->tty);
 
-    free_selection(&term->scr.sstate);
-
 #if USE_URI
     uri_match_reset(&term->uri_match);
-    uri_unref(term->scr.sgr.uri);
-    uri_unref(term->scr.saved_sgr.uri);
-    uri_unref(term->scr.back_saved_sgr.uri);
 #endif
 
-    screen_free_scrollback(&term->scr, 0);
+    free_screen(&term->scr);
 
-    for (ssize_t i = 0; i < term_height(term); i++) {
-        free_line(term->scr.screen[i]);
-        free_line(term->scr.back_screen[i]);
-    }
-
-    free(term->scr.screen);
-    free(term->scr.back_screen);
-    free(term->scr.temp_screen);
-
-    free(term->tabs);
-    free(term->predec_buf);
     free(term);
 }
