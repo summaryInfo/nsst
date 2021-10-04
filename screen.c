@@ -159,16 +159,16 @@ struct line_offset screen_line_iter(struct screen *scr, ssize_t y) {
 }
 
 void screen_reset_view(struct screen *scr, bool damage) {
-    if (!scr->view_pos.line) return;
+    if (scr->view_pos.line) {
+        scr->prev_c_view_changed |= !scr->view_pos.line;
+        scr->view_pos = (struct line_offset){0};
+        selection_view_scrolled(&scr->sstate, scr);
+    }
 
-    scr->prev_c_view_changed |= !scr->view_pos.line;
-    scr->view_pos = (struct line_offset){0};
-    selection_view_scrolled(&scr->sstate, scr);
-
-    if (!damage) return;
-
-    for(ssize_t i = 0; i < scr->height; i++)
-        scr->screen[i]->force_damage = 1;
+    if (damage) {
+        for(ssize_t i = 0; i < scr->height; i++)
+            scr->screen[i]->force_damage = 1;
+    }
 }
 
 inline static struct line *screen_concat_line(struct screen *scr, struct line *dst, struct line *src, bool opt) {
