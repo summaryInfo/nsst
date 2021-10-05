@@ -22,7 +22,7 @@
 #define WARN_PREFIX "[\033[33;1mWARN\033[m] "
 #define INFO_PREFIX "[\033[32;1mINFO\033[m] "
 
-static char log_buffer[LOG_BUFFER_SIZE];
+static char log_buffer[LOG_BUFFER_SIZE + 1];
 
 _Noreturn void die(const char *fmt, ...) {
     if (gconfig.log_level > 0) {

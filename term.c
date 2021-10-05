@@ -450,6 +450,8 @@ static void term_esc_dump(struct term *term, bool use_info) {
 
     const char *pref = use_info ? "Seq: " : "Unrecognized ";
 
+    term_esc_str(term)[term->esc.str_len] = 0;
+
     char buf[ESC_DUMP_MAX] = "^[";
     size_t pos = 2;
     switch (term->esc.state) {
