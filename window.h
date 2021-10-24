@@ -124,6 +124,7 @@ void window_set_clip(struct window *win, uint8_t *data, uint32_t time, enum clip
 void window_set_sync(struct window *win, bool state);
 bool window_get_sync(struct window *win);
 void window_set_autorepeat(struct window *win, bool state);
+bool window_get_autorepeat(struct window *win);
 void window_set_alpha(struct window *win, double alpha);
 struct instance_config *window_cfg(struct window *win);
 

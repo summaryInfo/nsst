@@ -1530,7 +1530,7 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = MODSTATE(smode->wrap);
             break;
         case 8: /* DECARM */
-            val = modstate_aways_disabled;
+            val = MODSTATE(window_get_autorepeat(screen_window(scr)));
             break;
         case 9: /* X10 Mouse */
             val = MODSTATE(term->mstate.mouse_mode == mouse_mode_x10);
