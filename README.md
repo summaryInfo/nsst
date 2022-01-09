@@ -18,13 +18,13 @@ This is an implementation of VT220-like X11 terminal emulator.
     * Multiple terminal windows
     * `Shift-Ctrl-N` is default keybinding to create new window in the same process
     * `nsstc` client that can create new terminal daemon
-    * Daemon can be autolaunched by `nsstc` on demand (`nsstc -d ...`)
+    * Daemon can be auto-launched by `nsstc` on demand (`nsstc -d ...`)
 * Configuration with symmetrical config file options and command line arguments
 * MIT-SHM and XRender backends (compile time option)
 * Compiles with `-flto` by default
 * No warnings (see list of all enabled warnins in Makefile)
 * Rewraps text on resize (can be disabled by setting `rewrap` to false)
-* URL support (no autodetection yet)
+* URL support (no auto-detection yet)
 
 See TODO file for things that are to be implemented.
 
@@ -65,7 +65,7 @@ Set `override-boxdrawing` to `true` if box drawing characters of font you use do
 
 If font looks to blurry try setting `font-gamma` to value greater than `1`.
 
-Set pixelMode to your monitor's pixel alignment to enable subpixel rendering.
+Set pixelMode to your monitor's pixel alignment to enable sub-pixel rendering.
 
 For command line arguments see `nsst --help`.
 Config file uses same option names.
@@ -83,10 +83,10 @@ Sequential graphical characters are decoded all at once, so can be printed faste
 Debugging output can be enabled with `trace-*` options.
 
 For now nsst supports combining characters only via precomposition, but almost everything is ready to implement proper rendering of combining character (and variant glyphs support).
-The only tricky part is to extract positioning tables and implemnt basic text shaping. It would be implemented using glyphs with codes `0x110000` - `0x1FFFFF`,
+The only tricky part is to extract positioning tables and implement basic text shaping. It would be implemented using glyphs with codes `0x110000` - `0x1FFFFF`,
 giving sufficient number of possible custom glyphs. DECDLD is also easy to implement this way.
 
-Hotkeys are now configurable. With syntax `[<Mods>-]<Name>`, where `<Mods>` is XKB key name and mods is a set of one or more of folowing:
+Hotkeys are now configurable. With syntax `[<Mods>-]<Name>`, where `<Mods>` is XKB key name and mods is a set of one or more of following:
 
 * `S` -- Shift
 * `C` -- Control

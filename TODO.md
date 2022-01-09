@@ -7,7 +7,7 @@ _NOTE: These plans can change any time_
 
 ### Until 2.4
 
-* Hyperlinks autodetection
+* Hyperlinks auto-detection
 
   * `--match-uri=<X>` where `<X>` is one of `off`,`manual`,`auto`
   * Protocols matching
@@ -38,14 +38,14 @@ _NOTE: These plans can change any time_
   * `CSI > Ps p` -- `XTSMPOINTER`
   * `OSC 13 Pt ST` -- Set mouse background color
   * `OSC 14 Pt ST` -- Set mouse foreground color
-  * `OSC 113 Pt ST` -- Reset color mouse foreground color
-  * `OSC 114 Pt ST` -- Reset color mouse background color
+  * `OSC 113 Pt ST` -- Reset mouse foreground color
+  * `OSC 114 Pt ST` -- Reset mouse background color
 
 ## Planned/possible features
 
 ### General
 
-* We need better storage for lines contents that just malloc, to be able to scroll faster.
+* We need better storage for lines contents than just malloc, to be able to scroll faster.
 
   Some kind of pool allocator, since we can only allocate scrollback from start and free from the back.
   Simplifies implementation of persistent scrollback feature (if it will be implemented at all).
@@ -67,7 +67,7 @@ _NOTE: These plans can change any time_
 * Some alternative to `XParseColor()`
 
   This is really hard since `XParseColor()` has some weird built-in colorspace conversions
-  and implementing this in the way matching *XTerm* behaviour means implementing whole
+  and implementing this in the way matching *XTerm* behavior means implementing whole
   colorspace and colors handling from *xlib*.
 
 ### Rendering
@@ -77,15 +77,15 @@ _NOTE: These plans can change any time_
   * Colored glyphs
 
       This will allow rendering emoji
-      In XRender this will require to use PutImage on every emoji (the most stright-forward solution)
+      In XRender this will require to use PutImage on every emoji (the most straight-forward solution)
 
-  * Add options to select width of ambigues characters
+  * Add options to select width of ambiguous characters
 
       This requires custom `wcwidth()`
 
   * Combining characters support
 
-      Basically, we need to create a global hashtable of privite runes
+      Basically, we need to create a global hash table of private runes
       mapping (with values higher than 2^21) to unicode code point sequences,
       parse fonts to determine relative glyphs positions and render glyphs
       one atop another to create new glyph and associate it with private rune in glyph cache.
@@ -124,8 +124,8 @@ _NOTE: These plans can change any time_
 ### VTxxx/XTerm compatibility and emulation
 
 * Encode NRCSs for printer autoprint mode
-* Proper vt level restriction
-* Is xterm private mode 1044 semantics correct/sould it be implemented at all?
+* Proper VT level restriction
+* Is xterm private mode 1044 semantics correct/should it be implemented at all?
 
 * VT220
 
@@ -134,10 +134,10 @@ _NOTE: These plans can change any time_
 * SIXEL
 
   * `CSI ? 80 l` / `CSI ? 80 h` -- **DECSDM**
-  * `CSI ? 1070 l` / `CSI ? 1070 h` -- Use private resgisters
-  * `CSI ? 8452 l` / `CSI ? 8452 h` -- Sixel scrolling leaves cursor to the right of graphics
+  * `CSI ? 1070 l` / `CSI ? 1070 h` -- Use private registers
+  * `CSI ? 8452 l` / `CSI ? 8452 h` -- SIXEL scrolling leaves cursor to the right of graphics
   * `CSI ? Pi ; Pa; Pv S` -- **XTSMGRAPHICS** (`Pi` = 1, 2; `Pa` = 1, 2, 3, 4)
-  * `DSC Pa ; Pb ; Ph q Ps..Ps ST` -- Send sixel image
+  * `DSC Pa ; Pb ; Ph q Ps..Ps ST` -- Send SIXEL image
 
 * Termcap
 
@@ -156,7 +156,7 @@ _NOTE: These plans can change any time_
 
   * `CSI 4:4 m` -- dotted underline
   * `CSI 4:5 m` -- dashed underline
-  * `CSI ? 1039 l` / `CSI ? 1039 h` -- Alt sends escape (I don't want to differentiate between `Alt` and `Meta`)
+  * `CSI ? 1039 l` / `CSI ? 1039 h` -- Alt sends escape (There's no plant to differentiate `Alt` and `Meta`)
   * `CSI ? 14 l` / `CSI ? 14 h` -- Cursor blinking XORing
   * `CSI Pm # p, CSI Pm # {` -- **XTPUSHSGR**
   * `CSI # q, CSI # }` -- **XTPOPSGR**
@@ -172,6 +172,6 @@ _NOTE: These plans can change any time_
   * `DCS + Q Pt ST` -> `DCS Ps + R Pt ST` -- **XTGETXRES** (too X11/xterm specific)
   * `CSI ? 1001 l` / `CSI ? 1001 h` -- Hightlight mouse tracking (can hang the terminal)
   * `CSI Ps ; Ps ; Ps ; Ps ; Ps T` -- **XTHIMOUSE** (can hang the terminal)
-  * `ESC # 3` / `ESC # 4` -- **DECDHL** (purely interacts with mouse)
-  * `ESC # 5` -- **DECSWL** (purely interacts with mouse)
-  * `ESC # 6` -- **DECDWL** (purely interacts with mouse)
+  * `ESC # 3` / `ESC # 4` -- **DECDHL** (poorly interacts with mouse)
+  * `ESC # 5` -- **DECSWL** (poorly interacts with mouse)
+  * `ESC # 6` -- **DECDWL** (poorly interacts with mouse)
