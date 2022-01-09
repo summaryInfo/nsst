@@ -34,7 +34,7 @@ struct line_offset {
     ssize_t offset;
 };
 
-inline static ssize_t line_offset_cmp(struct line_offset a, struct line_offset b) {
+inline static ssize_t line_offset_cmp(const struct line_offset a, const struct line_offset b) {
     return a.line == b.line ? a.offset - b.offset : a.line - b.line;
 }
 

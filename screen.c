@@ -1076,6 +1076,7 @@ void screen_scroll(struct screen *scr, int16_t top, int16_t amount, bool save) {
                 }
             } else {
                 screen_erase(scr, 0, top, scr->width, top + amount, 0);
+
                 memcpy(scr->temp_screen, scr->screen + top, amount*sizeof(*scr->temp_screen));
                 memmove(scr->screen + top, scr->screen + top + amount, rest*sizeof(scr->temp_screen));
                 memcpy(scr->screen + top + rest, scr->temp_screen, amount*sizeof(*scr->temp_screen));
@@ -1092,9 +1093,18 @@ void screen_scroll(struct screen *scr, int16_t top, int16_t amount, bool save) {
             memmove(scr->screen + top - amount, scr->screen + top, rest*sizeof(scr->temp_screen));
             memcpy(scr->screen + top, scr->temp_screen, -amount*sizeof(*scr->temp_screen));
 
-            scr->scroll_damage = 1;
         }
-        if (amount && !scr->view_pos.line) window_delay_redraw(scr->win);
+
+        if (amount) {
+            // Update position of selection, if scrolled
+            selection_scrolled(&scr->sstate, scr, amount, top, bottom);
+
+            scr->scroll_damage = 1;
+
+            if (!scr->view_pos.line)
+                window_delay_redraw(scr->win);
+        }
+
     } else { // Slow scrolling with margins
         for (ssize_t i = top; i < bottom; i++) {
             struct line *line = scr->screen[i];

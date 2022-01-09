@@ -296,6 +296,13 @@ static struct line_offset snap_forward(struct selection_state *sel, struct scree
     return pos;
 }
 
+/*
+ * This function converts an absolute position
+ * represented as pos into virtual position of the visual line
+ * on screen return back to pos and offset in that line
+ * as a return value of the function.
+ */
+
 inline static int16_t virtual_pos(struct screen *scr, struct line_offset *pos) {
     struct line_offset orig = *pos, next = *pos;
     next.offset = 0;
@@ -428,6 +435,35 @@ void free_selection(struct selection_state *sel) {
     sel->seg_caps = 0;
     sel->seg_size = 0;
     sel->seg = NULL;
+}
+
+void selection_scrolled(struct selection_state *sel, struct screen *scr, int16_t x, ssize_t top, ssize_t bottom) {
+
+    if (sel->state == state_sel_pressed ||
+            sel->state == state_sel_progress) {
+
+        /* NOTE: This is slow, but if the invariant of the lines
+         * on the screen having one-to-one correspondance
+         * between struct line and visual line changes it would
+         * be the only correct way to calculate the position */
+
+        //struct line_offset top_pos = screen_line_iter(scr, top);
+        //struct line_offset bottom_pos = screen_line_iter(scr, bottom);
+        //struct line_offset screen_start_pos = screen_line_iter(scr, 0);
+
+        struct line_offset top_pos = { top, 0 }, bottom_pos = { bottom, 0 }, screen_pos = { 0, 0 };
+
+        if (line_offset_cmp(sel->start, screen_pos) < 0 ||
+                (line_offset_cmp(sel->start, top_pos) >= 0 &&
+                 line_offset_cmp(sel->start, bottom_pos) < 0)) {
+            int16_t x_off = virtual_pos(scr, &sel->start);
+
+            screen_advance_iter(scr, &sel->start, -x);
+            sel->start.offset += x_off;
+
+            selection_view_scrolled(sel, scr);
+        }
+    }
 }
 
 static void selection_changed(struct selection_state *sel, struct screen *scr, uint8_t state, bool rectangular) {
