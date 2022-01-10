@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2021, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
 
 #ifndef URI_H_
 #define URI_H_ 1
