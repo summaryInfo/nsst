@@ -27,9 +27,6 @@ inline static struct segments *seg_head(struct selection_state *sel, struct line
 }
 
 inline static void free_segments(struct selection_state *sel, struct segments *head) {
-    head->line->selection_index = SELECTION_EMPTY;
-
-    free(head);
 
     /* Here we need to offset all selection below current by one
      * to keep selected lines heads continous.
@@ -37,12 +34,16 @@ inline static void free_segments(struct selection_state *sel, struct segments *h
 
     struct segments **phead = sel->seg + head->line->selection_index;
     struct segments **end = sel->seg + sel->seg_size;
+
+    head->line->selection_index = SELECTION_EMPTY;
+
     while (++phead < end) {
         *(phead - 1)  = *phead;
         (*phead)->line->selection_index--;
     }
 
     sel->seg_size--;
+    free(head);
 }
 
 #define SEGS_INIT_SIZE 2
@@ -104,7 +105,11 @@ void selection_concat(struct selection_state *sel, struct line *dst, struct line
     if (!(src_head = seg_head(sel, src))) return;
     if (!(dst_head = seg_head(sel, dst))) {
         dst->selection_index = src->selection_index;
-        src->selection_index = 0;
+
+        src->selection_index = SELECTION_EMPTY;
+        if (src_head->size)
+            src_head->segs[0].offset += dst->width;
+
         src_head->line = dst;
         return;
     }
@@ -135,7 +140,6 @@ void selection_concat(struct selection_state *sel, struct line *dst, struct line
     }
 
     free_segments(sel, src_head);
-    src->selection_index = SELECTION_EMPTY;
 }
 
 void selection_relocated(struct selection_state *sel, struct line *line, bool cut) {
@@ -530,8 +534,7 @@ bool selection_is_selected(struct selection_state *sel, struct line_view *view, 
         if (idx + seg->length > x) return 1;
     }
 
-    if (idx >= view->line->width) return 1;
-    return 0;
+    return idx >= view->line->width;
 }
 
 inline static int16_t line_len(struct line *line) {
