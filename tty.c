@@ -423,7 +423,7 @@ ssize_t tty_refill(struct tty *tty) {
         tty->start = tty->fd_buf;
     }
 
-    if ((inc = read(tty->w.fd, tty->end, sizeof(tty->fd_buf) - sz)) < 0) {
+    if ((inc = read(tty->w.fd, tty->end, sizeof tty->fd_buf - sz)) < 0) {
         if (errno != EAGAIN) {
             warn("Can't read from tty");
             tty_hang(tty);
@@ -457,14 +457,25 @@ inline static void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t le
             }
 
             if (res < (ssize_t)len) {
-                if (len < lim)
-                    lim = tty_refill(tty);
                 len -= res;
                 buf += res;
             } else break;
         }
-        if (pfd.revents & POLLIN)
+
+        if (pfd.revents & POLLIN) {
+            if (tty->end - tty->start == sizeof tty->fd_buf) {
+                // Since the parser cannot be called recursively
+                // called recursively we cannot empty the input buffer
+                // and tty input queue, so we cannot write the data.
+                // This situation is really rare,
+                // so we can just not write the output for now.
+                // FIXME: Add option to defer answeback messages to be written outside the parser.
+                warn("TTY buffer is overfilled, current output buffer is discarded");
+                return;
+            }
+
             lim = tty_refill(tty);
+        }
     }
 }
 
