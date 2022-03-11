@@ -634,7 +634,8 @@ static void send_selection_data(struct window *win, xcb_window_t req, xcb_atom_t
     if (prop == XCB_NONE) prop = target;
 
     if (target == ctx.atom.TARGETS) {
-        uint32_t data[] = {ctx.atom.UTF8_STRING, XCB_ATOM_STRING};
+        uint32_t data[] = {ctx.atom.TARGETS, ctx.atom.UTF8_STRING, XCB_ATOM_STRING};
+        ev.property = prop;
         xcb_change_property(con, XCB_PROP_MODE_REPLACE, req, prop, XCB_ATOM_ATOM, 32, sizeof(data)/sizeof(*data), data);
     } else if (target == ctx.atom.UTF8_STRING || target == XCB_ATOM_STRING) {
         uint8_t *data = NULL;
@@ -645,12 +646,15 @@ static void send_selection_data(struct window *win, xcb_window_t req, xcb_atom_t
                 win->clipboard : win->clipped[clip_clipboard];
 
         if (data) {
+            // TODO Implement INCR selection
+            //      In order to do that we need to remember every ongoing INCR
+            //      request and associate an offset and data being sent.
             xcb_change_property(con, XCB_PROP_MODE_REPLACE, req, prop, target, 8, strlen((char *)data), data);
             ev.property = prop;
         }
     }
 
-    xcb_send_event(con, 1, req, 0, (const char *)&ev);
+    xcb_send_event(con, 0, req, 0, (const char *)&ev);
 }
 
 static void receive_selection_data(struct window *win, xcb_atom_t prop, bool pnotify) {
