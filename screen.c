@@ -175,7 +175,7 @@ inline static struct line *screen_concat_line(struct screen *scr, struct line *d
     if (src && src->selection_index)
         selection_concat(&scr->sstate, dst, src);
     struct line *new = concat_line(dst, src, opt);
-    if (new->selection_index)
+    if (new && new->selection_index)
         selection_relocated(&scr->sstate, new, 0);
     return new;
 }
