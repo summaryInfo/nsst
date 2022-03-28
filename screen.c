@@ -692,6 +692,12 @@ bool screen_redraw(struct screen *scr, bool blink_commited) {
     struct line *cl = screen_cursor_line(scr);
     bool cursor = !scr->prev_c_hidden && (!cl->cell[scr->c.x].drawn  || cl->force_damage);
 
+    if (cursor) {
+        // Cursor cannot be drawn if it is beyond the end of the line,
+        // so we need to adjust line size.
+        screen_adjust_line(scr, scr->screen[scr->c.y], scr->c.x + 1);
+    }
+
     return window_submit_screen(scr->win, scr->c.x, scr->c.y, cursor, scr->c.pending);
 }
 
