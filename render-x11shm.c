@@ -217,10 +217,11 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
         struct line_view line = screen_line_at(scr, vpos);
         bool next_dirty = 0;
         struct rect l_bound = {-1, k, 0, 1};
-        for (int16_t i =  MIN(win->cw, line.width) - 1; i >= 0; i--) {
+        for (int16_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
             struct cell cel = line.cell[i];
-            struct attr attr = line_view_attr_at(line, i);
+            line.cell[i].drawn = 1;
 
+            struct attr attr = line_view_attr(line, cel.attrid);
             bool dirty = line.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
 
             struct cellspec spec;
@@ -273,31 +274,31 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                 // Strikethough
                 if (spec.stroke) image_draw_rect(win->plat.im, r_strike, spec.ul);
 
-                line.cell[i].drawn = 1;
-
                 if (l_bound.x < 0) l_bound.width = i + g_wide;
 
                 l_bound.x = i;
             }
             next_dirty = dirty;
         }
-        if (l_bound.x >= 0 || (scrolled && win->cw > line.width)) {
+
+        if (l_bound.x >= 0 || line.line->force_damage || (scrolled && win->cw > line.width)) {
             if (win->cw > line.width) {
-                color_t c = win->bg_premul;
-                if (selection_is_selected(term_get_sstate(win->term), &line, win->cw - 1)) {
-                    c = win->rcstate.palette[SPECIAL_SELECTED_BG];
-                    if (!c) c = win->rcstate.palette[SPECIAL_FG];
-                    c = color_apply_a(c, win->cfg.alpha);
-                }
+                // TODO Do less work here
+                bool selected = selection_is_selected(term_get_sstate(win->term), &line, win->cw - 1);
+                struct attr attr = attr_pad(line.line);
+                struct cell cel = MKCELL(0, line.line->pad_attrid);
+                struct cellspec spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
+
                 image_draw_rect(win->plat.im, (struct rect){
                     .x = bw + line.width * win->char_width,
                     .y = bh + k * (win->char_height + win->char_depth),
                     .width = (win->cw - line.width) * win->char_width,
                     .height = win->char_height + win->char_depth
-                }, c);
+                }, spec.bg);
                 l_bound.width = win->cw - 1;
                 if (l_bound.x < 0) l_bound.x = line.width;
             }
+
             l_bound.width = MIN(l_bound.width - l_bound.x + 1, win->cw);
             win->plat.bounds[win->plat.boundc++] = l_bound;
         }

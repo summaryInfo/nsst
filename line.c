@@ -65,7 +65,7 @@ void free_attrs(struct line_attr *attrs) {
 }
 
 static void move_attrtab(struct line_attr *dst, struct line *src) {
-    for (ssize_t i = 0; i < src->width; i++) {
+    for (ssize_t i = 0; i < src->size; i++) {
         uint32_t old_id = src->cell[i].attrid;
         if (old_id == ATTRID_DEFAULT) continue;
 
@@ -78,6 +78,13 @@ static void move_attrtab(struct line_attr *dst, struct line *src) {
         }
 
         src->cell[i].attrid = at->bg;
+    }
+
+    if (src->pad_attrid != ATTRID_DEFAULT) {
+        struct attr *pad = &src->attrs->data[src->pad_attrid - 1];
+        if (!attr_empty(pad))
+            pad->bg = insert_attr(dst, pad, attr_hash(pad));
+        src->pad_attrid = pad->bg;
     }
 
     free_attrs(src->attrs);
@@ -118,27 +125,26 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
     return insert_attr(line->attrs, &attr, hash);
 }
 
-struct line *create_line(struct attr attr, ssize_t width) {
-    struct line *line = malloc(sizeof(*line) + (size_t)width * sizeof(line->cell[0]));
+struct line *create_line(struct attr attr, ssize_t caps) {
+    struct line *line = malloc(sizeof(*line) + (size_t)caps * sizeof(line->cell[0]));
     if (!line) die("Can't allocate line");
-    memset(line, 0, sizeof(*line));
-    struct cell c = { .attrid = alloc_attr(line, attr) };
-    fill_cells(line->cell, c, width);
-    line->width = width;
+
+    memset(line, 0, sizeof *line);
+
+    line->pad_attrid = alloc_attr(line, attr);
+    line->force_damage = 1;
+    line->caps = caps;
     return line;
 }
 
-struct line *realloc_line(struct line *line, ssize_t width) {
-    struct line *new = realloc(line, sizeof(*new) + (size_t)width * sizeof(new->cell[0]));
+struct line *realloc_line(struct line *line, ssize_t caps) {
+    struct line *new = realloc(line, sizeof(*new) + (size_t)caps * sizeof(new->cell[0]));
     if (!new) die("Can't create lines");
 
-    if (width > new->width) {
-        fill_cells(new->cell + new->width,
-                MKCELL(0, new->cell[new->width - 1].attrid), width - new->width);
-    }
 
-    new->width = width;
-    new->mwidth = MIN(width, new->mwidth);
+    new->size = MIN(caps, new->size);
+    new->caps = caps;
+
     return new;
 }
 
@@ -148,9 +154,11 @@ static void optimize_attributes(struct line *line) {
 
     uint64_t used[(MAX_EXTRA_PALETTE + 1)/64] = {0};
 
-    for (ssize_t i = 0; i < line->width; i++) {
+    used[line->pad_attrid / 64] |= 1ULL << (line->pad_attrid % 64);
+
+    for (ssize_t i = 0; i < line->size; i++) {
         uint64_t id = line->cell[i].attrid;
-        used[id / 64] |= 1 << (id % 64);
+        used[id / 64] |= 1ULL << (id % 64);
     }
 
     ssize_t cnt = -(used[0] & 1);
@@ -171,21 +179,15 @@ static void optimize_attributes(struct line *line) {
 
 struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     if (src2) {
-        ssize_t llen = MIN(src2->mwidth + 1, src2->width);
-        ssize_t oldw = src1->width;
-
-        if (llen + oldw > MAX_LINE_LEN) return NULL;
-
-        src1 = realloc_line(src1, oldw + llen);
-
-        copy_line(src1, oldw, src2, 0, llen);
-
+        assert(src1->wrapped);
+        ssize_t len = MIN(src2->size + src1->size, MAX_LINE_LEN);
+        src1 = realloc_line(src1, len);
+        src1->pad_attrid = alloc_attr(src1, attr_pad(src2));
         src1->wrapped = src2->wrapped;
+        copy_line(src1, src1->size, src2, 0, len - src1->size);
         free_line(src2);
-    } else if (opt) {
-        ssize_t llen = MIN(src1->mwidth + 1, src1->width);
-        if (llen != src1->width)
-            src1 = realloc_line(src1, llen);
+    } else if (opt && src1->size != src1->caps) {
+        src1 = realloc_line(src1, src1->size);
     }
 
     if (opt) optimize_attributes(src1);
@@ -194,6 +196,10 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
 
 void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len) {
     struct cell *sc = src->cell + sx, *dc = dst->cell + dx, c;
+
+    assert(sx + len <= src->size);
+    assert(dx + len <= dst->caps);
+
     if (dst != src) {
         uint32_t previd = ATTRID_MAX, newid = 0;
         for (ssize_t i = 0; i < len; i++) {
@@ -205,11 +211,14 @@ void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, s
                 c.attrid = newid;
             }
             *dc++ = c;
+
+            if (dc - dst->cell > dst->size)
+                dst->size = dc - dst->cell;
         }
     } else {
         memmove(dc, sc, len * sizeof(*sc));
         while (len--) dc++->drawn = 0;
     }
-    dst->mwidth = MAX(dst->mwidth, sx + len);
+    dst->size = MAX(dst->size, sx + len);
 }
 

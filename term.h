@@ -38,14 +38,14 @@ inline static ssize_t line_offset_cmp(const struct line_offset a, const struct l
     return a.line == b.line ? a.offset - b.offset : a.line - b.line;
 }
 
-inline static struct attr line_view_attr_at(struct line_view view, ssize_t x) {
-    return view.cell[x].attrid ? view.line->attrs->data[view.cell[x].attrid - 1] : ATTR_DEFAULT;
+inline static struct attr line_view_attr(struct line_view view, uint32_t attrid) {
+    return attrid ? view.line->attrs->data[attrid - 1] : ATTR_DEFAULT;
 }
 
 /* Returns true if next line will be next physical line
  * and not continuation part of current physical line */
 inline static bool is_last_line(struct line_view line, bool rewrap) {
-    return !rewrap || line.cell - line.line->cell + line.width >= line.line->width;
+    return !rewrap || line.cell - line.line->cell + line.width >= line.line->size;
 }
 
 struct term *create_term(struct window *win, int16_t width, int16_t height);

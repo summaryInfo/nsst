@@ -77,19 +77,19 @@ inline static bool adjust_head(struct selection_state *sel, struct segments **ph
     return 1;
 }
 
+#define SNAP_RIGHT INT16_MAX
+
 static void append_segment(struct selection_state *sel, struct line *line, int16_t x0, int16_t x1) {
     struct segments *head = seg_head(sel, line);
 
-    // Clip if selecting over the line end
-    // (clipped lines always have one space at the end)
-    // FIXME Let it work without one character at the end
-    if (x0 >= line->width) x0 = line->width - 1;
-    if (x1 > line->width) x1 = line->width;
+    x0 = MIN(line->size, x0);
+    if (x1 > line->size) x1 = SNAP_RIGHT;
 
     if (!head && !(head = alloc_head(sel, line))) return;
 
-
     foreach_segment_indexed(seg, last_i, head);
+
+    if (last_i >= SNAP_RIGHT) return;
 
     if (last_i == x0 && head->size) {
         head->segs[head->size - 1].length += x1 - x0;
@@ -108,7 +108,7 @@ void selection_concat(struct selection_state *sel, struct line *dst, struct line
 
         src->selection_index = SELECTION_EMPTY;
         if (src_head->size)
-            src_head->segs[0].offset += dst->width;
+            src_head->segs[0].offset += dst->size;
 
         src_head->line = dst;
         return;
@@ -119,8 +119,15 @@ void selection_concat(struct selection_state *sel, struct line *dst, struct line
     size_t offset = 0;
     foreach_segment_indexed(seg, last_i, dst_head);
 
+    if (last_i == SNAP_RIGHT) {
+        last_i = dst->size;
+        dst_head->segs[dst_head->size - 1].length = SNAP_RIGHT - dst->size;
+    }
+
+    assert(last_i <= dst->size);
+
     /* Merge adjacent */
-    if (src_head->size && !src_head->segs->offset && last_i == dst->width) {
+    if (src_head->size && !src_head->segs->offset && last_i == dst->size) {
         dst_head->segs[dst_head->size - 1].length += src_head->segs[0].length;
         src_head->size--;
         offset = 1;
@@ -135,25 +142,27 @@ void selection_concat(struct selection_state *sel, struct line *dst, struct line
         // NOTE dst width computation should be compatible with
         //      one in line_concat()
         // Also, this does not change if first segment was merged
-        dst_head->segs[dst_head->size].offset += dst->width - last_i;
+        dst_head->segs[dst_head->size].offset += dst->size - last_i;
         dst_head->size += src_head->size;
     }
 
     free_segments(sel, src_head);
 }
 
-void selection_relocated(struct selection_state *sel, struct line *line, bool cut) {
+void selection_relocated(struct selection_state *sel, struct line *line) {
     struct segments *head = seg_head(sel, line);
     if (!head) return;
 
     head->line = line;
 
     foreach_segment_indexed(seg, idx, head) {
-        if (idx + seg->length > line->width) {
-            if (idx <= line->width)
-                seg++->length = line->width - idx;
+        if (idx + seg->length > line->size) {
+            if (idx <= line->size)
+                seg++->length = line->size - idx;
             head->size = seg - head->segs;
-            if (cut) selection_clear(sel);
+
+            // TODO Should it happen always or never?
+            //if (cut) selection_clear(sel);
             break;
         }
     }
@@ -190,9 +199,17 @@ bool selection_intersects(struct selection_state *sel, struct line *line, int16_
 
 static void damage_head(struct segments *head) {
     struct cell *cell = head->line->cell;
-    foreach_segment_indexed(seg, idx, head)
-        for (ssize_t i = idx; i < seg->length + idx; i++)
+    foreach_segment_indexed(seg, idx, head) {
+
+        if (head->line->size < idx + seg->length) {
+            head->line->force_damage = 1;
+            return;
+        }
+
+        for (ssize_t i = idx; i < seg->length + idx; i++) {
             cell[i].drawn = 0;
+        }
+    }
 }
 
 void selection_damage(struct selection_state *sel, struct line *line) {
@@ -220,7 +237,11 @@ static struct line_offset snap_backward(struct selection_state *sel, struct scre
         }
     } else if (sel->snap == snap_word) {
         struct line *line = screen_paragraph_at(scr, pos.line), *prev;
-        if (pos.offset > line->width) pos.offset = line->width - 1;
+        if (pos.offset >= line->size) {
+            pos.offset = line->size;
+            return pos;
+        }
+
         for (;;) {
             /* We should not land on second cell of wide character */
             pos.offset -= !line->cell[pos.offset].ch && pos.offset && cell_wide(line->cell + pos.offset - 1);
@@ -231,6 +252,7 @@ static struct line_offset snap_backward(struct selection_state *sel, struct scre
 
             for (; pos.offset; ) {
                 int delta = 1 + (pos.offset > 1 && cell_wide(line->cell + pos.offset - 2));
+                if (pos.offset - delta < 0) break;
                 if (sep_cur != is_separator(cell_get(line->cell + pos.offset - delta), seps)) return pos;
                 pos.offset -= delta;
             }
@@ -241,14 +263,15 @@ static struct line_offset snap_backward(struct selection_state *sel, struct scre
              *     - it ends with character of same class */
 
             if (!(prev = screen_paragraph_at(scr, pos.line - 1)) || !prev->wrapped) break;
+            if (!prev->size) break;
 
             line = prev;
 
-            int delta = 1 + (line->width > 1 && cell_wide(line->cell + line->width - 2));
-            if (is_separator(cell_get(line->cell + line->width - delta), seps) != sep_cur) break;
+            int delta = 1 + (line->size > 1 && cell_wide(line->cell + line->size - 2));
+            if (is_separator(cell_get(line->cell + line->size - delta), seps) != sep_cur) break;
 
             pos.line--;
-            pos.offset = line->width - delta;
+            pos.offset = line->size - delta;
         }
     }
 
@@ -263,10 +286,14 @@ static struct line_offset snap_forward(struct selection_state *sel, struct scree
         do line = next, next = screen_paragraph_at(scr, ++pos.line);
         while (next && line->wrapped);
         pos.line--;
-        pos.offset = line->width - 1;
+        pos.offset = SNAP_RIGHT;
     } else if (sel->snap == snap_word) {
         struct line *line = screen_paragraph_at(scr, pos.line), *next;
-        if (line->width < pos.offset) pos.offset = line->width - 1;
+        if (pos.offset >= line->size) {
+            pos.offset = SNAP_RIGHT;
+            return pos;
+        }
+
         for (;;) {
             bool sep_cur = is_separator(cell_get(line->cell + pos.offset), seps);
 
@@ -275,8 +302,9 @@ static struct line_offset snap_forward(struct selection_state *sel, struct scree
 
             /* Go forward until we hit word border */
 
-            for (; pos.offset < line->width; ) {
-                int delta = 1 + (cell_wide(line->cell + pos.offset) && pos.offset < line->width - 1);
+            for (; pos.offset < line->size; ) {
+                int delta = 1 + (cell_wide(line->cell + pos.offset) && pos.offset < line->size - 1);
+                if (line->size <= pos.offset + delta) break;
                 if (sep_cur != is_separator(cell_get(line->cell + pos.offset + delta), seps)) return pos;
                 pos.offset += delta;
             }
@@ -290,6 +318,7 @@ static struct line_offset snap_forward(struct selection_state *sel, struct scree
 
             line = next;
 
+            if (!line->size) break;
             if (is_separator(cell_get(line->cell), seps) != sep_cur) break;
 
             pos.line++;
@@ -362,9 +391,13 @@ static void damage_changed(struct selection_state *sel, struct segments **old, s
                     advance_new = 1;
                 }
 
-                assert(to <= line->width);
-                while (from < to)
-                    line->cell[from++].drawn = 0;
+                if (to >= line->size) {
+                    line->force_damage = 1;
+                } else {
+                    while (from < to) {
+                        line->cell[from++].drawn = 0;
+                    }
+                }
 
                 if (advance_old) {
                     if (seg_old < seg_old_end) {
@@ -413,7 +446,7 @@ static void decompose(struct selection_state *sel, struct screen *scr, struct li
     } else {
         for (; start.line < end.line; start.line++) {
             struct line *line = screen_paragraph_at(scr, start.line);
-            append_segment(sel, line, start.offset, line->width);
+            append_segment(sel, line, start.offset, SNAP_RIGHT);
             start.offset = 0;
         }
         struct line *line = screen_paragraph_at(scr, end.line);
@@ -451,11 +484,11 @@ void selection_scrolled(struct selection_state *sel, struct screen *scr, int16_t
          * between struct line and visual line changes it would
          * be the only correct way to calculate the position */
 
-        //struct line_offset top_pos = screen_line_iter(scr, top);
-        //struct line_offset bottom_pos = screen_line_iter(scr, bottom);
-        //struct line_offset screen_start_pos = screen_line_iter(scr, 0);
+        struct line_offset top_pos = screen_line_iter(scr, top);
+        struct line_offset bottom_pos = screen_line_iter(scr, bottom);
+        struct line_offset screen_pos = screen_line_iter(scr, 0);
 
-        struct line_offset top_pos = { top, 0 }, bottom_pos = { bottom, 0 }, screen_pos = { 0, 0 };
+        //struct line_offset top_pos = { top, 0 }, bottom_pos = { bottom, 0 }, screen_pos = { 0, 0 };
 
         if (line_offset_cmp(sel->start, screen_pos) < 0 ||
                 (line_offset_cmp(sel->start, top_pos) >= 0 &&
@@ -534,20 +567,11 @@ bool selection_is_selected(struct selection_state *sel, struct line_view *view, 
         if (idx + seg->length > x) return 1;
     }
 
-    return idx >= view->line->width;
-}
-
-inline static int16_t line_len(struct line *line) {
-    int16_t max_x = line->mwidth;
-    assert(line->mwidth <= line->width);
-    if (!line->wrapped)
-        while (max_x > 0 && !line->cell[max_x - 1].ch)
-            max_x--;
-    return max_x;
+    return 0; // FIXME What??? idx >= view->line->size;
 }
 
 static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line *line, ssize_t x0, ssize_t x1, bool first) {
-    ssize_t max_x = MIN(x1, line_len(line));
+    ssize_t max_x = MIN(x1, line_length(line));
 
     if (!first) {
         if (!adjust_buffer((void **)res, cap, *pos + 2, 1)) return;
@@ -565,7 +589,7 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line *li
         }
     }
 
-    if (!line->wrapped || x1 != line->width) {
+    if (!line->wrapped || x1 != line->size) {
         if (!adjust_buffer((void **)res, cap, *pos + 2, 1)) return;
         (*res)[(*pos)++] = '\n';
     }
@@ -720,7 +744,7 @@ static void update_active_uri(struct screen *scr, struct window *win, struct mou
 
         struct line_view lv = screen_line_at(scr, pos);
         uint32_t lx = x + lv.cell - lv.line->cell;
-        if (lx < lv.line->width) uri = attr_at(lv.line, lx).uri;
+        if (lx < lv.line->size) uri = attr_at(lv.line, lx).uri;
     }
     window_set_active_uri(win, uri, is_button1_down(ev));
 

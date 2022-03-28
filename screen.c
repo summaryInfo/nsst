@@ -67,7 +67,7 @@ void screen_damage_uri(struct screen *scr, uint32_t uri) {
         struct line_view line = screen_line_at(scr, vpos);
         if (line.line) {
             for (ssize_t j = 0; j <  MIN(scr->width, line.width); j++) {
-                if (line_view_attr_at(line, j).uri == uri)
+                if (line_view_attr(line, line.cell[j].attrid).uri == uri)
                     line.cell[j].drawn = 0;
             }
             screen_advance_iter(scr, &vpos, 1);
@@ -85,7 +85,7 @@ struct line_view screen_line_at(struct screen *scr, struct line_offset pos) {
         ssize_t wid = line_width(ln, pos.offset, scr->width);
         return (struct line_view) {
             .width = wid - pos.offset,
-            .wrapped = ln->wrapped || wid < ln->width,
+            .wrapped = ln->wrapped || wid < ln->size,
             .cell = ln->cell + pos.offset,
             .line = ln,
         };
@@ -98,7 +98,7 @@ ssize_t screen_inc_iter(struct screen *scr, struct line_offset *pos) {
         if (pos->line >= scr->height) return 1;
         ln = line_at(scr, pos->line);
         pos->offset = line_width(ln, pos->offset, scr->width);
-        if (pos->offset >= ln->width) {
+        if (pos->offset >= ln->size) {
             if (pos->line + 1 >= scr->height) return 1;
             pos->offset = 0;
             pos->line++;
@@ -132,7 +132,7 @@ ssize_t screen_advance_iter(struct screen *scr, struct line_offset *pos, ssize_t
             if (pos->line >= scr->height) return amount;
             ln = line_at(scr, pos->line);
             while (pos->line < scr->height && amount) {
-                if ((pos->offset = line_width(ln, pos->offset, scr->width)) >= ln->width) {
+                if ((pos->offset = line_width(ln, pos->offset, scr->width)) >= ln->size) {
                     pos->offset = 0;
                     if (pos->line + 1 >= scr->height) break;
                     ln = line_at(scr, ++pos->line);
@@ -165,27 +165,40 @@ void screen_reset_view(struct screen *scr, bool damage) {
         selection_view_scrolled(&scr->sstate, scr);
     }
 
-    if (damage) {
-        for(ssize_t i = 0; i < scr->height; i++)
-            scr->screen[i]->force_damage = 1;
-    }
+    if (damage)
+        screen_damage_lines(scr, 0, scr->height);
 }
 
 inline static struct line *screen_concat_line(struct screen *scr, struct line *dst, struct line *src, bool opt) {
-    if (src && src->selection_index)
+    if (dst && src && src->selection_index)
         selection_concat(&scr->sstate, dst, src);
     struct line *new = concat_line(dst, src, opt);
     if (new && new->selection_index)
-        selection_relocated(&scr->sstate, new, 0);
+        selection_relocated(&scr->sstate, new);
     return new;
 }
 
 inline static struct line *screen_realloc_line(struct screen *scr, struct line *line, ssize_t width) {
-    bool cut = width < line->mwidth;
     struct line *new = realloc_line(line, width);
+
     if (new->selection_index)
-        selection_relocated(&scr->sstate, new, cut);
+        selection_relocated(&scr->sstate, new);
     return new;
+}
+
+inline static struct line *screen_adjust_line(struct screen *scr, struct line *line, int16_t size) {
+    if (size < line->size)
+        return line;
+
+    if (size > line->caps)
+        line = screen_realloc_line(scr, line, size);
+
+    struct cell c = MKCELL(0, line->pad_attrid);
+    for (ssize_t i = line->size; i < size; i++)
+        line->cell[i] = c;
+
+    line->size = size;
+    return line;
 }
 
 void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
@@ -399,7 +412,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
             // If first line of screen is continuation line,
             // start with fist line of scrollback
             if (scr->sb_limit && line_at(scr, -1)->wrapped) {
-                loff = line_at(scr, -1)->width;
+                loff = line_at(scr, -1)->size;
                 y = -1;
             }
 
@@ -419,10 +432,10 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
                 // Calculate new line number
                 if (!scr->screen[i]->wrapped) {
                     ssize_t len = line_length(scr->screen[i]);
-                    scr->screen[i]->width = len;
+                    scr->screen[i]->size = len;
                     if (y && !nnlines) {
                         dlta = (len + loff + width - 1)/width -
-                                (len + loff - line_at(scr, -1)->width + width - 1)/width;
+                                (len + loff - line_at(scr, -1)->size + width - 1)/width;
                     }
                     nnlines += (len + loff + width - 1)/width;
                     lline++;
@@ -436,7 +449,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
             // Pop lines from scrollback so cursor row won't be changed
             while (y - 1 > -scr->sb_limit && new_cur_par < cursor_par) {
                 struct line *line = line_at(scr, --y);
-                ssize_t delta = (line->width + width - 1) / width;
+                ssize_t delta = (line->size + width - 1) / width;
                 new_cur_par += delta;
                 approx_cy += delta;
                 nnlines += delta;
@@ -452,7 +465,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
             ssize_t y2 = y, dy = 0;
             for (ssize_t dx = 0; y < scr->height; y++) {
                 struct line *line = line_at(scr, y);
-                ssize_t len = line->width;
+                ssize_t len = line->size;
                 if (!ll_translated && lower_left.line == y) {
                     lower_left.line = dy;
                     lower_left.offset = dx;
@@ -489,11 +502,13 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
                         c.attrid = newid;
                     };
                     new_lines[dy]->cell[dx] = c;
+                    new_lines[dy]->size++;
+                    assert(dx == new_lines[dy]->size - 1);
 
                     // Advance line, soft wrap
                     if (++dx == width && (x < len - 1 || line->wrapped)) {
                         new_lines[dy]->wrapped = 1;
-                        new_lines[dy]->mwidth = width;
+                        new_lines[dy]->pad_attrid = alloc_attr(new_lines[dy], attr_pad(line));
                         if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
                         dx = 0;
                     }
@@ -511,7 +526,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
                 }
                 // Advance line, hard wrap
                 if (!line->wrapped) {
-                    new_lines[dy]->mwidth = dx;
+                    new_lines[dy]->pad_attrid = alloc_attr(new_lines[dy], attr_pad(line));
                     if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
                     dx = 0;
                 }
@@ -540,7 +555,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
         while (scr->c.y > height - 1 || new_cur_par > cursor_par) {
             if (scr->sb_limit && line_at(scr, -1)->wrapped) {
                 if (lower_left.line >= 0) {
-                    if (!lower_left.line) lower_left.offset += line_at(scr, -1)->width;
+                    if (!lower_left.line) lower_left.offset += line_at(scr, -1)->size;
                     lower_left.line--;
                 }
             } else lower_left.line--;
@@ -562,7 +577,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
                 window_shift(scr->win, start, 0, height - start);
             }
             for (ssize_t i = 0; i < minh; i++) {
-                if (new_lines[i + start]->width < width || scr->mode.cut_lines) {
+                if (new_lines[i + start]->caps < width || scr->mode.cut_lines) {
                     new_lines[i + start] = screen_realloc_line(scr, new_lines[i + start], width);
                 }
             }
@@ -895,18 +910,22 @@ void screen_copy(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
 void screen_fill(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, bool origin, uint32_t ch) {
     screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin);
 
+    bool is_erase = !ch && scr->sgr.bg == indirect_color(SPECIAL_BG) &&
+                    !scr->sgr.blink && !scr->sgr.reverse && !scr->sgr.protected &&
+                    scr->sgr.uri == EMPTY_URI;
+
     // Reset line lengths
-    if (!ch && xe == scr->width) {
+    if (is_erase) {
         for (int16_t i = ys; i < ye; i++) {
-            assert(xs <= scr->screen[i]->width);
-            scr->screen[i]->mwidth = xs;
+            assert(scr->screen[i]->size <= scr->screen[i]->caps);
+            if (scr->screen[i]->size <= xe)
+                scr->screen[i]->size = MIN(xs, scr->screen[i]->size);
         }
     } else {
-        int16_t set_to = ch ? xe : xs;
         for (int16_t i = ys; i < ye; i++) {
-            assert(set_to <= scr->screen[i]->width);
-            if (scr->screen[i]->mwidth <= xe)
-                scr->screen[i]->mwidth = set_to;
+            assert(scr->screen[i]->size <= scr->screen[i]->caps);
+            if (scr->screen[i]->size <= xe)
+                scr->screen[i]->size = xe;
         }
     }
 
@@ -1134,6 +1153,10 @@ void screen_insert_cells(struct screen *scr, int16_t n) {
         n = MAX(screen_min_x(scr), MIN(n, screen_max_x(scr) - scr->c.x));
 
         struct line *line = screen_cursor_line(scr);
+
+        if (line->size >= scr->c.x)
+            line->size += n;
+
         adjust_wide_left(line, scr->c.x);
         adjust_wide_right(line, scr->c.x);
 
@@ -1501,11 +1524,21 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
     struct line *line = screen_cursor_line(scr);
     struct cell *cell = &line->cell[cx];
 
+    if (max_cx < line->size)
+        adjust_wide_right(line, max_cx - 1);
+
     // Shift characters to the left if insert mode is enabled
-    if (scr->mode.insert && max_cx < max_tx) {
+    if (scr->mode.insert && max_cx < max_tx && cx < line->size) {
+        ssize_t max_new_size = MIN(max_tx, line->size + totalw);
+        if (line->size < max_new_size)
+            screen_adjust_line(scr, line, max_new_size);
+
         for (struct cell *c = cell + totalw; c - line->cell < max_tx; c++) c->drawn = 0;
         memmove(cell + totalw, cell, (max_tx - max_cx)*sizeof(*cell));
         max_cx = MAX(max_cx, max_tx);
+    } else {
+        if (line->size <= max_cx)
+            screen_adjust_line(scr, line, max_cx);
     }
 
     // Clear selection if writing over it
@@ -1524,12 +1557,6 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
     adjust_wide_left(line, cx);
 
     cx += totalw;
-    if (cx < line->mwidth)
-        adjust_wide_right(line, cx - 1);
-    else {
-        assert(cx <= line->width);
-        line->mwidth = cx;
-    }
 
     scr->c.pending = cx == max_tx;
     scr->c.x = cx - scr->c.pending;

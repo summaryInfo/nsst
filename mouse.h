@@ -105,7 +105,7 @@ bool selection_is_selected(struct selection_state *sel, struct line_view *view, 
 void selection_clear(struct selection_state *sel);
 void selection_damage(struct selection_state *sel, struct line *line);
 void selection_concat(struct selection_state *sel, struct line *dst, struct line *src);
-void selection_relocated(struct selection_state *sel, struct line *line, bool cut);
+void selection_relocated(struct selection_state *sel, struct line *line);
 void selection_free(struct selection_state *sel, struct line *line);
 void selection_scrolled(struct selection_state *sel, struct screen *scr, int16_t x, ssize_t top, ssize_t bottom);
 bool selection_intersects(struct selection_state *sel, struct line *line, int16_t x0, int16_t x1);

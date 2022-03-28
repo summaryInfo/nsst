@@ -92,9 +92,10 @@ struct line_attr {
 // Add default attrib value?
 struct line {
     struct line_attr *attrs;
-    ssize_t width;
-    ssize_t mwidth;
-    uint32_t selection_index : 30;
+    ssize_t size;
+    ssize_t caps;
+    uint32_t selection_index;
+    uint16_t pad_attrid;
     bool force_damage : 1;
     bool wrapped : 1;
     struct cell cell[];
@@ -180,22 +181,22 @@ inline static void free_line(struct line *line) {
 }
 
 inline static int16_t line_length(struct line *line) {
-    int16_t max_x = line->width;
+    int16_t max_x = line->size;
     if (!line->wrapped)
-        while (LIKELY(max_x > 0 && !line->cell[max_x - 1].ch)) max_x--;
+        while (LIKELY(max_x > 0 && !line->cell[max_x - 1].ch && !line->cell[max_x - 1].attrid)) max_x--;
     return max_x;
 }
 
 inline static ssize_t line_width(struct line *ln, ssize_t off, ssize_t w) {
     off += w;
-    if (off - 1 < ln->width)
+    if (off - 1 < ln->size)
         off -= cell_wide(&ln->cell[off - 1]);
-    return MIN(off, ln->width);
+    return MIN(off, ln->size);
 }
 
 inline static ssize_t line_segments(struct line *ln, ssize_t off, ssize_t w) {
-    ssize_t n = off < ln->width || (!ln->width && !off);
-    while ((off = line_width(ln, off, w)) < ln->width) n++;
+    ssize_t n = off < ln->size || (!ln->size && !off);
+    while ((off = line_width(ln, off, w)) < ln->size) n++;
     return n;
 }
 
@@ -217,14 +218,18 @@ inline static struct attr attr_at(struct line *ln, ssize_t x) {
     return ln->cell[x].attrid ? ln->attrs->data[ln->cell[x].attrid - 1] : ATTR_DEFAULT;
 }
 
+inline static struct attr attr_pad(struct line *ln) {
+    return ln->pad_attrid ? ln->attrs->data[ln->pad_attrid - 1] : ATTR_DEFAULT;
+}
+
 inline static void adjust_wide_left(struct line *line, ssize_t x) {
-    if (x < 1) return;
+    if (x < 1 || !line->size) return;
     struct cell *cell = line->cell + x - 1;
     if (cell_wide(cell)) *cell = MKCELL(0, cell->attrid);
 }
 
 inline static void adjust_wide_right(struct line *line, ssize_t x) {
-    if (x >= line->width - 1) return;
+    if (x >= line->size - 1) return;
     struct cell *cell = &line->cell[x + 1];
     if (cell_wide(cell - 1)) cell->drawn = 0;
 }
@@ -279,6 +284,16 @@ inline static void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
     case 1: dst[0] = c;
     } while(--i > 0);
 #endif
+}
+
+inline static void damage_line(struct line *line, ssize_t x0, ssize_t x1) {
+    if (x0 >= line->size) {
+        line->force_damage = 1;
+    } else {
+        x1 = MIN(line->size, x1);
+        while (x0 < x1)
+            line->cell[x0].drawn = 0;
+    }
 }
 
 #endif
