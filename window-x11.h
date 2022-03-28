@@ -235,6 +235,48 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr *attr,
     return res;
 }
 
+/*
+ * This is specialized version of function above that only calculates
+ * background color. It is used for padding rendering.
+ */
+FORCEINLINE
+inline static color_t describe_bg(struct attr *attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected) {
+    color_t bg = direct_color(attr->bg, rcs->palette);
+
+    if (UNLIKELY(attr->reverse ^ selected)) {
+        color_t fg;
+
+        if (UNLIKELY(cfg->special_bold) && rcs->palette[SPECIAL_BOLD] && attr->bold)
+            attr->fg = rcs->palette[SPECIAL_BOLD], attr->bold = 0;
+        if (UNLIKELY(cfg->special_underline) && rcs->palette[SPECIAL_UNDERLINE] && attr->underlined)
+            attr->fg = rcs->palette[SPECIAL_UNDERLINE], attr->underlined = 0;
+        if (UNLIKELY(cfg->special_blink) && rcs->palette[SPECIAL_BLINK] && attr->blink)
+            attr->fg = rcs->palette[SPECIAL_BLINK], attr->blink = 0;
+        if (UNLIKELY(cfg->special_reverse) && rcs->palette[SPECIAL_REVERSE] && attr->reverse)
+            attr->fg = rcs->palette[SPECIAL_REVERSE], attr->reverse = 0;
+        if (UNLIKELY(cfg->special_italic) && rcs->palette[SPECIAL_ITALIC] && attr->italic)
+            attr->fg = rcs->palette[SPECIAL_ITALIC], attr->italic = 0;
+        if (attr->bold && !attr->faint && color_idx(attr->fg) < 8)
+            attr->fg = indirect_color(color_idx(attr->fg) + 8);
+
+        fg = direct_color(attr->fg, rcs->palette);
+
+        if (!attr->bold && attr->faint)
+            fg = (fg & 0xFF000000) | ((fg & 0xFEFEFE) >> 1);
+
+        if (attr->reverse ^ selected) SWAP(fg, bg);
+    }
+
+    // Apply background opacity
+    if (color_idx(attr->bg) == SPECIAL_BG || cfg->blend_all_bg)
+        bg = color_apply_a(bg, cfg->alpha);
+
+    if (selected && rcs->palette[SPECIAL_SELECTED_BG])
+        bg = rcs->palette[SPECIAL_SELECTED_BG];
+
+    return bg;
+}
+
 /* Renderer dependent functions */
 void init_render_context(void);
 void free_render_context(void);

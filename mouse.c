@@ -342,7 +342,7 @@ inline static int16_t virtual_pos(struct screen *scr, struct line_offset *pos) {
 
     do {
         *pos = next;
-        screen_advance_iter(scr, &next, 1);
+        if (screen_inc_iter(scr, &next)) break;
     } while (line_offset_cmp(orig, next) >= 0);
 
     return orig.offset - pos->offset;
@@ -391,13 +391,10 @@ static void damage_changed(struct selection_state *sel, struct segments **old, s
                     advance_new = 1;
                 }
 
-                if (to >= line->size) {
-                    line->force_damage = 1;
-                } else {
-                    while (from < to) {
+                if (to <= line->size) {
+                    while (from < to)
                         line->cell[from++].drawn = 0;
-                    }
-                }
+                } else line->force_damage = 1;
 
                 if (advance_old) {
                     if (seg_old < seg_old_end) {
@@ -440,7 +437,7 @@ static void decompose(struct selection_state *sel, struct screen *scr, struct li
         do {
             struct line *line = screen_paragraph_at(scr, vstart.line);
             append_segment(sel, line, vstart.offset + vstart_x, vstart.offset + vend_x + 1);
-            screen_advance_iter(scr, &vstart, 1);
+            if (screen_inc_iter(scr, &vstart)) break;
         } while (line_offset_cmp(vstart, vend) <= 0);
 
     } else {
@@ -554,20 +551,34 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
     damage_changed(sel, prev_heads, prev_size);
 }
 
-bool selection_is_selected(struct selection_state *sel, struct line_view *view, int16_t x) {
+struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_view *view) {
     struct segments *head = seg_head(sel, view->line);
-    if (!head) return 0;
+    struct mouse_selection_iterator it = { 0 };
+    if (!head || !head->size) return it;
 
-    // FIXME This should be optimized in renderer
+    foreach_segment_indexed(seg, idx, head);
+
+    it.seg = head->segs + head->size - 1;
+    it.idx = idx;
+    return it;
+}
+
+bool is_selected_prev(struct mouse_selection_iterator *it, struct line_view *view, int16_t x) {
+    if (!it->idx) return 0;
 
     x += view->cell - view->line->cell;
 
-    foreach_segment_indexed(seg, idx, head) {
-        if (idx > x) return 0;
-        if (idx + seg->length > x) return 1;
-    }
+    do {
+        assert(it->idx >= 0);
 
-    return 0; // FIXME What??? idx >= view->line->size;
+        if (x >= it->idx) return 0;
+        if (x >= it->idx - it->seg->length) return 1;
+
+        it->idx -= it->seg->length + it->seg->offset;
+        it->seg--;
+    } while (it->idx && x < it->idx);
+
+    return 0;
 }
 
 static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line *line, ssize_t x0, ssize_t x1, bool first) {

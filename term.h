@@ -80,6 +80,7 @@ struct line_view screen_line_at(struct screen *scr, struct line_offset pos);
 struct line_offset screen_view(struct screen *scr);
 struct line_offset screen_line_iter(struct screen *scr, ssize_t y);
 ssize_t screen_advance_iter(struct screen *scr, struct line_offset *pos, ssize_t amount);
+ssize_t screen_inc_iter(struct screen *scr, struct line_offset *pos);
 void screen_damage_selection(struct screen *scr);
 #if USE_URI
 void screen_damage_uri(struct screen *scr, uint32_t uri);

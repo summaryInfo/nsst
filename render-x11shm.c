@@ -213,10 +213,14 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
 
     struct screen *scr = term_screen(win->term);
     struct line_offset vpos = screen_view(scr);
-    for (ssize_t k = 0; k < win->ch; k++, screen_advance_iter(scr, &vpos, 1)) {
+    for (ssize_t k = 0; k < win->ch; k++, screen_inc_iter(scr, &vpos)) {
         struct line_view line = screen_line_at(scr, vpos);
         bool next_dirty = 0;
         struct rect l_bound = {-1, k, 0, 1};
+
+        struct mouse_selection_iterator sel_it = selection_begin_iteration(term_get_sstate(win->term), &line);
+        bool last_selected = is_selected_prev(&sel_it, &line, win->cw - 1);
+
         for (int16_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
             struct cell cel = line.cell[i];
             line.cell[i].drawn = 1;
@@ -235,7 +239,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                     attr.reverse ^= 1;
                 }
 
-                bool selected = selection_is_selected(term_get_sstate(win->term), &line, i);
+                bool selected = is_selected_prev(&sel_it, &line, i);
                 spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
 
                 if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face, NULL);
@@ -283,18 +287,15 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
 
         if (l_bound.x >= 0 || line.line->force_damage || (scrolled && win->cw > line.width)) {
             if (win->cw > line.width) {
-                // TODO Do less work here
-                bool selected = selection_is_selected(term_get_sstate(win->term), &line, win->cw - 1);
                 struct attr attr = attr_pad(line.line);
-                struct cell cel = MKCELL(0, line.line->pad_attrid);
-                struct cellspec spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
+                color_t bg = describe_bg(&attr, &win->cfg, &win->rcstate, last_selected);
 
                 image_draw_rect(win->plat.im, (struct rect){
                     .x = bw + line.width * win->char_width,
                     .y = bh + k * (win->char_height + win->char_depth),
                     .width = (win->cw - line.width) * win->char_width,
                     .height = win->char_height + win->char_depth
-                }, spec.bg);
+                }, bg);
                 l_bound.width = win->cw - 1;
                 if (l_bound.x < 0) l_bound.x = line.width;
             }

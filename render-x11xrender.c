@@ -497,21 +497,21 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
 
     struct screen *scr = term_screen(win->term);
     struct line_offset vpos = screen_view(scr);
-    for (ssize_t k = 0; k < win->ch; k++, screen_advance_iter(scr, &vpos, 1)) {
+    for (ssize_t k = 0; k < win->ch; k++, screen_inc_iter(scr, &vpos)) {
         struct line_view line = screen_line_at(scr, vpos);
         bool next_dirty = 0, first_in_line = 1;
 
+        struct mouse_selection_iterator sel_it = selection_begin_iteration(term_get_sstate(win->term), &line);
+
         if (win->cw > line.width) {
-            // TODO Do less work
-            bool selected = selection_is_selected(term_get_sstate(win->term), &line, win->cw - 1);
-            struct cell cel = MKCELL(0, line.line->pad_attrid);
+            bool selected = is_selected_prev(&sel_it, &line, win->cw - 1);
             struct attr attr = attr_pad(line.line);
-            struct cellspec spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
+            color_t bg = describe_bg(&attr, &win->cfg, &win->rcstate, selected);
 
             push_element(&rctx.background_buf, &(struct element) {
                 .x = win->cfg.left_border + line.width * win->char_width,
                 .y = win->cfg.top_border + k * (win->char_height + win->char_depth),
-                .color = spec.bg,
+                .color = bg,
                 .width = (win->cw - line.width) * win->char_width,
                 .height = win->char_height + win->char_depth,
             });
@@ -538,7 +538,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                     attr.reverse ^= 1;
                 }
 
-                bool selected = selection_is_selected(term_get_sstate(win->term), &line, i);
+                bool selected = is_selected_prev(&sel_it, &line, i);
                 spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
                 g =  spec.ch | (spec.face << 24);
 

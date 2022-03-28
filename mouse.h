@@ -55,6 +55,11 @@ struct mouse_state {
     } mouse_format;
 };
 
+struct mouse_selection_iterator {
+    struct segment *seg;
+    ssize_t idx;
+};
+
 void mouse_handle_input(struct term *term, struct mouse_event ev);
 void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask);
 void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, iparam_t ye);
@@ -101,7 +106,11 @@ void free_selection(struct selection_state *sel);
 bool init_selection(struct selection_state *sel, struct window *win);
 
 void selection_view_scrolled(struct selection_state *sel, struct screen *scr);
-bool selection_is_selected(struct selection_state *sel, struct line_view *view, int16_t x);
+
+/* Starts from the last character */
+struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_view *view);
+bool is_selected_prev(struct mouse_selection_iterator *it, struct line_view *view, int16_t x);
+
 void selection_clear(struct selection_state *sel);
 void selection_damage(struct selection_state *sel, struct line *line);
 void selection_concat(struct selection_state *sel, struct line *dst, struct line *src);

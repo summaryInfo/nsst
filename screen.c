@@ -43,7 +43,7 @@ void free_screen(struct screen *scr) {
 void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd) {
     struct line_offset vpos = screen_view(scr);
     screen_advance_iter(scr, &vpos, ys);
-    for (ssize_t i = ys; i < yd; i++, screen_advance_iter(scr, &vpos, 1))
+    for (ssize_t i = ys; i < yd; i++, screen_inc_iter(scr, &vpos))
         screen_line_at(scr, vpos).line->force_damage = 1;
 }
 
@@ -54,7 +54,7 @@ void screen_damage_selection(struct screen *scr) {
         struct line_view v = screen_line_at(scr, vpos);
         if (prev != v.line)
             selection_damage(&scr->sstate, v.line);
-        screen_advance_iter(scr, &vpos, 1);
+        screen_inc_iter(scr, &vpos);
         prev = v.line;
     }
 }
@@ -70,7 +70,7 @@ void screen_damage_uri(struct screen *scr, uint32_t uri) {
                 if (line_view_attr(line, line.cell[j].attrid).uri == uri)
                     line.cell[j].drawn = 0;
             }
-            screen_advance_iter(scr, &vpos, 1);
+            screen_inc_iter(scr, &vpos);
         }
     }
 }
