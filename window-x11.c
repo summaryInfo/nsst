@@ -879,39 +879,41 @@ void platform_handle_events(void) {
             break;
         }
         default:
-            if (event->response_type == ctx.xkb_base_event) {
-                struct _xkb_any_event {
-                    uint8_t response_type;
-                    uint8_t xkb_type;
-                    uint16_t sequence;
-                    xcb_timestamp_t time;
-                    uint8_t device_id;
-                } *xkb_ev = (struct _xkb_any_event *)event;
+            if (event->response_type != ctx.xkb_base_event) {
+                warn("Unknown xcb event type: %02"PRIu8, event->response_type);
+                break;
+            }
 
-                if (gconfig.trace_events) {
-                    info("Event: XKB Event %d", xkb_ev->xkb_type);
-                }
+            struct _xkb_any_event {
+                uint8_t response_type;
+                uint8_t xkb_type;
+                uint16_t sequence;
+                xcb_timestamp_t time;
+                uint8_t device_id;
+            } *xkb_ev = (struct _xkb_any_event *)event;
 
-                if (xkb_ev->device_id == ctx.xkb_core_kbd) {
-                    switch (xkb_ev->xkb_type) {
-                    case XCB_XKB_NEW_KEYBOARD_NOTIFY: {
-                        xcb_xkb_new_keyboard_notify_event_t *ev = (xcb_xkb_new_keyboard_notify_event_t *)event;
-                        if (ev->changed & XCB_XKB_NKN_DETAIL_KEYCODES)
-                    case XCB_XKB_MAP_NOTIFY:
-                            update_keymap();
-                        break;
-                    }
-                    case XCB_XKB_STATE_NOTIFY: {
-                        xcb_xkb_state_notify_event_t *ev = (xcb_xkb_state_notify_event_t *)event;
-                        xkb_state_update_mask(ctx.xkb_state, ev->baseMods, ev->latchedMods, ev->lockedMods,
-                                              ev->baseGroup, ev->latchedGroup, ev->lockedGroup);
-                        break;
-                    }
-                    default:
-                        warn("Unknown xcb-xkb event type: %02"PRIu8, xkb_ev->xkb_type);
-                    }
-                }
-            } else warn("Unknown xcb event type: %02"PRIu8, event->response_type);
+            if (gconfig.trace_events)
+                info("Event: XKB Event %d", xkb_ev->xkb_type);
+
+            if (xkb_ev->device_id != ctx.xkb_core_kbd) break;
+
+            switch (xkb_ev->xkb_type) {
+            case XCB_XKB_NEW_KEYBOARD_NOTIFY: {
+                xcb_xkb_new_keyboard_notify_event_t *ev = (xcb_xkb_new_keyboard_notify_event_t *)event;
+                if (ev->changed & XCB_XKB_NKN_DETAIL_KEYCODES)
+            case XCB_XKB_MAP_NOTIFY:
+                    update_keymap();
+                break;
+            }
+            case XCB_XKB_STATE_NOTIFY: {
+                xcb_xkb_state_notify_event_t *ev = (xcb_xkb_state_notify_event_t *)event;
+                xkb_state_update_mask(ctx.xkb_state, ev->baseMods, ev->latchedMods, ev->lockedMods,
+                                      ev->baseGroup, ev->latchedGroup, ev->lockedGroup);
+                break;
+            }
+            default:
+                warn("Unknown xcb-xkb event type: %02"PRIu8, xkb_ev->xkb_type);
+            }
         }
     }
 }
