@@ -924,8 +924,10 @@ void screen_fill(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
     if (is_erase) {
         for (int16_t i = ys; i < ye; i++) {
             assert(scr->screen[i]->size <= scr->screen[i]->caps);
-            if (scr->screen[i]->size <= xe)
+            if (scr->screen[i]->size <= xe) {
+                scr->screen[i]->force_damage |= !xs;
                 scr->screen[i]->size = MIN(xs, scr->screen[i]->size);
+            }
         }
     } else {
         for (int16_t i = ys; i < ye; i++) {
