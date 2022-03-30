@@ -186,9 +186,11 @@ inline static struct line *screen_realloc_line(struct screen *scr, struct line *
     return new;
 }
 
-inline static struct line *screen_adjust_line(struct screen *scr, struct line *line, int16_t size) {
-    if (size < line->size)
-        return line;
+inline static void screen_adjust_line(struct screen *scr, struct line **pline, int16_t size) {
+    struct line *line = *pline;
+
+    assert(line->size <= line->caps);
+    if (size <= line->size) return;
 
     if (size > line->caps)
         line = screen_realloc_line(scr, line, size);
@@ -198,7 +200,7 @@ inline static struct line *screen_adjust_line(struct screen *scr, struct line *l
         line->cell[i] = c;
 
     line->size = size;
-    return line;
+    *pline = line;
 }
 
 void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
@@ -675,7 +677,7 @@ bool screen_redraw(struct screen *scr, bool blink_commited) {
             scr->prev_c_hidden != c_hidden || scr->prev_c_view_changed || !blink_commited) {
         if (!c_hidden) screen_damage_cursor(scr);
         if ((!scr->prev_c_hidden || scr->prev_c_view_changed) &&
-                scr->prev_c_y < scr->height && scr->prev_c_x < scr->width)
+                scr->prev_c_y < scr->height && scr->prev_c_x < scr->screen[scr->prev_c_y]->size)
             scr->screen[scr->prev_c_y]->cell[scr->prev_c_x].drawn = 0;
     }
 
@@ -690,12 +692,12 @@ bool screen_redraw(struct screen *scr, bool blink_commited) {
     }
 
     struct line *cl = screen_cursor_line(scr);
-    bool cursor = !scr->prev_c_hidden && (!cl->cell[scr->c.x].drawn  || cl->force_damage);
+    bool cursor = !c_hidden && (scr->c.x >= cl->size || !cl->cell[scr->c.x].drawn || cl->force_damage);
 
     if (cursor) {
         // Cursor cannot be drawn if it is beyond the end of the line,
         // so we need to adjust line size.
-        screen_adjust_line(scr, scr->screen[scr->c.y], scr->c.x + 1);
+        screen_adjust_line(scr, &scr->screen[scr->c.y], scr->c.x + 1);
     }
 
     return window_submit_screen(scr->win, scr->c.x, scr->c.y, cursor, scr->c.pending);
@@ -732,20 +734,38 @@ void screen_reset_margins(struct screen *scr) {
     scr->right = scr->width - 1;
 }
 
+FORCEINLINE
 inline static void screen_rect_pre(struct screen *scr, int16_t *xs, int16_t *ys, int16_t *xe, int16_t *ye) {
     *xs = MAX(screen_min_oy(scr), MIN(*xs, screen_max_ox(scr) - 1));
     *xe = MAX(screen_min_oy(scr), MIN(*xe, screen_max_ox(scr)));
     *ys = MAX(screen_min_oy(scr), MIN(*ys, screen_max_oy(scr) - 1));
     *ye = MAX(screen_min_oy(scr), MIN(*ye, screen_max_oy(scr)));
+
+    for (int16_t i = *ys; i < *ye; i++)
+        screen_adjust_line(scr, &scr->screen[i], *xe);
 }
 
-inline static void screen_erase_pre(struct screen *scr, int16_t *xs, int16_t *ys, int16_t *xe, int16_t *ye, bool origin) {
+FORCEINLINE
+inline static void screen_erase_pre(struct screen *scr, int16_t *xs, int16_t *ys, int16_t *xe, int16_t *ye, bool origin, bool is_erase) {
     if (origin) screen_rect_pre(scr, xs, ys, xe, ye);
     else {
         *xs = MAX(0, MIN(*xs, scr->width - 1));
         *xe = MAX(0, MIN(*xe, scr->width));
         *ys = MAX(0, MIN(*ys, scr->height - 1));
         *ye = MAX(0, MIN(*ye, scr->height));
+
+        if (is_erase) {
+            for (int16_t i = *ys; i < *ye; i++) {
+                assert(scr->screen[i]->size <= scr->screen[i]->caps);
+                if (scr->screen[i]->size <= *xe) {
+                    scr->screen[i]->force_damage |= !*xs;
+                    scr->screen[i]->size = MIN(*xs, scr->screen[i]->size);
+                }
+            }
+        } else {
+            for (int16_t i = *ys; i < *ye; i++)
+                screen_adjust_line(scr, &scr->screen[i], *xe);
+        }
     }
 
     if (!scr->view_pos.line) window_delay_redraw(scr->win);
@@ -811,7 +831,7 @@ uint16_t screen_checksum(struct screen *scr, int16_t xs, int16_t ys, int16_t xe,
 }
 
 void screen_reverse_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct attr *attr) {
-    screen_erase_pre(scr, &xs, &ys, &xe, &ye, 1);
+    screen_erase_pre(scr, &xs, &ys, &xe, &ye, 1, 0);
     uint32_t mask = attr_mask(attr);
 
     bool rect = scr->mode.attr_ext_rectangle;
@@ -829,15 +849,17 @@ void screen_reverse_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, 
 }
 
 void screen_apply_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, struct attr *mask, struct attr *attr) {
-    screen_erase_pre(scr, &xs, &ys, &xe, &ye, 1);
+    screen_erase_pre(scr, &xs, &ys, &xe, &ye, 1, 0);
     uint32_t mmsk = attr_mask(mask);
     uint32_t amsk = attr_mask(attr) & mmsk;
 
     bool rect = scr->mode.attr_ext_rectangle;
     for (; ys < ye; ys++) {
+        int16_t xend = rect || ys == ye - 1 ? xe : screen_max_ox(scr);
+        screen_adjust_line(scr, &scr->screen[ys], xend);
         struct line *line = scr->screen[ys];
         // TODO Optimize
-        for (int16_t i = xs; i < (rect || ys == ye - 1 ? xe : screen_max_ox(scr)); i++) {
+        for (int16_t i = xs; i < xend; i++) {
             struct attr newa = attr_at(line, i);
             attr_mask_set(&newa, (attr_mask(&newa) & ~mmsk) | amsk);
             if (mask->fg) newa.fg = attr->fg;
@@ -900,12 +922,16 @@ void screen_copy(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
 
     if (yd <= ys) {
         for (; ys < ye; ys++, yd++) {
+            screen_adjust_line(scr, &scr->screen[ys], xe);
+            screen_adjust_line(scr, &scr->screen[yd], xd + (xe - xs));
             struct line *sl = scr->screen[ys], *dl = scr->screen[yd];
             dl->wrapped = 0; // Reset line wrapping state
             copy_line(dl, xd, sl, xs, xe - xs);
         }
     } else {
         for (yd += ye - ys; ys < ye; ye--, yd--) {
+            screen_adjust_line(scr, &scr->screen[ys], xe);
+            screen_adjust_line(scr, &scr->screen[yd], xd + (xe - xs));
             struct line *sl = scr->screen[ye - 1], *dl = scr->screen[yd - 1];
             dl->wrapped = 0; // Reset line wrapping state
             copy_line(dl, xd, sl, xs, xe - xs);
@@ -914,28 +940,11 @@ void screen_copy(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
 }
 
 void screen_fill(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, bool origin, uint32_t ch) {
-    screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin);
-
     bool is_erase = !ch && scr->sgr.bg == indirect_color(SPECIAL_BG) &&
                     !scr->sgr.blink && !scr->sgr.reverse && !scr->sgr.protected &&
                     scr->sgr.uri == EMPTY_URI;
 
-    // Reset line lengths
-    if (is_erase) {
-        for (int16_t i = ys; i < ye; i++) {
-            assert(scr->screen[i]->size <= scr->screen[i]->caps);
-            if (scr->screen[i]->size <= xe) {
-                scr->screen[i]->force_damage |= !xs;
-                scr->screen[i]->size = MIN(xs, scr->screen[i]->size);
-            }
-        }
-    } else {
-        for (int16_t i = ys; i < ye; i++) {
-            assert(scr->screen[i]->size <= scr->screen[i]->caps);
-            if (scr->screen[i]->size <= xe)
-                scr->screen[i]->size = xe;
-        }
-    }
+    screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin, is_erase);
 
     for (; ys < ye; ys++) {
         struct line *line = scr->screen[ys];
@@ -954,12 +963,11 @@ void screen_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_
 }
 
 void screen_protective_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, bool origin) {
-    screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin);
+    screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin, 0);
 
     for (; ys < ye; ys++) {
         struct line *line = scr->screen[ys];
         // Reset line wrapping state
-        line->wrapped = 0;
         struct cell c = { .attrid = alloc_attr(line, scr->sgr) };
         for (int16_t i = xs; i < xe; i++)
             if (!attr_at(line, i).protected) line->cell[i] = c;
@@ -967,14 +975,13 @@ void screen_protective_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t
 }
 
 void screen_selective_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye, bool origin) {
-    screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin);
+    screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin, 0);
 
     for (; ys < ye; ys++) {
         struct line *line = scr->screen[ys];
         // Reset line wrapping state
-        line->wrapped = 0;
         for (ssize_t i = xs; i < xe; i++)
-            if (!attr_at(line,i).protected)
+            if (!attr_at(line, i).protected)
                 line->cell[i] = MKCELL(0, line->cell[i].attrid);
     }
 }
@@ -1158,12 +1165,14 @@ void screen_scroll(struct screen *scr, int16_t top, int16_t amount, bool save) {
 
 void screen_insert_cells(struct screen *scr, int16_t n) {
     if (screen_cursor_in_region(scr)) {
-        n = MAX(screen_min_x(scr), MIN(n, screen_max_x(scr) - scr->c.x));
+        n = MIN(n, screen_max_x(scr) - scr->c.x);
+        if (n <= 0) return;
 
+        // TODO Don't resize line to terminal width
+        //      if it is not required.
+
+        screen_adjust_line(scr, &scr->screen[scr->c.y], screen_max_x(scr));
         struct line *line = screen_cursor_line(scr);
-
-        if (line->size >= scr->c.x)
-            line->size += n;
 
         adjust_wide_left(line, scr->c.x);
         adjust_wide_right(line, scr->c.x);
@@ -1186,9 +1195,16 @@ void screen_insert_cells(struct screen *scr, int16_t n) {
 void screen_delete_cells(struct screen *scr, int16_t n) {
     // Do not check top/bottom margins, DCH sould work outside them
     if (scr->c.x >= screen_min_x(scr) && scr->c.x < screen_max_x(scr)) {
-        n = MAX(0, MIN(n, screen_max_x(scr) - scr->c.x));
-
         struct line *line = screen_cursor_line(scr);
+
+        // TODO Shrink line
+        // We can optimize this code by avoiding allocation and movment of empty cells
+        // and just shrink the line.
+        screen_adjust_line(scr, &scr->screen[scr->c.y], screen_max_x(scr));
+
+        n = MIN(n, screen_max_x(scr) - scr->c.x);
+        if (n <= 0) return;
+
         adjust_wide_left(line, scr->c.x);
         adjust_wide_right(line, scr->c.x + n - 1);
 
@@ -1538,15 +1554,19 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
     // Shift characters to the left if insert mode is enabled
     if (scr->mode.insert && max_cx < max_tx && cx < line->size) {
         ssize_t max_new_size = MIN(max_tx, line->size + totalw);
-        if (line->size < max_new_size)
-            screen_adjust_line(scr, line, max_new_size);
+        if (line->size < max_new_size) {
+            screen_adjust_line(scr, &line, max_new_size);
+            scr->screen[scr->c.y] = line;
+        }
 
         for (struct cell *c = cell + totalw; c - line->cell < max_tx; c++) c->drawn = 0;
         memmove(cell + totalw, cell, (max_tx - max_cx)*sizeof(*cell));
         max_cx = MAX(max_cx, max_tx);
     } else {
-        if (line->size <= max_cx)
-            screen_adjust_line(scr, line, max_cx);
+        if (line->size < max_cx) {
+            screen_adjust_line(scr, &line, max_cx);
+            scr->screen[scr->c.y] = line;
+        }
     }
 
     // Clear selection if writing over it
