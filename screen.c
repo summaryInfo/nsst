@@ -930,8 +930,8 @@ void screen_copy(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
         }
     } else {
         for (yd += ye - ys; ys < ye; ye--, yd--) {
-            screen_adjust_line(scr, &scr->screen[ys], xe);
-            screen_adjust_line(scr, &scr->screen[yd], xd + (xe - xs));
+            screen_adjust_line(scr, &scr->screen[ye - 1], xe);
+            screen_adjust_line(scr, &scr->screen[yd - 1], xd + (xe - xs));
             struct line *sl = scr->screen[ye - 1], *dl = scr->screen[yd - 1];
             dl->wrapped = 0; // Reset line wrapping state
             copy_line(dl, xd, sl, xs, xe - xs);
