@@ -1954,6 +1954,7 @@ static void term_dispatch_window_op(struct term *term) {
             while (utf8_decode(&u, (const uint8_t **)&title, end)) *tmp++ = u;
             *tmp = '\0';
             tlen = tmp - tit;
+            title = tit;
         } else if (term->mode.title_query_utf8 && !tutf8) {
             if ((tmp = res2 = malloc(2 * tlen + 1))) {
                 while (*title) tmp += utf8_encode(*title++, tmp, res2 + 2 * tlen);
