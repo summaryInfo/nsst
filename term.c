@@ -1747,7 +1747,7 @@ static void term_dispatch_mc(struct term *term, bool private, uparam_t func) {
     if (private) {
         switch (func) {
         case 1: /* Print current line */
-            screen_print_line(scr, screen_cursor_line(scr));
+            screen_print_line(scr, screen_cursor_y(scr));
             break;
         case 4: /* Disable autoprint */
             smode->print_auto = 0;
@@ -1757,7 +1757,7 @@ static void term_dispatch_mc(struct term *term, bool private, uparam_t func) {
             break;
         case 11: /* Print scrollback and screen */
             for (ssize_t i = screen_scrollback_top(scr); i < 0; i++)
-                screen_print_line(scr, line_at(scr, i));
+                screen_print_line(scr, i);
             /* fallthrough */
         case 10: /* Print screen */
             screen_print_screen(scr, 1);
@@ -2990,7 +2990,7 @@ static void term_dispatch_c0(struct term *term, uint32_t ch) {
     case 0x0a: /* LF */
     case 0x0b: /* VT */
     case 0x0c: /* FF */
-        screen_autoprint(scr, screen_cursor_line(scr));
+        screen_autoprint(scr, screen_cursor_y(scr));
         screen_index(scr);
         if (term->mode.crlf) screen_cr(scr);
         break;
@@ -3090,7 +3090,7 @@ static void term_dispatch_vt52(struct term *term, uint32_t ch) {
                      screen_width(scr), screen_cursor_y(scr) + 1, 0);
         break;
     case 'V': /* Print cursor line */
-        screen_print_line(scr, screen_cursor_line(scr));
+        screen_print_line(scr, screen_cursor_y(scr));
         break;
     case 'W': /* Enable printer controller mode */
         term_dispatch_mc(term, 0, 5);

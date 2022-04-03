@@ -1389,13 +1389,14 @@ char *encode_sgr(char *dst, char *end, struct attr *attr) {
 #undef FMT
 }
 
-void screen_print_line(struct screen *scr, struct line *line) {
+void screen_print_line(struct screen *scr, ssize_t y) {
     if (!printer_is_available(&scr->printer)) return;
 
     uint8_t buf[PRINT_BLOCK_SIZE];
     uint8_t *pbuf = buf, *pend = buf + PRINT_BLOCK_SIZE;
 
     struct attr prev = {0};
+    struct line *line = line_at(scr, y);
 
     for (int16_t i = 0; i < line_length(line); i++) {
         struct cell c = line->cell[i];
@@ -1439,7 +1440,7 @@ void screen_print_screen(struct screen *scr, bool force_ext) {
     int16_t bottom = (force_ext ? scr->height : screen_max_y(scr)) - 1;
 
     while (top < bottom)
-        screen_print_line(scr, line_at(scr, top++));
+        screen_print_line(scr, top++);
 
     if (scr->mode.print_form_feed)
         printer_print_string(&scr->printer, (uint8_t[]){'\f'}, 1);

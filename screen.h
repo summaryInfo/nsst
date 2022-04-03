@@ -210,7 +210,7 @@ bool screen_load_config(struct screen *scr, bool reset);
 void screen_tabs(struct screen *scr, int16_t n);
 void screen_reset_tabs(struct screen *scr);
 void screen_print_screen(struct screen *scr, bool force_ext);
-void screen_print_line(struct screen *scr, struct line *line);
+void screen_print_line(struct screen *scr, ssize_t y);
 void screen_set_margin_bell_volume(struct screen *scr, uint8_t vol);
 uint8_t screen_get_margin_bell_volume(struct screen *scr);
 ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs);
@@ -275,10 +275,13 @@ inline static bool screen_cursor_in_region(struct screen *scr) {
             scr->c.y >= screen_min_y(scr) && scr->c.y < screen_max_y(scr);
 }
 
-/* Internal function to address terminal screen and
- * scrollback buffer continuously
+/*
+ * Internal function to address terminal screen and
+ * scrollback buffer continuously.
  * Lines with y >= 0 are on screen
- * Line with y < 0 are saved line # -y */
+ * Line with y < 0 are saved line # -y
+ * It should not be used outside screen.h/screen.c
+ */
 inline static struct line *line_at(struct screen *scr, ssize_t y) {
     return y >= 0 ? scr->screen[y] : scr->scrollback[(scr->sb_top + scr->sb_caps + y + 1) % scr->sb_caps];
 }
@@ -404,14 +407,14 @@ inline static void screen_set_origin(struct screen *scr, bool set) {
     screen_move_to(scr, screen_min_ox(scr), screen_min_oy(scr));
 }
 
-inline static void screen_autoprint(struct screen *scr, struct line *line) {
+inline static void screen_autoprint(struct screen *scr, ssize_t y) {
     if (scr->mode.print_auto)
-        screen_print_line(scr, line);
+        screen_print_line(scr, y);
 }
 
 inline static void screen_do_wrap(struct screen *scr) {
     screen_cursor_line(scr)->wrapped = 1;
-    screen_autoprint(scr, screen_cursor_line(scr));
+    screen_autoprint(scr, screen_cursor_y(scr));
     screen_index(scr);
     screen_cr(scr);
 }
