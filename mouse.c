@@ -100,10 +100,21 @@ static void append_segment(struct selection_state *sel, struct line *line, int16
 }
 
 void selection_concat(struct selection_state *sel, struct line *dst, struct line *src) {
-    struct segments *src_head, *dst_head;
+    struct segments *src_head = seg_head(sel, src);
+    struct segments *dst_head = seg_head(sel, dst);
 
-    if (!(src_head = seg_head(sel, src))) return;
-    if (!(dst_head = seg_head(sel, dst))) {
+    if (!src_head) {
+        if (!dst_head) return;
+
+        foreach_segment_indexed(seg, last_i, dst_head);
+        if (last_i < SNAP_RIGHT) return;
+
+        assert(dst_head->segs[dst_head->size - 1].length == SNAP_RIGHT);
+        dst_head->segs[dst_head->size - 1].length = dst->size - (last_i - SNAP_RIGHT);
+        return;
+    }
+
+    if (!dst_head) {
         dst->selection_index = src->selection_index;
 
         src->selection_index = SELECTION_EMPTY;
@@ -119,16 +130,20 @@ void selection_concat(struct selection_state *sel, struct line *dst, struct line
     size_t offset = 0;
     foreach_segment_indexed(seg, last_i, dst_head);
 
-    if (last_i == SNAP_RIGHT) {
+    if (last_i >= SNAP_RIGHT) {
+        assert(dst_head->segs[dst_head->size - 1].length == SNAP_RIGHT);
+        assert(dst->size - (last_i - SNAP_RIGHT) >= 0);
+
+        dst_head->segs[dst_head->size - 1].length = dst->size - (last_i - SNAP_RIGHT);
         last_i = dst->size;
-        dst_head->segs[dst_head->size - 1].length = SNAP_RIGHT - dst->size;
     }
 
     assert(last_i <= dst->size);
 
     /* Merge adjacent */
     if (src_head->size && !src_head->segs->offset && last_i == dst->size) {
-        dst_head->segs[dst_head->size - 1].length += src_head->segs[0].length;
+        dst_head->segs[dst_head->size - 1].length = MIN(SNAP_RIGHT,
+                src_head->segs[0].length + dst_head->segs[dst_head->size - 1].length);
         src_head->size--;
         offset = 1;
     }
@@ -158,11 +173,8 @@ void selection_relocated(struct selection_state *sel, struct line *line) {
     foreach_segment_indexed(seg, idx, head) {
         if (idx + seg->length > line->size) {
             if (idx <= line->size)
-                seg++->length = line->size - idx;
+                seg++->length = SNAP_RIGHT;
             head->size = seg - head->segs;
-
-            // TODO Should it happen always or never?
-            //if (cut) selection_clear(sel);
             break;
         }
     }

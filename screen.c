@@ -170,7 +170,7 @@ void screen_reset_view(struct screen *scr, bool damage) {
 }
 
 inline static struct line *screen_concat_line(struct screen *scr, struct line *dst, struct line *src, bool opt) {
-    if (dst && src && src->selection_index)
+    if (dst && src)
         selection_concat(&scr->sstate, dst, src);
     struct line *new = concat_line(dst, src, opt);
     if (new && new->selection_index)
