@@ -180,11 +180,28 @@ static void optimize_attributes(struct line *line) {
 struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     if (src2) {
         assert(src1->wrapped);
+
         ssize_t len = MIN(src2->size + src1->size, MAX_LINE_LEN);
         src1 = realloc_line(src1, len);
-        src1->pad_attrid = alloc_attr(src1, attr_pad(src2));
         src1->wrapped = src2->wrapped;
-        copy_line(src1, src1->size, src2, 0, len - src1->size);
+
+        if (src1->attrs && src2->attrs) {
+            src1->pad_attrid = alloc_attr(src1, attr_pad(src2));
+            copy_line(src1, src1->size, src2, 0, len - src1->size);
+        } else {
+            /* Faster line content copying in we do
+             * not need to merge attributes */
+            memcpy(src1->cell + src1->size, src2->cell,
+                   (len - src1->size) * sizeof *src1->cell);
+            src1->force_damage = 1;
+            src1->size = len;
+            src1->pad_attrid = src2->pad_attrid;
+            if (src2->attrs) {
+                src1->attrs = src2->attrs;
+                src1->attrs = NULL;
+            }
+        }
+
         free_line(src2);
     } else if (opt && src1->size != src1->caps) {
         src1 = realloc_line(src1, src1->size);
