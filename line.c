@@ -203,8 +203,10 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
         }
 
         free_line(src2);
-    } else if (opt && src1->size != src1->caps) {
-        src1 = realloc_line(src1, src1->size);
+    } else if (opt && !src1->wrapped) {
+        // NOTE After this point line will never be resized
+        if (src1->size != src1->caps)
+            src1 = realloc_line(src1, src1->size);
     }
 
     if (opt) optimize_attributes(src1);
