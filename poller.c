@@ -19,6 +19,7 @@
 #include <time.h>
 
 #define INIT_PFD_NUM 16
+#define FREE_SLOT INT_MIN
 
 struct poller {
     struct pollfd *pfds;
@@ -34,7 +35,7 @@ void init_poller(void) {
     poller.pfdn = 2;
     poller.pfdcap = INIT_PFD_NUM;
     for (ssize_t i = 1; i < INIT_PFD_NUM; i++)
-        poller.pfds[i].fd = INT_MIN;
+        poller.pfds[i].fd = FREE_SLOT;
 }
 
 void free_poller(void) {
@@ -47,7 +48,7 @@ int poller_alloc_index(int fd, int events) {
         struct pollfd *new = realloc(poller.pfds, (poller.pfdcap + INIT_PFD_NUM)*sizeof(*poller.pfds));
         if (new) {
             for (ssize_t i = 0; i < INIT_PFD_NUM; i++) {
-                new[i + poller.pfdcap].fd = INT_MIN;
+                new[i + poller.pfdcap].fd = FREE_SLOT;
                 new[i + poller.pfdcap].events = 0;
             }
             poller.pfdcap += INIT_PFD_NUM;
@@ -57,7 +58,7 @@ int poller_alloc_index(int fd, int events) {
 
     poller.pfdn++;
     ssize_t i = 0;
-    while (poller.pfds[i].fd != INT_MIN) i++;
+    while (poller.pfds[i].fd != FREE_SLOT) i++;
 
     poller.pfds[i].fd = fd;
     poller.pfds[i].events = events;
@@ -72,7 +73,7 @@ int poller_enable(int i, bool toggle) {
 }
 
 void poller_free_index(int i) {
-    poller.pfds[i].fd = INT_MIN;
+    poller.pfds[i].fd = FREE_SLOT;
     poller.pfdn--;
 }
 
