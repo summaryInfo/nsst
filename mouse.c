@@ -612,7 +612,7 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line *li
         }
     }
 
-    if (!line->wrapped || x1 != line->size) {
+    if (!line->wrapped || (x1 != line->size && x1 != SNAP_RIGHT)) {
         if (!adjust_buffer((void **)res, cap, *pos + 2, 1)) return;
         (*res)[(*pos)++] = '\n';
     }
