@@ -179,6 +179,7 @@ static void optimize_attributes(struct line *line) {
 
 struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     if (src2) {
+        assert(src1);
         assert(src1->wrapped);
 
         ssize_t len = MIN(src2->size + src1->size, MAX_LINE_LEN);
@@ -198,7 +199,7 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
             src1->pad_attrid = src2->pad_attrid;
             if (src2->attrs) {
                 src1->attrs = src2->attrs;
-                src1->attrs = NULL;
+                src2->attrs = NULL;
             }
         }
 
