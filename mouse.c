@@ -79,11 +79,11 @@ inline static bool adjust_head(struct selection_state *sel, struct segments **ph
 
 #define SNAP_RIGHT INT16_MAX
 
-static void append_segment(struct selection_state *sel, struct line *line, int16_t x0, int16_t x1) {
+static void append_segment(struct selection_state *sel, struct line *line, ssize_t x0, ssize_t x1) {
     struct segments *head = seg_head(sel, line);
 
     x0 = MIN(line->size, x0);
-    if (x1 > line->size) x1 = SNAP_RIGHT;
+    if (x1 > line->size) x1 = SNAP_RIGHT + x0;
 
     if (!head && !(head = alloc_head(sel, line))) return;
 
@@ -348,7 +348,7 @@ static struct line_offset snap_forward(struct selection_state *sel, struct scree
  * as a return value of the function.
  */
 
-inline static int16_t virtual_pos(struct screen *scr, struct line_offset *pos) {
+inline static ssize_t virtual_pos(struct screen *scr, struct line_offset *pos) {
     struct line_offset orig = *pos, next = *pos;
     next.offset = 0;
 
@@ -441,8 +441,8 @@ static void damage_changed(struct selection_state *sel, struct segments **old, s
 static void decompose(struct selection_state *sel, struct screen *scr, struct line_offset start, struct line_offset end) {
     if (sel->rectangular) {
         struct line_offset vstart = start, vend = end;
-        int16_t vstart_x = virtual_pos(scr, &vstart);
-        int16_t vend_x = virtual_pos(scr, &vend);
+        ssize_t vstart_x = virtual_pos(scr, &vstart);
+        ssize_t vend_x = virtual_pos(scr, &vend);
         if (vstart_x > vend_x)
             SWAP(vstart_x, vend_x);
 
@@ -502,7 +502,7 @@ void selection_scrolled(struct selection_state *sel, struct screen *scr, int16_t
         if (line_offset_cmp(sel->start, screen_pos) < 0 ||
                 (line_offset_cmp(sel->start, top_pos) >= 0 &&
                  line_offset_cmp(sel->start, bottom_pos) < 0)) {
-            int16_t x_off = virtual_pos(scr, &sel->start);
+            ssize_t x_off = virtual_pos(scr, &sel->start);
 
             screen_advance_iter(scr, &sel->start, -x);
             sel->start.offset += x_off;
@@ -575,10 +575,10 @@ struct mouse_selection_iterator selection_begin_iteration(struct selection_state
     return it;
 }
 
-bool is_selected_prev(struct mouse_selection_iterator *it, struct line_view *view, int16_t x) {
+bool is_selected_prev(struct mouse_selection_iterator *it, struct line_view *view, int16_t x0) {
     if (!it->idx) return 0;
 
-    x += view->cell - view->line->cell;
+    ssize_t x = x0 + view->cell - view->line->cell;
 
     do {
         assert(it->idx >= 0);
