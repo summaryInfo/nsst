@@ -66,9 +66,10 @@ void free_font(struct font *font) {
             free(font->face_types[i].faces);
         }
         if (--global.fonts == 0) {
+            if (font->subst_chars)
+                FcCharSetDestroy(font->subst_chars);
             FcFini();
             FT_Done_FreeType(global.library);
-            if (font->subst_chars) FcCharSetDestroy(font->subst_chars);
         }
         free(font);
     }
@@ -149,7 +150,8 @@ static void load_face_list(struct font *font, struct face_list* faces, const cha
         FcPattern *final_pat = NULL;
         FcPattern *pat = FcNameParse((FcChar8*) tok);
         FcPatternAddDouble(pat, FC_DPI, font->dpi);
-        if (font->force_scalable) FcPatternAddBool(pat, FC_SCALABLE, FcTrue);
+        if (font->force_scalable)
+            FcPatternAddBool(pat, FC_SCALABLE, FcTrue);
         FcPatternDel(pat, FC_STYLE);
         FcPatternDel(pat, FC_WEIGHT);
         FcPatternDel(pat, FC_SLANT);
@@ -316,6 +318,8 @@ static void add_font_substitute(struct font *font, struct face_list *faces, enum
 
     FcResult result;
     FcPattern *final_pat = FcFontMatch(NULL, chset_pat, &result);
+    FcPatternDestroy(chset_pat);
+
     if (result != FcResultMatch) {
         warn("Font doesn't match");
         return;
