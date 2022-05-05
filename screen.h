@@ -287,11 +287,14 @@ inline static struct line *line_at(struct screen *scr, ssize_t y) {
 }
 
 inline static struct line *screen_cursor_line(struct screen *scr) {
+    assert(scr->c.y < scr->height);
     return scr->screen[scr->c.y];
 }
 
 inline static void screen_damage_cursor(struct screen *scr) {
-    screen_cursor_line(scr)->cell[scr->c.x].drawn = 0;
+    struct line *cline = screen_cursor_line(scr);
+    if (cline->size <= scr->c.x) cline->force_damage = 1;
+    else cline->cell[scr->c.x].drawn = 0;
 }
 
 inline static void screen_unwrap_line(struct screen *scr, ssize_t y) {
@@ -351,7 +354,10 @@ inline static void screen_load_cursor_position(struct screen *scr, ssize_t cx,
 }
 
 inline static void screen_precompose_at_cursor(struct screen *scr, uint32_t ch) {
-    struct cell *cel = &screen_cursor_line(scr)->cell[scr->c.x];
+    struct line *cline = screen_cursor_line(scr);
+    if (cline->size <= scr->c.x) return;
+
+    struct cell *cel = &cline->cell[scr->c.x];
 
     // Step back to previous cell
     if (scr->c.x) cel--;
