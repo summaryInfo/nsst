@@ -222,6 +222,11 @@ void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, s
 
     if (dst != src) {
         uint32_t previd = ATTRID_MAX, newid = 0;
+        if (dx + len > dst->size) {
+            memset(dst->cell + dst->size, 0, (dx + len - dst->size)*sizeof *dc);
+            dst->size = dx + len;
+        }
+
         for (ssize_t i = 0; i < len; i++) {
             c = *sc++;
             c.drawn = 0;
@@ -231,14 +236,10 @@ void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, s
                 c.attrid = newid;
             }
             *dc++ = c;
-
-            if (dc - dst->cell > dst->size)
-                dst->size = dc - dst->cell;
         }
     } else {
         memmove(dc, sc, len * sizeof(*sc));
         while (len--) dc++->drawn = 0;
     }
-    dst->size = MAX(dst->size, sx + len);
 }
 

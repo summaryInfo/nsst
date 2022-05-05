@@ -457,9 +457,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
                 nnlines += delta;
             }
 
-            nnlines = MAX(nnlines * 2, MAX(MAX(new_cur_par - cursor_par, approx_cy - height - 1), 0) + height * 2);
-
-            assert(nnlines);
+            nnlines = height + 1;
             new_lines = calloc(nnlines, sizeof(*new_lines));
             if (!new_lines) die("Can't allocate line");
             new_lines[0] = create_line(dflt_sgr, width);
@@ -467,7 +465,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
             ssize_t y2 = y, dy = 0;
             for (ssize_t dx = 0; y < scr->height; y++) {
                 struct line *line = line_at(scr, y);
-                ssize_t len = line->size;
+                ssize_t len = line_length(line);
                 if (!ll_translated && lower_left.line == y) {
                     lower_left.line = dy;
                     lower_left.offset = dx;
@@ -475,12 +473,16 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
                 }
                 if (cursor_par == y) new_cur_par = dy;
 
-                uint32_t previd = ATTRID_MAX, newid = 0;
+                uint32_t previd = ATTRID_DEFAULT, newid = 0;
                 for (ssize_t x = 0; x < len; x++) {
                     // If last character of line is wide, soft wrap
                     if (dx == width - 1 && cell_wide(&line->cell[x])) {
+                        if (dy == nnlines - 1) {
+                            new_lines = realloc(new_lines, (nnlines *= 2) * sizeof *new_lines);
+                            assert(new_lines);
+                        }
                         new_lines[dy]->wrapped = 1;
-                        if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
+                        new_lines[++dy] = create_line(dflt_sgr, width);
                         dx = 0;
                     }
                     // Calculate new cursor...
@@ -496,6 +498,11 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
                         csset = 1;
                     }
 
+                    assert(dx < new_lines[dy]->caps);
+                    if (dx != new_lines[dy]->size)
+                        warn("[%zd, %zd] dy=%zd, dx=%zd, sz=%zd", y, x, dy, dx, new_lines[dy]->size);
+                    assert(dx == new_lines[dy]->size);
+
                     // Copy cell
                     struct cell c = line->cell[x];
                     if (c.attrid) {
@@ -503,15 +510,18 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
                             newid = alloc_attr(new_lines[dy], line->attrs->data[c.attrid - 1]);
                         c.attrid = newid;
                     };
-                    new_lines[dy]->cell[dx] = c;
+                    new_lines[dy]->cell[dx++] = c;
                     new_lines[dy]->size++;
-                    assert(dx == new_lines[dy]->size - 1);
 
                     // Advance line, soft wrap
-                    if (++dx == width && (x < len - 1 || line->wrapped)) {
+                    if (dx == width && (x < len - 1 || line->wrapped)) {
+                        if (dy == nnlines - 1) {
+                            new_lines = realloc(new_lines, (nnlines *= 2) * sizeof *new_lines);
+                            assert(new_lines);
+                        }
                         new_lines[dy]->wrapped = 1;
                         new_lines[dy]->pad_attrid = alloc_attr(new_lines[dy], attr_pad(line));
-                        if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
+                        new_lines[++dy] = create_line(dflt_sgr, width);
                         dx = 0;
                     }
                 }
@@ -528,13 +538,21 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
                 }
                 // Advance line, hard wrap
                 if (!line->wrapped) {
+                    if (dy == nnlines - 1) {
+                        new_lines = realloc(new_lines, (nnlines *= 2) * sizeof *new_lines);
+                        assert(new_lines);
+                    }
                     new_lines[dy]->pad_attrid = alloc_attr(new_lines[dy], attr_pad(line));
-                    if (dy < nnlines - 1) new_lines[++dy] = create_line(dflt_sgr, width);
+                    new_lines[++dy] = create_line(dflt_sgr, width);
                     dx = 0;
                 }
 
                 // Pop from scrollback
-                if (y < 0) scr->scrollback[(scr->sb_top + scr->sb_caps + y + 1) % scr->sb_caps] = NULL;
+                if (y < 0) {
+                    struct line **pline = &scr->scrollback[(scr->sb_top + scr->sb_caps + y + 1) % scr->sb_caps];
+                    assert(line == *pline);
+                    *pline = NULL;
+                }
 
                 assert(!line->selection_index);
                 free_line(line);
@@ -547,9 +565,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
             }
             if (!ll_translated) lower_left.line -= y2;
 
-            if (dy < nnlines) dy++;
-
-            nnlines = dy;
+            nnlines = dy + 1;
         }
 
         // Push extra lines from top back to scrollback
