@@ -499,8 +499,6 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
                     }
 
                     assert(dx < new_lines[dy]->caps);
-                    if (dx != new_lines[dy]->size)
-                        warn("[%zd, %zd] dy=%zd, dx=%zd, sz=%zd", y, x, dy, dx, new_lines[dy]->size);
                     assert(dx == new_lines[dy]->size);
 
                     // Copy cell
