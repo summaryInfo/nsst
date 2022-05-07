@@ -357,7 +357,7 @@ const char *uri_get(uint32_t id) {
 void uri_release_memory(void) {
     if (uritab.data) {
         ht_iter_t it = ht_begin(&uritab);
-        while(ht_current(&it))
+        while (ht_current(&it))
             free(ht_erase_current(&it));
         ht_free(&uritab);
     }

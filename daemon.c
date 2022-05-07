@@ -75,7 +75,7 @@ bool init_daemon(void) {
     int fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (fd < 0) {
         warn("Can't create daemon socket: %s", strerror(errno));
-        return 0;
+        return false;
     }
 
     int fl = fcntl(fd, F_GETFD);
@@ -85,23 +85,25 @@ bool init_daemon(void) {
             offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path)) < 0) {
         warn("Can't bind daemon socket: %s", strerror(errno));
         close(fd);
-        return 0;
+        return false;
     }
     if (listen(fd, NUM_PENDING) < 0) {
         warn("Can't listen to daemon socket: %s", strerror(errno));
         close(fd);
         unlink(gconfig.sockpath);
-        return 0;
+        return false;
     }
 
     socket_fd = fd;
     socket_index = poller_alloc_index(fd, POLLIN | POLLHUP);
 
     if (gconfig.fork) daemonize();
-    return 1;
+    return true;
 }
 
 void free_daemon(void) {
+    if (!gconfig.daemon_mode)
+        return;
     if (socket_index >= 0) {
         poller_free_index(socket_index);
         socket_index = -1;
