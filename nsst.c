@@ -126,8 +126,8 @@ inline static char *parse_config_path(int argc, char **argv) {
     char *config_path = NULL;
 
     for (int opt_i = 1; opt_i < argc; opt_i++) {
-        if (!strncmp(argv[opt_i], "--config=", sizeof "--config=" - 1) &&
-                !strncmp(argv[opt_i], "-C", sizeof "-C" - 1)) continue;
+        if (strncmp(argv[opt_i], "--config=", sizeof "--config=" - 1) &&
+                strncmp(argv[opt_i], "-C", sizeof "-C" - 1)) continue;
 
         char *arg = argv[opt_i] + (argv[opt_i][1] == '-' ? sizeof "--config=" : sizeof "-C") - 1;
         if (!*arg) arg = argv[++opt_i];
@@ -160,7 +160,8 @@ int main(int argc, char **argv) {
     /* Parse config path argument before
      * parsing config file to use correct one */
     char *cpath = parse_config_path(argc, argv);
-    init_instance_config(&cfg, cpath, 1);
+    init_instance_config(&cfg, cpath, true);
+
     parse_options(&cfg, argv);
 
     if (gconfig.daemon_mode) {
