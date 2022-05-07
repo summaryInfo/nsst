@@ -25,13 +25,11 @@ static _Noreturn void usage(const char *argv0, int code) {
         do fputs(argv0, stdout);
         while((argv0 = usage_string(i++)));
     }
-    free_context();
     exit(code);
 }
 
 static _Noreturn void version(void) {
     printf("%sFeatures: %s", version_string(), features_string());
-    free_context();
     exit(EXIT_SUCCESS);
 }
 
@@ -149,8 +147,14 @@ int main(int argc, char **argv) {
     setlocale(LC_CTYPE, "");
 
     init_options();
+    atexit(free_options);
+
     init_poller();
+    atexit(free_poller);
+
     init_context();
+    atexit(free_context);
+
     init_default_termios();
 
     /* Parse config path argument before
@@ -159,18 +163,15 @@ int main(int argc, char **argv) {
     init_instance_config(&cfg, cpath, 1);
     parse_options(&cfg, argv);
 
-    if (gconfig.daemon_mode)
+    if (gconfig.daemon_mode) {
+        atexit(free_daemon);
         result = !init_daemon();
-    else
+    } else {
         result = !create_window(&cfg);
+    }
 
     free_config(&cfg);
 
     if (!result) run();
-
-    free_daemon();
-    free_context();
-    free_poller();
-    free_options();
     return result;
 }
