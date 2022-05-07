@@ -53,8 +53,6 @@ static void handle_hup(int sig) {
 
 
 void init_context(void) {
-    init_poller();
-
     platform_init_context();
     init_render_context();
 
@@ -76,7 +74,6 @@ void free_context(void) {
 
     free_render_context();
     platform_free_context();
-    free_poller();
 
     memset(&con, 0, sizeof(con));
 

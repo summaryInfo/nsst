@@ -1125,7 +1125,7 @@ static void term_dispatch_osc(struct term *term) {
             valid = !stat(path, &stt) &&
                     (stt.st_mode & S_IFMT) == S_IFDIR;
         }
-        if (valid) set_option(cfg, "cwd", path, 0);
+        if (valid) set_option_entry(cfg, find_option_entry("cwd", true), path, 0);
         else term_esc_dump(term, 0);
         break;
     }

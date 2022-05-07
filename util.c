@@ -329,33 +329,6 @@ const char *features_string(void) {
             "\n";
 }
 
-#define MAX_OPTION_DESC 512
-
-const char *usage_string(ssize_t idx) {
-    static char buffer[MAX_OPTION_DESC + 1];
-
-    if (!idx) {
-        return /* argv0 here*/ " [-options] [-e] [command [args]]\n"
-            "Where options are:\n"
-                "\t--help, -h\t\t\t(Print this message and exit)\n"
-                "\t--version, -v\t\t\t(Print version and exit)\n"
-                "\t--color<N>=<color>, \t\t(Set palette color <N>, <N> is from 0 to 255)\n"
-                "\t--geometry=<value>, -g<value> \t(Window geometry, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>])\n";
-    } else if (idx - 1 < o_MAX) {
-        snprintf(buffer, sizeof buffer, "\t--%s=<value>%s\n", optmap[idx - 1].opt, optmap[idx - 1].descr);
-        return buffer;
-    } else if (idx == o_MAX + 1) {
-        return  "For every boolean option --<X>=<Y>\n"
-                "\t--<X>, --<X>=yes, --<X>=y,  --<X>=true\n"
-            "are equivalent to --<X>=1, and\n"
-                "\t--no-<X>, --<X>=no, --<X>=n, --<X>=false\n"
-            "are equivalent to --<X>=0,\n"
-            "where 'yes', 'y', 'true', 'no', 'n' and 'false' are case independet\n"
-            "All options are also accept special value 'default' to reset to built-in default\n";
-    } else return NULL;
-}
-
-
 #define HT_LOAD_FACTOR(x) (4*(x)/3)
 #define HT_CAPS_STEP(x) (3*(x)/2)
 

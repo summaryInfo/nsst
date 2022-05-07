@@ -159,14 +159,15 @@ static void append_pending_launch(struct pending_launch *lnch) {
         create_window(&lnch->cfg);
         free_pending_launch(lnch);
     } else if (buffer[0] == '\035' /* GS */ && len > 1) /* Option */ {
-        char *name_end = memchr(buffer + 1, '=', len);
-        if (!name_end) {
-            warn("Wrong option format: '%s'", buffer + 1);
+        char *name = buffer + 1, *value = memchr(buffer + 1, '=', len);
+        if (!value) {
+            warn("Wrong option format: '%s'", name);
             return;
         }
 
-        *name_end = '\0';
-        set_option(&lnch->cfg, buffer + 1, name_end + 1, 1);
+        *value++ = '\0';
+        struct option *opt = find_option_entry(name, true);
+        if (opt) set_option_entry(&lnch->cfg, opt, value, true);
     } else if (buffer[0] == '\036' /* RS */ && len > 1) /* Argument */ {
         if (lnch->argn + 2 > lnch->argcap) {
             ssize_t newsz = ARGN_STEP(lnch->argcap);

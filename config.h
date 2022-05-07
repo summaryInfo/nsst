@@ -56,19 +56,19 @@ struct global_config {
     char hostname[MAX_DOMAIN_NAME];
 
     char *open_command;
-    bool unique_uris : 1;
+    bool unique_uris;
 
-    uint8_t log_level : 2;
+    uint8_t log_level;
 
-    bool daemon_mode : 1;
-    bool trace_characters : 1;
-    bool trace_controls : 1;
-    bool trace_events : 1;
-    bool trace_fonts : 1;
-    bool trace_input : 1;
-    bool trace_misc : 1;
-    bool want_luit : 1;
-    bool fork : 1;
+    bool daemon_mode;
+    bool trace_characters;
+    bool trace_controls;
+    bool trace_events;
+    bool trace_fonts;
+    bool trace_input;
+    bool trace_misc;
+    bool want_luit;
+    bool fork;
 };
 
 struct instance_config {
@@ -88,6 +88,7 @@ struct instance_config {
     int64_t double_click_time;
     int64_t triple_click_time;
     int64_t select_scroll_time;
+    int64_t scrollback_size;
 
     struct shortcut {
         uint32_t ksym;
@@ -112,8 +113,6 @@ struct instance_config {
     char *shell;
     char *uri_click_mod;
 
-    ssize_t tab_width;
-    ssize_t scrollback_size;
 
     enum keyboad_mapping mapping;
     enum cursor_type cursor_shape;
@@ -123,6 +122,7 @@ struct instance_config {
     uint32_t force_mouse_mask;
     uint32_t uri_click_mask;
 
+    int16_t tab_width;
     int16_t vt_version;
     int16_t margin_bell_column;
     int16_t smooth_scroll_step;
@@ -144,234 +144,83 @@ struct instance_config {
     uint8_t margin_bell_low_volume;
     uint8_t bell_high_volume;
     uint8_t bell_low_volume;
+    uint8_t margin_bell_volume;
+    uint8_t bell_volume;
+    uint8_t modify_cursor;
+    uint8_t modify_function;
+    uint8_t modify_keypad;
+    uint8_t fkey_increment;
+    uint8_t modify_other;
 
-    uint8_t margin_bell_volume : 2;
-    uint8_t bell_volume : 2;
-    uint8_t modify_cursor : 2;
-    uint8_t modify_function : 2;
-    uint8_t modify_keypad : 2;
-    uint8_t fkey_increment : 6;
-    uint8_t modify_other : 3;
-
-    bool blend_fg : 1;
-    bool blend_all_bg : 1;
-    bool allow_blinking : 1;
-    bool allow_luit : 1;
-    bool print_attr : 1;
-    bool extended_cir : 1;
-    bool rewrap : 1;
-    bool cut_lines : 1;
-    bool minimize_scrollback : 1;
-    bool allow_erase_scrollback : 1;
-    bool alternate_scroll : 1;
-    bool keep_clipboard : 1;
-    bool keep_selection : 1;
-    bool select_to_clipboard : 1;
-    bool utf8 : 1;
-    bool wrap : 1;
-    bool scroll_on_output : 1;
-    bool scroll_on_input : 1;
-    bool reverse_video : 1;
-    bool allow_altscreen : 1;
-    bool allow_nrcs : 1;
-    bool allow_window_ops : 1;
-    bool force_utf8_nrcs : 1;
-    bool visual_bell : 1;
-    bool raise_on_bell : 1;
-    bool urgency_on_bell : 1;
-    bool smooth_scroll : 1;
-    bool appcursor : 1;
-    bool appkey : 1;
-    bool backspace_is_delete : 1;
-    bool delete_is_delete : 1;
-    bool has_meta : 1;
-    bool lock : 1;
-    bool meta_is_esc : 1;
-    bool modify_other_fmt : 1;
-    bool allow_legacy_edit : 1;
-    bool allow_legacy_function : 1;
-    bool allow_legacy_keypad : 1;
-    bool allow_legacy_misc : 1;
-    bool numlock : 1;
-    bool special_bold : 1;
-    bool special_blink : 1;
-    bool special_underline : 1;
-    bool special_italic : 1;
-    bool special_reverse : 1;
-    bool stick_to_bottom : 1;
-    bool stick_to_right : 1;
-    bool fixed : 1;
-    bool user_geometry : 1;
-    bool allow_subst_font : 1;
-    bool force_scalable : 1;
-    bool autorepeat : 1;
-    bool allow_uris : 1;
-    bool override_boxdraw : 1;
+    bool blend_fg;
+    bool blend_all_bg;
+    bool allow_blinking;
+    bool allow_luit;
+    bool print_attr;
+    bool extended_cir;
+    bool rewrap;
+    bool cut_lines;
+    bool minimize_scrollback;
+    bool allow_erase_scrollback;
+    bool alternate_scroll;
+    bool keep_clipboard;
+    bool keep_selection;
+    bool select_to_clipboard;
+    bool utf8;
+    bool wrap;
+    bool scroll_on_output;
+    bool scroll_on_input;
+    bool reverse_video;
+    bool allow_altscreen;
+    bool allow_nrcs;
+    bool allow_window_ops;
+    bool force_utf8_nrcs;
+    bool visual_bell;
+    bool raise_on_bell;
+    bool urgency_on_bell;
+    bool smooth_scroll;
+    bool appcursor;
+    bool appkey;
+    bool backspace_is_delete;
+    bool delete_is_delete;
+    bool has_meta;
+    bool lock;
+    bool meta_is_esc;
+    bool modify_other_fmt;
+    bool allow_legacy_edit;
+    bool allow_legacy_function;
+    bool allow_legacy_keypad;
+    bool allow_legacy_misc;
+    bool numlock;
+    bool special_bold;
+    bool special_blink;
+    bool special_underline;
+    bool special_italic;
+    bool special_reverse;
+    bool stick_to_bottom;
+    bool stick_to_right;
+    bool fixed;
+    bool user_geometry;
+    bool allow_subst_font;
+    bool force_scalable;
+    bool autorepeat;
+    bool allow_uris;
+    bool override_boxdraw;
 };
 
-enum optidx {
-    o_allow_alternate,
-    o_allow_blinking,
-    o_allow_modify_edit_keypad,
-    o_allow_modify_function,
-    o_allow_modify_keypad,
-    o_allow_modify_misc,
-    o_allow_uris,
-    o_alpha,
-    o_alternate_scroll,
-    o_answerback_string,
-    o_appcursor,
-    o_appkey,
-    o_autorepeat,
-    o_autowrap,
-    o_background,
-    o_backspace_is_del,
-    o_bell,
-    o_bell_high_volume,
-    o_bell_low_volume,
-    o_blend_all_background,
-    o_blend_foreground,
-    o_blink_color,
-    o_blink_time,
-    o_bold_color,
-    o_config,
-    o_cursor_background,
-    o_cursor_foreground,
-    o_cursor_shape,
-    o_cursor_width,
-    o_cut_lines,
-    o_cwd,
-    o_daemon,
-    o_delete_is_del,
-    o_double_click_time,
-    o_dpi,
-    o_erase_scrollback,
-    o_extended_cir,
-    o_fixed,
-    o_fkey_increment,
-    o_font,
-    o_font_gamma,
-    o_font_size,
-    o_font_size_step,
-    o_font_spacing,
-    o_force_mouse_mod,
-    o_force_nrcs,
-    o_force_scalable,
-    o_foreground,
-    o_fork,
-    o_fps,
-    o_frame_wait_delay,
-    o_has_meta,
-    o_horizontal_border,
-    o_italic_color,
-    o_keep_clipboard,
-    o_keep_selection,
-    o_keyboard_dialect,
-    o_keyboard_mapping,
-    o_key_break,
-    o_key_copy,
-    o_key_copy_uri,
-    o_key_dec_font,
-    o_key_inc_font,
-    o_key_new_window,
-    o_key_numlock,
-    o_key_paste,
-    o_key_reload_config,
-    o_key_reset,
-    o_key_reset_font,
-    o_key_reverse_video,
-    o_key_scroll_down,
-    o_key_scroll_up,
-    o_line_spacing,
-    o_lock_keyboard,
-    o_log_level,
-    o_luit,
-    o_luit_path,
-    o_margin_bell,
-    o_margin_bell_column,
-    o_margin_bell_high_volume,
-    o_margin_bell_low_volume,
-    o_max_frame_time,
-    o_meta_sends_escape,
-    o_minimize_scrollback,
-    o_modify_cursor,
-    o_modify_function,
-    o_modify_keypad,
-    o_modify_other,
-    o_modify_other_fmt,
-    o_nrcs,
-    o_numlock,
-    o_open_command,
-    o_override_boxdrawing,
-    o_pixel_mode,
-    o_print_attributes,
-    o_print_command,
-    o_printer_file,
-    o_raise_on_bell,
-    o_reversed_color,
-    o_reverse_video,
-    o_rewrap,
-    o_scroll_amount,
-    o_scrollback_size,
-    o_scroll_on_input,
-    o_scroll_on_output,
-    o_selected_background,
-    o_selected_foreground,
-    o_select_scroll_time,
-    o_select_to_clipboard,
-    o_shell,
-    o_smooth_scroll,
-    o_smooth_scroll_delay,
-    o_smooth_scroll_step,
-    o_socket,
-    o_special_blink,
-    o_special_bold,
-    o_special_italic,
-    o_special_reverse,
-    o_special_underlined,
-    o_substitute_fonts,
-    o_sync_timeout,
-    o_tab_width,
-    o_term_mod,
-    o_term_name,
-    o_title,
-    o_trace_characters,
-    o_trace_controls,
-    o_trace_events,
-    o_trace_fonts,
-    o_trace_input,
-    o_trace_misc,
-    o_triple_click_time,
-    o_underlined_color,
-    o_underline_width,
-    o_unique_uris,
-    o_urgent_on_bell,
-    o_uri_click_mod,
-    o_uri_text_color,
-    o_uri_underline_color,
-    o_use_utf8,
-    o_vertical_border,
-    o_visual_bell,
-    o_visual_bell_time,
-    o_vt_version,
-    o_window_class,
-    o_window_ops,
-    o_word_break,
-    o_MAX,
-};
-
-
-struct optmap_item {
-    const char *opt;
-    const char *descr;
-};
-
-extern struct optmap_item optmap[];
 extern struct global_config gconfig;
 
-bool set_option(struct instance_config *c, const char *name, const char *value, bool allow_global);
+struct option;
+
+void init_options(void);
+void free_options(void);
+
+struct option *find_option_entry(const char *name, bool need_warn);
+struct option *find_short_option_entry(char name);
+bool is_boolean_option(struct option *opt);
+
+bool set_option_entry(struct instance_config *c, struct option *, const char *value, bool allow_global);
 void set_default_dpi(double dpi);
-void set_default_utf8(bool set);
 void copy_config(struct instance_config *dst, struct instance_config *src);
 void free_config(struct instance_config *src);
 void init_instance_config(struct instance_config *cfg, const char *config_path, bool allow_global);
