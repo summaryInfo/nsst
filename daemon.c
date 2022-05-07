@@ -43,7 +43,7 @@ static int socket_fd = -1;
 static void daemonize(void) {
     pid_t pid = fork();
     if (pid > 0)
-        exit(0);
+        _exit(0);
     else if (pid < 0)
         die("Can't fork() daemon: %s", strerror(errno));
 
@@ -52,7 +52,7 @@ static void daemonize(void) {
 
     pid = fork();
     if (pid > 0)
-        exit(0);
+        _exit(0);
     else if (pid < 0)
         die("Can't fork() daemon: %s", strerror(errno));
 
