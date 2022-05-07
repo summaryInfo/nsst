@@ -521,10 +521,8 @@ struct option *find_option_entry(const char *name, bool need_warn) {
 }
 
 bool set_option_entry(struct instance_config *c, struct option *opt, const char *value, bool allow_global) {
-    if (opt->global && !allow_global) {
-        warn("Attempted to set global option %s in local context", value);
+    if (opt->global && !allow_global)
         return false;
-    }
 
     void *dest = opt->offset + (opt->global ? (char *)&gconfig : (char *)c);
     if (!option_types[opt->type].parse(value, dest, &opt->limits)) {
