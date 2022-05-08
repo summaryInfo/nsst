@@ -131,7 +131,7 @@ union opt_limits {
         enum charset dflt;
     } arg_nrcs;
     struct geometry_arg {
-        int dummy;
+        int dflt; /* dummy */
     } arg_geometry;
 #define arg_int16 arg_int64
 #define arg_uint8 arg_int64
@@ -161,6 +161,7 @@ struct option {
     enum option_type type;
     char short_opt[MAX_SHORT_OPT];
     bool global;
+    uint8_t field_size;
     ptrdiff_t offset;
     union opt_limits limits;
 };
@@ -176,27 +177,30 @@ static bool do_parse_nrcs(const char *, void *, union opt_limits *);
 static bool do_parse_string(const char *, void *, union opt_limits *);
 static bool do_parse_uint8(const char *, void *, union opt_limits *);
 
-#define T(type_, name_) [option_type_##type_] = { \
+/* type_size field is stored modulo 256 */
+#define T(type_, name_, size_) [option_type_##type_] = { \
         .name = name_, \
         .parse = do_parse_##type_, \
+        .type_size = (uint8_t)sizeof(size_), \
         .name_len = sizeof name_ - 1\
     }
 
 struct option_type_desc {
     const char *name;
     parse_fn parse;
-    size_t name_len;
+    uint8_t type_size;
+    uint8_t name_len;
 } option_types[] = {
-    T(boolean, "bool"),
-    T(color, "color"),
-    T(double, "real"),
-    T(enum, "enum"),
-    T(geometry, "geometry"),
-    T(int16, "int"),
-    T(int64, "int"),
-    T(nrcs, "charset string"),
-    T(string, "str"),
-    T(uint8, "int"),
+    T(boolean, "bool", bool),
+    T(color, "color", color_t),
+    T(double, "real", double),
+    T(enum, "enum", int),
+    T(geometry, "geometry", color_t[PALETTE_SIZE]),
+    T(int16, "int", int16_t),
+    T(int64, "int", int64_t),
+    T(nrcs, "charset string", enum charset),
+    T(string, "str", char *),
+    T(uint8, "int", uint8_t),
 };
 
 #undef T
@@ -209,6 +213,7 @@ struct option_type_desc {
         .type = option_type_##type_, \
         .global = false, \
         .short_opt = { l1_, l2_ }, \
+        .field_size = (uint8_t)sizeof(((struct instance_config *)NULL)->field_), \
         .offset = offsetof(struct instance_config, field_), \
         .limits.arg_##type_ = { __VA_ARGS__ } \
     }
@@ -227,6 +232,7 @@ struct option_type_desc {
         .type = option_type_##type_, \
         .global = true, \
         .short_opt = { l1_, 0 }, \
+        .field_size = (uint8_t)sizeof(((struct global_config *)NULL)->field_), \
         .offset = offsetof(struct global_config, field_), \
         .limits.arg_##type_ = { __VA_ARGS__ } \
     }
@@ -451,6 +457,14 @@ void init_options(void) {
             n_short * (short_opt_len + option_types[opt->type].name_len);
         if (help_line_len > max_help_line_len)
             max_help_line_len = help_line_len;
+
+        /* We cannot do type checking in compile time, so check it here */
+        if (opt->field_size != option_types[opt->type].type_size) {
+            die("Wrong field size for option '%s' (%d) of type '%s' (%d)",
+                    opt->name, opt->field_size,
+                    option_types[opt->type].name,
+                    option_types[opt->type].type_size);
+        }
     }
 
     /* Initialize cached hostname
