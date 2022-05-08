@@ -58,7 +58,7 @@ struct global_config {
     char *open_command;
     bool unique_uris;
 
-    uint8_t log_level;
+    int log_level;
 
     bool daemon_mode;
     bool trace_characters;
@@ -118,6 +118,9 @@ struct instance_config {
     enum cursor_type cursor_shape;
     enum pixel_mode pixel_mode;
     enum charset keyboard_nrcs;
+    int modify_other_fmt;
+    int margin_bell_volume;
+    int bell_volume;
 
     uint32_t force_mouse_mask;
     uint32_t uri_click_mask;
@@ -144,8 +147,6 @@ struct instance_config {
     uint8_t margin_bell_low_volume;
     uint8_t bell_high_volume;
     uint8_t bell_low_volume;
-    uint8_t margin_bell_volume;
-    uint8_t bell_volume;
     uint8_t modify_cursor;
     uint8_t modify_function;
     uint8_t modify_keypad;
@@ -186,7 +187,6 @@ struct instance_config {
     bool has_meta;
     bool lock;
     bool meta_is_esc;
-    bool modify_other_fmt;
     bool allow_legacy_edit;
     bool allow_legacy_function;
     bool allow_legacy_keypad;
