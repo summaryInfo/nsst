@@ -100,7 +100,7 @@ void init_render_context(void) {
     char *display = getenv("DISPLAY");
     const char *local[] = { "localhost:", "127.0.0.1:", "unix:", };
     bool localhost = display[0] == ':';
-    for (size_t i = 0; !localhost && i < sizeof(local)/sizeof(*local); i++)
+    for (size_t i = 0; !localhost && i < LEN(local); i++)
         localhost = display == strstr(display, local[i]);
 
     if (localhost) {

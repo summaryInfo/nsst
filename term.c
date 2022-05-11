@@ -3424,7 +3424,7 @@ void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool 
                     buf1[size++] = ch;
         } else {
             while (pos < end)
-                size += utf8_encode(*pos++, buf1 + size, buf1 + sizeof buf1/sizeof *buf1);
+                size += utf8_encode(*pos++, buf1 + size, buf1 + LEN(buf1));
         }
 
         data = buf1;

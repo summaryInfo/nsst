@@ -387,11 +387,11 @@ static int pre2_cmpfn(const void * a, const void *b) {
 
 uint32_t try_precompose(uint32_t ch, uint32_t comb) {
     struct pre1_item *r1 = bsearch(&(struct pre1_item){ch, comb, 0},
-            pre1_tab, sizeof(pre1_tab)/sizeof(*pre1_tab), sizeof(*pre1_tab), pre1_cmpfn);
+            pre1_tab, LEN(pre1_tab), sizeof(*pre1_tab), pre1_cmpfn);
     if (r1) return r1->dst;
 
     struct pre2_item *r2 = bsearch(&(struct pre2_item){ch, comb, 0},
-            pre2_tab, sizeof(pre2_tab)/sizeof(*pre2_tab), sizeof(*pre2_tab), pre2_cmpfn);
+            pre2_tab, LEN(pre2_tab), sizeof(*pre2_tab), pre2_cmpfn);
     if (r2) return r2->dst;
 
     return ch;

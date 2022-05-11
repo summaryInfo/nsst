@@ -71,7 +71,7 @@ static void move_attrtab(struct line_attr *dst, struct line *src) {
 
         struct attr *at = &src->attrs->data[old_id - 1];
 
-        if (!attr_empty(at)) {
+        if (LIKELY(!attr_empty(at))) {
             at->bg = insert_attr(dst, at, attr_hash(at));
             at->fg = 0;
             at->uri = EMPTY_URI;
@@ -162,7 +162,7 @@ static void optimize_attributes(struct line *line) {
     }
 
     ssize_t cnt = -(used[0] & 1);
-    for (size_t i = 0; i < sizeof used/sizeof *used; i++)
+    for (ssize_t i = 0; i < (ssize_t)LEN(used); i++)
         cnt += __builtin_popcountll(used[i]);
 
     if (cnt) {
@@ -242,4 +242,3 @@ void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, s
         while (len--) dc++->drawn = 0;
     }
 }
-

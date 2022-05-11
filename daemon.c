@@ -186,7 +186,7 @@ static void append_pending_launch(struct pending_launch *lnch) {
     } else if (buffer[0] == '\005' /* ENQ */ && len == 1) /* Version text request */ {
         const char *resps[] = {version_string(), "Features: ", features_string()};
 
-        for (size_t i = 0; i < sizeof resps/sizeof *resps; i++)
+        for (size_t i = 0; i < LEN(resps); i++)
             if (!send_pending_launch_resp(lnch, resps[i])) return; // Don't free pending_launch twice
 
         free_pending_launch(lnch);

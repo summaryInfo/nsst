@@ -25,6 +25,12 @@
 #define TIMEDIFF(t, d)  ((((d).tv_sec - (t).tv_sec) * SEC + ((d).tv_nsec - (t).tv_nsec)))
 #define TIMEINC(t, in) ((t).tv_sec += (in)/SEC), ((t).tv_nsec += (in)%SEC)
 
+#define IS_SAME_TYPE_(a, b) __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
+#define IS_ARRAY_(arr) (!IS_SAME_TYPE_((arr), &(arr)[0]))
+#define MUST_BE_(e) (0*(size_t)sizeof(struct {_Static_assert(e, "Argument has wrong type");int dummy__;}))
+
+#define LEN(x) (sizeof(x)/sizeof((x)[0]) + MUST_BE_(IS_ARRAY_(x)))
+
 #define LIKELY(x) (__builtin_expect(!!(x), 1))
 #define UNLIKELY(x) (__builtin_expect((x), 0))
 #define PACKED __attribute__((packed))

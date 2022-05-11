@@ -430,13 +430,12 @@ void init_options(void) {
     gconfig.log_level = 3;
 
     /* Preprocess options metadata */
-    size_t n_opts = sizeof options/sizeof *options;
-    ht_init(&options_hashtable, n_opts * 2, option_eq);
+    ht_init(&options_hashtable, 2 * LEN(options), option_eq);
 
     const size_t short_opt_len = strlen(", -X<>");
     const size_t long_opt_len = strlen("\t --=<>");
 
-    for (size_t i = 0; i < n_opts; i++) {
+    for (size_t i = 0; i < LEN(options); i++) {
         /* Build fast lookup hash table */
         struct option *opt = &options[i];
         opt->head.hash = hash64(opt->name, strlen(opt->name));
@@ -487,7 +486,7 @@ void init_options(void) {
             "ISO8869-1",
         };
 
-        for (size_t i = 0; !supported && i < sizeof(lc_supported)/sizeof(*lc_supported); i++)
+        for (size_t i = 0; !supported && i < LEN(lc_supported); i++)
             supported |= !strcasecmp(charset, lc_supported[i]);
 
         struct option *opt = find_option_entry("use-utf8", true);
@@ -740,7 +739,7 @@ static bool do_parse_geometry(const char *value, void *dst, union opt_limits *li
 void copy_config(struct instance_config *dst, struct instance_config *src) {
     *dst = *src;
     src->argv = NULL;
-    for (size_t i = 0; i < sizeof(options)/sizeof(*options); i++) {
+    for (size_t i = 0; i < LEN(options); i++) {
         if (options[i].global || options[i].type != option_type_string) continue;
         char *dst1 = (char *)dst + options[i].offset, *value;
         memcpy(&value, dst1, sizeof value);
@@ -750,7 +749,7 @@ void copy_config(struct instance_config *dst, struct instance_config *src) {
 }
 
 void free_config(struct instance_config *src) {
-    for (size_t i = 0; i < sizeof(options)/sizeof(*options); i++) {
+    for (size_t i = 0; i < LEN(options); i++) {
         if (options[i].global || options[i].type != option_type_string) continue;
         char *src1 = (char *)src + options[i].offset, *value;
         memcpy(&value, src1, sizeof value);
@@ -857,7 +856,7 @@ void init_instance_config(struct instance_config *cfg, const char *config_path, 
     struct option *cpath = find_short_option_entry('C');
     assert(cpath);
 
-    for (size_t i = 0; i < sizeof(options)/sizeof(*options); i++)
+    for (size_t i = 0; i < LEN(options); i++)
         if (&options[i] != cpath)
             set_option_entry(cfg, &options[i], "default", allow_global);
     for (size_t i = 0; i < PALETTE_SIZE - SPECIAL_PALETTE_SIZE; i++)
@@ -887,7 +886,7 @@ const char *usage_string(ssize_t idx) {
         APPEND("%-*s(Print version and exit)\n", (int)max_help_line_len, "\t--version, -v");
         APPEND("%-*s(Set palette color <N>, <N> is from 0 to 255)\n", (int)max_help_line_len, "\t--color<N>=<color>");
         return buffer;
-    } else if (idx - 1 < (ssize_t)(sizeof options/sizeof *options)) {
+    } else if (idx - 1 < (ssize_t)LEN(options)) {
         struct option *opt = &options[idx - 1];
         struct option_type_desc *type = &option_types[opt->type];
 
@@ -901,7 +900,7 @@ const char *usage_string(ssize_t idx) {
 
         APPEND("(%s)\n", opt->description);
         return buffer;
-    } else if (idx == (sizeof options/sizeof *options) + 1) {
+    } else if (idx == LEN(options) + 1) {
         return  "For every boolean option --<X>=<Y>\n"
                 "\t--<X>, --<X>=yes, --<X>=y,  --<X>=true\n"
             "are equivalent to --<X>=1, and\n"

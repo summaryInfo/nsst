@@ -360,7 +360,7 @@ inline static uint32_t translate_keypad(uint32_t in) {
         { XKB_KEY_KP_Up, XKB_KEY_KP_8 },
         { XKB_KEY_KP_Prior, XKB_KEY_KP_9 },
     };
-    for (size_t i = 0; i < sizeof(tab)/sizeof(tab[0]); i++)
+    for (size_t i = 0; i < LEN(tab); i++)
         if (tab[i].from == in) return tab[i].to;
     return in;
 }
@@ -581,7 +581,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
                     if (!mode->meta_escape) {
                         if (k.utf32 < 0x80)
                             k.utf8len = utf8_encode(k.utf32 | 0x80, k.utf8data,
-                                    k.utf8data + sizeof(k.utf8data)/sizeof(k.utf8data[0]));
+                                    k.utf8data + LEN(k.utf8data));
                     } else {
                         memmove(k.utf8data + 1, k.utf8data, k.utf8len);
                         k.utf8len++;

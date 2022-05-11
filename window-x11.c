@@ -542,9 +542,9 @@ void platform_update_window_props(struct window *win) {
         XCB_NONE // Window group
     };
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->plat.wid, ctx.atom.WM_NORMAL_HINTS,
-            ctx.atom.WM_SIZE_HINTS, 8*sizeof(*nhints), sizeof(nhints)/sizeof(*nhints), nhints);
+            ctx.atom.WM_SIZE_HINTS, 8*sizeof(*nhints), LEN(nhints), nhints);
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->plat.wid, XCB_ATOM_WM_HINTS,
-            XCB_ATOM_WM_HINTS, 8*sizeof(*wmhints), sizeof(wmhints)/sizeof(*wmhints), wmhints);
+            XCB_ATOM_WM_HINTS, 8*sizeof(*wmhints), LEN(wmhints), wmhints);
 }
 
 
@@ -636,7 +636,7 @@ static void send_selection_data(struct window *win, xcb_window_t req, xcb_atom_t
     if (target == ctx.atom.TARGETS) {
         uint32_t data[] = {ctx.atom.TARGETS, ctx.atom.UTF8_STRING, XCB_ATOM_STRING};
         ev.property = prop;
-        xcb_change_property(con, XCB_PROP_MODE_REPLACE, req, prop, XCB_ATOM_ATOM, 32, sizeof(data)/sizeof(*data), data);
+        xcb_change_property(con, XCB_PROP_MODE_REPLACE, req, prop, XCB_ATOM_ATOM, 32, LEN(data), data);
     } else if (target == ctx.atom.UTF8_STRING || target == XCB_ATOM_STRING) {
         uint8_t *data = NULL;
 

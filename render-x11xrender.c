@@ -126,7 +126,7 @@ void renderer_recolor_border(struct window *win) {
         {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh},
     };
 
-    do_draw_rects(win, rects, sizeof rects/ sizeof *rects, win->bg_premul);
+    do_draw_rects(win, rects, LEN(rects), win->bg_premul);
 }
 
 void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {

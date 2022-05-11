@@ -102,7 +102,7 @@ bool nrcs_encode(enum charset set, uint32_t *ch, bool nrcs) {
         break;
 
     case cs94_dec_graph:
-        for (size_t i = 0; i < sizeof(graph_tr)/sizeof(*graph_tr); i++) {
+        for (size_t i = 0; i < LEN(graph_tr); i++) {
             if (graph_tr[i] == *ch) {
                 *ch = i + 0x5F;
                 done = 1;
@@ -112,7 +112,7 @@ bool nrcs_encode(enum charset set, uint32_t *ch, bool nrcs) {
         done |= *ch < 0x5F || *ch == 0x7F;
         break;
     case cs94_dec_tech:
-        for (size_t i = 0; i < sizeof(tech_tr)/sizeof(*tech_tr); i++) {
+        for (size_t i = 0; i < LEN(tech_tr); i++) {
             if (tech_tr[i] == *ch) {
                 *ch = i + 0x21;
                 done = 1;
@@ -128,7 +128,7 @@ bool nrcs_encode(enum charset set, uint32_t *ch, bool nrcs) {
     }
 
     if (set <= nrcs__impl_high) {
-        for (size_t i = 0; i < sizeof(trans_idx)/sizeof(*trans_idx); i++) {
+        for (size_t i = 0; i < LEN(trans_idx); i++) {
             if (nrcs_trs[set][i] == *ch) {
                 *ch = trans_idx[i];
                 done = 1;
@@ -347,4 +347,3 @@ enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nr
     return nrcs_invalid;
 #undef NRC
 }
-
