@@ -148,21 +148,25 @@ struct line *realloc_line(struct line *line, ssize_t caps) {
     return new;
 }
 
+/* We know that byte has 8 bits */
+#define LONG_BITS ((ssize_t)(8*sizeof(unsigned long)))
+
 static void optimize_attributes(struct line *line) {
 
     if (!line->attrs) return;
 
-    uint64_t used[(MAX_EXTRA_PALETTE + 1)/64] = {0};
+    unsigned long used[(MAX_EXTRA_PALETTE + 1)/LONG_BITS] = {0};
 
-    used[line->pad_attrid / 64] |= 1ULL << (line->pad_attrid % 64);
+    used[line->pad_attrid / LONG_BITS] |= 1ULL << (line->pad_attrid % LONG_BITS);
 
     for (ssize_t i = 0; i < line->size; i++) {
         uint64_t id = line->cell[i].attrid;
-        used[id / 64] |= 1ULL << (id % 64);
+        used[id / LONG_BITS] |= 1ULL << (id % LONG_BITS);
     }
 
     ssize_t cnt = -(used[0] & 1);
-    for (ssize_t i = 0; i < (ssize_t)LEN(used); i++)
+    ssize_t max_elem = (line->attrs->caps + LONG_BITS - 1)/LONG_BITS;
+    for (ssize_t i = 0; i < max_elem; i++)
         cnt += __builtin_popcountll(used[i]);
 
     if (cnt) {
