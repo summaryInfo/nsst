@@ -152,10 +152,13 @@ struct line *realloc_line(struct line *line, ssize_t caps) {
 #define LONG_BITS ((ssize_t)(8*sizeof(unsigned long)))
 
 static void optimize_attributes(struct line *line) {
-
     if (!line->attrs) return;
 
-    unsigned long used[(MAX_EXTRA_PALETTE + 1)/LONG_BITS] = {0};
+    /* NOTE: No threading here */
+    static unsigned long used[(MAX_EXTRA_PALETTE + 1)/LONG_BITS];
+    ssize_t max_elem = (line->attrs->caps + LONG_BITS - 1)/LONG_BITS;
+
+    memset(used, 0, max_elem*sizeof *used);
 
     used[line->pad_attrid / LONG_BITS] |= 1ULL << (line->pad_attrid % LONG_BITS);
 
@@ -165,7 +168,6 @@ static void optimize_attributes(struct line *line) {
     }
 
     ssize_t cnt = -(used[0] & 1);
-    ssize_t max_elem = (line->attrs->caps + LONG_BITS - 1)/LONG_BITS;
     for (ssize_t i = 0; i < max_elem; i++)
         cnt += __builtin_popcountll(used[i]);
 
