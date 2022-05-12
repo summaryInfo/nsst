@@ -1748,7 +1748,6 @@ ssize_t screen_dispatch_rep(struct screen *scr, int32_t rune, ssize_t rep) {
         rep -= totalw;
         while (totalw-- > 0)
             *pbuf++ = rune, *pbuf++ = 0;
-        totalw *= 2;
     } else {
         totalw = MIN(maxw, rep);
         rep -= totalw;
