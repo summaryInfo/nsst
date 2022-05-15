@@ -214,12 +214,13 @@ inline static void attr_mask_set(struct attr *a, uint32_t mask) {
     a->mask = (a->mask & ~ATTR_MASK) | (mask & ATTR_MASK);
 }
 
-inline static struct attr attr_at(struct line *ln, ssize_t x) {
-    return ln->cell[x].attrid ? ln->attrs->data[ln->cell[x].attrid - 1] : ATTR_DEFAULT;
-}
-
 inline static struct attr attr_pad(struct line *ln) {
     return ln->pad_attrid ? ln->attrs->data[ln->pad_attrid - 1] : ATTR_DEFAULT;
+}
+
+inline static struct attr attr_at(struct line *ln, ssize_t x) {
+    if (x >= ln->size) return attr_pad(ln);
+    return ln->cell[x].attrid ? ln->attrs->data[ln->cell[x].attrid - 1] : ATTR_DEFAULT;
 }
 
 inline static void adjust_wide_left(struct line *line, ssize_t x) {
@@ -297,4 +298,3 @@ inline static void damage_line(struct line *line, ssize_t x0, ssize_t x1) {
 }
 
 #endif
-

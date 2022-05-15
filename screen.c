@@ -806,7 +806,7 @@ uint16_t screen_checksum(struct screen *scr, int16_t xs, int16_t ys, int16_t xe,
     for (; ys < ye; ys++) {
         struct line *line = scr->screen[ys];
         for (int16_t i = xs; i < xe; i++) {
-            uint32_t ch = line->cell[i].ch;
+            uint32_t ch = i >= line->size ? 0 : line->cell[i].ch;
             struct attr attr = attr_at(line, i);
             if (!(mode.no_implicit) && !ch) ch = ' ';
 
