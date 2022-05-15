@@ -18,22 +18,46 @@
 
 #define LOG_BUFFER_SIZE 1024
 
-#define FATAL_PREFIX "[\033[31;1mFATAL\033[m] "
-#define WARN_PREFIX "[\033[33;1mWARN\033[m] "
-#define INFO_PREFIX "[\033[32;1mINFO\033[m] "
-
 static char log_buffer[LOG_BUFFER_SIZE + 1];
+
+static void do_log(int level, const char *fmt, va_list args)  __attribute__((format(printf, 2, 0)));
+
+static void do_log(int level, const char *fmt, va_list args) {
+    static struct log_prefix {
+        const char *msg;
+        int len;
+        int color;
+    } log_prefix[] = {
+        {"FATAL", sizeof "FATAL" - 1, 31},
+        {"WARN", sizeof "WARN" - 1, 33},
+        {"INFO", sizeof "INFO" - 1, 32},
+        {"DEBUG", sizeof "DEBUG" - 1, 0},
+    };
+
+    if (gconfig.log_level < level) return;
+
+    size_t len = log_prefix[level].len;
+    if (gconfig.log_color) {
+        len += snprintf(log_buffer + len, LOG_BUFFER_SIZE - len,
+                        "[\033[%d;1m%s\033[m] ", log_prefix[level].color, log_prefix[level].msg);
+    } else {
+        len += snprintf(log_buffer + len, LOG_BUFFER_SIZE - len,
+                        "[%s] ", log_prefix[level].msg);
+    }
+
+    len += vsnprintf(log_buffer + len, LOG_BUFFER_SIZE - len, fmt, args);
+    log_buffer[len++] = '\n';
+
+    for (size_t written = 0, res; written < len; written += res)
+        if ((res = write(STDERR_FILENO, log_buffer, len - written)) <= 0)
+            break;
+}
 
 _Noreturn void die(const char *fmt, ...) {
     if (gconfig.log_level > 0) {
         va_list args;
         va_start(args, fmt);
-        size_t offset = sizeof FATAL_PREFIX - 1;
-        memcpy(log_buffer, FATAL_PREFIX, offset);
-        offset += vsnprintf(log_buffer + offset,
-                            LOG_BUFFER_SIZE - offset, fmt, args);
-        log_buffer[offset++] = '\n';
-        write(STDERR_FILENO, log_buffer, offset);
+        do_log(0, fmt, args);
         va_end(args);
     }
     exit(EXIT_FAILURE);
@@ -43,12 +67,7 @@ void fatal(const char *fmt, ...) {
     if (gconfig.log_level > 0) {
         va_list args;
         va_start(args, fmt);
-        size_t offset = sizeof FATAL_PREFIX - 1;
-        memcpy(log_buffer, FATAL_PREFIX, offset);
-        offset += vsnprintf(log_buffer + offset,
-                            LOG_BUFFER_SIZE - offset, fmt, args);
-        log_buffer[offset++] = '\n';
-        write(STDERR_FILENO, log_buffer, offset);
+        do_log(0, fmt, args);
         va_end(args);
     }
 }
@@ -57,12 +76,7 @@ void warn(const char *fmt, ...) {
     if (gconfig.log_level > 1) {
         va_list args;
         va_start(args, fmt);
-        size_t offset = sizeof WARN_PREFIX - 1;
-        memcpy(log_buffer, WARN_PREFIX, offset);
-        offset += vsnprintf(log_buffer + offset,
-                            LOG_BUFFER_SIZE - offset, fmt, args);
-        log_buffer[offset++] = '\n';
-        write(STDERR_FILENO, log_buffer, offset);
+        do_log(1, fmt, args);
         va_end(args);
     }
 }
@@ -71,12 +85,7 @@ void info(const char *fmt, ...) {
     if (gconfig.log_level > 2) {
         va_list args;
         va_start(args, fmt);
-        size_t offset = sizeof INFO_PREFIX - 1;
-        memcpy(log_buffer, INFO_PREFIX, offset);
-        offset += vsnprintf(log_buffer + offset,
-                            LOG_BUFFER_SIZE - offset, fmt, args);
-        log_buffer[offset++] = '\n';
-        write(STDERR_FILENO, log_buffer, offset);
+        do_log(2, fmt, args);
         va_end(args);
     }
 }

@@ -428,6 +428,7 @@ void init_options(void) {
 
     /* This is needed to get error messages from option parsing code */
     gconfig.log_level = 3;
+    gconfig.log_color = isatty(STDERR_FILENO) && !getenv("NO_COLOR");
 
     /* Preprocess options metadata */
     ht_init(&options_hashtable, 2 * LEN(options), option_eq);

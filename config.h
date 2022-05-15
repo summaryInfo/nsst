@@ -69,6 +69,7 @@ struct global_config {
     bool trace_misc;
     bool want_luit;
     bool fork;
+    bool log_color;
 };
 
 struct instance_config {
