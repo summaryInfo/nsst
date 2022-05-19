@@ -61,7 +61,8 @@ static void daemonize(void) {
     dup2(devnull, STDIN_FILENO);
     close(devnull);
 
-    (void)chdir("/");
+    if (chdir("/") < 0)
+        warn("chdir(): %s", strerror(errno));
 }
 
 
