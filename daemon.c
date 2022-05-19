@@ -61,7 +61,7 @@ static void daemonize(void) {
     dup2(devnull, STDIN_FILENO);
     close(devnull);
 
-    chdir("/");
+    (void)chdir("/");
 }
 
 
