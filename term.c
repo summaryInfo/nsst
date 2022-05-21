@@ -1147,7 +1147,8 @@ static void term_dispatch_osc(struct term *term) {
             if (!strncmp(attr, "id=", sizeof("id=") - 1)) {
                 id = val + 1;
                 id_end = attr = strchr(val, ':');
-                *id_end = '\0';
+                if (id_end)
+                    *id_end = '\0';
             } else attr = strchr(val, ':');
         }
 
