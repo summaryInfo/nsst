@@ -456,11 +456,12 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
     }
 
     if (gconfig.log_level == 3 && gconfig.trace_fonts) {
-        info("Bitmap mode: %d", face->glyph->bitmap.pixel_mode);
-        info("Num grays: %d", face->glyph->bitmap.num_grays);
-        info("Glyph: %d %d", glyph->width, glyph->height);
+        info("[Glyph] char=%"PRId32"(%lc) pixel_mode=%d num_grays=%d width=%d height=%d data:",
+            ch, (wchar_t)ch, face->glyph->bitmap.pixel_mode,
+            face->glyph->bitmap.num_grays, glyph->width, glyph->height);
 
         for (size_t k = 0; k < glyph->height; k++) {
+            fputs("\t", stderr);
             for (size_t m = 0; m < glyph->width; m++)
                 fprintf(stderr, "%02x", glyph->data[stride*k+m]);
             putc('\n', stderr);
