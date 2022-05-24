@@ -411,7 +411,7 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
                     glyph->data[stride*i + 4*j + 2] = v;
                     glyph->data[stride*i + 4*j + 3] = v;
                 }
-                memset(glyph->data + stride*i + glyph->width, 0, stride - glyph->width);
+                memset(glyph->data + stride*i + glyph->width * 4, 0, stride - glyph->width * 4);
             }
         } else {
             for (size_t i = 0; i < glyph->height; i++) {
