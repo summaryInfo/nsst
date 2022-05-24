@@ -172,7 +172,6 @@ struct line_offset screen_line_iter(struct screen *scr, ssize_t y);
 void screen_reset_view(struct screen *scr, bool damage);
 void screen_free_scrollback(struct screen *scr, ssize_t max_size);
 void screen_scroll_view(struct screen *scr, int16_t amount);
-ssize_t screen_append_history(struct screen *scr, struct line *line, bool opt);
 void screen_resize(struct screen *scr, int16_t width, int16_t height);
 bool screen_redraw(struct screen *scr, bool blink_commited);
 void screen_set_tb_margins(struct screen *scr, int16_t top, int16_t bottom);
@@ -276,13 +275,16 @@ inline static bool screen_cursor_in_region(struct screen *scr) {
             scr->c.y >= screen_min_y(scr) && scr->c.y < screen_max_y(scr);
 }
 
-inline static struct line *screen_cursor_line(struct screen *scr) {
-    assert(scr->c.y < scr->height);
-    return scr->screen[scr->c.y];
+inline static void screen_cursor_adjust_wide_left(struct screen *scr) {
+    adjust_wide_left(scr->screen[scr->c.y], scr->c.x);
+}
+
+inline static void screen_cursor_adjust_wide_right(struct screen *scr) {
+    adjust_wide_right(scr->screen[scr->c.y], scr->c.x);
 }
 
 inline static void screen_damage_cursor(struct screen *scr) {
-    struct line *cline = screen_cursor_line(scr);
+    struct line *cline = scr->screen[scr->c.y];
     if (cline->size <= scr->c.x) cline->force_damage = 1;
     else cline->cell[scr->c.x].drawn = 0;
 }
@@ -338,7 +340,7 @@ inline static void screen_load_cursor_position(struct screen *scr, ssize_t cx,
 }
 
 inline static void screen_precompose_at_cursor(struct screen *scr, uint32_t ch) {
-    struct line *cline = screen_cursor_line(scr);
+    struct line *cline = scr->screen[scr->c.y];
     if (cline->size <= scr->c.x) return;
 
     struct cell *cel = &cline->cell[scr->c.x];
@@ -403,7 +405,7 @@ inline static void screen_autoprint(struct screen *scr, ssize_t y) {
 }
 
 inline static void screen_do_wrap(struct screen *scr) {
-    screen_cursor_line(scr)->wrapped = 1;
+    scr->screen[scr->c.y]->wrapped = 1;
     screen_autoprint(scr, screen_cursor_y(scr));
     screen_index(scr);
     screen_cr(scr);

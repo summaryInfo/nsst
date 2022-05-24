@@ -714,7 +714,7 @@ bool screen_redraw(struct screen *scr, bool blink_commited) {
         scr->scroll_damage = 0;
     }
 
-    struct line *cl = screen_cursor_line(scr);
+    struct line *cl = scr->screen[scr->c.y];
     bool cursor = !c_hidden && (scr->c.x >= cl->size || !cl->cell[scr->c.x].drawn || cl->force_damage);
 
     if (cursor) {
@@ -1195,7 +1195,7 @@ void screen_insert_cells(struct screen *scr, int16_t n) {
         //      if it is not required.
 
         screen_adjust_line(scr, &scr->screen[scr->c.y], screen_max_x(scr));
-        struct line *line = screen_cursor_line(scr);
+        struct line *line = scr->screen[scr->c.y];
 
         adjust_wide_left(line, scr->c.x);
         adjust_wide_right(line, scr->c.x);
@@ -1218,7 +1218,7 @@ void screen_insert_cells(struct screen *scr, int16_t n) {
 void screen_delete_cells(struct screen *scr, int16_t n) {
     // Do not check top/bottom margins, DCH sould work outside them
     if (scr->c.x >= screen_min_x(scr) && scr->c.x < screen_max_x(scr)) {
-        struct line *line = screen_cursor_line(scr);
+        struct line *line = scr->screen[scr->c.y];
 
         // TODO Shrink line
         // We can optimize this code by avoiding allocation and movment of empty cells
@@ -1569,7 +1569,7 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
 
     ssize_t max_cx = scr->c.x + totalw, cx = scr->c.x;
     ssize_t max_tx = screen_max_x(scr);
-    struct line *line = screen_cursor_line(scr);
+    struct line *line = scr->screen[scr->c.y];
     struct cell *cell = &line->cell[cx];
 
     if (max_cx < line->size)

@@ -2253,12 +2253,12 @@ static void term_dispatch_csi(struct term *term) {
                 term->mode.protected ? screen_protective_erase : screen_erase;
         switch(PARAM(0, 0)) {
         case 0: /* Below */
-            adjust_wide_left(screen_cursor_line(scr), screen_cursor_x(scr));
+            screen_cursor_adjust_wide_left(scr);
             erase(scr, screen_cursor_x(scr), screen_cursor_y(scr), screen_width(scr), screen_cursor_y(scr) + 1, 0);
             erase(scr, 0, screen_cursor_y(scr) + 1, screen_width(scr), screen_height(scr), 0);
             break;
         case 1: /* Above */
-            adjust_wide_right(screen_cursor_line(scr), screen_cursor_x(scr));
+            screen_cursor_adjust_wide_right(scr);
             erase(scr, 0, screen_cursor_y(scr), screen_cursor_x(scr) + 1, screen_cursor_y(scr) + 1, 0);
             erase(scr, 0, 0, screen_width(scr), screen_cursor_y(scr), 0);
             break;
@@ -2284,11 +2284,11 @@ static void term_dispatch_csi(struct term *term) {
                 term->mode.protected ? screen_protective_erase : screen_erase;
         switch (PARAM(0, 0)) {
         case 0: /* To the right */
-            adjust_wide_left(screen_cursor_line(scr), screen_cursor_x(scr));
+            screen_cursor_adjust_wide_left(scr);
             erase(scr, screen_cursor_x(scr), screen_cursor_y(scr), screen_width(scr), screen_cursor_y(scr) + 1, 0);
             break;
         case 1: /* To the left */
-            adjust_wide_right(screen_cursor_line(scr), screen_cursor_x(scr));
+            screen_cursor_adjust_wide_right(scr);
             erase(scr, 0, screen_cursor_y(scr), screen_cursor_x(scr) + 1, screen_cursor_y(scr) + 1, 0);
             break;
         case 2: /* Whole */
@@ -3079,14 +3079,14 @@ static void term_dispatch_vt52(struct term *term, uint32_t ch) {
         screen_rindex(scr);
         break;
     case 'J':
-        adjust_wide_left(screen_cursor_line(scr), screen_cursor_x(scr));
+        screen_cursor_adjust_wide_left(scr);
         screen_erase(scr, screen_cursor_x(scr), screen_cursor_y(scr),
                      screen_width(scr), screen_cursor_y(scr) + 1, 0);
         screen_erase(scr, 0, screen_cursor_y(scr) + 1,
                      screen_width(scr), screen_height(scr), 0);
         break;
     case 'K':
-        adjust_wide_left(screen_cursor_line(scr), screen_cursor_x(scr));
+        screen_cursor_adjust_wide_left(scr);
         screen_erase(scr, screen_cursor_x(scr), screen_cursor_y(scr),
                      screen_width(scr), screen_cursor_y(scr) + 1, 0);
         break;
