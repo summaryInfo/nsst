@@ -287,14 +287,4 @@ inline static void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
 #endif
 }
 
-inline static void damage_line(struct line *line, ssize_t x0, ssize_t x1) {
-    if (x0 >= line->size) {
-        line->force_damage = 1;
-    } else {
-        x1 = MIN(line->size, x1);
-        while (x0 < x1)
-            line->cell[x0].drawn = 0;
-    }
-}
-
 #endif
