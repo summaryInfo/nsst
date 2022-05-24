@@ -75,8 +75,17 @@ void screen_damage_uri(struct screen *scr, uint32_t uri) {
     }
 }
 
+inline static struct line *line_at(struct screen *scr, ssize_t y) {
+    return y >= 0 ? scr->screen[y] : scr->scrollback[(scr->sb_top + scr->sb_caps + y + 1) % scr->sb_caps];
+}
+
 struct line *screen_paragraph_at(struct screen *scr, ssize_t y) {
     return y < -scr->sb_limit || y >= scr->height ? NULL : line_at(scr, y);
+}
+
+void screen_unwrap_cursor_line(struct screen *scr) {
+    if (scr->c.y - 1 >= -scr->sb_limit)
+        line_at(scr, scr->c.y - 1)->wrapped = 0;
 }
 
 struct line_view screen_line_at(struct screen *scr, struct line_offset pos) {

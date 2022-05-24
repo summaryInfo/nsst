@@ -215,6 +215,7 @@ void screen_set_margin_bell_volume(struct screen *scr, uint8_t vol);
 uint8_t screen_get_margin_bell_volume(struct screen *scr);
 ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs);
 ssize_t screen_dispatch_rep(struct screen *scr, int32_t rune, ssize_t rep);
+void screen_unwrap_cursor_line(struct screen *scr);
 
 char *encode_sgr(char *dst, char *end, struct attr *attr);
 
@@ -275,17 +276,6 @@ inline static bool screen_cursor_in_region(struct screen *scr) {
             scr->c.y >= screen_min_y(scr) && scr->c.y < screen_max_y(scr);
 }
 
-/*
- * Internal function to address terminal screen and
- * scrollback buffer continuously.
- * Lines with y >= 0 are on screen
- * Line with y < 0 are saved line # -y
- * It should not be used outside screen.h/screen.c
- */
-inline static struct line *line_at(struct screen *scr, ssize_t y) {
-    return y >= 0 ? scr->screen[y] : scr->scrollback[(scr->sb_top + scr->sb_caps + y + 1) % scr->sb_caps];
-}
-
 inline static struct line *screen_cursor_line(struct screen *scr) {
     assert(scr->c.y < scr->height);
     return scr->screen[scr->c.y];
@@ -295,12 +285,6 @@ inline static void screen_damage_cursor(struct screen *scr) {
     struct line *cline = screen_cursor_line(scr);
     if (cline->size <= scr->c.x) cline->force_damage = 1;
     else cline->cell[scr->c.x].drawn = 0;
-}
-
-inline static void screen_unwrap_line(struct screen *scr, ssize_t y) {
-    // TODO Make this more generic?
-    if (y >= -scr->sb_limit)
-        line_at(scr, y)->wrapped = 0;
 }
 
 inline static void screen_move_width_origin(struct screen *scr, int16_t x, int16_t y) {
