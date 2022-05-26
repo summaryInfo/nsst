@@ -571,9 +571,6 @@ static bool do_parse_double(const char *str, void *dst, union opt_limits *limits
 
 static bool do_parse_nrcs(const char *str, void *dst, union opt_limits *limits) {
     enum charset result;
-#define E(c) ((c) & 0x7F)
-#define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
-#define I1(i) (I0(i) << 5)
     if (!strcasecmp(str, "default")) result = limits->arg_nrcs.dflt;
     else if (!str[1] && str[0] > 0x2F && str[0] < 0x7F) {
         uint32_t sel = E(str[0]);
@@ -589,9 +586,6 @@ static bool do_parse_nrcs(const char *str, void *dst, union opt_limits *limits) 
 
     memcpy(dst, &result, sizeof result);
     return true;
-#undef E
-#undef I0
-#undef I1
 }
 
 static bool do_parse_boolean(const char *str, void *dst, union opt_limits *limits) {

@@ -54,32 +54,6 @@
 #define PARAM(i, d) (term->esc.param[i] > 0 ? (uparam_t)term->esc.param[i] : (uparam_t)(d))
 #define CHK_VT(v) { if (term->vt_level < (v)) break; }
 
-/* Macros for encoding dispatch selectors
- * OSC commands just stores osc number as selector
- * (and OSC L/OSC l/OSC I are translated to 0/1/2)
- *
- * Generic escape sequeces uses E(c) for final byte
- * and I0(c), I1(c) for first and second intermediate
- * bytes
- *
- * CSI and DCS sequeces use C(c) for final byte
- * P(c) for private indicator byte and
- * I0(c), I1(c) for intermediate bytes
- *
- * *_MASK macros can be used to extract
- * corresponding parts of selectors
- * */
-#define C(c) ((c) & 0x3F)
-#define P(p) ((p) ? ((((p) & 3) + 1) << 6) : 0)
-#define E(c) ((c) & 0x7F)
-#define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
-#define I1(i) (I0(i) << 5)
-#define C_MASK (0x3F)
-#define P_MASK (7 << 6)
-#define E_MASK (0x7F)
-#define I0_MASK (0x1F << 9)
-#define I1_MASK (0x1F << 14)
-
 enum mode_status {
     modstate_unrecognized,
     modstate_enabled,

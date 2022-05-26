@@ -228,21 +228,6 @@ uint32_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, uint32_
     return ch;
 }
 
-#define I1_SHIFT 14
-#define I0_SHIFT 9
-
-#define E_MASK (0x7F)
-#define I0_MASK (0x1F << I0_SHIFT)
-#define I1_MASK (0x1F << I1_SHIFT)
-
-#define E(c) ((c) & E_MASK)
-#define I0(i) ((i) ? (((i) & 0xF) + 1) << I0_SHIFT : 0)
-#define I1(i) ((i) ? (((i) & 0xF) + 1) << I1_SHIFT : 0)
-
-#define E_CHAR(s) ((s) & 0x7F)
-#define I0_CHAR(s) ((s) >> I0_SHIFT ? (((s) >> I0_SHIFT) - 1) | ' ' : 0)
-#define I1_CHAR(s) ((s) >> I1_SHIFT ? (((s) >> I1_SHIFT) - 1) | ' ' : 0)
-
 struct nrcs_desc {
     uint16_t min_vt_level;
     uint16_t max_vt_level;

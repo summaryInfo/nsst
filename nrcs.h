@@ -59,6 +59,45 @@ enum charset {
     nrcs_invalid = -1,
 };
 
+/*
+ * Macros for encoding dispatch selectors
+ * OSC commands just stores osc number as selector
+ * (and OSC L/OSC l/OSC I are translated to 0/1/2).
+ *
+ * Generic escape sequeces uses E(c) for final byte
+ * and I0(c), I1(c) for first and second intermediate
+ * bytes.
+ *
+ * CSI and DCS sequeces use C(c) for final byte
+ * P(c) for private indicator byte and
+ * I0(c), I1(c) for intermediate bytes.
+ *
+ * *_MASK macros can be used to extract
+ * corresponding parts of selectors.
+ *
+ * *_CHAR macros are used for getting
+ * source character.
+ */
+
+#define I1_SHIFT 14
+#define I0_SHIFT 9
+#define P_SHIFT 6
+
+#define C_MASK (0x3F)
+#define E_MASK (0x7F)
+#define I0_MASK (0x1F << I0_SHIFT)
+#define I1_MASK (0x1F << I1_SHIFT)
+#define P_MASK (0x7 << P_SHIFT)
+
+#define C(c) ((c) & C_MASK)
+#define E(c) ((c) & E_MASK)
+#define I0(i) ((i) ? (((i) & 0xF) + 1) << I0_SHIFT : 0)
+#define I1(i) ((i) ? (((i) & 0xF) + 1) << I1_SHIFT : 0)
+#define P(p) ((p) ? ((((p) & 3) + 1) << P_SHIFT) : 0)
+
+#define E_CHAR(s) ((s) & 0x7F)
+#define I0_CHAR(s) ((s) >> I0_SHIFT ? (((s) >> I0_SHIFT) - 1) | ' ' : 0)
+#define I1_CHAR(s) ((s) >> I1_SHIFT ? (((s) >> I1_SHIFT) - 1) | ' ' : 0)
 
 inline static bool nrcs_is_96(enum charset cs) {
     return cs >= cs96_latin_1;
