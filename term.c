@@ -3362,7 +3362,7 @@ bool term_read(struct term *term) {
     size_t i = 0;
     for (; i < MAX_READS; i++) {
         if (tty_refill(&term->tty) < 0 ||
-            term->tty.start >= term->tty.end) break;
+            !tty_has_data(&term->tty)) break;
 
         printer_intercept(screen_printer(&term->scr), (const uint8_t **)&term->tty.start, term->tty.end);
 

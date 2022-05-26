@@ -598,8 +598,8 @@ void printer_intercept(struct printer *pr, const uint8_t **start, const uint8_t 
 
     const uint8_t *blk_start = *start;
     while (*start < end) {
-        uint8_t ch;
-        switch ((ch = *(*start)++)) {
+        uint8_t ch = *(*start)++;
+        switch (ch) {
         case 0x11: /* XON */
         case 0x13: /* XOFF */
         case 0x00: /* NUL */
@@ -643,4 +643,3 @@ void printer_intercept(struct printer *pr, const uint8_t **start, const uint8_t 
     if (blk_start < end && pr->state == pr_ground)
         printer_print_string(pr, blk_start, end - blk_start);
 }
-

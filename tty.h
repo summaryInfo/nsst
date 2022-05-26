@@ -44,6 +44,10 @@ struct tty {
     uint8_t *end;
 };
 
+inline static bool tty_has_data(struct tty *tty) {
+    return tty->start < tty->end;
+}
+
 void init_default_termios(void);
 void hang_watched_children(void);
 
