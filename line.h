@@ -224,7 +224,7 @@ inline static struct attr attr_at(struct line *ln, ssize_t x) {
 }
 
 inline static void adjust_wide_left(struct line *line, ssize_t x) {
-    if (x < 1 || !line->size) return;
+    if (x < 1 || x > line->size || !line->size) return;
     struct cell *cell = line->cell + x - 1;
     if (cell_wide(cell)) *cell = MKCELL(0, cell->attrid);
 }
