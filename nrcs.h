@@ -8,8 +8,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* NOTE: Order of groups is important */
 enum charset {
     nrcs_french_canadian,
+    nrcs_START = nrcs_french_canadian,
     nrcs_finnish,
     nrcs_german,
     nrcs_dutch,
@@ -33,6 +35,7 @@ enum charset {
     nrcs_cyrillic, // Not implemented
 
     cs94_ascii,
+    cs94_START = cs94_ascii,
     cs94_dec_altchars,
     cs94_dec_altgraph,
     cs94_british, // Same as latin-1
@@ -43,13 +46,16 @@ enum charset {
     cs94_dec_greek, // Not implemented
     cs94_dec_hebrew, // Not implemented
     cs94_dec_turkish, // Not implemented
+    cs94_END = cs94_dec_turkish,
 
     cs96_latin_1,
+    cs96_START = cs96_latin_1,
     cs96_greek, // Not implemented
     cs96_hebrew, // Not implemented
     cs96_latin_cyrillic, // Not implemented
     cs96_latin_5,
-    nrcs_MAX = cs96_latin_5,
+    cs96_END = cs96_latin_5,
+
     nrcs_invalid = -1,
 };
 
@@ -65,4 +71,3 @@ enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nr
 const char *nrcs_unparse(enum charset cs);
 
 #endif
-

@@ -228,130 +228,83 @@ uint32_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, uint32_
     return ch;
 }
 
-const char *nrcs_unparse(enum charset cs) {
-    return (const char *[nrcs_MAX + 1]){
-        [cs94_ascii]              = "B",
-        [cs94_british]            = "A",
-        [cs94_dec_altchars]       = "1",
-        [cs94_dec_altgraph]       = "2",
-        [cs94_dec_graph]          = "0",
-        [cs94_dec_greek]          = "\"?",
-        [cs94_dec_hebrew]         = "\"4",
-        [cs94_dec_sup]            = "<",
-        [cs94_dec_sup_graph]      = "%5",
-        [cs94_dec_tech]           = ">",
-        [cs94_dec_turkish]        = "%0",
-        [cs96_greek]              = "F",
-        [cs96_hebrew]             = "H",
-        [cs96_latin_1]            = "A",
-        [cs96_latin_5]            = "M",
-        [cs96_latin_cyrillic]     = "L",
-        [nrcs_cyrillic]           = "&4",
-        [nrcs_dutch]              = "4",
-        [nrcs_finnish2]           = "5",
-        [nrcs_finnish]            = "C",
-        [nrcs_french2]            = "f",
-        [nrcs_french]             = "R",
-        [nrcs_french_canadian2]   = "9",
-        [nrcs_french_canadian]    = "Q",
-        [nrcs_german]             = "K",
-        [nrcs_greek]              = "\">",
-        [nrcs_hebrew]             = "%=",
-        [nrcs_itallian]           = "Y",
-        [nrcs_norwegian_dannish2] = "6",
-        [nrcs_norwegian_dannish3] = "`",
-        [nrcs_norwegian_dannish]  = "E",
-        [nrcs_portuguese]         = "%6",
-        [nrcs_spannish]           = "Z",
-        [nrcs_swedish2]           = "7",
-        [nrcs_swedish]            = "H",
-        [nrcs_swiss]              = "=",
-        [nrcs_turkish]            = "%2",
-    }[cs];
-}
+#define I1_SHIFT 14
+#define I0_SHIFT 9
 
+#define E_MASK (0x7F)
+#define I0_MASK (0x1F << I0_SHIFT)
+#define I1_MASK (0x1F << I1_SHIFT)
+
+#define E(c) ((c) & E_MASK)
+#define I0(i) ((i) ? (((i) & 0xF) + 1) << I0_SHIFT : 0)
+#define I1(i) ((i) ? (((i) & 0xF) + 1) << I1_SHIFT : 0)
+
+#define E_CHAR(s) ((s) & 0x7F)
+#define I0_CHAR(s) ((s) >> I0_SHIFT ? (((s) >> I0_SHIFT) - 1) | ' ' : 0)
+#define I1_CHAR(s) ((s) >> I1_SHIFT ? (((s) >> I1_SHIFT) - 1) | ' ' : 0)
+
+struct nrcs_desc {
+    uint16_t min_vt_level;
+    uint16_t max_vt_level;
+    uint32_t selector;
+} descs[] = {
+    [nrcs_finnish]            = { 2, 9, E('C') },
+    [nrcs_finnish2]           = { 2, 9, E('5') },
+    [nrcs_swedish]            = { 2, 9, E('H') },
+    [nrcs_swedish2]           = { 2, 9, E('7') },
+    [nrcs_german]             = { 2, 9, E('K') },
+    [nrcs_french_canadian]    = { 2, 9, E('Q') },
+    [nrcs_french]             = { 2, 9, E('R') },
+    [nrcs_french2]            = { 2, 9, E('f') },
+    [nrcs_itallian]           = { 2, 9, E('Y') },
+    [nrcs_spannish]           = { 2, 9, E('Z') },
+    [nrcs_dutch]              = { 2, 9, E('4') },
+    [nrcs_swiss]              = { 2, 9, E('=') },
+    [nrcs_norwegian_dannish]  = { 2, 9, E('E') },
+    [nrcs_norwegian_dannish2] = { 2, 9, E('6') },
+    [nrcs_norwegian_dannish3] = { 3, 9, E('`') },
+    [nrcs_french_canadian2]   = { 3, 9, E('9') },
+    [nrcs_portuguese]         = { 3, 9, E('6') | I1('%') },
+    [nrcs_hebrew]             = { 5, 9, E('=') | I1('%') },
+    [nrcs_greek]              = { 5, 9, E('>') | I1('"') },
+    [nrcs_turkish]            = { 5, 9, E('2') | I1('%') },
+    [nrcs_cyrillic]           = { 5, 9, E('4') | I1('&') },
+    [cs94_ascii]              = { 1, 9, E('B') },
+    [cs94_british]            = { 1, 9, E('A') },
+    [cs94_dec_graph]          = { 1, 9, E('0') },
+    [cs94_dec_altchars]       = { 1, 1, E('1') },
+    [cs94_dec_altgraph]       = { 1, 1, E('2') },
+    [cs94_dec_sup]            = { 2, 9, E('<') },
+    [cs94_dec_sup_graph]      = { 3, 9, E('5') | I1('%') },
+    [cs94_dec_tech]           = { 3, 9, E('>') },
+    [cs94_dec_hebrew]         = { 5, 9, E('4') | I1('"') },
+    [cs94_dec_greek]          = { 5, 9, E('?') | I1('"') },
+    [cs94_dec_turkish]        = { 5, 9, E('0') | I1('%') },
+    [cs96_latin_1]            = { 3, 9, E('A') },
+    [cs96_greek]              = { 5, 9, E('F') },
+    [cs96_hebrew]             = { 5, 9, E('H') },
+    [cs96_latin_cyrillic]     = { 5, 9, E('L') },
+    [cs96_latin_5]            = { 5, 9, E('M') },
+};
 
 enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nrcs) {
-#define E(c) ((c) & 0x7F)
-#define I0(i) ((i) ? (((i) & 0xF) + 1) << 9 : 0)
-#define I1(i) (I0(i) << 5)
-#define E_MASK (0x7F)
-#define I1_MASK (0x1F << 14)
-#define NRC {if (!nrcs) return nrcs_invalid;}
-    selector &= (I1_MASK | E_MASK);
-    if (!is96) {
-        switch (vt_level) {
-        default:
-            switch (selector) {
-            case E('4') | I1('"'): return cs94_dec_hebrew;
-            case E('?') | I1('"'): return cs94_dec_greek;
-            case E('0') | I1('%'): return cs94_dec_turkish;
-            case E('=') | I1('%'): NRC; return nrcs_hebrew;
-            case E('>') | I1('"'): NRC; return nrcs_greek;
-            case E('2') | I1('%'): NRC; return nrcs_turkish;
-            case E('4') | I1('&'): NRC; return nrcs_cyrillic;
-            }
-            /* fallthrough */
-        case 4: case 3:
-            switch (selector) {
-            case E('5') | I1('%'): return cs94_dec_sup_graph;
-            case E('`'): NRC; return nrcs_norwegian_dannish3;
-            case E('9'): NRC; return nrcs_french_canadian2;
-            case E('>'): return cs94_dec_tech;
-            case E('6') | I1('%'): NRC; return nrcs_portuguese;
-            }
-            /* fallthrough */
-        case 2:
-            switch (selector) {
-            case E('C'): NRC; return nrcs_finnish;
-            case E('5'): NRC; return nrcs_finnish2;
-            case E('H'): NRC; return nrcs_swedish;
-            case E('7'): NRC; return nrcs_swedish2;
-            case E('K'): NRC; return nrcs_german;
-            case E('Q'): NRC; return nrcs_french_canadian;
-            case E('R'): NRC; return nrcs_french;
-            case E('f'): NRC; return nrcs_french2;
-            case E('Y'): NRC; return nrcs_itallian;
-            case E('Z'): NRC; return nrcs_spannish;
-            case E('4'): NRC; return nrcs_dutch;
-            case E('='): NRC; return nrcs_swiss;
-            case E('E'): NRC; return nrcs_norwegian_dannish;
-            case E('6'): NRC; return nrcs_norwegian_dannish2;
-            case E('<'): return cs94_dec_sup;
-            }
-            /* fallthrough */
-        case 1:
-            switch (selector) {
-            case E('A'): return cs94_british;
-            case E('B'): return cs94_ascii;
-            case E('0'): return cs94_dec_graph;
-            case E('1'): if (vt_level != 1) break;
-                         return cs94_dec_altchars;
-            case E('2'): if (vt_level != 1) break;
-                         return cs94_dec_altgraph;
-            }
-            /* fallthrough */
-        case 0: break;
-        }
-    } else {
-        switch (vt_level) {
-        default:
-            switch (selector) {
-            case E('F'): return cs96_greek;
-            case E('H'): return cs96_hebrew;
-            case E('L'): return cs96_latin_cyrillic;
-            case E('M'): return cs96_latin_5;
-            }
-            /* fallthrough */
-        case 4: case 3:
-            switch (selector) {
-            case E('A'): return cs96_latin_1;
-            }
-            /* fallthrough */
-        case 2: case 1: case 0:
-            break;
-        }
-    }
+    size_t start = is96 ? (nrcs ? cs96_END + 1 : cs96_START) :
+                          (nrcs ? nrcs_START : cs94_START);
+    size_t end = is96 ? cs96_END + 1 : cs94_END + 1;
+    selector &= I1_MASK | E_MASK;
+
+    for (size_t i = start; i < end; i++)
+        if (descs[i].selector == selector &&
+                descs[i].min_vt_level <= vt_level &&
+                vt_level <= descs[i].max_vt_level)
+            return i;
+
     return nrcs_invalid;
-#undef NRC
+}
+
+const char *nrcs_unparse(enum charset cs) {
+    static char selstring[3];
+    selstring[1] = I1_CHAR(descs[cs].selector);
+    selstring[!!selstring[1]] = E_CHAR(descs[cs].selector);
+    return selstring;
 }
