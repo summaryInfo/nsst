@@ -289,7 +289,8 @@ enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nr
 
 const char *nrcs_unparse(enum charset cs) {
     static char selstring[3];
-    selstring[1] = I1_CHAR(descs[cs].selector);
-    selstring[!!selstring[1]] = E_CHAR(descs[cs].selector);
+    selstring[1] = '\0';
+    selstring[0] = I1_CHAR(descs[cs].selector);
+    selstring[!!selstring[0]] = E_CHAR(descs[cs].selector);
     return selstring;
 }
