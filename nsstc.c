@@ -54,7 +54,8 @@ static _Noreturn void version(int fd) {
     exit(0);
 }
 
-static void parse_client_args(char **argv, const char **cpath, const char **spath, _Bool *need_daemon, const char **cwd) {
+static void parse_client_args(char **argv, const char **cpath, const char **spath,
+                              _Bool *need_daemon, _Bool *need_exit, const char **cwd) {
     size_t ind = 1;
     char *arg, *opt;
 
@@ -73,11 +74,13 @@ static void parse_client_args(char **argv, const char **cpath, const char **spat
                 if (!*++arg) arg = argv[++ind];
                 if (!strncmp(opt, "config=" , 7)) *cpath = arg;
                 else if (!strncmp(opt, "socket=", 7)) *spath = arg;
-                else if (!strncmp(opt, "daemon", 7)) *need_daemon = 1;
                 else if (!strncmp(opt, "cwd=", 4)) {
                     if (!(*cwd = realpath(arg, buffer)))
                         fprintf(stderr, "[\033[33;1mWARN\033[m] realpath(): %s\n", strerror(errno));
                 }
+            } else {
+                if (!strcmp(opt, "daemon")) *need_daemon = 1;
+                else if (!strcmp(opt, "quit")) *need_exit = 1;
             }
         } else while (argv[ind] && argv[ind][++cind]) {
             char letter = argv[ind][cind];
@@ -86,6 +89,8 @@ static void parse_client_args(char **argv, const char **cpath, const char **spat
             case 'd':
                 *need_daemon = 1;
                 break;
+            case 'q':
+                *need_exit = 1;
             case 'e':
                 return;
             case 'f': case 's': case 'C':
@@ -174,7 +179,8 @@ static void parse_server_args(char **argv, int fd) {
                 *arg++ = '\0';
                 if (!*arg) arg = argv[++ind];
 
-                if (strcmp(opt, "config") && strcmp(opt, "socket") && strcmp(opt, "cwd")) {
+                if (strcmp(opt, "config") && strcmp(opt, "socket") &&
+                        strcmp(opt, "cwd") && strcmp(opt, "exit")) {
                     send_opt(fd, opt, arg);
                 }
             } else if (!strcmp(opt, "help")) {
@@ -192,6 +198,7 @@ static void parse_server_args(char **argv, int fd) {
             opt = NULL;
             switch (letter) {
             case 'd':
+            case 'q':
                 /* ignore */
                 continue;
             case 'e':
@@ -278,12 +285,12 @@ static int try_connect(const char *spath) {
 
 int main(int argc, char **argv) {
     const char *cpath = NULL, *spath = "/tmp/nsst-sock0";
-    _Bool need_daemon = 0;
+    _Bool need_daemon = 0, need_exit = 0;
 
     (void)argc;
 
     const char *pcwd = getcwd(buffer, sizeof(buffer));
-    parse_client_args(argv, &cpath, &spath, &need_daemon, &pcwd);
+    parse_client_args(argv, &cpath, &spath, &need_daemon, &need_exit, &pcwd);
 
     int fd = try_connect(spath);
     if (fd < 0 && need_daemon) {
@@ -294,6 +301,11 @@ int main(int argc, char **argv) {
     if (fd < 0) {
         perror(fd == -2 ? "connect()" : "socket()");
         return fd;
+    }
+
+    if (need_exit) {
+        send_char(fd, '\031');
+        return 0;
     }
 
     send_header(fd, cpath);

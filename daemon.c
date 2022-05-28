@@ -39,6 +39,7 @@ static struct pending_launch *first_pending;
 
 static int socket_index = 1;
 static int socket_fd = -1;
+static bool need_exit = 0;
 
 static void daemonize(void) {
     pid_t pid = fork();
@@ -198,6 +199,9 @@ static void append_pending_launch(struct pending_launch *lnch) {
             if (!send_pending_launch_resp(lnch, part)) return; // Don't free pending_launch twice
 
         free_pending_launch(lnch);
+    } else if (buffer[0] == '\031' /* EM */ && len == 1) /* Exit daemon*/ {
+        need_exit = 1;
+        free_pending_launch(lnch);
     }
 }
 
@@ -220,8 +224,8 @@ static void accept_pending_launch(void) {
     }
 }
 
-void daemon_process_clients(void) {
-    if (socket_fd < 0) return;
+bool daemon_process_clients(void) {
+    if (socket_fd < 0) return 0;
     // Handle daemon requests
 
     int rev = poller_index_events(socket_index);
@@ -235,4 +239,6 @@ void daemon_process_clients(void) {
         if (rev & POLLIN) append_pending_launch(holder);
         else if (rev & (POLLERR | POLLHUP | POLLNVAL)) free_pending_launch(holder);
     }
+
+    return need_exit;
 }

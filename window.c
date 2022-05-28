@@ -651,7 +651,8 @@ void run(void) {
         if (reload_config) do_reload_config();
 
         // Process connecting clients
-        daemon_process_clients();
+        // If this functions returns true we need to exit.
+        if (daemon_process_clients()) break;
 
         next_timeout = 30*SEC;
         struct timespec cur ALIGNED(16);

@@ -132,6 +132,6 @@ struct instance_config *window_cfg(struct window *win);
 
 bool init_daemon(void);
 void free_daemon(void);
-void daemon_process_clients(void);
+bool daemon_process_clients(void);
 
 #endif
