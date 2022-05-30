@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #ifndef NRCS_H_
 #define NRCS_H_ 1
@@ -64,11 +64,11 @@ enum charset {
  * OSC commands just stores osc number as selector
  * (and OSC L/OSC l/OSC I are translated to 0/1/2).
  *
- * Generic escape sequeces uses E(c) for final byte
+ * Generic escape sequences uses E(c) for final byte
  * and I0(c), I1(c) for first and second intermediate
  * bytes.
  *
- * CSI and DCS sequeces use C(c) for final byte
+ * CSI and DCS sequences use C(c) for final byte
  * P(c) for private indicator byte and
  * I0(c), I1(c) for intermediate bytes.
  *

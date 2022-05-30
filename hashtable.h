@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #ifndef HASHTABLE_H_
 #define HASHTABLE_H_ 1

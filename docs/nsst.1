@@ -1,4 +1,4 @@
-.\" Copyright (c) 2019-2020, Evgeny Baskov. All rights reserved
+.\" Copyright (c) 2019-2020, Evgeniy Baskov. All rights reserved
 .Dd August 27, 2020
 .Dt NSST 1
 .Os
@@ -27,7 +27,7 @@ Config file path can be specified with
 .Fl \-config Ns = Ns Ar path
 option.
 If this option is set in config file this path would be used during config reloading.
-Config realoading can be requeseted by sending SIGUSR1 to terminal.
+Config reloading can be requested by sending SIGUSR1 to terminal.
 .Pp
 Options specified via command line arguments feature additional syntax. For boolean options
 .Fl \-boolean-option
@@ -42,7 +42,7 @@ is equivalent to
 .Ar \&No , Ar n , Ar false
 (case independent) can be used to disable it.
 .Pp
-Every option also acceptes special value
+Every option also accepts special value
 .Ar default
 that resets option to builtin default.
 .Bl -tag -width Ds
@@ -51,7 +51,7 @@ Print help message and exit
 .It Fl Fl version , Fl v
 Print version string and exit
 .It Fl \-geometry Ns = Ns Ar geometry , Fl g Ns = Ns Ar geometry
-Speicfy window geometry in pixels.
+Specify window geometry in pixels.
 .Ar Geometry
 is in format
 .Bq = Ns
@@ -75,18 +75,18 @@ Enable alternate screen
 .It Fl \-allow-blinking Ns = Ns Ar bool
 Allow blinking text and cursor
 .It Fl \-allow-modify-edit-keypad Ns = Ns Ar bool
- Allow modifing edit keypad keys in legacy keyboad layout
+ Allow modifying edit keypad keys in legacy keyboard layout
 .It Fl \-allow-modify-function Ns = Ns Ar bool
-Allow modifing function keys in legacy keyboad layout
+Allow modifying function keys in legacy keyboard layout
 .It Fl \-allow-modify-keypad Ns = Ns Ar bool
-Allow modifing keypad keys in legacy keyboad layout
+Allow modifying keypad keys in legacy keyboard layout
 .It Fl \-allow-modify-misc Ns = Ns Ar bool
-Allow modifing miscelleneous keys in legacy keyboad layout
+Allow modifying miscellaneous keys in legacy keyboard layout
 .It Fl \-allow-uris Ns = Ns Ar bool
 Enable URI highlighting (enabled by default).
 This option is recognized only if box drawing characters support is compiled in
 .It Fl \-alpha Ns = Ns Ar opacity
-Backround opacity, requires compositor to be running
+Background opacity, requires compositor to be running
 .It Fl \-alternate-scroll Ns = Ns Ar bool
 Scrolling sends arrow keys escapes in alternate screen
 .It Fl \-answerback-string Ns = Ns Ar string
@@ -100,7 +100,7 @@ Initial application keypad mode value
 .It Fl \-autowrap Ns = Ns Ar bool
 Initial autowrap setting
 .It Fl \-background Ns = Ns Ar color
-Default backround color
+Default background color
 .Fl \-colorN
 .It Fl \-backspace-is-del Ns = Ns Ar bool
 Backspace sends DEL instead of BS
@@ -124,12 +124,12 @@ Special color of bold text
 format is same as for
 .Fl \-colorN
 .It Fl \-cursor-background Ns = Ns Ar color
-Default cursor backround color.
+Default cursor background color.
 .Ar Color
 format is same as for
 .Fl \-colorN
 .It Fl \-cursor-foreground Ns = Ns Ar color
-Default cursor foreround color.
+Default cursor foreground color.
 .Ar Color
 format is same as for
 .Fl \-colorN
@@ -145,7 +145,7 @@ to prevent config loading
 .It Fl \-cursor-width Ns = Ns Ar pixels
 Width of lines that forms cursor
 .It Fl \-cut-lines Ns = Ns Ar bool
-Cut long lines on resize with rewrapping disabled
+Cut long lines on resize with re-wrapping disabled
 .It Fl \-daemon Ns = Ns Ar bool , Fl d
 Enable daemon mode
 .It Fl \-delete-is-del Ns = Ns Ar bool
@@ -165,7 +165,7 @@ Step in numbering function keys
 .It Fl \-font Ns = Ns Ar name , Fl f name
 Comma-separated list of fontconfig font patterns
 .It Fl \-font-gamma Ns = Ns Ar gamma
-Factor of font sharpenning
+Factor of font sharpening
 .It Fl \-font-size Ns = Ns Ar points
 Font size in points
 .It Fl \-font-size-step Ns = Ns Ar points
@@ -175,7 +175,7 @@ Additional horizontal spacing for individual cells
 .It Fl \-force-dpi Ns = Ns Ar dpi
 DPI value for fonts
 .It Fl \-force-mouse-mod Ns = Ns Ar mods
-Modifer to force mouse action
+Modifier to force mouse action
 .It Fl \-force-nrcs Ns = Ns Ar bool
 Enable NRCS translation even when UTF-8 mode is enabled
 .It Fl \-force-scalable Ns = Ns Ar bool
@@ -193,7 +193,7 @@ Window refresh rate
 Maximal time since last application output before redraw is scheduled.
 .It Fl \-has-meta Ns = Ns Ar bool
 Initial
-.Qq handle meta/alt modifer
+.Qq handle meta/alt modifier
 mode state
 .It Fl \-horizontal-border Ns = Ns Ar pixels
 Top and bottom internal botder width
@@ -248,10 +248,10 @@ More information about keyboard mappings can be found in XTerm's ctlseqs.ms
 Additional vertical line spacing
 .It Fl \-lock-keyboard Ns = Ns Ar bool
 Initial value of KAM
-.Qq disable keyboad input
+.Qq disable keyboard input
 mode state
 .It Fl \-log-level Ns = Ns Ar level
-Filering level of logged information.
+Filtering level of logged information.
 .Ar level
 is one of quiet, fatal, warn or info
 .It Fl \-luit Ns = Ns Ar bool
@@ -272,14 +272,14 @@ Maximal time between redraws in microseconds. It is used to reduce flickering.
 .It Fl \-meta-sends-escape Ns = Ns Ar bool
 Alt/Meta sends escape prefix instead of setting 8-th bit
 .It Fl \-minimize-scrollback Ns = Ns Ar bool
-Realloc lines to save memory; makes scrolling a little slower.
-Better to be enabled when rewrapping enabled
+Realloc() lines to save memory; makes scrolling a little slower.
+Better to be enabled when re-wrapping enabled
 .It Fl \-modify-cursor Ns = Ns Ar fmt
 Enable encoding modifiers for cursor keys.
 .Ar fmt
-0 disables reportting keys with modifers, 1 sends \fBSS3 ...\fP sequences
+0 disables reporting keys with modifiers, 1 sends \fBSS3 ...\fP sequences
 2 sends \fBCSI ...\fP sequences, 3 sends \fBCSI 1; ...\fP sequences, with dummy first argument 1,
-3 sends privite \fBCSI > 1; ...\fP sequences.
+3 sends private \fBCSI > 1; ...\fP sequences.
 .It Fl \-modify-function Ns = Ns Ar fmt
 Enable encoding modifiers for function keys
 .Ar Fmt
@@ -294,7 +294,7 @@ is same as for
 Enable encoding modifiers for other (non-function) keys.
 0 is disable, 1 is all, excluding commonly known values, 2 is all.
 .It Fl \-modify-other-fmt Ns = Ns Ar value
-Format of encoding modifers when modiy other keys is enabled.
+Format of encoding modifiers when modify other keys is enabled.
 .Ar Value
 is one of xterm, csi-u. xterm sends \fBCSI 27 ; M ; K ~\fP sequences.
 csu-u sends \fBCSI K ; M u\fP sequences. M is decimal modifier mask. K is pressed key code.
@@ -335,7 +335,7 @@ Special color of reversed text.
 format is same as for
 .Fl \-colorN
 .It Fl \-rewrap Ns = Ns Ar bool
-Rewrap text on resize. Multiline shell prompts can erase lines above, that probably can not be fixed.
+Re-wrap text on resize. Multiline shell prompts can erase lines above, that probably can not be fixed.
 .It Fl \-smooth-scroll-delay Ns = Ns Ar teme
 Delay in microseconds between subsequent scrolls when smooth scroll mode is enabled
 .It Fl \-smooth-scroll-step Ns = Ns Ar lines
@@ -363,7 +363,7 @@ Color of selected text. If unspecified uses background color.
 format is same as for
 .Fl \-colorN
 .It Fl \-shell Ns = Ns Ar path
-Shell to start in new instance. It diffes from
+Shell to start in new instance. It differs from
 .Fl e
 in aspect that
 .Fl e
@@ -387,7 +387,7 @@ Synchronous update timeout in microseconds
 .It Fl \-tab-width Ns = Ns Ar width
 Initial width of tab character, default is 8
 .It Fl \-term-mod Ns = Ns Ar mods
-Modifers to which T modifer expands. If
+Modifiers to which T modifier expands. If
 .Ar mods
 contains T it expands to CS
 .It Fl \-term-name Ns = Ns Ar name , Fl D Ar name
@@ -399,7 +399,7 @@ Trace interpreted characters
 .It Fl \-trace-controls Ns = Ns Ar bool
 Trace interpreted control characters and sequences
 .It Fl \-trace-events Ns = Ns Ar bool
-Trace recieved events
+Trace received events
 .It Fl \-trace-fonts Ns = Ns Ar bool
 Log font related information
 .It Fl \-trace-input Ns = Ns Ar bool
@@ -422,7 +422,7 @@ This option is recognized only if URI support is compiled in
 .It Fl \-urgent-on-bell Ns = Ns Ar bool
 Set ICCCM window urgency on bell
 .It Fl \-uri-click-mod Ns = Ns Ar mods
-Modifers required to click to URIs, empty by default.
+Modifiers required to click to URIs, empty by default.
 This option is recognized only if URI support is compiled in
 .It Fl \-use-utf8 Ns = Ns Ar bool
 Enable UTF-8 mode. Enabled by default if current locale encoding is UTF-8
@@ -454,4 +454,4 @@ Allow window manipulation with escape sequences
 Symbols treated as word separators when snapping mouse selection
 .El
 .Sh AUTHORS
-Baskov Evgeny <j-basevgser@yandex.ru>
+Evgeniy Baskov <j-basevgser@yandex.ru>

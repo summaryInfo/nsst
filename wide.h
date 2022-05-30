@@ -1,4 +1,4 @@
-/* Copyright (c) 2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2022, Evgeniy Baskov. All rights reserved */
 
 #ifndef _WIDE_H
 #define _WIDE_H 1

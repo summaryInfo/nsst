@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -1090,7 +1090,7 @@ static void term_dispatch_osc(struct term *term) {
             // Only support local host paths
             valid = path && (path == pathstart || strncmp(gconfig.hostname, pathstart, path - pathstart));
         } else {
-            // No realative paths allowed
+            // No relative paths allowed
             valid = (*dstr == '/');
         }
         if (valid) {
@@ -1195,7 +1195,7 @@ static void term_dispatch_osc(struct term *term) {
         switch (dstr[0]) {
         case 'A': /* Prompt start */
         case 'D': /* Command finished */
-            // Make sure shell plays well with rewrapping
+            // Make sure shell plays well with re-wraping
             if (screen_cursor_x(scr) != screen_min_x(scr))
                 screen_do_wrap(scr);
             screen_unwrap_cursor_line(scr);
@@ -1216,7 +1216,7 @@ static void term_dispatch_osc(struct term *term) {
             term_esc_dump(term, 0);
             break;
         }
-        // For compatibiliry with older versions,
+        // For compatibility with older versions,
         // if res is not normalized, assume it to be 8-bit value
         if (res > 1) res /= 255;
         window_set_alpha(screen_window(scr), res);
@@ -2159,7 +2159,7 @@ inline static bool load_mode(uint8_t modbits[], uparam_t mode) {
 }
 
 static void term_dispatch_csi(struct term *term) {
-    // Fixup parameter count
+    // Fix parameter count up
     term->esc.i += term->esc.param[term->esc.i] >= 0;
     struct screen *scr = &term->scr;
 
@@ -3164,7 +3164,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         return 1;
     }
 
-    // Treat bytes with 8th bits set as their lower couterparts
+    // Treat bytes with 8th bits set as their lower counterparts
     // (Unless they are a printable character, part of a string or C1 control)
     ch &= 0x7F;
 

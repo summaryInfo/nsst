@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -469,7 +469,7 @@ inline static void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t le
                 // and tty input queue, so we cannot write the data.
                 // This situation is really rare,
                 // so we can just not write the output for now.
-                // FIXME: Add option to defer answeback messages to be written outside the parser.
+                // FIXME: Add option to defer answerback messages to be written outside the parser.
                 warn("TTY buffer is overfilled, current output buffer is discarded");
                 return;
             }

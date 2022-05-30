@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #define _DEFAULT_SOURCE
 
@@ -124,11 +124,11 @@ ssize_t screen_inc_iter(struct screen *scr, struct line_offset *pos) {
 ssize_t screen_advance_iter(struct screen *scr, struct line_offset *pos, ssize_t amount) {
     struct line *ln;
     if (scr->mode.rewrap) {
-        // Rewrapping is enabled
+        // Re-wraping is enabled
         if (amount < 0) {
             if (pos->line - 1 < -scr->sb_limit) return amount;
             ln = line_at(scr, pos->line);
-            // TODO Litle optimization
+            // TODO Little optimization
             amount += line_segments(ln, 0, scr->width) - line_segments(ln, pos->offset, scr->width);
             pos->offset = 0;
             while (amount < 0) {
@@ -349,7 +349,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
     resize_tabs(scr, width);
 
-    // Ensure thatscr->back_screen is altscreen
+    // Ensure that scr->back_screen is altscreen
     if (scr->mode.altscreen) {
         SWAP(scr->back_saved_c,scr->saved_c);
         SWAP(scr->back_screen,scr->screen);
@@ -433,7 +433,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
             scr->screen[scr->height - 1]->wrapped = 0;
 
             for (ssize_t i = 0; i < scr->height; i++) {
-                // Calculate new apporiximate cursor y
+                // Calculate new apporoximate cursor y
                 if (!aset && i == scr->c.y) {
                     approx_cy = nnlines + (loff + scr->c.x) / width,
                     new_cur_par = nnlines;
@@ -593,7 +593,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
         ssize_t minh = MIN(nnlines - start, height);
 
-        // Resize lines if rewrapping is disabled
+        // Resize lines if re-wraping is disabled
         if (!scr->mode.cut_lines) {
             if (scrolled) {
                 window_shift(scr->win, scrolled, 0, scr->height - scrolled);
@@ -626,7 +626,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
         if (new_lines != scr->screen) free(scr->screen);
 
         // Resize line buffer
-        // That 'if' is not strictly nessecery,
+        // That 'if' is not strictly necessary,
         // but causes UBSAN warning
         if (new_lines) memmove(new_lines, new_lines + start, minh * sizeof(*new_lines));
         new_lines = realloc(new_lines, height * sizeof(*new_lines));
@@ -678,7 +678,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
     // Damage screen
     if (!scr->mode.altscreen && scr->mode.rewrap) {
-        // Just damage everything if rewrapping is enabled
+        // Just damage everything if re-wraping is enabled
         screen_damage_lines(scr, 0, scr->height);
     } else if (cur_moved) {
         scr->back_screen[scr->c.y]->cell[scr->c.x].drawn = 0;
@@ -1216,12 +1216,12 @@ void screen_insert_cells(struct screen *scr, int16_t n) {
 }
 
 void screen_delete_cells(struct screen *scr, int16_t n) {
-    // Do not check top/bottom margins, DCH sould work outside them
+    // Do not check top/bottom margins, DCH should work outside them
     if (scr->c.x >= screen_min_x(scr) && scr->c.x < screen_max_x(scr)) {
         struct line *line = scr->screen[scr->c.y];
 
         // TODO Shrink line
-        // We can optimize this code by avoiding allocation and movment of empty cells
+        // We can optimize this code by avoiding allocation and movement of empty cells
         // and just shrink the line.
         screen_adjust_line(scr, &scr->screen[scr->c.y], screen_max_x(scr));
 
@@ -1443,7 +1443,7 @@ void screen_print_line(struct screen *scr, ssize_t y) {
 
         prev = attr;
 
-        /* If theres no more space for next char, flush buffer */
+        /* If there's no more space for next char, flush buffer */
         if (pbuf + MAX_SGR_LEN + UTF8_MAX_LEN + 1 >= pend) {
             printer_print_string(&scr->printer, buf, pbuf - buf);
             pbuf = buf;

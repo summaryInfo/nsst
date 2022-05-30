@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -164,7 +164,7 @@ uint32_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, uint32_
 
     enum charset set = ch > 0x7F ? gr : gl;
 
-    // User prefered supplemental
+    // User preferred supplemental
     if (set == cs94_dec_sup) set = ups;
 
     switch (set) {

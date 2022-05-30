@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 
 #include "feature.h"
@@ -256,7 +256,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                 struct rect r_under = { x + fs, y + ch + 1 + ls, cw, ul };
                 struct rect r_strike = { x + fs, y + 2*ch/3 - ul/2 + ls, cw, ul };
 
-                // Backround
+                // Background
                 image_draw_rect(win->plat.im, r_cell, spec.bg);
 
                 // Glyph
@@ -275,7 +275,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                     // TODO curly
                 }
 
-                // Strikethough
+                // Strikethrough
                 if (spec.stroke) image_draw_rect(win->plat.im, r_strike, spec.ul);
 
                 if (l_bound.x < 0) l_bound.width = i + g_wide;

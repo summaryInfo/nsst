@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 
 #include "feature.h"
@@ -255,7 +255,7 @@ inline static __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) 
 
 FORCEINLINE
 inline static __m128i load_n_higher(void *src, int w) {
-    // TODO This definitly could be done better
+    // TODO This definitely could be done better
     uint32_t *ptr = src;
     switch (w) {
     case 1: return _mm_setr_epi32(0, 0, 0, ptr[0]);

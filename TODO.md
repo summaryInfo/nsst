@@ -165,7 +165,7 @@ _NOTE: These plans can change any time_
   * `CSI # R` -- **XTREPORTCOLORS**
   * `OSC I Pt ST` -- Set icon XPM file (Would not work in Wayland)
 
-* Flawed and bad sequences (won't implemnet)
+* Flawed and bad sequences (won't implement)
 
   * `CSI ? 38 l` / `CSI ? 38 h` -- **DECTEK** (this is complex, obscure and unused)
   * `OSC 3 ; Pt ST` -- Set X property (insecure)

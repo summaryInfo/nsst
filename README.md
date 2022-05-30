@@ -8,7 +8,7 @@ This is an implementation of VT220-like X11 terminal emulator.
     * Scrolling performance is on par with fastest terminals my system (`alacritty` and `urxvt`)
 * Small size and almost no dependencies
 * Uses xcb as X11 interface library
-    * A litle bit faster because of its asynchrony
+    * A little bit faster because of its asynchrony
     * `size` including all loaded shared libs is only 80% of `st` on my system
 * Most escape sequences from XTerm are implemented
 * Full keyboard mode from XTerm
@@ -22,8 +22,8 @@ This is an implementation of VT220-like X11 terminal emulator.
 * Configuration with symmetrical config file options and command line arguments
 * MIT-SHM and XRender backends (compile time option)
 * Compiles with `-flto` by default
-* No warnings (see list of all enabled warnins in Makefile)
-* Rewraps text on resize (can be disabled by setting `rewrap` to false)
+* No warnings (see list of all enabled warnings in Makefile)
+* Re-wraps text on resize (can be disabled by setting `rewrap` to false)
 * URL support (no auto-detection yet)
 
 See TODO file for things that are to be implemented.

@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -83,7 +83,7 @@ static inline bool is_ctrl(uint32_t ks) {
 }
 
 static inline bool is_xkb_ctrl(struct key *k) {
-    // Detect if thats something like Ctrl-3
+    // Detect if key is something like Ctrl-3
     // which gets translated to ESC by XKB
     return is_ctrl(k->utf32);
 }
@@ -570,7 +570,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
     } else if (k.utf8len > 0) {
         if (is_modify_others_allowed(&k, mode)) {
             /* Is it OK to use k.ascii here?
-             * It allows to identify key in layout independent fasion
+             * It allows to identify key in layout independent fashion
              * uint32_t val = k.ascii ? k.ascii : k.sym; */
             uint32_t val = k.sym < 0x100 ? k.sym : k.utf32;
             modify_others(val, mask_to_param(k.mask), mode->modkey_other_fmt, &reply);
@@ -619,7 +619,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
 }
 
 /* And now I should duplicate some code of xkbcommon
- * in order to be able to distunguish NUL symbol and error condition...
+ * in order to be able to distinguish NUL symbol and error condition...
  */
 
 static char to_control(char ch) {

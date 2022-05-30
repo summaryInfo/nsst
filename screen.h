@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #ifndef SCREEN_H_
 #define SCREEN_H_ 1
@@ -35,7 +35,7 @@ struct cursor {
 
     /* Pending wrap flag
      * is used to match DEC VT terminals
-     * wrapping behaviour */
+     * wrapping behavior */
     bool pending : 1;
 };
 
@@ -103,11 +103,11 @@ struct screen {
     ssize_t left;
     ssize_t right;
 
-    /* Terminal screen dimentions */
+    /* Terminal screen dimensions */
     ssize_t width;
     ssize_t height;
 
-    /* Smooth scroll acumulator */
+    /* Smooth scroll accumulator */
     ssize_t scrolled;
 
     /* Flags specific to screen */
@@ -128,7 +128,7 @@ struct screen {
     struct cursor saved_c;
     struct cursor c;
 
-    /* Graphics renderition state */
+    /* Graphics rendition state */
     struct attr back_saved_sgr;
     struct attr saved_sgr;
     struct attr sgr;

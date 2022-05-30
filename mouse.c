@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -29,7 +29,7 @@ inline static struct segments *seg_head(struct selection_state *sel, struct line
 inline static void free_segments(struct selection_state *sel, struct segments *head) {
 
     /* Here we need to offset all selection below current by one
-     * to keep selected lines heads continous.
+     * to keep selected lines heads continuous.
      * FIXME Make heads be organized in double linked list */
 
     struct segments **phead = sel->seg + head->line->selection_index;
@@ -270,7 +270,7 @@ static struct line_offset snap_backward(struct selection_state *sel, struct scre
             }
 
             /* Go to previous line only if:
-             *     - it exitsts
+             *     - it exists
              *     - it is wrapped
              *     - it ends with character of same class */
 
@@ -322,7 +322,7 @@ static struct line_offset snap_forward(struct selection_state *sel, struct scree
             }
 
             /* Go to previous line only if:
-             *     - it exitsts
+             *     - it exists
              *     - it is wrapped
              *     - it ends with character of same class */
 
@@ -489,7 +489,7 @@ void selection_scrolled(struct selection_state *sel, struct screen *scr, int16_t
             sel->state == state_sel_progress) {
 
         /* NOTE: This is slow, but if the invariant of the lines
-         * on the screen having one-to-one correspondance
+         * on the screen having one-to-one correspondence
          * between struct line and visual line changes it would
          * be the only correct way to calculate the position */
 
@@ -830,7 +830,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
             else if (ev.button > 2) ev.button += 64 - 3;
             if (ev.event == mouse_event_release) {
                 if (md == mouse_mode_x10) return;
-                /* Don't report wheel relese events */
+                /* Don't report wheel release events */
                 if (ev.button == 64 || ev.button == 65) return;
                 if (loc->mouse_format != mouse_format_sgr) ev.button = 3;
             }

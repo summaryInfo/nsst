@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -714,7 +714,7 @@ void run(void) {
                 ctx.vbell_count--;
             }
 
-            // We need to skeep frame if redraw is not forced
+            // We need to skip frame if redraw is not forced
             // and ether synchronous update is active, window is not visible
             // or we are waiting for frame to finish and maximal frame time is not expired
             if (!win->force_redraw && !pending_scroll) {

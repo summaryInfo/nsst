@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -552,7 +552,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
             if (dirty || (g_wide && next_dirty)) {
                 int16_t y = k * (win->char_depth + win->char_height);
 
-                // Queue background, groupping by color
+                // Queue background, grouping by color
 
                 struct element *prev_bg = rctx.background_buf.data + rctx.background_buf.size - 1;
                 if (LIKELY(!first_in_line && prev_bg->color == spec.bg &&
@@ -570,7 +570,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                     });
                 }
 
-                // Push character if present, groupping by color
+                // Push character if present, grouping by color
 
                 if (spec.ch) {
                     g |=  (uint32_t)spec.wide << 31;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #ifndef UTIL_H_
 #define UTIL_H_ 1
@@ -122,7 +122,7 @@ inline static bool intersect_with(struct rect *src, struct rect *dst) {
 /* Adjust buffer capacity if no space left (size > *caps) */
 bool adjust_buffer(void **buf, size_t *caps, size_t size, size_t elem);
 
-/* Version information helper funcions */
+/* Version information helper functions */
 const char *version_string(void);
 const char *features_string(void);
 const char *usage_string(ssize_t idx);

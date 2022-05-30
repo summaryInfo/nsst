@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2021, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2021, Evgeniy Baskov. All rights reserved */
 
 #ifndef FEATURES_H_
 #define FEATURES_H_ 1
@@ -20,7 +20,7 @@
 /* Use posix shm interface */
 #define USE_POSIX_SHM @USE_POSIX_SHM@
 
-/* URI openning/parsing/highlighting */
+/* URI opening/parsing/highlighting */
 #define USE_URI @USE_URI@
 
 /* NSST Version number */

@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeny Baskov. All rights reserved */
+/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -38,7 +38,7 @@ struct uri {
      * and incremented on adding an attribute to the line */
     int64_t refc;
     uintptr_t slot;
-    /* Assocciated ID */
+    /* Associated ID */
     char *id;
     /* URI string itself */
     char *uri;
@@ -247,14 +247,14 @@ uint32_t uri_add(const char *uri, const char *id) {
     }
 
     /* Generate internal identifier
-     * if not exiplicitly provided */
+     * if not explicitly provided */
     char buf[MAX_NUMBER_LEN + 2];
     buf[0] = 0;
     if (LIKELY(!id)) {
         if (gconfig.unique_uris) {
             id = buf;
             buf[id_len++] = URI_ID_PREF;
-            /* Convert privite id to string (non-human readable) */
+            /* Convert private id to string (non-human readable) */
             uint32_t idn = id_counter++;
             do buf[id_len++] = ' ' + (idn & 63);
             while (idn >>= 6);
