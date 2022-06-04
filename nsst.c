@@ -113,7 +113,7 @@ static void parse_options(struct instance_config *cfg, char **argv) {
 
     if (argv[arg_i]) {
 finish:
-    	if (!argv[arg_i])
+        if (!argv[arg_i])
             usage(argv[0], EXIT_FAILURE);
         cfg->argv = &argv[arg_i];
     }

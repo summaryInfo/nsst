@@ -2,8 +2,11 @@
 
 #include "feature.h"
 
+#define _GNU_SOURCE
+
 #include <errno.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,10 +23,15 @@
 #define MAX_OPTION_DESC 1024
 #define MAX_WAIT_LOOP 8
 #define STARTUP_DELAY 10000000LL
-#define SKIP_OPT ((void*)-1)
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define WARN_PREFIX "[\033[33;1mWARN\033[m] "
 
 static char buffer[MAX(MAX_OPTION_DESC, PATH_MAX) + 1];
+static const char *config_path;
+static const char *socket_path = "/tmp/nsst-sock0";
+static const char *cwd;
+static bool need_daemon;
+static bool need_exit;
 
 inline static void send_char(int fd, char c) {
     while (send(fd, (char[1]){c}, 1, 0) < 0 && errno == EAGAIN);
@@ -54,71 +62,27 @@ static _Noreturn void version(int fd) {
     exit(0);
 }
 
-static void parse_client_args(char **argv, const char **cpath, const char **spath,
-                              _Bool *need_daemon, _Bool *need_exit, const char **cwd) {
-    size_t ind = 1;
-    char *arg, *opt;
-
-    while (argv[ind] && argv[ind][0] == '-') {
-        size_t cind = 0;
-        if (!argv[ind][1]) exit(EXIT_FAILURE);
-        if (argv[ind][1] == '-') {
-            if (!argv[ind][2]) {
-                ind++;
-                break;
-            }
-
-            //Long options
-            opt = argv[ind] + 2;
-            if ((arg = strchr(opt, '='))) {
-                if (!*++arg) arg = argv[++ind];
-                if (!strncmp(opt, "config=" , 7)) *cpath = arg;
-                else if (!strncmp(opt, "socket=", 7)) *spath = arg;
-                else if (!strncmp(opt, "cwd=", 4)) {
-                    if (!(*cwd = realpath(arg, buffer)))
-                        fprintf(stderr, "[\033[33;1mWARN\033[m] realpath(): %s\n", strerror(errno));
-                }
-            } else {
-                if (!strcmp(opt, "daemon")) *need_daemon = 1;
-                else if (!strcmp(opt, "quit")) *need_exit = 1;
-            }
-        } else while (argv[ind] && argv[ind][++cind]) {
-            char letter = argv[ind][cind];
-            // One letter options
-            switch (letter) {
-            case 'd':
-                *need_daemon = 1;
-                break;
-            case 'q':
-                *need_exit = 1;
-            case 'e':
-                return;
-            case 'f': case 's': case 'C':
-            case 'D': case 'o': case 'c':
-            case 't': case 'T': case 'V':
-            case 'H': case 'g':
-                // Has arguments
-                if (!argv[ind][++cind]) ind++, cind = 0;
-                if (!argv[ind]) exit(EXIT_FAILURE);
-                arg = argv[ind] + cind;
-
-                // Ignore all options with arguments besides -C and -s here
-                if (letter == 'C') *cpath = arg;
-                else if (letter == 's') *spath = arg;
-
-                goto next;
-            }
-        }
-next:
-        if (argv[ind]) ind++;
-    }
-}
-
 static void send_opt(int fd, const char *opt, const char *value) {
     // This API lacks const's but doesn't change values...
     struct iovec dvec[4] = {
         { .iov_base = (char *)"\035" /* GS */, .iov_len = 1 },
         { .iov_base = (char *)opt, .iov_len = strlen(opt) },
+        { .iov_base = (char *)"=", .iov_len = 1 },
+        { .iov_base = (char *)value, .iov_len = strlen(value) },
+    };
+
+    struct msghdr hdr = {
+        .msg_iov = dvec,
+        .msg_iovlen = sizeof dvec / sizeof *dvec
+    };
+
+    while (sendmsg(fd, &hdr, 0) < 0 && errno == EAGAIN);
+}
+
+static void send_short_opt(int fd, char opt, const char *value) {
+    struct iovec dvec[4] = {
+        { .iov_base = (char *)"\034" /* FS */, .iov_len = 1 },
+        { .iov_base = &opt, .iov_len = 1 },
         { .iov_base = (char *)"=", .iov_len = 1 },
         { .iov_base = (char *)value, .iov_len = strlen(value) },
     };
@@ -159,89 +123,210 @@ static void send_header(int fd, const char *cpath) {
     while (sendmsg(fd, &hdr, 0) < 0 && errno == EAGAIN);
 }
 
-static void parse_server_args(char **argv, int fd) {
-    size_t ind = 1;
-    char *arg;
-    const char *opt;
-    while (argv[ind] && argv[ind][0] == '-') {
-        size_t cind = 0;
-        if (!argv[ind][1]) usage(fd, argv[0], EXIT_FAILURE);
-        if (argv[ind][1] == '-') {
-            if (!argv[ind][2]) {
-                ind++;
-                break;
+static bool is_boolean_option(const char *opt) {
+    // TODO Use hash table?
+    const char *bool_opts[] = {
+        "autorepeat", "allow-uris", "allow-alternate", "allow-blinking",
+        "allow-modify-edit-keypad", "allow-modify-function", "allow-modify-keypad",
+        "allow-modify-misc", "alternate-scroll", "appcursor", "appkey",
+        "autowrap", "backspace-is-del", "blend-all-background", "blend-foreground",
+        "cut-lines", "daemon", "delete-is-del", "erase-scrollback",
+        "extended-cir", "fixed", "force-nrcs", "force-scalable", "fork",
+        "has-meta", "keep-clipboard", "keep-selection", "lock-keyboard",
+        "luit", "meta-sends-escape", "minimize-scrollback", "nrcs", "numlock",
+        "override-boxdrawing", "unique-uris", "print-attributes", "raise-on-bell",
+        "reverse-video", "rewrap", "scroll-on-input", "scroll-on-output",
+        "select-to-clipboard", "smooth-scroll", "special-blink", "special-bold",
+        "special-italic", "special-reverse", "special-underlined", "substitute-fonts",
+        "trace-characters", "trace-controls", "trace-events", "trace-fonts", "trace-input",
+        "trace-misc", "urgent-on-bell", "use-utf8", "visual-bell", "window-ops", "quit"
+    };
+    for (size_t i = 0; i < sizeof bool_opts/sizeof *bool_opts; i++)
+        if (!strcmp(bool_opts[i], opt)) return true;
+    return false;
+}
+
+static bool is_boolean_short_option(char opt) {
+    return opt == 'q' || opt == 'd' || opt == 'h' || opt == 'v';
+}
+
+inline static bool is_client_only_option(const char *opt) {
+    if (!strcmp(opt, "config")) return true;
+    if (!strcmp(opt, "socket")) return true;
+    if (!strcmp(opt, "cwd")) return true;
+    if (!strcmp(opt, "exit")) return true;
+    return false;
+}
+
+inline static bool is_client_only_short_option(char opt) {
+    return opt == 'q' || opt == 's' || opt == 'C' || opt == 'd';
+}
+
+bool is_true(const char *value) {
+    if (!strcasecmp(value, "true")) return 1;
+    if (!strcasecmp(value, "yes")) return 1;
+    if (!strcmp(value, "1")) return 1;
+    return 0;
+}
+
+static void parse_client_args(char **argv) {
+    size_t arg_i = 1;
+    char *name_end;
+
+    for (const char *arg, *name; argv[arg_i] && argv[arg_i][0] == '-'; arg_i += !!argv[arg_i]) {
+        switch (argv[arg_i][1]) {
+        case '\0': /* Invalid syntax */;
+            continue;
+        case '-': /* Long options */;
+            /* End of flags mark */
+            if (!*(name = argv[arg_i] + 2)) {
+                arg_i++;
+                goto finish;
             }
 
-            //Long options
-            opt = argv[ind] + 2;
-
-            if ((arg = strchr(opt, '='))) {
-                *arg++ = '\0';
-                if (!*arg) arg = argv[++ind];
-
-                if (strcmp(opt, "config") && strcmp(opt, "socket") &&
-                        strcmp(opt, "cwd") && strcmp(opt, "exit")) {
-                    send_opt(fd, opt, arg);
-                }
-            } else if (!strcmp(opt, "help")) {
-                usage(fd, argv[0], EXIT_SUCCESS);
-            } else if (!strcmp(opt, "version")) {
-                version(fd);
-            } else {
-                const char *val = "true";
-                if (!strncmp(opt, "no-", 3))
-                    opt += 3, val = "false";
-                send_opt(fd, opt, val);
-            }
-        } else while (argv[ind] && argv[ind][++cind]) {
-            char letter = argv[ind][cind];
-            opt = NULL;
-            switch (letter) {
-            case 'd':
-            case 'q':
-                /* ignore */
+            /* Options without arguments */
+            if (!strcmp(name, "help"))
                 continue;
+            if (!strcmp(name, "version"))
+                continue;
+
+            /* Options with arguments */
+            if ((arg = name_end = strchr(name, '=')))
+                *name_end = '\0', arg++;
+
+            if (!strncmp(name, "no-", 3) && is_boolean_option(name + 3))
+                arg = "false", name += 3;
+
+            if (is_boolean_option(name)) {
+                if (!arg) arg = "true";
+            } else {
+                if (!arg || !*arg)
+                    arg = argv[++arg_i];
+            }
+
+            if (!strcmp(name, "config"))
+                config_path = arg;
+            else if (!strcmp(name, "socket"))
+                socket_path = arg;
+            else if (!strcmp(name, "cwd")) {
+                if (!(cwd = realpath(arg, buffer)))
+                    fprintf(stderr, WARN_PREFIX"realpath(): %s\n", strerror(errno));
+            }
+            else if (!strcmp(name, "daemon"))
+                need_daemon = is_true(arg);
+            else if (!strcmp(name, "quit"))
+                need_exit = is_true(arg);
+            continue;
+        }
+
+        /* Short options, may be clustered  */
+        for (size_t char_i = 1; argv[arg_i] && argv[arg_i][char_i]; char_i++) {
+            char letter = argv[arg_i][char_i];
+            /* Handle options without arguments */
+            if (letter == 'e') goto finish;
+
+            /* Handle options with arguments (including implicit arguments) */
+            if (!is_boolean_short_option(letter)) {
+                if (!argv[arg_i][++char_i]) arg_i++, char_i = 0;
+                if (!argv[arg_i]) break;
+                arg = argv[arg_i] + char_i;
+            } else {
+                arg = "true";
+            }
+
+            if (letter == 'd')
+                need_daemon = 1;
+            else if (letter == 'q')
+                need_exit = 1;
+            break;
+        }
+    }
+
+finish:
+    if (cwd && !(cwd = realpath(cwd, buffer)))
+        fprintf(stderr, WARN_PREFIX"realpath(): %s\n", strerror(errno));
+}
+
+static void parse_server_args(char **argv, int fd) {
+    size_t arg_i = 1;
+    char *name_end;
+
+    for (const char *arg, *name; argv[arg_i] && argv[arg_i][0] == '-'; arg_i += !!argv[arg_i]) {
+        switch (argv[arg_i][1]) {
+        case '\0': /* Invalid syntax */;
+            usage(fd, argv[0], EXIT_FAILURE);
+        case '-': /* Long options */;
+            /* End of flags mark */
+            if (!*(name = argv[arg_i] + 2)) {
+                arg_i++;
+                goto finish;
+            }
+
+            /* Options without arguments */
+            if (!strcmp(name, "help"))
+                usage(fd, argv[0], EXIT_SUCCESS);
+            if (!strcmp(name, "version"))
+                version(fd);
+
+            /* Options with arguments */
+            if ((arg = name_end = strchr(name, '=')))
+                *name_end = '\0', arg++;
+
+            if (!strncmp(name, "no-", 3) && is_boolean_option(name + 3))
+                arg = "false", name += 3;
+
+            if (is_boolean_option(name)) {
+                if (!arg) arg = "true";
+            } else {
+                if (!arg || !*arg)
+                    arg = argv[++arg_i];
+            }
+
+            if (!is_client_only_option(name)) {
+                if (arg) send_opt(fd, name, arg);
+                else usage(fd, argv[0], EXIT_FAILURE);
+            }
+            continue;
+        }
+
+        /* Short options, may be clustered  */
+        for (size_t char_i = 1; argv[arg_i] && argv[arg_i][char_i]; char_i++) {
+            char letter = argv[arg_i][char_i];
+            /* Handle options without arguments */
+            switch (letter) {
             case 'e':
-                if (!argv[++ind]) usage(fd, argv[0], EXIT_FAILURE);
-                goto end;
+                /* Works the same way as -- */
+                if (argv[arg_i++][char_i + 1])
+                    usage(fd, argv[0], EXIT_FAILURE);
+                goto finish;
             case 'h':
                 usage(fd, argv[0], EXIT_SUCCESS);
             case 'v':
                 version(fd);
-            case 'C':
-            case 's': opt = SKIP_OPT; break;
-            case 'f': opt = "font"; break;
-            case 'D': opt = "term-name"; break;
-            case 'o': opt = "printer-file"; break;
-            case 'c': opt = "window-class"; break;
-            case 't':
-            case 'T': opt = "title"; break;
-            case 'V': opt = "vt-version"; break;
-            case 'H': opt = "scrollback-size"; break;
-            case 'g': opt = "geometry"; break;
             }
 
-            if (!opt) {
-                fprintf(stderr, "[\033[33;1mWARN\033[m] Unknown option -%c\n", letter);
-                break;
+            /* Handle options with arguments (including implicit arguments) */
+            if (!is_boolean_short_option(letter)) {
+                if (!argv[arg_i][++char_i]) arg_i++, char_i = 0;
+                if (!argv[arg_i]) usage(fd, argv[0], EXIT_FAILURE);
+                arg = argv[arg_i] + char_i;
+            } else {
+                arg = "true";
             }
 
-            if (!argv[ind][++cind]) ind++, cind = 0;
-            if (!argv[ind]) usage(fd, argv[0], EXIT_FAILURE);
-
-            arg = argv[ind] + cind;
-
-            if (opt != SKIP_OPT)
-                send_opt(fd, opt, arg);
-
+            if (!is_client_only_short_option(letter))
+                send_short_opt(fd, letter, arg);
             break;
         }
-        if (argv[ind]) ind++;
     }
 
-end:
-    while (argv[ind])
-        send_arg(fd, argv[ind++]);
+    if (argv[arg_i]) {
+finish:
+        if (!argv[arg_i])
+            usage(fd, argv[0], EXIT_FAILURE);
+        while (argv[arg_i])
+            send_arg(fd, argv[arg_i++]);
+    }
 }
 
 static void do_fork(const char *spath) {
@@ -261,8 +346,10 @@ static void do_fork(const char *spath) {
         }
     default:
         while(wait(NULL) < 0 && errno == EINTR);
+        /* Wait for socket */
+        struct timespec ts = {.tv_nsec = STARTUP_DELAY};
         for (int i = 0; stat(spath, &stt) < 0 && i < MAX_WAIT_LOOP; i++)
-            clock_nanosleep(CLOCK_MONOTONIC, 0, &(struct timespec){.tv_nsec = STARTUP_DELAY}, NULL);
+            clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
     }
 }
 
@@ -284,18 +371,16 @@ static int try_connect(const char *spath) {
 }
 
 int main(int argc, char **argv) {
-    const char *cpath = NULL, *spath = "/tmp/nsst-sock0";
-    _Bool need_daemon = 0, need_exit = 0;
 
     (void)argc;
 
-    const char *pcwd = getcwd(buffer, sizeof(buffer));
-    parse_client_args(argv, &cpath, &spath, &need_daemon, &need_exit, &pcwd);
+    cwd = getcwd(buffer, sizeof(buffer));
+    parse_client_args(argv);
 
-    int fd = try_connect(spath);
+    int fd = try_connect(socket_path);
     if (fd < 0 && need_daemon) {
-        do_fork(spath);
-        fd = try_connect(spath);
+        do_fork(socket_path);
+        fd = try_connect(socket_path);
     }
 
     if (fd < 0) {
@@ -308,8 +393,8 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    send_header(fd, cpath);
-    if (pcwd) send_opt(fd, "cwd", pcwd);
+    send_header(fd, config_path);
+    if (cwd) send_opt(fd, "cwd", cwd);
 
     parse_server_args(argv, fd);
 

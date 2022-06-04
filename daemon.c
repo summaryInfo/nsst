@@ -162,6 +162,15 @@ static void append_pending_launch(struct pending_launch *lnch) {
         lnch->cfg.argv = lnch->args;
         create_window(&lnch->cfg);
         free_pending_launch(lnch);
+    } else if (buffer[0] == '\034' /* FS */ && len > 1) /* Short option */ {
+        char *name = buffer + 1, *value = memchr(buffer + 1, '=', len);
+        if (!value || name + 1 != value) {
+            warn("Wrong option format: '%s'", name);
+            return;
+        }
+
+        struct option *opt = find_short_option_entry(*name);
+        if (opt) set_option_entry(&lnch->cfg, opt, value, true);
     } else if (buffer[0] == '\035' /* GS */ && len > 1) /* Option */ {
         char *name = buffer + 1, *value = memchr(buffer + 1, '=', len);
         if (!value) {
