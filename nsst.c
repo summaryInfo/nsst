@@ -106,7 +106,9 @@ static void parse_options(struct instance_config *cfg, char **argv) {
                 if (opt != config_path_entry)
                     if (!set_option_entry(cfg, opt, arg, 1))
                         usage(argv[0], EXIT_FAILURE);
-                break;
+
+                if (is_boolean_option(opt)) continue;
+                else break;
             }
         }
     }

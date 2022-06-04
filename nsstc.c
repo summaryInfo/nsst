@@ -169,91 +169,14 @@ bool is_true(const char *value) {
     return 0;
 }
 
-static void parse_client_args(char **argv) {
+static void parse_args(char **argv, int fd, bool client) {
     size_t arg_i = 1;
     char *name_end;
 
     for (const char *arg, *name; argv[arg_i] && argv[arg_i][0] == '-'; arg_i += !!argv[arg_i]) {
         switch (argv[arg_i][1]) {
         case '\0': /* Invalid syntax */;
-            continue;
-        case '-': /* Long options */;
-            /* End of flags mark */
-            if (!*(name = argv[arg_i] + 2)) {
-                arg_i++;
-                goto finish;
-            }
-
-            /* Options without arguments */
-            if (!strcmp(name, "help"))
-                continue;
-            if (!strcmp(name, "version"))
-                continue;
-
-            /* Options with arguments */
-            if ((arg = name_end = strchr(name, '=')))
-                *name_end = '\0', arg++;
-
-            if (!strncmp(name, "no-", 3) && is_boolean_option(name + 3))
-                arg = "false", name += 3;
-
-            if (is_boolean_option(name)) {
-                if (!arg) arg = "true";
-            } else {
-                if (!arg || !*arg)
-                    arg = argv[++arg_i];
-            }
-
-            if (!strcmp(name, "config"))
-                config_path = arg;
-            else if (!strcmp(name, "socket"))
-                socket_path = arg;
-            else if (!strcmp(name, "cwd")) {
-                if (!(cwd = realpath(arg, buffer)))
-                    fprintf(stderr, WARN_PREFIX"realpath(): %s\n", strerror(errno));
-            }
-            else if (!strcmp(name, "daemon"))
-                need_daemon = is_true(arg);
-            else if (!strcmp(name, "quit"))
-                need_exit = is_true(arg);
-            continue;
-        }
-
-        /* Short options, may be clustered  */
-        for (size_t char_i = 1; argv[arg_i] && argv[arg_i][char_i]; char_i++) {
-            char letter = argv[arg_i][char_i];
-            /* Handle options without arguments */
-            if (letter == 'e') goto finish;
-
-            /* Handle options with arguments (including implicit arguments) */
-            if (!is_boolean_short_option(letter)) {
-                if (!argv[arg_i][++char_i]) arg_i++, char_i = 0;
-                if (!argv[arg_i]) break;
-                arg = argv[arg_i] + char_i;
-            } else {
-                arg = "true";
-            }
-
-            if (letter == 'd')
-                need_daemon = 1;
-            else if (letter == 'q')
-                need_exit = 1;
-            break;
-        }
-    }
-
-finish:
-    if (cwd && !(cwd = realpath(cwd, buffer)))
-        fprintf(stderr, WARN_PREFIX"realpath(): %s\n", strerror(errno));
-}
-
-static void parse_server_args(char **argv, int fd) {
-    size_t arg_i = 1;
-    char *name_end;
-
-    for (const char *arg, *name; argv[arg_i] && argv[arg_i][0] == '-'; arg_i += !!argv[arg_i]) {
-        switch (argv[arg_i][1]) {
-        case '\0': /* Invalid syntax */;
+            if (client) continue;
             usage(fd, argv[0], EXIT_FAILURE);
         case '-': /* Long options */;
             /* End of flags mark */
@@ -263,10 +186,14 @@ static void parse_server_args(char **argv, int fd) {
             }
 
             /* Options without arguments */
-            if (!strcmp(name, "help"))
+            if (!strcmp(name, "help")) {
+                if (client) continue;
                 usage(fd, argv[0], EXIT_SUCCESS);
-            if (!strcmp(name, "version"))
+            }
+            if (!strcmp(name, "version")) {
+                if (client) continue;
                 version(fd);
+            }
 
             /* Options with arguments */
             if ((arg = name_end = strchr(name, '=')))
@@ -282,10 +209,29 @@ static void parse_server_args(char **argv, int fd) {
                     arg = argv[++arg_i];
             }
 
-            if (!is_client_only_option(name)) {
-                if (arg) send_opt(fd, name, arg);
-                else usage(fd, argv[0], EXIT_FAILURE);
+            if (!client) {
+                if (!arg)
+                    usage(fd, argv[0], EXIT_FAILURE);
+                if (!is_client_only_option(name))
+                    send_opt(fd, name, arg);
+            } else {
+                if (!arg) continue;
+                if (!strcmp(name, "config"))
+                    config_path = arg;
+                else if (!strcmp(name, "socket"))
+                    socket_path = arg;
+                else if (!strcmp(name, "cwd"))
+                    cwd = arg;
+                else if (!strcmp(name, "daemon"))
+                    need_daemon = is_true(arg);
+                else if (!strcmp(name, "quit"))
+                    need_exit = is_true(arg);
             }
+
+            // We need to restore the original
+            // argv value since we parse options twice.
+            if (name_end)
+                *name_end = '=';
             continue;
         }
 
@@ -296,37 +242,65 @@ static void parse_server_args(char **argv, int fd) {
             switch (letter) {
             case 'e':
                 /* Works the same way as -- */
-                if (argv[arg_i++][char_i + 1])
+                if (!client && argv[arg_i++][char_i + 1])
                     usage(fd, argv[0], EXIT_FAILURE);
                 goto finish;
             case 'h':
+                if (client) break;
                 usage(fd, argv[0], EXIT_SUCCESS);
             case 'v':
+                if (client) break;
                 version(fd);
             }
 
             /* Handle options with arguments (including implicit arguments) */
             if (!is_boolean_short_option(letter)) {
                 if (!argv[arg_i][++char_i]) arg_i++, char_i = 0;
-                if (!argv[arg_i]) usage(fd, argv[0], EXIT_FAILURE);
+                if (!argv[arg_i]) {
+                    if (client) break;
+                    usage(fd, argv[0], EXIT_FAILURE);
+                }
                 arg = argv[arg_i] + char_i;
             } else {
                 arg = "true";
             }
 
-            if (!is_client_only_short_option(letter))
+            if (!client && !is_client_only_short_option(letter))
                 send_short_opt(fd, letter, arg);
-            break;
+            else if (client) {
+                switch (letter) {
+                case 'q':
+                    need_exit = 1;
+                    break;
+                case 'd':
+                    need_daemon = 1;
+                    break;
+                case 'C':
+                    config_path = arg;
+                    break;
+                case 's':
+                    socket_path = arg;
+                    break;
+                }
+            }
+
+            if (!is_boolean_short_option(letter)) break;
+            else continue;
         }
     }
 
     if (argv[arg_i]) {
 finish:
-        if (!argv[arg_i])
-            usage(fd, argv[0], EXIT_FAILURE);
-        while (argv[arg_i])
-            send_arg(fd, argv[arg_i++]);
+        if (!client) {
+            if (!argv[arg_i])
+                usage(fd, argv[0], EXIT_FAILURE);
+            while (argv[arg_i])
+                send_arg(fd, argv[arg_i++]);
+        }
     }
+
+    if (client && cwd && !(cwd = realpath(cwd, buffer)))
+        fprintf(stderr, WARN_PREFIX"realpath(): %s\n", strerror(errno));
 }
 
 static void do_fork(const char *spath) {
@@ -375,7 +349,7 @@ int main(int argc, char **argv) {
     (void)argc;
 
     cwd = getcwd(buffer, sizeof(buffer));
-    parse_client_args(argv);
+    parse_args(argv, -1, true);
 
     int fd = try_connect(socket_path);
     if (fd < 0 && need_daemon) {
@@ -396,7 +370,7 @@ int main(int argc, char **argv) {
     send_header(fd, config_path);
     if (cwd) send_opt(fd, "cwd", cwd);
 
-    parse_server_args(argv, fd);
+    parse_args(argv, fd, false);
 
     send_char(fd, '\003' /* ETX */);
 
