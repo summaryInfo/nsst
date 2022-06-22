@@ -218,10 +218,8 @@ void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
         screen_reset_view(scr, 0);
     }
 
-    for (ssize_t i = 1; i <= (scr->sb_caps == scr->sb_max_caps ? scr->sb_caps : scr->sb_limit); i++) {
+    for (ssize_t i = 1; i <= scr->sb_limit; i++) {
         struct line *line = line_at(scr, -i);
-        if (line->selection_index)
-            selection_clear(&scr->sstate);
         free_line(line);
     }
     free(scr->scrollback);
