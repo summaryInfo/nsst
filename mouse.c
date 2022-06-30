@@ -204,7 +204,7 @@ bool selection_intersects(struct selection_state *sel, struct line *line, int16_
     if (!head) return 0;
 
     foreach_segment_indexed(seg, idx, head)
-        if (idx < x1 - 1 && idx + seg->length - 1 > x0)
+        if (idx <= x1 - 1 && idx + seg->length - 1 >= x0)
             return 1;
     return 0;
 }
