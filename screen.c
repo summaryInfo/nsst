@@ -573,6 +573,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
         // Push extra lines from top back to scrollback
         ssize_t start = 0, scrolled = 0;
+        translated_csr.y = MIN(nnlines - 1, translated_csr.y);
         while (translated_csr.y > height - 1 || new_cur_par > cursor_par) {
             if (scr->sb_limit && line_at(scr, -1)->wrapped) {
                 if (lower_left.line >= 0) {
@@ -1060,7 +1061,7 @@ void screen_save_cursor(struct screen *scr, bool mode) {
 
 void screen_swap_screen(struct screen *scr, bool damage) {
     selection_clear(&scr->sstate);
-    if (scr->mode.altscreen)
+    if (!scr->mode.altscreen)
         scr->last_scr_c = scr->c;
     scr->mode.altscreen ^= 1;
     SWAP(scr->back_saved_c, scr->saved_c);
