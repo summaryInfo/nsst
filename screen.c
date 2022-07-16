@@ -1216,12 +1216,12 @@ void screen_insert_cells(struct screen *scr, int16_t n) {
 void screen_delete_cells(struct screen *scr, int16_t n) {
     // Do not check top/bottom margins, DCH should work outside them
     if (scr->c.x >= screen_min_x(scr) && scr->c.x < screen_max_x(scr)) {
-        struct line *line = scr->screen[scr->c.y];
 
         // TODO Shrink line
         // We can optimize this code by avoiding allocation and movement of empty cells
         // and just shrink the line.
         screen_adjust_line(scr, &scr->screen[scr->c.y], screen_max_x(scr));
+        struct line *line = scr->screen[scr->c.y];
 
         n = MIN(n, screen_max_x(scr) - scr->c.x);
         if (n <= 0) return;
