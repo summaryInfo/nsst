@@ -354,8 +354,6 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
         SWAP(scr->back_saved_sgr,scr->saved_sgr);
     }
 
-    bool cur_moved = scr->c.x == scr->width - 1 && scr->c.pending;
-
     // Resize temporary screen buffer
     struct line **new_tmpsc = realloc(scr->temp_screen, height*sizeof(*new_tmpsc));
     if (!new_tmpsc) die("Can't allocate new temporary screen buffer");
@@ -396,7 +394,6 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
         }
     }
 
-
     // Clear mouse selection
     // TODO Keep non-rectangular selection
     selection_clear(&scr->sstate);
@@ -407,6 +404,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
     bool to_top = scr->view_pos.line <= -scr->sb_limit;
     bool to_bottom = !scr->view_pos.line;
     bool ll_translated = to_top || to_bottom;
+    struct cursor translated_csr = scr->mode.altscreen ? scr->last_scr_c : scr->c;
 
 
     {  // Resize main screen
@@ -432,8 +430,8 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
             for (ssize_t i = 0; i < scr->height; i++) {
                 // Calculate new apporoximate cursor y
-                if (!aset && i == scr->c.y) {
-                    approx_cy = nnlines + (loff + scr->c.x) / width,
+                if (!aset && i == translated_csr.y) {
+                    approx_cy = nnlines + (loff + translated_csr.x) / width,
                     new_cur_par = nnlines;
                     cursor_par = par_start;
                     aset = 1;
@@ -493,9 +491,9 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
                         dx = 0;
                     }
                     // Calculate new cursor...
-                    if (!cset && scr->c.y == y && x == scr->c.x) {
-                        scr->c.y = dy;
-                        scr->c.x = dx;
+                    if (!cset && translated_csr.y == y && x == translated_csr.x) {
+                        translated_csr.y = dy;
+                        translated_csr.x = dx;
                         cset = 1;
                     }
                     // ..and saved cursor position
@@ -531,9 +529,9 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
                     }
                 }
                 // If cursor is to the right of line end, need to check separately
-                if (!cset && scr->c.y == y && scr->c.x >= len) {
-                    scr->c.y = dy;
-                    scr->c.x = MIN(width - 1, scr->c.x - len + dx);
+                if (!cset && translated_csr.y == y && translated_csr.x >= len) {
+                    translated_csr.y = dy;
+                    translated_csr.x = MIN(width - 1, translated_csr.x - len + dx);
                     cset = 1;
                 }
                 if (!csset && scr->saved_c.y == y && scr->saved_c.x >= len) {
@@ -575,7 +573,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
         // Push extra lines from top back to scrollback
         ssize_t start = 0, scrolled = 0;
-        while (scr->c.y > height - 1 || new_cur_par > cursor_par) {
+        while (translated_csr.y > height - 1 || new_cur_par > cursor_par) {
             if (scr->sb_limit && line_at(scr, -1)->wrapped) {
                 if (lower_left.line >= 0) {
                     if (!lower_left.line) lower_left.offset += line_at(scr, -1)->size;
@@ -585,7 +583,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
             scrolled = screen_append_history(scr, new_lines[start++], scr->mode.minimize_scrollback);
             new_cur_par--;
-            scr->c.y--;
+            translated_csr.y--;
             scr->saved_c.y--;
         }
 
@@ -610,8 +608,8 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
         scr->saved_c.y = MAX(MIN(scr->saved_c.y, height - 1), 0);
         if (scr->saved_c.pending) scr->saved_c.x = width - 1;
         if (!scr->mode.altscreen) {
-            scr->c.y = MAX(MIN(scr->c.y, height - 1), 0);
-            if (scr->c.pending) scr->c.x = width - 1;
+            translated_csr.y = MAX(MIN(translated_csr.y, height - 1), 0);
+            if (translated_csr.pending) translated_csr.x = width - 1;
         }
 
         // Free extra lines from bottom
@@ -634,6 +632,9 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
         for (ssize_t i = minh; i < height; i++)
             new_lines[i] = create_line(dflt_sgr, width);
 
+        if (!scr->mode.altscreen)
+            scr->c = translated_csr;
+
         scr->screen = new_lines;
     }
 
@@ -645,43 +646,34 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
     scr->right = width - 1;
     scr->bottom = height - 1;
 
-    {  // Fixup view
-
-        // Reposition view
-        if (scr->mode.rewrap && !scr->mode.altscreen) {
-            if (to_bottom) {
-                // Stick to bottom
-                scr->view_pos.offset = 0;
-                scr->view_pos.line = 0;
-            } else if (to_top) {
-                // Stick to top
-                scr->view_pos.offset = 0;
-                scr->view_pos.line = -scr->sb_limit;
-            } else {
-                // Keep line of lower left view cell at the bottom
-                lower_left.offset -= lower_left.offset % width;
-                ssize_t hei = height;
-                if (lower_left.line >= scr->height) {
-                    hei = MAX(0, hei - (lower_left.line - scr->height));
-                    lower_left.line = height - 1;
-                }
-                screen_advance_iter(scr, &lower_left, 1 - hei);
-                scr->view_pos = lower_left;
-                if (scr->view_pos.line >= 0 || scr->view_pos.line < -scr->sb_limit)
-                    scr->view_pos.offset = 0;
+    // Fixup view
+    if (scr->mode.rewrap && !scr->mode.altscreen) {
+        if (to_bottom) {
+            // Stick to bottom
+            scr->view_pos.offset = 0;
+            scr->view_pos.line = 0;
+        } else if (to_top) {
+            // Stick to top
+            scr->view_pos.offset = 0;
+            scr->view_pos.line = -scr->sb_limit;
+        } else {
+            // Keep line of lower left view cell at the bottom
+            lower_left.offset -= lower_left.offset % width;
+            ssize_t hei = height;
+            if (lower_left.line >= scr->height) {
+                hei = MAX(0, hei - (lower_left.line - scr->height));
+                lower_left.line = height - 1;
             }
-            scr->view_pos.line = MAX(MIN(0, scr->view_pos.line), -scr->sb_limit);
+            screen_advance_iter(scr, &lower_left, 1 - hei);
+            scr->view_pos = lower_left;
+            if (scr->view_pos.line >= 0 || scr->view_pos.line < -scr->sb_limit)
+                scr->view_pos.offset = 0;
         }
+        scr->view_pos.line = MAX(MIN(0, scr->view_pos.line), -scr->sb_limit);
     }
 
     // Damage screen
-    if (!scr->mode.altscreen && scr->mode.rewrap) {
-        // Just damage everything if re-wraping is enabled
-        screen_damage_lines(scr, 0, scr->height);
-    } else if (cur_moved) {
-        scr->back_screen[scr->c.y]->cell[scr->c.x].drawn = 0;
-        scr->back_screen[scr->c.y]->cell[MAX(scr->c.x - 1, 0)].drawn = 0;
-    }
+    screen_damage_lines(scr, 0, scr->height);
 
     if (scr->mode.altscreen) {
         SWAP(scr->back_saved_c, scr->saved_c);
@@ -1068,6 +1060,8 @@ void screen_save_cursor(struct screen *scr, bool mode) {
 
 void screen_swap_screen(struct screen *scr, bool damage) {
     selection_clear(&scr->sstate);
+    if (scr->mode.altscreen)
+        scr->last_scr_c = scr->c;
     scr->mode.altscreen ^= 1;
     SWAP(scr->back_saved_c, scr->saved_c);
     SWAP(scr->back_saved_sgr, scr->saved_sgr);

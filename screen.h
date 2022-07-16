@@ -126,6 +126,7 @@ struct screen {
     /* Cursor state */
     struct cursor back_saved_c;
     struct cursor saved_c;
+    struct cursor last_scr_c;
     struct cursor c;
 
     /* Graphics rendition state */
