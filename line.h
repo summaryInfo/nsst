@@ -164,7 +164,7 @@ inline static void cell_set(struct cell *cell, uint32_t ch) {
 }
 
 inline static bool cell_wide(struct cell *cell) {
-    return iswide(cell->ch);
+    return iswide(uncompact(cell->ch));
 }
 
 void free_attrs(struct line_attr *attrs);
