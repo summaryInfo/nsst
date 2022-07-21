@@ -739,7 +739,10 @@ static void term_dispatch_dcs(struct term *term) {
     term_esc_dump(term, 1);
 
     // Only SGR is allowed to have subparams
-    if (term->esc.subpar_mask) return;
+    if (term->esc.subpar_mask) {
+        term_esc_dump(term, 0);
+        goto finish;
+    }
 
     uint8_t *dstr = term_esc_str(term);
     uint8_t *dend = dstr + term->esc.str_len;
@@ -874,6 +877,7 @@ static void term_dispatch_dcs(struct term *term) {
         term_esc_dump(term, 0);
     }
 
+finish:
     term_esc_finish_string(term);
     term->esc.old_state = 0;
     term->esc.state = esc_ground;
