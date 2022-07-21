@@ -206,8 +206,9 @@ inline static void term_esc_start(struct term *term) {
 }
 
 inline static void term_esc_start_seq(struct term *term) {
-    for (size_t i = 0; i <= term->esc.i; i++)
-        term->esc.param[i] = -1;
+    //for (size_t i = 0; i <= term->esc.i; i++) term->esc.param[i] = -1;
+    memset(term->esc.param, 0xFF, term->esc.i*sizeof *term->esc.param);
+
     term->esc.i = 0;
     term->esc.subpar_mask = 0;
     term->esc.selector = 0;
@@ -3120,7 +3121,7 @@ inline static bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
 
         if (len + *start >= end) return 0;
 
-        if (term->esc.str_len + len >= term->esc.str_cap) {
+        if (UNLIKELY(term->esc.str_len + len + 1 >= term->esc.str_cap)) {
             size_t new_cap = STR_CAP_STEP(term->esc.str_cap);
             if (new_cap > ESC_MAX_LONG_STR) break;
 
@@ -3134,8 +3135,9 @@ inline static bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
             term->esc.str_cap = new_cap;
         }
 
+        uint8_t *str = term_esc_str(term);
         while (len--) {
-            term_esc_str(term)[term->esc.str_len++] = ch;
+            str[term->esc.str_len++] = ch;
             ch = *++*start;
             if ((ch & 0xA0) != 0x80) break;
         }
