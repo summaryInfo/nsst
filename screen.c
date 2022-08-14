@@ -984,7 +984,6 @@ void screen_protective_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t
 
     for (; ys < ye; ys++) {
         struct line *line = scr->screen[ys];
-        // Reset line wrapping state
         struct cell c = { .attrid = alloc_attr(line, scr->sgr) };
         for (int16_t i = xs; i < xe; i++)
             if (!attr_at(line, i).protected) line->cell[i] = c;
@@ -996,7 +995,6 @@ void screen_selective_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t 
 
     for (; ys < ye; ys++) {
         struct line *line = scr->screen[ys];
-        // Reset line wrapping state
         for (ssize_t i = xs; i < xe; i++)
             if (!attr_at(line, i).protected)
                 line->cell[i] = MKCELL(0, line->cell[i].attrid);
