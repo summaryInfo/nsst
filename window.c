@@ -109,7 +109,7 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
 
     if (cfg_changed || bg_changed) {
         // If reverse video is set via option
-        // during initiallization
+        // during initialization
         // win->term can be NULL at this point
 
         if (win->term) screen_damage_lines(term_screen(win->term), 0, win->ch);
