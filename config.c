@@ -284,7 +284,7 @@ static struct option options[] = {
     X1(string, font_name, 'f', "font", "Comma-separated list of fontconfig font patterns", "mono"),
     X(double, gamma, "font-gamma", "Factor of font sharpenning", 1, 0.2, 2),
     X(int16, font_size, "font-size", "Font size in points", 0, 1, 1000),
-    X(int16, font_size_step, "font-size-step", "Font size step in points", 0, 250, 1),
+    X(int16, font_size_step, "font-size-step", "Font size step in points", 1, 0, 250),
     X(int16, font_spacing, "font-spacing", "Additional spacing for individual symbols", 0, -100, 100),
     X(string, force_mouse_mod, "force-mouse-mod", "Modifer to force mouse action", "T"),
     X(boolean, force_utf8_nrcs, "force-nrcs", "Enable NRCS translation when UTF-8 mode is enabled", false),
