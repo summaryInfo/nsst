@@ -12,7 +12,7 @@ name=nsst
 backend=x11xrender
 cflags='-O2 -flto'
 vars=
-version=20300
+version=20301
 
 # Test some features by trying compiling snippets
 dotest() { printf "$1" | cc -x c - -lrt 2>&1 >/dev/null && rm -f a.out; }
