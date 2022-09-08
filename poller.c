@@ -5,6 +5,11 @@
 
 #if USE_PPOLL
 #   define _GNU_SOURCE
+#ifndef __linux__
+/* GLIBC insists on _DEFAULT_SOURCE instead of _BSD_SOURCE,
+ * so define it if only we are not on linux */
+#   define _BSD_SOURCE
+#endif
 #endif
 
 #include "util.h"
