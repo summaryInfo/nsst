@@ -5,8 +5,6 @@
 
 #include "feature.h"
 
-#define _POSIX_C_SOURCE 200809L
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
