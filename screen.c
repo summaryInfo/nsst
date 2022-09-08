@@ -421,14 +421,13 @@ void resize_main_screen(struct screen *scr, ssize_t width, ssize_t height,
         }
 
         bool cset = scr->mode.altscreen, csset = 0, aset = 0;
-        ssize_t par_start = y, approx_cy = 0, dlta = 0;
+        ssize_t par_start = y, dlta = 0;
 
         scr->screen[scr->height - 1]->wrapped = 0;
 
         for (ssize_t i = 0; i < scr->height; i++) {
             // Calculate new apporoximate cursor y
             if (!aset && i == translated_csr.y) {
-                approx_cy = nnlines + (loff + translated_csr.x) / width,
                 new_cur_par = nnlines;
                 cursor_par = par_start;
                 aset = 1;
@@ -455,7 +454,6 @@ void resize_main_screen(struct screen *scr, ssize_t width, ssize_t height,
             struct line *line = line_at(scr, --y);
             ssize_t delta = (line->size + width - 1) / width;
             new_cur_par += delta;
-            approx_cy += delta;
             nnlines += delta;
         }
 
