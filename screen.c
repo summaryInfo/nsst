@@ -9,6 +9,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <strings.h>
 
 #define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
 #define PRINT_BLOCK_SIZE 256
