@@ -4,6 +4,7 @@ use_ppoll=0
 use_x11shm=1
 use_boxdrawing=1
 use_precompose=1
+use_nanosleep=0
 use_posix_shm=0
 use_clang=0
 use_uri=1
