@@ -1519,7 +1519,7 @@ inline static uint64_t read_block_mask(const uint8_t *start) {
 }
 
 inline static const uint8_t *block_mask_offset(const uint8_t *start, const uint8_t *end, uint64_t b) {
-    return MIN(end, start + (ffsll(b) - sizeof(uint64_t) + 1)/sizeof(uint64_t));
+    return MIN(end, start + (__builtin_ffsll(b) - sizeof(uint64_t) + 1)/sizeof(uint64_t));
 }
 
 inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end, ssize_t max_chunk) {
