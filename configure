@@ -35,10 +35,10 @@ dotest() {
     echo -n "Testing for '$2'... " >&2
     if printf "$1" | $testcc $linkrt -x c - >/dev/null 2>&1; then
         rm -f a.out
-        echo "\033[1;32mYES\033[m." >&2
+        printf "\033[1;32mYES\033[m.\n" >&2
         return 0
     else
-        echo "\033[1;31mNO\033[m." >&2
+        printf "\033[1;31mNO\033[m.\n" >&2
         return 1
     fi
 }
@@ -47,10 +47,10 @@ dotestwarn() {
     echo -n "Testing for '$1' warning... " >&2
     if printf "$emptytest" | $testcc -Werror $1 -x c - >/dev/null 2>&1; then
         rm -f a.out
-        echo "\033[1;32mYES\033[m." >&2
+        printf "\033[1;32mYES\033[m.\n" >&2
         return 0
     else
-        echo "\033[1;31mNO\033[m." >&2
+        printf "\033[1;31mNO\033[m.\n" >&2
         return 1
     fi
 }
