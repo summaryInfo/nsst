@@ -22,7 +22,7 @@ OBJ := @OBJECTS@
 LIBS != pkg-config @DEPS@ --libs
 INCLUES != pkg-config @DEPS@ --cflags
 
-LDLIBS += -lrt -lm -lutil $(LIBS)
+LDLIBS += @LIBRT@ -lm -lutil $(LIBS)
 CFLAGS += $(INCLUES)
 
 
