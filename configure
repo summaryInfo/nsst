@@ -10,7 +10,7 @@ name=nsst
 backend=x11xrender
 cflags='-O2 -flto'
 vars=
-version=20301
+version=20302
 
 # Test some features by trying compiling snippets
 linkrt=' -lrt '
