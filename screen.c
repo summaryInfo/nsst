@@ -1617,7 +1617,7 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
 
     if (gconfig.trace_characters) {
         for (uint32_t *p = bstart; p < bend; p++) {
-            info("Char: (%x) '%lc' ", *p, *p);
+            info("Char: (%x) '%lc' ", *p, (wint_t)*p);
         }
     }
 }
