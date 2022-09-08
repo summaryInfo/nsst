@@ -19,11 +19,14 @@ dotest() { printf "$1" | cc -x c - -lrt 2>&1 >/dev/null && rm -f a.out; }
 
 shmtest="#define _POSIX_C_SOURCE 200809L\n#include <sys/mman.h>\nint main(){shm_open(0,0,0);}\n"
 ppolltest="#define _GNU_SOURCE\n#include <poll.h>\nint main(){ppoll(0,0,0,0);}\n"
+nanosleeptest="#define _POSIX_C_SOURCE 200809L\n#include <time.h>\nint main(){clock_nanosleep(0,0,0,0);}\n"
 
 # Test if system supports POSIX shared memory
 dotest "$shmtest" && use_posix_shm=1
-# Test if system supports ppoll
+# Test if system supports ppoll()
 dotest "$ppolltest" && use_ppoll=1
+# Test if system supports POSIX clock_nanosleep()
+dotest "$nanosleeptest" && use_nanosleep=1
 
 help() {
 cat <<END
@@ -34,6 +37,8 @@ Usage: configure [options]
     --bindir=DIR            binary install directory [$prefix/bin]
     --enable-ppoll          enable ppoll in main loop for better timing [set if available]
     --disable-ppoll         disable ppoll in main loop, use poll instead
+    --enable-nanosleep      enable POSIX clock_nanosleep() [set if available]
+    --disable-nanosleep     disable POSIX clock_nanosleep() use nanosleep() instead
     --enable-boxdrawing     enable built-in box drawing characters [set]
     --disable-boxdrawing    disable built-in box drawing characters
     --enable-uri            enable URI handling features [set]
@@ -69,6 +74,10 @@ for i; do
         use_precompose=1 ;;
     --disable-precompose)
         use_precompose=0 ;;
+    --enable-nanosleep)
+        use_nanosleep=1 ;;
+    --disable-nanosleep)
+        use_nanosleep=0 ;;
     --enable-posix-shm)
         use_posix_shm=1 ;;
     --disable-posix-shm)
@@ -137,6 +146,7 @@ esac
 
 sed < "./feature.h.in" > "./feature.h" \
     -e "s:@USE_PPOLL@:$use_ppoll:g" \
+    -e "s:@USE_CLOCK_NANOSLEEP@:$use_nanosleep:g" \
     -e "s:@USE_BOXDRAWING@:$use_boxdrawing:g" \
     -e "s:@USE_X11SHM@:$use_x11shm:g" \
     -e "s:@USE_PRECOMPOSE@:$use_precompose:g" \
@@ -165,6 +175,7 @@ cat <<END
     uri...................... $use_uri
     precompose............... $use_precompose
     ppoll.................... $use_ppoll
+    clock_nanosleep.......... $use_nanosleep
     posix shm................ $use_posix_shm
     force clang+lld.......... $use_clang
 

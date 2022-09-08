@@ -324,7 +324,11 @@ static void do_fork(const char *spath) {
         /* Wait for socket */
         struct timespec ts = {.tv_nsec = STARTUP_DELAY};
         for (int i = 0; stat(spath, &stt) < 0 && i < MAX_WAIT_LOOP; i++)
+#if USE_CLOCK_NANOSLEEP
             clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
+#else
+            nanosleep(&ts, NULL);
+#endif
     }
 }
 
