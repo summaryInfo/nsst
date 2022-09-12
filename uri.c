@@ -54,10 +54,125 @@ struct id_table {
     } *slots;
 };
 
+#define PT_CHILDREN_COUNT 42
+#define PT_LETTER_IDX 0
+#define PT_DIGIT_IDX 26
+#define PT_DASH_IDX 36
+#define PT_POINT_IDX 37
+#define PT_SLASH_IDX 38
+#define PT_PLUS_IDX 39
+#define PT_UNDERSCORE_IDX 40
+#define PT_STAR_IDX 41
+
+#define MAX_SERVICE_LINE 128
+
+struct prefix_tree_node {
+    struct prefix_tree_node *children[PT_CHILDREN_COUNT];
+    bool leaf;
+};
+
 #define mkurikey(_id, idlen, _uri, urilen) ((const struct uri){ .head = (ht_head_t){ .hash = hash64(_id, idlen) ^ hash64(_uri, urilen) }, .id = _id, .uri = _uri})
 
 static struct id_table idtab;
 static hashtable_t uritab;
+
+static struct prefix_tree_node proto_tree_head;
+
+inline static ssize_t char_to_index(char ch) {
+    if (ch == '.')
+        return PT_POINT_IDX;
+    else if (ch == '-')
+        return PT_DASH_IDX;
+    else if (ch == '+')
+        return PT_PLUS_IDX;
+    else if (ch == '/')
+        return PT_SLASH_IDX;
+    else if (ch == '_')
+        return PT_UNDERSCORE_IDX;
+    else if (ch == '*')
+        return PT_STAR_IDX;
+    else if ('0' <= ch && ch <= '9')
+        return PT_DIGIT_IDX + ch - '0';
+    else if ('a' <= ch && ch <= 'z')
+        return PT_LETTER_IDX + ch - 'a';
+    else if ('A' <= ch && ch <= 'Z')
+        return PT_LETTER_IDX + ch - 'A';
+
+    return -1;
+}
+
+static struct prefix_tree_node *match_proto_tree(struct prefix_tree_node *current, char ch) {
+    if (!current) current = &proto_tree_head;
+
+    ssize_t idx = char_to_index(ch);
+    if (idx >= 0)
+        return current->children[idx];
+
+    return NULL;
+}
+
+inline static bool is_leaf_node(struct prefix_tree_node *current) {
+    return current && current->leaf;
+}
+
+static bool proto_tree_add_proto(const char *proto) {
+    struct prefix_tree_node *current = &proto_tree_head;
+    char ch;
+    for (const char *it = proto; (ch = *it++); ) {
+        ssize_t idx = char_to_index(ch);
+        if (idx < 0) {
+            warn("Invalid protocol name '%s', unexpected char '%c'", proto, ch);
+            return false;
+        }
+        if (!current->children[idx]) {
+            if (!(current->children[idx] = calloc(1, sizeof *current)))
+                return false;
+        }
+        current = current->children[idx];
+    }
+
+    current->leaf = true;
+    return true;
+}
+
+static void proto_tree_free(struct prefix_tree_node *node) {
+    for (size_t i = 0; i < LEN(node->children); i++) {
+        if (!node->children[i]) continue;
+        proto_tree_free(node->children[i]);
+        free(node->children[i]);
+    }
+}
+
+void init_proto_tree(void) {
+    FILE *services = fopen("/etc/services", "r");
+    char *line = NULL;
+    size_t len = 0;
+
+    /* Always include 'file' pseudo protocol */
+    proto_tree_add_proto("file");
+
+    for (ssize_t sz; (sz = getline(&line, &len, services)) != -1; ) {
+        char  *it = line;
+
+        while (isspace(*it))
+            it++;
+
+        if (!*it || *it == '#' || *it == '\n')
+            continue;
+
+        char *proto = it;
+
+        while (!isspace(*it))
+            it++;
+
+        *it = '\0';
+
+        proto_tree_add_proto(proto);
+    }
+
+    free(line);
+    fclose(services);
+}
 
 /* From window.c */
 enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
@@ -83,16 +198,19 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
 
     switch(stt->state) {
     case uris1_ground:
-        if (isalpha(ch)) {
+        if ((stt->ptc = match_proto_tree(stt->ptc, ch))) {
             stt->state++;
             return (stt->res = urim_need_more);
         }
         break;
     case uris1_proto:
         if (MATCH(c_proto, ch)) {
-            return urim_need_more;
-        } else if (ch == ':') {
+            stt->ptc = match_proto_tree(stt->ptc, ch);
+            if (stt->ptc)
+                return urim_need_more;
+        } else if (ch == ':' && is_leaf_node(stt->ptc)) {
             stt->state++;
+            stt->ptc = &proto_tree_head;
             return (stt->res = urim_need_more);
         }
         break;
@@ -363,6 +481,9 @@ void uri_release_memory(void) {
     }
     free(idtab.slots);
 
+    proto_tree_free(&proto_tree_head);
+
+    memset(&proto_tree_head, 0, sizeof(proto_tree_head));
     memset(&idtab, 0, sizeof(idtab));
     memset(&uritab, 0, sizeof(uritab));
 }
