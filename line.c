@@ -10,7 +10,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#ifdef __SSE2__
+#include <emmintrin.h>
+#endif
+
+// FIXME Use this
 #define MAX_LINE_LEN 16384
+
 #define MAX_EXTRA_PALETTE (ATTRID_MAX - 1)
 #define INIT_CAP 4
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, MAX(3*(sz)/2, INIT_CAP))
@@ -63,6 +69,37 @@ void free_attrs(struct line_attr *attrs) {
 
     free(attrs);
 }
+
+void free_line(struct line *line) {
+
+	if (!line) return;
+
+    // If we are freeing line its selection
+    // should be reset
+    // TODO Make selection a set of regular handles
+    assert(!line->selection_index);
+
+    detach_prev_line(line);
+    detach_next_line(line);
+
+    /* Handles are effectively weak pointers in
+     * a sence that they can become NULL after the
+     * line is freed. This is useful to avoid explicitly
+     * updating e.g. selection data. */
+    while (line->first_handle) {
+        struct line_handle *handle = line->first_handle;
+        assert(!handle->prev);
+        assert(handle->line == line);
+        line_handle_remove(handle);
+        handle->line = NULL;
+        handle->offset = 0;
+    }
+
+    if (line->attrs)
+        free_attrs(line->attrs);
+    free(line);
+}
+
 
 static void move_attrtab(struct line_attr *dst, struct line *src) {
     for (ssize_t i = 0; i < src->size; i++) {
@@ -125,25 +162,58 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
     return insert_attr(line->attrs, &attr, hash);
 }
 
-struct line *create_line(struct attr attr, ssize_t caps) {
+struct line *create_line_with_seq(struct attr attr, ssize_t caps, uint64_t seq) {
     struct line *line = malloc(sizeof(*line) + (size_t)caps * sizeof(line->cell[0]));
     if (!line) die("Can't allocate line");
+
+    assert(caps >= 0);
 
     memset(line, 0, sizeof *line);
 
     line->pad_attrid = alloc_attr(line, attr);
-    line->force_damage = 1;
+    line->force_damage = true;
     line->caps = caps;
+    line->seq = seq;
     return line;
+}
+
+
+uint64_t get_next_seqno(void) {
+    static uint64_t line_seqno;
+    return ++line_seqno;
+}
+
+struct line *create_line(struct attr attr, ssize_t caps) {
+    return create_line_with_seq(attr, caps, get_next_seqno());
+}
+
+void fixup_lines_seqno(struct line *line) {
+    while (line) {
+        line->seq = get_next_seqno();
+        line = line->next;
+    }
 }
 
 struct line *realloc_line(struct line *line, ssize_t caps) {
     struct line *new = realloc(line, sizeof(*new) + (size_t)caps * sizeof(new->cell[0]));
     if (!new) die("Can't create lines");
 
-
     new->size = MIN(caps, new->size);
     new->caps = caps;
+
+    // new->force_damage = true;
+
+    if (new->next)
+        new->next->prev = new;
+    if (new->prev)
+        new->prev->next = new;
+
+    /* Update registered handles */
+    struct line_handle *handle = new->first_handle;
+    while (handle) {
+        handle->line = new;
+        handle = handle->next;
+    }
 
     return new;
 }
@@ -183,17 +253,66 @@ static void optimize_attributes(struct line *line) {
     }
 }
 
+void split_line(struct line *src, ssize_t offset, struct line **dst1, struct line **dst2) {
+    ssize_t tail_len = src->size - offset;
+    assert(tail_len >= 0);
+
+    struct line *tail = create_line(*attr_pad(src), tail_len);
+    assert(tail);
+
+    copy_line(tail, 0, src, offset, tail_len);
+
+    // Fixup line properties
+
+    tail->force_damage = src->force_damage;
+    tail->wrapped = src->wrapped;
+
+    src->size = offset;
+    src->wrapped = false;
+
+    // Fixup line ordering
+
+    if (src->next)
+        src->next->prev = tail;
+    tail->next = src->next;
+    tail->prev = src;
+    src->next = tail;
+
+    // Fixup references
+
+    struct line_handle *handle = src->first_handle, *next;
+    while (handle) {
+        next = handle->next;
+        if (handle->offset >= offset) {
+            line_handle_remove(handle);
+            handle->line = tail;
+            handle->offset -= offset;
+            line_handle_add(handle);
+        }
+        handle = next;
+    }
+
+    // TODO Optimize by using seq increments more than one
+    fixup_lines_seqno(src);
+
+    *dst1 = src;
+    *dst2 = tail;
+}
+
 struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     if (src2) {
         assert(src1);
-        assert(src1->wrapped);
+        assert(src1->next == src2);
+        assert(src2->prev == src1);
 
-        ssize_t len = MIN(src2->size + src1->size, MAX_LINE_LEN);
+        ssize_t len = src2->size + src1->size;
+        ssize_t first_len = src1->size;
         src1 = realloc_line(src1, len);
         src1->wrapped = src2->wrapped;
+        src1->force_damage |= src2->force_damage;
 
         if (src1->attrs && src2->attrs) {
-            src1->pad_attrid = alloc_attr(src1, attr_pad(src2));
+            src1->pad_attrid = alloc_attr(src1, *attr_pad(src2));
             copy_line(src1, src1->size, src2, 0, len - src1->size);
         } else {
             /* Faster line content copying in we do
@@ -207,6 +326,22 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
                 src1->attrs = src2->attrs;
                 src2->attrs = NULL;
             }
+        }
+
+        // Update line links
+        struct line *next_line = detach_next_line(src2);
+        detach_prev_line(src2);
+        attach_next_line(src1, next_line);
+
+        // Update line handles
+        struct line_handle *handle = src2->first_handle, *next;
+        while (handle) {
+            next = handle->next;
+            line_handle_remove(handle);
+            handle->line = src1;
+            handle->offset += first_len;
+            line_handle_add(handle);
+            handle = next;
         }
 
         free_line(src2);
@@ -245,6 +380,56 @@ void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, s
         }
     } else {
         memmove(dc, sc, len * sizeof(*sc));
+        if (dx + len < dst->size)
+            dst->size = dx + len;
         while (len--) dc++->drawn = 0;
     }
+}
+
+HOT
+void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
+#if defined(__SSE2__)
+    // Well... this looks ugly but its fast
+
+    static_assert(sizeof(struct cell) == sizeof(uint32_t), "Wrong size of cell");
+    int32_t pref = MIN((4 - (intptr_t)(((uintptr_t)dst/sizeof(uint32_t)) & 3)) & 3, width);
+    switch (pref) {
+    case 3: dst[2] = c; //fallthrough
+    case 2: dst[1] = c; //fallthrough
+    case 1: dst[0] = c; //fallthrough
+    case 0:;
+    }
+    dst += pref;
+    width -= pref;
+    if (width <= 0) return;
+
+    uint32_t cell_val;
+    memcpy(&cell_val, &c, sizeof cell_val);
+    const __m128i four_cells = _mm_set1_epi32(cell_val);
+    for (ssize_t i = 0; i < (width & ~3); i += 4)
+        _mm_stream_si128((__m128i *)&dst[i], four_cells);
+
+    dst += width & ~3;
+    switch (width & 3) {
+    case 3: dst[2] = c; //fallthrough
+    case 2: dst[1] = c; //fallthrough
+    case 1: dst[0] = c; //fallthrough
+    case 0:;
+    }
+#else
+    ssize_t i = (width+7)/8, inc = width % 8;
+    if (!inc) inc = 8;
+    switch(inc) do {
+        dst += inc;
+        inc = 8; /* fallthrough */
+    case 8: dst[7] = c; /* fallthrough */
+    case 7: dst[6] = c; /* fallthrough */
+    case 6: dst[5] = c; /* fallthrough */
+    case 5: dst[4] = c; /* fallthrough */
+    case 4: dst[3] = c; /* fallthrough */
+    case 3: dst[2] = c; /* fallthrough */
+    case 2: dst[1] = c; /* fallthrough */
+    case 1: dst[0] = c;
+    } while(--i > 0);
+#endif
 }

@@ -76,26 +76,19 @@ struct checksum_mode {
  * alternate screen; same with saved_c/back_saved_c and saved_sgr/saved_back_sgr */
 
 struct screen {
-    struct line **screen;
-    struct line **back_screen;
-    struct line **temp_screen;
+    struct line_view *screen;
+    struct line_view *back_screen;
+    struct line_view *temp_screen;
 
-    /* Cyclic buffer for scrollback buffer,
-     * it grows dynamically, and thus before
-     * it has reached maximal size (sb_max_caps)
-     * functions as simple array */
-    struct line **scrollback;
-    /* First line offset */
-    ssize_t sb_top;
+    /* History topmost line */
+    struct line_handle top_line;
     /* Number of lines */
     ssize_t sb_limit;
-    /* Capacity */
-    ssize_t sb_caps;
     /* Maximal capacity */
     ssize_t sb_max_caps;
 
-    /* Offset in scrollback lines */
-    struct line_offset view_pos;
+    /* Viewport start position */
+    struct line_handle view_pos;
 
     /* Margins */
     ssize_t top;
@@ -162,14 +155,13 @@ struct screen {
 
 bool init_screen(struct screen *scr, struct window *win);
 void free_screen(struct screen *scr);
-struct line_offset screen_view(struct screen *scr);
+struct line_handle screen_view(struct screen *scr); /* NOTE: It does not register handle */
 void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd);
 void screen_damage_selection(struct screen *scr);
 void screen_damage_uri(struct screen *scr, uint32_t uri);
-struct line *screen_paragraph_at(struct screen *scr, ssize_t y);
-struct line_view screen_line_at(struct screen *scr, struct line_offset pos);
-ssize_t screen_advance_iter(struct screen *scr, struct line_offset *pos, ssize_t amount);
-struct line_offset screen_line_iter(struct screen *scr, ssize_t y);
+struct line_view screen_view_at(struct screen *scr, struct line_handle *pos);
+ssize_t screen_advance_iter(struct screen *scr, struct line_handle *pos, ssize_t amount);
+struct line_handle screen_line_iter(struct screen *scr, ssize_t y); /* NOTE: It does not register handle */
 void screen_reset_view(struct screen *scr, bool damage);
 void screen_free_scrollback(struct screen *scr, ssize_t max_size);
 void screen_scroll_view(struct screen *scr, int16_t amount);
@@ -203,19 +195,21 @@ void screen_insert_columns(struct screen *scr, int16_t n);
 void screen_delete_columns(struct screen *scr, int16_t n);
 void screen_index_horizonal(struct screen *scr);
 void screen_rindex_horizonal(struct screen *scr);
-void screen_index(struct screen *scr);
+bool screen_index(struct screen *scr);
 void screen_rindex(struct screen *scr);
 void screen_cr(struct screen *scr);
 bool screen_load_config(struct screen *scr, bool reset);
 void screen_tabs(struct screen *scr, int16_t n);
 void screen_reset_tabs(struct screen *scr);
 void screen_print_screen(struct screen *scr, bool force_ext);
-void screen_print_line(struct screen *scr, ssize_t y);
+void screen_print_line(struct screen *scr, struct line_view *line);
 void screen_set_margin_bell_volume(struct screen *scr, uint8_t vol);
 uint8_t screen_get_margin_bell_volume(struct screen *scr);
 ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs);
 ssize_t screen_dispatch_rep(struct screen *scr, int32_t rune, ssize_t rep);
 void screen_unwrap_cursor_line(struct screen *scr);
+void screen_do_wrap(struct screen *scr);
+void screen_print_all(struct screen *scr);
 
 char *encode_sgr(char *dst, char *end, struct attr *attr);
 
@@ -277,17 +271,17 @@ inline static bool screen_cursor_in_region(struct screen *scr) {
 }
 
 inline static void screen_cursor_adjust_wide_left(struct screen *scr) {
-    adjust_wide_left(scr->screen[scr->c.y], scr->c.x);
+    view_adjust_wide_left(&scr->screen[scr->c.y], scr->c.x);
 }
 
 inline static void screen_cursor_adjust_wide_right(struct screen *scr) {
-    adjust_wide_right(scr->screen[scr->c.y], scr->c.x);
+    view_adjust_wide_right(&scr->screen[scr->c.y], scr->c.x);
 }
 
 inline static void screen_damage_cursor(struct screen *scr) {
-    struct line *cline = scr->screen[scr->c.y];
-    if (cline->size <= scr->c.x) cline->force_damage = 1;
-    else cline->cell[scr->c.x].drawn = 0;
+    struct line_view *cview = &scr->screen[scr->c.y];
+    if (cview->width <= scr->c.x) cview->h.line->force_damage = 1;
+    else view_cell(cview, scr->c.x)->drawn = 0;
 }
 
 inline static void screen_move_width_origin(struct screen *scr, int16_t x, int16_t y) {
@@ -340,11 +334,15 @@ inline static void screen_load_cursor_position(struct screen *scr, ssize_t cx,
     scr->c.pending = cpending;
 }
 
-inline static void screen_precompose_at_cursor(struct screen *scr, uint32_t ch) {
-    struct line *cline = scr->screen[scr->c.y];
-    if (cline->size <= scr->c.x) return;
+inline static void screen_print_cursor_line(struct screen *scr) {
+    screen_print_line(scr, &scr->screen[scr->c.y]);
+}
 
-    struct cell *cel = &cline->cell[scr->c.x];
+inline static void screen_precompose_at_cursor(struct screen *scr, uint32_t ch) {
+    struct line_view *cview = &scr->screen[scr->c.y];
+    if (cview->width <= scr->c.x) return;
+
+    struct cell *cel = view_cell(cview, scr->c.x);
 
     // Step back to previous cell
     if (scr->c.x) cel--;
@@ -400,16 +398,9 @@ inline static void screen_set_origin(struct screen *scr, bool set) {
     screen_move_to(scr, screen_min_ox(scr), screen_min_oy(scr));
 }
 
-inline static void screen_autoprint(struct screen *scr, ssize_t y) {
+inline static void screen_autoprint(struct screen *scr) {
     if (scr->mode.print_auto)
-        screen_print_line(scr, y);
-}
-
-inline static void screen_do_wrap(struct screen *scr) {
-    scr->screen[scr->c.y]->wrapped = 1;
-    screen_autoprint(scr, screen_cursor_y(scr));
-    screen_index(scr);
-    screen_cr(scr);
+        screen_print_line(scr, &scr->screen[scr->c.y]);
 }
 
 #endif

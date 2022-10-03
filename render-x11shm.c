@@ -205,6 +205,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
     bool scrolled = win->plat.boundc;
     bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
     bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1);
+    bool beyond_eol = false;
     if (cond_cblink) cursor &= win->rcstate.blink;
 
     int cw = win->char_width, ch = win->char_height;
@@ -212,21 +213,25 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
     int bw = win->cfg.left_border, bh = win->cfg.top_border;
 
     struct screen *scr = term_screen(win->term);
-    struct line_offset vpos = screen_view(scr);
+    struct line_handle vpos = screen_view(scr);
     for (ssize_t k = 0; k < win->ch; k++, screen_inc_iter(scr, &vpos)) {
-        struct line_view line = screen_line_at(scr, vpos);
+        struct line_view view = screen_view_at(scr, &vpos);
         bool next_dirty = 0;
         struct rect l_bound = {-1, k, 0, 1};
 
-        struct mouse_selection_iterator sel_it = selection_begin_iteration(term_get_sstate(win->term), &line);
-        bool last_selected = is_selected_prev(&sel_it, &line, win->cw - 1);
+        struct mouse_selection_iterator sel_it = selection_begin_iteration(term_get_sstate(win->term), &view);
+        bool last_selected = is_selected_prev(&sel_it, &view, win->cw - 1);
 
-        for (int16_t i = MIN(win->cw, line.width) - 1; i >= 0; i--) {
-            struct cell cel = line.cell[i];
-            line.cell[i].drawn = 1;
+        if (k == cur_y)
+            beyond_eol = cur_x >= view.width;
 
-            struct attr attr = line_view_attr(line, cel.attrid);
-            bool dirty = line.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
+        for (int16_t i = MIN(win->cw, view.width) - 1; i >= 0; i--) {
+            struct cell *pcell = view_cell(&view, i);
+            struct cell cel = *pcell;
+            pcell->drawn = 1;
+
+            struct attr attr = view_attr(&view, cel.attrid);
+            bool dirty = view.h.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
 
             struct cellspec spec;
             struct glyph *glyph = NULL;
@@ -239,7 +244,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                     attr.reverse ^= 1;
                 }
 
-                bool selected = is_selected_prev(&sel_it, &line, i);
+                bool selected = is_selected_prev(&sel_it, &view, i);
                 spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
 
                 if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face, NULL);
@@ -285,19 +290,19 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
             next_dirty = dirty;
         }
 
-        if (l_bound.x >= 0 || line.line->force_damage || (scrolled && win->cw > line.width)) {
-            if (win->cw > line.width) {
-                struct attr attr = attr_pad(line.line);
+        if (l_bound.x >= 0 || view.h.line->force_damage || (scrolled && win->cw > view.width)) {
+            if (win->cw > view.width) {
+                struct attr attr = *attr_pad(view.h.line);
                 color_t bg = describe_bg(&attr, &win->cfg, &win->rcstate, last_selected);
 
                 image_draw_rect(win->plat.im, (struct rect){
-                    .x = bw + line.width * win->char_width,
+                    .x = bw + view.width * win->char_width,
                     .y = bh + k * (win->char_height + win->char_depth),
-                    .width = (win->cw - line.width) * win->char_width,
+                    .width = (win->cw - view.width) * win->char_width,
                     .height = win->char_height + win->char_depth
                 }, bg);
                 l_bound.width = win->cw - 1;
-                if (l_bound.x < 0) l_bound.x = line.width;
+                if (l_bound.x < 0) l_bound.x = view.width;
             }
 
             l_bound.width = MIN(l_bound.width - l_bound.x + 1, win->cw);
@@ -305,7 +310,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
         }
 
         // Only reset force flag for last part of the line
-        if (is_last_line(line, win->cfg.rewrap)) line.line->force_damage = 0;
+        if (is_last_line(&view, win->cfg.rewrap)) view.h.line->force_damage = 0;
     }
 
     if (cursor) {
@@ -332,6 +337,9 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                 off = 3;
                 rects[3].height = win->cfg.cursor_width;
                 rects[3].y -= win->cfg.cursor_width - 1;
+            } else if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block && beyond_eol) {
+                count = 1;
+                rects[0].width = win->char_width;
             } else {
                 count = 0;
             }

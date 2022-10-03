@@ -29,4 +29,8 @@
 /* NSST Version number */
 #define NSST_VERSION @VERSION@
 
+/* Uncomment to enable internal data structures validation.
+ * NOTE: It is really slows down terminal */
+// #define DEBUG_LINES
+
 #endif

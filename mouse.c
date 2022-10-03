@@ -164,6 +164,33 @@ void selection_concat(struct selection_state *sel, struct line *dst, struct line
     free_segments(sel, src_head);
 }
 
+void selection_split(struct selection_state *sel, struct line *line, struct line *tail) {
+    // Left line is the old one that contains selected fragments
+
+    struct segments *head = seg_head(sel, line);
+    if (!head) return;
+
+    head->line = line;
+
+    ssize_t new_head_size = -1;
+    foreach_segment_indexed(seg, idx, head) {
+        if (idx + seg->length > line->size) {
+            if (idx <= line->size) {
+                append_segment(sel, tail, 0, idx + seg->length - line->size);
+                seg++->length = SNAP_RIGHT;
+            } else {
+                append_segment(sel, tail, idx - line->size, idx + seg->length - line->size);
+            }
+            if (new_head_size < 0)
+                new_head_size = seg - head->segs;
+            break;
+        }
+    }
+
+    if (new_head_size >= 0)
+            head->size = new_head_size;
+}
+
 void selection_relocated(struct selection_state *sel, struct line *line) {
     struct segments *head = seg_head(sel, line);
     if (!head) return;
@@ -183,6 +210,9 @@ void selection_relocated(struct selection_state *sel, struct line *line) {
 void selection_clear(struct selection_state *sel) {
     if (sel->state == state_sel_none ||
         sel->state == state_sel_pressed) return;
+
+    line_handle_remove(&sel->start);
+    line_handle_remove(&sel->end);
 
     sel->state = state_sel_none;
 
@@ -236,19 +266,19 @@ inline static bool is_separator(uint32_t ch, char *seps) {
     return strstr(seps, (char *)cbuf);
 }
 
-static struct line_offset snap_backward(struct selection_state *sel, struct screen *scr, struct line_offset pos) {
+static struct line_handle snap_backward(struct selection_state *sel, struct line_handle pos) {
     char *seps = window_cfg(sel->win)->word_separators;
 
     if (sel->snap == snap_line) {
         pos.offset = 0;
         struct line *prev_line;
         for (;;) {
-            prev_line = screen_paragraph_at(scr, pos.line - 1);
+            prev_line = pos.line->prev;
             if (!prev_line || !prev_line->wrapped) break;
-            pos.line--;
+            pos.line = prev_line;
         }
     } else if (sel->snap == snap_word) {
-        struct line *line = screen_paragraph_at(scr, pos.line), *prev;
+        struct line *line = pos.line, *prev;
         if (pos.offset >= line->size) {
             pos.offset = line->size;
             return pos;
@@ -274,7 +304,7 @@ static struct line_offset snap_backward(struct selection_state *sel, struct scre
              *     - it is wrapped
              *     - it ends with character of same class */
 
-            if (!(prev = screen_paragraph_at(scr, pos.line - 1)) || !prev->wrapped) break;
+            if (!(prev = pos.line->prev) || !prev->wrapped) break;
             if (!prev->size) break;
 
             line = prev;
@@ -282,7 +312,7 @@ static struct line_offset snap_backward(struct selection_state *sel, struct scre
             int delta = 1 + (line->size > 1 && cell_wide(line->cell + line->size - 2));
             if (is_separator(cell_get(line->cell + line->size - delta), seps) != sep_cur) break;
 
-            pos.line--;
+            pos.line = prev;
             pos.offset = line->size - delta;
         }
     }
@@ -290,17 +320,17 @@ static struct line_offset snap_backward(struct selection_state *sel, struct scre
     return pos;
 }
 
-static struct line_offset snap_forward(struct selection_state *sel, struct screen *scr, struct line_offset pos) {
+static struct line_handle snap_forward(struct selection_state *sel, struct line_handle pos) {
     char *seps = window_cfg(sel->win)->word_separators;
 
     if (sel->snap == snap_line) {
-        struct line *next = screen_paragraph_at(scr, pos.line), *line;
-        do line = next, next = screen_paragraph_at(scr, ++pos.line);
+        struct line *next = pos.line, *line;
+        do line = next, next = line->next;
         while (next && line->wrapped);
-        pos.line--;
+        pos.line = line;
         pos.offset = SNAP_RIGHT;
     } else if (sel->snap == snap_word) {
-        struct line *line = screen_paragraph_at(scr, pos.line), *next;
+        struct line *line = pos.line, *next;
         if (pos.offset >= line->size) {
             pos.offset = SNAP_RIGHT;
             return pos;
@@ -326,14 +356,14 @@ static struct line_offset snap_forward(struct selection_state *sel, struct scree
              *     - it is wrapped
              *     - it ends with character of same class */
 
-            if (!line->wrapped || !(next = screen_paragraph_at(scr, pos.line + 1))) break;
+            if (!line->wrapped || !(next = pos.line->next)) break;
 
             line = next;
 
             if (!line->size) break;
             if (is_separator(cell_get(line->cell), seps) != sep_cur) break;
 
-            pos.line++;
+            pos.line = next;
             pos.offset = 0;
         }
     }
@@ -348,20 +378,20 @@ static struct line_offset snap_forward(struct selection_state *sel, struct scree
  * as a return value of the function.
  */
 
-inline static ssize_t virtual_pos(struct screen *scr, struct line_offset *pos) {
-    struct line_offset orig = *pos, next = *pos;
+inline static ssize_t virtual_pos(struct screen *scr, struct line_handle *pos) {
+    struct line_handle orig = *pos, next = *pos;
     next.offset = 0;
 
     do {
         *pos = next;
         if (screen_inc_iter(scr, &next)) break;
-    } while (line_offset_cmp(orig, next) >= 0);
+    } while (line_handle_cmp(&orig, &next) >= 0);
 
     return orig.offset - pos->offset;
 }
 
-inline static struct line_offset absolute_pos(struct screen *scr, ssize_t x, ssize_t y) {
-    struct line_offset offset = screen_view(scr);
+inline static struct line_handle absolute_pos(struct screen *scr, ssize_t x, ssize_t y) {
+    struct line_handle offset = screen_view(scr);
     screen_advance_iter(scr, &offset, y);
     offset.offset += x;
     return offset;
@@ -438,28 +468,25 @@ static void damage_changed(struct selection_state *sel, struct segments **old, s
             damage_head(sel->seg[i]);
 }
 
-static void decompose(struct selection_state *sel, struct screen *scr, struct line_offset start, struct line_offset end) {
+static void decompose(struct selection_state *sel, struct screen *scr, struct line_handle start, struct line_handle end) {
     if (sel->rectangular) {
-        struct line_offset vstart = start, vend = end;
+        struct line_handle vstart = start, vend = end;
         ssize_t vstart_x = virtual_pos(scr, &vstart);
         ssize_t vend_x = virtual_pos(scr, &vend);
         if (vstart_x > vend_x)
             SWAP(vstart_x, vend_x);
 
         do {
-            struct line *line = screen_paragraph_at(scr, vstart.line);
-            append_segment(sel, line, vstart.offset + vstart_x, vstart.offset + vend_x + 1);
+            append_segment(sel, vstart.line, vstart.offset + vstart_x, vstart.offset + vend_x + 1);
             if (screen_inc_iter(scr, &vstart)) break;
-        } while (line_offset_cmp(vstart, vend) <= 0);
+        } while (line_handle_cmp(&vstart, &vend) <= 0);
 
     } else {
-        for (; start.line < end.line; start.line++) {
-            struct line *line = screen_paragraph_at(scr, start.line);
-            append_segment(sel, line, start.offset, SNAP_RIGHT);
+        for (; start.line->seq < end.line->seq; start.line = start.line->next) {
+            append_segment(sel, start.line, start.offset, SNAP_RIGHT);
             start.offset = 0;
         }
-        struct line *line = screen_paragraph_at(scr, end.line);
-        append_segment(sel, line, start.offset, end.offset + 1);
+        append_segment(sel, end.line, start.offset, end.offset + 1);
     }
 }
 
@@ -493,15 +520,13 @@ void selection_scrolled(struct selection_state *sel, struct screen *scr, int16_t
          * between struct line and visual line changes it would
          * be the only correct way to calculate the position */
 
-        struct line_offset top_pos = screen_line_iter(scr, top);
-        struct line_offset bottom_pos = screen_line_iter(scr, bottom);
-        struct line_offset screen_pos = screen_line_iter(scr, 0);
+        struct line_handle top_pos = screen_line_iter(scr, top);
+        struct line_handle bottom_pos = screen_line_iter(scr, bottom);
+        struct line_handle screen_pos = screen_line_iter(scr, 0);
 
-        //struct line_offset top_pos = { top, 0 }, bottom_pos = { bottom, 0 }, screen_pos = { 0, 0 };
-
-        if (line_offset_cmp(sel->start, screen_pos) < 0 ||
-                (line_offset_cmp(sel->start, top_pos) >= 0 &&
-                 line_offset_cmp(sel->start, bottom_pos) < 0)) {
+        if (line_handle_cmp(&sel->start, &screen_pos) < 0 ||
+                (line_handle_cmp(&sel->start, &top_pos) >= 0 &&
+                 line_handle_cmp(&sel->start, &bottom_pos) < 0)) {
             ssize_t x_off = virtual_pos(scr, &sel->start);
 
             screen_advance_iter(scr, &sel->start, -x);
@@ -514,10 +539,14 @@ void selection_scrolled(struct selection_state *sel, struct screen *scr, int16_t
 
 static void selection_changed(struct selection_state *sel, struct screen *scr, uint8_t state, bool rectangular) {
     struct instance_config *cfg = window_cfg(sel->win);
-    struct line_offset pos = absolute_pos(scr, sel->pointer_x, sel->pointer_y);
+    struct line_handle pos = absolute_pos(scr, sel->pointer_x, sel->pointer_y);
+    assert(!line_handle_is_registered(&pos));
+    assert(pos.line);
 
     if (state == state_sel_pressed) {
+        line_handle_remove(&sel->start);
         sel->start = pos;
+        line_handle_add(&sel->start);
 
         struct timespec now;
         clock_gettime(CLOCK_TYPE, &now);
@@ -535,16 +564,18 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
 
     sel->state = state;
     sel->rectangular = rectangular;
+    line_handle_remove(&sel->end);
     sel->end = pos;
+    line_handle_add(&sel->end);
 
-    struct line_offset nstart = sel->start;
-    struct line_offset nend = sel->end;
+    struct line_handle nstart = dup_handle(&sel->start);
+    struct line_handle nend = dup_handle(&sel->end);
 
-    if (line_offset_cmp(nstart, nend) > 0)
+    if (line_handle_cmp(&nstart, &nend) > 0)
         SWAP(nstart, nend);
 
-    nstart = snap_backward(sel, scr, nstart);
-    nend = snap_forward(sel, scr, nend);
+    nstart = snap_backward(sel, nstart);
+    nend = snap_forward(sel, nend);
 
     if (sel->snap != snap_none && sel->state == state_sel_pressed)
         sel->state = state_sel_progress;
@@ -559,12 +590,14 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
     if (sel->state == state_sel_progress || sel->state == state_sel_released)
         decompose(sel, scr, nstart, nend);
 
+    // dump(sel);
+
     // Make changed cells dirty
     damage_changed(sel, prev_heads, prev_size);
 }
 
 struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_view *view) {
-    struct segments *head = seg_head(sel, view->line);
+    struct segments *head = seg_head(sel, view->h.line);
     struct mouse_selection_iterator it = { 0 };
     if (!head || !head->size) return it;
 
@@ -578,7 +611,7 @@ struct mouse_selection_iterator selection_begin_iteration(struct selection_state
 bool is_selected_prev(struct mouse_selection_iterator *it, struct line_view *view, int16_t x0) {
     if (!it->idx) return 0;
 
-    ssize_t x = x0 + view->cell - view->line->cell;
+    ssize_t x = x0 + view->h.offset;
 
     do {
         assert(it->idx >= 0);
@@ -762,12 +795,11 @@ static void update_active_uri(struct screen *scr, struct window *win, struct mou
         int16_t y = (ev->y - b.height) / c.height;
 
 
-        struct line_offset pos = screen_view(scr);
+        struct line_handle pos = screen_view(scr);
         screen_advance_iter(scr, &pos, y);
 
-        struct line_view lv = screen_line_at(scr, pos);
-        uint32_t lx = x + lv.cell - lv.line->cell;
-        if (lx < lv.line->size) uri = attr_at(lv.line, lx).uri;
+        if (pos.offset + x < pos.line->size)
+            uri = attr_at(pos.line, pos.offset + x).uri;
     }
     window_set_active_uri(win, uri, is_button1_down(ev));
 

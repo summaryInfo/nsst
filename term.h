@@ -23,29 +23,35 @@ typedef int32_t iparam_t;
 #define SCNparam SCNu32
 
 struct line_view {
-    struct line *line;
-    uint16_t width;
+    struct line_handle h;
+    int32_t width;
     bool wrapped;
-    struct cell *cell;
 };
 
-struct line_offset {
-    ssize_t line;
-    ssize_t offset;
-};
-
-inline static ssize_t line_offset_cmp(const struct line_offset a, const struct line_offset b) {
-    return a.line == b.line ? a.offset - b.offset : a.line - b.line;
+inline static struct cell *view_cell(struct line_view *view, ssize_t x) {
+    return view->h.line->cell + view->h.offset + x;
 }
 
-inline static struct attr line_view_attr(struct line_view view, uint32_t attrid) {
-    return attrid ? view.line->attrs->data[attrid - 1] : ATTR_DEFAULT;
+inline static struct attr view_attr_at(struct line_view *view, ssize_t x) {
+    return attr_at(view->h.line, view->h.offset + x);
+}
+
+inline static struct attr view_attr(struct line_view *view, uint32_t attrid) {
+    return attrid ? view->h.line->attrs->data[attrid - 1] : ATTR_DEFAULT;
+}
+
+inline static void view_adjust_wide_right(struct line_view *view, ssize_t x) {
+    adjust_wide_right(view->h.line, view->h.offset + x);
+}
+
+inline static void view_adjust_wide_left(struct line_view *view, ssize_t x) {
+    adjust_wide_left(view->h.line, view->h.offset + x);
 }
 
 /* Returns true if next line will be next physical line
  * and not continuation part of current physical line */
-inline static bool is_last_line(struct line_view line, bool rewrap) {
-    return !rewrap || line.cell - line.line->cell + line.width >= line.line->size;
+inline static bool is_last_line(struct line_view *view, bool rewrap) {
+    return !rewrap || !view->wrapped;
 }
 
 struct term *create_term(struct window *win, int16_t width, int16_t height);
@@ -75,12 +81,11 @@ struct screen *term_screen(struct term *term);
 bool screen_redraw(struct screen *scr, bool blink_commited);
 void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd);
 void screen_scroll_view(struct screen *scr, int16_t amount);
-struct line *screen_paragraph_at(struct screen *scr, ssize_t y);
-struct line_view screen_line_at(struct screen *scr, struct line_offset pos);
-struct line_offset screen_view(struct screen *scr);
-struct line_offset screen_line_iter(struct screen *scr, ssize_t y);
-ssize_t screen_advance_iter(struct screen *scr, struct line_offset *pos, ssize_t amount);
-ssize_t screen_inc_iter(struct screen *scr, struct line_offset *pos);
+struct line_view screen_view_at(struct screen *scr, struct line_handle *pos);
+struct line_handle screen_view(struct screen *scr); /* NOTE: It does not register handle */
+struct line_handle screen_line_iter(struct screen *scr, ssize_t y); /* NOTE: It does not register handle */
+ssize_t screen_advance_iter(struct screen *scr, struct line_handle *pos, ssize_t amount);
+ssize_t screen_inc_iter(struct screen *scr, struct line_handle *pos);
 void screen_damage_selection(struct screen *scr);
 #if USE_URI
 void screen_damage_uri(struct screen *scr, uint32_t uri);

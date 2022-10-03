@@ -152,8 +152,8 @@ int main(int argc, char **argv) {
     atexit(free_options);
 
 #if USE_URI
-	init_proto_tree();
-	atexit(uri_release_memory);
+    init_proto_tree();
+    atexit(uri_release_memory);
 #endif
     init_poller();
     atexit(free_poller);

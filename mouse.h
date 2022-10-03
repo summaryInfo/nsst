@@ -71,8 +71,8 @@ struct selection_state {
     size_t seg_size;
     struct segments **seg;
 
-    struct line_offset start;
-    struct line_offset end;
+    struct line_handle start;
+    struct line_handle end;
     bool rectangular;
 
     enum {
@@ -102,6 +102,7 @@ struct selection_state {
     bool select_to_clipboard;
 };
 
+
 void free_selection(struct selection_state *sel);
 bool init_selection(struct selection_state *sel, struct window *win);
 
@@ -114,6 +115,7 @@ bool is_selected_prev(struct mouse_selection_iterator *it, struct line_view *vie
 void selection_clear(struct selection_state *sel);
 void selection_damage(struct selection_state *sel, struct line *line);
 void selection_concat(struct selection_state *sel, struct line *dst, struct line *src);
+void selection_split(struct selection_state *sel, struct line *line, struct line *tail);
 void selection_relocated(struct selection_state *sel, struct line *line);
 void selection_free(struct selection_state *sel, struct line *line);
 void selection_scrolled(struct selection_state *sel, struct screen *scr, int16_t x, ssize_t top, ssize_t bottom);
@@ -125,5 +127,9 @@ inline static bool selection_active(struct selection_state *sel) {
            sel->state != state_sel_pressed;
 }
 
-#endif
+inline static bool view_selection_intersects(struct selection_state *sel, struct line_view *line, int16_t x0, int16_t x1) {
+    ssize_t offset = line->h.offset;
+    return selection_intersects(sel, line->h.line, x0 + offset, x1 + offset);
+}
 
+#endif

@@ -15,10 +15,6 @@
 #include <unistd.h>
 #include <wchar.h>
 
-#ifdef __SSE2__
-#include <emmintrin.h>
-#endif
-
 #define SPECIAL_PALETTE_SIZE 13
 #define PALETTE_SIZE (256 + SPECIAL_PALETTE_SIZE)
 #define SPECIAL_BOLD 256
@@ -89,11 +85,22 @@ struct line_attr {
     struct attr data[];
 };
 
+struct line_handle {
+    struct line_handle *prev;
+    struct line_handle *next;
+    struct line *line;
+    ssize_t offset;
+};
+
 // Add default attrib value?
 struct line {
     struct line_attr *attrs;
+    struct line_handle *first_handle;
+    struct line *next;
+    struct line *prev;
     ssize_t size;
     ssize_t caps;
+    uint64_t  seq; // Global history counter
     uint32_t selection_index;
     uint16_t pad_attrid;
     bool force_damage : 1;
@@ -101,15 +108,20 @@ struct line {
     struct cell cell[];
 };
 
-
 uint32_t alloc_attr(struct line *line, struct attr attr);
 struct line *create_line(struct attr attr, ssize_t width);
+uint64_t get_next_seqno();
+void fixup_lines_seqno(struct line *line);
+struct line *create_line_with_seq(struct attr attr, ssize_t width, uint64_t seq);
 struct line *realloc_line(struct line *line, ssize_t width);
+void split_line(struct line *src, ssize_t offset, struct line **dst1, struct line **dst2);
 /* concat_line will return NULL not touching src1 and src2 if resulting line is too long */
 /* if src2 is NULL, it will relocate src1 to its length if opt == 1 */
 /* if opt == 1, line attributes will be minimized */
 struct line *concat_line(struct line *src1, struct line *src2, bool opt);
 void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len);
+void fill_cells(struct cell *dst, struct cell c, ssize_t width);
+void free_line(struct line *line);
 
 inline static color_t indirect_color(uint32_t idx) { return idx + 1; }
 inline static uint32_t color_idx(color_t c) { return c - 1; }
@@ -167,17 +179,43 @@ inline static bool cell_wide(struct cell *cell) {
     return iswide(uncompact(cell->ch));
 }
 
-void free_attrs(struct line_attr *attrs);
 
-inline static void free_line(struct line *line) {
+inline static struct line *detach_prev_line(struct line *line) {
+    struct line *prev = line->prev;
+    if (prev)
+        prev->next = NULL;
+    line->prev = NULL;
+    return prev;
+}
 
-    // If we are freeing line its selection
-    // should be reset
-    assert(!line->selection_index);
+inline static struct line *detach_next_line(struct line *line) {
+    struct line *next = line->next;
+    if (next)
+        next->prev = NULL;
+    line->next = NULL;
+    return next;
+}
 
-    if (line && line->attrs)
-        free_attrs(line->attrs);
-    free(line);
+inline static void attach_next_line(struct line *line, struct line *next) {
+    if (next) {
+        assert(!next->prev);
+        next->prev = line;
+    }
+    if (line) {
+        assert(!line->next);
+        line->next = next;
+    }
+}
+
+inline static void attach_prev_line(struct line *line, struct line *prev) {
+    if (prev) {
+        assert(!prev->next);
+        prev->next = line;
+    }
+    if (line) {
+        assert(!line->prev);
+        line->prev = prev;
+    }
 }
 
 inline static int16_t line_length(struct line *line) {
@@ -187,16 +225,24 @@ inline static int16_t line_length(struct line *line) {
     return max_x;
 }
 
-inline static ssize_t line_width(struct line *ln, ssize_t off, ssize_t w) {
-    off += w;
-    if (off - 1 < ln->size)
-        off -= cell_wide(&ln->cell[off - 1]);
-    return MIN(off, ln->size);
+inline static ssize_t line_advance_width(struct line *ln, ssize_t offset, ssize_t width) {
+    offset += width;
+    if (offset - 1 < ln->size)
+        offset -= cell_wide(&ln->cell[offset - 1]);
+    return MIN(offset, ln->size);
 }
 
-inline static ssize_t line_segments(struct line *ln, ssize_t off, ssize_t w) {
-    ssize_t n = off < ln->size || (!ln->size && !off);
-    while ((off = line_width(ln, off, w)) < ln->size) n++;
+inline static ssize_t line_segments(struct line *ln, ssize_t offset, ssize_t width) {
+    if (!ln->size && !offset)
+        return 1;
+
+    ssize_t n = 0;
+
+    while (offset < ln->size) {
+        n++;
+        offset = line_advance_width(ln, offset, width);
+    }
+
     return n;
 }
 
@@ -214,12 +260,12 @@ inline static void attr_mask_set(struct attr *a, uint32_t mask) {
     a->mask = (a->mask & ~ATTR_MASK) | (mask & ATTR_MASK);
 }
 
-inline static struct attr attr_pad(struct line *ln) {
-    return ln->pad_attrid ? ln->attrs->data[ln->pad_attrid - 1] : ATTR_DEFAULT;
+inline static const struct attr *attr_pad(struct line *ln) {
+    return ln->pad_attrid ? &ln->attrs->data[ln->pad_attrid - 1] : &ATTR_DEFAULT;
 }
 
 inline static struct attr attr_at(struct line *ln, ssize_t x) {
-    if (x >= ln->size) return attr_pad(ln);
+    if (x >= ln->size) return *attr_pad(ln);
     return ln->cell[x].attrid ? ln->attrs->data[ln->cell[x].attrid - 1] : ATTR_DEFAULT;
 }
 
@@ -235,56 +281,91 @@ inline static void adjust_wide_right(struct line *line, ssize_t x) {
     if (cell_wide(cell - 1)) cell->drawn = 0;
 }
 
-inline static bool attr_eq(struct attr *a, struct attr *b) {
+inline static bool attr_eq(const struct attr *a, const struct attr *b) {
     return a->fg == b->fg && a->bg == b->bg &&
             a->ul == b->ul && !((a->mask ^ b->mask) & ~PROTECTED_MASK);
 }
 
-inline static void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
-#if defined(__SSE2__)
-    // Well... this looks ugly but its fast
-
-    static_assert(sizeof(struct cell) == sizeof(uint32_t), "Wrong size of cell");
-    int32_t pref = MIN((4 - (intptr_t)(((uintptr_t)dst/sizeof(uint32_t)) & 3)) & 3, width);
-    switch (pref) {
-    case 3: dst[2] = c; //fallthrough
-    case 2: dst[1] = c; //fallthrough
-    case 1: dst[0] = c; //fallthrough
-    case 0:;
-    }
-    dst += pref;
-    width -= pref;
-    if (width <= 0) return;
-
-    uint32_t cell_val;
-    memcpy(&cell_val, &c, sizeof cell_val);
-    const __m128i four_cells = _mm_set1_epi32(cell_val);
-    for (ssize_t i = 0; i < (width & ~3); i += 4)
-        _mm_stream_si128((__m128i *)&dst[i], four_cells);
-
-    dst += width & ~3;
-    switch (width & 3) {
-    case 3: dst[2] = c; //fallthrough
-    case 2: dst[1] = c; //fallthrough
-    case 1: dst[0] = c; //fallthrough
-    case 0:;
-    }
-#else
-    ssize_t i = (width+7)/8, inc = width % 8;
-    if (!inc) inc = 8;
-    switch(inc) do {
-        dst += inc;
-        inc = 8; /* fallthrough */
-    case 8: dst[7] = c; /* fallthrough */
-    case 7: dst[6] = c; /* fallthrough */
-    case 6: dst[5] = c; /* fallthrough */
-    case 5: dst[4] = c; /* fallthrough */
-    case 4: dst[3] = c; /* fallthrough */
-    case 3: dst[2] = c; /* fallthrough */
-    case 2: dst[1] = c; /* fallthrough */
-    case 1: dst[0] = c;
-    } while(--i > 0);
+#ifdef DEBUG_LINES
+inline static bool find_handle_in_line(struct line_handle *handle) {
+    struct line_handle *first = handle->line->first_handle;
+    while (first) {
+        if (first == handle) return true;
+        first = first->next;
+    };
+    return false;
+}
 #endif
+
+inline static void line_handle_add(struct line_handle *handle) {
+#ifdef DEBUG_LINES
+    assert(!handle->next);
+    assert(!handle->prev);
+    assert(!find_handle_in_line(handle));
+#endif
+
+    struct line_handle *next = handle->line->first_handle;
+    handle->line->first_handle = handle;
+    if (next) next->prev = handle;
+
+    handle->next = next;
+    handle->prev = NULL;
+}
+
+inline static bool line_handle_is_registered(struct line_handle *handle) {
+    return handle->prev || handle == handle->line->first_handle;
+}
+
+inline static void line_handle_remove(struct line_handle *handle) {
+    if (!handle->line || !line_handle_is_registered(handle))
+        return;
+
+#ifdef DEBUG_LINES
+    assert(find_handle_in_line(handle));
+    if (!handle->prev)
+        assert(handle->line->first_handle == handle);
+    else
+        assert(handle->prev->next == handle);
+    if (handle->next)
+        assert(handle->next->prev == handle);
+#endif
+
+    struct line_handle *next = handle->next;
+    struct line_handle *prev = handle->prev;
+
+    if (!prev)
+        handle->line->first_handle = next;
+    else {
+        prev->next = next;
+        handle->prev = NULL;
+    }
+    if (next) {
+        next->prev = prev;
+        handle->next = NULL;
+    }
+}
+
+inline static int line_handle_cmp(struct line_handle *a, struct line_handle *b) {
+    if (a->line != b->line) {
+        int64_t a_seq = a->line ? a->line->seq : 0;
+        int64_t b_seq = b->line ? b->line->seq : 0;
+        return a_seq < b_seq ? -1 : a_seq > b_seq;
+    }
+    return a->offset < b->offset ? -1 : a->offset > b->offset;
+}
+
+/* Returns unregistered copy of handle */
+inline static struct line_handle dup_handle(struct line_handle *handle) {
+    return (struct line_handle) {
+        .line = handle->line,
+        .offset = handle->offset
+    };
+}
+
+inline static void replace_handle(struct line_handle *dst, struct line_handle *src) {
+    line_handle_remove(dst);
+    *dst = dup_handle(src);
+    line_handle_add(dst);
 }
 
 #endif

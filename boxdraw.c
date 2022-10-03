@@ -41,7 +41,7 @@ struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t de
     size_t stride = (width + 3) & ~3;
     if (lcd) stride *= 4;
 #else
-    /* X11 XRender backend requires all glyphs 
+    /* X11 XRender backend requires all glyphs
      * to be in the same format (i.e. subpixel or not) */
     size_t stride = lcd ? width * 4 : (width + 3) & ~3;
 #endif

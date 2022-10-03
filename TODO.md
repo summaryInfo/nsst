@@ -3,6 +3,13 @@ Roadmap
 
 ## Future versions
 
+Optimize scrolling
+
+Optimize screen_damage_uri to iterate over attributes first to
+find whether the line has attributes with source URI.
+
+Handle overlong lines
+
 _NOTE: These plans can change any time_
 
 ### Until 2.4
