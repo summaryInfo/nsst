@@ -178,20 +178,15 @@ struct line *create_line_with_seq(struct attr attr, ssize_t caps, uint64_t seq) 
 }
 
 
-uint64_t get_next_seqno(void) {
-    static uint64_t line_seqno;
-    return ++line_seqno;
+uint64_t get_seqno_range(uint64_t inc) {
+    static uint64_t line_seqno = 1;
+    uint64_t ret = line_seqno;
+    line_seqno += inc;
+    return ret;
 }
 
 struct line *create_line(struct attr attr, ssize_t caps) {
-    return create_line_with_seq(attr, caps, get_next_seqno());
-}
-
-void fixup_lines_seqno(struct line *line) {
-    while (line) {
-        line->seq = get_next_seqno();
-        line = line->next;
-    }
+    return create_line_with_seq(attr, caps, get_seqno_range(SEQNO_INC));
 }
 
 struct line *realloc_line(struct line *line, ssize_t caps) {
@@ -255,10 +250,18 @@ static void optimize_attributes(struct line *line) {
 
 void split_line(struct line *src, ssize_t offset, struct line **dst1, struct line **dst2) {
     ssize_t tail_len = src->size - offset;
+#ifdef DEBUG_LINES
     assert(tail_len >= 0);
+#endif
 
-    struct line *tail = create_line(*attr_pad(src), tail_len);
+    uint64_t dist = src->next ? src->next->seq - src->seq : 0;
+    bool need_fixup = src->next && dist < 2;
+    uint64_t tail_seq = dist < 2 ? get_seqno_range(SEQNO_INC) : src->seq + dist/2;
+
+    struct line *tail = create_line_with_seq(*attr_pad(src), tail_len, tail_seq);
+#ifdef DEBUG_LINES
     assert(tail);
+#endif
 
     copy_line(tail, 0, src, offset, tail_len);
 
@@ -292,8 +295,8 @@ void split_line(struct line *src, ssize_t offset, struct line **dst1, struct lin
         handle = next;
     }
 
-    // TODO Optimize by using seq increments more than one
-    fixup_lines_seqno(src);
+    if (need_fixup)
+        fixup_lines_seqno(tail->next);
 
     *dst1 = src;
     *dst2 = tail;
@@ -307,7 +310,7 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
 
         ssize_t len = src2->size + src1->size;
         ssize_t first_len = src1->size;
-        src1 = realloc_line(src1, len);
+        src1 = realloc_line(src1, src1->size + src2->caps);
         src1->wrapped = src2->wrapped;
         src1->force_damage |= src2->force_damage;
 

@@ -214,6 +214,9 @@ void selection_clear(struct selection_state *sel) {
     line_handle_remove(&sel->start);
     line_handle_remove(&sel->end);
 
+    sel->start.line = NULL;
+    sel->end.line = NULL;
+
     sel->state = state_sel_none;
 
     for (size_t i = 1; i < sel->seg_size; i++) {
@@ -514,6 +517,9 @@ void selection_scrolled(struct selection_state *sel, struct screen *scr, int16_t
 
     if (sel->state == state_sel_pressed ||
             sel->state == state_sel_progress) {
+
+        if (!sel->start.line || !sel->end.line)
+            selection_clear(sel);
 
         /* NOTE: This is slow, but if the invariant of the lines
          * on the screen having one-to-one correspondence

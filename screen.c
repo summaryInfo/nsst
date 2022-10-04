@@ -214,7 +214,7 @@ inline static struct line *screen_concat_line(struct screen *scr, struct line *d
 
 FORCEINLINE
 inline static struct line *screen_split_line(struct screen *scr, struct line *src, ssize_t offset, struct line **dst1, struct  line **dst2) {
-    if (!offset || offset >= src->size) return src;
+    if (LIKELY(!offset || offset >= src->size)) return src;
 
     struct line *dst1p, *dst2p;
     if (!dst1) dst1 = &dst1p;
@@ -256,10 +256,10 @@ void screen_unwrap_cursor_line(struct screen *scr) {
 inline static void screen_adjust_line2(struct screen *scr, struct line_view *screen, ssize_t y, ssize_t size) {
     struct line_view *view = &screen[y];
     ssize_t old_size = view->h.line->size;
-
-    if (LIKELY(view->h.line->size >= view->h.offset + size)) return;
-
     ssize_t new_size = view->h.offset + size;
+
+    if (LIKELY(old_size >= new_size)) return;
+
     if (new_size > view->h.line->caps)
         screen_realloc_line(scr, view->h.line, new_size);
 
@@ -268,8 +268,8 @@ inline static void screen_adjust_line2(struct screen *scr, struct line_view *scr
 
     /* When we are resizing continuation line view fixup
      * widths of previous parts of line */
-    if (--y >= 0 && screen[y].h.line == view->h.line) {
-        screen[y].width = scr->width;
+    if (UNLIKELY(view->h.offset) && y > 0) {
+        screen[--y].width = scr->width;
 #ifdef DEBUG_LINES
         assert(screen[y].h.offset <= old_size);
         while (--y > 0 && screen[y].h.line == view->h.line)
@@ -278,9 +278,7 @@ inline static void screen_adjust_line2(struct screen *scr, struct line_view *scr
     }
 
     view->width = size;
-
-    if (view->h.line->size < new_size)
-        view->h.line->size = new_size;
+    view->h.line->size = new_size;
 }
 
 inline static void screen_adjust_line(struct screen *scr, ssize_t y, ssize_t size) {
@@ -539,9 +537,14 @@ inline static void translate_screen_position(struct line_handle *first, struct l
         return;
     }
 
+#ifdef DEBUG_LINES
     ssize_t yy = c->y;
+#endif
+
     c->y = -1;
     ssize_t y = 0;
+
+    // FIXME handle rewrap == false
 
     do {
         ssize_t next_offset = line_advance_width(it.line, it.offset, width);
@@ -554,11 +557,9 @@ inline static void translate_screen_position(struct line_handle *first, struct l
         y++;
     } while (!inc_iter_width_width(&it, width, rewrap));
 
-    if (c->y == -1) {
-        warn("w=%zd y=%zd x=%zd cy=%zd", width, y, c->x, yy);
-    }
-
 #ifdef DEBUG_LINES
+    if (c->y == -1)
+        warn("w=%zd y=%zd x=%zd cy=%zd", width, y, c->x, yy);
     assert(c->y >= 0);
     assert(c->x >= 0);
 #endif
@@ -648,7 +649,7 @@ inline static void round_offset_to_width(struct line_handle *handle, ssize_t wid
     do {
         ssize_t next = line_advance_width(handle->line, handle->offset, width);
         if (next > to) break;
-        handle->offset = to;
+        handle->offset = next;
     } while (handle->offset < handle->line->size);
 }
 
@@ -684,10 +685,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         screen_adjust_line2(scr, screen, c->y, c->x + 1);
         screen_adjust_line2(scr, screen, saved_c->y, saved_c->x + 1);
 
-        struct line_handle it = {
-            .line = screen[c->y].h.line,
-            .offset = screen[c->y].h.offset + c->x
-        };
+        struct line_handle it = dup_handle(&cursor_handle);
         round_offset_to_width(&it, width, scr->mode.rewrap);
 
         /* Remove handles that are gonna be freed by realloc below */
@@ -700,8 +698,8 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
 
 #ifdef DEBUG_LINES
         assert(c->y >= 0);
+        struct line_handle d0 = dup_handle(&it);
 #endif
-
         ssize_t rest = advance_iter_with_width(&it, -c->y, width, scr->mode.rewrap);
         if (rest) {
         /* Not enough lines in scrollback buffer to keep cursor on it original line,
@@ -716,6 +714,15 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
                                &ATTR_DEFAULT, -rest, &scr->top_line);
             fixup_lines_seqno(it.line);
             it.line = scr->top_line.line;
+#ifdef DEBUG_LINES
+        } else {
+            struct line_handle d = dup_handle(&it);
+            assert(!advance_iter_with_width(&d, c->y, width, scr->mode.rewrap));
+            if (line_handle_cmp(&d, &d0)) {
+                warn("(%zd, %zd) != (%zd, %zd)", d.line->seq, d.offset, d0.line->seq, d0.offset);
+            }
+            assert(!line_handle_cmp(&d, &d0));
+#endif
         }
 
         /* Calculate new cursor position */
@@ -793,8 +800,6 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
     window_set_active_uri(scr->win, EMPTY_URI, 0);
 #endif
 
-    ssize_t old_y = scr->c.y;
-
     resize_aux(scr, width, height);
     resize_tabs(scr, width);
     resize_altscreen(scr, width, height);
@@ -826,9 +831,6 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
     fixup_view(scr, &lower_left, stick);
 
     screen_damage_lines(scr, 0, scr->height);
-
-    if (old_y != scr->c.y)
-        warn("Cursor mode old %zd new %zd", old_y, scr->c.y);
 
     validate_altscreen(scr);
     validate_main_screen(scr);
@@ -1309,52 +1311,54 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
         ssize_t rest = (bottom - top) - amount;
 
         if (save) {
-
             struct line *first_to_hist = first->h.line;
             struct line *bottom_line = last->h.line;
             struct line *bottom_next = detach_next_line(bottom_line);
 
-
-#if 0 // Causes cycles, needs more debugging
-            /* This code assumes that handles gets added from top to bottom */
-            for (ssize_t i = 0; i < amount; i++) {
+            ssize_t i = 0;
+            for (; i < amount; i++) {
                 struct line_handle *handle = &scr->screen[i].h;
 
-                if (!handle->prev)
-                    handle->line->first_handle = handle->next;
-                else
-                    handle->prev->next = handle->next;
-                if (handle->next)
-                    handle->next->prev = handle->prev;
-            }
-#else
-            for (ssize_t i = 0; i < bottom; i++)
-                line_handle_remove(&scr->screen[i].h);
+                struct line_handle *prev = handle->prev;
+                struct line_handle *next = handle->next;
 
-#endif
+                if (prev) prev->next = next;
+                else handle->line->first_handle = next;
+                if (next) next->prev = prev;
+            }
+
+            for (; i < bottom; i++) {
+                struct line_handle *handle = &scr->screen[i].h;
+
+                struct line_handle *prev = handle->prev;
+                struct line_handle *next = handle->next;
+
+                /* This magic is required to speed up relocation.
+                 * Returns true if it is on screen and has already been fixed up.
+                 * Need to correct position if it has already been fixed up since,
+                 * but memmove did not happen yet. */
+                #define INSCREEN(x) (((void *)(x) < (void *)(scr->screen + i - amount) && \
+                                      (void *)(x) >= (void *)(scr->screen)))
+                #define FIXUP(x, y) ((struct line_handle *)((struct line_view *)(x) + (y)))
+
+                struct line_handle *fixed_up = FIXUP(handle, -amount);
+
+                if (prev) {
+                    if (INSCREEN(prev)) prev = FIXUP(prev, amount);
+                    prev->next = fixed_up;
+                } else {
+                    handle->line->first_handle = fixed_up;
+                }
+
+                if (next) {
+                    if (INSCREEN(next)) next = FIXUP(next, amount);
+                    next->prev = fixed_up;
+                }
+
+                #undef INSCREEN
+            }
 
             memmove(scr->screen, scr->screen + amount, rest*sizeof(*scr->screen));
-
-#if 0 // Causes cycles, needs more debugging
-            /* This magic is required to speed up relocation */
-            for (ssize_t i = rest - 1 ; i >= 0; i--) {
-                struct line_handle *handle = &scr->screen[i].h;
-                if (handle->prev) handle->prev->next = handle;
-                else handle->line->first_handle = handle;
-                struct line_handle *next = handle->next;
-                if (next) {
-                    if ((void *)next < (void *)(scr->screen + bottom) &&
-                        (void *)next >= (void *)scr->screen) {
-                        next -= amount;
-                        handle->next = next;
-                     }
-                     next->prev = handle;
-                }
-            }
-#else
-            for (ssize_t i = 0; i < rest; i++)
-                line_handle_add(&scr->screen[i].h);
-#endif
 
 #ifdef DEFUG_LINES
             if (rest) assert(scr->screen[rest - 1].h.line == bottom_line);
@@ -1863,14 +1867,14 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
             screen_do_wrap(scr);
     } else scr->c.x = MIN(scr->c.x, screen_max_x(scr) - totalw);
 
+    struct line_view *line = &scr->screen[scr->c.y];
+    struct cell *cell = NULL;
+
     // Writing to the line resets its wrapping state
     screen_unwrap_line(scr, scr->c.y);
 
     ssize_t max_cx = scr->c.x + totalw, cx = scr->c.x;
     ssize_t max_tx = screen_max_x(scr);
-
-    struct line_view *line = &scr->screen[scr->c.y];
-    struct cell *cell = NULL;
 
     if (max_cx < line->width)
         view_adjust_wide_right(line, max_cx - 1);

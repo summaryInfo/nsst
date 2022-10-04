@@ -94,13 +94,13 @@ struct line_handle {
 
 // Add default attrib value?
 struct line {
-    struct line_attr *attrs;
-    struct line_handle *first_handle;
     struct line *next;
     struct line *prev;
+    uint64_t  seq; // Global history counter
+    struct line_handle *first_handle;
+    struct line_attr *attrs;
     ssize_t size;
     ssize_t caps;
-    uint64_t  seq; // Global history counter
     uint32_t selection_index;
     uint16_t pad_attrid;
     bool force_damage : 1;
@@ -110,8 +110,7 @@ struct line {
 
 uint32_t alloc_attr(struct line *line, struct attr attr);
 struct line *create_line(struct attr attr, ssize_t width);
-uint64_t get_next_seqno();
-void fixup_lines_seqno(struct line *line);
+uint64_t get_seqno_range(uint64_t inc);
 struct line *create_line_with_seq(struct attr attr, ssize_t width, uint64_t seq);
 struct line *realloc_line(struct line *line, ssize_t width);
 void split_line(struct line *src, ssize_t offset, struct line **dst1, struct line **dst2);
@@ -342,6 +341,23 @@ inline static void line_handle_remove(struct line_handle *handle) {
     if (next) {
         next->prev = prev;
         handle->next = NULL;
+    }
+}
+
+#define SEQNO_INC 16
+#define LINES_AT_A_TIME 16
+
+inline static void fixup_lines_seqno(struct line *line) {
+    uint64_t next = 0, rem = 0;
+
+    while (line) {
+        if (!rem--) {
+            next = get_seqno_range(SEQNO_INC * LINES_AT_A_TIME);
+            rem = LINES_AT_A_TIME;
+        }
+        line->seq = next;
+        line = line->next;
+        next += SEQNO_INC;
     }
 }
 
