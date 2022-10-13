@@ -436,3 +436,49 @@ void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
     } while(--i > 0);
 #endif
 }
+
+HOT
+void copy_cells_with_attr(struct cell *dst, const uint32_t *src, const uint32_t *end, uint32_t attrid) {
+    uint32_t *restrict dstp = (uint32_t *)dst;
+    attrid <<= 20;
+
+    int32_t pref = MIN((4 - (intptr_t)(((uintptr_t)dstp/sizeof(uint32_t)) & 3)) & 3, end - src);
+    switch (pref) {
+        case 3: *dstp++ = *src++ | attrid; // fallthrough
+        case 2: *dstp++ = *src++ | attrid; // fallthrough
+        case 1: *dstp++ = *src++ | attrid; // fallthrough
+        default:;
+    }
+
+    register ssize_t blocks = (end - src)/4;
+
+#ifdef __SSE2__
+    const __m128i four_attrs = _mm_set1_epi32(attrid);
+    if ((uintptr_t)src & (4 * sizeof(uint32_t) - 1)) {
+        for (ssize_t i = 0; i < blocks; i++)
+            _mm_stream_si128((__m128i *)&dstp[i*4],
+                             _mm_or_si128(four_attrs, _mm_loadu_si128((__m128i *)&src[i*4])));
+    } else {
+        for (ssize_t i = 0; i < blocks; i++)
+            _mm_stream_si128((__m128i *)&dstp[i*4],
+                             _mm_or_si128(four_attrs, _mm_load_si128((__m128i *)&src[i*4])));
+    }
+#else
+    for (ssize_t i = 0; i < blocks; i++) {
+        dstp[4*i + 0] = attrid | src[4*i + 0];
+        dstp[4*i + 1] = attrid | src[4*i + 1];
+        dstp[4*i + 2] = attrid | src[4*i + 2];
+        dstp[4*i + 3] = attrid | src[4*i + 3];
+    }
+#endif
+    src += blocks*4;
+    dstp += blocks*4;
+
+    switch((end - src)) {
+        case 3: *dstp++ = *src++ | attrid; // fallthrough
+        case 2: *dstp++ = *src++ | attrid; // fallthrough
+        case 1: *dstp = *src | attrid; // fallthrough
+        default:;
+    }
+
+}

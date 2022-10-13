@@ -3,12 +3,10 @@ Roadmap
 
 ## Future versions
 
-Optimize scrolling
-
-Optimize screen_damage_uri to iterate over attributes first to
-find whether the line has attributes with source URI.
-
-Handle overlong lines
+* Optimize scrolling
+* Optimize screen_damage_uri to iterate over attributes first to find whether the line has attributes with source URI.
+* Handle overlong lines
+* Unbreak `rewrap==False`
 
 _NOTE: These plans can change any time_
 

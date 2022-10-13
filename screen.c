@@ -1897,7 +1897,7 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
     }
 
     // Clear selection if writing over it
-    if (UNLIKELY(line->h.line->selection_index) &&
+    if (UNLIKELY(selection_active(&scr->sstate)) && UNLIKELY(line->h.line->selection_index) &&
         view_selection_intersects(&scr->sstate, line, cx, scr->mode.insert ? max_tx : max_cx)) {
         screen_damage_selection(scr);
         selection_clear(&scr->sstate);
@@ -1921,12 +1921,11 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
     uint32_t attrid = alloc_attr(line->h.line, *screen_sgr(scr));
 
     // Put charaters
-    for (uint32_t *p = bstart; p < bend; p++)
-        *cell++ = MKCELL(*p, attrid);
+    copy_cells_with_attr(cell, bstart, bend, attrid);
 
     if (UNLIKELY(gconfig.trace_characters)) {
-        for (uint32_t *p = bstart; p < bend; p++) {
-            info("Char: (%x) '%lc' ", *p, (wint_t)*p);
+        for (uint32_t *px = bstart; px < bend; px++) {
+            info("Char: (%x) '%lc' ", *px, (wint_t)*px);
         }
     }
 }

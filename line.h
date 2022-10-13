@@ -120,6 +120,7 @@ void split_line(struct line *src, ssize_t offset, struct line **dst1, struct lin
 struct line *concat_line(struct line *src1, struct line *src2, bool opt);
 void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len);
 void fill_cells(struct cell *dst, struct cell c, ssize_t width);
+void copy_cells_with_attr(struct cell *dst, const uint32_t *src, const uint32_t *end, uint32_t attrid);
 void free_line(struct line *line);
 
 inline static color_t indirect_color(uint32_t idx) { return idx + 1; }
