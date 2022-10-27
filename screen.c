@@ -466,7 +466,7 @@ static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) 
         create_lines_range(scr->height ? (*alts)[scr->height - 1].h.line : NULL, NULL,
                            &(*alts)[scr->height], width, &ATTR_DEFAULT, height - scr->height, NULL);
     }
-    
+
     /* Adjust altscreen saved cursor position */
 
     struct cursor *c = scr->mode.altscreen ? &scr->saved_c : &scr->back_saved_c;
@@ -668,7 +668,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         struct line_handle prev_first_line = dup_handle(&screen->h);
         line_handle_add(&prev_first_line);
 
-        struct cursor *c = scr->mode.altscreen ? &scr->last_scr_c : &scr->c; 
+        struct cursor *c = scr->mode.altscreen ? &scr->last_scr_c : &scr->c;
         struct line_handle cursor_handle = {
             .line = screen[c->y].h.line,
             .offset = screen[c->y].h.offset + c->x,
@@ -902,8 +902,8 @@ inline static void screen_rect_pre(struct screen *scr, int16_t *xs, int16_t *ys,
     *ye = MAX(screen_min_oy(scr), MIN(*ye, screen_max_oy(scr)));
 
     for (int16_t i = *ys; i < *ye; i++) {
-        screen_adjust_line(scr, i, *xe);
         screen_unwrap_line(scr, i);
+        screen_adjust_line(scr, i, *xe);
     }
 }
 
@@ -917,8 +917,8 @@ inline static void screen_erase_pre(struct screen *scr, int16_t *xs, int16_t *ys
         *ye = MAX(0, MIN(*ye, scr->height));
 
         for (int16_t i = *ys; i < *ye; i++) {
-            screen_adjust_line(scr, i, *xe);
             screen_unwrap_line(scr, i);
+            screen_adjust_line(scr, i, *xe);
         }
     }
 
@@ -1092,7 +1092,7 @@ void screen_copy(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
         for (yd += ye - ys; ys < ye; ye--, yd--) {
             screen_adjust_line(scr, ye - 1, xe);
             screen_adjust_line(scr, yd - 1, xd + (xe - xs));
-            screen_unwrap_line(scr, yd);
+            screen_unwrap_line(scr, yd - 1);
             struct line_view *sl = &scr->screen[ye - 1], *dl = &scr->screen[yd - 1];
             copy_line(dl->h.line, xd + dl->h.offset,
                       sl->h.line, xs + sl->h.offset, xe - xs);
@@ -1227,7 +1227,7 @@ void screen_save_cursor(struct screen *scr, bool mode) {
         uri_unref(scr->sgr.uri);
 #endif
         scr->sgr = scr->saved_sgr;
-        
+
         assert(scr->c.x < scr->width);
         assert(scr->c.y < scr->height);
     }
