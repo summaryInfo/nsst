@@ -3,6 +3,30 @@ Roadmap
 
 ## Future versions
 
+Fails:
+
+    DECBITests.test_DECBI_Scrolls
+    DECFITests.test_DECFI_Scrolls
+    DECDCTests.test_DECDC_DeleteWithLeftRightMargins
+    DECICTests.test_DECIC_ScrollOffRightMarginInScrollRegion
+
+Flakes when fast scrolling is off:
+
+    DLTests.test_DL_InLeftRightAndTopBottomScrollRegion
+    DLTests.test_DL_InLeftRightScrollRegion
+    ILTests.test_IL_RespectsScrollRegion
+
+Leaks:
+
+    RITests.test_RI_Scrolls
+    SDTests.test_SD_DefaultParam
+    SDTests.test_SD_ExplicitParam
+    SUTests.test_SU_DefaultParam
+    SUTests.test_SU_ExplicitParam
+
+Leaks are all caused by screen_scroll_fast()
+
+
 * Optimize scrolling
 * Optimize screen_damage_uri to iterate over attributes first to find whether the line has attributes with source URI.
 * Handle overlong lines
