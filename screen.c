@@ -1281,9 +1281,9 @@ inline static void swap_3(struct line *top_after, struct line *mid_before, struc
         struct line *mid_after = detach_next_line(mid_before);
         struct line *bottom_after = detach_next_line(bottom_before);
 
-#ifdef DEFUG_LINES
+#ifdef DEBUG_LINES
         assert(top_after->seq <= mid_before->seq);
-        assert(mid_before->seq <= bottom_before->seq);
+        assert(mid_before->seq < bottom_before->seq);
 #endif
 
         attach_next_line(top_before, mid_after);
@@ -1296,6 +1296,9 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
 
     save &= save && !scr->mode.altscreen && top == 0 && amount >= 0;
 
+    bool should_reset_view = screen_at_bottom(scr);
+    bool should_reset_top = !save && !top && !line_handle_cmp(&scr->top_line, &scr->screen->h);
+
     struct line_view *first = &scr->screen[top];
     /* Force scrolled region borders to be line borders */
     if (!save)
@@ -1303,8 +1306,6 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
 
     struct line_view *last = &scr->screen[bottom - 1];
     screen_split_line(scr, last->h.line, last->h.offset + scr->width, NULL, NULL);
-
-    bool should_reset_view = screen_at_bottom(scr);
 
     if (amount > 0) /* up */ {
         amount = MIN(amount, (bottom - top));
@@ -1356,18 +1357,21 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
                 }
 
                 #undef INSCREEN
+                #undef FIXUP
             }
 
             memmove(scr->screen, scr->screen + amount, rest*sizeof(*scr->screen));
 
-#ifdef DEFUG_LINES
+#ifdef DEBUG_LINES
             if (rest) assert(scr->screen[rest - 1].h.line == bottom_line);
+            assert(!bottom_line->next);
+            if (bottom_next) assert(!bottom_next->prev);
 #endif
 
             create_lines_range(bottom_line, bottom_next, &scr->screen[rest],
                                scr->width, &scr->sgr, amount, NULL);
 
-            fixup_lines_seqno(bottom_line->next);
+            fixup_lines_seqno(bottom_next);
 
             ssize_t scrolled = screen_push_history_until(scr, first_to_hist, first->h.line, scr->mode.minimize_scrollback);
             if (UNLIKELY(scrolled)) /* View down, image up */ {
@@ -1380,11 +1384,11 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
         } else {
             screen_erase_fast(scr, top, top + amount, &scr->sgr);
 
-            validate_altscreen(scr);
-
             if (rest && amount) {
                 struct line *mid = scr->screen[top + amount - 1].h.line;
                 swap_3(first->h.line, mid, last->h.line);
+                if (should_reset_top && !top)
+                    replace_handle(&scr->top_line, &scr->screen[0].h);
             }
 
             for (ssize_t i = top; i < bottom; i++)
@@ -1397,7 +1401,8 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
             for (ssize_t i = top; i < bottom; i++)
                 line_handle_add(&scr->screen[i].h);
 
-            fixup_lines_seqno(scr->screen[bottom - amount].h.line);
+            if (bottom - amount >= 0)
+                fixup_lines_seqno(scr->screen[bottom - amount].h.line);
         }
     } else if (amount < 0) /* down */ {
         amount = MAX(amount, -(bottom - top));
@@ -1420,11 +1425,15 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
         for (ssize_t i = top; i < bottom; i++)
             line_handle_add(&scr->screen[i].h);
 
-        fixup_lines_seqno(scr->screen[top].h.line);
+        if (top - amount < scr->height)
+            fixup_lines_seqno(scr->screen[top - amount].h.line);
     }
 
     if (amount) {
         scr->scroll_damage = 1;
+
+        if (should_reset_top)
+            replace_handle(&scr->top_line, &scr->screen[0].h);
 
         if (should_reset_view) {
             replace_handle(&scr->view_pos, &scr->screen[0].h);

@@ -346,19 +346,11 @@ inline static void line_handle_remove(struct line_handle *handle) {
 }
 
 #define SEQNO_INC 16
-#define LINES_AT_A_TIME 16
 
 inline static void fixup_lines_seqno(struct line *line) {
-    uint64_t next = 0, rem = 0;
-
     while (line) {
-        if (!rem--) {
-            next = get_seqno_range(SEQNO_INC * LINES_AT_A_TIME);
-            rem = LINES_AT_A_TIME;
-        }
-        line->seq = next;
+        line->seq = get_seqno_range(SEQNO_INC);
         line = line->next;
-        next += SEQNO_INC;
     }
 }
 

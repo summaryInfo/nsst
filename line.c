@@ -260,6 +260,8 @@ void split_line(struct line *src, ssize_t offset, struct line **dst1, struct lin
 
     struct line *tail = create_line_with_seq(*attr_pad(src), tail_len, tail_seq);
 #ifdef DEBUG_LINES
+    assert(tail_seq < get_seqno_range(0));
+    assert(tail->seq > src->seq);
     assert(tail);
 #endif
 
