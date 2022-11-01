@@ -109,8 +109,8 @@ bool init_selection(struct selection_state *sel, struct window *win);
 void selection_view_scrolled(struct selection_state *sel, struct screen *scr);
 
 /* Starts from the last character */
-struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_view *view);
-bool is_selected_prev(struct mouse_selection_iterator *it, struct line_view *view, int16_t x);
+struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_handle *view);
+bool is_selected_prev(struct mouse_selection_iterator *it, struct line_handle *view, int16_t x);
 
 void selection_clear(struct selection_state *sel);
 void selection_damage(struct selection_state *sel, struct line *line);
@@ -127,9 +127,9 @@ inline static bool selection_active(struct selection_state *sel) {
            sel->state != state_sel_pressed;
 }
 
-inline static bool view_selection_intersects(struct selection_state *sel, struct line_view *line, int16_t x0, int16_t x1) {
-    ssize_t offset = line->h.offset;
-    return selection_intersects(sel, line->h.line, x0 + offset, x1 + offset);
+inline static bool view_selection_intersects(struct selection_state *sel, struct line_handle *line, int16_t x0, int16_t x1) {
+    ssize_t offset = line->offset;
+    return selection_intersects(sel, line->line, x0 + offset, x1 + offset);
 }
 
 #endif

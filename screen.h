@@ -76,9 +76,9 @@ struct checksum_mode {
  * alternate screen; same with saved_c/back_saved_c and saved_sgr/saved_back_sgr */
 
 struct screen {
-    struct line_view *screen;
-    struct line_view *back_screen;
-    struct line_view *temp_screen;
+    struct line_handle *screen;
+    struct line_handle *back_screen;
+    struct line_handle *temp_screen;
 
     /* History topmost line */
     struct line_handle top_line;
@@ -159,7 +159,7 @@ struct line_handle screen_view(struct screen *scr); /* NOTE: It does not registe
 void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd);
 void screen_damage_selection(struct screen *scr);
 void screen_damage_uri(struct screen *scr, uint32_t uri);
-struct line_view screen_view_at(struct screen *scr, struct line_handle *pos);
+struct line_handle screen_view_at(struct screen *scr, struct line_handle *pos);
 ssize_t screen_advance_iter(struct screen *scr, struct line_handle *pos, ssize_t amount);
 struct line_handle screen_line_iter(struct screen *scr, ssize_t y); /* NOTE: It does not register handle */
 void screen_reset_view(struct screen *scr, bool damage);
@@ -202,7 +202,7 @@ bool screen_load_config(struct screen *scr, bool reset);
 void screen_tabs(struct screen *scr, int16_t n);
 void screen_reset_tabs(struct screen *scr);
 void screen_print_screen(struct screen *scr, bool force_ext);
-void screen_print_line(struct screen *scr, struct line_view *line);
+void screen_print_line(struct screen *scr, struct line_handle *line);
 void screen_set_margin_bell_volume(struct screen *scr, uint8_t vol);
 uint8_t screen_get_margin_bell_volume(struct screen *scr);
 ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs);
@@ -279,8 +279,8 @@ inline static void screen_cursor_adjust_wide_right(struct screen *scr) {
 }
 
 inline static void screen_damage_cursor(struct screen *scr) {
-    struct line_view *cview = &scr->screen[scr->c.y];
-    if (cview->width <= scr->c.x) cview->h.line->force_damage = 1;
+    struct line_handle *cview = &scr->screen[scr->c.y];
+    if (cview->width <= scr->c.x) cview->line->force_damage = 1;
     else view_cell(cview, scr->c.x)->drawn = 0;
 }
 
@@ -339,7 +339,7 @@ inline static void screen_print_cursor_line(struct screen *scr) {
 }
 
 inline static void screen_precompose_at_cursor(struct screen *scr, uint32_t ch) {
-    struct line_view *cview = &scr->screen[scr->c.y];
+    struct line_handle *cview = &scr->screen[scr->c.y];
     if (cview->width <= scr->c.x) return;
 
     struct cell *cel = view_cell(cview, scr->c.x);

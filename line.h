@@ -89,7 +89,11 @@ struct line_handle {
     struct line_handle *prev;
     struct line_handle *next;
     struct line *line;
-    ssize_t offset;
+    int32_t offset;
+
+    /* Only when used as line view, it does not get accounted
+     * when splitting. (FIXME) */
+    int32_t width;
 };
 
 // Add default attrib value?

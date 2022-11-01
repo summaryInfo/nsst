@@ -16,14 +16,14 @@
 
 
 inline static bool screen_at_bottom(struct screen *scr) {
-    return !line_handle_cmp(&scr->view_pos, &scr->screen->h);
+    return !line_handle_cmp(&scr->view_pos, scr->screen);
 }
 
-inline static struct line_view **get_main_screen(struct screen *scr) {
+inline static struct line_handle **get_main_screen(struct screen *scr) {
     return scr->mode.altscreen ? &scr->back_screen : &scr->screen;
 }
 
-inline static struct line_view **get_alt_screen(struct screen *scr) {
+inline static struct line_handle **get_alt_screen(struct screen *scr) {
     return !scr->mode.altscreen ? &scr->back_screen : &scr->screen;
 }
 
@@ -49,7 +49,7 @@ void free_screen(struct screen *scr) {
 #endif
 
     free_line_list_until(scr, scr->top_line.line, NULL);
-    free_line_list_until(scr, (*get_alt_screen(scr))->h.line, NULL);
+    free_line_list_until(scr, (*get_alt_screen(scr))->line, NULL);
 
     free(scr->screen);
     free(scr->back_screen);
@@ -85,7 +85,7 @@ void screen_damage_uri(struct screen *scr, uint32_t uri) {
 
     struct line_handle vpos = screen_view(scr);
     for (ssize_t i = 0; i < 0 + scr->height; i++) {
-        struct line_view view = screen_view_at(scr, &vpos);
+        struct line_handle view = screen_view_at(scr, &vpos);
         for (ssize_t j = 0; j <  MIN(scr->width, view.width); j++) {
             struct cell *pcell = view_cell(&view, j);
             if (view_attr(&view, pcell->attrid).uri == uri)
@@ -95,13 +95,11 @@ void screen_damage_uri(struct screen *scr, uint32_t uri) {
     }
 }
 
-struct line_view screen_view_at(struct screen *scr, struct line_handle *pos) {
+struct line_handle screen_view_at(struct screen *scr, struct line_handle *pos) {
     ssize_t wid = line_advance_width(pos->line, pos->offset, scr->width);
-    return (struct line_view) {
-        .h = dup_handle(pos),
-        .width = wid - pos->offset,
-        .wrapped = wid < pos->line->size,
-    };
+    struct line_handle res = dup_handle(pos);
+    res.width = wid - pos->offset;
+    return res;
 }
 
 inline static ssize_t inc_iter_width_width(struct line_handle *pos, ssize_t width, bool rewrap) {
@@ -187,7 +185,7 @@ struct line_handle screen_view(struct screen *scr) {
 }
 
 struct line_handle screen_line_iter(struct screen *scr, ssize_t y) {
-    struct line_handle pos = dup_handle(&scr->screen[0].h);
+    struct line_handle pos = dup_handle(scr->screen);
     screen_advance_iter(scr, &pos, y);
     return pos;
 }
@@ -195,7 +193,7 @@ struct line_handle screen_line_iter(struct screen *scr, ssize_t y) {
 void screen_reset_view(struct screen *scr, bool damage) {
     if (!screen_at_bottom(scr)) {
         scr->prev_c_view_changed = true;
-        replace_handle(&scr->view_pos, &scr->screen[0].h);
+        replace_handle(&scr->view_pos, scr->screen);
         selection_view_scrolled(&scr->sstate, scr);
     }
 
@@ -238,47 +236,46 @@ inline static struct line *screen_realloc_line(struct screen *scr, struct line *
 }
 
 inline static void screen_unwrap_line(struct screen *scr, ssize_t y) {
-    struct line_view *view = &scr->screen[y];
+    struct line_handle *view = &scr->screen[y];
 
-    if (!view->wrapped) return;
-    view->wrapped = false;
+    if (!view_wrapped(view)) return;
 
     // Views are updates automatically
     // since they are based on line_handle's
 
-    screen_split_line(scr, view->h.line, view->h.offset, NULL, NULL);
+    screen_split_line(scr, view->line, view->offset, NULL, NULL);
 }
 
 void screen_unwrap_cursor_line(struct screen *scr) {
     screen_unwrap_line(scr, scr->c.y);
 }
 
-inline static void screen_adjust_line2(struct screen *scr, struct line_view *screen, ssize_t y, ssize_t size) {
-    struct line_view *view = &screen[y];
-    ssize_t old_size = view->h.line->size;
-    ssize_t new_size = view->h.offset + size;
+inline static void screen_adjust_line2(struct screen *scr, struct line_handle *screen, ssize_t y, ssize_t size) {
+    struct line_handle *view = &screen[y];
+    ssize_t old_size = view->line->size;
+    ssize_t new_size = view->offset + size;
 
     if (LIKELY(old_size >= new_size)) return;
 
-    if (new_size > view->h.line->caps)
-        screen_realloc_line(scr, view->h.line, new_size);
+    if (new_size > view->line->caps)
+        screen_realloc_line(scr, view->line, new_size);
 
-    struct cell c = MKCELL(0, view->h.line->pad_attrid);
-    fill_cells(view->h.line->cell + old_size, c, new_size - old_size);
+    struct cell c = MKCELL(0, view->line->pad_attrid);
+    fill_cells(view->line->cell + old_size, c, new_size - old_size);
 
     /* When we are resizing continuation line view fixup
      * widths of previous parts of line */
-    if (UNLIKELY(view->h.offset) && y > 0) {
+    if (UNLIKELY(view->offset) && y > 0) {
         screen[--y].width = scr->width;
 #ifdef DEBUG_LINES
-        assert(screen[y].h.offset <= old_size);
-        while (--y > 0 && screen[y].h.line == view->h.line)
+        assert(screen[y].offset <= old_size);
+        while (--y > 0 && screen[y].line == view->line)
             assert(screen[y].width == scr->width);
 #endif
     }
 
     view->width = size;
-    view->h.line->size = new_size;
+    view->line->size = new_size;
 }
 
 inline static void screen_adjust_line(struct screen *scr, ssize_t y, ssize_t size) {
@@ -300,13 +297,13 @@ void screen_do_wrap(struct screen *scr) {
 
     /* If history size is set to 0 and scrolled off line is not saved
      * in history or we are on altscreen we should not re-wrap lines either. */
-    if (!scr->screen[0].h.line->prev) return;
+    if (!scr->screen[0].line->prev) return;
 
     /* If this and the next line are already the same,
      * avoid reallocation and do nothing. */
     // FIXME: Check if this can actually happend right now and make it possible if not.
 
-    if (scr->screen[scr->c.y].h.offset) return;
+    if (scr->screen[scr->c.y].offset) return;
 
     /* Otherwise if everything is fine and we can wrap */
 
@@ -314,23 +311,22 @@ void screen_do_wrap(struct screen *scr) {
     // FIXME: Should we really adjust it? Or current width is already fine?
     if (scr->c.y > 0) {
         screen_adjust_line(scr, scr->c.y - 1, scr->width);
-        scr->screen[scr->c.y - 1].wrapped = true;
     }
 
-    struct line *current = scr->screen[scr->c.y].h.line;
+    struct line *current = scr->screen[scr->c.y].line;
     screen_concat_line(scr, current->prev, current, false);
 }
 
 void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
-    struct line_view *screen_top = *get_main_screen(scr);
+    struct line_handle *screen_top = *get_main_screen(scr);
     if (screen_top) {
 
-        if (screen_top->h.line->prev)
+        if (screen_top->line->prev)
             screen_reset_view(scr, 0);
 
-        free_line_list_until(scr, scr->top_line.line, screen_top->h.line);
+        free_line_list_until(scr, scr->top_line.line, screen_top->line);
 
-        replace_handle(&scr->top_line, &screen_top->h);
+        replace_handle(&scr->top_line, screen_top);
     }
 
     scr->sb_max_caps = max_size;
@@ -342,12 +338,12 @@ void screen_scroll_view(struct screen *scr, int16_t amount) {
 
     amount = -amount;
 
-    bool old_viewr = !line_handle_cmp(&scr->view_pos, &scr->screen->h);
+    bool old_viewr = !line_handle_cmp(&scr->view_pos, scr->screen);
     /* Shortcut for the case when view is already at the bottom */
     if (old_viewr && amount > 0) return;
 
     ssize_t delta = screen_advance_iter(scr, &scr->view_pos, amount) - amount;
-    int new_viewr = line_handle_cmp(&scr->view_pos, &scr->screen->h);
+    int new_viewr = line_handle_cmp(&scr->view_pos, scr->screen);
     if (new_viewr > 0) {
         screen_reset_view(scr, 1);
     } else {
@@ -366,8 +362,8 @@ void screen_scroll_view(struct screen *scr, int16_t amount) {
 
 /* Returns true if view should move down */
 inline static ssize_t try_free_top_line(struct screen *scr) {
-    struct line_view *screen = *get_main_screen(scr);
-    if (scr->top_line.line == screen->h.line) return 0;
+    struct line_handle *screen = *get_main_screen(scr);
+    if (scr->top_line.line == screen->line) return 0;
 
     ssize_t view_moved = 0;
     if (scr->top_line.line == scr->view_pos.line)
@@ -417,7 +413,7 @@ static void resize_tabs(struct screen *scr, int16_t width) {
     }
 }
 
-struct line *create_lines_range(struct line *prev, struct line *next, struct line_view *dst, ssize_t width, const struct attr *attr, ssize_t count, struct line_handle *top) {
+struct line *create_lines_range(struct line *prev, struct line *next, struct line_handle *dst, ssize_t width, const struct attr *attr, ssize_t count, struct line_handle *top) {
     if (count <= 0) return NULL;
 
     struct line *line = create_line(*attr, width);
@@ -425,12 +421,10 @@ struct line *create_lines_range(struct line *prev, struct line *next, struct lin
         replace_handle(top, &(struct line_handle) { .line =  line });
 
     for (ssize_t i = 0; i < count; i++) {
-        dst[i] = (struct line_view) {
-            .h = { .line = line },
-            .width = 0,
-            .wrapped = false,
+        dst[i] = (struct line_handle) {
+            .line = line,
         };
-        line_handle_add(&dst[i].h);
+        line_handle_add(&dst[i]);
         attach_prev_line(line, prev);
         prev = line;
         if (i != count - 1)
@@ -443,27 +437,27 @@ struct line *create_lines_range(struct line *prev, struct line *next, struct lin
 }
 
 static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) {
-    struct line_view **alts = get_alt_screen(scr);
+    struct line_handle **alts = get_alt_screen(scr);
     ssize_t minh = MIN(scr->height, height);
 
     for (ssize_t i = 0; i < scr->height; i++)
-        line_handle_remove(&(*alts)[i].h);
+        line_handle_remove(&(*alts)[i]);
 
     if (height < scr->height)
-        free_line_list_until(scr, (*alts)[height].h.line, NULL);
+        free_line_list_until(scr, (*alts)[height].line, NULL);
 
-    struct line_view *new_back = realloc(*alts, height * sizeof(*new_back));
+    struct line_handle *new_back = realloc(*alts, height * sizeof(*new_back));
     if (!new_back) die("Can't allocate lines");
     *alts = new_back;
 
     for (ssize_t i = 0; i < minh; i++) {
-        line_handle_add(&(*alts)[i].h);
-        screen_realloc_line(scr, (*alts)[i].h.line, width);
+        line_handle_add(&(*alts)[i]);
+        screen_realloc_line(scr, (*alts)[i].line, width);
         (*alts)[i].width = MIN((*alts)[i].width, width);
     }
 
     if (scr->height < height) {
-        create_lines_range(scr->height ? (*alts)[scr->height - 1].h.line : NULL, NULL,
+        create_lines_range(scr->height ? (*alts)[scr->height - 1].line : NULL, NULL,
                            &(*alts)[scr->height], width, &ATTR_DEFAULT, height - scr->height, NULL);
     }
 
@@ -489,7 +483,7 @@ static void resize_aux(struct screen *scr, ssize_t width, ssize_t height) {
     scr->predec_buf = newpb;
 
     // Resize temporary screen buffer
-    struct line_view *new_tmpsc = realloc(scr->temp_screen, height*sizeof(*new_tmpsc));
+    struct line_handle *new_tmpsc = realloc(scr->temp_screen, height*sizeof(*new_tmpsc));
     if (!new_tmpsc) die("Can't allocate new temporary screen buffer");
     scr->temp_screen = new_tmpsc;
 }
@@ -508,7 +502,7 @@ static void fixup_view(struct screen *scr, struct line_handle *lower_left, enum 
 
     switch (stick) {
     case stick_to_bottom:
-        replace_handle(&scr->view_pos, &scr->screen->h);
+        replace_handle(&scr->view_pos, scr->screen);
         break;
     case stick_to_top:
         replace_handle(&scr->view_pos, &scr->top_line);
@@ -523,7 +517,7 @@ static void fixup_view(struct screen *scr, struct line_handle *lower_left, enum 
     }
 
 #ifdef DEBUG_LINES
-    assert(scr->view_pos.line->seq <= scr->screen->h.line->seq);
+    assert(scr->view_pos.line->seq <= scr->screen->line->seq);
 #endif
 }
 
@@ -567,25 +561,25 @@ inline static void translate_screen_position(struct line_handle *first, struct l
 
 #ifdef DEBUG_LINES
 static void validate_main_screen(struct screen *scr) {
-    struct line_view *screen = *get_main_screen(scr);
+    struct line_handle *screen = *get_main_screen(scr);
 
-    struct line_view *prev = NULL;
+    struct line_handle *prev = NULL;
     struct line *prev_ln = NULL;
     assert(!scr->top_line.line->prev);
     assert(!scr->top_line.offset);
-    assert(!screen[scr->height - 1].h.line->next);
+    assert(!screen[scr->height - 1].line->next);
     assert(scr->view_pos.line);
     assert(scr->top_line.line);
     assert(line_handle_is_registered(&scr->top_line));
     assert(line_handle_is_registered(&scr->view_pos));
     if (!scr->mode.altscreen)
         assert(line_handle_cmp(&scr->top_line, &scr->view_pos) <= 0);
-    assert(line_handle_cmp(&scr->view_pos, &scr->screen->h) <= 0);
-    assert(!screen[scr->height - 1].h.line->next);
+    assert(line_handle_cmp(&scr->view_pos, scr->screen) <= 0);
+    assert(!screen[scr->height - 1].line->next);
     bool has_scr = false, has_view = false;
     for (struct line *ln = scr->top_line.line; ln; ln = ln->next) {
         if (ln == scr->view_pos.line) has_view = true;
-        if (ln == screen->h.line) has_scr = true;
+        if (ln == screen->line) has_scr = true;
         if (prev_ln) {
             assert(prev_ln == ln->prev);
             assert(prev_ln->next == ln);
@@ -597,35 +591,35 @@ static void validate_main_screen(struct screen *scr) {
     assert(!scr->mode.altscreen == has_view);
 
     for (ssize_t i = 0; i < scr->height; i++) {
-        struct line_view *view = &screen[i];
+        struct line_handle *view = &screen[i];
         assert(view->width <= scr->width);
-        if (view->width < scr->width) assert(!view->wrapped);
-        assert(view->h.offset + view->width <= view->h.line->size);
-        assert(line_handle_is_registered(&view->h));
+        if (view->width < scr->width) assert(!view_wrapped(view));
+        assert(view->offset + view->width <= view->line->size);
+        assert(line_handle_is_registered(view));
         if (prev) {
-            assert((prev->h.line == view->h.line->prev && prev->h.line->next == view->h.line) || prev->h.line == view->h.line);
-            assert(prev->h.line->seq <= view->h.line->seq);
+            assert((prev->line == view->line->prev && prev->line->next == view->line) || prev->line == view->line);
+            assert(prev->line->seq <= view->line->seq);
         }
         prev = view;
     }
 }
 
 static void validate_altscreen(struct screen *scr) {
-    struct line_view *altscr = *get_alt_screen(scr);
+    struct line_handle *altscr = *get_alt_screen(scr);
 
-    struct line_view *prev = NULL;
-    assert(!altscr[0].h.line->prev);
-    assert(!altscr[scr->height - 1].h.line->next);
+    struct line_handle *prev = NULL;
+    assert(!altscr[0].line->prev);
+    assert(!altscr[scr->height - 1].line->next);
     for (ssize_t i = 0; i < scr->height; i++) {
-        struct line_view *view = &altscr[i];
+        struct line_handle *view = &altscr[i];
         assert(view->width <= scr->width);
-        assert(!view->h.offset);
-        assert(line_handle_is_registered(&view->h));
-        assert(!view->wrapped);
+        assert(!view->offset);
+        assert(line_handle_is_registered(view));
+        assert(!view_wrapped(view));
         if (prev) {
-            assert(prev->h.line == view->h.line->prev);
-            assert(prev->h.line->next == view->h.line);
-            assert(prev->h.line->seq < view->h.line->seq);
+            assert(prev->line == view->line->prev);
+            assert(prev->line->next == view->line);
+            assert(prev->line->seq < view->line->seq);
         }
         prev = view;
     }
@@ -658,27 +652,27 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
 
     enum stick_view ret = stick_none;
 
-    struct line_view **pscr = get_main_screen(scr);
-    struct line_view *screen = *pscr;
+    struct line_handle **pscr = get_main_screen(scr);
+    struct line_handle *screen = *pscr;
 
     ssize_t y = 0;
 
     if (screen) {
         /* Create cursor handles */
-        struct line_handle prev_first_line = dup_handle(&screen->h);
+        struct line_handle prev_first_line = dup_handle(screen);
         line_handle_add(&prev_first_line);
 
         struct cursor *c = scr->mode.altscreen ? &scr->last_scr_c : &scr->c;
         struct line_handle cursor_handle = {
-            .line = screen[c->y].h.line,
-            .offset = screen[c->y].h.offset + c->x,
+            .line = screen[c->y].line,
+            .offset = screen[c->y].offset + c->x,
         };
         line_handle_add(&cursor_handle);
 
         struct cursor *saved_c = scr->mode.altscreen ? &scr->back_saved_c : &scr->saved_c;
         struct line_handle saved_cursor_handle = {
-            .line = screen[saved_c->y].h.line,
-            .offset = screen[saved_c->y].h.offset + saved_c->x
+            .line = screen[saved_c->y].line,
+            .offset = screen[saved_c->y].offset + saved_c->x
         };
         line_handle_add(&saved_cursor_handle);
 
@@ -690,7 +684,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
 
         /* Remove handles that are gonna be freed by realloc below */
         for (ssize_t i = 0; i < scr->height; i++)
-            line_handle_remove(&screen[i].h);
+            line_handle_remove(&screen[i]);
 
         screen = realloc(screen, height * sizeof(screen[0]));
         if (!screen) die("Can't allocate lines");
@@ -718,9 +712,6 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         } else {
             struct line_handle d = dup_handle(&it);
             assert(!advance_iter_with_width(&d, c->y, width, scr->mode.rewrap));
-            if (line_handle_cmp(&d, &d0)) {
-                warn("(%zd, %zd) != (%zd, %zd)", d.line->seq, d.offset, d0.line->seq, d0.offset);
-            }
             assert(!line_handle_cmp(&d, &d0));
 #endif
         }
@@ -754,22 +745,18 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         do {
             if (y >= 0) {
                 ssize_t view_width = line_advance_width(it.line, it.offset, width);
-                screen[y] = (struct line_view) {
-                    .h = it,
-                    .width = view_width - it.offset,
-                    .wrapped = view_width < it.line->size,
-                };
-                line_handle_add(&screen[y].h);
+                screen[y] = it;
+                screen[y].width = view_width - it.offset;
+                line_handle_add(&screen[y]);
             }
             if (++y >= height) break;
         } while (!inc_iter_width_width(&it, width, scr->mode.rewrap));
 
         /* Truncate lines that are below the last line of the screen */
         if (y >= height) {
-            struct line_view *bottom = &screen[height - 1];
-            bottom->wrapped = false;
-            screen_split_line(scr, bottom->h.line, bottom->h.offset + width, NULL, NULL);
-            free_line_list_until(scr, bottom->h.line->next, NULL);
+            struct line_handle *bottom = &screen[height - 1];
+            screen_split_line(scr, bottom->line, bottom->offset + width, NULL, NULL);
+            free_line_list_until(scr, bottom->line->next, NULL);
             y = height;
         }
 
@@ -785,7 +772,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         if (!screen) die("Can't allocate lines");
     }
 
-    create_lines_range(y ? screen[y - 1].h.line : NULL, NULL,
+    create_lines_range(y ? screen[y - 1].line : NULL, NULL,
                        &screen[y], width, &ATTR_DEFAULT, height - y, &scr->top_line);
 
     if (ret == stick_none && !lower_left->line)
@@ -813,7 +800,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
     enum stick_view stick = stick_none;
 
-    if (!scr->screen || !line_handle_cmp(&scr->view_pos, &scr->screen[0].h)) stick = stick_to_bottom;
+    if (!scr->screen || !line_handle_cmp(&scr->view_pos, scr->screen)) stick = stick_to_bottom;
     else if (!line_handle_cmp(&scr->view_pos, &scr->top_line)) stick = stick_to_top;
 
     enum stick_view stick_after_resize = resize_main_screen(scr, width, height, &lower_left);
@@ -857,8 +844,8 @@ bool screen_redraw(struct screen *scr, bool blink_commited) {
         scr->scroll_damage = 0;
     }
 
-    struct line_view *cl = &scr->screen[scr->c.y];
-    bool cursor = !c_hidden && (scr->c.x >= cl->width || !view_cell(cl, scr->c.x)->drawn || cl->h.line->force_damage);
+    struct line_handle *cl = &scr->screen[scr->c.y];
+    bool cursor = !c_hidden && (scr->c.x >= cl->width || !view_cell(cl, scr->c.x)->drawn || cl->line->force_damage);
 
     return window_submit_screen(scr->win, scr->c.x, scr->c.y, cursor, scr->c.pending);
 }
@@ -927,8 +914,8 @@ inline static void screen_erase_pre(struct screen *scr, int16_t *xs, int16_t *ys
 
     if (!selection_active(&scr->sstate)) return;
     for (ssize_t y = *ys; y < *ye; y++) {
-        ssize_t offset = scr->screen[y].h.offset;
-        if (selection_intersects(&scr->sstate, scr->screen[y].h.line, *xs + offset, *xe + offset)) {
+        ssize_t offset = scr->screen[y].offset;
+        if (selection_intersects(&scr->sstate, scr->screen[y].line, *xs + offset, *xe + offset)) {
             screen_damage_selection(scr);
             selection_clear(&scr->sstate);
             break;
@@ -946,7 +933,7 @@ uint16_t screen_checksum(struct screen *scr, int16_t xs, int16_t ys, int16_t xe,
     bool first = 1, notrim = mode.no_trim;
 
     for (; ys < ye; ys++) {
-        struct line_view *line = &scr->screen[ys];
+        struct line_handle *line = &scr->screen[ys];
         for (int16_t i = xs; i < xe; i++) {
             uint32_t ch_orig = i >= line->width ? 0 : view_cell(line, i)->ch;
             uint32_t ch = ch_orig;
@@ -993,13 +980,13 @@ void screen_reverse_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, 
 
     bool rect = scr->mode.attr_ext_rectangle;
     for (; ys < ye; ys++) {
-        struct line_view *line = &scr->screen[ys];
+        struct line_handle *line = &scr->screen[ys];
         // TODO Optimize
         for (int16_t i = xs; i < (rect || ys == ye - 1 ? xe : screen_max_ox(scr)); i++) {
             struct attr newa = view_attr_at(line, i);
             attr_mask_set(&newa, attr_mask(&newa) ^ mask);
             struct cell *cell = view_cell(line, i);
-            cell->attrid = alloc_attr(line->h.line, newa);
+            cell->attrid = alloc_attr(line->line, newa);
             cell->drawn = 0;
         }
         if (!rect) xs = screen_min_ox(scr);
@@ -1015,7 +1002,7 @@ void screen_apply_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, in
     for (; ys < ye; ys++) {
         int16_t xend = rect || ys == ye - 1 ? xe : screen_max_ox(scr);
         screen_adjust_line(scr, ys, xend);
-        struct line_view *line = &scr->screen[ys];
+        struct line_handle *line = &scr->screen[ys];
         // TODO Optimize
         for (int16_t i = xs; i < xend; i++) {
             struct attr newa = view_attr_at(line, i);
@@ -1025,7 +1012,7 @@ void screen_apply_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, in
             if (mask->ul) newa.ul = attr->ul;
 
             struct cell *cell = view_cell(line, i);
-            cell->attrid = alloc_attr(line->h.line, newa);
+            cell->attrid = alloc_attr(line->line, newa);
             cell->drawn = 0;
         }
         if (!rect) xs = screen_min_ox(scr);
@@ -1040,7 +1027,7 @@ struct attr screen_common_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_
     bool has_common_fg = 1, has_common_bg = 1, has_common_ul = 1;
 
     for (; ys < ye; ys++) {
-        struct line_view *line = &scr->screen[ys];
+        struct line_handle *line = &scr->screen[ys];
         for (int16_t i = xs; i < xe; i++) {
             struct attr attr = view_attr_at(line, i);
             has_common_fg &= (common.fg == attr.fg);
@@ -1084,18 +1071,18 @@ void screen_copy(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
             screen_adjust_line(scr, ys, xe);
             screen_adjust_line(scr, yd, xd + (xe - xs));
             screen_unwrap_line(scr, yd);
-            struct line_view *sl = &scr->screen[ys], *dl = &scr->screen[yd];
-            copy_line(dl->h.line, xd + dl->h.offset,
-                      sl->h.line, xs + sl->h.offset, xe - xs);
+            struct line_handle *sl = &scr->screen[ys], *dl = &scr->screen[yd];
+            copy_line(dl->line, xd + dl->offset,
+                      sl->line, xs + sl->offset, xe - xs);
         }
     } else {
         for (yd += ye - ys; ys < ye; ye--, yd--) {
             screen_adjust_line(scr, ye - 1, xe);
             screen_adjust_line(scr, yd - 1, xd + (xe - xs));
             screen_unwrap_line(scr, yd - 1);
-            struct line_view *sl = &scr->screen[ye - 1], *dl = &scr->screen[yd - 1];
-            copy_line(dl->h.line, xd + dl->h.offset,
-                      sl->h.line, xs + sl->h.offset, xe - xs);
+            struct line_handle *sl = &scr->screen[ye - 1], *dl = &scr->screen[yd - 1];
+            copy_line(dl->line, xd + dl->offset,
+                      sl->line, xs + sl->offset, xe - xs);
         }
     }
 }
@@ -1106,12 +1093,12 @@ void screen_fill(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
     screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin);
 
     for (; ys < ye; ys++) {
-        struct line_view *line = &scr->screen[ys];
-        if (!line->wrapped && attr_eq(attr_pad(line->h.line), &scr->sgr))
-        if (line->width <= xs) continue;
+        struct line_handle *line = &scr->screen[ys];
+        if (!ch && line->width <= xs && !view_wrapped(line) &&
+            attr_eq(attr_pad(line->line), &scr->sgr)) continue;
         ssize_t xe1 = MIN(xe, line->width);
         struct cell c = {
-            .attrid = alloc_attr(line->h.line, scr->sgr),
+            .attrid = alloc_attr(line->line, scr->sgr),
             .ch = compact(ch),
         };
         fill_cells(view_cell(line, xs), c, xe1 - xs);
@@ -1121,22 +1108,22 @@ void screen_fill(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
 /* Erase whole lines by resetting their sizes to 0 */
 void screen_erase_fast(struct screen *scr, int16_t ys, int16_t ye, struct attr *attr) {
 
-    struct line_view *view = &scr->screen[ys];
-    screen_split_line(scr, view->h.line, view->h.offset, NULL, NULL);
+    struct line_handle *view = &scr->screen[ys];
+    screen_split_line(scr, view->line, view->offset, NULL, NULL);
 
     while (ys < ye) {
 #ifdef DEBUG_LINES
-        assert(!view->h.offset);
+        assert(!view->offset);
 #endif
 
-        screen_split_line(scr, view->h.line, scr->width, NULL, NULL);
-        view->h.line->size = 0;
-        view->h.line->force_damage = true;
+        screen_split_line(scr, view->line, scr->width, NULL, NULL);
+        view->line->size = 0;
+        view->line->force_damage = true;
         view->width = 0;
 
         // FIXME Prefer explicit relocation after moving to custom line allocator.
-        // screen_realloc_line(scr, view->h.line, 0);
-        // view->h.line->pad_attrid = alloc_attr(view->h.line, *attr);
+        // screen_realloc_line(scr, view->line, 0);
+        // view->line->pad_attrid = alloc_attr(view->line, *attr);
         (void)attr;
 
         view = &scr->screen[++ys];
@@ -1151,8 +1138,8 @@ void screen_protective_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t
     screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin);
 
     for (; ys < ye; ys++) {
-        struct line_view *line = &scr->screen[ys];
-        struct cell c = { .attrid = alloc_attr(line->h.line, scr->sgr) };
+        struct line_handle *line = &scr->screen[ys];
+        struct cell c = { .attrid = alloc_attr(line->line, scr->sgr) };
         for (int16_t i = xs; i < xe; i++)
             if (!view_attr_at(line, i).protected)
                 *view_cell(line, i) = c;
@@ -1163,7 +1150,7 @@ void screen_selective_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t 
     screen_erase_pre(scr, &xs, &ys, &xe, &ye, origin);
 
     for (; ys < ye; ys++) {
-        struct line_view *line = &scr->screen[ys];
+        struct line_handle *line = &scr->screen[ys];
         for (ssize_t i = xs; i < xe; i++) {
             if (!view_attr_at(line, i).protected) {
                 struct cell *cell = view_cell(line, i);
@@ -1260,7 +1247,7 @@ void screen_scroll_horizontal(struct screen *scr, int16_t left, int16_t amount) 
     ssize_t top = screen_min_y(scr), right = screen_max_x(scr), bottom = screen_max_y(scr);
 
     for (ssize_t i = top; i < bottom; i++) {
-        struct line_view *line = &scr->screen[i];
+        struct line_handle *line = &scr->screen[i];
         view_adjust_wide_left(line, left);
         view_adjust_wide_right(line, right - 1);
     }
@@ -1297,28 +1284,28 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
     save &= save && !scr->mode.altscreen && top == 0 && amount >= 0;
 
     bool should_reset_view = screen_at_bottom(scr);
-    bool should_reset_top = !save && !top && !line_handle_cmp(&scr->top_line, &scr->screen->h);
+    bool should_reset_top = !save && !top && !line_handle_cmp(&scr->top_line, scr->screen);
 
-    struct line_view *first = &scr->screen[top];
+    struct line_handle *first = &scr->screen[top];
     /* Force scrolled region borders to be line borders */
     if (!save)
-        screen_split_line(scr, first->h.line, first->h.offset, NULL, NULL);
+        screen_split_line(scr, first->line, first->offset, NULL, NULL);
 
-    struct line_view *last = &scr->screen[bottom - 1];
-    screen_split_line(scr, last->h.line, last->h.offset + scr->width, NULL, NULL);
+    struct line_handle *last = &scr->screen[bottom - 1];
+    screen_split_line(scr, last->line, last->offset + scr->width, NULL, NULL);
 
     if (amount > 0) /* up */ {
         amount = MIN(amount, (bottom - top));
         ssize_t rest = (bottom - top) - amount;
 
         if (save) {
-            struct line *first_to_hist = first->h.line;
-            struct line *bottom_line = last->h.line;
+            struct line *first_to_hist = first->line;
+            struct line *bottom_line = last->line;
             struct line *bottom_next = detach_next_line(bottom_line);
 
             ssize_t i = 0;
             for (; i < amount; i++) {
-                struct line_handle *handle = &scr->screen[i].h;
+                struct line_handle *handle = &scr->screen[i];
 
                 struct line_handle *prev = handle->prev;
                 struct line_handle *next = handle->next;
@@ -1329,21 +1316,21 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
             }
 
             for (; i < bottom; i++) {
-                struct line_view *src = &scr->screen[i];
-                struct line_view *dst = &scr->screen[i - amount];
+                struct line_handle *src = &scr->screen[i];
+                struct line_handle *dst = &scr->screen[i - amount];
 
                 *dst = *src;
 
-                struct line_handle *prev = src->h.prev;
-                struct line_handle *next = src->h.next;
+                struct line_handle *prev = src->prev;
+                struct line_handle *next = src->next;
 
-                if (prev) prev->next = &dst->h;
-                else dst->h.line->first_handle = &dst->h;
-                if (next) next->prev = &dst->h;
+                if (prev) prev->next = dst;
+                else dst->line->first_handle = dst;
+                if (next) next->prev = dst;
             }
 
 #ifdef DEBUG_LINES
-            if (rest) assert(scr->screen[rest - 1].h.line == bottom_line);
+            if (rest) assert(scr->screen[rest - 1].line == bottom_line);
             assert(!bottom_line->next);
             if (bottom_next) assert(!bottom_next->prev);
 #endif
@@ -1353,7 +1340,7 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
 
             fixup_lines_seqno(bottom_next);
 
-            ssize_t scrolled = screen_push_history_until(scr, first_to_hist, first->h.line, scr->mode.minimize_scrollback);
+            ssize_t scrolled = screen_push_history_until(scr, first_to_hist, first->line, scr->mode.minimize_scrollback);
             if (UNLIKELY(scrolled)) /* View down, image up */ {
                 replace_handle(&scr->view_pos, &scr->top_line);
                 screen_damage_lines(scr, scr->height - scrolled, scr->height);
@@ -1365,24 +1352,24 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
             screen_erase_fast(scr, top, top + amount, &scr->sgr);
 
             if (rest && amount) {
-                struct line *mid = scr->screen[top + amount - 1].h.line;
-                swap_3(first->h.line, mid, last->h.line);
+                struct line *mid = scr->screen[top + amount - 1].line;
+                swap_3(first->line, mid, last->line);
                 if (should_reset_top && !top)
-                    replace_handle(&scr->top_line, &scr->screen[0].h);
+                    replace_handle(&scr->top_line, scr->screen);
             }
 
             for (ssize_t i = top; i < bottom; i++)
-                line_handle_remove(&scr->screen[i].h);
+                line_handle_remove(&scr->screen[i]);
 
             memcpy(scr->temp_screen, scr->screen + top, amount*sizeof(*scr->temp_screen));
             memmove(scr->screen + top, scr->screen + top + amount, rest*sizeof(*scr->temp_screen));
             memcpy(scr->screen + top + rest, scr->temp_screen, amount*sizeof(*scr->temp_screen));
 
             for (ssize_t i = top; i < bottom; i++)
-                line_handle_add(&scr->screen[i].h);
+                line_handle_add(&scr->screen[i]);
 
             if (bottom - amount >= 0)
-                fixup_lines_seqno(scr->screen[bottom - amount].h.line);
+                fixup_lines_seqno(scr->screen[bottom - amount].line);
         }
     } else if (amount < 0) /* down */ {
         amount = MAX(amount, -(bottom - top));
@@ -1391,32 +1378,32 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
         screen_erase_fast(scr, bottom + amount, bottom, &scr->sgr);
 
         if (rest /* && amount */) {
-            struct line *mid = scr->screen[bottom - 1 + amount].h.line;
-            swap_3(first->h.line, mid, last->h.line);
+            struct line *mid = scr->screen[bottom - 1 + amount].line;
+            swap_3(first->line, mid, last->line);
         }
 
         for (ssize_t i = top; i < bottom; i++)
-            line_handle_remove(&scr->screen[i].h);
+            line_handle_remove(&scr->screen[i]);
 
         memcpy(scr->temp_screen, scr->screen + bottom + amount, -amount*sizeof(*scr->temp_screen));
         memmove(scr->screen + top - amount, scr->screen + top, rest*sizeof(*scr->temp_screen));
         memcpy(scr->screen + top, scr->temp_screen, -amount*sizeof(*scr->temp_screen));
 
         for (ssize_t i = top; i < bottom; i++)
-            line_handle_add(&scr->screen[i].h);
+            line_handle_add(&scr->screen[i]);
 
         if (top - amount < scr->height)
-            fixup_lines_seqno(scr->screen[top - amount].h.line);
+            fixup_lines_seqno(scr->screen[top - amount].line);
     }
 
     if (amount) {
         scr->scroll_damage = 1;
 
         if (should_reset_top)
-            replace_handle(&scr->top_line, &scr->screen[0].h);
+            replace_handle(&scr->top_line, &scr->screen[0]);
 
         if (should_reset_view) {
-            replace_handle(&scr->view_pos, &scr->screen[0].h);
+            replace_handle(&scr->view_pos, &scr->screen[0]);
             window_delay_redraw(scr->win);
         }
 
@@ -1436,7 +1423,7 @@ void screen_scroll(struct screen *scr, int16_t top, int16_t amount, bool save) {
         amount = screen_scroll_fast(scr, top, amount, save);
     } else { // Slow scrolling with margins
         for (ssize_t i = top; i < bottom; i++) {
-            struct line_view *line = &scr->screen[i];
+            struct line_handle *line = &scr->screen[i];
             view_adjust_wide_left(line, left);
             view_adjust_wide_right(line, right - 1);
         }
@@ -1467,7 +1454,7 @@ void screen_insert_cells(struct screen *scr, int16_t n) {
         //      if it is not required.
 
         screen_adjust_line(scr, scr->c.y, screen_max_x(scr));
-        struct line_view *line = &scr->screen[scr->c.y];
+        struct line_handle *line = &scr->screen[scr->c.y];
 
         view_adjust_wide_left(line, scr->c.x);
         view_adjust_wide_right(line, scr->c.x);
@@ -1495,7 +1482,7 @@ void screen_delete_cells(struct screen *scr, int16_t n) {
         // We can optimize this code by avoiding allocation and movement of empty cells
         // and just shrink the line.
         screen_adjust_line(scr, scr->c.y, screen_max_x(scr));
-        struct line_view *line = &scr->screen[scr->c.y];
+        struct line_handle *line = &scr->screen[scr->c.y];
 
         n = MIN(n, screen_max_x(scr) - scr->c.x);
         if (n <= 0) return;
@@ -1688,7 +1675,7 @@ char *encode_sgr(char *dst, char *end, struct attr *attr) {
 #undef FMT
 }
 
-void screen_print_line(struct screen *scr, struct line_view *line) {
+void screen_print_line(struct screen *scr, struct line_handle *line) {
     if (!printer_is_available(&scr->printer)) return;
 
     uint8_t buf[PRINT_BLOCK_SIZE];
@@ -1732,13 +1719,11 @@ void screen_print_line(struct screen *scr, struct line_view *line) {
 
 void screen_print_all(struct screen *scr) {
     struct line *line = !scr->mode.altscreen && scr->top_line.line ?
-            scr->top_line.line : scr->screen[0].h.line;
+            scr->top_line.line : scr->screen[0].line;
 
     while (line) {
-        screen_print_line(scr, &(struct line_view) {
-            .h = (struct line_handle) { .line = line },
-            .width = line->size,
-            .wrapped = line->wrapped });
+        screen_print_line(scr, &(struct line_handle) {
+            .line = line, .width = line->size });
         line = line->next;
     }
 }
@@ -1856,7 +1841,7 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
             screen_do_wrap(scr);
     } else scr->c.x = MIN(scr->c.x, screen_max_x(scr) - totalw);
 
-    struct line_view *line = &scr->screen[scr->c.y];
+    struct line_handle *line = &scr->screen[scr->c.y];
     struct cell *cell = NULL;
 
     // Writing to the line resets its wrapping state
@@ -1886,7 +1871,7 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
     }
 
     // Clear selection if writing over it
-    if (UNLIKELY(selection_active(&scr->sstate)) && UNLIKELY(line->h.line->selection_index) &&
+    if (UNLIKELY(selection_active(&scr->sstate)) && UNLIKELY(line->line->selection_index) &&
         view_selection_intersects(&scr->sstate, line, cx, scr->mode.insert ? max_tx : max_cx)) {
         screen_damage_selection(scr);
         selection_clear(&scr->sstate);
@@ -1907,7 +1892,7 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
     scr->c.x = cx - scr->c.pending;
 
     // Allocate color for cell
-    uint32_t attrid = alloc_attr(line->h.line, *screen_sgr(scr));
+    uint32_t attrid = alloc_attr(line->line, *screen_sgr(scr));
 
     // Put charaters
     copy_cells_with_attr(cell, bstart, bend, attrid);

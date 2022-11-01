@@ -602,8 +602,8 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
     damage_changed(sel, prev_heads, prev_size);
 }
 
-struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_view *view) {
-    struct segments *head = seg_head(sel, view->h.line);
+struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_handle *view) {
+    struct segments *head = seg_head(sel, view->line);
     struct mouse_selection_iterator it = { 0 };
     if (!head || !head->size) return it;
 
@@ -614,10 +614,10 @@ struct mouse_selection_iterator selection_begin_iteration(struct selection_state
     return it;
 }
 
-bool is_selected_prev(struct mouse_selection_iterator *it, struct line_view *view, int16_t x0) {
+bool is_selected_prev(struct mouse_selection_iterator *it, struct line_handle *view, int16_t x0) {
     if (!it->idx) return 0;
 
-    ssize_t x = x0 + view->h.offset;
+    ssize_t x = x0 + view->offset;
 
     do {
         assert(it->idx >= 0);

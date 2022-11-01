@@ -22,36 +22,34 @@ typedef int32_t iparam_t;
 
 #define SCNparam SCNu32
 
-struct line_view {
-    struct line_handle h;
-    int32_t width;
-    bool wrapped;
-};
-
-inline static struct cell *view_cell(struct line_view *view, ssize_t x) {
-    return view->h.line->cell + view->h.offset + x;
+inline static bool view_wrapped(struct line_handle *view) {
+    return view->line->size > view->offset + view->width;
 }
 
-inline static struct attr view_attr_at(struct line_view *view, ssize_t x) {
-    return attr_at(view->h.line, view->h.offset + x);
+inline static struct cell *view_cell(struct line_handle *view, ssize_t x) {
+    return view->line->cell + view->offset + x;
 }
 
-inline static struct attr view_attr(struct line_view *view, uint32_t attrid) {
-    return attrid ? view->h.line->attrs->data[attrid - 1] : ATTR_DEFAULT;
+inline static struct attr view_attr_at(struct line_handle *view, ssize_t x) {
+    return attr_at(view->line, view->offset + x);
 }
 
-inline static void view_adjust_wide_right(struct line_view *view, ssize_t x) {
-    adjust_wide_right(view->h.line, view->h.offset + x);
+inline static struct attr view_attr(struct line_handle *view, uint32_t attrid) {
+    return attrid ? view->line->attrs->data[attrid - 1] : ATTR_DEFAULT;
 }
 
-inline static void view_adjust_wide_left(struct line_view *view, ssize_t x) {
-    adjust_wide_left(view->h.line, view->h.offset + x);
+inline static void view_adjust_wide_right(struct line_handle *view, ssize_t x) {
+    adjust_wide_right(view->line, view->offset + x);
+}
+
+inline static void view_adjust_wide_left(struct line_handle *view, ssize_t x) {
+    adjust_wide_left(view->line, view->offset + x);
 }
 
 /* Returns true if next line will be next physical line
  * and not continuation part of current physical line */
-inline static bool is_last_line(struct line_view *view, bool rewrap) {
-    return !rewrap || !view->wrapped;
+inline static bool is_last_line(struct line_handle *view, bool rewrap) {
+    return !rewrap || !view_wrapped(view);
 }
 
 struct term *create_term(struct window *win, int16_t width, int16_t height);
@@ -81,7 +79,7 @@ struct screen *term_screen(struct term *term);
 bool screen_redraw(struct screen *scr, bool blink_commited);
 void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd);
 void screen_scroll_view(struct screen *scr, int16_t amount);
-struct line_view screen_view_at(struct screen *scr, struct line_handle *pos);
+struct line_handle screen_view_at(struct screen *scr, struct line_handle *pos);
 struct line_handle screen_view(struct screen *scr); /* NOTE: It does not register handle */
 struct line_handle screen_line_iter(struct screen *scr, ssize_t y); /* NOTE: It does not register handle */
 ssize_t screen_advance_iter(struct screen *scr, struct line_handle *pos, ssize_t amount);

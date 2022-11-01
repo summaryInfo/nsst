@@ -215,7 +215,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
     struct screen *scr = term_screen(win->term);
     struct line_handle vpos = screen_view(scr);
     for (ssize_t k = 0; k < win->ch; k++, screen_inc_iter(scr, &vpos)) {
-        struct line_view view = screen_view_at(scr, &vpos);
+        struct line_handle view = screen_view_at(scr, &vpos);
         bool next_dirty = 0;
         struct rect l_bound = {-1, k, 0, 1};
 
@@ -231,7 +231,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
             pcell->drawn = 1;
 
             struct attr attr = view_attr(&view, cel.attrid);
-            bool dirty = view.h.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
+            bool dirty = view.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
 
             struct cellspec spec;
             struct glyph *glyph = NULL;
@@ -290,9 +290,9 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
             next_dirty = dirty;
         }
 
-        if (l_bound.x >= 0 || view.h.line->force_damage || (scrolled && win->cw > view.width)) {
+        if (l_bound.x >= 0 || view.line->force_damage || (scrolled && win->cw > view.width)) {
             if (win->cw > view.width) {
-                struct attr attr = *attr_pad(view.h.line);
+                struct attr attr = *attr_pad(view.line);
                 color_t bg = describe_bg(&attr, &win->cfg, &win->rcstate, last_selected);
 
                 image_draw_rect(win->plat.im, (struct rect){
@@ -310,7 +310,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
         }
 
         // Only reset force flag for last part of the line
-        if (is_last_line(&view, win->cfg.rewrap)) view.h.line->force_damage = 0;
+        if (is_last_line(&view, win->cfg.rewrap)) view.line->force_damage = 0;
     }
 
     if (cursor) {
