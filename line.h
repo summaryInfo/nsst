@@ -31,6 +31,8 @@
 #define SPECIAL_URI_TEXT 267
 #define SPECIAL_URI_UNDERLINE 268
 
+#define MAX_LINE_LEN 16384
+
 extern const struct attr default_attr__;
 
 #define ATTR_DEFAULT default_attr__

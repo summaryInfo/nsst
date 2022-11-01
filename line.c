@@ -14,9 +14,6 @@
 #include <emmintrin.h>
 #endif
 
-// FIXME Use this
-#define MAX_LINE_LEN 16384
-
 #define MAX_EXTRA_PALETTE (ATTRID_MAX - 1)
 #define INIT_CAP 4
 #define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, MAX(3*(sz)/2, INIT_CAP))
