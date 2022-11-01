@@ -3632,8 +3632,10 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 }
 
 struct term *create_term(struct window *win, int16_t width, int16_t height) {
-    struct term *term = calloc(1, sizeof(struct term));
+    struct term *term = aligned_alloc(_Alignof(struct line_handle), sizeof(struct term));
     if (!term) return NULL;
+
+    memset(term, 0, sizeof *term);
 
     if (tty_open(&term->tty, window_cfg(win)) < 0) {
         warn("Can't create tty");

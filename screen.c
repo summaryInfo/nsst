@@ -436,6 +436,20 @@ struct line *create_lines_range(struct line *prev, struct line *next, struct lin
     return line;
 }
 
+inline static void realloc_handle_array(struct line_handle **old, size_t old_caps, size_t new_caps) {
+    if (old_caps >= new_caps) return;
+
+    struct line_handle *new = aligned_alloc(_Alignof(struct line_handle), new_caps * sizeof(*new));
+    if (!new) die("Can't allocate handle array");
+
+    if (*old) {
+        memcpy(new, *old, old_caps*sizeof(*new));
+        free(*old);
+    }
+
+    *old = new;
+}
+
 static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) {
     struct line_handle **alts = get_alt_screen(scr);
     ssize_t minh = MIN(scr->height, height);
@@ -446,9 +460,7 @@ static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) 
     if (height < scr->height)
         free_line_list_until(scr, (*alts)[height].line, NULL);
 
-    struct line_handle *new_back = realloc(*alts, height * sizeof(*new_back));
-    if (!new_back) die("Can't allocate lines");
-    *alts = new_back;
+    realloc_handle_array(alts, scr->height, height);
 
     for (ssize_t i = 0; i < minh; i++) {
         line_handle_add(&(*alts)[i]);
@@ -483,9 +495,7 @@ static void resize_aux(struct screen *scr, ssize_t width, ssize_t height) {
     scr->predec_buf = newpb;
 
     // Resize temporary screen buffer
-    struct line_handle *new_tmpsc = realloc(scr->temp_screen, height*sizeof(*new_tmpsc));
-    if (!new_tmpsc) die("Can't allocate new temporary screen buffer");
-    scr->temp_screen = new_tmpsc;
+    realloc_handle_array(&scr->temp_screen, scr->height, height);
 }
 
 enum stick_view {
@@ -686,9 +696,8 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         for (ssize_t i = 0; i < scr->height; i++)
             line_handle_remove(&screen[i]);
 
-        screen = realloc(screen, height * sizeof(screen[0]));
-        if (!screen) die("Can't allocate lines");
-        *pscr = screen;
+        realloc_handle_array(pscr, scr->height, height);
+        screen = *pscr;
 
 #ifdef DEBUG_LINES
         assert(c->y >= 0);
@@ -768,8 +777,8 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         assert(scr->top_line.line);
 #endif
     } else {
-        *pscr = screen = malloc(height * sizeof(screen[0]));
-        if (!screen) die("Can't allocate lines");
+        realloc_handle_array(pscr, 0, height);
+        screen = *pscr;
     }
 
     create_lines_range(y ? screen[y - 1].line : NULL, NULL,

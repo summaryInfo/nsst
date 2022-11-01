@@ -94,7 +94,7 @@ struct line_handle {
     /* Only when used as line view, it does not get accounted
      * when splitting. (FIXME) */
     int32_t width;
-};
+} ALIGNED(16);
 
 // Add default attrib value?
 struct line {
