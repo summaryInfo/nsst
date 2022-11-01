@@ -7,11 +7,6 @@ _NOTE: These plans can change any time_
 
 ### Until 2.4
 
-* Fix flaky tests
-  * DECSETTests.test_DECSET_DECAWM
-  * DECSETTests.test_DECSET_DECCOLM
-  * DECSETTests.test_DECSET_Allow80To132
-
 * Optimize scrolling
 
 * Optimize screen_damage_uri to iterate over attributes first to find whether the line has attributes with source URI.
@@ -28,6 +23,9 @@ _NOTE: These plans can change any time_
   * `CSI 4:3 m` -- curly underline
 
 ### Until 2.5 (or later)
+
+* Fix flaky tests
+  * `DECSETTests.test_DECSET_Allow80To132` causes flakes for itself and `DECSETTests.test_DECSET_DECAWM`, `DECSETTests.test_DECSET_DECCOLM`.
 
 * Allow selecting over the end of the short line
 
