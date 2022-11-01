@@ -295,9 +295,8 @@ void screen_do_wrap(struct screen *scr) {
 
     if (!moved || screen_min_x(scr) || screen_max_x(scr) != scr->width) return;
 
-    /* If history size is set to 0 and scrolled off line is not saved
-     * in history or we are on altscreen we should not re-wrap lines either. */
-    if (!scr->screen[0].line->prev) return;
+    /* If there's no previous line, we cannot soft wrap */
+    if (!scr->screen[scr->c.y].line->prev) return;
 
     /* If this and the next line are already the same,
      * avoid reallocation and do nothing. */
