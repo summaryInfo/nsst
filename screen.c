@@ -307,15 +307,13 @@ void screen_do_wrap(struct screen *scr) {
     /* If paragraph is too long, force hard wrap */
 
     if (scr->screen[scr->c.y].line->prev->size +
-        scr->screen[scr->c.y].line->size > MAX_LINE_LEN) return;
+            scr->screen[scr->c.y].line->size > MAX_LINE_LEN)
+        scr->screen[scr->c.y].line->prev->wrapped = true;
 
     /* Otherwise if everything is fine and we can wrap */
 
-
-    // FIXME: Should we really adjust it? Or current width is already fine?
-    if (scr->c.y > 0) {
+    if (scr->c.y > 0)
         screen_adjust_line(scr, scr->c.y - 1, scr->width);
-    }
 
     struct line *current = scr->screen[scr->c.y].line;
     screen_concat_line(scr, current->prev, current, false);
