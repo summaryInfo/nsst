@@ -3,38 +3,29 @@ Roadmap
 
 ## Future versions
 
-Fails:
-
-    DECBITests.test_DECBI_Scrolls
-    DECFITests.test_DECFI_Scrolls
-    DECDCTests.test_DECDC_DeleteWithLeftRightMargins
-    DECICTests.test_DECIC_ScrollOffRightMarginInScrollRegion
-
-Flakes when fast scrolling is off:
-
-    DLTests.test_DL_InLeftRightAndTopBottomScrollRegion
-    DLTests.test_DL_InLeftRightScrollRegion
-    ILTests.test_IL_RespectsScrollRegion
-
-* Optimize scrolling
-* Optimize screen_damage_uri to iterate over attributes first to find whether the line has attributes with source URI.
-* Handle overlong lines
-* Unbreak `rewrap==False`
-
 _NOTE: These plans can change any time_
 
 ### Until 2.4
 
+* Fix flaky tests
+  * DECSETTests.test_DECSET_DECAWM
+  * DECSETTests.test_DECSET_DECCOLM
+  * DECSETTests.test_DECSET_Allow80To132
+
+* Optimize scrolling
+
+* Optimize screen_damage_uri to iterate over attributes first to find whether the line has attributes with source URI.
+
+* Handle overlong lines
+
+* Unbreak `rewrap==False`
+
 * Hyperlinks auto-detection
 
   * `--match-uri=<X>` where `<X>` is one of `off`,`manual`,`auto`
-  * Protocols matching
 
 * Underlines
   * `CSI 4:3 m` -- curly underline
-
-* Keep non-rectangular selections on resize
-* Optimize resizing
 
 ### Until 2.5 (or later)
 

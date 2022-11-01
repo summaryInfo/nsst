@@ -166,7 +166,9 @@ struct line *create_line_with_seq(struct attr attr, ssize_t caps, uint64_t seq) 
     struct line *line = malloc(sizeof(*line) + (size_t)caps * sizeof(line->cell[0]));
     if (!line) die("Can't allocate line");
 
+#ifdef DEBUG_LINES
     assert(caps >= 0);
+#endif
 
     memset(line, 0, sizeof *line);
 
@@ -384,9 +386,12 @@ void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, s
             *dc++ = c;
         }
     } else {
-        memmove(dc, sc, len * sizeof(*sc));
-        if (dx + len < dst->size)
+        if (dx + len > dst->size) {
+            if (dx > dst->size)
+                memset(dst->cell + dst->size, 0, (dx - dst->size)*sizeof *dc);
             dst->size = dx + len;
+        }
+        memmove(dc, sc, len * sizeof(*sc));
         while (len--) dc++->drawn = 0;
     }
 }
