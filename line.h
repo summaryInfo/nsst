@@ -292,7 +292,7 @@ inline static bool attr_eq(const struct attr *a, const struct attr *b) {
             a->ul == b->ul && !((a->mask ^ b->mask) & ~PROTECTED_MASK);
 }
 
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
 inline static bool find_handle_in_line(struct line_handle *handle) {
     struct line_handle *first = handle->line->first_handle;
     while (first) {
@@ -304,7 +304,7 @@ inline static bool find_handle_in_line(struct line_handle *handle) {
 #endif
 
 inline static void line_handle_add(struct line_handle *handle) {
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
     assert(!handle->next);
     assert(!handle->prev);
     assert(!find_handle_in_line(handle));
@@ -323,7 +323,7 @@ inline static bool line_handle_is_registered(struct line_handle *handle) {
 }
 
 inline static void line_handle_remove(struct line_handle *handle) {
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
     if (!handle->line) return;
     if (!line_handle_is_registered(handle)) {
         assert(!find_handle_in_line(handle));

@@ -3,6 +3,7 @@
 use_x11shm=1
 use_boxdrawing=1
 use_precompose=1
+debug_lines=0
 use_clang=0
 use_uri=1
 prefix=/usr/local
@@ -62,8 +63,8 @@ Usage: configure [options]
     --prefix=DIR            installation prefix [$prefix]
     --mandir=DIR            man install directory [$prefix/share/man]
     --bindir=DIR            binary install directory [$prefix/bin]
-    --enable-ppoll          enable ppoll in main loop for better timing [set if available]
-    --disable-ppoll         disable ppoll in main loop, use poll instead
+    --enable-ppoll          enable ppoll() in main loop for better timing [set if available]
+    --disable-ppoll         disable ppoll() in main loop, use poll instead
     --enable-nanosleep      enable POSIX clock_nanosleep() [set if available]
     --disable-nanosleep     disable POSIX clock_nanosleep() use nanosleep() instead
     --enable-boxdrawing     enable built-in box drawing characters [set]
@@ -73,9 +74,10 @@ Usage: configure [options]
     --enable-precompose     enable unicode combining characters precomposition [set]
     --disable-precompose    disable unicode combining characters precomposition
     --enable-posix-shm      enable posix shared memory functions usage
-    --disable-posix-shm     disble posix shared memory functions usa
+    --disable-posix-shm     disable posix shared memory functions usa
     --backend=<targ>        Rendering backend x11shm/[x11xrender]
     --use-clang             Configure to compile with clang/lld
+    --debug-lines           Enable heavy interal data structures checks
 END
 }
 
@@ -112,6 +114,8 @@ for i; do
         use_posix_shm=0 ;;
     --use-clang)
         use_clang=1 ;;
+    --debug-lines)
+        debug_lines=1 ;;
     --backend=*)
         backend="${i#--backend=}" ;;
     --name=*)
@@ -207,6 +211,7 @@ sed < "./feature.h.in" > "./feature.h" \
     -e "s:@USE_PRECOMPOSE@:$use_precompose:g" \
     -e "s:@USE_POSIX_SHM@:$use_posix_shm:g" \
     -e "s:@USE_URI@:$use_uri:g" \
+    -e "s:@DEBUG_LINES@:$debug_lines:g" \
     -e "s:@VERSION@:$version:g"
 
 sed < "./Makefile.in" > "./Makefile" \
@@ -237,6 +242,7 @@ Configure results:
     clock_nanosleep.......... $use_nanosleep
     posix shm................ $use_posix_shm
     force clang+lld.......... $use_clang
+    debug lines.............. $debug_lines
 
     Do "make && make install" to compile and install nsst
 END

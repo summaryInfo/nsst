@@ -267,7 +267,7 @@ inline static void screen_adjust_line2(struct screen *scr, struct line_handle *s
      * widths of previous parts of line */
     if (UNLIKELY(view->offset) && y > 0) {
         screen[--y].width = scr->width;
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
         assert(screen[y].offset <= old_size);
         while (--y > 0 && screen[y].line == view->line)
             assert(screen[y].width == scr->width);
@@ -507,7 +507,7 @@ enum stick_view {
 };
 
 static void fixup_view(struct screen *scr, struct line_handle *lower_left, enum stick_view stick) {
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
     if (scr->mode.altscreen)
         assert(stick == stick_to_bottom);
 #endif
@@ -528,7 +528,7 @@ static void fixup_view(struct screen *scr, struct line_handle *lower_left, enum 
         line_handle_add(&scr->view_pos);
     }
 
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
     assert(scr->view_pos.line->seq <= scr->screen->line->seq);
 #endif
 }
@@ -543,7 +543,7 @@ inline static void translate_screen_position(struct line_handle *first, struct l
         return;
     }
 
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
     ssize_t yy = c->y;
 #endif
 
@@ -563,7 +563,7 @@ inline static void translate_screen_position(struct line_handle *first, struct l
         y++;
     } while (!inc_iter_width_width(&it, width, rewrap));
 
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
     if (c->y == -1)
         warn("w=%zd y=%zd x=%zd cy=%zd", width, y, c->x, yy);
     assert(c->y >= 0);
@@ -571,7 +571,7 @@ inline static void translate_screen_position(struct line_handle *first, struct l
 #endif
 }
 
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
 static void validate_main_screen(struct screen *scr) {
     struct line_handle *screen = *get_main_screen(scr);
 
@@ -648,7 +648,7 @@ inline static void round_offset_to_width(struct line_handle *handle, ssize_t wid
     // FIXME handle rewrap==false everywhere
     if (!rewrap) return;
 
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
     assert(to < handle->line->size);
 #endif
 
@@ -701,7 +701,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         realloc_handle_array(pscr, scr->height, height);
         screen = *pscr;
 
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
         assert(c->y >= 0);
         struct line_handle d0 = dup_handle(&it);
 #endif
@@ -709,7 +709,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         if (rest) {
         /* Not enough lines in scrollback buffer to keep cursor on it original line,
          * need to allocate more */
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
             assert(rest < 0);
             assert(!it.line->prev);
             assert(!it.offset);
@@ -719,7 +719,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
                                &ATTR_DEFAULT, -rest, &scr->top_line);
             fixup_lines_seqno(it.line);
             it.line = scr->top_line.line;
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
         } else {
             struct line_handle d = dup_handle(&it);
             assert(!advance_iter_with_width(&d, c->y, width, scr->mode.rewrap));
@@ -740,7 +740,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
             saved_c->y = MAX(0, saved_c->y - delta);
 
             delta = advance_iter_with_width(&it, delta, width, scr->mode.rewrap);
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
             assert(!delta);
 #endif
         }
@@ -775,7 +775,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         line_handle_remove(&saved_cursor_handle);
         line_handle_remove(&prev_first_line);
 
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
         assert(scr->top_line.line);
 #endif
     } else {
@@ -1123,7 +1123,7 @@ void screen_erase_fast(struct screen *scr, int16_t ys, int16_t ye, struct attr *
     screen_split_line(scr, view->line, view->offset, NULL, NULL);
 
     while (ys < ye) {
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
         assert(!view->offset);
 #endif
 
@@ -1279,7 +1279,7 @@ inline static void swap_3(struct line *top_after, struct line *mid_before, struc
         struct line *mid_after = detach_next_line(mid_before);
         struct line *bottom_after = detach_next_line(bottom_before);
 
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
         assert(top_after->seq <= mid_before->seq);
         assert(mid_before->seq < bottom_before->seq);
 #endif
@@ -1340,7 +1340,7 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
                 if (next) next->prev = dst;
             }
 
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
             if (rest) assert(scr->screen[rest - 1].line == bottom_line);
             assert(!bottom_line->next);
             if (bottom_next) assert(!bottom_next->prev);

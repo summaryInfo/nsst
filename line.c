@@ -163,7 +163,7 @@ struct line *create_line_with_seq(struct attr attr, ssize_t caps, uint64_t seq) 
     struct line *line = malloc(sizeof(*line) + (size_t)caps * sizeof(line->cell[0]));
     if (!line) die("Can't allocate line");
 
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
     assert(caps >= 0);
 #endif
 
@@ -249,7 +249,7 @@ static void optimize_attributes(struct line *line) {
 
 void split_line(struct line *src, ssize_t offset, struct line **dst1, struct line **dst2) {
     ssize_t tail_len = src->size - offset;
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
     assert(tail_len >= 0);
 #endif
 
@@ -258,7 +258,7 @@ void split_line(struct line *src, ssize_t offset, struct line **dst1, struct lin
     uint64_t tail_seq = dist < 2 ? get_seqno_range(SEQNO_INC) : src->seq + dist/2;
 
     struct line *tail = create_line_with_seq(*attr_pad(src), tail_len, tail_seq);
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
     assert(tail_seq < get_seqno_range(0));
     assert(tail->seq > src->seq);
     assert(tail);
@@ -305,7 +305,7 @@ void split_line(struct line *src, ssize_t offset, struct line **dst1, struct lin
 
 struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     if (src2) {
-#ifdef DEBUG_LINES
+#if DEBUG_LINES
         assert(src1);
         assert(src1->next == src2);
         assert(src2->prev == src1);
