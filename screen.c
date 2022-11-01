@@ -1735,7 +1735,7 @@ void screen_print_all(struct screen *scr) {
             scr->top_line.line : scr->screen[0].h.line;
 
     while (line) {
-        screen_print_line(scr, &(struct line_view){
+        screen_print_line(scr, &(struct line_view) {
             .h = (struct line_handle) { .line = line },
             .width = line->size,
             .wrapped = line->wrapped });
