@@ -1329,38 +1329,18 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
             }
 
             for (; i < bottom; i++) {
-                struct line_handle *handle = &scr->screen[i].h;
+                struct line_view *src = &scr->screen[i];
+                struct line_view *dst = &scr->screen[i - amount];
 
-                struct line_handle *prev = handle->prev;
-                struct line_handle *next = handle->next;
+                *dst = *src;
 
-                /* This magic is required to speed up relocation.
-                 * Returns true if it is on screen and has already been fixed up.
-                 * Need to correct position if it has already been fixed up since,
-                 * but memmove did not happen yet. */
-                #define INSCREEN(x) (((void *)(x) < (void *)(scr->screen + i - amount) && \
-                                      (void *)(x) >= (void *)(scr->screen)))
-                #define FIXUP(x, y) ((struct line_handle *)((struct line_view *)(x) + (y)))
+                struct line_handle *prev = src->h.prev;
+                struct line_handle *next = src->h.next;
 
-                struct line_handle *fixed_up = FIXUP(handle, -amount);
-
-                if (prev) {
-                    if (INSCREEN(prev)) prev = FIXUP(prev, amount);
-                    prev->next = fixed_up;
-                } else {
-                    handle->line->first_handle = fixed_up;
-                }
-
-                if (next) {
-                    if (INSCREEN(next)) next = FIXUP(next, amount);
-                    next->prev = fixed_up;
-                }
-
-                #undef INSCREEN
-                #undef FIXUP
+                if (prev) prev->next = &dst->h;
+                else dst->h.line->first_handle = &dst->h;
+                if (next) next->prev = &dst->h;
             }
-
-            memmove(scr->screen, scr->screen + amount, rest*sizeof(*scr->screen));
 
 #ifdef DEBUG_LINES
             if (rest) assert(scr->screen[rest - 1].h.line == bottom_line);

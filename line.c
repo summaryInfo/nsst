@@ -308,9 +308,11 @@ void split_line(struct line *src, ssize_t offset, struct line **dst1, struct lin
 
 struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
     if (src2) {
+#ifdef DEBUG_LINES
         assert(src1);
         assert(src1->next == src2);
         assert(src2->prev == src1);
+#endif
 
         ssize_t len = src2->size + src1->size;
         ssize_t first_len = src1->size;
