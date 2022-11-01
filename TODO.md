@@ -7,9 +7,11 @@ _NOTE: These plans can change any time_
 
 ### Until 2.4
 
-* Find out where empty tail for scrolled off lines is comming from.
+* Find out where empty tail for scrolled off lines is comming from, since erase should have trimmed them.
 
-* Fix assertion failure on exit `line.c:89: free_line: Assertion handle->line == line failed.`
+* Fix assertion failure on exit (they are a little rare):
+  * `line.c:89: free_line: Assertion handle->line == line failed.`
+  * `line.h:335: line_handle_remove: Assertion find_handle_in_line(handle) failed.`
 
 * Optimize scrolling by replacing malloc with custom allocator based on multiple linear memory pools.
 
