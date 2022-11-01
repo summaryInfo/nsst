@@ -7,9 +7,11 @@ _NOTE: These plans can change any time_
 
 ### Until 2.4
 
+* Find out where empty tail for scrolled off lines is comming from.
+
 * Fix assertion failure on exit `line.c:89: free_line: Assertion handle->line == line failed.`
 
-* Optimize scrolling by replacing malloc with custom allcator based on multiple linear memory pools.
+* Optimize scrolling by replacing malloc with custom allocator based on multiple linear memory pools.
 
 * Optimize screen_damage_uri to iterate over attributes first to find whether the line has attributes with source URI.
 
