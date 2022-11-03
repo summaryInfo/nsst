@@ -80,7 +80,7 @@ struct attr {
     } PACKED;
     /* Total length of union above
      * is assumed to be sizeof(uint32_t) */
-};
+} ALIGNED(MPA_ALIGNMENT);
 
 struct line_attr {
     ssize_t caps;
@@ -97,7 +97,7 @@ struct line_handle {
     /* Only when used as line view, it does not get accounted
      * when splitting. (FIXME) */
     int32_t width;
-} ALIGNED(16);
+} ALIGNED(MPA_ALIGNMENT);
 
 // Add default attrib value?
 struct line {

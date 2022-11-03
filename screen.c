@@ -1782,23 +1782,30 @@ inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bo
 }
 
 #define BLOCK_MASK 0x4040404040404040ULL
+#define ASCII_MASK 0x8080808080808080ULL
 
 inline static uint64_t read_block_mask(const uint8_t *start) {
     uint64_t b = *(const uint64_t *)start;
     return ((b | (b << 1)) & BLOCK_MASK) ^ BLOCK_MASK;
 }
 
+inline static uint64_t has_non_ascii(const uint8_t *start) {
+    uint64_t b = *(const uint64_t *)start;
+    return (b & ASCII_MASK);
+}
+
 inline static const uint8_t *block_mask_offset(const uint8_t *start, const uint8_t *end, uint64_t b) {
     return MIN(end, start + (__builtin_ffsll(b) - sizeof(uint64_t) + 1)/sizeof(uint64_t));
 }
 
-inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end, ssize_t max_chunk) {
+inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end, ssize_t max_chunk, bool *phas_nonascii) {
     if (end - start >= (ssize_t)sizeof(uint64_t)) {
         if (start + max_chunk < end) end = start + max_chunk;
 
         ssize_t unaligned_prefix = (uintptr_t)start & (sizeof(uint64_t) - 1);
         if (unaligned_prefix) {
-            uint64_t res = read_block_mask(start - unaligned_prefix) >> (unaligned_prefix * sizeof(uint64_t));
+            uint64_t res = read_block_mask(start - unaligned_prefix) >> (unaligned_prefix * 8);
+            *phas_nonascii |= !!(has_non_ascii(start - unaligned_prefix) >> (unaligned_prefix * 8));
             if (UNLIKELY(res))
                 return block_mask_offset(start, end, res);
             start += sizeof(uint64_t) - unaligned_prefix;
@@ -1810,6 +1817,7 @@ inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end
         // and buffer size is a power of two
 
         for (; start < end; start += sizeof(uint64_t)) {
+            *phas_nonascii |= !!has_non_ascii(start);
             uint64_t res = read_block_mask(start);
             if (UNLIKELY(res))
                 return block_mask_offset(start, end, res);
@@ -1817,7 +1825,10 @@ inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end
 
         return end;
     } else {
-        while (start < end && !IS_CBYTE(*start)) start++;
+        bool has_nonascii = false;
+        while (start < end && !IS_CBYTE(*start))
+            has_nonascii |= 0x80 & *start++;
+        *phas_nonascii = has_nonascii;
         return start;
     }
 }
@@ -1919,75 +1930,84 @@ ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const u
     // 4 times width of the lines since
     // each UTF-8 can be at most 4 bytes single width
 
-    const uint8_t *chunk = find_chunk(xstart, end, maxw*4);
+    bool has_non_ascii = false;
+    const uint8_t *chunk = find_chunk(xstart, end, maxw*4, &has_non_ascii);
 
-    do {
-        const uint8_t *char_start = xstart;
-        if (UNLIKELY((ch = decode_special(&xstart, end, !utf8)) < 0)) {
-            // If we encountered partial UTF-8,
-            // print all we have and return
-            res = 0;
-            break;
-        }
+    // TODO Cache most of this condition in variable
 
-        // Skip DEL char if not 96 set
-        if (UNLIKELY(IS_DEL(ch)) && skip_del) continue;
-
-        // Decode nrcs
-        // In theory this should be disabled while in UTF-8 mode, but
-        // in practice applications use these symbols, so keep translating.
-        // But decode only allow only DEC Graph in GL, unless configured otherwise
-        if (LIKELY(fast_nrcs))
-            ch = nrcs_decode_fast(glv, ch);
-        else
-            ch = nrcs_decode(glv, scr->c.gn[scr->c.gr], scr->upcs, ch, nrcs);
-        scr->c.gl_ss = scr->c.gl; // Reset single shift
-
-        prev = ch;
-
-        if (UNLIKELY(iscombining(ch))) {
-            // Don't put zero-width charactes
-            // to predecode buffer
-            if (!totalw) screen_precompose_at_cursor(scr, ch);
-            else {
-                uint32_t *p = pbuf - 1 - !pbuf[-1];
-                *p = compact(try_precompose(uncompact(*p), ch));
+    /* Really fast short path for common case */
+    if ((LIKELY(!has_non_ascii) || !utf8) && LIKELY(!skip_del && fast_nrcs && glv != cs94_dec_graph && scr->c.gl_ss == scr->c.gl) ) {
+        do *pbuf++ = *xstart++;
+        while(++totalw < maxw && xstart < chunk);
+        scr->prev_ch = pbuf[-1];
+    } else {
+        do {
+            const uint8_t *char_start = xstart;
+            if (UNLIKELY((ch = decode_special(&xstart, end, !utf8)) < 0)) {
+                // If we encountered partial UTF-8,
+                // print all we have and return
+                res = 0;
+                break;
             }
-        } else {
-            int wid = 1 + iswide(ch);
 
-            // Don't include char if its too wide, unless its a wide char
-            // at right margin, or autowrap is disabled, and we are at right size of the screen
-            // In those cases recalculate maxw
-            if (UNLIKELY(totalw + wid > maxw)) {
-                if (LIKELY(totalw || wid != 2)) {
-                    xstart = char_start;
-                    break;
-                } else if (scr->c.x == screen_max_x(scr) - 1) {
-                    maxw = scr->mode.wrap ? screen_max_x(scr) - screen_min_x(scr) : wid;
-                } else if (scr->c.x == screen_width(scr) - 1) {
-                    maxw = wid;
-                } else {
-                    xstart = char_start;
-                    break;
+            // Skip DEL char if not 96 set
+            if (UNLIKELY(IS_DEL(ch)) && skip_del) continue;
+
+            // Decode nrcs
+            // In theory this should be disabled while in UTF-8 mode, but
+            // in practice applications use these symbols, so keep translating.
+            // But decode only allow only DEC Graph in GL, unless configured otherwise
+            if (LIKELY(fast_nrcs))
+                ch = nrcs_decode_fast(glv, ch);
+            else
+                ch = nrcs_decode(glv, scr->c.gn[scr->c.gr], scr->upcs, ch, nrcs);
+            scr->c.gl_ss = scr->c.gl; // Reset single shift
+
+            prev = ch;
+
+            if (UNLIKELY(iscombining(ch))) {
+                // Don't put zero-width charactes
+                // to predecode buffer
+                if (!totalw) screen_precompose_at_cursor(scr, ch);
+                else {
+                    uint32_t *p = pbuf - 1 - !pbuf[-1];
+                    *p = compact(try_precompose(uncompact(*p), ch));
                 }
+            } else {
+                int wid = 1 + iswide(ch);
+
+                // Don't include char if its too wide, unless its a wide char
+                // at right margin, or autowrap is disabled, and we are at right size of the screen
+                // In those cases recalculate maxw
+                if (UNLIKELY(totalw + wid > maxw)) {
+                    if (LIKELY(totalw || wid != 2)) {
+                        xstart = char_start;
+                        break;
+                    } else if (scr->c.x == screen_max_x(scr) - 1) {
+                        maxw = scr->mode.wrap ? screen_max_x(scr) - screen_min_x(scr) : wid;
+                    } else if (scr->c.x == screen_width(scr) - 1) {
+                        maxw = wid;
+                    } else {
+                        xstart = char_start;
+                        break;
+                    }
+                }
+
+                *pbuf++ = compact(ch);
+                totalw += wid;
+
+                if (wid > 1)
+                    *pbuf++ = 0;
             }
 
-            *pbuf++ = compact(ch);
-            totalw += wid;
+            // Since maxw < width == length of predec_buf, don't check it
+        } while(totalw < maxw && /* count < FD_BUF_SIZE && */ xstart < chunk);
 
-            if (wid > 1)
-                *pbuf++ = 0;
-        }
-
-        // Since maxw < width == length of predec_buf, don't check it
-    } while(totalw < maxw && /* count < FD_BUF_SIZE && */ xstart < chunk);
+        if (prev != -1U) scr->prev_ch = prev; // For REP CSI
+    }
 
     *start = xstart;
 
-    if (prev != -1U) scr->prev_ch = prev; // For REP CSI
-
-    assert(pbuf - scr->predec_buf == totalw);
     print_buffer(scr, scr->predec_buf, pbuf);
     return res;
 }

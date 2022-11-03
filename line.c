@@ -13,6 +13,9 @@
 #ifdef __SSE2__
 #include <emmintrin.h>
 #endif
+#ifdef __SSE4_1__
+#include <smmintrin.h>
+#endif
 
 #define MAX_EXTRA_PALETTE (ATTRID_MAX - 1)
 #define INIT_CAP 4
@@ -26,7 +29,12 @@ const struct attr default_attr__ = {
 
 inline static bool attr_eq_prot(const struct attr *a, const struct attr *b) {
     static_assert(sizeof(struct attr) == 4*sizeof(uint32_t), "Wrong attribute size");
+#ifdef __SSE4_1__
+    __m128i c = _mm_xor_si128(_mm_load_si128((void *)a), _mm_load_si128((void *)b));
+    return _mm_testz_si128(c, c);
+#else
     return a->fg == b->fg && a->bg == b->bg && a->ul == b->ul && a->mask == b->mask;
+#endif
 }
 
 inline static uint32_t attr_hash(struct attr *attr) {
