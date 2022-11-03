@@ -678,6 +678,8 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
             assert(!it.line->prev);
             assert(!it.offset);
             assert(it.line == scr->top_line.line);
+            if (scr->top_line.line)
+                assert(find_handle_in_line(&scr->top_line));
 #endif
             create_lines_range(NULL, it.line, screen, width,
                                &ATTR_DEFAULT, -rest, &scr->top_line);

@@ -294,6 +294,7 @@ inline static bool attr_eq(const struct attr *a, const struct attr *b) {
 
 #if DEBUG_LINES
 inline static bool find_handle_in_line(struct line_handle *handle) {
+    assert(handle->line);
     struct line_handle *first = handle->line->first_handle;
     while (first) {
         if (first == handle) return true;
@@ -316,6 +317,10 @@ inline static void line_handle_add(struct line_handle *handle) {
 
     handle->next = next;
     handle->prev = NULL;
+
+#if DEBUG_LINES
+    assert(find_handle_in_line(handle));
+#endif
 }
 
 inline static bool line_handle_is_registered(struct line_handle *handle) {
@@ -358,6 +363,10 @@ inline static void line_handle_remove(struct line_handle *handle) {
         next->prev = prev;
         handle->next = NULL;
     }
+
+#if DEBUG_LINES
+    assert(!find_handle_in_line(handle));
+#endif
 }
 
 #define SEQNO_INC 16
