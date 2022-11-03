@@ -16,19 +16,19 @@ _NOTE: These plans can change any time_
 
 * Optimize scrolling by replacing malloc with custom allocator based on multiple linear memory pools.
 
-* Optimize screen_damage_uri to iterate over attributes first to find whether the line has attributes with source URI.
-
 * Hyperlinks auto-detection
 
   * `--match-uri=<X>` where `<X>` is one of `off`,`manual`,`auto`
 
-* Underlines
-  * `CSI 4:3 m` -- curly underline
-
 ### Until 2.5 (or later)
+
+* Optimize screen_damage_uri to iterate over attributes first to find whether the line has attributes with source URI.
 
 * Fix flaky tests
   * `DECSETTests.test_DECSET_Allow80To132` causes flakes for itself and `DECSETTests.test_DECSET_DECAWM`, `DECSETTests.test_DECSET_DECCOLM`.
+
+* Underlines
+  * `CSI 4:3 m` -- curly underline
 
 * Allow selecting over the end of the short line
 
@@ -55,11 +55,6 @@ _NOTE: These plans can change any time_
 
 ### General
 
-* We need better storage for lines contents than just malloc, to be able to scroll faster.
-
-  Some kind of pool allocator, since we can only allocate scrollback from start and free from the back.
-  Simplifies implementation of persistent scrollback feature (if it will be implemented at all).
-
 * Add `always` value to some options to prevent overriding
 
   User might want to keep some settings in the certain way, not allowing an application
@@ -68,11 +63,6 @@ _NOTE: These plans can change any time_
 * Do something with multi-line shell prompt eating history lines
 
   This can possibly be done using shell integration.
-
-* Make selection operate on physical lines?
-
-  This allows to get rid of `term->view` numeric value and its recalculation on resize (which is linear).
-  Allows to keep non-rectangular selections after resizing (_alternatively: recalculate their positions on resize too_).
 
 * Some alternative to `XParseColor()`
 
@@ -90,8 +80,6 @@ _NOTE: These plans can change any time_
       In XRender this will require to use PutImage on every emoji (the most straight-forward solution)
 
   * Add options to select width of ambiguous characters
-
-      This requires custom `wcwidth()`
 
   * Combining characters support
 
