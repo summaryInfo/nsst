@@ -1332,8 +1332,6 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
             ssize_t scrolled = screen_push_history_until(scr, first_to_hist, first->line, scr->mode.minimize_scrollback);
             if (UNLIKELY(scrolled)) /* View down, image up */ {
                 replace_handle(&scr->view_pos, &scr->top_line);
-                screen_damage_lines(scr, scr->height - scrolled, scr->height);
-                window_shift(scr->win, -scrolled, 0, scr->height - scrolled);
                 selection_view_scrolled(&scr->sstate, scr);
             }
 
