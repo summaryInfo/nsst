@@ -426,26 +426,28 @@ struct line *create_lines_range(struct line *prev, struct line *next, struct lin
 
 static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) {
     struct line_handle **alts = get_alt_screen(scr);
+    struct line_handle *screen = *alts;
     ssize_t minh = MIN(scr->height, height);
 
     for (ssize_t i = 0; i < scr->height; i++)
-        line_handle_remove(&(*alts)[i]);
+        line_handle_remove(&screen[i]);
 
     if (height < scr->height)
-        free_line_list_until(scr, (*alts)[height].line, NULL);
+        free_line_list_until(scr, screen[height].line, NULL);
 
     static_assert(MALLOC_ALIGNMENT == _Alignof(struct line_handle), "Insufficient alignment");
-    *alts = xrealloc(*alts, scr->height * sizeof **alts, height * sizeof **alts);
+    screen = xrealloc(screen, scr->height * sizeof *screen, height * sizeof *screen);
+    *alts = screen;
 
     for (ssize_t i = 0; i < minh; i++) {
-        line_handle_add(&(*alts)[i]);
-        screen_realloc_line(scr, (*alts)[i].line, width);
-        (*alts)[i].width = MIN((*alts)[i].width, width);
+        line_handle_add(&screen[i]);
+        screen_realloc_line(scr, screen[i].line, width);
+        screen[i].width = MIN(screen[i].width, width);
     }
 
     if (scr->height < height) {
-        create_lines_range(scr->height ? (*alts)[scr->height - 1].line : NULL, NULL,
-                           &(*alts)[scr->height], width, &ATTR_DEFAULT, height - scr->height, NULL);
+        create_lines_range(scr->height ? screen[scr->height - 1].line : NULL, NULL,
+                           &screen[scr->height], width, &ATTR_DEFAULT, height - scr->height, NULL);
     }
 
     /* Adjust altscreen saved cursor position */
