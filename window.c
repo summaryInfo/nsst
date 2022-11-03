@@ -285,12 +285,7 @@ void window_push_title(struct window *win, enum title_target which) {
     if (title) len += tlen = strlen(title) + 1;
     if (icon) len += ilen = strlen(icon) + 1;
 
-    struct title_stack_item *new = malloc(len);
-    if (!new) {
-        free(title);
-        free(icon);
-        return;
-    }
+    struct title_stack_item *new = xalloc(len);
 
     if (title) memcpy(new->title_data = new->data, title, tlen);
     else new->title_data = NULL;
@@ -418,11 +413,7 @@ struct window *window_find_shared_font(struct window *win, bool need_free) {
 
 
 struct window *create_window(struct instance_config *cfg) {
-    struct window *win = calloc(1, sizeof(struct window));
-    if (!win) {
-        free(win);
-        return NULL;
-    }
+    struct window *win = xzalloc(sizeof(struct window));
 
     copy_config(&win->cfg, cfg);
 

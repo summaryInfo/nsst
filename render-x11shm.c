@@ -128,8 +128,7 @@ static void resize_bounds(struct window *win, bool h_changed) {
     if (win->plat.bounds) {
         size_t j = 0;
         struct rect *r_dst = win->plat.bounds;
-        if (h_changed) r_dst = malloc(sizeof(struct rect) * 2 * win->ch);
-        if (!r_dst) die("Can't allocate bounds");
+        if (h_changed) r_dst = xalloc(sizeof(struct rect) * 2 * win->ch);
         for (size_t i = 0; i < win->plat.boundc; i++)
             if (intersect_with(&win->plat.bounds[i], &(struct rect){0, 0, win->cw, win->ch}))
                 r_dst[j++] = win->plat.bounds[i];
@@ -140,8 +139,7 @@ static void resize_bounds(struct window *win, bool h_changed) {
         }
     } else {
         win->plat.boundc = 0;
-        win->plat.bounds = malloc(sizeof(struct rect) * 2 * win->ch);
-        if (!win->plat.bounds) die("Can't allocate bounds");
+        win->plat.bounds = xalloc(sizeof(struct rect) * 2 * win->ch);
     }
 }
 

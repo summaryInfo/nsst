@@ -184,12 +184,7 @@ static void append_pending_launch(struct pending_launch *lnch) {
     } else if (buffer[0] == '\036' /* RS */ && len > 1) /* Argument */ {
         if (lnch->argn + 2 > lnch->argcap) {
             ssize_t newsz = ARGN_STEP(lnch->argcap);
-            char **new = realloc(lnch->args, newsz*sizeof(*new));
-            if (!new) {
-                free_pending_launch(lnch);
-                return;
-            }
-            lnch->args = new;
+            lnch->args = xrealloc(lnch->args, lnch->argcap*sizeof(*lnch->args), newsz*sizeof(*lnch->args));
             lnch->argcap = newsz;
         }
 
@@ -220,8 +215,8 @@ static void accept_pending_launch(void) {
     int fl = fcntl(fd, F_GETFD);
     if (fl >= 0) fcntl(fd, F_SETFD, fl | FD_CLOEXEC);
 
-    struct pending_launch *lnch = calloc(1, sizeof(struct pending_launch));
-    if (fd < 0 || !lnch || (lnch->poll_index = poller_alloc_index(fd, POLLIN | POLLHUP)) < 0) {
+    struct pending_launch *lnch = xzalloc(sizeof(struct pending_launch));
+    if (fd < 0 || (lnch->poll_index = poller_alloc_index(fd, POLLIN | POLLHUP)) < 0) {
         close(fd);
         free(lnch);
         warn("Can't create pending launch: %s", strerror(errno));

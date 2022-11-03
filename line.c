@@ -131,8 +131,7 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
     uint32_t hash = attr_hash(&attr);
 
     if (!line->attrs) {
-        line->attrs = calloc(sizeof *line->attrs + INIT_CAP * sizeof *line->attrs->data, 1);
-        if (!line->attrs) return ATTRID_DEFAULT;
+        line->attrs = xzalloc(sizeof *line->attrs + INIT_CAP * sizeof *line->attrs->data);
         line->attrs->caps = INIT_CAP;
     }
 
@@ -144,13 +143,7 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
     if (id) return id;
 
     size_t new_caps = CAPS_INC_STEP(line->attrs->caps);
-    struct line_attr *new = calloc(sizeof *new + new_caps * sizeof *new->data, 1);
-    if (!new) {
-#if USE_URI
-        uri_unref(attr.uri);
-#endif
-        return ATTRID_DEFAULT;
-    }
+    struct line_attr *new = xzalloc(sizeof *new + new_caps * sizeof *new->data);
 
     new->caps = new_caps;
 
@@ -160,8 +153,7 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
 }
 
 struct line *create_line_with_seq(struct attr attr, ssize_t caps, uint64_t seq) {
-    struct line *line = malloc(sizeof(*line) + (size_t)caps * sizeof(line->cell[0]));
-    if (!line) die("Can't allocate line");
+    struct line *line = xalloc(sizeof(*line) + (size_t)caps * sizeof line->cell[0]);
 
 #if DEBUG_LINES
     assert(caps >= 0);
@@ -189,8 +181,9 @@ struct line *create_line(struct attr attr, ssize_t caps) {
 }
 
 struct line *realloc_line(struct line *line, ssize_t caps) {
-    struct line *new = realloc(line, sizeof(*new) + (size_t)caps * sizeof(new->cell[0]));
-    if (!new) die("Can't create lines");
+    size_t old_size = sizeof(*line) + (size_t)line->caps * sizeof(line->cell[0]);
+    size_t new_size = sizeof(*line) + (size_t)caps * sizeof(line->cell[0]);
+    struct line *new = xrealloc(line, old_size, new_size);
 
     new->size = MIN(caps, new->size);
     new->caps = caps;
@@ -236,8 +229,7 @@ static void optimize_attributes(struct line *line) {
         cnt += __builtin_popcountll(used[i]);
 
     if (cnt) {
-        struct line_attr *new = calloc(sizeof *new + cnt*sizeof *new->data, 1);
-        if (!new) return;
+        struct line_attr *new = xzalloc(sizeof *new + cnt*sizeof *new->data);
         new->caps = cnt;
 
         move_attrtab(new, line);

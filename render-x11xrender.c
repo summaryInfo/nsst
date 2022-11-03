@@ -304,14 +304,12 @@ void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) 
     xcb_copy_area(con, win->plat.pid1, win->plat.pid1, win->plat.gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
 }
 
-inline static bool adjust_msg_buffer(void) {
+inline static void adjust_msg_buffer(void) {
     if (UNLIKELY(rctx.payload_size + WORDS_IN_MESSAGE * sizeof(uint32_t) > rctx.payload_caps)) {
-        uint8_t *new = realloc(rctx.payload, rctx.payload_caps + WORDS_IN_MESSAGE * sizeof(uint32_t));
-        if (!new) return 0;
-        rctx.payload = new;
+        rctx.payload = xrealloc(rctx.payload, rctx.payload_caps,
+                                rctx.payload_caps + WORDS_IN_MESSAGE * sizeof(uint32_t));
         rctx.payload_caps  += WORDS_IN_MESSAGE * sizeof(uint32_t);
     }
-    return 1;
 }
 
 inline static struct glyph_msg *start_msg(int16_t dx, int16_t dy) {
@@ -339,7 +337,7 @@ static void draw_text(struct window *win, struct element_buffer *buf) {
         int16_t old_x = 0, old_y = 0, x = it->x;
         uint32_t *glyph = rctx.glyphs + rctx.glyphs_caps - it->glyphs;
         for (;;) {
-            if (!adjust_msg_buffer()) break;
+            adjust_msg_buffer();
 
             struct glyph_msg *head = start_msg(x - old_x, it->y - old_y);
             old_x = x, old_y = it->y;
@@ -390,13 +388,11 @@ void free_render_context(void) {
 }
 
 void init_render_context(void) {
-    bool res = 1;
-    res &= adjust_buffer((void **)&rctx.payload, &rctx.payload_caps, INIT_PAYLOAD_CAPS, 1);
-    res &= adjust_buffer((void **)&rctx.glyphs, &rctx.glyphs_caps, INIT_GLYPHS_CAPS, sizeof(rctx.glyphs[0]));
-    res &= adjust_buffer((void **)&rctx.foreground_buf.data, &rctx.foreground_buf.caps, INIT_FG_CAPS, sizeof(struct element));
-    res &= adjust_buffer((void **)&rctx.background_buf.data, &rctx.background_buf.caps, INIT_BG_CAPS, sizeof(struct element));
-    res &= adjust_buffer((void **)&rctx.decoration_buf.data, &rctx.decoration_buf.caps, INIT_DEC_CAPS, sizeof(struct element));
-    if (!res) die("Can't allocate renderer buffers");
+    adjust_buffer((void **)&rctx.payload, &rctx.payload_caps, INIT_PAYLOAD_CAPS, 1);
+    adjust_buffer((void **)&rctx.glyphs, &rctx.glyphs_caps, INIT_GLYPHS_CAPS, sizeof(rctx.glyphs[0]));
+    adjust_buffer((void **)&rctx.foreground_buf.data, &rctx.foreground_buf.caps, INIT_FG_CAPS, sizeof(struct element));
+    adjust_buffer((void **)&rctx.background_buf.data, &rctx.background_buf.caps, INIT_BG_CAPS, sizeof(struct element));
+    adjust_buffer((void **)&rctx.decoration_buf.data, &rctx.decoration_buf.caps, INIT_DEC_CAPS, sizeof(struct element));
 
     platform_init_render_context();
 }
@@ -405,10 +401,8 @@ void init_render_context(void) {
 static void push_rect(struct rect *rect) {
     if (UNLIKELY(rctx.payload_size + sizeof(*rect) >= rctx.payload_caps)) {
         size_t new_size = 3 * rctx.payload_caps / 2;
-        uint8_t *new = realloc(rctx.payload, new_size);
-        if (!new) return;
+        rctx.payload = xrealloc(rctx.payload, rctx.payload_caps, new_size);
         rctx.payload_caps = new_size;
-        rctx.payload = new;
     }
 
     memcpy(rctx.payload + rctx.payload_size, rect, sizeof(*rect));
@@ -418,8 +412,7 @@ static void push_rect(struct rect *rect) {
 inline static void push_element(struct element_buffer *dst, struct element *elem) {
     // We need buffer twice as big a the number of elements to
     // be able to use merge sort efficiently
-    if (!adjust_buffer((void **)&dst->data, &dst->caps,
-                       2*(dst->size + 1), sizeof *elem)) return;
+    adjust_buffer((void **)&dst->data, &dst->caps, 2*(dst->size + 1), sizeof *elem);
     dst->data[dst->size++] = *elem;
 }
 
@@ -428,8 +421,7 @@ inline static uint32_t push_char(uint32_t ch) {
      * since lines are scanned in reverse order */
     if (UNLIKELY(rctx.glyphs_size + 1 > rctx.glyphs_caps)) {
         size_t new_caps = 4*rctx.glyphs_caps/3;
-        uint32_t *tmp = calloc(new_caps, sizeof(uint32_t));
-        if (!tmp) return UINT32_MAX;
+        uint32_t *tmp = xzalloc(new_caps * sizeof(uint32_t));
         memcpy(tmp + new_caps - rctx.glyphs_size, rctx.glyphs, rctx.glyphs_size*sizeof(uint32_t));
         free(rctx.glyphs);
         rctx.glyphs = tmp;

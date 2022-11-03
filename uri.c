@@ -124,10 +124,8 @@ static bool proto_tree_add_proto(const char *proto) {
             warn("Invalid protocol name '%s', unexpected char '%c'", proto, ch);
             return false;
         }
-        if (!current->children[idx]) {
-            if (!(current->children[idx] = calloc(1, sizeof *current)))
-                return false;
-        }
+        if (!current->children[idx])
+            current->children[idx] = xzalloc(sizeof *current);
         current = current->children[idx];
     }
 
@@ -188,10 +186,7 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
     if (ch - 0x21U > 0x5DU) goto finish_nak;
 
     if (!stt->no_copy) {
-        if (UNLIKELY(!adjust_buffer((void **)&stt->data, &stt->caps, stt->size + 1, 1))) {
-            uri_match_reset(stt);
-            return urim_ground;
-        }
+        adjust_buffer((void **)&stt->data, &stt->caps, stt->size + 1, 1);
         stt->data[stt->size] = ch;
     }
     stt->size++;
@@ -331,8 +326,7 @@ inline static struct slot *alloc_slot(void) {
     } else {
         if (idtab.size + 1 > idtab.caps) {
             size_t new_caps = URI_CAPS_STEP(idtab.caps);
-            struct slot *tmp = realloc(idtab.slots, new_caps*sizeof(*tmp));
-            if (!tmp)  return NULL;
+            struct slot *tmp = xrealloc(idtab.slots, idtab.caps*sizeof(*tmp), new_caps*sizeof(*tmp));
             idtab.slots = tmp;
             idtab.caps = new_caps;
         }
@@ -392,12 +386,10 @@ uint32_t uri_add(const char *uri, const char *id) {
 
     /* Allocate URI hash table node */
 
-    struct uri *new = malloc(sizeof *new + uri_len + id_len + 2);
-    if (!new) goto alloc_failed;
+    struct uri *new = xalloc(sizeof *new + uri_len + id_len + 2);
 
     /* Allocate id table slot */
     struct slot *slot = alloc_slot();
-    if (!new) goto alloc_failed;
 
     slot->uri = new;
     *new = (struct uri) {
@@ -420,10 +412,6 @@ uint32_t uri_add(const char *uri, const char *id) {
 
     /* External ID is actually index + 1, not index*/
     return new->slot;
-
-alloc_failed:
-    free(new);
-    return EMPTY_URI;
 }
 
 void uri_ref(uint32_t id) {

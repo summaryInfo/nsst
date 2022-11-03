@@ -125,7 +125,7 @@ static _Noreturn void exec_shell(char **args, char *sh, char *termname, char *lu
     if (luit) {
         ssize_t narg = 0;
         for (char **arg = args; *arg; arg++) narg++;
-        char **new_args = calloc(narg + 2, sizeof(*new_args));
+        char **new_args = calloc(narg + 2, sizeof *new_args);
         if (!new_args) _exit(2);
         new_args[0] = luit;
         for (ssize_t i = 1; i <= narg; i++)

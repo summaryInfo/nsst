@@ -11,6 +11,11 @@
 
 #define HT_INIT_CAPS 8
 
+#ifndef HT_CALLOC
+#define HT_CALLOC xzalloc
+extern void *xzalloc(size_t size);
+#endif
+
 typedef struct ht_head ht_head_t;
 typedef struct ht_iter ht_iter_t;
 typedef struct hashtable hashtable_t;
@@ -34,8 +39,8 @@ struct ht_iter {
     ht_head_t **elem;
 };
 
-extern bool ht_shrink(struct hashtable *ht, intptr_t new_caps);
-extern bool ht_adjust(struct hashtable *ht, intptr_t inc);
+extern void ht_shrink(struct hashtable *ht, intptr_t new_caps);
+extern void ht_adjust(struct hashtable *ht, intptr_t inc);
 
 inline static ht_iter_t ht_begin(hashtable_t *ht) {
     ht_iter_t it = { .ht = ht, ht->data, ht->data };
@@ -98,7 +103,7 @@ inline static void ht_free(hashtable_t *ht) {
 
 inline static void ht_init(hashtable_t *ht, size_t caps, ht_cmpfn_t *cmpfn) {
     *ht = (hashtable_t) {
-        .data = calloc(caps, sizeof(ht->data[0])),
+        .data = HT_CALLOC(caps * sizeof(ht->data[0])),
         .caps = caps,
         .cmpfn = cmpfn,
     };

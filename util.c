@@ -53,6 +53,83 @@ static void do_log(int level, const char *fmt, va_list args) {
             break;
 }
 
+void *xalloc(size_t size) {
+    void *res;
+#ifdef __SSE2__
+    if (_Alignof(max_align_t) < MALLOC_ALIGNMENT) {
+        size = (size + MALLOC_ALIGNMENT - 1) & ~(MALLOC_ALIGNMENT - 1);
+        res = aligned_alloc(MALLOC_ALIGNMENT, size);
+    } else
+#endif
+        res = malloc(size);
+
+    if (!res)
+        die("Failed to allocate %zd bytes of memory", size);
+    return res;
+}
+
+void *xrealloc(void *src, size_t old_size, size_t size) {
+    void *res;
+
+    if (!src) return xalloc(size);
+    assert(size);
+
+#ifdef __SSE2__
+    if (_Alignof(max_align_t) < MALLOC_ALIGNMENT) {
+        size = (size + MALLOC_ALIGNMENT - 1) & ~(MALLOC_ALIGNMENT - 1);
+        res = aligned_alloc(MALLOC_ALIGNMENT, size);
+        if (res) memcpy(res, src, MIN(old_size, size));
+        free(src);
+    } else
+#endif
+        res = realloc(src, size);
+
+    if (!res)
+        die("Failed to allocate %zd bytes of memory", size);
+    return res;
+}
+
+void *xzalloc(size_t size) {
+    void *res;
+#ifdef __SSE2__
+    if (_Alignof(max_align_t) < MALLOC_ALIGNMENT) {
+        size = (size + MALLOC_ALIGNMENT - 1) & ~(MALLOC_ALIGNMENT - 1);
+        res = aligned_alloc(MALLOC_ALIGNMENT, size);
+        if (res) memset(res, 0, size);
+    } else
+#endif
+        res = calloc(1, size);
+
+    if (!res)
+        die("Failed to allocate %zd bytes of memory", size);
+    return res;
+}
+
+void *xrezalloc(void *src, size_t old_size, size_t size) {
+    void *res;
+
+    if (!src) return xzalloc(size);
+    assert(size);
+
+#ifdef __SSE2__
+    if (_Alignof(max_align_t) < MALLOC_ALIGNMENT) {
+        size = (size + MALLOC_ALIGNMENT - 1) & ~(MALLOC_ALIGNMENT - 1);
+        res = aligned_alloc(MALLOC_ALIGNMENT, size);
+        if (res) memcpy(res, src, MIN(old_size, size));
+        free(src);
+    } else
+#endif
+        res = realloc(src, size);
+
+    if (!res)
+        die("Failed to allocate %zd bytes of memory", size);
+
+    if (size > old_size)
+        memset((char *)res + old_size, 0, size - old_size);
+
+    return res;
+}
+
 _Noreturn void die(const char *fmt, ...) {
     if (gconfig.log_level > 0) {
         va_list args;
@@ -299,14 +376,11 @@ uint8_t *base64_encode(uint8_t *dst, const uint8_t *buf, const uint8_t *end) {
 
 #define CAPS_STEP(x) ((x)?4*(x)/3:8)
 
-bool adjust_buffer(void **buf, size_t *caps, size_t size, size_t elem) {
+void adjust_buffer(void **buf, size_t *caps, size_t size, size_t elem) {
     if (UNLIKELY(size > *caps)) {
-        void *tmp = realloc(*buf, elem * MAX(CAPS_STEP(*caps), size));
-        if (!tmp) return 0;
-        *buf = tmp;
+        *buf = xrealloc(*buf, elem * *caps, elem * MAX(CAPS_STEP(*caps), size));
         *caps = CAPS_STEP(*caps);
     }
-    return 1;
 }
 
 const char *version_string(void) {
@@ -341,16 +415,15 @@ const char *features_string(void) {
 #define HT_LOAD_FACTOR(x) (4*(x)/3)
 #define HT_CAPS_STEP(x) (3*(x)/2)
 
-bool ht_adjust(struct hashtable *ht, intptr_t inc) {
+void ht_adjust(struct hashtable *ht, intptr_t inc) {
     ht->size += inc;
 
     if (UNLIKELY(HT_LOAD_FACTOR(ht->size) > ht->caps)) {
         struct hashtable tmp = {
             .cmpfn = ht->cmpfn,
             .caps = HT_CAPS_STEP(ht->caps),
-            .data = calloc(HT_CAPS_STEP(ht->caps), sizeof(*ht->data)),
+            .data = xzalloc(HT_CAPS_STEP(ht->caps) * sizeof *ht->data),
         };
-        if (!tmp.data) return 0;
 
         ht_iter_t it = ht_begin(ht);
         while(ht_current(&it))
@@ -358,25 +431,20 @@ bool ht_adjust(struct hashtable *ht, intptr_t inc) {
         free(ht->data);
         *ht = tmp;
     }
-
-    return 1;
 }
 
-bool ht_shrink(struct hashtable *ht, intptr_t new_caps) {
+void ht_shrink(struct hashtable *ht, intptr_t new_caps) {
     struct hashtable tmp = {
         .cmpfn = ht->cmpfn,
         .caps = new_caps,
-        .data = calloc(new_caps, sizeof(*ht->data)),
+        .data = xzalloc(new_caps * sizeof *ht->data),
     };
-    if (!tmp.data) return 0;
 
     ht_iter_t it = ht_begin(ht);
     while(ht_current(&it))
         ht_insert(&tmp, ht_erase_current(&it));
     free(ht->data);
     *ht = tmp;
-
-    return 1;
 }
 
 #if USE_PRECOMPOSE

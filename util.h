@@ -68,6 +68,15 @@ void warn(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 void fatal(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 _Noreturn void die(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
+#define MALLOC_ALIGNMENT 16
+
+/* malloc() wrappers which calls die() on failure and
+ * ensure 16 bytes alignment */
+void *xalloc(size_t size);
+void *xzalloc(size_t size);
+void *xrealloc(void *src, size_t old_size, size_t size);
+void *xrezalloc(void *src, size_t old_size, size_t size);
+
 inline static struct rect rect_scale_up(struct rect rect, int16_t x_factor, int16_t y_factor) {
     rect.x *= x_factor;
     rect.y *= y_factor;
@@ -118,7 +127,7 @@ inline static bool intersect_with(struct rect *src, struct rect *dst) {
 }
 
 /* Adjust buffer capacity if no space left (size > *caps) */
-bool adjust_buffer(void **buf, size_t *caps, size_t size, size_t elem);
+void adjust_buffer(void **buf, size_t *caps, size_t size, size_t elem);
 
 /* Version information helper functions */
 const char *version_string(void);

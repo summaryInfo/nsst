@@ -49,9 +49,8 @@ inline static void free_segments(struct selection_state *sel, struct segments *h
 #define SEGS_INIT_SIZE 2
 
 inline static struct segments *alloc_head(struct selection_state *sel, struct line *line) {
-    if (!adjust_buffer((void **)&sel->seg, &sel->seg_caps,
-                       sel->seg_size + 2, sizeof *sel->seg)) return NULL;
-    struct segments *head = malloc(sizeof *head + sizeof *head->segs * SEGS_INIT_SIZE);
+    adjust_buffer((void **)&sel->seg, &sel->seg_caps, sel->seg_size + 2, sizeof *sel->seg);
+    struct segments *head = xalloc(sizeof *head + sizeof *head->segs * SEGS_INIT_SIZE);
 
     line->selection_index = sel->seg_size;
     sel->seg[sel->seg_size++] = head;
@@ -63,18 +62,18 @@ inline static struct segments *alloc_head(struct selection_state *sel, struct li
     return head;
 }
 
-inline static bool adjust_head(struct selection_state *sel, struct segments **phead, ssize_t inc) {
+inline static void adjust_head(struct selection_state *sel, struct segments **phead, ssize_t inc) {
     struct segments *head = *phead;
     if (head->size + inc > head->caps) {
         ssize_t new_caps = MAX(4 * head->caps / 3, head->size + inc);
         ssize_t idx = head->line->selection_index;
-        head = realloc(head, sizeof *head + new_caps * sizeof *head->segs);
-        if (!head) return 0;
+        ssize_t old_size = sizeof *head + head->caps * sizeof *head->segs;
+        ssize_t new_size = sizeof *head + new_caps * sizeof *head->segs;
+        head = xrealloc(head, old_size, new_size);
 
         *phead = sel->seg[idx] = head;
         head->caps = new_caps;
     }
-    return 1;
 }
 
 #define SNAP_RIGHT INT16_MAX
@@ -94,7 +93,7 @@ static void append_segment(struct selection_state *sel, struct line *line, ssize
     if (last_i == x0 && head->size) {
         head->segs[head->size - 1].length += x1 - x0;
     } else if (last_i <= x0) {
-        if (!adjust_head(sel, &head, 1)) return;
+        adjust_head(sel, &head, 1);
         head->segs[head->size++] = (struct segment) {x0 - last_i, x1 - x0 };
     } else assert(0);
 }
@@ -149,7 +148,8 @@ void selection_concat(struct selection_state *sel, struct line *dst, struct line
     }
 
     /* Append tail */
-    if (src_head->size && adjust_head(sel, &dst_head, src_head->size)) {
+    if (src_head->size) {
+        adjust_head(sel, &dst_head, src_head->size);
         memcpy(dst_head->segs + dst_head->size,
                src_head->segs + offset,
                src_head->size * sizeof *src_head->segs);
@@ -497,7 +497,7 @@ bool init_selection(struct selection_state *sel, struct window *win) {
     sel->seg_caps = 4;
     sel->win = win;
     sel->seg_size = 1;
-    sel->seg = calloc(sizeof *sel->seg, sel->seg_caps);
+    sel->seg = xzalloc(sel->seg_caps * sizeof *sel->seg);
     return sel->seg;
 }
 
@@ -636,7 +636,7 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line *li
     ssize_t max_x = MIN(x1, line_length(line));
 
     if (!first) {
-        if (!adjust_buffer((void **)res, cap, *pos + 2, 1)) return;
+        adjust_buffer((void **)res, cap, *pos + 2, 1);
         (*res)[(*pos)++] = ' ';
     }
 
@@ -645,22 +645,21 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line *li
         if (line->cell[j].ch) {
             size_t len = utf8_encode(cell_get(&line->cell[j]), buf, buf + UTF8_MAX_LEN);
             // 2 is space for '\n' and '\0'
-            if (!adjust_buffer((void **)res, cap, *pos + len + 2, 1)) return;
+            adjust_buffer((void **)res, cap, *pos + len + 2, 1);
             memcpy(*res + *pos, buf, len);
             *pos += len;
         }
     }
 
     if (!line->wrapped || (x1 != line->size && x1 != SNAP_RIGHT)) {
-        if (!adjust_buffer((void **)res, cap, *pos + 2, 1)) return;
+        adjust_buffer((void **)res, cap, *pos + 2, 1);
         (*res)[(*pos)++] = '\n';
     }
 }
 
 static uint8_t *selection_data(struct selection_state *sel) {
     if (sel->state == state_sel_released) {
-        uint8_t *res = malloc(SEL_INIT_SIZE * sizeof(*res));
-        if (!res) return NULL;
+        uint8_t *res = xalloc(SEL_INIT_SIZE * sizeof(*res));
         size_t pos = 0, cap = SEL_INIT_SIZE;
 
         for (size_t i = 1; i < sel->seg_size; i++) {

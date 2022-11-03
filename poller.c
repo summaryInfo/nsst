@@ -35,8 +35,7 @@ struct poller {
 struct poller poller;
 
 void init_poller(void) {
-    poller.pfds = calloc(INIT_PFD_NUM, sizeof(struct pollfd));
-    if (!poller.pfds) die("Can't allocate poller fds array");
+    poller.pfds = xzalloc(INIT_PFD_NUM * sizeof(struct pollfd));
     poller.pfdn = 2;
     poller.pfdcap = INIT_PFD_NUM;
     for (ssize_t i = 1; i < INIT_PFD_NUM; i++)
@@ -50,15 +49,14 @@ void free_poller(void) {
 
 int poller_alloc_index(int fd, int events) {
     if (poller.pfdn + 1 > poller.pfdcap) {
-        struct pollfd *new = realloc(poller.pfds, (poller.pfdcap + INIT_PFD_NUM)*sizeof(*poller.pfds));
-        if (new) {
-            for (ssize_t i = 0; i < INIT_PFD_NUM; i++) {
-                new[i + poller.pfdcap].fd = FREE_SLOT;
-                new[i + poller.pfdcap].events = 0;
-            }
-            poller.pfdcap += INIT_PFD_NUM;
-            poller.pfds = new;
-        } else die("Cannot alloc poller fd slot");
+        struct pollfd *new = xrealloc(poller.pfds, poller.pfdcap*sizeof(*poller.pfds),
+                                     (poller.pfdcap + INIT_PFD_NUM)*sizeof(*poller.pfds));
+        for (ssize_t i = 0; i < INIT_PFD_NUM; i++) {
+            new[i + poller.pfdcap].fd = FREE_SLOT;
+            new[i + poller.pfdcap].events = 0;
+        }
+        poller.pfdcap += INIT_PFD_NUM;
+        poller.pfds = new;
     }
 
     poller.pfdn++;

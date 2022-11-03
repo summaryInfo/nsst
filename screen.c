@@ -403,15 +403,12 @@ ssize_t screen_push_history_until(struct screen *scr, struct line *from, struct 
 }
 
 static void resize_tabs(struct screen *scr, int16_t width) {
-    bool *new_tabs = realloc(scr->tabs, width * sizeof(*scr->tabs));
-    if (!new_tabs) die("Can't alloc tabs");
-    scr->tabs = new_tabs;
+    scr->tabs = xrezalloc(scr->tabs, scr->width * sizeof *scr->tabs, width * sizeof *scr->tabs);
 
     if (width > scr->width) {
-        memset(new_tabs + scr->width, 0, (width - scr->width) * sizeof(new_tabs[0]));
         ssize_t tab = scr->width ? scr->width - 1: 0, tabw = window_cfg(scr->win)->tab_width;
-        while (tab > 0 && !new_tabs[tab]) tab--;
-        while ((tab += tabw) < width) new_tabs[tab] = 1;
+        while (tab > 0 && !scr->tabs[tab]) tab--;
+        while ((tab += tabw) < width) scr->tabs[tab] = 1;
     }
 }
 
@@ -438,20 +435,6 @@ struct line *create_lines_range(struct line *prev, struct line *next, struct lin
     return line;
 }
 
-inline static void realloc_handle_array(struct line_handle **old, size_t old_caps, size_t new_caps) {
-    if (old_caps >= new_caps) return;
-
-    struct line_handle *new = aligned_alloc(_Alignof(struct line_handle), new_caps * sizeof(*new));
-    if (!new) die("Can't allocate handle array");
-
-    if (*old) {
-        memcpy(new, *old, old_caps*sizeof(*new));
-        free(*old);
-    }
-
-    *old = new;
-}
-
 static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) {
     struct line_handle **alts = get_alt_screen(scr);
     ssize_t minh = MIN(scr->height, height);
@@ -462,7 +445,8 @@ static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) 
     if (height < scr->height)
         free_line_list_until(scr, (*alts)[height].line, NULL);
 
-    realloc_handle_array(alts, scr->height, height);
+    static_assert(MALLOC_ALIGNMENT == _Alignof(struct line_handle), "Insufficient alignment");
+    *alts = xrealloc(*alts, scr->height * sizeof **alts, height * sizeof **alts);
 
     for (ssize_t i = 0; i < minh; i++) {
         line_handle_add(&(*alts)[i]);
@@ -492,12 +476,11 @@ static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) 
 
 static void resize_aux(struct screen *scr, ssize_t width, ssize_t height) {
     // Resize predecode buffer
-    uint32_t *newpb = realloc(scr->predec_buf, width*sizeof(*newpb));
-    if (!newpb) die("Can't allocate predecode buffer");
-    scr->predec_buf = newpb;
+    scr->predec_buf = xrealloc(scr->predec_buf, scr->width*sizeof *scr->predec_buf, width*sizeof *scr->predec_buf);
 
     // Resize temporary screen buffer
-    realloc_handle_array(&scr->temp_screen, scr->height, height);
+    scr->temp_screen = xrealloc(scr->temp_screen, scr->height * sizeof *scr->temp_screen, height * sizeof *scr->temp_screen);
+
 }
 
 enum stick_view {
@@ -698,8 +681,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         for (ssize_t i = 0; i < scr->height; i++)
             line_handle_remove(&screen[i]);
 
-        realloc_handle_array(pscr, scr->height, height);
-        screen = *pscr;
+        *pscr = screen = xrealloc(*pscr, scr->height * sizeof **pscr, height * sizeof **pscr);
 
 #if DEBUG_LINES
         assert(c->y >= 0);
@@ -779,8 +761,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         assert(scr->top_line.line);
 #endif
     } else {
-        realloc_handle_array(pscr, 0, height);
-        screen = *pscr;
+        *pscr = screen = xalloc(height * sizeof **pscr);
     }
 
     create_lines_range(y ? screen[y - 1].line : NULL, NULL,

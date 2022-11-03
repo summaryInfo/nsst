@@ -990,7 +990,7 @@ static void term_dispatch_osc(struct term *term) {
                 *dst++ = val;
             *dst = '\0';
         } else if (!term->mode.title_set_utf8 && term->mode.utf8) {
-            res = malloc(term->esc.str_len * 2 + 1);
+            res = xalloc(term->esc.str_len * 2 + 1);
             uint8_t *ptr = res, *src = dstr;
             if (res) {
                 while (*src) ptr += utf8_encode(*src++, ptr, res + term->esc.str_len * 2);
@@ -1935,18 +1935,16 @@ static void term_dispatch_window_op(struct term *term) {
             tlen = tmp - tit;
             title = tit;
         } else if (term->mode.title_query_utf8 && !tutf8) {
-            if ((tmp = res2 = malloc(2 * tlen + 1))) {
-                while (*title) tmp += utf8_encode(*title++, tmp, res2 + 2 * tlen);
-                *tmp = '\0';
-                tlen = tmp - res2;
-                title = res2;
-            }
+            tmp = res2 = xalloc(2 * tlen + 1);
+            while (*title) tmp += utf8_encode(*title++, tmp, res2 + 2 * tlen);
+            *tmp = '\0';
+            tlen = tmp - res2;
+            title = res2;
         }
         if (term->mode.title_query_hex) {
-            if ((res = malloc(2 * tlen + 1))) {
-                hex_encode(res, title, title + tlen);
-                title = res;
-            }
+            res = xalloc(2 * tlen + 1);
+            hex_encode(res, title, title + tlen);
+            title = res;
         }
         term_answerback(term, OSC"%c%s"ST, pa == 20 ? 'L' : 'l', title);
         free(res);
@@ -2035,18 +2033,13 @@ static void term_report_cursor(struct term *term) {
 
 static void term_report_tabs(struct term *term) {
     size_t caps = TABSR_INIT_CAP, len = 0;
-    char *tabs = malloc(caps), *tmp;
+    char *tabs = xalloc(caps);
 
     for (int16_t i = 0; tabs && i < screen_width(&term->scr); i++) {
         if (screen_has_tab(&term->scr, i)) {
             if (len + TABSR_MAX_ENTRY > caps) {
-                tmp = realloc(tabs, caps = TABSR_CAP_STEP(caps));
-                if (!tmp) {
-                    free(tabs);
-                    tabs = NULL;
-                    break;
-                }
-                tabs = tmp;
+                tabs = xrealloc(tabs, caps, TABSR_CAP_STEP(caps));
+                caps = TABSR_CAP_STEP(caps);
             }
             len += snprintf(tabs + len, caps, len ? "/%u" : "%u", i + 1);
         }
@@ -3128,8 +3121,7 @@ inline static bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
             size_t new_cap = STR_CAP_STEP(term->esc.str_cap);
             if (new_cap > ESC_MAX_LONG_STR) break;
 
-            uint8_t *new = realloc(term->esc.str_ptr, new_cap + 1);
-            if (!new) break;
+            uint8_t *new = xrealloc(term->esc.str_ptr, term->esc.str_cap, new_cap + 1);
 
             if (!term->esc.str_ptr)
                 memcpy(new, term->esc.str_data, term->esc.str_len);
@@ -3632,10 +3624,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 }
 
 struct term *create_term(struct window *win, int16_t width, int16_t height) {
-    struct term *term = aligned_alloc(_Alignof(struct line_handle), sizeof(struct term));
-    if (!term) return NULL;
-
-    memset(term, 0, sizeof *term);
+    struct term *term = xzalloc(sizeof(struct term));
 
     if (tty_open(&term->tty, window_cfg(win)) < 0) {
         warn("Can't create tty");

@@ -472,8 +472,8 @@ bool keyboard_set_udk(struct term *term, const uint8_t *str, const uint8_t *end,
             if (*str++ != '/' || k >= UDK_MAX) return 0;
             const uint8_t *sem = memchr(str, ';', end - str);
             if (!sem) sem = end;
-            uint8_t *udk = malloc((sem - str + 1)/2 + 1);
-            if (!udk || (hex_decode(udk, str, sem) != sem)) {
+            uint8_t *udk = xalloc((sem - str + 1)/2 + 1);
+            if (hex_decode(udk, str, sem) != sem) {
                 free(udk);
                 return 0;
             }

@@ -444,8 +444,8 @@ void platform_set_icon_label(struct window *win, const char *title, bool utf8) {
 }
 
 static char *get_full_property(xcb_window_t wid, xcb_atom_t prop, xcb_atom_t *type, size_t *psize) {
-    size_t left = 0, offset = 0, size = 0;
-    char *data = NULL, *tmp;
+    size_t left = 0, offset = 0, size = 0, data_len = 0;
+    char *data = NULL;
     do {
         xcb_get_property_cookie_t c = xcb_get_property(con, 0, wid,
                 prop, XCB_GET_PROPERTY_TYPE_ANY, offset, PASTE_BLOCK_SIZE/4);
@@ -461,13 +461,9 @@ static char *get_full_property(xcb_window_t wid, xcb_atom_t prop, xcb_atom_t *ty
         if (type && !offset) *type = rep->type;
         offset += len/4;
 
-        tmp = realloc(data, size + len + 1);
-        if (!tmp) {
-            free(rep);
-            break;
-        }
+        data = xrealloc(data, data_len, size + len + 1);
+        data_len = size + len + 1;
 
-        data = tmp;
         memcpy(data + size, xcb_get_property_value(rep), len);
         data[size += len] = 0;
 

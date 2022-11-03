@@ -77,12 +77,7 @@ void free_font(struct font *font) {
 
 static void load_append_fonts(struct font *font, struct face_list *faces, struct patern_holder pats) {
     size_t new_size = faces->length + pats.length;
-    if (new_size > faces->caps) {
-        if (!adjust_buffer((void **)&faces->faces, &faces->caps, new_size, sizeof(FT_Face))) {
-            warn("Can't relocate face list");
-            return;
-        }
-    }
+    adjust_buffer((void **)&faces->faces, &faces->caps, new_size, sizeof(FT_Face));
 
     for (size_t i = 0; i < pats.length; i++) {
         FcValue file, index, matrix, pixsize;
@@ -143,7 +138,7 @@ static void load_face_list(struct font *font, struct face_list* faces, const cha
     struct patern_holder pats = {
         .length = 0,
         .caps = CAPS_STEP,
-        .pats = calloc(CAPS_STEP, sizeof(*pats.pats))
+        .pats = xzalloc(CAPS_STEP * sizeof *pats.pats)
     };
 
     for (char *tok = strtok(tmp, ","); tok; tok = strtok(NULL, ",")) {
@@ -204,12 +199,8 @@ static void load_face_list(struct font *font, struct face_list* faces, const cha
         }
 
 
-        if (pats.length + 1 > pats.caps) {
-            if(!adjust_buffer((void **)&pats.pats, &pats.caps, pats.length + 1, sizeof(*pats.pats))) {
-                warn("Out of memory");
-                continue;
-            }
-        }
+        if (pats.length + 1 > pats.caps)
+            adjust_buffer((void **)&pats.pats, &pats.caps, pats.length + 1, sizeof(*pats.pats));
 
         FcValue pixsize;
         if (FcPatternGet(final_pat, FC_PIXEL_SIZE, 0, &pixsize) == FcResultMatch) {
@@ -244,11 +235,7 @@ struct font *create_font(const char* descr, double size, double dpi, double gamm
         FT_Library_SetLcdFilter(global.library, FT_LCD_FILTER_DEFAULT);
     }
 
-    struct font *font = calloc(1, sizeof(*font));
-    if (!font) {
-        warn("Can't allocate font");
-        return NULL;
-    }
+    struct font *font = xzalloc(sizeof *font);
 
     font->refs = 1;
     font->pixel_size = 0;
@@ -498,11 +485,8 @@ static bool glyph_cmp(const ht_head_t *a, const ht_head_t *b) {
 }
 
 struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmode, int16_t vspacing, int16_t hspacing, bool boxdraw) {
-    struct glyph_cache *cache = calloc(1, sizeof(struct glyph_cache));
-    if (!cache) {
-        warn("Can't allocate glyph cache");
-        return NULL;
-    }
+    struct glyph_cache *cache = xzalloc(sizeof(struct glyph_cache));
+
     cache->refc = 1;
     cache->font = font;
     cache->vspacing = vspacing;
@@ -510,11 +494,6 @@ struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmod
     cache->override_boxdraw = boxdraw;
     cache->pixmode = pixmode;
     ht_init(&cache->glyphs, HASH_INIT_CAP, glyph_cmp);
-    if (!cache->glyphs.data) {
-        free(cache);
-        warn("Can't allocate glyph cache");
-        return NULL;
-    }
 
     int16_t total = 0, maxd = 0, maxh = 0;
     for (uint32_t i = ' '; i <= '~'; i++) {
