@@ -618,9 +618,6 @@ static void validate_altscreen(struct screen *scr) {
         prev = view;
     }
 }
-#else
-inline static void validate_main_screen(struct screen *scr) { (void)scr; }
-inline static void validate_altscreen(struct screen *scr) { (void)scr; }
 #endif
 
 inline static void round_offset_to_width(struct line_handle *handle, ssize_t width) {
@@ -808,8 +805,10 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
     screen_damage_lines(scr, 0, scr->height);
 
+#if DEBUG_LINES
     validate_altscreen(scr);
     validate_main_screen(scr);
+#endif
 }
 
 bool screen_redraw(struct screen *scr, bool blink_commited) {
@@ -1383,7 +1382,7 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
             fixup_lines_seqno(scr->screen[top - amount].line);
     }
 
-    if (amount) {
+    if (LIKELY(amount)) {
         scr->scroll_damage = 1;
 
         if (should_reset_top)
@@ -1398,17 +1397,20 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
         selection_scrolled(&scr->sstate, scr, amount, top, bottom);
     }
 
+#if DEBUG_LINES
     validate_altscreen(scr);
     validate_main_screen(scr);
+#endif
     return amount;
 }
 
 void screen_scroll(struct screen *scr, int16_t top, int16_t amount, bool save) {
-    ssize_t left = screen_min_x(scr), right = screen_max_x(scr), bottom = screen_max_y(scr);
+    ssize_t left = screen_min_x(scr), right = screen_max_x(scr);
 
-    if (left == 0 && right == scr->width) { // Fast scrolling without margins
+    if (LIKELY(left == 0 && right == scr->width)) { // Fast scrolling without margins
         amount = screen_scroll_fast(scr, top, amount, save);
     } else { // Slow scrolling with margins
+        ssize_t bottom = screen_max_y(scr);
         for (ssize_t i = top; i < bottom; i++) {
             struct line_handle *line = &scr->screen[i];
             view_adjust_wide_left(line, left);
@@ -1426,7 +1428,7 @@ void screen_scroll(struct screen *scr, int16_t top, int16_t amount, bool save) {
         }
     }
 
-    if (scr->mode.smooth_scroll && (scr->scrolled += abs(amount)) > window_cfg(scr->win)->smooth_scroll_step) {
+    if (UNLIKELY(scr->mode.smooth_scroll) && (scr->scrolled += abs(amount)) > window_cfg(scr->win)->smooth_scroll_step) {
         window_request_scroll_flush(scr->win);
         scr->scrolled = 0;
     }
