@@ -366,8 +366,14 @@ inline static ssize_t try_free_top_line(struct screen *scr) {
     if (scr->top_line.line->selection_index)
         selection_clear(&scr->sstate);
 
+#if DEBUG_LINES
+    assert(!scr->top_line.line->prev);
+    assert(find_handle_in_line(&scr->top_line));
+#endif
+
     free_line(scr->top_line.line);
     scr->top_line.line = next_top;
+    scr->top_line.offset = 0;
     line_handle_add(&scr->top_line);
 
     return view_moved;
@@ -401,7 +407,8 @@ static void resize_tabs(struct screen *scr, int16_t width) {
     }
 }
 
-struct line *create_lines_range(struct line *prev, struct line *next, struct line_handle *dst, ssize_t width, const struct attr *attr, ssize_t count, struct line_handle *top) {
+struct line *create_lines_range(struct line *prev, struct line *next, struct line_handle *dst, ssize_t width,
+                                const struct attr *attr, ssize_t count, struct line_handle *top, bool need_register) {
     if (count <= 0) return NULL;
 
     struct line *line = create_line(*attr, width);
@@ -412,7 +419,8 @@ struct line *create_lines_range(struct line *prev, struct line *next, struct lin
         dst[i] = (struct line_handle) {
             .line = line,
         };
-        line_handle_add(&dst[i]);
+        if (need_register)
+            line_handle_add(&dst[i]);
         attach_prev_line(line, prev);
         prev = line;
         if (i != count - 1)
@@ -447,7 +455,7 @@ static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) 
 
     if (scr->height < height) {
         create_lines_range(scr->height ? screen[scr->height - 1].line : NULL, NULL,
-                           &screen[scr->height], width, &ATTR_DEFAULT, height - scr->height, NULL);
+                           &screen[scr->height], width, &ATTR_DEFAULT, height - scr->height, NULL, true);
     }
 
     /* Adjust altscreen saved cursor position */
@@ -686,7 +694,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
                 assert(find_handle_in_line(&scr->top_line));
 #endif
             create_lines_range(NULL, it.line, screen, width,
-                               &ATTR_DEFAULT, -rest, &scr->top_line);
+                               &ATTR_DEFAULT, -rest, &scr->top_line, false);
             fixup_lines_seqno(it.line);
             it.line = scr->top_line.line;
 #if DEBUG_LINES
@@ -728,9 +736,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
                 ssize_t view_width = line_advance_width(it.line, it.offset, width);
                 screen[y] = it;
                 screen[y].width = view_width - it.offset;
-                /* Handles created with create_lines_range are already registered */
-                if (!line_handle_is_registered(&screen[y]))
-                    line_handle_add(&screen[y]);
+                line_handle_add(&screen[y]);
             }
             if (++y >= height) break;
         } while (!inc_iter_width_width(&it, width));
@@ -749,13 +755,14 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
 
 #if DEBUG_LINES
         assert(scr->top_line.line);
+        assert(find_handle_in_line(&scr->top_line));
 #endif
     } else {
         *pscr = screen = xalloc(height * sizeof **pscr);
     }
 
     create_lines_range(y ? screen[y - 1].line : NULL, NULL,
-                       &screen[y], width, &ATTR_DEFAULT, height - y, &scr->top_line);
+                       &screen[y], width, &ATTR_DEFAULT, height - y, &scr->top_line, true);
 
     if (ret == stick_none && !lower_left->line)
         ret = stick_to_bottom;
@@ -1318,7 +1325,7 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
 #endif
 
             create_lines_range(bottom_line, bottom_next, &scr->screen[rest],
-                               scr->width, &scr->sgr, amount, NULL);
+                               scr->width, &scr->sgr, amount, NULL, true);
 
             fixup_lines_seqno(bottom_next);
 
