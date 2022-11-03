@@ -580,6 +580,7 @@ static void validate_main_screen(struct screen *scr) {
         if (view->width < scr->width) assert(!view_wrapped(view));
         assert(view->offset + view->width <= view->line->size);
         assert(line_handle_is_registered(view));
+        assert(find_handle_in_line(view));
         if (prev) {
             assert((prev->line == view->line->prev && prev->line->next == view->line) || prev->line == view->line);
             assert(prev->line->seq <= view->line->seq);
@@ -599,6 +600,7 @@ static void validate_altscreen(struct screen *scr) {
         assert(view->width <= scr->width);
         assert(!view->offset);
         assert(line_handle_is_registered(view));
+        assert(find_handle_in_line(view));
         assert(!view_wrapped(view));
         if (prev) {
             assert(prev->line == view->line->prev);

@@ -390,6 +390,9 @@ inline static struct line_handle dup_handle(struct line_handle *handle) {
 }
 
 inline static void replace_handle(struct line_handle *dst, struct line_handle *src) {
+#if DEBUG_LINES
+    assert(src->line);
+#endif
     line_handle_remove(dst);
     *dst = dup_handle(src);
     line_handle_add(dst);
