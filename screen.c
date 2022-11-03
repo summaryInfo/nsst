@@ -726,7 +726,9 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
                 ssize_t view_width = line_advance_width(it.line, it.offset, width);
                 screen[y] = it;
                 screen[y].width = view_width - it.offset;
-                line_handle_add(&screen[y]);
+                /* Handles created with create_lines_range are already registered */
+                if (!line_handle_is_registered(&screen[y]))
+                    line_handle_add(&screen[y]);
             }
             if (++y >= height) break;
         } while (!inc_iter_width_width(&it, width));
