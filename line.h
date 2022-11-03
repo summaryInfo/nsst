@@ -330,12 +330,6 @@ inline static bool line_handle_is_registered(struct line_handle *handle) {
 inline static void line_handle_remove(struct line_handle *handle) {
 #if DEBUG_LINES
     if (!handle->line) return;
-    if (!line_handle_is_registered(handle)) {
-        assert(!find_handle_in_line(handle));
-        assert(!handle->prev);
-        assert(!handle->next);
-        return;
-    }
 
     assert(find_handle_in_line(handle));
     if (!handle->prev)
@@ -345,7 +339,7 @@ inline static void line_handle_remove(struct line_handle *handle) {
     if (handle->next)
         assert(handle->next->prev == handle);
 #else
-    if (!handle->line || !line_handle_is_registered(handle))
+    if (!handle->line)
         return;
 
 #endif
