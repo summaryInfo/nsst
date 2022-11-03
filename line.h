@@ -385,7 +385,8 @@ inline static int line_handle_cmp(struct line_handle *a, struct line_handle *b) 
 inline static struct line_handle dup_handle(struct line_handle *handle) {
     return (struct line_handle) {
         .line = handle->line,
-        .offset = handle->offset
+        .offset = handle->offset,
+        .width = handle->width
     };
 }
 
