@@ -46,12 +46,6 @@ inline static void view_adjust_wide_left(struct line_handle *view, ssize_t x) {
     adjust_wide_left(view->line, view->offset + x);
 }
 
-/* Returns true if next line will be next physical line
- * and not continuation part of current physical line */
-inline static bool is_last_line(struct line_handle *view, bool rewrap) {
-    return !rewrap || !view_wrapped(view);
-}
-
 struct term *create_term(struct window *win, int16_t width, int16_t height);
 void free_term(struct term *term);
 void term_resize(struct term *term, int16_t width, int16_t height);

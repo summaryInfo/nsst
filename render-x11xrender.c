@@ -658,7 +658,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
             next_dirty = dirty;
         }
         // Only reset force flag for last part of the line
-        if (is_last_line(&view, win->cfg.rewrap))
+        if (!view_wrapped(&view))
             view.line->force_damage = 0;
     }
 }

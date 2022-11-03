@@ -43,8 +43,6 @@ struct screen_mode {
     bool altscreen : 1;
     bool lr_margins : 1;
     bool disable_altscreen : 1;
-    bool rewrap : 1;
-    bool cut_lines : 1;
     bool minimize_scrollback : 1;
     bool hide_cursor : 1;
     bool attr_ext_rectangle : 1;

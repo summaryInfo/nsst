@@ -23,7 +23,7 @@ This is an implementation of VT220-like X11 terminal emulator.
 * MIT-SHM and XRender backends (compile time option)
 * Compiles with `-flto` by default
 * No warnings (see list of all enabled warnings in Makefile)
-* Re-wraps text on resize (can be disabled by setting `rewrap` to false)
+* Re-wraps text on resize
 * URL support (no auto-detection yet)
 
 See TODO file for things that are to be implemented.
