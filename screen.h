@@ -149,6 +149,8 @@ struct screen {
     /* Last written character
      * Used for REP */
     uint32_t prev_ch;
+
+    struct multipool mp;
 };
 
 bool init_screen(struct screen *scr, struct window *win);

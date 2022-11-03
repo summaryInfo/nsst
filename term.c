@@ -3609,6 +3609,8 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
 void term_resize(struct term *term, int16_t width, int16_t height) {
     struct screen *scr = &term->scr;
 
+    mpa_set_seal_max_pad(&term->scr.mp, width * sizeof(struct cell) + sizeof(struct line), height + 1);
+
     // First try to read from tty to empty out input queue
     // since this is input from program not yet aware about resize
     if (!term->requested_resize)
@@ -3643,6 +3645,9 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
     term->vt_version = window_cfg(win)->vt_version;
     term->vt_level = term->vt_version / 100;
     if (!term->vt_level) term_set_vt52(term, 1);
+
+    // FIXME Make this strict
+    mpa_init(&term->scr.mp, MPA_POOL_SIZE, false);
 
     screen_free_scrollback(&term->scr, window_cfg(win)->scrollback_size);
     term_resize(term, width, height);

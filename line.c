@@ -67,7 +67,7 @@ void free_attrs(struct line_attr *attrs) {
     free(attrs);
 }
 
-void free_line(struct line *line) {
+void free_line(struct multipool *mp, struct line *line) {
 
 	if (!line) return;
 
@@ -94,7 +94,7 @@ void free_line(struct line *line) {
 
     if (line->attrs)
         free_attrs(line->attrs);
-    free(line);
+    mpa_free(mp, line);
 }
 
 
@@ -152,8 +152,8 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
     return insert_attr(line->attrs, &attr, hash);
 }
 
-struct line *create_line_with_seq(struct attr attr, ssize_t caps, uint64_t seq) {
-    struct line *line = xalloc(sizeof(*line) + (size_t)caps * sizeof line->cell[0]);
+struct line *create_line_with_seq(struct multipool *mp, struct attr attr, ssize_t caps, uint64_t seq) {
+    struct line *line = mpa_alloc(mp, sizeof(*line) + (size_t)caps * sizeof line->cell[0]);
 
 #if DEBUG_LINES
     assert(caps >= 0);
@@ -176,17 +176,19 @@ uint64_t get_seqno_range(uint64_t inc) {
     return ret;
 }
 
-struct line *create_line(struct attr attr, ssize_t caps) {
-    return create_line_with_seq(attr, caps, get_seqno_range(SEQNO_INC));
+struct line *create_line(struct multipool *mp, struct attr attr, ssize_t caps) {
+    return create_line_with_seq(mp, attr, caps, get_seqno_range(SEQNO_INC));
 }
 
-struct line *realloc_line(struct line *line, ssize_t caps) {
-    size_t old_size = sizeof(*line) + (size_t)line->caps * sizeof(line->cell[0]);
+struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t caps) {
     size_t new_size = sizeof(*line) + (size_t)caps * sizeof(line->cell[0]);
-    struct line *new = xrealloc(line, old_size, new_size);
+    struct line *new = mpa_realloc(mp, line, new_size);
 
     new->size = MIN(caps, new->size);
     new->caps = caps;
+
+    if (new == line)
+        return new;
 
     // new->force_damage = true;
 
@@ -239,7 +241,7 @@ static void optimize_attributes(struct line *line) {
     }
 }
 
-void split_line(struct line *src, ssize_t offset, struct line **dst1, struct line **dst2) {
+void split_line(struct multipool *mp, struct line *src, ssize_t offset, struct line **dst1, struct line **dst2) {
     ssize_t tail_len = src->size - offset;
 #if DEBUG_LINES
     assert(tail_len >= 0);
@@ -249,7 +251,7 @@ void split_line(struct line *src, ssize_t offset, struct line **dst1, struct lin
     bool need_fixup = src->next && dist < 2;
     uint64_t tail_seq = dist < 2 ? get_seqno_range(SEQNO_INC) : src->seq + dist/2;
 
-    struct line *tail = create_line_with_seq(*attr_pad(src), tail_len, tail_seq);
+    struct line *tail = create_line_with_seq(mp, *attr_pad(src), tail_len, tail_seq);
 #if DEBUG_LINES
     assert(tail_seq < get_seqno_range(0));
     assert(tail->seq > src->seq);
@@ -291,11 +293,13 @@ void split_line(struct line *src, ssize_t offset, struct line **dst1, struct lin
     if (need_fixup)
         fixup_lines_seqno(tail->next);
 
+    realloc_line(mp, src, offset);
+
     *dst1 = src;
     *dst2 = tail;
 }
 
-struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
+struct line *concat_line(struct multipool *mp, struct line *src1, struct line *src2, bool opt) {
     if (src2) {
 #if DEBUG_LINES
         assert(src1);
@@ -305,7 +309,7 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
 
         ssize_t len = src2->size + src1->size;
         ssize_t first_len = src1->size;
-        src1 = realloc_line(src1, src1->size + src2->caps);
+        src1 = realloc_line(mp, src1, src1->size + src2->caps);
         src1->wrapped = src2->wrapped;
         src1->force_damage |= src2->force_damage;
 
@@ -342,12 +346,13 @@ struct line *concat_line(struct line *src1, struct line *src2, bool opt) {
             handle = next;
         }
 
-        free_line(src2);
+        free_line(mp, src2);
     } else if (opt && !src1->wrapped) {
         // NOTE After this point line will never be resized
         ssize_t len = line_length(src1);
         if (len != src1->caps)
-            src1 = realloc_line(src1, len);
+            src1 = realloc_line(mp, src1, len);
+        mpa_pin(mp, src1);
     }
 
     if (opt) optimize_attributes(src1);

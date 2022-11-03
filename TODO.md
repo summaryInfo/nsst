@@ -9,8 +9,6 @@ _NOTE: These plans can change any time_
 
 * Find out where empty tail for scrolled off lines is comming from, since erase should have trimmed them.
 
-* Optimize scrolling by replacing malloc with custom allocator based on multiple linear memory pools.
-
 * Hyperlinks auto-detection
 
   * `--match-uri=<X>` where `<X>` is one of `off`,`manual`,`auto`
