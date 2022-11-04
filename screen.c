@@ -205,7 +205,7 @@ inline static struct line *screen_concat_line(struct screen *scr, struct line *d
 
 FORCEINLINE
 inline static void screen_split_line(struct screen *scr, struct line *src, ssize_t offset) {
-    if (LIKELY(!offset || offset >= src->size)) return;
+    if (LIKELY(offset >= src->size) || LIKELY(!offset)) return;
 
     split_line(&scr->mp, src, offset);
 
@@ -223,15 +223,11 @@ inline static struct line *screen_realloc_line(struct screen *scr, struct line *
     return new;
 }
 
+FORCEINLINE
 inline static void screen_unwrap_line(struct screen *scr, ssize_t y) {
     struct line_handle *view = &scr->screen[y];
 
-    if (!view_wrapped(view)) return;
-
-    // Views are updates automatically
-    // since they are based on line_handle's
-
-    screen_split_line(scr, view->line, view->offset);
+    screen_split_line(scr, view->line, view->offset + view->width);
 }
 
 void screen_unwrap_cursor_line(struct screen *scr) {
@@ -1128,10 +1124,10 @@ void screen_erase_fast(struct screen *scr, int16_t ys, int16_t ye, struct attr *
         assert(!view->offset);
 #endif
 
-        screen_split_line(scr, view->line, scr->width);
-        view->line->size = 0;
-        view->line->force_damage = true;
+        screen_unwrap_line(scr, ys);
         view->width = 0;
+        view->line->force_damage = true;
+        view->line->size = 0;
 
         // FIXME Prefer explicit relocation after moving to custom line allocator.
         // screen_realloc_line(scr, view->line, 0);
@@ -1290,6 +1286,35 @@ inline static void swap_3(struct line *top_after, struct line *mid_before, struc
         attach_next_line(mid_before, bottom_after);
 }
 
+HOT
+inline static void shift_handles_up(struct line_handle *screen, ssize_t amount, ssize_t bottom) {
+        ssize_t i = 0;
+        for (; i < amount; i++) {
+            struct line_handle *handle = &screen[i];
+
+            struct line_handle *prev = handle->prev;
+            struct line_handle *next = handle->next;
+
+            if (prev) prev->next = next;
+            else handle->line->first_handle = next;
+            if (next) next->prev = prev;
+        }
+
+        for (; i < bottom; i++) {
+            struct line_handle *src = &screen[i];
+            struct line_handle *dst = &screen[i - amount];
+
+            *dst = *src;
+
+            struct line_handle *prev = src->prev;
+            struct line_handle *next = src->next;
+
+            if (prev) prev->next = dst;
+            else dst->line->first_handle = dst;
+            if (next) next->prev = dst;
+        }
+}
+
 inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool save) {
     ssize_t bottom = screen_max_y(scr);
 
@@ -1304,7 +1329,7 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
         screen_split_line(scr, first->line, first->offset);
 
     struct line_handle *last = &scr->screen[bottom - 1];
-    screen_split_line(scr, last->line, last->offset + scr->width);
+    screen_unwrap_line(scr, bottom - 1);
 
     if (amount > 0) /* up */ {
         amount = MIN(amount, (bottom - top));
@@ -1315,31 +1340,7 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
             struct line *bottom_line = last->line;
             struct line *bottom_next = detach_next_line(bottom_line);
 
-            ssize_t i = 0;
-            for (; i < amount; i++) {
-                struct line_handle *handle = &scr->screen[i];
-
-                struct line_handle *prev = handle->prev;
-                struct line_handle *next = handle->next;
-
-                if (prev) prev->next = next;
-                else handle->line->first_handle = next;
-                if (next) next->prev = prev;
-            }
-
-            for (; i < bottom; i++) {
-                struct line_handle *src = &scr->screen[i];
-                struct line_handle *dst = &scr->screen[i - amount];
-
-                *dst = *src;
-
-                struct line_handle *prev = src->prev;
-                struct line_handle *next = src->next;
-
-                if (prev) prev->next = dst;
-                else dst->line->first_handle = dst;
-                if (next) next->prev = dst;
-            }
+            shift_handles_up(scr->screen, amount, bottom);
 
 #if DEBUG_LINES
             if (rest) assert(scr->screen[rest - 1].line == bottom_line);
@@ -1364,8 +1365,6 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
             if (rest && amount) {
                 struct line *mid = scr->screen[top + amount - 1].line;
                 swap_3(first->line, mid, last->line);
-                if (should_reset_top && !top)
-                    replace_handle(&scr->top_line, scr->screen);
             }
 
             for (ssize_t i = top; i < bottom; i++)
@@ -1407,7 +1406,7 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
     }
 
     if (LIKELY(amount)) {
-        scr->scroll_damage = 1;
+        scr->scroll_damage = true;
 
         if (should_reset_top)
             replace_handle(&scr->top_line, &scr->screen[0]);
@@ -1418,7 +1417,8 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
         }
 
         // Update position of selection, if scrolled
-        selection_scrolled(&scr->sstate, scr, amount, top, bottom);
+        if (UNLIKELY(selection_active(&scr->sstate)))
+            selection_scrolled(&scr->sstate, scr, amount, top, bottom);
     }
 
 #if DEBUG_LINES
