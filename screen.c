@@ -244,7 +244,7 @@ void screen_unwrap_cursor_line(struct screen *scr) {
     screen_unwrap_line(scr, scr->c.y);
 }
 
-inline static void screen_adjust_line2(struct screen *scr, struct line_handle *screen, ssize_t y, ssize_t size) {
+inline static void screen_adjust_line2(struct screen *scr, struct line_handle *screen, ssize_t y, ssize_t size, bool fill) {
     struct line_handle *view = &screen[y];
     ssize_t old_size = view->line->size;
     ssize_t new_size = view->offset + size;
@@ -254,8 +254,10 @@ inline static void screen_adjust_line2(struct screen *scr, struct line_handle *s
     if (new_size > view->line->caps)
         screen_realloc_line(scr, view->line, new_size);
 
-    struct cell c = MKCELL(0, view->line->pad_attrid);
-    fill_cells(view->line->cell + old_size, c, new_size - old_size);
+    if (fill) {
+        struct cell c = MKCELL(0, view->line->pad_attrid);
+        fill_cells(view->line->cell + old_size, c, new_size - old_size);
+    }
 
     /* When we are resizing continuation line view fixup
      * widths of previous parts of line */
@@ -273,7 +275,7 @@ inline static void screen_adjust_line2(struct screen *scr, struct line_handle *s
 }
 
 inline static void screen_adjust_line(struct screen *scr, ssize_t y, ssize_t size) {
-    screen_adjust_line2(scr, scr->screen, y, size);
+    screen_adjust_line2(scr, scr->screen, y, size, true);
 }
 
 void screen_do_wrap(struct screen *scr) {
@@ -690,8 +692,8 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         };
         line_handle_add(&saved_cursor_handle);
 
-        screen_adjust_line2(scr, screen, c->y, c->x + 1);
-        screen_adjust_line2(scr, screen, saved_c->y, saved_c->x + 1);
+        screen_adjust_line2(scr, screen, c->y, c->x + 1, true);
+        screen_adjust_line2(scr, screen, saved_c->y, saved_c->x + 1, true);
 
         struct line_handle it = dup_handle(&cursor_handle);
         round_offset_to_width(&it, width);
@@ -1914,22 +1916,7 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
     if (max_cx < line->width)
         view_adjust_wide_right(line, max_cx - 1);
 
-    // Shift characters to the left if insert mode is enabled
-    if (UNLIKELY(scr->mode.insert) && max_cx < max_tx && cx < line->width) {
-        ssize_t max_new_size = MIN(max_tx, line->width + totalw);
-        if (line->width < max_new_size)
-            screen_adjust_line(scr, scr->c.y, max_new_size);
-
-        cell = view_cell(line, cx);
-
-        for (struct cell *c = cell + totalw; c < view_cell(line, max_tx); c++) c->drawn = 0;
-        memmove(cell + totalw, cell, (max_tx - max_cx)*sizeof(*cell));
-        max_cx = MAX(max_cx, max_tx);
-    } else {
-        if (line->width < max_cx)
-            screen_adjust_line(scr, scr->c.y, max_cx);
-        cell = view_cell(line, cx);
-    }
+    view_adjust_wide_left(line, cx);
 
     // Clear selection if writing over it
     if (UNLIKELY(selection_active(&scr->sstate)) && UNLIKELY(line->line->selection_index) &&
@@ -1944,16 +1931,34 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
             window_bell(scr->win, scr->mbvol);
     }
 
-    // Erase overwritten parts of wide characters
-    view_adjust_wide_left(line, cx);
+    // Allocate color for cell
+    uint32_t attrid = alloc_attr(line->line, screen_sgr(scr));
+
+    /* NOTE: screen_adjust_line2() does not fill line with correct values after resizing
+     * here. So we should not try dereferencing attributes of undefined cells.
+     * That is why attriubte allocation is performed above. */
+
+    // Shift characters to the left if insert mode is enabled
+    if (UNLIKELY(scr->mode.insert) && max_cx < max_tx && cx < line->width) {
+        ssize_t max_new_size = MIN(max_tx, line->width + totalw);
+        if (line->width < max_new_size)
+            screen_adjust_line2(scr, scr->screen, scr->c.y, max_new_size, false);
+
+        cell = view_cell(line, cx);
+
+        for (struct cell *c = cell + totalw; c < view_cell(line, max_tx); c++) c->drawn = 0;
+        memmove(cell + totalw, cell, (max_tx - max_cx)*sizeof(*cell));
+        max_cx = MAX(max_cx, max_tx);
+    } else {
+        if (line->width < max_cx)
+            screen_adjust_line2(scr, scr->screen, scr->c.y, max_cx, false);
+        cell = view_cell(line, cx);
+    }
 
     cx += totalw;
 
     scr->c.pending = cx == max_tx;
     scr->c.x = cx - scr->c.pending;
-
-    // Allocate color for cell
-    uint32_t attrid = alloc_attr(line->line, screen_sgr(scr));
 
     // Put charaters
     copy_cells_with_attr(cell, bstart, bend, attrid);
