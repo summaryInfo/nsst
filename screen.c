@@ -195,11 +195,10 @@ void screen_reset_view(struct screen *scr, bool damage) {
         screen_damage_lines(scr, 0, scr->height);
 }
 
-inline static struct line *screen_concat_line(struct screen *scr, struct line *dst, struct line *src, bool opt) {
-    if (dst && src)
-        selection_concat(&scr->sstate, dst, src);
-    struct line *new = concat_line(&scr->mp, dst, src, opt);
-    if (new && new->selection_index)
+inline static struct line *screen_concat_line(struct screen *scr, struct line *dst, struct line *src) {
+    selection_concat(&scr->sstate, dst, src);
+    struct line *new = concat_line(&scr->mp, dst, src);
+    if (UNLIKELY(new->selection_index))
         selection_relocated(&scr->sstate, new);
     return new;
 }
@@ -307,7 +306,7 @@ void screen_do_wrap(struct screen *scr) {
         screen_adjust_line(scr, scr->c.y - 1, scr->width);
 
     struct line *current = scr->screen[scr->c.y].line;
-    screen_concat_line(scr, current->prev, current, false);
+    screen_concat_line(scr, current->prev, current);
 }
 
 void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
@@ -390,7 +389,7 @@ ssize_t screen_push_history_until(struct screen *scr, struct line *from, struct 
     } else if (opt) {
         for (struct line *next; from->seq < to->seq; from = next) {
             next = from->next;
-            screen_concat_line(scr, from, NULL, true);
+            optimize_line(&scr->mp, from);
             if (UNLIKELY(++scr->sb_limit > scr->sb_max_caps))
                 view_offset += try_free_top_line(scr);
         }
@@ -1291,7 +1290,7 @@ inline static void swap_3(struct line *top_after, struct line *mid_before, struc
         attach_next_line(mid_before, bottom_after);
 }
 
-int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool save) {;
+inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool save) {
     ssize_t bottom = screen_max_y(scr);
 
     save &= save && !scr->mode.altscreen && top == 0 && amount >= 0;

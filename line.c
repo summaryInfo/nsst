@@ -295,63 +295,64 @@ void split_line(struct multipool *mp, struct line *src, ssize_t offset) {
     realloc_line(mp, src, offset);
 }
 
-struct line *concat_line(struct multipool *mp, struct line *src1, struct line *src2, bool opt) {
-    if (src2) {
+void optimize_line(struct multipool *mp, struct line *src) {
+    // NOTE After this point line will never be resized
+    ssize_t len = line_length(src);
+    if (len != src->caps)
+        src = realloc_line(mp, src, len);
+    mpa_pin(mp, src);
+
+    optimize_attributes(src);
+}
+
+struct line *concat_line(struct multipool *mp, struct line *src1, struct line *src2) {
 #if DEBUG_LINES
-        assert(src1);
-        assert(src1->next == src2);
-        assert(src2->prev == src1);
+    assert(src1 && src2);
+    assert(src1->next == src2);
+    assert(src2->prev == src1);
 #endif
 
-        ssize_t len = src2->size + src1->size;
-        ssize_t first_len = src1->size;
-        src1 = realloc_line(mp, src1, src1->size + src2->caps);
-        src1->wrapped = src2->wrapped;
-        src1->force_damage |= src2->force_damage;
+    ssize_t len = src2->size + src1->size;
+    ssize_t first_len = src1->size;
+    src1 = realloc_line(mp, src1, src1->size + src2->caps);
+    src1->wrapped = src2->wrapped;
+    src1->force_damage |= src2->force_damage;
 
-        if (src1->attrs && src2->attrs) {
-            src1->pad_attrid = alloc_attr(src1, attr_pad(src2));
-            copy_line(src1, src1->size, src2, 0, len - src1->size);
-        } else {
-            /* Faster line content copying in we do
-             * not need to merge attributes */
-            memcpy(src1->cell + src1->size, src2->cell,
-                   (len - src1->size) * sizeof *src1->cell);
-            src1->force_damage = 1;
-            src1->size = len;
-            src1->pad_attrid = src2->pad_attrid;
-            if (src2->attrs) {
-                src1->attrs = src2->attrs;
-                src2->attrs = NULL;
-            }
+    if (src1->attrs && src2->attrs) {
+        src1->pad_attrid = alloc_attr(src1, attr_pad(src2));
+        copy_line(src1, src1->size, src2, 0, len - src1->size);
+    } else {
+        /* Faster line content copying in we do
+         * not need to merge attributes */
+        memcpy(src1->cell + src1->size, src2->cell,
+               (len - src1->size) * sizeof *src1->cell);
+        src1->force_damage = 1;
+        src1->size = len;
+        src1->pad_attrid = src2->pad_attrid;
+        if (src2->attrs) {
+            src1->attrs = src2->attrs;
+            src2->attrs = NULL;
         }
-
-        // Update line links
-        struct line *next_line = detach_next_line(src2);
-        detach_prev_line(src2);
-        attach_next_line(src1, next_line);
-
-        // Update line handles
-        struct line_handle *handle = src2->first_handle, *next;
-        while (handle) {
-            next = handle->next;
-            line_handle_remove(handle);
-            handle->line = src1;
-            handle->offset += first_len;
-            line_handle_add(handle);
-            handle = next;
-        }
-
-        free_line(mp, src2);
-    } else if (opt && !src1->wrapped) {
-        // NOTE After this point line will never be resized
-        ssize_t len = line_length(src1);
-        if (len != src1->caps)
-            src1 = realloc_line(mp, src1, len);
-        mpa_pin(mp, src1);
     }
 
-    if (opt) optimize_attributes(src1);
+    // Update line links
+    struct line *next_line = detach_next_line(src2);
+    detach_prev_line(src2);
+    attach_next_line(src1, next_line);
+
+    // Update line handles
+    struct line_handle *handle = src2->first_handle, *next;
+    while (handle) {
+        next = handle->next;
+        line_handle_remove(handle);
+        handle->line = src1;
+        handle->offset += first_len;
+        line_handle_add(handle);
+        handle = next;
+    }
+
+    free_line(mp, src2);
+
     return src1;
 }
 
