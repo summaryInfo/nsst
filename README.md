@@ -38,12 +38,14 @@ See TODO file for things that are to be implemented.
 * `input.c` -- Input handling code (more or less compatible with Xterm)
 * `line.c` -- Terminal lines manipulation functions
 * `mouse.c` -- Mouse events and selection handling
+* `multipool.c` -- Allocator implementation optimized for lines allocation
 * `nrcs.c` -- National replacement character sets logic
-* `nsst.c` -- `main` function and arguments parsing
 * `nsstc.c` -- Thin client that is able to connect to nsst daemon
+* `nsst.c` -- `main` function and arguments parsing
 * `poller.c` -- Event handling (`poll()` wrapper)
-* `render-x12shm.c` -- X11 MIT-SHM backend
 * `render-x11xrender.c` -- X11 XRender backend
+* `render-x12shm.c` -- X11 MIT-SHM backend
+* `screen.c` -- Screen manipulation routines
 * `term.c` -- Terminal logic
 * `tty.c` -- Low level TTY/PTY code
 * `uri.c` -- URL storage and validation
