@@ -30,12 +30,12 @@ inline static struct cell *view_cell(struct line_handle *view, ssize_t x) {
     return view->line->cell + view->offset + x;
 }
 
-inline static struct attr view_attr_at(struct line_handle *view, ssize_t x) {
+inline static const struct attr *view_attr_at(struct line_handle *view, ssize_t x) {
     return attr_at(view->line, view->offset + x);
 }
 
-inline static struct attr view_attr(struct line_handle *view, uint32_t attrid) {
-    return attrid ? view->line->attrs->data[attrid - 1] : ATTR_DEFAULT;
+inline static const struct attr *view_attr(struct line_handle *view, uint32_t attrid) {
+    return attrid ? &view->line->attrs->data[attrid - 1] : &ATTR_DEFAULT;
 }
 
 inline static void view_adjust_wide_right(struct line_handle *view, ssize_t x) {

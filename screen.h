@@ -211,7 +211,7 @@ void screen_unwrap_cursor_line(struct screen *scr);
 void screen_do_wrap(struct screen *scr);
 void screen_print_all(struct screen *scr);
 
-char *encode_sgr(char *dst, char *end, struct attr *attr);
+char *encode_sgr(char *dst, char *end, const struct attr *attr);
 
 inline static ssize_t screen_width(struct screen *scr) {
     return scr->width;

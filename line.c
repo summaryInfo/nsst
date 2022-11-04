@@ -28,16 +28,13 @@ const struct attr default_attr__ = {
 };
 
 inline static bool attr_eq_prot(const struct attr *a, const struct attr *b) {
-    static_assert(sizeof(struct attr) == 4*sizeof(uint32_t), "Wrong attribute size");
-#ifdef __SSE4_1__
-    __m128i c = _mm_xor_si128(_mm_load_si128((void *)a), _mm_load_si128((void *)b));
-    return _mm_testz_si128(c, c);
-#else
-    return a->fg == b->fg && a->bg == b->bg && a->ul == b->ul && a->mask == b->mask;
-#endif
+    static_assert(sizeof(struct attr) == 2*sizeof(uint64_t), "Wrong attribute size");
+    return *(const uint64_t *)a == *(const uint64_t *)b &&
+           *((const uint64_t *)a + 1) == *((const uint64_t *)b + 1);
+    //return a->fg == b->fg && a->bg == b->bg && a->ul == b->ul && a->mask == b->mask;
 }
 
-inline static uint32_t attr_hash(struct attr *attr) {
+inline static uint32_t attr_hash(const struct attr *attr) {
     return uint_hash32(attr->bg) ^
             uint_hash32(attr->fg) ^
             uint_hash32(attr->ul) ^
@@ -48,7 +45,7 @@ inline static bool attr_empty(struct attr *attr) {
     return attr->fg == 0;
 }
 
-static uint32_t insert_attr(struct line_attr *tab, struct attr *attr, uint32_t hash) {
+static uint32_t insert_attr(struct line_attr *tab, const struct attr *attr, uint32_t hash) {
     size_t i = hash % tab->caps;
     size_t i0 = i, caps = tab->caps;
     do {
@@ -133,10 +130,10 @@ static void move_attrtab(struct line_attr *dst, struct line *src) {
     src->attrs = dst;
 }
 
-uint32_t alloc_attr(struct line *line, struct attr attr) {
-    if (attr_eq_prot(&attr, &ATTR_DEFAULT)) return ATTRID_DEFAULT;
+uint32_t alloc_attr(struct line *line, const struct attr *attr) {
+    if (attr_eq_prot(attr, &ATTR_DEFAULT)) return ATTRID_DEFAULT;
 
-    uint32_t hash = attr_hash(&attr);
+    uint32_t hash = attr_hash(attr);
 
     if (!line->attrs) {
         line->attrs = xzalloc(sizeof *line->attrs + INIT_CAP * sizeof *line->attrs->data);
@@ -144,10 +141,10 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
     }
 
 #if USE_URI
-    uri_ref(attr.uri);
+    uri_ref(attr->uri);
 #endif
 
-    uint32_t id = insert_attr(line->attrs, &attr, hash);
+    uint32_t id = insert_attr(line->attrs, attr, hash);
     if (id) return id;
 
     size_t new_caps = CAPS_INC_STEP(line->attrs->caps);
@@ -157,10 +154,10 @@ uint32_t alloc_attr(struct line *line, struct attr attr) {
 
     move_attrtab(new, line);
 
-    return insert_attr(line->attrs, &attr, hash);
+    return insert_attr(line->attrs, attr, hash);
 }
 
-struct line *create_line_with_seq(struct multipool *mp, struct attr attr, ssize_t caps, uint64_t seq) {
+struct line *create_line_with_seq(struct multipool *mp, const struct attr *attr, ssize_t caps, uint64_t seq) {
     struct line *line = mpa_alloc(mp, sizeof(*line) + (size_t)caps * sizeof line->cell[0]);
 
 #if DEBUG_LINES
@@ -184,7 +181,7 @@ uint64_t get_seqno_range(uint64_t inc) {
     return ret;
 }
 
-struct line *create_line(struct multipool *mp, struct attr attr, ssize_t caps) {
+struct line *create_line(struct multipool *mp, const struct attr *attr, ssize_t caps) {
     return create_line_with_seq(mp, attr, caps, get_seqno_range(SEQNO_INC));
 }
 
@@ -259,7 +256,7 @@ void split_line(struct multipool *mp, struct line *src, ssize_t offset, struct l
     bool need_fixup = src->next && dist < 2;
     uint64_t tail_seq = dist < 2 ? get_seqno_range(SEQNO_INC) : src->seq + dist/2;
 
-    struct line *tail = create_line_with_seq(mp, *attr_pad(src), tail_len, tail_seq);
+    struct line *tail = create_line_with_seq(mp, attr_pad(src), tail_len, tail_seq);
 #if DEBUG_LINES
     assert(tail_seq < get_seqno_range(0));
     assert(tail->seq > src->seq);
@@ -322,7 +319,7 @@ struct line *concat_line(struct multipool *mp, struct line *src1, struct line *s
         src1->force_damage |= src2->force_damage;
 
         if (src1->attrs && src2->attrs) {
-            src1->pad_attrid = alloc_attr(src1, *attr_pad(src2));
+            src1->pad_attrid = alloc_attr(src1, attr_pad(src2));
             copy_line(src1, src1->size, src2, 0, len - src1->size);
         } else {
             /* Faster line content copying in we do
@@ -385,7 +382,7 @@ void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, s
             c.drawn = 0;
             if (UNLIKELY(c.attrid)) {
                 if (UNLIKELY(c.attrid != previd))
-                    newid = alloc_attr(dst, src->attrs->data[c.attrid - 1]);
+                    newid = alloc_attr(dst, &src->attrs->data[c.attrid - 1]);
                 c.attrid = newid;
             }
             *dc++ = c;

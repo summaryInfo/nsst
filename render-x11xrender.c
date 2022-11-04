@@ -523,7 +523,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
             struct cell cel = *pcell;
             pcell->drawn = 1;
 
-            struct attr attr = view_attr(&view, cel.attrid);
+            struct attr attr = *view_attr(&view, cel.attrid);
             bool dirty = view.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
 
             struct cellspec spec;

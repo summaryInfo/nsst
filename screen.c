@@ -93,7 +93,7 @@ void screen_damage_uri(struct screen *scr, uint32_t uri) {
         struct line_handle view = screen_view_at(scr, &vpos);
         for (ssize_t j = 0; j <  MIN(scr->width, view.width); j++) {
             struct cell *pcell = view_cell(&view, j);
-            if (view_attr(&view, pcell->attrid).uri == uri)
+            if (view_attr(&view, pcell->attrid)->uri == uri)
                 pcell->drawn = 0;
         }
         screen_inc_iter(scr, &vpos);
@@ -416,7 +416,7 @@ struct line *create_lines_range(struct multipool *mp, struct line *prev, struct 
                                 const struct attr *attr, ssize_t count, struct line_handle *top, bool need_register) {
     if (count <= 0) return NULL;
 
-    struct line *line = create_line(mp, *attr, width);
+    struct line *line = create_line(mp, attr, width);
     if (UNLIKELY(!prev && top))
         replace_handle(top, &(struct line_handle) { .line =  line });
 
@@ -429,7 +429,7 @@ struct line *create_lines_range(struct multipool *mp, struct line *prev, struct 
         attach_prev_line(line, prev);
         prev = line;
         if (i != count - 1)
-            line = create_line(mp, *attr, width);
+            line = create_line(mp, attr, width);
     }
 
     attach_next_line(line, next);
@@ -930,7 +930,7 @@ uint16_t screen_checksum(struct screen *scr, int16_t xs, int16_t ys, int16_t xe,
         for (int16_t i = xs; i < xe; i++) {
             uint32_t ch_orig = i >= line->width ? 0 : view_cell(line, i)->ch;
             uint32_t ch = ch_orig;
-            struct attr attr = view_attr_at(line, i);
+            const struct attr *attr = view_attr_at(line, i);
             if (!(mode.no_implicit) && !ch) ch = ' ';
 
             if (!(mode.wide)) {
@@ -944,16 +944,16 @@ uint16_t screen_checksum(struct screen *scr, int16_t xs, int16_t ys, int16_t xe,
             }
 
             if (!(mode.no_attr)) {
-                if (attr.underlined) ch += 0x10;
-                if (attr.reverse) ch += 0x20;
-                if (attr.blink) ch += 0x40;
-                if (attr.bold) ch += 0x80;
-                if (attr.italic) ch += 0x100;
-                if (attr.faint) ch += 0x200;
-                if (attr.strikethrough) ch += 0x400;
-                if (attr.invisible) ch += 0x800;
+                if (attr->underlined) ch += 0x10;
+                if (attr->reverse) ch += 0x20;
+                if (attr->blink) ch += 0x40;
+                if (attr->bold) ch += 0x80;
+                if (attr->italic) ch += 0x100;
+                if (attr->faint) ch += 0x200;
+                if (attr->strikethrough) ch += 0x400;
+                if (attr->invisible) ch += 0x800;
             }
-            if (first || ch_orig || !attr_eq(&attr, &(struct attr){ .fg = attr.fg, .bg = attr.bg, .ul = attr.ul }))
+            if (first || ch_orig || !attr_eq(attr, &(struct attr){ .fg = attr->fg, .bg = attr->bg, .ul = attr->ul }))
                 trm += ch + spc, spc = 0;
             else if (!ch_orig && notrim) spc += ' ';
 
@@ -976,10 +976,10 @@ void screen_reverse_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, 
         struct line_handle *line = &scr->screen[ys];
         // TODO Optimize
         for (int16_t i = xs; i < (rect || ys == ye - 1 ? xe : screen_max_ox(scr)); i++) {
-            struct attr newa = view_attr_at(line, i);
+            struct attr newa = *view_attr_at(line, i);
             attr_mask_set(&newa, attr_mask(&newa) ^ mask);
             struct cell *cell = view_cell(line, i);
-            cell->attrid = alloc_attr(line->line, newa);
+            cell->attrid = alloc_attr(line->line, &newa);
             cell->drawn = 0;
         }
         if (!rect) xs = screen_min_ox(scr);
@@ -998,14 +998,14 @@ void screen_apply_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, in
         struct line_handle *line = &scr->screen[ys];
         // TODO Optimize
         for (int16_t i = xs; i < xend; i++) {
-            struct attr newa = view_attr_at(line, i);
+            struct attr newa = *view_attr_at(line, i);
             attr_mask_set(&newa, (attr_mask(&newa) & ~mmsk) | amsk);
             if (mask->fg) newa.fg = attr->fg;
             if (mask->bg) newa.bg = attr->bg;
             if (mask->ul) newa.ul = attr->ul;
 
             struct cell *cell = view_cell(line, i);
-            cell->attrid = alloc_attr(line->line, newa);
+            cell->attrid = alloc_attr(line->line, &newa);
             cell->drawn = 0;
         }
         if (!rect) xs = screen_min_ox(scr);
@@ -1016,17 +1016,17 @@ void screen_apply_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, in
 struct attr screen_common_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
     screen_rect_pre(scr, &xs, &ys, &xe, &ye);
 
-    struct attr common = view_attr_at(&scr->screen[ys], xs);
+    struct attr common = *view_attr_at(&scr->screen[ys], xs);
     bool has_common_fg = 1, has_common_bg = 1, has_common_ul = 1;
 
     for (; ys < ye; ys++) {
         struct line_handle *line = &scr->screen[ys];
         for (int16_t i = xs; i < xe; i++) {
-            struct attr attr = view_attr_at(line, i);
-            has_common_fg &= (common.fg == attr.fg);
-            has_common_bg &= (common.bg == attr.bg);
-            has_common_ul &= (common.ul == attr.ul);
-            attr_mask_set(&common, attr_mask(&common) & attr_mask(&attr));
+            const struct attr *attr = view_attr_at(line, i);
+            has_common_fg &= (common.fg == attr->fg);
+            has_common_bg &= (common.bg == attr->bg);
+            has_common_ul &= (common.ul == attr->ul);
+            attr_mask_set(&common, attr_mask(&common) & attr_mask(attr));
         }
     }
 
@@ -1091,7 +1091,7 @@ void screen_fill(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
             attr_eq(attr_pad(line->line), &scr->sgr)) continue;
         ssize_t xe1 = MIN(xe, line->width);
         struct cell c = {
-            .attrid = alloc_attr(line->line, scr->sgr),
+            .attrid = alloc_attr(line->line, &scr->sgr),
             .ch = compact(ch),
         };
         fill_cells(view_cell(line, xs), c, xe1 - xs);
@@ -1132,9 +1132,9 @@ void screen_protective_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t
 
     for (; ys < ye; ys++) {
         struct line_handle *line = &scr->screen[ys];
-        struct cell c = { .attrid = alloc_attr(line->line, scr->sgr) };
+        struct cell c = { .attrid = alloc_attr(line->line, &scr->sgr) };
         for (int16_t i = xs; i < xe; i++)
-            if (!view_attr_at(line, i).protected)
+            if (!view_attr_at(line, i)->protected)
                 *view_cell(line, i) = c;
     }
 }
@@ -1145,7 +1145,7 @@ void screen_selective_erase(struct screen *scr, int16_t xs, int16_t ys, int16_t 
     for (; ys < ye; ys++) {
         struct line_handle *line = &scr->screen[ys];
         for (ssize_t i = xs; i < xe; i++) {
-            if (!view_attr_at(line, i).protected) {
+            if (!view_attr_at(line, i)->protected) {
                 struct cell *cell = view_cell(line, i);
                 cell->ch = cell->drawn = 0;
             }
@@ -1625,7 +1625,7 @@ bool init_screen(struct screen *scr, struct window *win) {
     return screen_load_config(scr, 1);
 }
 
-char *encode_sgr(char *dst, char *end, struct attr *attr) {
+char *encode_sgr(char *dst, char *end, const struct attr *attr) {
 #define FMT(...) dst += snprintf(dst, end - dst, __VA_ARGS__)
 #define MAX_SGR_LEN 54
     // Maximal length sequence is "0;1;2;3;4;6;7;8;9;38:2:255:255:255;48:2:255:255:255"
@@ -1673,17 +1673,17 @@ void screen_print_line(struct screen *scr, struct line_handle *line) {
     uint8_t buf[PRINT_BLOCK_SIZE];
     uint8_t *pbuf = buf, *pend = buf + PRINT_BLOCK_SIZE;
 
-    struct attr prev = {0};
+    const struct attr *prev = &ATTR_DEFAULT;
 
     for (int16_t i = 0; i < line->width; i++) {
         struct cell c = *view_cell(line, i);
-        struct attr attr = view_attr_at(line, i);
+        const struct attr *attr = view_attr_at(line, i);
 
-        if (window_cfg(scr->win)->print_attr && (!attr_eq(&prev, &attr) || !i)) {
+        if (window_cfg(scr->win)->print_attr && (!attr_eq(prev, attr) || !i)) {
             /* Print SGR state, if it have changed */
             *pbuf++ = '\033';
             *pbuf++ = '[';
-            pbuf = (uint8_t *)encode_sgr((char *)pbuf, (char *)pend, &attr);
+            pbuf = (uint8_t *)encode_sgr((char *)pbuf, (char *)pend, attr);
             *pbuf++ = 'm';
         }
 
@@ -1930,7 +1930,7 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
     scr->c.x = cx - scr->c.pending;
 
     // Allocate color for cell
-    uint32_t attrid = alloc_attr(line->line, *screen_sgr(scr));
+    uint32_t attrid = alloc_attr(line->line, screen_sgr(scr));
 
     // Put charaters
     copy_cells_with_attr(cell, bstart, bend, attrid);

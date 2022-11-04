@@ -804,7 +804,7 @@ static void update_active_uri(struct screen *scr, struct window *win, struct mou
         screen_advance_iter(scr, &pos, y);
 
         if (pos.offset + x < pos.line->size)
-            uri = attr_at(pos.line, pos.offset + x).uri;
+            uri = attr_at(pos.line, pos.offset + x)->uri;
     }
     window_set_active_uri(win, uri, is_button1_down(ev));
 

@@ -115,10 +115,10 @@ struct line {
     struct cell cell[];
 } ALIGNED(MPA_ALIGNMENT);
 
-uint32_t alloc_attr(struct line *line, struct attr attr);
-struct line *create_line(struct multipool *mp, struct attr attr, ssize_t width);
+uint32_t alloc_attr(struct line *line, const struct attr *attr);
+struct line *create_line(struct multipool *mp, const struct attr *attr, ssize_t width);
 uint64_t get_seqno_range(uint64_t inc);
-struct line *create_line_with_seq(struct multipool *mp, struct attr attr, ssize_t width, uint64_t seq);
+struct line *create_line_with_seq(struct multipool *mp, const struct attr *attr, ssize_t width, uint64_t seq);
 struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t width);
 void split_line(struct multipool *mp, struct line *src, ssize_t offset, struct line **dst1, struct line **dst2);
 /* concat_line will return NULL not touching src1 and src2 if resulting line is too long */
@@ -259,7 +259,7 @@ inline static ssize_t line_segments(struct line *ln, ssize_t offset, ssize_t wid
     .reverse = 1, .blink = 1, .protected = 1}.mask)
 #define PROTECTED_MASK ((struct attr){ .protected = 1}.mask)
 
-inline static uint32_t attr_mask(struct attr *a) {
+inline static uint32_t attr_mask(const struct attr *a) {
     return a->mask & ATTR_MASK;
 }
 
@@ -271,9 +271,9 @@ inline static const struct attr *attr_pad(struct line *ln) {
     return ln->pad_attrid ? &ln->attrs->data[ln->pad_attrid - 1] : &ATTR_DEFAULT;
 }
 
-inline static struct attr attr_at(struct line *ln, ssize_t x) {
-    if (x >= ln->size) return *attr_pad(ln);
-    return ln->cell[x].attrid ? ln->attrs->data[ln->cell[x].attrid - 1] : ATTR_DEFAULT;
+inline static const struct attr *attr_at(struct line *ln, ssize_t x) {
+    if (x >= ln->size) return attr_pad(ln);
+    return ln->cell[x].attrid ? &ln->attrs->data[ln->cell[x].attrid - 1] : &ATTR_DEFAULT;
 }
 
 inline static void adjust_wide_left(struct line *line, ssize_t x) {
