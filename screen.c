@@ -412,24 +412,41 @@ static void resize_tabs(struct screen *scr, int16_t width) {
     }
 }
 
-struct line *create_lines_range(struct multipool *mp, struct line *prev, struct line *next, struct line_handle *dst, ssize_t width,
-                                const struct attr *attr, ssize_t count, struct line_handle *top, bool need_register) {
+inline static struct line *create_lines_range(struct multipool *mp, struct line *prev, struct line *next,
+                                              struct line_handle *dst, ssize_t width, const struct attr *attr,
+                                              ssize_t count, struct line_handle *top, bool need_register) {
     if (count <= 0) return NULL;
 
     struct line *line = create_line(mp, attr, width);
     if (UNLIKELY(!prev && top))
         replace_handle(top, &(struct line_handle) { .line =  line });
 
-    for (ssize_t i = 0; i < count; i++) {
-        dst[i] = (struct line_handle) {
-            .line = line,
-        };
-        if (need_register)
-            line_handle_add(&dst[i]);
+    memset(dst, 0, count*sizeof *dst);
+
+    if (LIKELY(need_register)) {
+        dst->line = line;
+        line_handle_add(dst);
         attach_prev_line(line, prev);
         prev = line;
-        if (i != count - 1)
-            line = create_line(mp, attr, width);
+
+        if (UNLIKELY(count > 1)) {
+            ssize_t i = 1;
+            do {
+                dst[i].line = line = create_line(mp, attr, width);
+                line_handle_add(&dst[i]);
+                attach_prev_line(line, prev);
+                prev = line;
+            } while (++i < count);
+        }
+
+    } else {
+        for (ssize_t i = 0; i < count; i++) {
+            dst[i].line = line;
+            attach_prev_line(line, prev);
+            prev = line;
+            if (i != count - 1)
+                line = create_line(mp, attr, width);
+        }
     }
 
     attach_next_line(line, next);
