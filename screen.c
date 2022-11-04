@@ -205,19 +205,14 @@ inline static struct line *screen_concat_line(struct screen *scr, struct line *d
 }
 
 FORCEINLINE
-inline static struct line *screen_split_line(struct screen *scr, struct line *src, ssize_t offset, struct line **dst1, struct  line **dst2) {
-    if (LIKELY(!offset || offset >= src->size)) return src;
+inline static void screen_split_line(struct screen *scr, struct line *src, ssize_t offset) {
+    if (LIKELY(!offset || offset >= src->size)) return;
 
-    struct line *dst1p, *dst2p;
-    if (!dst1) dst1 = &dst1p;
-    if (!dst2) dst2 = &dst2p;
+    split_line(&scr->mp, src, offset);
 
-    split_line(&scr->mp, src, offset, dst1, dst2);
+    if (UNLIKELY(src->selection_index))
+        selection_split(&scr->sstate, src, src->next);
 
-    if ((*dst1)->selection_index)
-        selection_split(&scr->sstate, *dst1, *dst2);
-
-    return *dst1;
 }
 
 inline static struct line *screen_realloc_line(struct screen *scr, struct line *line, ssize_t width) {
@@ -237,7 +232,7 @@ inline static void screen_unwrap_line(struct screen *scr, ssize_t y) {
     // Views are updates automatically
     // since they are based on line_handle's
 
-    screen_split_line(scr, view->line, view->offset, NULL, NULL);
+    screen_split_line(scr, view->line, view->offset);
 }
 
 void screen_unwrap_cursor_line(struct screen *scr) {
@@ -771,7 +766,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         /* Truncate lines that are below the last line of the screen */
         if (y >= height) {
             struct line_handle *bottom = &screen[height - 1];
-            screen_split_line(scr, bottom->line, bottom->offset + width, NULL, NULL);
+            screen_split_line(scr, bottom->line, bottom->offset + width);
             free_line_list_until(scr, bottom->line->next, NULL);
             y = height;
         }
@@ -1127,14 +1122,14 @@ void screen_fill(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
 void screen_erase_fast(struct screen *scr, int16_t ys, int16_t ye, struct attr *attr) {
 
     struct line_handle *view = &scr->screen[ys];
-    screen_split_line(scr, view->line, view->offset, NULL, NULL);
+    screen_split_line(scr, view->line, view->offset);
 
     while (ys < ye) {
 #if DEBUG_LINES
         assert(!view->offset);
 #endif
 
-        screen_split_line(scr, view->line, scr->width, NULL, NULL);
+        screen_split_line(scr, view->line, scr->width);
         view->line->size = 0;
         view->line->force_damage = true;
         view->width = 0;
@@ -1307,10 +1302,10 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
     struct line_handle *first = &scr->screen[top];
     /* Force scrolled region borders to be line borders */
     if (!save)
-        screen_split_line(scr, first->line, first->offset, NULL, NULL);
+        screen_split_line(scr, first->line, first->offset);
 
     struct line_handle *last = &scr->screen[bottom - 1];
-    screen_split_line(scr, last->line, last->offset + scr->width, NULL, NULL);
+    screen_split_line(scr, last->line, last->offset + scr->width);
 
     if (amount > 0) /* up */ {
         amount = MIN(amount, (bottom - top));

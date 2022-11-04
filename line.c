@@ -240,7 +240,7 @@ static void optimize_attributes(struct line *line) {
     }
 }
 
-void split_line(struct multipool *mp, struct line *src, ssize_t offset, struct line **dst1, struct line **dst2) {
+void split_line(struct multipool *mp, struct line *src, ssize_t offset) {
     ssize_t tail_len = src->size - offset;
 #if DEBUG_LINES
     assert(tail_len >= 0);
@@ -293,9 +293,6 @@ void split_line(struct multipool *mp, struct line *src, ssize_t offset, struct l
         fixup_lines_seqno(tail->next);
 
     realloc_line(mp, src, offset);
-
-    *dst1 = src;
-    *dst2 = tail;
 }
 
 struct line *concat_line(struct multipool *mp, struct line *src1, struct line *src2, bool opt) {
