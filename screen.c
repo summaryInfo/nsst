@@ -387,14 +387,20 @@ inline static ssize_t try_free_top_line(struct screen *scr) {
 ssize_t screen_push_history_until(struct screen *scr, struct line *from, struct line *to, bool opt) {
     ssize_t view_offset = 0;
 
-    if (from->seq > to->seq) {
+    if (UNLIKELY(from->seq > to->seq)) {
         for (struct line *next; from->seq > to->seq; from = next)
             next = from->prev;
+    } else if (opt) {
+        for (struct line *next; from->seq < to->seq; from = next) {
+            next = from->next;
+            screen_concat_line(scr, from, NULL, true);
+            if (UNLIKELY(++scr->sb_limit > scr->sb_max_caps))
+                view_offset += try_free_top_line(scr);
+        }
     } else {
         for (struct line *next; from->seq < to->seq; from = next) {
             next = from->next;
-            if (opt) screen_concat_line(scr, from, NULL, true);
-            if (++scr->sb_limit > scr->sb_max_caps)
+            if (UNLIKELY(++scr->sb_limit > scr->sb_max_caps))
                 view_offset += try_free_top_line(scr);
         }
     }
