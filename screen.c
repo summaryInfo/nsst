@@ -11,9 +11,12 @@
 #include <stdio.h>
 #include <strings.h>
 
+#ifdef __SSE2__
+#include <emmintrin.h>
+#endif
+
 #define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
 #define PRINT_BLOCK_SIZE 256
-
 
 inline static bool screen_at_bottom(struct screen *scr) {
     return !line_handle_cmp(&scr->view_pos, scr->screen);
@@ -1757,12 +1760,13 @@ void screen_reset_tabs(struct screen *scr) {
         scr->tabs[i] = 1;
 }
 
+HOT
 inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bool raw) {
     uint32_t part = *(*buf)++, i;
     if (LIKELY(part < 0xC0 || raw)) return part;
     if (UNLIKELY(part > 0xF7)) return UTF_INVAL;
 
-    uint32_t len = (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(part >> 3U) - 24];
+    uint32_t len = (0xFA55000000000000ULL >> 2*(part >> 3U)) & 3U;
 
     if (*buf + len > end) {
         (*buf)--;
@@ -1781,56 +1785,90 @@ inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bo
     return part;
 }
 
-#define BLOCK_MASK 0x4040404040404040ULL
-#define ASCII_MASK 0x8080808080808080ULL
+#if __SSE2__
 
-inline static uint64_t read_block_mask(const uint8_t *start) {
-    uint64_t b = *(const uint64_t *)start;
-    return ((b | (b << 1)) & BLOCK_MASK) ^ BLOCK_MASK;
+typedef __m128i block_type;
+
+#define read_aligned(ptr) _mm_load_si128((const __m128i *)(ptr))
+#define read_unaligned(ptr) _mm_loadu_si128((const __m128i *)(ptr))
+#define movemask _mm_movemask_epi8
+
+#else
+
+typedef uint64_t block_type;
+
+inline static block_type read_aligned(const uint8_t *ptr) {
+    return *(const block_type *)ptr;
 }
 
-inline static uint64_t has_non_ascii(const uint8_t *start) {
-    uint64_t b = *(const uint64_t *)start;
-    return (b & ASCII_MASK);
+inline static block_type read_unaligned(const uint8_t *ptr) {
+    /* Let's hope memcpy to be optimized out */
+    block_type d;
+    memcpy(&d, ptr, sizeof d);
+    return d;
 }
 
-inline static const uint8_t *block_mask_offset(const uint8_t *start, const uint8_t *end, uint64_t b) {
-    return MIN(end, start + (__builtin_ffsll(b) - sizeof(uint64_t) + 1)/sizeof(uint64_t));
+inline static uint32_t movemask(block_type b) {
+    b &= 0x8080808080808080;
+    b = (b >> 7) | (b >> 14);
+    b |= b >> 14;
+    b |= b >> 28;
+    return b & 0xFF;
 }
 
-inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end, ssize_t max_chunk, bool *phas_nonascii) {
-    if (end - start >= (ssize_t)sizeof(uint64_t)) {
-        if (start + max_chunk < end) end = start + max_chunk;
+#endif
 
-        ssize_t unaligned_prefix = (uintptr_t)start & (sizeof(uint64_t) - 1);
-        if (unaligned_prefix) {
-            uint64_t res = read_block_mask(start - unaligned_prefix) >> (unaligned_prefix * 8);
-            *phas_nonascii |= !!(has_non_ascii(start - unaligned_prefix) >> (unaligned_prefix * 8));
-            if (UNLIKELY(res))
-                return block_mask_offset(start, end, res);
-            start += sizeof(uint64_t) - unaligned_prefix;
-        }
+inline static uint32_t block_mask(block_type b) {
+    return movemask(~((b << 2) | (b << 1)));
+}
 
-        // Process 8 aligned bytes at a time
-        // We have out-of bounds read here but it
-        // should be fine since it it aligned
-        // and buffer size is a power of two
+inline static const uint8_t *mask_offset(const uint8_t *start, const uint8_t *end, uint32_t mask) {
+    return MIN(end, start + __builtin_ffsl(mask) - 1);
+}
 
-        for (; start < end; start += sizeof(uint64_t)) {
-            *phas_nonascii |= !!has_non_ascii(start);
-            uint64_t res = read_block_mask(start);
-            if (UNLIKELY(res))
-                return block_mask_offset(start, end, res);
-        }
+inline static uint32_t contains_non_ascii(block_type b) {
+    return movemask(b);
+}
 
-        return end;
-    } else {
-        bool has_nonascii = false;
-        while (start < end && !IS_CBYTE(*start))
-            has_nonascii |= 0x80 & *start++;
-        *phas_nonascii = has_nonascii;
-        return start;
+inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end, ssize_t max_chunk, bool *has_nonascii) {
+    if (start + max_chunk < end)
+        end = start + max_chunk;
+
+    ssize_t prefix = end - start;
+
+    if (prefix >= (ssize_t)sizeof(block_type))
+        prefix = -(uintptr_t)start & (sizeof(block_type) - 1);
+
+    if (prefix) {
+        block_type b = read_unaligned(start);
+        uint32_t msk = (1U << prefix) - 1U;
+        static_assert(sizeof(block_type) < sizeof(msk)*8, "Mask is too small");
+
+        if (contains_non_ascii(b) & msk)
+            *has_nonascii = true;
+
+        msk &= block_mask(b);
+
+        if (msk)
+            return mask_offset(start, end, msk);
+
+        start += prefix;
     }
+
+    /* We have out-of bounds read here but it should be fine,
+     * since it is aligned and buffer size is a power of two */
+
+    for (; start < end; start += sizeof(block_type)) {
+        block_type b = read_aligned(start);
+        if (contains_non_ascii(b))
+            *has_nonascii = true;
+
+        uint32_t msk = block_mask(b);
+        if (UNLIKELY(msk))
+            return mask_offset(start, end, msk);
+    }
+
+    return end;
 }
 
 inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *bend) {
