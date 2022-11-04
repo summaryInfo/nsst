@@ -53,33 +53,38 @@ struct cell {
 #define UNDERLINE_CURLY 3
 
 struct attr {
-    color_t bg;
-    color_t fg;
-    color_t ul;
     union {
-        uint32_t mask;
         struct {
-            /* URI index in terminal URI table
-             * if this field is 0, theres no URI
-             * associated with attribute.
-             * This field is only used when
-             * USE_URI option is active */
-            uint32_t uri : 22;
+            color_t bg;
+            color_t fg;
+            color_t ul;
+            /* Total length of union above
+             * is assumed to be sizeof(uint32_t) */
+            union {
+                uint32_t mask;
+                struct {
+                    /* URI index in terminal URI table
+                     * if this field is 0, theres no URI
+                     * associated with attribute.
+                     * This field is only used when
+                     * USE_URI option is active */
+                    uint32_t uri : 22;
 
-            /* Attributes */
-            bool bold : 1;
-            bool italic : 1;
-            bool faint : 1;
-            uint32_t underlined : 2;
-            bool strikethrough : 1;
-            bool invisible : 1;
-            bool reverse : 1;
-            bool blink : 1;
-            bool protected : 1;
+                    /* Attributes */
+                    bool bold : 1;
+                    bool italic : 1;
+                    bool faint : 1;
+                    uint32_t underlined : 2;
+                    bool strikethrough : 1;
+                    bool invisible : 1;
+                    bool reverse : 1;
+                    bool blink : 1;
+                    bool protected : 1;
+                } PACKED;
+            };
         };
-    } PACKED;
-    /* Total length of union above
-     * is assumed to be sizeof(uint32_t) */
+        uint64_t mask64[2];
+    };
 } ALIGNED(MPA_ALIGNMENT);
 
 struct line_attr {
@@ -230,10 +235,13 @@ inline static void attach_prev_line(struct line *line, struct line *prev) {
     }
 }
 
-inline static int16_t line_length(struct line *line) {
+inline static ssize_t line_length(struct line *line) {
     int16_t max_x = line->size;
-    if (!line->wrapped)
-        while (LIKELY(max_x > 0 && !line->cell[max_x - 1].ch && !line->cell[max_x - 1].attrid)) max_x--;
+    if (!line->wrapped) {
+        while (LIKELY(max_x > 0) &&
+               UNLIKELY(!line->cell[max_x - 1].ch) &&
+               !line->cell[max_x - 1].attrid) max_x--;
+    }
     return max_x;
 }
 
@@ -259,10 +267,10 @@ inline static ssize_t line_segments(struct line *ln, ssize_t offset, ssize_t wid
 }
 
 #define ATTR_MASK ((struct attr) {\
-    .bold = 1, .italic = 1, .faint = 1,\
-    .underlined = 3, .strikethrough = 1, .invisible = 1,\
-    .reverse = 1, .blink = 1, .protected = 1}.mask)
-#define PROTECTED_MASK ((struct attr){ .protected = 1}.mask)
+    .bold = true, .italic = true, .faint = true,\
+    .underlined = 3, .strikethrough = true, .invisible = true,\
+    .reverse = true, .blink = true, .protected = true}.mask)
+#define PROTECTED_MASK64 ((struct attr){ .protected = true }.mask64[1])
 
 inline static uint32_t attr_mask(const struct attr *a) {
     return a->mask & ATTR_MASK;
@@ -294,8 +302,10 @@ inline static void adjust_wide_right(struct line *line, ssize_t x) {
 }
 
 inline static bool attr_eq(const struct attr *a, const struct attr *b) {
-    return a->fg == b->fg && a->bg == b->bg &&
-            a->ul == b->ul && !((a->mask ^ b->mask) & ~PROTECTED_MASK);
+    return a->mask64[0] == b->mask64[0] &&
+           !((a->mask64[1] ^ b->mask64[1]) & ~PROTECTED_MASK64);
+    // return a->fg == b->fg && a->bg == b->bg &&
+    //         a->ul == b->ul && !((a->mask ^ b->mask) & ~PROTECTED_MASK);
 }
 
 #if DEBUG_LINES

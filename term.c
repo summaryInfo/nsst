@@ -255,7 +255,7 @@ static void term_set_132(struct term *term, bool set) {
     screen_reset_margins(scr);
     screen_move_to(scr, screen_min_ox(scr), screen_min_oy(scr));
     if (!(term->mode.preserve_display_132))
-        screen_erase(scr, 0, 0, screen_width(scr), screen_height(scr), 0);
+        screen_erase(scr, 0, 0, screen_width(scr), screen_height(scr), false);
     if (window_cfg(screen_window(scr))->allow_window_ops)
         term_request_resize(term, set ? 132 : 80, 24, 1);
     term->mode.columns_132 = set;
@@ -405,7 +405,7 @@ static void term_do_reset(struct term *term, bool hard) {
     window_set_autorepeat(win, window_cfg(win)->autorepeat);
 
     if (hard) {
-        screen_erase(scr, 0, 0, screen_width(scr), screen_height(scr), 0);
+        screen_erase(scr, 0, 0, screen_width(scr), screen_height(scr), false);
         screen_free_scrollback(scr, window_cfg(win)->scrollback_size);
 
         term->vt_version = window_cfg(win)->vt_version;
@@ -2225,16 +2225,16 @@ static void term_dispatch_csi(struct term *term) {
         switch(PARAM(0, 0)) {
         case 0: /* Below */
             screen_cursor_adjust_wide_left(scr);
-            erase(scr, screen_cursor_x(scr), screen_cursor_y(scr), screen_width(scr), screen_cursor_y(scr) + 1, 0);
-            erase(scr, 0, screen_cursor_y(scr) + 1, screen_width(scr), screen_height(scr), 0);
+            erase(scr, screen_cursor_x(scr), screen_cursor_y(scr), screen_width(scr), screen_cursor_y(scr) + 1, false);
+            erase(scr, 0, screen_cursor_y(scr) + 1, screen_width(scr), screen_height(scr), false);
             break;
         case 1: /* Above */
             screen_cursor_adjust_wide_right(scr);
-            erase(scr, 0, screen_cursor_y(scr), screen_cursor_x(scr) + 1, screen_cursor_y(scr) + 1, 0);
-            erase(scr, 0, 0, screen_width(scr), screen_cursor_y(scr), 0);
+            erase(scr, 0, screen_cursor_y(scr), screen_cursor_x(scr) + 1, screen_cursor_y(scr) + 1, false);
+            erase(scr, 0, 0, screen_width(scr), screen_cursor_y(scr), false);
             break;
         case 2: /* All */
-            erase(scr, 0, 0, screen_width(scr), screen_height(scr), 0);
+            erase(scr, 0, 0, screen_width(scr), screen_height(scr), false);
             break;
         case 3: /* Scrollback */
             if (window_cfg(screen_window(scr))->allow_erase_scrollback && !screen_altscreen(scr)) {
@@ -2256,14 +2256,14 @@ static void term_dispatch_csi(struct term *term) {
         switch (PARAM(0, 0)) {
         case 0: /* To the right */
             screen_cursor_adjust_wide_left(scr);
-            erase(scr, screen_cursor_x(scr), screen_cursor_y(scr), screen_width(scr), screen_cursor_y(scr) + 1, 0);
+            erase(scr, screen_cursor_x(scr), screen_cursor_y(scr), screen_width(scr), screen_cursor_y(scr) + 1, false);
             break;
         case 1: /* To the left */
             screen_cursor_adjust_wide_right(scr);
-            erase(scr, 0, screen_cursor_y(scr), screen_cursor_x(scr) + 1, screen_cursor_y(scr) + 1, 0);
+            erase(scr, 0, screen_cursor_y(scr), screen_cursor_x(scr) + 1, screen_cursor_y(scr) + 1, false);
             break;
         case 2: /* Whole */
-            erase(scr, 0, screen_cursor_y(scr), screen_width(scr), screen_cursor_y(scr) + 1, 0);
+            erase(scr, 0, screen_cursor_y(scr), screen_width(scr), screen_cursor_y(scr) + 1, false);
             break;
         default:
             term_esc_dump(term, 0);
@@ -2292,7 +2292,7 @@ static void term_dispatch_csi(struct term *term) {
         break;
     case C('X'): /* ECH */
         (term->mode.protected ? screen_protective_erase : screen_erase)
-                (scr, screen_cursor_x(scr), screen_cursor_y(scr), screen_cursor_x(scr) + PARAM(0, 1), screen_cursor_y(scr) + 1, 0);
+                (scr, screen_cursor_x(scr), screen_cursor_y(scr), screen_cursor_x(scr) + PARAM(0, 1), screen_cursor_y(scr) + 1, false);
         screen_reset_pending(scr);
         break;
     case C('Z'): /* CBT */
@@ -2541,14 +2541,14 @@ static void term_dispatch_csi(struct term *term) {
         (term->mode.protected ? screen_protective_erase : screen_erase)
                 (scr, screen_min_ox(scr) + PARAM(1, 1) - 1, screen_min_oy(scr) + PARAM(0, 1) - 1,
                 screen_min_ox(scr) + PARAM(3, screen_max_ox(scr) - screen_min_ox(scr)),
-                screen_min_oy(scr) + PARAM(2, screen_max_oy(scr) - screen_min_oy(scr)), 1);
+                screen_min_oy(scr) + PARAM(2, screen_max_oy(scr) - screen_min_oy(scr)), true);
         break;
     case C('{') | I0('$'): /* DECSERA */
         CHK_VT(4);
         (term->mode.protected ? screen_erase : screen_selective_erase)
                 (scr, screen_min_ox(scr) + PARAM(1, 1) - 1, screen_min_oy(scr) + PARAM(0, 1) - 1,
                 screen_min_ox(scr) + PARAM(3, screen_max_ox(scr) - screen_min_ox(scr)),
-                screen_min_oy(scr) + PARAM(2, screen_max_oy(scr) - screen_min_oy(scr)), 1);
+                screen_min_oy(scr) + PARAM(2, screen_max_oy(scr) - screen_min_oy(scr)), true);
         break;
     case C('y') | I0('*'): /* DECRQCRA */
         CHK_VT(4);
@@ -3052,14 +3052,14 @@ static void term_dispatch_vt52(struct term *term, uint32_t ch) {
     case 'J':
         screen_cursor_adjust_wide_left(scr);
         screen_erase(scr, screen_cursor_x(scr), screen_cursor_y(scr),
-                     screen_width(scr), screen_cursor_y(scr) + 1, 0);
+                     screen_width(scr), screen_cursor_y(scr) + 1, false);
         screen_erase(scr, 0, screen_cursor_y(scr) + 1,
-                     screen_width(scr), screen_height(scr), 0);
+                     screen_width(scr), screen_height(scr), false);
         break;
     case 'K':
         screen_cursor_adjust_wide_left(scr);
         screen_erase(scr, screen_cursor_x(scr), screen_cursor_y(scr),
-                     screen_width(scr), screen_cursor_y(scr) + 1, 0);
+                     screen_width(scr), screen_cursor_y(scr) + 1, false);
         break;
     case 'V': /* Print cursor line */
         screen_print_cursor_line(scr);

@@ -31,8 +31,7 @@ uint64_t line_next_seqno = 1;
 
 inline static bool attr_eq_prot(const struct attr *a, const struct attr *b) {
     static_assert(sizeof(struct attr) == 2*sizeof(uint64_t), "Wrong attribute size");
-    return *(const uint64_t *)a == *(const uint64_t *)b &&
-           *((const uint64_t *)a + 1) == *((const uint64_t *)b + 1);
+    return a->mask64[0] == b->mask64[0] && a->mask64[1] == b->mask64[1];
     //return a->fg == b->fg && a->bg == b->bg && a->ul == b->ul && a->mask == b->mask;
 }
 
@@ -186,10 +185,10 @@ struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t caps)
     new->size = MIN(caps, new->size);
     new->caps = caps;
 
+    line->force_damage = true;
+
     if (new == line)
         return new;
-
-    // new->force_damage = true;
 
     if (new->next)
         new->next->prev = new;
@@ -297,9 +296,8 @@ void split_line(struct multipool *mp, struct line *src, ssize_t offset) {
 
 void optimize_line(struct multipool *mp, struct line *src) {
     // NOTE After this point line will never be resized
-    ssize_t len = line_length(src);
-    if (len != src->caps)
-        src = realloc_line(mp, src, len);
+    if (src->size != src->caps)
+        src = realloc_line(mp, src, src->size);
     mpa_pin(mp, src);
 
     optimize_attributes(src);
