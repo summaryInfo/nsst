@@ -205,22 +205,30 @@ inline static struct line *detach_next_line(struct line *line) {
 
 inline static void attach_next_line(struct line *line, struct line *next) {
     if (next) {
+#if DEBUG_LINES
         assert(!next->prev);
+#endif
         next->prev = line;
     }
     if (line) {
+#if DEBUG_LINES
         assert(!line->next);
+#endif
         line->next = next;
     }
 }
 
 inline static void attach_prev_line(struct line *line, struct line *prev) {
     if (prev) {
+#if DEBUG_LINES
         assert(!prev->next);
+#endif
         prev->next = line;
     }
     if (line) {
+#if DEBUG_LINES
         assert(!line->prev);
+#endif
         line->prev = prev;
     }
 }
