@@ -377,6 +377,10 @@ inline static void fixup_lines_seqno(struct line *line) {
     }
 }
 
+inline static bool line_handle_cmpeq(struct line_handle *a, struct line_handle *b) {
+    return a->line == b->line && a->offset == b->offset;
+}
+
 inline static int line_handle_cmp(struct line_handle *a, struct line_handle *b) {
     if (a->line != b->line) {
         int64_t a_seq = a->line ? a->line->seq : 0;

@@ -19,7 +19,7 @@
 #define PRINT_BLOCK_SIZE 256
 
 inline static bool screen_at_bottom(struct screen *scr) {
-    return !line_handle_cmp(&scr->view_pos, scr->screen);
+    return line_handle_cmpeq(&scr->view_pos, scr->screen);
 }
 
 inline static struct line_handle **get_main_screen(struct screen *scr) {
@@ -334,7 +334,7 @@ void screen_scroll_view(struct screen *scr, int16_t amount) {
 
     amount = -amount;
 
-    bool old_viewr = !line_handle_cmp(&scr->view_pos, scr->screen);
+    bool old_viewr = line_handle_cmpeq(&scr->view_pos, scr->screen);
     /* Shortcut for the case when view is already at the bottom */
     if (old_viewr && amount > 0) return;
 
@@ -353,7 +353,7 @@ void screen_scroll_view(struct screen *scr, int16_t amount) {
     }
 
     selection_view_scrolled(&scr->sstate, scr);
-    scr->prev_c_view_changed |= old_viewr != new_viewr;
+    scr->prev_c_view_changed |= old_viewr != !!new_viewr;
 }
 
 /* Returns true if view should move down */
@@ -808,8 +808,8 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
     enum stick_view stick = stick_none;
 
-    if (!scr->screen || !line_handle_cmp(&scr->view_pos, scr->screen)) stick = stick_to_bottom;
-    else if (!line_handle_cmp(&scr->view_pos, &scr->top_line)) stick = stick_to_top;
+    if (!scr->screen || line_handle_cmpeq(&scr->view_pos, scr->screen)) stick = stick_to_bottom;
+    else if (line_handle_cmpeq(&scr->view_pos, &scr->top_line)) stick = stick_to_top;
 
     enum stick_view stick_after_resize = resize_main_screen(scr, width, height, &lower_left);
     if (!scr->mode.altscreen && stick_after_resize != stick_none)
@@ -1294,7 +1294,7 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
     save &= save && !scr->mode.altscreen && top == 0 && amount >= 0;
 
     bool should_reset_view = screen_at_bottom(scr);
-    bool should_reset_top = !save && !top && !line_handle_cmp(&scr->top_line, scr->screen);
+    bool should_reset_top = !save && !top && line_handle_cmpeq(&scr->top_line, scr->screen);
 
     struct line_handle *first = &scr->screen[top];
     /* Force scrolled region borders to be line borders */
