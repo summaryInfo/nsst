@@ -1300,7 +1300,7 @@ int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool
     save &= save && !scr->mode.altscreen && top == 0 && amount >= 0;
 
     bool should_reset_view = screen_at_bottom(scr);
-    bool should_reset_top = !save && !top && line_handle_cmpeq(&scr->top_line, scr->screen);
+    bool should_reset_top = UNLIKELY(!save) && !top && UNLIKELY(line_handle_cmpeq(&scr->top_line, scr->screen));
 
     struct line_handle *first = &scr->screen[top];
     /* Force scrolled region borders to be line borders */

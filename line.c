@@ -27,6 +27,8 @@ const struct attr default_attr__ = {
         .ul = SPECIAL_BG + 1
 };
 
+uint64_t line_next_seqno = 1;
+
 inline static bool attr_eq_prot(const struct attr *a, const struct attr *b) {
     static_assert(sizeof(struct attr) == 2*sizeof(uint64_t), "Wrong attribute size");
     return *(const uint64_t *)a == *(const uint64_t *)b &&
@@ -171,14 +173,6 @@ struct line *create_line_with_seq(struct multipool *mp, const struct attr *attr,
     line->caps = caps;
     line->seq = seq;
     return line;
-}
-
-
-uint64_t get_seqno_range(uint64_t inc) {
-    static uint64_t line_seqno = 1;
-    uint64_t ret = line_seqno;
-    line_seqno += inc;
-    return ret;
 }
 
 struct line *create_line(struct multipool *mp, const struct attr *attr, ssize_t caps) {

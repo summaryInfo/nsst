@@ -117,7 +117,6 @@ struct line {
 
 uint32_t alloc_attr(struct line *line, const struct attr *attr);
 struct line *create_line(struct multipool *mp, const struct attr *attr, ssize_t width);
-uint64_t get_seqno_range(uint64_t inc);
 struct line *create_line_with_seq(struct multipool *mp, const struct attr *attr, ssize_t width, uint64_t seq);
 struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t width);
 void split_line(struct multipool *mp, struct line *src, ssize_t offset, struct line **dst1, struct line **dst2);
@@ -369,6 +368,14 @@ inline static void line_handle_remove(struct line_handle *handle) {
 }
 
 #define SEQNO_INC 16
+
+extern uint64_t line_next_seqno;
+
+inline static uint64_t get_seqno_range(uint64_t inc) {
+    uint64_t ret = line_next_seqno;
+    line_next_seqno += inc;
+    return ret;
+}
 
 inline static void fixup_lines_seqno(struct line *line) {
     while (line) {
