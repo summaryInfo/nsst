@@ -7,7 +7,11 @@ _NOTE: These plans can change any time_
 
 ### Until 2.4
 
-* Find out where empty tail for scrolled off lines is comming from, since erase should have trimmed them.
+* **Find out where empty tail for scrolled off lines is comming from, since erase should have trimmed them.**
+  * Optimize `concat_line()` by doing that.
+
+* Optimize `screen_scroll_fast()` -- need to change handles internal structure to make then easer relocatable.
+ * Replace linked list with array?
 
 * Hyperlinks auto-detection
 
