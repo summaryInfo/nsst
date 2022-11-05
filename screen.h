@@ -209,6 +209,7 @@ ssize_t screen_dispatch_rep(struct screen *scr, int32_t rune, ssize_t rep);
 void screen_unwrap_cursor_line(struct screen *scr);
 void screen_do_wrap(struct screen *scr);
 void screen_print_all(struct screen *scr);
+void screen_drain_scrolled(struct screen *scr);
 
 char *encode_sgr(char *dst, char *end, const struct attr *attr);
 

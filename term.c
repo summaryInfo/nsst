@@ -3339,6 +3339,8 @@ bool term_read(struct term *term) {
     while (term->tty.start < term->tty.end)
         if (!term_dispatch(term, (const uint8_t **)&term->tty.start, term->tty.end)) break;
 
+    screen_drain_scrolled(&term->scr);
+
     return true;
 }
 

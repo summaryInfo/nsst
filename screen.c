@@ -352,22 +352,8 @@ void screen_scroll_view(struct screen *scr, int16_t amount) {
 }
 
 HOT
-bool screen_push_history_until(struct screen *scr, struct line *from, struct line *to) {
+bool free_extra_lines(struct screen *scr) {
     struct line_handle *screen = *get_main_screen(scr);
-
-    if (UNLIKELY(from->seq > to->seq)) {
-        for (struct line *next; from->seq > to->seq; from = next) {
-            next = from->prev;
-            scr->sb_limit--;
-        }
-    } else {
-        for (struct line *next; from->seq < to->seq; from = next) {
-            next = from->next;
-            optimize_line(&scr->mp, from);
-            scr->sb_limit++;
-        }
-    }
-
     ssize_t extra = scr->sb_limit - scr->sb_max_caps;
     if (extra <= 0) return false;
 
@@ -400,6 +386,21 @@ bool screen_push_history_until(struct screen *scr, struct line *from, struct lin
     line_handle_add(&scr->top_line);
 
     return view_moved;
+}
+
+inline static void push_history_until(struct screen *scr, struct line *from, struct line *to) {
+    if (UNLIKELY(from->seq > to->seq)) {
+        for (struct line *next; from->seq > to->seq; from = next) {
+            next = from->prev;
+            scr->sb_limit--;
+        }
+    } else {
+        for (struct line *next; from->seq < to->seq; from = next) {
+            next = from->next;
+            optimize_line(&scr->mp, from);
+            scr->sb_limit++;
+        }
+    }
 }
 
 static void resize_tabs(struct screen *scr, int16_t width) {
@@ -748,8 +749,10 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
 
         /* Fixup history count */
         if (!lower_left->line) ret = stick_to_bottom;
-        if (screen_push_history_until(scr, prev_first_line.line, it.line) &&
-            ret == stick_none && !lower_left->line) ret = stick_to_top;
+
+        push_history_until(scr, prev_first_line.line, it.line);
+        if (free_extra_lines(scr) && ret == stick_none && !lower_left->line)
+            ret = stick_to_top;
 
         /* Recalculate line views that are on screen */
         do {
@@ -791,7 +794,16 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
     return ret;
 }
 
+void screen_drain_scrolled(struct screen *scr) {
+    if (free_extra_lines(scr)) {
+        replace_handle(&scr->view_pos, &scr->top_line);
+        selection_view_scrolled(&scr->sstate, scr);
+    }
+}
+
 void screen_resize(struct screen *scr, int16_t width, int16_t height) {
+
+    screen_drain_scrolled(scr);
 #if USE_URI
     // Reset active URL
     window_set_active_uri(scr->win, EMPTY_URI, 0);
@@ -1373,10 +1385,7 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
 
             fixup_lines_seqno(bottom_next);
 
-            if (screen_push_history_until(scr, first_to_hist, first->line)) {
-                replace_handle(&scr->view_pos, &scr->top_line);
-                selection_view_scrolled(&scr->sstate, scr);
-            }
+            push_history_until(scr, first_to_hist, first->line);
 
         } else {
             screen_erase_fast(scr, top, top + amount, &scr->sgr);
