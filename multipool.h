@@ -23,7 +23,7 @@ struct multipool {
     bool force_fast_resize;
 };
 
-void mpa_init(struct multipool *mp, ssize_t pool_size, bool force_fast_resize);
+void mpa_init(struct multipool *mp, ssize_t pool_size);
 
 /*
  * Set the maximum amount of wasted bytes per pool.
@@ -38,12 +38,7 @@ void mpa_release(struct multipool *mp);
 void mpa_free(struct multipool *mp, void *ptr);
 /* Allocate an object */
 void *mpa_alloc(struct multipool *mp, ssize_t size);
-
-/*
- * Resize object.
- * Might move, if force_fast_resize is not set,
- * otherwise terminates the program.
- */
+/* Resize object, might move */
 void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size);
 
 /* Mark an object to be not (easily) resizable */

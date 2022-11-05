@@ -3646,8 +3646,7 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
     term->vt_level = term->vt_version / 100;
     if (!term->vt_level) term_set_vt52(term, 1);
 
-    // FIXME Make this strict
-    mpa_init(&term->scr.mp, MPA_POOL_SIZE, false);
+    mpa_init(&term->scr.mp, MPA_POOL_SIZE);
 
     screen_free_scrollback(&term->scr, window_cfg(win)->scrollback_size);
     term_resize(term, width, height);

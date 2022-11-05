@@ -130,11 +130,10 @@ void mpa_release(struct multipool *mp) {
     memset(mp, 0, sizeof *mp);
 }
 
-void mpa_init(struct multipool *mp, ssize_t pool_size, bool force_fast_resize) {
+void mpa_init(struct multipool *mp, ssize_t pool_size) {
     mp->max_pad = 0;
     mp->pool_count = mp->unsealed_count = 0;
     mp->pool_size = pool_size;
-    mp->force_fast_resize = force_fast_resize;
     mp->sealed = mp->unsealed = NULL;
 }
 
@@ -206,10 +205,6 @@ void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size) {
 
         return ptr;
     }
-
-    (mp->force_fast_resize ? die : warn)
-        ("Multi-pool relocation hit slow path: size=%zd max_resize=%zd is_last=%d",
-         size, pool->size - pool->offset, is_last);
 
     if (header->size >= size)
         return ptr;
