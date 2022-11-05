@@ -497,7 +497,9 @@ static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) 
 
 static void resize_aux(struct screen *scr, ssize_t width, ssize_t height) {
     // Resize predecode buffer
-    scr->predec_buf = xrealloc(scr->predec_buf, scr->width*sizeof *scr->predec_buf, width*sizeof *scr->predec_buf);
+    size_t old_pbuf_size = ROUNDUP(scr->width*sizeof *scr->predec_buf, MPA_ALIGNMENT);
+    size_t new_pbuf_size = ROUNDUP(width*sizeof *scr->predec_buf, MPA_ALIGNMENT);
+    scr->predec_buf = xrealloc(scr->predec_buf, old_pbuf_size, new_pbuf_size);
 
     // Resize temporary screen buffer
     scr->temp_screen = xrealloc(scr->temp_screen, scr->height * sizeof *scr->temp_screen, height * sizeof *scr->temp_screen);
