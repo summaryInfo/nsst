@@ -1201,8 +1201,8 @@ static void term_dispatch_osc(struct term *term) {
         case 'A': /* Prompt start */
         case 'D': /* Command finished */
             // Make sure shell plays well with re-wraping
-            if (screen_cursor_x(scr) != screen_min_x(scr))
-                screen_do_wrap(scr);
+            if (screen_cursor_x(scr) > screen_min_x(scr))
+                screen_wrap(scr, true);
             screen_unwrap_cursor_line(scr);
             break;
         case 'B': /* Command start */

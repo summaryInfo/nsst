@@ -207,7 +207,7 @@ uint8_t screen_get_margin_bell_volume(struct screen *scr);
 ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs);
 ssize_t screen_dispatch_rep(struct screen *scr, int32_t rune, ssize_t rep);
 void screen_unwrap_cursor_line(struct screen *scr);
-void screen_do_wrap(struct screen *scr);
+void screen_wrap(struct screen *scr, bool soft);
 void screen_print_all(struct screen *scr);
 void screen_drain_scrolled(struct screen *scr);
 

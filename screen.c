@@ -228,12 +228,12 @@ inline static struct line *screen_realloc_line(struct screen *scr, struct line *
 FORCEINLINE
 inline static void screen_unwrap_line(struct screen *scr, ssize_t y) {
     struct line_handle *view = &scr->screen[y];
-
     screen_split_line(scr, view->line, view->offset + view->width);
 }
 
 void screen_unwrap_cursor_line(struct screen *scr) {
-    screen_unwrap_line(scr, scr->c.y);
+    struct line_handle *view = &scr->screen[scr->c.y];
+    screen_split_line(scr, view->line, view->offset);
 }
 
 inline static void screen_adjust_line_ex(struct screen *scr, struct line_handle *screen, ssize_t y, ssize_t clear_to, ssize_t size) {
@@ -270,11 +270,12 @@ inline static void screen_adjust_line(struct screen *scr, ssize_t y, ssize_t siz
     screen_adjust_line_ex(scr, scr->screen, y, size, size);
 }
 
-void screen_do_wrap(struct screen *scr) {
+void screen_wrap(struct screen *scr, bool hard) {
     screen_autoprint(scr);
     bool moved = screen_index(scr);
     screen_cr(scr);
 
+    if (hard) return;
     if (scr->mode.altscreen) return;
 
     /* If we have not scrolled and did not create new line
@@ -1809,7 +1810,7 @@ void screen_tabs(struct screen *scr, int16_t n) {
 
     if (n >= 0) {
         if (scr->mode.xterm_more_hack && scr->c.pending)
-            screen_do_wrap(scr);
+            screen_wrap(scr, false);
         while (scr->c.x < screen_max_x(scr) - 1 && n--) {
             do scr->c.x++;
             while (scr->c.x < screen_max_x(scr) - 1 && !scr->tabs[scr->c.x]);
@@ -1943,7 +1944,7 @@ inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end
 inline static void print_buffer(struct screen *scr, const uint32_t *bstart, const uint8_t *astart, ssize_t totalw) {
     if (scr->mode.wrap) {
         if (scr->c.pending || (scr->c.x == screen_max_x(scr) - 1 && (bstart && !bstart[1])))
-            screen_do_wrap(scr);
+            screen_wrap(scr, false);
     } else scr->c.x = MIN(scr->c.x, screen_max_x(scr) - totalw);
 
     struct line_handle *line = &scr->screen[scr->c.y];
