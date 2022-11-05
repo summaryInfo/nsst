@@ -362,7 +362,7 @@ inline static ssize_t try_free_top_line(struct screen *scr) {
     struct line *next_top = scr->top_line.line->next;
     scr->sb_limit--;
 
-    if (scr->top_line.line->selection_index)
+    if (UNLIKELY(scr->top_line.line->selection_index))
         selection_clear(&scr->sstate);
 
 #if DEBUG_LINES

@@ -80,7 +80,9 @@ void free_line(struct multipool *mp, struct line *line) {
     // If we are freeing line its selection
     // should be reset
     // TODO Make selection a set of regular handles
+#if DEBUG_LINES
     assert(!line->selection_index);
+#endif
 
     detach_prev_line(line);
     detach_next_line(line);
@@ -91,11 +93,12 @@ void free_line(struct multipool *mp, struct line *line) {
      * updating e.g. selection data. */
     while (line->first_handle) {
         struct line_handle *handle = line->first_handle;
+#if DEBUG_LINES
         assert(!handle->prev);
         assert(handle->line == line);
+#endif
         line_handle_remove(handle);
         handle->line = NULL;
-        handle->offset = 0;
     }
 
     if (line->attrs)

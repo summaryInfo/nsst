@@ -64,9 +64,6 @@ inline static void pool_detach(struct pool **head, struct pool *pool) {
 }
 
 inline static void pool_attach(struct pool **head, struct pool *pool) {
-    assert(!pool->next);
-    assert(!pool->prev);
-
     if (*head)
         (*head)->prev = pool;
 
@@ -75,8 +72,6 @@ inline static void pool_attach(struct pool **head, struct pool *pool) {
 }
 
 inline static void pool_seal(struct multipool *mp, struct pool *pool) {
-    assert(!pool->sealed);
-
     pool_detach(&mp->unsealed, pool);
     pool_attach(&mp->sealed, pool);
 
@@ -85,8 +80,6 @@ inline static void pool_seal(struct multipool *mp, struct pool *pool) {
 }
 
 inline static void pool_unseal(struct multipool *mp, struct pool *pool) {
-    assert(pool->sealed);
-
     pool_detach(&mp->sealed, pool);
     pool_attach(&mp->unsealed, pool);
 
