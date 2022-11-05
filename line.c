@@ -455,11 +455,11 @@ void copy_cells_with_attr(struct cell *dst, const uint32_t *src, const uint32_t 
     const __m128i four_attrs = _mm_set1_epi32(attrid);
     if ((uintptr_t)src & (4 * sizeof(uint32_t) - 1)) {
         for (ssize_t i = 0; i < blocks; i++)
-            _mm_stream_si128((__m128i *)&dstp[i*4],
+            _mm_store_si128((__m128i *)&dstp[i*4],
                              _mm_or_si128(four_attrs, _mm_loadu_si128((__m128i *)&src[i*4])));
     } else {
         for (ssize_t i = 0; i < blocks; i++)
-            _mm_stream_si128((__m128i *)&dstp[i*4],
+            _mm_store_si128((__m128i *)&dstp[i*4],
                              _mm_or_si128(four_attrs, _mm_load_si128((__m128i *)&src[i*4])));
     }
 #else

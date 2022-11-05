@@ -1828,7 +1828,31 @@ typedef __m128i block_type;
 
 #define read_aligned(ptr) _mm_load_si128((const __m128i *)(ptr))
 #define read_unaligned(ptr) _mm_loadu_si128((const __m128i *)(ptr))
-#define movemask _mm_movemask_epi8
+#define write_aligned(ptr, data) _mm_store_si128((__m128i *)(ptr), (data))
+#define movemask(x) _mm_movemask_epi8(x)
+
+inline static block_type unpack_u8x4_to_u32x4(uint32_t data) {
+    __m128i d = _mm_set1_epi32(data), z = _mm_set1_epi32(0);
+    return _mm_unpacklo_epi16(_mm_unpacklo_epi8(d, z), z);
+}
+
+inline static void unpack_ascii(uint32_t *dst, const uint8_t *src, ssize_t len) {
+    static_assert(sizeof(block_type)/sizeof(uint32_t) == 4, "Unexpected size");
+    uint32_t data;
+
+    ssize_t rem = len & 3;
+    ssize_t blocks = len - rem;
+    for (ssize_t i = 0; i < blocks; i += 4) {
+        memcpy(&data, src + i, sizeof data);
+        write_aligned(&dst[i], unpack_u8x4_to_u32x4(data));
+    }
+
+    if (!rem) return;
+
+    data = 0;
+    memcpy(&data, src + len - rem, rem);
+    write_aligned(dst + len - rem, unpack_u8x4_to_u32x4(data));
+}
 
 #else
 
@@ -1851,6 +1875,11 @@ inline static uint32_t movemask(block_type b) {
     b |= b >> 14;
     b |= b >> 28;
     return b & 0xFF;
+}
+
+inline static void unpack_ascii(uint32_t *dst, uint8_t *src, ssize_t len) {
+    do *dst++ = *src++;
+    while(len--);
 }
 
 #endif
@@ -1986,19 +2015,16 @@ ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const u
     ssize_t res = 1;
 
     // Compute maximal with to be printed at once
-    register ssize_t maxw = screen_max_x(scr) - screen_min_x(scr), totalw = 0;
+    register ssize_t maxw = screen_max_x(scr) - screen_min_x(scr);
     uint32_t *pbuf = scr->predec_buf;
     if (!scr->c.pending || !scr->mode.wrap)
         maxw = (scr->c.x >= screen_max_x(scr) ? screen_width(scr) : screen_max_x(scr)) - scr->c.x;
 
-    register int32_t ch;
-
-    uint32_t prev = -1U;
-    const uint8_t *xstart = *start;
     enum charset glv = scr->c.gn[scr->c.gl_ss];
 
     bool fast_nrcs = utf8 && !window_cfg(scr->win)->force_utf8_nrcs;
     bool skip_del = glv > cs96_latin_1 || (!nrcs && (glv == cs96_latin_1 || glv == cs94_british));
+    bool has_non_ascii = false;
 
     // Find the actual end of buffer
     // (control character or number of characters)
@@ -2008,17 +2034,21 @@ ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const u
     // 4 times width of the lines since
     // each UTF-8 can be at most 4 bytes single width
 
-    bool has_non_ascii = false;
+    const uint8_t *xstart = *start;
     const uint8_t *chunk = find_chunk(xstart, end, maxw*4, &has_non_ascii);
-
-    // TODO Cache most of this condition in variable
 
     /* Really fast short path for common case */
     if ((LIKELY(!has_non_ascii) || !utf8) && LIKELY(!skip_del && fast_nrcs && glv != cs94_dec_graph && scr->c.gl_ss == scr->c.gl) ) {
-        do *pbuf++ = *xstart++;
-        while(++totalw < maxw && xstart < chunk);
+        maxw = MIN(chunk - xstart, maxw);
+        unpack_ascii(pbuf, xstart, maxw);
+        pbuf += maxw;
+        *start = xstart + maxw;
         scr->prev_ch = pbuf[-1];
     } else {
+        register int32_t ch;
+        register ssize_t totalw = 0;
+        uint32_t prev = -1U;
+
         do {
             const uint8_t *char_start = xstart;
             if (UNLIKELY((ch = decode_special(&xstart, end, !utf8)) < 0)) {
@@ -2082,9 +2112,9 @@ ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const u
         } while(totalw < maxw && /* count < FD_BUF_SIZE && */ xstart < chunk);
 
         if (prev != -1U) scr->prev_ch = prev; // For REP CSI
-    }
 
-    *start = xstart;
+        *start = xstart;
+    }
 
     print_buffer(scr, scr->predec_buf, pbuf);
     return res;
