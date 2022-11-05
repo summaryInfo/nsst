@@ -1989,9 +1989,8 @@ inline static void print_buffer(struct screen *scr, uint32_t *bstart, uint32_t *
 
         cell = view_cell(line, cx);
 
-        for (struct cell *c = cell + totalw; c < view_cell(line, max_tx); c++) c->drawn = 0;
+        for (struct cell *c = cell; c < view_cell(line, max_tx - max_cx); c++) c->drawn = 0;
         memmove(cell + totalw, cell, (max_tx - max_cx)*sizeof(*cell));
-        max_cx = MAX(max_cx, max_tx);
     } else {
         if (line->width < max_cx)
             screen_adjust_line_ex(scr, scr->screen, scr->c.y, cx, max_cx);
