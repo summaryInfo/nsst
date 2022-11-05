@@ -1157,14 +1157,10 @@ void screen_erase_fast(struct screen *scr, int16_t ys, int16_t ye, struct attr *
 #endif
 
         screen_unwrap_line(scr, ys);
-        view->width = 0;
-        view->line->force_damage = true;
-        view->line->size = 0;
 
-        // FIXME Prefer explicit relocation after moving to custom line allocator.
-        // screen_realloc_line(scr, view->line, 0);
-        // view->line->pad_attrid = alloc_attr(view->line, *attr);
-        (void)attr;
+        screen_realloc_line(scr, view->line, 0);
+        view->line->pad_attrid = alloc_attr(view->line, attr);
+        view->width = 0;
 
         view = &scr->screen[++ys];
     }
@@ -1486,27 +1482,34 @@ void screen_scroll(struct screen *scr, int16_t top, int16_t amount, bool save) {
     }
 }
 
+
 void screen_insert_cells(struct screen *scr, int16_t n) {
     if (screen_cursor_in_region(scr)) {
-        n = MIN(n, screen_max_x(scr) - scr->c.x);
+        ssize_t max_x = screen_max_x(scr);
+        n = MIN(n, max_x - scr->c.x);
         if (n <= 0) return;
 
-        // TODO Don't resize line to terminal width
-        //      if it is not required.
-
-        screen_adjust_line(scr, scr->c.y, screen_max_x(scr));
         struct line_handle *line = &scr->screen[scr->c.y];
 
-        view_adjust_wide_left(line, scr->c.x);
-        view_adjust_wide_right(line, scr->c.x);
+        ssize_t tail = line->width - scr->c.x;
+        if (tail > 0) {
+            screen_adjust_line(scr, scr->c.y, MIN(line->width + n, max_x));
 
-        memmove(view_cell(line, scr->c.x + n), view_cell(line, scr->c.x),
-                (screen_max_x(scr) - scr->c.x - n) * sizeof(struct cell));
-        for (int16_t i = scr->c.x + n; i < screen_max_x(scr); i++)
-            view_cell(line, i)->drawn = 0;
+            view_adjust_wide_left(line, scr->c.x);
+            view_adjust_wide_right(line, scr->c.x);
+
+            ssize_t tail_len = MIN(max_x - n - scr->c.x, tail);
+            if (tail_len > 0) {
+                for (int16_t i = scr->c.x; i < scr->c.x + tail_len; i++)
+                    view_cell(line, i)->drawn = 0;
+                memmove(view_cell(line, scr->c.x + n),
+                        view_cell(line, scr->c.x), tail_len * sizeof(struct cell));
+            }
+        }
 
         screen_erase(scr, scr->c.x, scr->c.y, scr->c.x + n, scr->c.y + 1, false);
-        if (view_selection_intersects(&scr->sstate, line, screen_max_x(scr) - n, screen_max_x(scr))) {
+
+        if (view_selection_intersects(&scr->sstate, line, max_x - n, max_x)) {
             screen_damage_selection(scr);
             selection_clear(&scr->sstate);
         }
@@ -1517,26 +1520,35 @@ void screen_insert_cells(struct screen *scr, int16_t n) {
 
 void screen_delete_cells(struct screen *scr, int16_t n) {
     // Do not check top/bottom margins, DCH should work outside them
-    if (scr->c.x >= screen_min_x(scr) && scr->c.x < screen_max_x(scr)) {
-
-        // TODO Shrink line
-        // We can optimize this code by avoiding allocation and movement of empty cells
-        // and just shrink the line.
-        screen_adjust_line(scr, scr->c.y, screen_max_x(scr));
-        struct line_handle *line = &scr->screen[scr->c.y];
-
-        n = MIN(n, screen_max_x(scr) - scr->c.x);
+    ssize_t max_x = screen_max_x(scr);
+    if (scr->c.x >= screen_min_x(scr) && scr->c.x < max_x) {
+        n = MIN(n, max_x - scr->c.x);
         if (n <= 0) return;
 
-        view_adjust_wide_left(line, scr->c.x);
-        view_adjust_wide_right(line, scr->c.x + n - 1);
+        struct line_handle *line = &scr->screen[scr->c.y];
 
-        memmove(view_cell(line, scr->c.x), view_cell(line, scr->c.x + n),
-                (screen_max_x(scr) - scr->c.x - n) * sizeof(struct cell));
-        for (int16_t i = scr->c.x; i < screen_max_x(scr) - n; i++)
-            view_cell(line, i)->drawn = 0;
+        ssize_t tail = line->width - scr->c.x;
+        if (tail > 0) {
+            screen_unwrap_line(scr, scr->c.y);
+            view_adjust_wide_left(line, scr->c.x);
+            view_adjust_wide_right(line, scr->c.x + n - 1);
 
-        screen_erase(scr, screen_max_x(scr) - n, scr->c.y, screen_max_x(scr), scr->c.y + 1, false);
+            ssize_t tail_len = MIN(max_x, line->width) - n - scr->c.x;
+            if (tail_len > 0) {
+                memmove(view_cell(line, scr->c.x),
+                        view_cell(line, scr->c.x + n), tail_len * sizeof(struct cell));
+                for (int16_t i = scr->c.x; i < scr->c.x + tail_len; i++)
+                    view_cell(line, i)->drawn = 0;
+            }
+
+            if (max_x >= line->width) {
+                screen_realloc_line(scr, line->line, line->offset + scr->c.x + MAX(0, tail_len));
+                line->width = scr->c.x + MAX(0, tail_len);
+            }
+        }
+
+        screen_erase(scr, max_x - n, scr->c.y, max_x, scr->c.y + 1, false);
+
         if (view_selection_intersects(&scr->sstate, line, scr->c.x, scr->c.x + n)) {
             screen_damage_selection(scr);
             selection_clear(&scr->sstate);
