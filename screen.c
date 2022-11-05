@@ -240,6 +240,7 @@ inline static void screen_adjust_line_ex(struct screen *scr, struct line_handle 
     struct line_handle *view = &screen[y];
     ssize_t old_size = view->line->size;
     ssize_t new_size = view->offset + size;
+    clear_to += view->offset;
 
     if (LIKELY(old_size >= new_size)) return;
 
