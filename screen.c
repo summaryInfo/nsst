@@ -351,57 +351,53 @@ void screen_scroll_view(struct screen *scr, int16_t amount) {
     scr->prev_c_view_changed |= old_viewr != !!new_viewr;
 }
 
-/* Returns true if view should move down */
-FORCEINLINE HOT
-inline static bool try_free_top_line(struct screen *scr, struct line_handle *screen) {
-    struct line *top =  scr->top_line.line;
-    struct line *next_top = top->next;
-
-    if (UNLIKELY(top == screen->line)) return 0;
-
-    bool view_moved = false;
-    if (UNLIKELY(top == scr->view_pos.line))
-        view_moved = line_segments(top, scr->view_pos.offset, scr->width);
-
-#if DEBUG_LINES
-    assert(!scr->top_line.line->prev);
-    assert(find_handle_in_line(&scr->top_line));
-#endif
-
-    if (UNLIKELY(top->selection_index))
-        selection_clear(&scr->sstate);
-
-    free_line(&scr->mp, top);
-    scr->top_line.line = next_top;
-    scr->top_line.offset = 0;
-    line_handle_add(&scr->top_line);
-
-    return view_moved;
-}
-
-bool screen_push_history_until(struct screen *scr, struct line *from, struct line *to, bool opt) {
-    bool view_moved = false;
+HOT
+bool screen_push_history_until(struct screen *scr, struct line *from, struct line *to) {
     struct line_handle *screen = *get_main_screen(scr);
 
     if (UNLIKELY(from->seq > to->seq)) {
-        for (struct line *next; from->seq > to->seq; from = next)
+        for (struct line *next; from->seq > to->seq; from = next) {
             next = from->prev;
-    } else if (opt) {
-        for (struct line *next; from->seq < to->seq; from = next) {
-            next = from->next;
-            optimize_line(&scr->mp, from);
-            if (UNLIKELY(scr->sb_limit >= scr->sb_max_caps))
-                view_moved |= try_free_top_line(scr, screen);
-            else scr->sb_limit++;
+            scr->sb_limit--;
         }
     } else {
         for (struct line *next; from->seq < to->seq; from = next) {
             next = from->next;
-            if (UNLIKELY(scr->sb_limit >= scr->sb_max_caps))
-                view_moved |= try_free_top_line(scr, screen);
-            else scr->sb_limit++;
+            optimize_line(&scr->mp, from);
+            scr->sb_limit++;
         }
     }
+
+    ssize_t extra = scr->sb_limit - scr->sb_max_caps;
+    if (extra <= 0) return false;
+
+    scr->sb_limit -= extra;
+
+    bool view_moved = false;
+    struct line *next = scr->top_line.line;
+
+#if DEBUG_LINES
+    assert(find_handle_in_line(&scr->top_line));
+    assert(!scr->top_line.line->prev);
+#endif
+
+    for (ssize_t i = 0; i < extra; i++) {
+        struct line *top = next;
+        next = top->next;
+
+        if (UNLIKELY(top == screen->line))
+            break;
+        if (UNLIKELY(top == scr->view_pos.line))
+            view_moved |= line_segments(top, scr->view_pos.offset, scr->width);
+        if (UNLIKELY(top->selection_index))
+            selection_clear(&scr->sstate);
+
+        free_line(&scr->mp, top);
+    }
+
+    scr->top_line.line = next;
+    scr->top_line.offset = 0;
+    line_handle_add(&scr->top_line);
 
     return view_moved;
 }
@@ -752,7 +748,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
 
         /* Fixup history count */
         if (!lower_left->line) ret = stick_to_bottom;
-        if (screen_push_history_until(scr, prev_first_line.line, it.line, scr->mode.minimize_scrollback) &&
+        if (screen_push_history_until(scr, prev_first_line.line, it.line) &&
             ret == stick_none && !lower_left->line) ret = stick_to_top;
 
         /* Recalculate line views that are on screen */
@@ -1377,8 +1373,7 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
 
             fixup_lines_seqno(bottom_next);
 
-            if (screen_push_history_until(scr, first_to_hist,
-                                          first->line, scr->mode.minimize_scrollback)) {
+            if (screen_push_history_until(scr, first_to_hist, first->line)) {
                 replace_handle(&scr->view_pos, &scr->top_line);
                 selection_view_scrolled(&scr->sstate, scr);
             }
