@@ -352,24 +352,24 @@ void screen_scroll_view(struct screen *scr, int16_t amount) {
 }
 
 /* Returns true if view should move down */
-inline static ssize_t try_free_top_line(struct screen *scr) {
-    struct line_handle *screen = *get_main_screen(scr);
-    if (scr->top_line.line == screen->line) return 0;
-
-    ssize_t view_moved = 0;
-    if (scr->top_line.line == scr->view_pos.line)
-        view_moved = line_segments(scr->view_pos.line, scr->view_pos.offset, scr->width);
-
+FORCEINLINE HOT
+inline static bool try_free_top_line(struct screen *scr, struct line_handle *screen) {
+    struct line *top =  scr->top_line.line;
     struct line *next_top = scr->top_line.line->next;
-    scr->sb_limit--;
 
-    if (UNLIKELY(scr->top_line.line->selection_index))
-        selection_clear(&scr->sstate);
+    if (UNLIKELY(top == screen->line)) return 0;
+
+    bool view_moved = false;
+    if (UNLIKELY(top == scr->view_pos.line))
+        view_moved = line_segments(top, scr->view_pos.offset, scr->width);
 
 #if DEBUG_LINES
     assert(!scr->top_line.line->prev);
     assert(find_handle_in_line(&scr->top_line));
 #endif
+
+    if (UNLIKELY(scr->top_line.line->selection_index))
+        selection_clear(&scr->sstate);
 
     free_line(&scr->mp, scr->top_line.line);
     scr->top_line.line = next_top;
@@ -379,8 +379,9 @@ inline static ssize_t try_free_top_line(struct screen *scr) {
     return view_moved;
 }
 
-ssize_t screen_push_history_until(struct screen *scr, struct line *from, struct line *to, bool opt) {
-    ssize_t view_offset = 0;
+bool screen_push_history_until(struct screen *scr, struct line *from, struct line *to, bool opt) {
+    bool view_moved = false;
+    struct line_handle *screen = *get_main_screen(scr);
 
     if (UNLIKELY(from->seq > to->seq)) {
         for (struct line *next; from->seq > to->seq; from = next)
@@ -389,18 +390,20 @@ ssize_t screen_push_history_until(struct screen *scr, struct line *from, struct 
         for (struct line *next; from->seq < to->seq; from = next) {
             next = from->next;
             optimize_line(&scr->mp, from);
-            if (UNLIKELY(++scr->sb_limit > scr->sb_max_caps))
-                view_offset += try_free_top_line(scr);
+            if (UNLIKELY(scr->sb_limit > scr->sb_max_caps))
+                view_moved |= try_free_top_line(scr, screen);
+            else scr->sb_limit++;
         }
     } else {
         for (struct line *next; from->seq < to->seq; from = next) {
             next = from->next;
-            if (UNLIKELY(++scr->sb_limit > scr->sb_max_caps))
-                view_offset += try_free_top_line(scr);
+            if (UNLIKELY(scr->sb_limit > scr->sb_max_caps))
+                view_moved |= try_free_top_line(scr, screen);
+            else scr->sb_limit++;
         }
     }
 
-    return view_offset;
+    return view_moved;
 }
 
 static void resize_tabs(struct screen *scr, int16_t width) {
@@ -1374,8 +1377,8 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
 
             fixup_lines_seqno(bottom_next);
 
-            ssize_t scrolled = screen_push_history_until(scr, first_to_hist, first->line, scr->mode.minimize_scrollback);
-            if (UNLIKELY(scrolled)) /* View down, image up */ {
+            if (screen_push_history_until(scr, first_to_hist,
+                                          first->line, scr->mode.minimize_scrollback)) {
                 replace_handle(&scr->view_pos, &scr->top_line);
                 selection_view_scrolled(&scr->sstate, scr);
             }

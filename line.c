@@ -161,7 +161,8 @@ uint32_t alloc_attr(struct line *line, const struct attr *attr) {
     return insert_attr(line->attrs, attr, hash);
 }
 
-struct line *create_line_with_seq(struct multipool *mp, const struct attr *attr, ssize_t caps, uint64_t seq) {
+static struct line *create_line_with_seq(struct multipool *mp, const struct attr *attr,
+                                         ssize_t caps, uint64_t seq) {
     struct line *line = mpa_alloc(mp, sizeof(*line) + (size_t)caps * sizeof line->cell[0]);
 
 #if DEBUG_LINES

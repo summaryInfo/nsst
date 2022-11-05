@@ -52,15 +52,12 @@ struct pool {
 };
 
 inline static void pool_detach(struct pool **head, struct pool *pool) {
-    if (pool->next)
-        pool->next->prev = pool->prev;
+    struct pool *next = pool->next;
+    struct pool *prev = pool->prev;
 
-    if (pool->prev)
-        pool->prev->next = pool->next;
-    else
-        *head = pool->next;
-
-    pool->next = pool->prev = NULL;
+    if (next) next->prev = prev;
+    if (prev) prev->next = next;
+    else *head = next;
 }
 
 inline static void pool_attach(struct pool **head, struct pool *pool) {
@@ -68,6 +65,7 @@ inline static void pool_attach(struct pool **head, struct pool *pool) {
         (*head)->prev = pool;
 
     pool->next = *head;
+    pool->prev = NULL;
     *head = pool;
 }
 

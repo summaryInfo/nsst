@@ -122,7 +122,6 @@ struct line {
 
 uint32_t alloc_attr(struct line *line, const struct attr *attr);
 struct line *create_line(struct multipool *mp, const struct attr *attr, ssize_t width);
-struct line *create_line_with_seq(struct multipool *mp, const struct attr *attr, ssize_t width, uint64_t seq);
 struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t width);
 void split_line(struct multipool *mp, struct line *src, ssize_t offset);
 struct line *concat_line(struct multipool *mp, struct line *src1, struct line *src2);
