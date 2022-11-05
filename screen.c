@@ -1313,7 +1313,7 @@ inline static void swap_3(struct line *top_after, struct line *mid_before, struc
         assert(mid_before->seq < bottom_before->seq);
 #endif
 
-        attach_next_line(top_before, mid_after);
+        if (top_before) attach_next_line(top_before, mid_after);
         attach_next_line(bottom_before, top_after);
         attach_next_line(mid_before, bottom_after);
 }

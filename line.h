@@ -212,12 +212,10 @@ inline static void attach_next_line(struct line *line, struct line *next) {
 #endif
         next->prev = line;
     }
-    if (line) {
 #if DEBUG_LINES
-        assert(!line->next);
+    assert(!line->next);
 #endif
-        line->next = next;
-    }
+    line->next = next;
 }
 
 inline static void attach_prev_line(struct line *line, struct line *prev) {
@@ -227,12 +225,10 @@ inline static void attach_prev_line(struct line *line, struct line *prev) {
 #endif
         prev->next = line;
     }
-    if (line) {
 #if DEBUG_LINES
-        assert(!line->prev);
+    assert(!line->prev);
 #endif
-        line->prev = prev;
-    }
+    line->prev = prev;
 }
 
 inline static ssize_t line_length(struct line *line) {
