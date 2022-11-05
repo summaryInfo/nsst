@@ -416,7 +416,7 @@ void tty_hang(struct tty *tty) {
 ssize_t tty_refill(struct tty *tty) {
     if (UNLIKELY(tty->w.fd == -1)) return -1;
 
-    ssize_t inc, sz = tty->end - tty->start;
+    ssize_t inc, sz = tty->end - tty->start, inctotal = 0;
 
     if (tty->start != tty->fd_buf) {
         memmove(tty->fd_buf, tty->start, sz);
@@ -424,17 +424,20 @@ ssize_t tty_refill(struct tty *tty) {
         tty->start = tty->fd_buf;
     }
 
-    if ((inc = read(tty->w.fd, tty->end, sizeof tty->fd_buf - sz)) < 0) {
-        if (errno != EAGAIN) {
-            warn("Can't read from tty");
-            tty_hang(tty);
-            return -1;
-        }
-        inc = 0;
+    ssize_t space = sizeof tty->fd_buf - sz;
+
+    while (space > 0 && (inc = read(tty->w.fd, tty->end, space)) > 0)
+        space -= inc, tty->end += inc;
+
+    inctotal = (sizeof tty->fd_buf - sz) - space;
+
+    if (inc < 0 && errno != EAGAIN) {
+        warn("Can't read from tty");
+        tty_hang(tty);
+        return -1;
     }
 
-    tty->end += inc;
-    return inc;
+    return inctotal;
 }
 
 

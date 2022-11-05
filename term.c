@@ -3326,25 +3326,20 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
     return 1;
 }
 
-#define MAX_READS 8
-
 HOT
 bool term_read(struct term *term) {
-    size_t i = 0;
-    for (; i < MAX_READS; i++) {
-        if (tty_refill(&term->tty) < 0 ||
-            !tty_has_data(&term->tty)) break;
+    if (tty_refill(&term->tty) < 0 ||
+        !tty_has_data(&term->tty)) return false;
 
-        printer_intercept(screen_printer(&term->scr), (const uint8_t **)&term->tty.start, term->tty.end);
+    printer_intercept(screen_printer(&term->scr), (const uint8_t **)&term->tty.start, term->tty.end);
 
-        if (term->mode.scroll_on_output)
-            screen_reset_view(&term->scr, 1);
+    if (term->mode.scroll_on_output)
+        screen_reset_view(&term->scr, 1);
 
-        while (term->tty.start < term->tty.end)
-            if (!term_dispatch(term, (const uint8_t **)&term->tty.start, term->tty.end)) break;
-    }
+    while (term->tty.start < term->tty.end)
+        if (!term_dispatch(term, (const uint8_t **)&term->tty.start, term->tty.end)) break;
 
-    return i;
+    return true;
 }
 
 inline static bool is_osc52_reply(struct term *term) {
