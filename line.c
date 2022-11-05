@@ -163,18 +163,19 @@ uint32_t alloc_attr(struct line *line, const struct attr *attr) {
 
 static struct line *create_line_with_seq(struct multipool *mp, const struct attr *attr,
                                          ssize_t caps, uint64_t seq) {
-    struct line *line = mpa_alloc(mp, sizeof(*line) + (size_t)caps * sizeof line->cell[0]);
+    struct line *line = mpa_alloc(mp, sizeof *line + (size_t)caps * sizeof *line->cell);
 
 #if DEBUG_LINES
     assert(caps >= 0);
 #endif
 
-    memset(line, 0, sizeof *line);
+    *line = (struct line) {
+        .seq = seq,
+        .caps = caps,
+        .pad_attrid = alloc_attr(line, attr),
+        .force_damage = true,
+    };
 
-    line->pad_attrid = alloc_attr(line, attr);
-    line->force_damage = true;
-    line->caps = caps;
-    line->seq = seq;
     return line;
 }
 
