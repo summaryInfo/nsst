@@ -390,14 +390,14 @@ bool screen_push_history_until(struct screen *scr, struct line *from, struct lin
         for (struct line *next; from->seq < to->seq; from = next) {
             next = from->next;
             optimize_line(&scr->mp, from);
-            if (UNLIKELY(scr->sb_limit > scr->sb_max_caps))
+            if (UNLIKELY(scr->sb_limit >= scr->sb_max_caps))
                 view_moved |= try_free_top_line(scr, screen);
             else scr->sb_limit++;
         }
     } else {
         for (struct line *next; from->seq < to->seq; from = next) {
             next = from->next;
-            if (UNLIKELY(scr->sb_limit > scr->sb_max_caps))
+            if (UNLIKELY(scr->sb_limit >= scr->sb_max_caps))
                 view_moved |= try_free_top_line(scr, screen);
             else scr->sb_limit++;
         }
