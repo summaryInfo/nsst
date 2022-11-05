@@ -355,7 +355,7 @@ void screen_scroll_view(struct screen *scr, int16_t amount) {
 FORCEINLINE HOT
 inline static bool try_free_top_line(struct screen *scr, struct line_handle *screen) {
     struct line *top =  scr->top_line.line;
-    struct line *next_top = scr->top_line.line->next;
+    struct line *next_top = top->next;
 
     if (UNLIKELY(top == screen->line)) return 0;
 
@@ -368,10 +368,10 @@ inline static bool try_free_top_line(struct screen *scr, struct line_handle *scr
     assert(find_handle_in_line(&scr->top_line));
 #endif
 
-    if (UNLIKELY(scr->top_line.line->selection_index))
+    if (UNLIKELY(top->selection_index))
         selection_clear(&scr->sstate);
 
-    free_line(&scr->mp, scr->top_line.line);
+    free_line(&scr->mp, top);
     scr->top_line.line = next_top;
     scr->top_line.offset = 0;
     line_handle_add(&scr->top_line);
