@@ -172,10 +172,11 @@ static struct line *create_line_with_seq(struct multipool *mp, const struct attr
     *line = (struct line) {
         .seq = seq,
         .caps = caps,
-        .pad_attrid = alloc_attr(line, attr),
+        .pad_attrid = 0,
         .force_damage = true,
     };
 
+    line->pad_attrid = alloc_attr(line, attr);
     return line;
 }
 
