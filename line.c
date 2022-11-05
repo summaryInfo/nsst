@@ -309,7 +309,7 @@ void optimize_line(struct multipool *mp, struct line *line) {
 #if DEBUG_LINES
         assert(new == line);
 #endif
-        line->caps = line->caps;
+        line->caps = line->size;
         line->force_damage = true;
     } else
         mpa_pin(mp, line);
