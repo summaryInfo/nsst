@@ -371,8 +371,11 @@ bool free_extra_lines(struct screen *scr) {
         struct line *top = next;
         next = top->next;
 
-        if (UNLIKELY(top == screen->line))
-            break;
+        if (UNLIKELY(top == screen->line)) {
+            line_handle_remove(&scr->top_line);
+            next = screen->line;
+            goto finish;
+        }
         if (UNLIKELY(top == scr->view_pos.line))
             view_moved |= line_segments(top, scr->view_pos.offset, scr->width);
         if (UNLIKELY(top->selection_index))
@@ -380,6 +383,11 @@ bool free_extra_lines(struct screen *scr) {
 
         free_line(&scr->mp, top);
     }
+
+finish:
+#if DEBUG_LINES
+    assert(next);
+#endif
 
     scr->top_line.line = next;
     scr->top_line.offset = 0;
@@ -389,18 +397,19 @@ bool free_extra_lines(struct screen *scr) {
 }
 
 inline static void push_history_until(struct screen *scr, struct line *from, struct line *to) {
-    if (UNLIKELY(from->seq > to->seq)) {
-        for (struct line *next; from->seq > to->seq; from = next) {
-            next = from->prev;
-            scr->sb_limit--;
-        }
-    } else {
-        for (struct line *next; from->seq < to->seq; from = next) {
-            next = from->next;
+    if (LIKELY(from->seq < to->seq)) { // Push to history
+        for (; from->seq < to->seq; from = from->next) {
             optimize_line(&scr->mp, from);
             scr->sb_limit++;
         }
+    } else { // Pull from history
+        for (; to->seq > from->seq; to = to->next)
+            scr->sb_limit--;
     }
+
+#if DEBUG_LINES
+    assert(scr->sb_limit >= 0);
+#endif
 }
 
 static void resize_tabs(struct screen *scr, int16_t width) {
@@ -715,6 +724,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
             if (scr->top_line.line)
                 assert(find_handle_in_line(&scr->top_line));
 #endif
+            scr->sb_limit += -rest;
             create_lines_range(&scr->mp, NULL, it.line, screen, width,
                                &ATTR_DEFAULT, -rest, &scr->top_line, false);
             fixup_lines_seqno(it.line);
@@ -730,7 +740,6 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         /* Calculate new cursor position */
         translate_screen_position(&it, &saved_cursor_handle, saved_c, width);
         translate_screen_position(&it, &cursor_handle, c, width);
-        saved_c->y = MIN(saved_c->y, height - 1);
 
         /* If cursor will be shifted off-screen, some lines needs to be pushed
          * to scrollback to keep cusor on screen.. */
@@ -745,6 +754,8 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
 #endif
         }
 
+        saved_c->y = MIN(saved_c->y, height - 1);
+
         // FIXME Can lower_left be reset at this point?
 
         /* Fixup history count */
@@ -756,12 +767,10 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
 
         /* Recalculate line views that are on screen */
         do {
-            if (y >= 0) {
-                ssize_t view_width = line_advance_width(it.line, it.offset, width);
-                screen[y] = it;
-                screen[y].width = view_width - it.offset;
-                line_handle_add(&screen[y]);
-            }
+            ssize_t view_width = line_advance_width(it.line, it.offset, width);
+            screen[y] = it;
+            screen[y].width = view_width - it.offset;
+            line_handle_add(&screen[y]);
             if (++y >= height) break;
         } while (!inc_iter_width_width(&it, width));
 
