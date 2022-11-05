@@ -324,7 +324,6 @@ static struct option options[] = {
     X(uint8, margin_bell_low_volume, "margin-bell-low-volume", "Low volume value for DECSWBV", 50, 0, 100),
     X(int64, max_frame_time, "max-frame-time", "Maximal time between frames in microseconds", SEC/20000, 0, 10*SEC/1000),
     X(boolean, meta_is_esc, "meta-sends-escape", "Alt/Meta sends escape prefix instead of setting 8-th bit", true),
-    X(boolean, minimize_scrollback, "minimize-scrollback", "Realloc lines to save memory; makes scrolling a little slower", true),
     X(uint8, modify_cursor, "modify-cursor", "Enable encoding modifiers for cursor keys", 3, 0, 3),
     X(uint8, modify_function, "modify-function", "Enable encoding modifiers for function keys", 3, 0, 3),
     X(uint8, modify_keypad, "modify-keypad", "Enable encoding modifiers keypad keys", 3, 0, 3),

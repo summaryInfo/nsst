@@ -134,7 +134,7 @@ static bool is_boolean_option(const char *opt) {
         "daemon", "delete-is-del", "erase-scrollback", "extended-cir",
         "fixed", "force-nrcs", "force-scalable", "fork", "has-meta",
         "keep-clipboard", "keep-selection", "lock-keyboard", "luit",
-        "meta-sends-escape", "minimize-scrollback", "nrcs", "numlock",
+        "meta-sends-escape", "nrcs", "numlock",
         "override-boxdrawing", "unique-uris", "print-attributes", "raise-on-bell",
         "reverse-video", "scroll-on-input", "scroll-on-output", "select-to-clipboard",
         "smooth-scroll", "special-blink", "special-bold", "special-italic",

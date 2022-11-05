@@ -160,7 +160,6 @@ struct instance_config {
     bool allow_luit;
     bool print_attr;
     bool extended_cir;
-    bool minimize_scrollback;
     bool allow_erase_scrollback;
     bool alternate_scroll;
     bool keep_clipboard;

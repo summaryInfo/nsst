@@ -1653,7 +1653,6 @@ bool screen_load_config(struct screen *scr, bool reset) {
     scr->sstate.select_to_clipboard = cfg->select_to_clipboard;
 
     scr->mode.smooth_scroll = cfg->smooth_scroll;
-    scr->mode.minimize_scrollback = cfg->minimize_scrollback;
     return 1;
 }
 
