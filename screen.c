@@ -255,7 +255,6 @@ inline static void screen_adjust_line_ex(struct screen *scr, struct line_handle 
     /* When we are resizing continuation line view fixup
      * widths of previous parts of line */
     if (UNLIKELY(view->offset) && y > 0) {
-        screen[--y].width = scr->width;
 #if DEBUG_LINES
         assert(screen[y].offset <= old_size);
         while (--y > 0 && screen[y].line == view->line)
@@ -767,6 +766,9 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
 
         /* Recalculate line views that are on screen */
         do {
+#if DEBUG_LINES
+            assert(it.line->size >= it.offset);
+#endif
             ssize_t view_width = line_advance_width(it.line, it.offset, width);
             screen[y] = it;
             screen[y].width = view_width - it.offset;
@@ -924,7 +926,7 @@ inline static void prep_lines(struct screen *scr, ssize_t xs, ssize_t ys, ssize_
             struct line_handle *view = &scr->screen[i];
             if (view->width <= xe_val && attr_eq(attr_pad(view->line), &scr->sgr)) {
                 if (view->width > xs_val) {
-                    screen_realloc_line(scr, view->line, xs_val);
+                    screen_realloc_line(scr, view->line, view->offset + xs_val);
                     view->width = xs_val;
                 }
             } else {
