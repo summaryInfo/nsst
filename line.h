@@ -128,7 +128,8 @@ struct line *concat_line(struct multipool *mp, struct line *src1, struct line *s
 void optimize_line(struct multipool *mp, struct line *src);
 void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len);
 void fill_cells(struct cell *dst, struct cell c, ssize_t width);
-void copy_cells_with_attr(struct cell *dst, const uint32_t *src, const uint32_t *end, uint32_t attrid);
+void copy_utf32_to_cells(struct cell *dst, const uint32_t *src, const uint32_t *end, uint32_t attrid);
+void copy_ascii_to_cells(struct cell *dst, const uint8_t *src, const uint8_t *end, uint32_t attrid);
 void free_line(struct multipool *mp, struct line *line);
 
 inline static color_t indirect_color(uint32_t idx) { return idx + 1; }

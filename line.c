@@ -450,7 +450,7 @@ void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
 }
 
 HOT
-void copy_cells_with_attr(struct cell *dst, const uint32_t *src, const uint32_t *end, uint32_t attrid) {
+void copy_utf32_to_cells(struct cell *dst, const uint32_t *src, const uint32_t *end, uint32_t attrid) {
     uint32_t *restrict dstp = (uint32_t *)dst;
     attrid <<= 20;
 
@@ -483,6 +483,78 @@ void copy_cells_with_attr(struct cell *dst, const uint32_t *src, const uint32_t 
                              _mm_or_si128(four_attrs,
                                           _mm_load_si128((__m128i *)(src + i*4))));
     }
+#else
+    switch(pref) {
+        case 3: dstp[2] = src[2] | attrid; // fallthrough
+        case 2: dstp[1] = src[1] | attrid; // fallthrough
+        case 1: dstp[0] = src[0] | attrid; // fallthrough
+        default:;
+    }
+
+    src += pref;
+    dstp += pref;
+
+    register ssize_t blocks = (end - src)/4;
+
+    for (ssize_t i = 0; i < blocks; i++) {
+        dstp[4*i + 0] = attrid | src[4*i + 0];
+        dstp[4*i + 1] = attrid | src[4*i + 1];
+        dstp[4*i + 2] = attrid | src[4*i + 2];
+        dstp[4*i + 3] = attrid | src[4*i + 3];
+    }
+
+#endif
+
+    src += blocks*4;
+    dstp += blocks*4;
+
+short_copy:
+    switch((end - src)) {
+        case 3: dstp[2] = src[2] | attrid; // fallthrough
+        case 2: dstp[1] = src[1] | attrid; // fallthrough
+        case 1: dstp[0] = src[0] | attrid; // fallthrough
+        default:;
+    }
+
+}
+
+#ifdef __SSE2__
+inline static __m128i unpack_u8x4_to_cells(const void *pdata, __m128i zero, __m128i attr) {
+    uint32_t data;
+    memcpy(&data, pdata, sizeof data);
+    return _mm_or_si128(attr, _mm_unpacklo_epi16(_mm_unpacklo_epi8(_mm_set1_epi32(data), zero), zero));
+}
+#endif
+
+HOT
+void copy_ascii_to_cells(struct cell *dst, const uint8_t *src, const uint8_t *end, uint32_t attrid) {
+    uint32_t *restrict dstp = (uint32_t *)dst;
+    attrid <<= 20;
+
+    if (UNLIKELY(end - src < 4))
+        goto short_copy;
+
+    int32_t pref = (-(uintptr_t)dstp & 15ULL) / sizeof(uint32_t);
+
+#ifdef __SSE2__
+    const __m128i four_attrs = _mm_set1_epi32(attrid);
+    const __m128i zero = _mm_set1_epi32(0);
+
+    if (pref) {
+        /* Write unaligned prefix separately */
+        _mm_storeu_si128((__m128i *)dstp,
+                         unpack_u8x4_to_cells(src, zero, four_attrs));
+
+        src += pref;
+        dstp += pref;
+    }
+
+    register ssize_t blocks = (end - src)/4;
+
+    for (ssize_t i = 0; i < blocks; i++)
+        _mm_store_si128((__m128i *)(dstp + i*4),
+                        unpack_u8x4_to_cells(src + i*4, zero, four_attrs));
+
 #else
     switch(pref) {
         case 3: dstp[2] = src[2] | attrid; // fallthrough
