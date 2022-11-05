@@ -417,10 +417,29 @@ inline static struct line_handle dup_handle(struct line_handle *handle) {
 inline static void replace_handle(struct line_handle *dst, struct line_handle *src) {
 #if DEBUG_LINES
     assert(src->line);
-#endif
     line_handle_remove(dst);
     *dst = dup_handle(src);
     line_handle_add(dst);
+#else
+    if (LIKELY(dst->line)) {
+        struct line_handle *next = dst->next;
+        struct line_handle *prev = dst->prev;
+        if (!prev) dst->line->first_handle = next;
+        else prev->next = next;
+        if (next) next->prev = prev;
+    }
+
+    struct line *line = src->line;
+    struct line_handle *next = line->first_handle;
+    if (next) next->prev = dst;
+    line->first_handle = dst;
+
+    dst->line = line;
+    dst->offset = src->offset;
+    dst->width = src->width;
+    dst->next = next;
+    dst->prev = NULL;
+#endif
 }
 
 #endif
