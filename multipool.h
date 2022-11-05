@@ -14,7 +14,6 @@ struct pool;
 
 struct multipool {
     struct pool *unsealed;
-    struct pool *sealed;
     ssize_t max_pad;
     ssize_t pool_size;
     ssize_t unsealed_count;
@@ -39,7 +38,7 @@ void mpa_free(struct multipool *mp, void *ptr);
 /* Allocate an object */
 void *mpa_alloc(struct multipool *mp, ssize_t size);
 /* Resize object, might move */
-void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size);
+void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size, bool pin);
 
 /* Mark an object to be not (easily) resizable */
 void mpa_pin(struct multipool *mp, void *ptr);

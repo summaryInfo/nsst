@@ -71,16 +71,12 @@ inline static void pool_attach(struct pool **head, struct pool *pool) {
 
 inline static void pool_seal(struct multipool *mp, struct pool *pool) {
     pool_detach(&mp->unsealed, pool);
-    pool_attach(&mp->sealed, pool);
-
     mp->unsealed_count--;
     pool->sealed = true;
 }
 
 inline static void pool_unseal(struct multipool *mp, struct pool *pool) {
-    pool_detach(&mp->sealed, pool);
     pool_attach(&mp->unsealed, pool);
-
     mp->unsealed_count++;
     pool->sealed = false;
 }
@@ -99,18 +95,15 @@ static struct pool *get_fitting_pool(struct multipool *mp, ssize_t size) {
         memset(pool, 0, sizeof *pool);
 
         mp->pool_count++;
-        mp->unsealed_count++;
-
         pool->size = pool_size;
-
-        pool_attach(&mp->unsealed, pool);
+        pool_unseal(mp, pool);
     }
 
     return pool;
 }
 
 void mpa_release(struct multipool *mp) {
-    struct pool *pool = mp->sealed, *next;
+    struct pool *pool = mp->unsealed, *next;
 
     while (pool) {
         next = pool->next;
@@ -118,12 +111,7 @@ void mpa_release(struct multipool *mp) {
         pool = next;
     }
 
-    pool = mp->unsealed;
-    while (pool) {
-        next = pool->next;
-        DO_FREE(pool, sizeof *pool + pool->size);
-        pool = next;
-    }
+    assert(mp->pool_count == mp->unsealed_count);
 
     memset(mp, 0, sizeof *mp);
 }
@@ -132,7 +120,7 @@ void mpa_init(struct multipool *mp, ssize_t pool_size) {
     mp->max_pad = 0;
     mp->pool_count = mp->unsealed_count = 0;
     mp->pool_size = pool_size;
-    mp->sealed = mp->unsealed = NULL;
+    mp->unsealed = NULL;
 }
 
 void mpa_free(struct multipool *mp, void *ptr) {
@@ -145,18 +133,14 @@ void mpa_free(struct multipool *mp, void *ptr) {
         pool->offset -= header->size;
 
     if (!--pool->n_alloc) {
-        pool_detach(pool->sealed ? &mp->sealed : &mp->unsealed, pool);
-        if (!pool->sealed)
-            mp->unsealed_count--;
-
         if (mp->unsealed_count + 1 > mp->max_unsealed) {
+            if (!pool->sealed)
+                pool_seal(mp, pool);
+
             DO_FREE(pool, pool->size + sizeof *pool);
             mp->pool_count--;
-        } else {
-            pool_attach(&mp->unsealed, pool);
-            pool->sealed = false;
-            mp->unsealed_count++;
-        }
+        } else if (pool->sealed)
+            pool_unseal(mp, pool);
     }
 }
 
@@ -188,11 +172,11 @@ ssize_t mpa_allocated_size(void *ptr) {
     return header->size - sizeof *header;
 }
 
-void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size) {
-    size = ROUNDUP(size + sizeof (struct header), MPA_ALIGNMENT);
-
+void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size, bool pin) {
     struct header *header = GET_PTR_HEADER(ptr);
     struct pool *pool = GET_HEADER_POOL(header);
+
+    size = ROUNDUP(size + sizeof (struct header), MPA_ALIGNMENT);
 
     bool is_last = (ssize_t)header->offset + (ssize_t)header->size == (ssize_t)pool->offset;
 
@@ -201,18 +185,19 @@ void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size) {
         pool->offset += size - header->size;
         header->size = size;
 
-        return ptr;
+    } else if (header->size < size) {
+        void *new = mpa_alloc(mp, size);
+        if (!new) return NULL;
+
+        memcpy(new, ptr, MIN(header->size, size) - sizeof *header);
+        mpa_free(mp, ptr);
+        ptr = new;
     }
 
-    if (header->size >= size)
-        return ptr;
+    if (pin && pool->sealed && pool->size - pool->offset >= mp->max_pad)
+        pool_unseal(mp, pool);
 
-    void *new = mpa_alloc(mp, size);
-    if (!new) return NULL;
-
-    memcpy(new, ptr, MIN(header->size, size) - sizeof *header);
-    mpa_free(mp, ptr);
-    return new;
+    return ptr;
 }
 
 void mpa_pin(struct multipool *mp, void *ptr) {

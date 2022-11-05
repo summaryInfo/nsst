@@ -184,7 +184,7 @@ struct line *create_line(struct multipool *mp, const struct attr *attr, ssize_t 
 
 struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t caps) {
     size_t new_size = sizeof(*line) + (size_t)caps * sizeof(line->cell[0]);
-    struct line *new = mpa_realloc(mp, line, new_size);
+    struct line *new = mpa_realloc(mp, line, new_size, false);
 
     new->size = MIN(caps, new->size);
     new->caps = caps;
@@ -298,13 +298,22 @@ void split_line(struct multipool *mp, struct line *src, ssize_t offset) {
     realloc_line(mp, src, offset);
 }
 
-void optimize_line(struct multipool *mp, struct line *src) {
+void optimize_line(struct multipool *mp, struct line *line) {
     // NOTE After this point line will never be resized
-    if (src->size != src->caps)
-        src = realloc_line(mp, src, src->size);
-    mpa_pin(mp, src);
+    if (line->size < line->caps) {
+        size_t new_size = sizeof(*line) + (size_t)line->size * sizeof(line->cell[0]);
+        struct line *new = mpa_realloc(mp, line, new_size, true);
+        (void)new;
 
-    optimize_attributes(src);
+#if DEBUG_LINES
+        assert(new == line);
+#endif
+        line->caps = line->caps;
+        line->force_damage = true;
+    } else
+        mpa_pin(mp, line);
+
+    optimize_attributes(line);
 }
 
 struct line *concat_line(struct multipool *mp, struct line *src1, struct line *src2) {
