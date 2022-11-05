@@ -3663,6 +3663,7 @@ void free_term(struct term *term) {
 #endif
 
     free_screen(&term->scr);
+    keyboard_reset_udk(term);
 
     free(term);
 }
