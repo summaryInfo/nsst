@@ -7,14 +7,14 @@ _NOTE: These plans can change any time_
 
 ### Until 2.4
 
-* Optimize `screen_scroll_fast()` -- need to change handles internal structure to make then easer relocatable.
- * Replace linked list with array?
-
 * Hyperlinks auto-detection
 
   * `--match-uri=<X>` where `<X>` is one of `off`,`manual`,`auto`
 
 ### Until 2.5 (or later)
+
+* Re-implement mouse selection via line_handle's to (mostly) remove special case.
+  * "Mostly", because we still would need to notify mouse code upon relocation.
 
 * Optimize screen_damage_uri to iterate over attributes first to find whether the line has attributes with source URI.
 
