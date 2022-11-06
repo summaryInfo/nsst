@@ -416,7 +416,7 @@ void tty_hang(struct tty *tty) {
 ssize_t tty_refill(struct tty *tty) {
     if (UNLIKELY(tty->w.fd == -1)) return -1;
 
-    ssize_t inc, sz = tty->end - tty->start, inctotal = 0;
+    ssize_t inc = 0, sz = tty->end - tty->start, inctotal = 0;
 
     if (tty->start != tty->fd_buf) {
         memmove(tty->fd_buf, tty->start, sz);
@@ -425,9 +425,16 @@ ssize_t tty_refill(struct tty *tty) {
     }
 
     ssize_t space = sizeof tty->fd_buf - sz;
+    ssize_t n_read = 0;
 
-    while (space > 0 && (inc = read(tty->w.fd, tty->end, space)) > 0)
-        space -= inc, tty->end += inc;
+    while (space > 0 && (inc = read(tty->w.fd, tty->end, space)) > 0) {
+        space -= inc;
+        tty->end += inc;
+        n_read++;
+    }
+
+    if (UNLIKELY(gconfig.trace_misc))
+        info("Read TTY (size=%zd n_read=%zd)", inctotal, n_read);
 
     inctotal = (sizeof tty->fd_buf - sz) - space;
 
