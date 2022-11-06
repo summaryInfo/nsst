@@ -469,38 +469,6 @@ static void term_esc_dump(struct term *term, bool use_info) {
     (use_info ? info : warn)("%s%s", pref, buf);
 }
 
-static size_t term_decode_color(struct term *term, size_t arg, color_t *rc, color_t *valid) {
-    *valid = 0;
-    size_t argc = arg + 1 < ESC_MAX_PARAM;
-    bool subpars = arg && (term->esc.subpar_mask >> (arg + 1)) & 1;
-    for (size_t i = arg + 1; i < ESC_MAX_PARAM &&
-        !subpars ^ ((term->esc.subpar_mask >> i) & 1); i++) argc++;
-    if (argc > 0) {
-        if (term->esc.param[arg] == 2 && argc > 3) {
-            color_t col = 0xFF;
-            bool wrong = 0, space = subpars && argc > 4;
-            for (size_t i = 1 + space; i < 4U + space; i++) {
-                wrong |= term->esc.param[arg + i] > 255;
-                col = (col << 8) + MIN(MAX(0, term->esc.param[arg + i]), 0xFF);
-            }
-            if (wrong) term_esc_dump(term, 1);
-            *rc = col;
-            *valid = 1;
-            if (!subpars) argc = MIN(argc, 4);
-        } else if (term->esc.param[arg] == 5 && argc > 1) {
-            if (term->esc.param[arg + 1] < PALETTE_SIZE - SPECIAL_PALETTE_SIZE && term->esc.param[arg + 1] >= 0) {
-                *rc = indirect_color(term->esc.param[arg + 1]);
-                *valid = 1;
-            } else term_esc_dump(term, 0);
-            if (!subpars) argc = MIN(argc, 2);
-        } else {
-            if (!subpars) argc = MIN(argc, 1);
-             term_esc_dump(term, 0);
-         }
-    } else term_esc_dump(term, 0);
-    return argc;
-}
-
 static void term_dispatch_da(struct term *term, uparam_t mode) {
     switch (mode) {
     case P('='): /* Tertinary DA */
@@ -2046,6 +2014,44 @@ static void term_report_tabs(struct term *term) {
     }
 
     term_answerback(term, DCS"2$u%s"ST, tabs ? tabs : "");
+}
+
+static size_t term_decode_color(struct term *term, size_t arg, color_t *rc, color_t *valid) {
+    ssize_t argc = 0;
+    if (arg + 1 >= ESC_MAX_PARAM) goto dump;
+
+    argc = __builtin_ctzl(~(term->esc.subpar_mask >> (arg + 1))) + 1;
+    bool has_subpars = argc > 1;
+    if (!has_subpars)
+        argc = ESC_MAX_PARAM - arg;
+
+    iparam_t type = term->esc.param[arg];
+    if (type == 2) {
+        if (argc < 4) goto dump;
+        if (!has_subpars) argc = 4;
+
+        ssize_t i = arg + 1 + (argc > 4);
+        *rc = mk_color(MIN(MAX(0, term->esc.param[i]), 0xFF),
+                       MIN(MAX(0, term->esc.param[i + 1]), 0xFF),
+                       MIN(MAX(0, term->esc.param[i + 2]), 0xFF), 0xFF);
+    } else if (type == 5) {
+        if (argc < 2 || term->esc.param[arg + 1] < 0 ||
+            term->esc.param[arg + 1] >= PALETTE_SIZE - SPECIAL_PALETTE_SIZE) goto dump;
+        if (!has_subpars) argc = 2;
+
+        *rc = indirect_color(term->esc.param[arg + 1]);
+    } else {
+        argc = 1;
+        goto dump;
+    }
+
+    *valid = true;
+    return argc;
+
+dump:
+    term_esc_dump(term, false);
+    *valid = false;
+    return argc;
 }
 
 static void term_decode_sgr(struct term *term, size_t i, struct attr *mask, struct attr *sgr) {
