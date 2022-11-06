@@ -252,15 +252,16 @@ inline static void screen_adjust_line_ex(struct screen *scr, struct line_handle 
         fill_cells(view->line->cell + old_size, c, clear_to - old_size);
     }
 
-    /* When we are resizing continuation line view fixup
-     * widths of previous parts of line */
-    if (UNLIKELY(view->offset) && y > 0) {
 #if DEBUG_LINES
+    /* When we are resizing continuation line we need
+     * to ensure all wrapped parts are withing the line (sic)
+     * and are wrapped to the screen width. */
+    if (UNLIKELY(view->offset) && y > 0) {
         assert(screen[y].offset <= old_size);
         while (--y > 0 && screen[y].line == view->line)
             assert(screen[y].width == scr->width);
-#endif
     }
+#endif
 
     view->width = size;
     view->line->size = new_size;
