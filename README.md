@@ -154,7 +154,7 @@ You need all dependencies installed before getting started.
 
 First clone this repo and cd into its folder like this:
 
-    git clone https://github.com/nsst
+    git clone https://github.com/summaryInfo/nsst
     cd nsst
 
 Then configure and build:
