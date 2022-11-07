@@ -76,7 +76,7 @@ struct prefix_tree_node {
 static struct id_table idtab;
 static hashtable_t uritab;
 
-static struct prefix_tree_node proto_tree_head;
+static struct prefix_tree_node reverse_proto_tree_head;
 
 inline static ssize_t char_to_index(char ch) {
     if (ch == '.')
@@ -101,25 +101,15 @@ inline static ssize_t char_to_index(char ch) {
     return -1;
 }
 
-static struct prefix_tree_node *match_proto_tree(struct prefix_tree_node *current, char ch) {
-    if (!current) current = &proto_tree_head;
-
-    ssize_t idx = char_to_index(ch);
-    if (idx >= 0)
-        return current->children[idx];
-
-    return NULL;
-}
-
 inline static bool is_leaf_node(struct prefix_tree_node *current) {
     return current && current->leaf;
 }
 
-static bool proto_tree_add_proto(const char *proto) {
-    struct prefix_tree_node *current = &proto_tree_head;
+static bool reverse_proto_tree_add_proto(const char *proto, const char *end) {
+    struct prefix_tree_node *current = &reverse_proto_tree_head;
     char ch;
-    for (const char *it = proto; (ch = *it++); ) {
-        ssize_t idx = char_to_index(ch);
+    for (const char *it = end - 1; it >= proto; it--) {
+        ssize_t idx = char_to_index(ch = *it);
         if (idx < 0) {
             warn("Invalid protocol name '%s', unexpected char '%c'", proto, ch);
             return false;
@@ -149,13 +139,13 @@ void init_proto_tree(void) {
     size_t len = 0;
 
     /* Always include 'file' pseudo protocol */
-    proto_tree_add_proto("file");
+    const char *file = "\0file";
+    reverse_proto_tree_add_proto(file + 1, file + 5);
 
     /* Save file protocol node for fast checking */
-    struct prefix_tree_node *node = &proto_tree_head;
-    for (const char *ch = "file"; *ch; ch++)
-        node =  match_proto_tree(node, *ch);
-    file_leaf = node;
+    file_leaf = &reverse_proto_tree_head;
+    for (ssize_t i = 4; i > 0; i--)
+        file_leaf = file_leaf->children[char_to_index(file[i])];
 
     for (ssize_t sz; (sz = getline(&line, &len, services)) != -1; ) {
         char  *it = line;
@@ -171,29 +161,55 @@ void init_proto_tree(void) {
         while (!isspace(*it))
             it++;
 
-        *it = '\0';
-
         if (line - it >= MAX_PROTOCOL_LEN) {
             warn("Skipping too long protocol name '%s'", it);
             continue;
         }
 
-        proto_tree_add_proto(proto);
+        reverse_proto_tree_add_proto(proto, it);
     }
 
     free(line);
     fclose(services);
 }
 
-/* From window.c */
-enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
-#define MATCH(tab, ch) (!!((tab)[((ch) >> 5) - 1] & (1U << ((ch) & 0x1F))))
-    static uint32_t c_proto[] = {0x03FF6000, 0x07FFFFFE, 0x07FFFFFE}; // [\w\d\-.]
+const uint8_t *match_reverse_proto_tree(struct uri_match_state *stt, const uint8_t *str, size_t len) {
+    struct prefix_tree_node *current = &reverse_proto_tree_head;
+    const uint8_t *at_valid_proto = 0;
+    for (size_t i = 0; i < len; i++) {
+        ssize_t idx = char_to_index(str[-i-1]);
+        if (idx < 0) {
+            current = NULL;
+            break;
+        }
+        current = current->children[idx];
+        if (!current) break;
+        if (is_leaf_node(current)) {
+            at_valid_proto = &str[-i-1];
+            stt->matched_file_proto = current == file_leaf;
+        }
+    }
 
-    // static uint32_t c_ext[] = {0xAFFFFFD2, 0x87FFFFFF, 0x47FFFFFE}; // [\w\d\-._~!$&'()*+,;=:@/?]
+    if (at_valid_proto) {
+        stt->size = str - at_valid_proto;
+        if (!stt->no_copy) {
+            adjust_buffer((void **)&stt->data, &stt->caps, stt->size + 1, 1);
+            memcpy(stt->data, at_valid_proto, stt->size);
+        }
+        stt->state = uris1_colon, stt->res = urim_need_more;
+    } else
+        stt->state = uris1_ground, stt->res = urim_ground;
+
+    return at_valid_proto;
+}
+
+/* From window.c */
+enum uri_match_result uri_match_next_from_colon(struct uri_match_state *stt, uint8_t ch) {
+#define MATCH(tab, ch) (!!((tab)[((ch) >> 5) - 1] & (1U << ((ch) & 0x1F))))
 
     // For real world purposes don't treat following characters as a part of URL: ()'
     // This makes parenthesized and quoted URLs match correctly.
+    // static uint32_t c_ext[] = {0xAFFFFFD2, 0x87FFFFFF, 0x47FFFFFE}; // [\w\d\-._~!$&'()*+,;=:@/?]
     static uint32_t c_ext[] = {0xAFFFFC42, 0x87FFFFFF, 0x47FFFFFE}; // [\w\d\-._~!$&*+,;=:@/?]
 
     /* This code does not handle fancy unicode URIs that
@@ -211,18 +227,10 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
 
     switch(stt->state) {
     case uris1_ground:
-        if ((stt->ptc = match_proto_tree(stt->ptc, ch))) {
-            stt->state++;
-            return (stt->res = urim_need_more);
-        }
+        assert(false);
         break;
-    case uris1_proto:
-        if (MATCH(c_proto, ch)) {
-            stt->ptc = match_proto_tree(stt->ptc, ch);
-            if (stt->ptc)
-                return urim_need_more;
-        } else if (ch == ':' && is_leaf_node(stt->ptc)) {
-            stt->matched_file_proto = stt->ptc == file_leaf;
+    case uris1_colon:
+        if (ch == ':') {
             stt->state++;
             return (stt->res = urim_need_more);
         }
@@ -313,7 +321,6 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
 
 finish_nak:
     stt->state = uris1_ground;
-    stt->ptc = NULL;
     if (stt->res != urim_may_finish) {
         stt->size = 0;
         return (stt->res = urim_ground);
@@ -324,10 +331,9 @@ finish_nak:
 
 void uri_match_reset(struct uri_match_state *state, bool soft) {
     if (soft) {
-        state->state = uris1_ground;
+        state->state = uris1_colon;
         state->res = urim_ground;
         state->size =  0;
-        state->ptc = NULL;
     } else {
         free(state->data);
         *state = (struct uri_match_state){0};
@@ -340,18 +346,23 @@ char *uri_match_get(struct uri_match_state *state) {
     return res;
 }
 
-inline static size_t vaild_uri_len(const char *uri) {
+inline static size_t valid_uri_len(const char *uri) {
     if (!uri) return 0;
 
     struct uri_match_state stt = {.no_copy = true};
+    const char *uri2 = strstr(uri, "://");
+    if (!uri2) return 0;
+
+    if (!match_reverse_proto_tree(&stt,
+        (const uint8_t *)uri2, uri2 - uri)) return 0;
+
     enum uri_match_result res = urim_ground;
-    while (*uri) {
-        res = uri_match_next(&stt, *uri++);
-        if (res == urim_finished ||
-            res == urim_ground) break;
+    while (*uri2) {
+         res = uri_match_next_from_colon(&stt, *uri2++);
+        if (res == urim_finished || res == urim_ground) break;
     }
 
-    if (!*uri && res == urim_may_finish) return stt.size;
+    if (!*uri2 && res == urim_may_finish) return stt.size;
     return 0;
 }
 
@@ -387,13 +398,14 @@ static bool uri_cmp(const ht_head_t *a, const ht_head_t *b) {
 uint32_t uri_add(const char *uri, const char *id) {
     static size_t id_counter = 0;
 
-    if (!idtab.slots) ht_init(&uritab, HT_INIT_CAPS, uri_cmp);
-
-    size_t uri_len = vaild_uri_len(uri), id_len = 0;
+    size_t uri_len = valid_uri_len(uri), id_len = 0;
     if (!uri_len) {
         if (*uri) warn("URI '%s' is invalid", uri);
         return EMPTY_URI;
     }
+
+    if (!idtab.slots)
+        ht_init(&uritab, HT_INIT_CAPS, uri_cmp);
 
     /* Generate internal identifier
      * if not explicitly provided */
@@ -506,9 +518,9 @@ void uri_release_memory(void) {
     }
     free(idtab.slots);
 
-    proto_tree_free(&proto_tree_head);
+    proto_tree_free(&reverse_proto_tree_head);
 
-    memset(&proto_tree_head, 0, sizeof(proto_tree_head));
+    memset(&reverse_proto_tree_head, 0, sizeof(reverse_proto_tree_head));
     memset(&idtab, 0, sizeof(idtab));
     memset(&uritab, 0, sizeof(uritab));
 }

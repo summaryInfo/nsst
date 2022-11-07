@@ -16,7 +16,7 @@ enum uri_match_result {
 
 enum uri_match_state1 {
     uris1_ground,
-    uris1_proto,
+    uris1_colon,
     uris1_slash1,
     uris1_slash2,
     uris1_user,
@@ -39,7 +39,6 @@ struct uri_match_state {
     size_t caps;
     char *data;
     bool no_copy;
-    struct prefix_tree_node *ptc;
 };
 
 #define EMPTY_URI 0
@@ -51,7 +50,8 @@ void uri_unref(uint32_t uri);
 void uri_open(uint32_t uri);
 const char *uri_get(uint32_t uri);
 
-enum uri_match_result uri_match_next(struct uri_match_state *state, uint8_t ch);
+const uint8_t *match_reverse_proto_tree(struct uri_match_state *stt, const uint8_t *str, size_t len);
+enum uri_match_result uri_match_next_from_colon(struct uri_match_state *state, uint8_t ch);
 void uri_match_reset(struct uri_match_state *state, bool soft);
 char *uri_match_get(struct uri_match_state *state);
 void uri_release_memory(void);

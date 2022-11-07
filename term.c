@@ -3370,19 +3370,35 @@ bool term_read(struct term *term) {
 
 #if USE_URI
     bool allow_uris = window_cfg(screen_window(term_screen(term)))->allow_uris;
-    if (allow_uris && !screen_altscreen(&term->scr) && !screen_sgr(&term->scr)->uri) {
-        for (const uint8_t *cur = term->tty.start; cur < term->tty.end; cur++) {
-            enum uri_match_result res = uri_match_next(&term->uri_match, *cur);
-            if (res == urim_ground) {
-                screen_set_bookmark(&term->scr, cur + 1);
-            } else if (res == urim_finished) {;
-                while (term->tty.start < cur)
-                    if (!term_dispatch(term, (const uint8_t **)&term->tty.start, cur)) break;
 
-                if (term->esc.state == esc_ground)
-                    apply_matched_uri(term);
-                uri_match_reset(&term->uri_match, true);
-                screen_set_bookmark(&term->scr, cur);
+    if (allow_uris) {
+        for (const uint8_t *cur = term->tty.start; cur < term->tty.end; cur++) {
+            if (term->uri_match.state < uris1_slash1) {
+                /* Skip until potential URI start,
+                 * if we are not in the middle of protocol matching. */
+                cur = memchr(cur, ':', term->tty.end - cur);
+                if (LIKELY(!cur)) break;
+
+                const uint8_t *proto_start;
+                proto_start = match_reverse_proto_tree(&term->uri_match, cur - 1, MAX_PROTOCOL_LEN - 1);
+                if (!proto_start) continue;
+
+                screen_set_bookmark(&term->scr, proto_start);
+            }
+
+            for (; cur < term->tty.end; cur++) {
+                enum uri_match_result res = uri_match_next_from_colon(&term->uri_match, *cur);
+                if (res == urim_ground) break;
+                if (res == urim_finished) {
+                    while (term->tty.start < cur)
+                        if (!term_dispatch(term, (const uint8_t **)&term->tty.start, cur)) break;
+
+                    if (term->esc.state == esc_ground  &&
+                        !screen_altscreen(&term->scr) &&
+                        !screen_sgr(&term->scr)->uri) apply_matched_uri(term);
+                    uri_match_reset(&term->uri_match, true);
+                    break;
+                }
             }
         }
     }
