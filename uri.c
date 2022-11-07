@@ -141,6 +141,8 @@ static void proto_tree_free(struct prefix_tree_node *node) {
     }
 }
 
+struct prefix_tree_node *file_leaf;
+
 void init_proto_tree(void) {
     FILE *services = fopen("/etc/services", "r");
     char *line = NULL;
@@ -148,6 +150,12 @@ void init_proto_tree(void) {
 
     /* Always include 'file' pseudo protocol */
     proto_tree_add_proto("file");
+
+    /* Save file protocol node for fast checking */
+    struct prefix_tree_node *node = &proto_tree_head;
+    for (const char *ch = "file"; *ch; ch++)
+        node =  match_proto_tree(node, *ch);
+    file_leaf = node;
 
     for (ssize_t sz; (sz = getline(&line, &len, services)) != -1; ) {
         char  *it = line;
@@ -176,7 +184,12 @@ void init_proto_tree(void) {
 enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
 #define MATCH(tab, ch) (!!((tab)[((ch) >> 5) - 1] & (1U << ((ch) & 0x1F))))
     static uint32_t c_proto[] = {0x03FF6000, 0x07FFFFFE, 0x07FFFFFE}; // [\w\d\-.]
-    static uint32_t c_ext[] = {0xAFFFFFD2, 0x87FFFFFF, 0x47FFFFFE}; // [\w\d\-._~!$&'()*+,;=:@/?]
+
+    // static uint32_t c_ext[] = {0xAFFFFFD2, 0x87FFFFFF, 0x47FFFFFE}; // [\w\d\-._~!$&'()*+,;=:@/?]
+
+    // For real world purposes don't treat following characters as a part of URL: ()'
+    // This makes parenthesized and quoted URLs match correctly.
+    static uint32_t c_ext[] = {0xAFFFFC42, 0x87FFFFFF, 0x47FFFFFE}; // [\w\d\-._~!$&*+,;=:@/?]
 
     /* This code does not handle fancy unicode URIs that
      * can be displayed by browsers, but only strictly complying
@@ -204,15 +217,18 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
             if (stt->ptc)
                 return urim_need_more;
         } else if (ch == ':' && is_leaf_node(stt->ptc)) {
+            stt->matched_file_proto = stt->ptc == file_leaf;
             stt->state++;
             stt->ptc = &proto_tree_head;
             return (stt->res = urim_need_more);
         }
         break;
-    case uris1_slash1:
     case uris1_slash2:
+    case uris1_slash1:
         if (ch == '/') {
-            stt->state++;
+            if (stt->state == uris1_slash2 && stt->matched_file_proto)
+                stt->state = uris1_filename;
+            else stt->state++;
             return (stt->res = urim_need_more);
         }
         break;
@@ -271,6 +287,12 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
     case uris1_p_hex2:
         if (isxdigit(ch)) {
             stt->state = stt->saved;
+            return (stt->res = urim_may_finish);
+        }
+        break;
+    case uris1_filename:
+        /* Allow everything except space and control characters in filenames */
+        if (ch > ' ') {
             return (stt->res = urim_may_finish);
         }
         break;

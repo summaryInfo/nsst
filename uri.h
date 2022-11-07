@@ -27,12 +27,14 @@ enum uri_match_state1 {
     uris1_fragment,
     uris1_p_hex1,
     uris1_p_hex2,
+    uris1_filename
 };
 
 struct uri_match_state {
     enum uri_match_state1 state;
     enum uri_match_state1 saved;
     enum uri_match_result res;
+    bool matched_file_proto;
     size_t size;
     size_t caps;
     char *data;
@@ -56,4 +58,3 @@ void uri_release_memory(void);
 void init_proto_tree(void);
 
 #endif
-
