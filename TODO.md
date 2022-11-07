@@ -3,16 +3,11 @@ Roadmap
 
 ## Future versions
 
-_NOTE: These plans can change any time_
+### Until 2.5
 
-### Until 2.5 (or later)
+* Fix infinite loop in `fixup_line_seqno()` (if it's still present; only happened once).
 
-* Fix infinite loop in `fixup_line_seqno()` (only happened once).
-
-* Change X cursor according to the situation.
-  *  Hand when pointing to the link and I-beam in other situations.
-
-* (Maybe) show helper when hovering over URL.
+* Make config format more sophisticated. Support arrays and quoted strings.
 
 * Re-implement mouse selection via line_handle's to (mostly) remove special case.
   * "Mostly", because we still would need to notify mouse code upon relocation.
@@ -25,21 +20,27 @@ _NOTE: These plans can change any time_
 * Underlines
   * `CSI 4:3 m` -- curly underline
 
+* Allow geometry to be specified in characters
+
+_NOTE: These plans can change any time_
+
+### Until 2.6 (or later)
+
+* (Maybe) show helper when hovering over URL.
+
 * Allow selecting over the end of the short line
 
 * Wayland
 
 * IME support
 
-* Allow geometry to be specified in characters
-
 * OSC 50 ; Pt ST -- Set font
 
 * `CSI ? 35 l` / `CSI ? 35 h` -- font shifting functions
 
 * Pointer (for X11)
-
-  * Shape
+  * Change X cursor according to the situation.
+    Hand when pointing to the link and I-beam in other situations.
   * `CSI > Ps p` -- `XTSMPOINTER`
   * `OSC 13 Pt ST` -- Set mouse background color
   * `OSC 14 Pt ST` -- Set mouse foreground color
