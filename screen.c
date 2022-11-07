@@ -2001,7 +2001,6 @@ inline static void print_buffer(struct screen *scr, const uint32_t *bstart, cons
     scr->c.pending = cx == max_tx;
     scr->c.x = cx - scr->c.pending;
 
-
     // Put charaters, with fast path for ASCII-only
     if (astart) {
         copy_ascii_to_cells(cell, astart, astart + totalw, attrid);
@@ -2018,8 +2017,8 @@ inline static void print_buffer(struct screen *scr, const uint32_t *bstart, cons
     }
 }
 
-ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs) {
-    ssize_t res = 1;
+bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs) {
+    bool res = true;
 
     // Compute maximal with to be printed at once
     register ssize_t maxw = screen_max_x(scr) - screen_min_x(scr);
@@ -2047,14 +2046,21 @@ ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const u
     if ((LIKELY(!has_non_ascii) || !utf8) &&
         LIKELY(!skip_del && fast_nrcs &&
                glv != cs94_dec_graph && scr->c.gl_ss == scr->c.gl) ) {
+
         maxw = MIN(chunk - xstart, maxw);
         *start = xstart + maxw;
         scr->prev_ch = xstart[maxw - 1];
         print_buffer(scr, NULL, xstart, maxw);
+
+        if (xstart <= scr->save_handle_at_print && scr->save_handle_at_print < end) {
+            replace_handle(&scr->saved_handle, &scr->screen[scr->c.y]);
+            scr->saved_handle.offset += scr->c.x - (end - scr->save_handle_at_print);
+        }
         return res;
     }
 
     uint32_t *pbuf = scr->predec_buf;
+    uint32_t *save_offset = NULL;
     register int32_t ch;
     register ssize_t totalw = 0;
     uint32_t prev = -1U;
@@ -2064,9 +2070,11 @@ ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const u
         if (UNLIKELY((ch = decode_special(&xstart, end, !utf8)) < 0)) {
             // If we encountered partial UTF-8,
             // print all we have and return
-            res = 0;
+            res = false;
             break;
         }
+
+        if (char_start == scr->save_handle_at_print) save_offset = pbuf;
 
         // Skip DEL char if not 96 set
         if (UNLIKELY(IS_DEL(ch)) && skip_del) continue;
@@ -2126,6 +2134,12 @@ ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const u
     *start = xstart;
 
     print_buffer(scr, scr->predec_buf, NULL, pbuf - scr->predec_buf);
+
+    if (save_offset) {
+        replace_handle(&scr->saved_handle, &scr->screen[scr->c.y]);
+        scr->saved_handle.offset += scr->c.x - (pbuf - save_offset);
+    }
+
     return res;
 }
 

@@ -150,6 +150,9 @@ struct screen {
     uint32_t prev_ch;
 
     struct multipool mp;
+
+    const uint8_t *save_handle_at_print;
+    struct line_handle saved_handle;
 };
 
 bool init_screen(struct screen *scr, struct window *win);
@@ -204,7 +207,7 @@ void screen_print_screen(struct screen *scr, bool force_ext);
 void screen_print_line(struct screen *scr, struct line_handle *line);
 void screen_set_margin_bell_volume(struct screen *scr, uint8_t vol);
 uint8_t screen_get_margin_bell_volume(struct screen *scr);
-ssize_t screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs);
+bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs);
 ssize_t screen_dispatch_rep(struct screen *scr, int32_t rune, ssize_t rep);
 void screen_unwrap_cursor_line(struct screen *scr);
 void screen_wrap(struct screen *scr, bool soft);
@@ -212,6 +215,14 @@ void screen_print_all(struct screen *scr);
 void screen_drain_scrolled(struct screen *scr);
 
 char *encode_sgr(char *dst, char *end, const struct attr *attr);
+
+inline static void screen_set_bookmark(struct screen *scr, const uint8_t *pin) {
+    scr->save_handle_at_print = pin;
+}
+
+inline static struct line_handle *screen_get_bookmark(struct screen *scr) {
+    return &scr->saved_handle;
+}
 
 inline static ssize_t screen_width(struct screen *scr) {
     return scr->width;
