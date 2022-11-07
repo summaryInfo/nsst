@@ -7,8 +7,6 @@ _NOTE: These plans can change any time_
 
 ### Until 2.4
 
-* Implement option `--match-uri=<X>` where `<X>` is one of `off`,`manual`,`auto`
-
 * Fix infinite loop in `fixup_line_seqno()`.
 
 ### Until 2.5 (or later)

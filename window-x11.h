@@ -162,7 +162,7 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr *attr,
     //      -- underline colors
     //      -- dotted underlines
 #if USE_URI
-    bool has_uri = attr->uri && cfg->allow_uris;
+    bool has_uri = attr->uri && cfg->uri_mode != uri_mode_off;
     bool active_uri = attr->uri == rcs->active_uri;
 #else
     bool has_uri = 0, active_uri = 0;
@@ -323,4 +323,3 @@ void handle_resize(struct window *win, int16_t width, int16_t height);
 struct window *window_find_shared_font(struct window *win, bool need_free);
 
 #endif
-

@@ -49,6 +49,12 @@ enum keyboad_mapping {
     keymap_MAX
 };
 
+enum uri_mode {
+    uri_mode_off,
+    uri_mode_manual,
+    uri_mode_auto,
+};
+
 #define MAX_DOMAIN_NAME 254
 
 struct global_config {
@@ -119,6 +125,7 @@ struct instance_config {
     enum cursor_type cursor_shape;
     enum pixel_mode pixel_mode;
     enum charset keyboard_nrcs;
+    enum uri_mode uri_mode;
     int modify_other_fmt;
     int margin_bell_volume;
     int bell_volume;
@@ -202,7 +209,6 @@ struct instance_config {
     bool allow_subst_font;
     bool force_scalable;
     bool autorepeat;
-    bool allow_uris;
     bool override_boxdraw;
 };
 

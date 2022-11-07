@@ -788,7 +788,7 @@ inline static bool is_button1_down(struct mouse_event *ev) {
 }
 
 static void update_active_uri(struct screen *scr, struct window *win, struct mouse_event *ev) {
-    if (!window_cfg(win)->allow_uris) return;
+    if (window_cfg(win)->uri_mode == uri_mode_off) return;
 
     struct extent c = window_get_cell_size(win);
     struct extent b = window_get_border(win);

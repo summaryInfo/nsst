@@ -1079,7 +1079,7 @@ static void term_dispatch_osc(struct term *term) {
 #if USE_URI
     case 8: /* Set current URI */ {
         char *uri = strchr((char *)dstr, ';');
-        if (!uri || !(cfg->allow_uris)) {
+        if (!uri || !(cfg->uri_mode != uri_mode_off)) {
             if (!uri) term_esc_dump(term, 0);
             break;
         }
@@ -3369,9 +3369,7 @@ bool term_read(struct term *term) {
         screen_reset_view(&term->scr, 1);
 
 #if USE_URI
-    bool allow_uris = window_cfg(screen_window(term_screen(term)))->allow_uris;
-
-    if (allow_uris) {
+    if (window_cfg(screen_window(term_screen(term)))->uri_mode == uri_mode_auto) {
         for (const uint8_t *cur = term->tty.start; cur < term->tty.end; cur++) {
             if (term->uri_match.state < uris1_slash1) {
                 /* Skip until potential URI start,
