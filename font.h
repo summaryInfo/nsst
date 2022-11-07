@@ -12,8 +12,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// IMPORTANT: Order should be the same as
-// in enum cell_attr
+/* IMPORTANT: Order should be the same as
+ * in enum cell_attr */
 enum face_name {
     face_normal = 0,
     face_italic = 1 << 0,
@@ -57,4 +57,3 @@ void glyph_cache_get_dim(struct glyph_cache *cache, int16_t *w, int16_t *h, int1
 struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face, bool *is_new);
 
 #endif
-

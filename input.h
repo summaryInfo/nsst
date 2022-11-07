@@ -32,23 +32,26 @@ struct keyboard_state {
     bool udk_locked : 1;
 
     bool modkey_other_fmt : 1;
-        // 0 -> CSI 27 ; M ; K ~
-        // 1 -> CSI K ; M u
+        /* 0 -> CSI 27 ; M ; K ~
+         * 1 -> CSI K ; M u
+         */
 
     uint16_t modkey_fn : 3;
     uint16_t modkey_cursor : 3;
     uint16_t modkey_keypad : 3;
-        // 0 ->
-        // 1 -> SS3 ...
-        // 2 -> CSI ...
-        // 3 -> CSI 1 ; ...
-        // 4 -> CSI > 1 ; ...
-        // 5,6,7 reserved
+        /* 0 ->
+         * 1 -> SS3 ...
+         * 2 -> CSI ...
+         * 3 -> CSI 1 ; ...
+         * 4 -> CSI > 1 ; ...
+         * 5,6,7 reserved
+         */
     uint16_t modkey_other : 2;
-        // 0 -> nothing
-        // 1 -> all, but common
-        // 2 -> all
-        // 3 reserved
+        /* 0 -> nothing
+         * 1 -> all, but common
+         * 2 -> all
+         * 3 reserved
+         */
 
     uint16_t fkey_inc_step : 5;
 
@@ -66,7 +69,7 @@ struct key {
     uint32_t utf32;
     uint32_t sym;
     uint32_t mask;
-    uint8_t utf8data[6]; // zero terminated
+    uint8_t utf8data[6]; /* Zero terminated */
     uint8_t utf8len;
     uint8_t ascii : 7;
     uint8_t is_fkey : 1;

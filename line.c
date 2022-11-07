@@ -77,8 +77,7 @@ void free_line(struct multipool *mp, struct line *line) {
 
 	if (!line) return;
 
-    // If we are freeing line its selection
-    // should be reset
+    /* If we are freeing line its selection should be reset */
     // TODO Make selection a set of regular handles
 #if DEBUG_LINES
     assert(!line->selection_index);
@@ -272,7 +271,7 @@ void split_line(struct multipool *mp, struct line *src, ssize_t offset) {
 
     copy_line(tail, 0, src, offset, tail_len);
 
-    // Fixup line properties
+    /* Fixup line properties */
 
     tail->force_damage = src->force_damage;
     tail->wrapped = src->wrapped;
@@ -280,7 +279,7 @@ void split_line(struct multipool *mp, struct line *src, ssize_t offset) {
     src->size = offset;
     src->wrapped = false;
 
-    // Fixup line ordering
+    /* Fixup line ordering */
 
     if (src->next)
         src->next->prev = tail;
@@ -288,7 +287,7 @@ void split_line(struct multipool *mp, struct line *src, ssize_t offset) {
     tail->prev = src;
     src->next = tail;
 
-    // Fixup references
+    /* Fixup references */
 
     struct line_handle *handle = src->first_handle, *next;
     while (handle) {
@@ -309,7 +308,7 @@ void split_line(struct multipool *mp, struct line *src, ssize_t offset) {
 }
 
 void optimize_line(struct multipool *mp, struct line *line) {
-    // NOTE After this point line will never be resized
+    /* NOTE After this point line will never be resized */
     if (line->size < line->caps) {
         size_t new_size = sizeof(*line) + (size_t)line->size * sizeof(line->cell[0]);
         struct line *new = mpa_realloc(mp, line, new_size, true);
@@ -356,12 +355,12 @@ struct line *concat_line(struct multipool *mp, struct line *src1, struct line *s
         }
     }
 
-    // Update line links
+    /* Update line links */
     struct line *next_line = detach_next_line(src2);
     detach_prev_line(src2);
     attach_next_line(src1, next_line);
 
-    // Update line handles
+    /* Update line handles */
     struct line_handle *handle = src2->first_handle, *next;
     while (handle) {
         next = handle->next;
@@ -414,14 +413,14 @@ void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, s
 HOT
 void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
 #if defined(__SSE2__)
-    // Well... this looks ugly but its fast
+    /* Well... this looks ugly but its fast */
 
     static_assert(sizeof(struct cell) == sizeof(uint32_t), "Wrong size of cell");
     int32_t pref = MIN((4 - (intptr_t)(((uintptr_t)dst/sizeof(uint32_t)) & 3)) & 3, width);
     switch (pref) {
-    case 3: dst[2] = c; //fallthrough
-    case 2: dst[1] = c; //fallthrough
-    case 1: dst[0] = c; //fallthrough
+    case 3: dst[2] = c; /* fallthrough */
+    case 2: dst[1] = c; /* fallthrough */
+    case 1: dst[0] = c; /* fallthrough */
     case 0:;
     }
     dst += pref;
@@ -436,9 +435,9 @@ void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
 
     dst += width & ~3;
     switch (width & 3) {
-    case 3: dst[2] = c; //fallthrough
-    case 2: dst[1] = c; //fallthrough
-    case 1: dst[0] = c; //fallthrough
+    case 3: dst[2] = c; /* fallthrough */
+    case 2: dst[1] = c; /* fallthrough */
+    case 1: dst[0] = c; /* fallthrough */
     case 0:;
     }
 #else
@@ -495,9 +494,9 @@ void copy_utf32_to_cells(struct cell *dst, const uint32_t *src, const uint32_t *
     }
 #else
     switch(pref) {
-        case 3: dstp[2] = src[2] | attrid; // fallthrough
-        case 2: dstp[1] = src[1] | attrid; // fallthrough
-        case 1: dstp[0] = src[0] | attrid; // fallthrough
+        case 3: dstp[2] = src[2] | attrid; /* fallthrough */
+        case 2: dstp[1] = src[1] | attrid; /* fallthrough */
+        case 1: dstp[0] = src[0] | attrid; /* fallthrough */
         default:;
     }
 
@@ -520,9 +519,9 @@ void copy_utf32_to_cells(struct cell *dst, const uint32_t *src, const uint32_t *
 
 short_copy:
     switch((end - src)) {
-        case 3: dstp[2] = src[2] | attrid; // fallthrough
-        case 2: dstp[1] = src[1] | attrid; // fallthrough
-        case 1: dstp[0] = src[0] | attrid; // fallthrough
+        case 3: dstp[2] = src[2] | attrid; /* fallthrough */
+        case 2: dstp[1] = src[1] | attrid; /* fallthrough */
+        case 1: dstp[0] = src[0] | attrid; /* fallthrough */
         default:;
     }
 
@@ -567,9 +566,9 @@ void copy_ascii_to_cells(struct cell *dst, const uint8_t *src, const uint8_t *en
 
 #else
     switch(pref) {
-        case 3: dstp[2] = src[2] | attrid; // fallthrough
-        case 2: dstp[1] = src[1] | attrid; // fallthrough
-        case 1: dstp[0] = src[0] | attrid; // fallthrough
+        case 3: dstp[2] = src[2] | attrid; /* fallthrough */
+        case 2: dstp[1] = src[1] | attrid; /* fallthrough */
+        case 1: dstp[0] = src[0] | attrid; /* fallthrough */
         default:;
     }
 
@@ -592,9 +591,9 @@ void copy_ascii_to_cells(struct cell *dst, const uint8_t *src, const uint8_t *en
 
 short_copy:
     switch((end - src)) {
-        case 3: dstp[2] = src[2] | attrid; // fallthrough
-        case 2: dstp[1] = src[1] | attrid; // fallthrough
-        case 1: dstp[0] = src[0] | attrid; // fallthrough
+        case 3: dstp[2] = src[2] | attrid; /* fallthrough */
+        case 2: dstp[1] = src[1] | attrid; /* fallthrough */
+        case 1: dstp[0] = src[0] | attrid; /* fallthrough */
         default:;
     }
 

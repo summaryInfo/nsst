@@ -396,12 +396,14 @@ finish:
 }
 
 inline static void push_history_until(struct screen *scr, struct line *from, struct line *to) {
-    if (LIKELY(from->seq < to->seq)) { // Push to history
+    if (LIKELY(from->seq < to->seq)) {
+        /* Push to history */
         for (; from->seq < to->seq; from = from->next) {
             optimize_line(&scr->mp, from);
             scr->sb_limit++;
         }
-    } else { // Pull from history
+    } else {
+        /* Pull from history */
         for (; to->seq > from->seq; to = to->next)
             scr->sb_limit--;
     }
@@ -505,12 +507,12 @@ static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) 
 }
 
 static void resize_aux(struct screen *scr, ssize_t width, ssize_t height) {
-    // Resize predecode buffer
+    /* Resize predecode buffer */
     size_t old_pbuf_size = ROUNDUP(scr->width*sizeof *scr->predec_buf, MPA_ALIGNMENT);
     size_t new_pbuf_size = ROUNDUP(width*sizeof *scr->predec_buf, MPA_ALIGNMENT);
     scr->predec_buf = xrealloc(scr->predec_buf, old_pbuf_size, new_pbuf_size);
 
-    // Resize temporary screen buffer
+    /* Resize temporary screen buffer */
     scr->temp_screen = xrealloc(scr->temp_screen, scr->height * sizeof *scr->temp_screen, height * sizeof *scr->temp_screen);
 
 }
@@ -535,7 +537,7 @@ static void fixup_view(struct screen *scr, struct line_handle *lower_left, enum 
         replace_handle(&scr->view_pos, &scr->top_line);
         break;
     case stick_none:
-        // Keep line of lower left view cell at the bottom
+        /* Keep line of lower left view cell at the bottom */
         line_handle_remove(&scr->view_pos);
         scr->view_pos = dup_handle(lower_left);
         scr->view_pos.offset -= scr->view_pos.offset % scr->width;
@@ -816,7 +818,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
     screen_drain_scrolled(scr);
 #if USE_URI
-    // Reset active URL
+    /* Reset active URL */
     window_set_active_uri(scr->win, EMPTY_URI, 0);
 #endif
 
@@ -824,7 +826,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
     resize_tabs(scr, width);
     resize_altscreen(scr, width, height);
 
-    // Find line of bottom left cell
+    /* Find line of bottom left cell */
     struct line_handle lower_left = dup_handle(&scr->view_pos);
     if (lower_left.line) {
         line_handle_add(&lower_left);
@@ -1225,8 +1227,8 @@ void screen_move_left(struct screen *scr, int16_t amount) {
         first_left = x < screen_min_x(scr) ? 0 : screen_min_x(scr);
 
 
-    // This is a hack that allows using proper line editing with reverse wrap
-    // mode while staying compatible with VT100 wrapping mode
+    /* This is a hack that allows using proper line editing with reverse wrap
+     * mode while staying compatible with VT100 wrapping mode */
     if (scr->mode.reverse_wrap) x += scr->c.pending;
 
     if (amount > x - first_left && scr->mode.wrap && scr->mode.reverse_wrap) {
@@ -1451,7 +1453,7 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
             window_delay_redraw(scr->win);
         }
 
-        // Update position of selection, if scrolled
+        /* Update position of selection, if scrolled */
         if (UNLIKELY(selection_active(&scr->sstate)))
             selection_scrolled(&scr->sstate, scr, amount, top, bottom);
     }
@@ -1466,9 +1468,9 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
 void screen_scroll(struct screen *scr, int16_t top, int16_t amount, bool save) {
     ssize_t left = screen_min_x(scr), right = screen_max_x(scr);
 
-    if (LIKELY(left == 0 && right == scr->width)) { // Fast scrolling without margins
+    if (LIKELY(left == 0 && right == scr->width)) { /* Fast scrolling without margins */
         amount = screen_scroll_fast(scr, top, amount, save);
-    } else { // Slow scrolling with margins
+    } else { /* Slow scrolling with margins */
         ssize_t bottom = screen_max_y(scr);
         for (ssize_t i = top; i < bottom; i++) {
             struct line_handle *line = &scr->screen[i];
@@ -1530,7 +1532,7 @@ void screen_insert_cells(struct screen *scr, int16_t n) {
 }
 
 void screen_delete_cells(struct screen *scr, int16_t n) {
-    // Do not check top/bottom margins, DCH should work outside them
+    /* Do not check top/bottom margins, DCH should work outside them */
     ssize_t max_x = screen_max_x(scr);
     if (scr->c.x >= screen_min_x(scr) && scr->c.x < max_x) {
         n = MIN(n, max_x - scr->c.x);
@@ -1697,12 +1699,12 @@ bool init_screen(struct screen *scr, struct window *win) {
 char *encode_sgr(char *dst, char *end, const struct attr *attr) {
 #define FMT(...) dst += snprintf(dst, end - dst, __VA_ARGS__)
 #define MAX_SGR_LEN 54
-    // Maximal length sequence is "0;1;2;3;4;6;7;8;9;38:2:255:255:255;48:2:255:255:255"
+    /* Maximal length sequence is "0;1;2;3;4;6;7;8;9;38:2:255:255:255;48:2:255:255:255" */
 
-    // Reset everything
+    /* Reset everything */
     FMT("0");
 
-    // Encode attributes
+    /* Encode attributes */
     if (attr->bold) FMT(";1");
     if (attr->faint) FMT(";2");
     if (attr->italic) FMT(";3");
@@ -1713,21 +1715,21 @@ char *encode_sgr(char *dst, char *end, const struct attr *attr) {
     if (attr->invisible) FMT(";8");
     if (attr->strikethrough) FMT(";9");
 
-    // Encode foreground color
+    /* Encode foreground color */
     if (color_idx(attr->fg) < 8) FMT(";%u", 30 + color_idx(attr->fg));
     else if (color_idx(attr->fg) < 16) FMT(";%u", 90 + color_idx(attr->fg) - 8);
     else if (color_idx(attr->fg) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";38:5:%u", color_idx(attr->fg));
     else if (color_idx(attr->fg) == SPECIAL_FG) /* FMT(";39") -- default, skip */;
     else if (is_direct_color(attr->fg)) FMT(";38:2:%u:%u:%u", color_r(attr->fg), color_g(attr->fg), color_b(attr->fg));
 
-    // Encode background color
+    /* Encode background color */
     if (color_idx(attr->bg) < 8) FMT(";%u", 40 + color_idx(attr->bg));
     else if (color_idx(attr->bg) < 16) FMT(";%u", 100 + color_idx(attr->bg) - 8);
     else if (color_idx(attr->bg) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";48:5:%u", color_idx(attr->bg));
     else if (color_idx(attr->bg) == SPECIAL_FG) /* FMT(";49") -- default, skip */;
     else if (is_direct_color(attr->bg)) FMT(";48:2:%u:%u:%u", color_r(attr->bg), color_g(attr->bg), color_b(attr->bg));
 
-    // Encode underline color
+    /* Encode underline color */
     if (color_idx(attr->ul) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";58:5:%u", color_idx(attr->ul));
     else if (color_idx(attr->ul) == SPECIAL_FG) /* FMT(";59") -- default, skip */;
     else if (is_direct_color(attr->ul)) FMT(";58:2:%u:%u:%u", color_r(attr->ul), color_g(attr->ul), color_b(attr->ul));
@@ -1760,7 +1762,7 @@ void screen_print_line(struct screen *scr, struct line_handle *line) {
         if (!c.ch) c.ch = ' ';
 
         //TODO Encode NRCS when UTF is disabled
-        //for now just always print as UTF-8
+        //     for now just always print as UTF-8
         if (c.ch < 0xA0) *pbuf++ = cell_get(&c);
         else pbuf += utf8_encode(cell_get(&c), pbuf, pend);
 
@@ -1949,7 +1951,7 @@ inline static void print_buffer(struct screen *scr, const uint32_t *bstart, cons
     struct line_handle *line = &scr->screen[scr->c.y];
     struct cell *cell = NULL;
 
-    // Writing to the line resets its wrapping state
+    /* Writing to the line resets its wrapping state */
     screen_unwrap_line(scr, scr->c.y);
 
     ssize_t max_cx = scr->c.x + totalw, cx = scr->c.x;
@@ -1960,7 +1962,7 @@ inline static void print_buffer(struct screen *scr, const uint32_t *bstart, cons
 
     view_adjust_wide_left(line, cx);
 
-    // Clear selection if writing over it
+    /* Clear selection if writing over it */
     if (UNLIKELY(selection_active(&scr->sstate)) && UNLIKELY(line->line->selection_index) &&
         view_selection_intersects(&scr->sstate, line, cx, scr->mode.insert ? max_tx : max_cx)) {
         screen_damage_selection(scr);
@@ -1973,14 +1975,14 @@ inline static void print_buffer(struct screen *scr, const uint32_t *bstart, cons
             window_bell(scr->win, scr->mbvol);
     }
 
-    // Allocate color for cell
+    /* Allocate color for cell */
     uint32_t attrid = alloc_attr(line->line, screen_sgr(scr));
 
     /* NOTE: screen_adjust_line_ex() does not fill line with correct values after resizing
      * here. So we should not try dereferencing attributes of undefined cells.
      * That is why attriubte allocation is performed above. */
 
-    // Shift characters to the left if insert mode is enabled
+    /* Shift characters to the left if insert mode is enabled */
     if (UNLIKELY(scr->mode.insert) && max_cx < max_tx && cx < line->width) {
         ssize_t max_new_size = MIN(max_tx, line->width + totalw);
         if (line->width < max_new_size)
@@ -2001,7 +2003,7 @@ inline static void print_buffer(struct screen *scr, const uint32_t *bstart, cons
     scr->c.pending = cx == max_tx;
     scr->c.x = cx - scr->c.pending;
 
-    // Put charaters, with fast path for ASCII-only
+    /* Put charaters, with fast path for ASCII-only */
     if (astart) {
         copy_ascii_to_cells(cell, astart, astart + totalw, attrid);
         if (UNLIKELY(gconfig.trace_characters)) {
@@ -2020,7 +2022,7 @@ inline static void print_buffer(struct screen *scr, const uint32_t *bstart, cons
 bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs) {
     bool res = true;
 
-    // Compute maximal with to be printed at once
+    /* Compute maximal with to be printed at once */
     register ssize_t maxw = screen_max_x(scr) - screen_min_x(scr);
     if (!scr->c.pending || !scr->mode.wrap)
         maxw = (scr->c.x >= screen_max_x(scr) ? screen_width(scr) : screen_max_x(scr)) - scr->c.x;
@@ -2031,13 +2033,10 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
     bool skip_del = glv > cs96_latin_1 || (!nrcs && (glv == cs96_latin_1 || glv == cs94_british));
     bool has_non_ascii = false;
 
-    // Find the actual end of buffer
-    // (control character or number of characters)
-    // to prevent checking that on each iteration
-    // and preload cache.
-    // Maximal possible size of the chunk is
-    // 4 times width of the lines since
-    // each UTF-8 can be at most 4 bytes single width
+    /* Find the actual end of buffer (control character or number of characters)
+     * to prevent checking that on each iteration and preload cache.
+     * Maximal possible size of the chunk is 4 times width of the lines since
+     * each UTF-8 can be at most 4 bytes single width */
 
     const uint8_t *xstart = *start;
     const uint8_t *chunk = find_chunk(xstart, end, maxw*4, &has_non_ascii);
@@ -2068,32 +2067,30 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
     do {
         const uint8_t *char_start = xstart;
         if (UNLIKELY((ch = decode_special(&xstart, end, !utf8)) < 0)) {
-            // If we encountered partial UTF-8,
-            // print all we have and return
+            /* If we encountered partial UTF-8, print all we have and return */
             res = false;
             break;
         }
 
         if (char_start == scr->save_handle_at_print) save_offset = pbuf;
 
-        // Skip DEL char if not 96 set
+        /* Skip DEL char if not 96 set */
         if (UNLIKELY(IS_DEL(ch)) && skip_del) continue;
 
-        // Decode nrcs
-        // In theory this should be disabled while in UTF-8 mode, but
-        // in practice applications use these symbols, so keep translating.
-        // But decode only allow only DEC Graph in GL, unless configured otherwise
+        /* Decode nrcs.
+         * In theory this should be disabled while in UTF-8 mode, but
+         * in practice applications use these symbols, so keep translating.
+         * But decode only allow only DEC Graph in GL, unless configured otherwise. */
         if (LIKELY(fast_nrcs))
             ch = nrcs_decode_fast(glv, ch);
         else
             ch = nrcs_decode(glv, scr->c.gn[scr->c.gr], scr->upcs, ch, nrcs);
-        scr->c.gl_ss = scr->c.gl; // Reset single shift
+        scr->c.gl_ss = scr->c.gl; /* Reset single shift */
 
         prev = ch;
 
         if (UNLIKELY(iscombining(ch))) {
-            // Don't put zero-width charactes
-            // to predecode buffer
+            /* Don't put zero-width charactes to predecode buffer */
             if (!totalw) screen_precompose_at_cursor(scr, ch);
             else {
                 uint32_t *p = pbuf - 1 - !pbuf[-1];
@@ -2102,9 +2099,9 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
         } else {
             int wid = 1 + iswide(ch);
 
-            // Don't include char if its too wide, unless its a wide char
-            // at right margin, or autowrap is disabled, and we are at right size of the screen
-            // In those cases recalculate maxw
+            /* Don't include char if its too wide, unless its a wide char
+             * at right margin, or autowrap is disabled, and we are at right size of the screen.
+             * In those cases recalculate maxw. */
             if (UNLIKELY(totalw + wid > maxw)) {
                 if (LIKELY(totalw || wid != 2)) {
                     xstart = char_start;
@@ -2126,10 +2123,10 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
                 *pbuf++ = 0;
         }
 
-        // Since maxw < width == length of predec_buf, don't check it
+        /* Since maxw < width == length of predec_buf, don't check it */
     } while(totalw < maxw && /* count < FD_BUF_SIZE && */ xstart < chunk);
 
-    if (prev != -1U) scr->prev_ch = prev; // For REP CSI
+    if (prev != -1U) scr->prev_ch = prev; /* For REP CSI */
 
     *start = xstart;
 
@@ -2145,13 +2142,12 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
 
 ssize_t screen_dispatch_rep(struct screen *scr, int32_t rune, ssize_t rep) {
     if (iscombining(rune)) {
-        // Don't put zero-width charactes
-        // to predecode buffer
+        /* Don't put zero-width charactes to predecode buffer */
         screen_precompose_at_cursor(scr, rune);
         return 0;
     }
 
-    // Compute maximal with to be printed at once
+    /* Compute maximal with to be printed at once */
     ssize_t maxw = screen_max_x(scr) - screen_min_x(scr), totalw = 0;
 
     uint32_t *pbuf = scr->predec_buf;
@@ -2159,12 +2155,12 @@ ssize_t screen_dispatch_rep(struct screen *scr, int32_t rune, ssize_t rep) {
         maxw = (scr->c.x >= screen_max_x(scr) ? screen_width(scr) : screen_max_x(scr)) - scr->c.x;
 
     if (iswide(rune)) {
-        // Allow printing at least one wide char at right margin
-        // if autowrap is off
+        /* Allow printing at least one wide char at right margin
+         * if autowrap is off. */
         if (maxw < 2) maxw = 2;
 
-        // If autowrap is on, in this case line will be
-        // wrapped so we can print a lot more
+        /* If autowrap is on, in this case line will be
+         * wrapped so we can print a lot more. */
         if (scr->mode.wrap && scr->c.x == screen_max_x(scr) - 1)
             maxw = screen_max_x(scr) - screen_min_x(scr);
 

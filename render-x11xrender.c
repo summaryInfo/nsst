@@ -251,11 +251,11 @@ void renderer_free(struct window *win) {
 }
 
 void platform_init_render_context(void) {
-    // Check if XRender is present
+    /* Check if XRender is present */
     xcb_render_query_version_cookie_t vc = xcb_render_query_version(con, XCB_RENDER_MAJOR_VERSION, XCB_RENDER_MINOR_VERSION);
     xcb_generic_error_t *err = NULL;
     xcb_render_query_version_reply_t *rep = xcb_render_query_version_reply(con, vc, &err);
-    // Any version is OK, so don't check
+    /* Any version is OK, so don't check */
     free(rep);
 
     if (err) {
@@ -324,13 +324,13 @@ inline static struct glyph_msg *start_msg(int16_t dx, int16_t dy) {
 
 static void draw_text(struct window *win, struct element_buffer *buf) {
     for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; ) {
-        // Prepare pen
+        /* Prepare pen */
         color_t color = it->color;
         xcb_render_color_t col = MAKE_COLOR(color);
         xcb_rectangle_t rect2 = { .x = 0, .y = 0, .width = 1, .height = 1 };
         xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->plat.pen, col, 1, &rect2);
 
-        // Build payload...
+        /* Build payload... */
 
         rctx.payload_size = 0;
 
@@ -360,7 +360,7 @@ static void draw_text(struct window *win, struct element_buffer *buf) {
             }
         }
 
-        // ..and send it
+        /* ..and send it */
 
         if (rctx.payload_size) {
             xcb_render_composite_glyphs_32(con, XCB_RENDER_PICT_OP_OVER,
@@ -371,7 +371,7 @@ static void draw_text(struct window *win, struct element_buffer *buf) {
 }
 
 
-// X11-independent code is below
+/* X11-independent code is below */
 
 
 inline static void free_elem_buffer(struct element_buffer *buf) {
@@ -410,8 +410,8 @@ static void push_rect(struct rect *rect) {
 }
 
 inline static void push_element(struct element_buffer *dst, struct element *elem) {
-    // We need buffer twice as big a the number of elements to
-    // be able to use merge sort efficiently
+    /* We need buffer twice as big a the number of elements to
+     * be able to use merge sort efficiently */
     adjust_buffer((void **)&dst->data, &dst->caps, 2*(dst->size + 1), sizeof *elem);
     dst->data[dst->size++] = *elem;
 }
@@ -551,7 +551,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
             if (dirty || (g_wide && next_dirty)) {
                 int16_t y = k * (win->char_depth + win->char_height);
 
-                // Queue background, grouping by color
+                /* Queue background, grouping by color */
 
                 struct element *prev_bg = rctx.background_buf.data + rctx.background_buf.size - 1;
                 if (LIKELY(!first_in_line && prev_bg->color == spec.bg &&
@@ -569,7 +569,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                     });
                 }
 
-                // Push character if present, grouping by color
+                /* Push character if present, grouping by color */
 
                 if (spec.ch) {
                     g |=  (uint32_t)spec.wide << 31;
@@ -590,7 +590,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                 }
 
 
-                // Push strikethrough/underline rects, if present
+                /* Push strikethrough/underline rects, if present */
 
                 if (UNLIKELY(spec.underlined)) {
                     int16_t line_y = y + win->char_height + 1 + win->cfg.line_spacing/2;
@@ -657,7 +657,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
             }
             next_dirty = dirty;
         }
-        // Only reset force flag for last part of the line
+        /* Only reset force flag for last part of the line */
         if (!view_wrapped(&view))
             view.line->force_damage = 0;
     }
@@ -717,13 +717,13 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
 
     set_clip(win, &rctx.background_buf);
 
-    // Draw cells backgrounds
+    /* Draw cells backgrounds */
     draw_rects(win, &rctx.background_buf);
     draw_text(win, &rctx.foreground_buf);
 
     if (rctx.background_buf.size) reset_clip(win);
 
-    // Draw underline and strikethrough lines
+    /* Draw underline and strikethrough lines */
     draw_rects(win, &rctx.decoration_buf);
 
     if (cursor) draw_cursor(win, cur_x, cur_y, marg, beyond_eol);

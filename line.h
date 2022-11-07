@@ -104,11 +104,10 @@ struct line_handle {
     int32_t width;
 } ALIGNED(MPA_ALIGNMENT);
 
-// Add default attrib value?
 struct line {
     struct line *next;
     struct line *prev;
-    uint64_t  seq; // Global history counter
+    uint64_t  seq; /* Global history counter */
     struct line_handle *first_handle;
     struct line_attr *attrs;
     ssize_t size;

@@ -173,7 +173,7 @@ inline static ht_head_t *ht_erase(hashtable_t *ht, ht_head_t *elem) {
     return ht_erase_hint(ht, cand);
 }
 
-// Murmur64A
+/* Murmur64A */
 inline static uint64_t hash64(const void *vdata, size_t len) {
     const uint64_t m = 0xC6A4A7935BD1E995LLU;
 
@@ -190,12 +190,12 @@ inline static uint64_t hash64(const void *vdata, size_t len) {
 
     const uint8_t *tail = (const uint8_t *)data;
     switch (len & 7) {
-    case 7: h ^= (uint64_t)tail[6] << 48; //fallthrough
-    case 6: h ^= (uint64_t)tail[5] << 40; //fallthrough
-    case 5: h ^= (uint64_t)tail[4] << 32; //fallthrough
-    case 4: h ^= (uint64_t)tail[3] << 24; //fallthrough
-    case 3: h ^= (uint64_t)tail[2] << 16; //fallthrough
-    case 2: h ^= (uint64_t)tail[1] << 8; //fallthrough
+    case 7: h ^= (uint64_t)tail[6] << 48; /* fallthrough */
+    case 6: h ^= (uint64_t)tail[5] << 40; /* fallthrough */
+    case 5: h ^= (uint64_t)tail[4] << 32; /* fallthrough */
+    case 4: h ^= (uint64_t)tail[3] << 24; /* fallthrough */
+    case 3: h ^= (uint64_t)tail[2] << 16; /* fallthrough */
+    case 2: h ^= (uint64_t)tail[1] << 8; /* fallthrough */
     case 1: h ^= (uint64_t)tail[0];
           h *= m;
     };

@@ -207,16 +207,16 @@ const uint8_t *match_reverse_proto_tree(struct uri_match_state *stt, const uint8
 enum uri_match_result uri_match_next_from_colon(struct uri_match_state *stt, uint8_t ch) {
 #define MATCH(tab, ch) (!!((tab)[((ch) >> 5) - 1] & (1U << ((ch) & 0x1F))))
 
-    // For real world purposes don't treat following characters as a part of URL: ()'
-    // This makes parenthesized and quoted URLs match correctly.
-    // static uint32_t c_ext[] = {0xAFFFFFD2, 0x87FFFFFF, 0x47FFFFFE}; // [\w\d\-._~!$&'()*+,;=:@/?]
-    static uint32_t c_ext[] = {0xAFFFFC42, 0x87FFFFFF, 0x47FFFFFE}; // [\w\d\-._~!$&*+,;=:@/?]
+    /* For real world purposes don't treat following characters as a part of URL: ()'
+     * This makes parenthesized and quoted URLs match correctly. */
+    // static uint32_t c_ext[] = {0xAFFFFFD2, 0x87FFFFFF, 0x47FFFFFE}; /* [\w\d\-._~!$&'()*+,;=:@/?] */
+    static uint32_t c_ext[] = {0xAFFFFC42, 0x87FFFFFF, 0x47FFFFFE}; /* [\w\d\-._~!$&*+,;=:@/?] */
 
     /* This code does not handle fancy unicode URIs that
      * can be displayed by browsers, but only strictly complying
      * that includes only subset of ASCII */
 
-    // Only ASCII graphical characters are accepted
+    /* Only ASCII graphical characters are accepted */
     if (ch - 0x21U > 0x5DU) goto finish_nak;
 
     if (!stt->no_copy) {
@@ -248,12 +248,12 @@ enum uri_match_result uri_match_next_from_colon(struct uri_match_state *stt, uin
         if (ch == '@') {
             stt->state = uris1_host;
             return (stt->res = urim_need_more);
-        } else //fallthrough
+        } else /* fallthrough */
     case uris1_host:
         if (ch == ':') {
             stt->state = uris1_port;
             return (stt->res = urim_need_more);
-        } else //fallthrough
+        } else /* fallthrough */
     case uris1_path:
         if (ch == '/') {
             stt->state = uris1_path;
@@ -261,12 +261,12 @@ enum uri_match_result uri_match_next_from_colon(struct uri_match_state *stt, uin
         } else if (ch == '?') {
             stt->state = uris1_query;
             return (stt->res = urim_may_finish);
-        } else //fallthrough
+        } else /* fallthrough */
     case uris1_query:
         if (ch == '#') {
             stt->state = uris1_fragment;
             return (stt->res = urim_may_finish);
-        } else //fallthrough
+        } else /* fallthrough */
     case uris1_fragment:
         if (ch == '%') {
             stt->saved = stt->state;
@@ -313,8 +313,8 @@ enum uri_match_result uri_match_next_from_colon(struct uri_match_state *stt, uin
     if (stt->size) {
         stt->size--;
         if (stt->data) {
-            // Last character was not part of URL,
-            // remove it (buffer should be cleared by outer code)
+            /* Last character was not part of URL, remove it.
+             * (buffer should be cleared by outer code.) */
             stt->data[stt->size] = '\0';
         }
     }

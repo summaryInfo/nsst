@@ -164,7 +164,7 @@ uint32_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, uint32_
 
     enum charset set = ch > 0x7F ? gr : gl;
 
-    // User preferred supplemental
+    /* User preferred supplemental */
     if (set == cs94_dec_sup) set = ups;
 
     switch (set) {

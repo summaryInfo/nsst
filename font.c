@@ -249,7 +249,7 @@ struct font *create_font(const char* descr, double size, double dpi, double gamm
     for (size_t i = 0; i < face_MAX; i++)
         load_face_list(font, &font->face_types[i], descr, i, size);
 
-    // If can't find suitable, use 13 by default
+    /* If can't find suitable, use 13 by default */
     if (font->pixel_size == 0)
         font->pixel_size = 13.0;
 

@@ -101,8 +101,8 @@ struct image create_image(int16_t width, int16_t height) {
 
 void image_draw_rect(struct image im, struct rect rect, color_t fg) {
     if (intersect_with(&rect, &(struct rect){0, 0, im.width, im.height})) {
-        // That's a hack for PutImage
-        // PutImage cannot pass stride
+        /* That's a hack for PutImage
+         * PutImage cannot pass stride */
         if (im.shmid < 0 && rect.x + rect.width == im.width)
             rect.width += STRIDE(im.width) - im.width;
 
@@ -199,25 +199,25 @@ inline static __m128i op_over4(__m128i bg8, __m128i fg16, uint32_t alpha) {
 
     __m128i valpha = _mm_set1_epi32(alpha);
 
-    // alpha
+    /* alpha */
     __m128i al_0 = _mm_shuffle_epi8(valpha, allo);
     __m128i al_1 = _mm_shuffle_epi8(valpha, alhi);
-    // fg*alpha
+    /* fg*alpha */
     __m128i mfg_0 = _mm_mullo_epi16(fg16, al_0);
     __m128i mfg_1 = _mm_mullo_epi16(fg16, al_1);
 
-    // 255-alpha
+    /* 255-alpha */
     __m128i mal_0 = _mm_xor_si128(m255, al_0);
     __m128i mal_1 = _mm_xor_si128(m255, al_1);
-    // bg*(255-alpha)
+    /* bg*(255-alpha) */
     __m128i mbg_0 = _mm_mullo_epi16(_mm_cvtepu8_epi16(bg8), mal_0);
     __m128i mbg_1 = _mm_mullo_epi16(_mm_unpackhi_epi8(bg8, zero), mal_1);
 
-    // bg*(255-alpha) + fg*alpha
+    /* bg*(255-alpha) + fg*alpha */
     __m128i res_0 = _mm_adds_epu16(mfg_0, mbg_0);
     __m128i res_1 = _mm_adds_epu16(mfg_1, mbg_1);
 
-    // (bg*(255-alpha) + fg*alpha)/255
+    /* (bg*(255-alpha) + fg*alpha)/255 */
     __m128i div_0 = _mm_srli_epi16(_mm_mulhi_epu16(res_0, div), 7);
     __m128i div_1 = _mm_srli_epi16(_mm_mulhi_epu16(res_1, div), 7);
     return _mm_packus_epi16(div_0, div_1);
@@ -229,25 +229,21 @@ inline static __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) 
     const __m128i zero = _mm_set1_epi32(0x00000000);
     const __m128i div  = _mm_set1_epi16(-32639);
 
-    // alpha
+    /* alpha */
     __m128i al_0 = _mm_cvtepu8_epi16(alpha);
     __m128i al_1 = _mm_unpackhi_epi8(alpha, zero);
-    // fg*alpha
-    __m128i mfg_0 = _mm_mullo_epi16(fg16, al_0);
+    /* fg*alpha */*    __m128i mfg_0 = _mm_mullo_epi16(fg16, al_0); */
     __m128i mfg_1 = _mm_mullo_epi16(fg16, al_1);
 
-    // 255-alpha
-    __m128i mal_0 = _mm_xor_si128(m255, al_0);
+    /* 255-alpha */*    __m128i mal_0 = _mm_xor_si128(m255, al_0); */
     __m128i mal_1 = _mm_xor_si128(m255, al_1);
-    // bg*(255-alpha)
-    __m128i mbg_0 = _mm_mullo_epi16(_mm_cvtepu8_epi16(bg8), mal_0);
+    /* bg*(255-alpha) */*    __m128i mbg_0 = _mm_mullo_epi16(_mm_cvtepu8_epi16(bg8), mal_0); */
     __m128i mbg_1 = _mm_mullo_epi16(_mm_unpackhi_epi8(bg8, zero), mal_1);
 
-    // bg*(255-alpha) + fg*alpha
-    __m128i res_0 = _mm_adds_epu16(mfg_0, mbg_0);
+    /* bg*(255-alpha) + fg*alpha */*    __m128i res_0 = _mm_adds_epu16(mfg_0, mbg_0); */
     __m128i res_1 = _mm_adds_epu16(mfg_1, mbg_1);
 
-    // (bg*(255-alpha) + fg*alpha)/255
+    /* (bg*(255-alpha) + fg*alpha)/255 */
     __m128i div_0 = _mm_srli_epi16(_mm_mulhi_epu16(res_0, div), 7);
     __m128i div_1 = _mm_srli_epi16(_mm_mulhi_epu16(res_1, div), 7);
     return _mm_packus_epi16(div_0, div_1);
@@ -534,7 +530,7 @@ void image_copy(struct image dst, struct rect rect, struct image src, int16_t sx
 
         if (rect.y < sy || (rect.y == sy && rect.x <= sx)) /* Copy forward */ {
 
-            // First, fill unaligned prefix
+            /* First, fill unaligned prefix */
             if (rect.x & 3) {
                 ssize_t w = MIN(4 - (rect.x & 3), width);
                 for (ssize_t y = 0; y < height; y++)
@@ -546,10 +542,10 @@ void image_copy(struct image dst, struct rect rect, struct image src, int16_t sx
             }
             if (width <= 0) return;
 
-            // Then fill aligned part
+            /* Then fill aligned part */
             ssize_t width4 = width & ~3;
-            // Two cases depending on aligning of source pointer
-            // (destination pointer is aligned anyway)
+            /* Two cases depending on aligning of source pointer
+             * (destination pointer is aligned anyway) */
             if ((uintptr_t)sptr & 15) {
                 for (ssize_t y = 0; y < height; y++) {
                     for (ssize_t x = 0; x < width4; x += 4) {
@@ -570,7 +566,7 @@ void image_copy(struct image dst, struct rect rect, struct image src, int16_t sx
                 }
             }
         } else /* Copy backward */ {
-            // First, fill unaligned suffix
+            /* First, fill unaligned suffix */
             if ((rect.x + width) & 3) {
                 ssize_t w = MIN((rect.x + width) & 3, width);
                 for (ssize_t y = height - 1; y >= 0; y--)
@@ -580,10 +576,10 @@ void image_copy(struct image dst, struct rect rect, struct image src, int16_t sx
             }
             if (width <= 0) return;
 
-            // Then fill aligned part
+            /* Then fill aligned part */
 
-            // Two cases depending on aligning of source pointer
-            // (destination pointer is aligned anyway)
+            /* Two cases depending on aligning of source pointer
+             * (destination pointer is aligned anyway) */
 
             if ((uintptr_t)(sptr + width) & 15) {
                 for (ssize_t y = height - 1; y >= 0; y--) {

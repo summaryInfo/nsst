@@ -64,7 +64,7 @@ static _Noreturn void version(int fd) {
 }
 
 static void send_opt(int fd, const char *opt, const char *value) {
-    // This API lacks const's but doesn't change values...
+    /* This API lacks const's but doesn't change values... */
     struct iovec dvec[4] = {
         { .iov_base = (char *)"\035" /* GS */, .iov_len = 1 },
         { .iov_base = (char *)opt, .iov_len = strlen(opt) },
@@ -229,8 +229,8 @@ static void parse_args(char **argv, int fd, bool client) {
                     need_exit = is_true(arg);
             }
 
-            // We need to restore the original
-            // argv value since we parse options twice.
+            /* We need to restore the original
+             * argv value since we parse options twice. */
             if (name_end)
                 *name_end = '=';
             continue;

@@ -108,9 +108,8 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
     }
 
     if (cfg_changed || bg_changed) {
-        // If reverse video is set via option
-        // during initialization
-        // win->term can be NULL at this point
+        /* If reverse video is set via option during initialization
+         * win->term can be NULL at this point. */
 
         if (win->term) screen_damage_lines(term_screen(win->term), 0, win->ch);
         win->force_redraw = 1;
@@ -403,7 +402,7 @@ struct window *window_find_shared_font(struct window *win, bool need_free) {
     win->font_cache = newc;
     win->cfg.font_size = font_get_size(newf);
 
-    //Initialize default font size
+    /* Initialize default font size */
     if (!ctx.font_size) ctx.font_size = win->cfg.font_size;
 
     glyph_cache_get_dim(win->font_cache, &win->char_width, &win->char_height, &win->char_depth);
@@ -462,8 +461,8 @@ error:
 void free_window(struct window *win) {
     platform_free_window(win);
 
-    // Decrement count of currently blinking
-    // windows if window gets freed during blink
+    /* Decrement count of currently blinking
+     * windows if window gets freed during blink. */
     if (win->in_blink) ctx.vbell_count--;
 
     if (win->next) win->next->prev = win->prev;
@@ -635,21 +634,21 @@ void run(void) {
     for (int64_t next_timeout = SEC;;) {
         poller_poll(next_timeout);
 
-        // First check window system events
+        /* First check window system events */
         platform_handle_events();
 
-        // Reload config if requested
+        /* Reload config if requested */
         if (reload_config) do_reload_config();
 
-        // Process connecting clients
-        // If this functions returns true we need to exit.
+        /* Process connecting clients
+         * If this functions returns true we need to exit. */
         if (daemon_process_clients()) break;
 
         next_timeout = 30*SEC;
         struct timespec cur ALIGNED(16);
         clock_gettime(CLOCK_TYPE, &cur);
 
-        // Then read for PTYs
+        /* Then read for PTYs */
         for (struct window *win = win_list_head, *next; win; win = next) {
             next = win->next;
             int evt = poller_index_events(win->poll_index);
@@ -657,10 +656,10 @@ void run(void) {
                 free_window(win);
             } else {
                 bool need_read = evt & POLLIN;
-                // If we requested flush scroll, pty fd got disabled from polling
-                // to prevent active waiting loop. If smooth scroll timeout got expired
-                // we can enable it back and attempt to read from pty.
-                // If there is nothing to read it won't block since O_NONBLOCK is set for ptys
+                /* If we requested flush scroll, pty fd got disabled from polling
+                 * to prevent active waiting loop. If smooth scroll timeout got expired
+                 * we can enable it back and attempt to read from pty.
+                 * If there is nothing to read it won't block since O_NONBLOCK is set for ptys */
                 if (!need_read && !poller_is_enabled(win->poll_index) && TIMEDIFF(win->last_scroll, cur) > win->cfg.smooth_scroll_delay*1000LL) {
                     poller_enable(win->poll_index, 1);
                     need_read = 1;
@@ -670,8 +669,8 @@ void run(void) {
                     win->any_event_happend = 1;
                 }
                 if (win->wait_for_redraw) {
-                    // If we are waiting for the frame to finish, we need to
-                    // reduce poll timeout
+                    /* If we are waiting for the frame to finish, we need to
+                     * reduce poll timeout */
                     int64_t diff = (win->cfg.frame_finished_delay + 1)*1000LL - TIMEDIFF(win->last_read, cur);
                     if (win->wait_for_redraw &= diff > 0 && win->active) next_timeout = MIN(next_timeout, diff);
                 }
@@ -681,10 +680,10 @@ void run(void) {
         for (struct window *win = win_list_head; win; win = win->next) {
             next_timeout = MIN(next_timeout, (win->in_blink ? win->cfg.visual_bell_time : win->cfg.blink_time)*1000LL);
 
-            // Scroll down selection
+            /* Scroll down selection */
             bool pending_scroll = selection_pending_scroll(term_get_sstate(win->term), term_screen(win->term));
 
-            // Change blink state if blinking interval is expired
+            /* Change blink state if blinking interval is expired */
             if (win->active && win->cfg.allow_blinking &&
                     TIMEDIFF(win->last_blink, cur) > win->cfg.blink_time*1000LL) {
                 win->rcstate.blink = !win->rcstate.blink;
@@ -694,20 +693,20 @@ void run(void) {
 
             if (!win->any_event_happend && !pending_scroll && win->blink_commited) continue;
 
-            // Deactivate synchronous update mode if it has expired
+            /* Deactivate synchronous update mode if it has expired */
             if (UNLIKELY(win->sync_active) && TIMEDIFF(win->last_sync, cur) > win->cfg.sync_time*1000LL)
                 win->sync_active = 0, win->wait_for_redraw = 0;
 
-            // Reset revert if visual blink duration finished
+            /* Reset revert if visual blink duration finished */
             if (UNLIKELY(win->in_blink) && TIMEDIFF(win->vbell_start, cur) > win->cfg.visual_bell_time*1000LL) {
                 term_set_reverse(win->term, win->init_invert);
                 win->in_blink = 0;
                 ctx.vbell_count--;
             }
 
-            // We need to skip frame if redraw is not forced
-            // and ether synchronous update is active, window is not visible
-            // or we are waiting for frame to finish and maximal frame time is not expired
+            /* We need to skip frame if redraw is not forced
+             * and ether synchronous update is active, window is not visible
+             * or we are waiting for frame to finish and maximal frame time is not expired. */
             if (!win->force_redraw && !pending_scroll) {
                 if (UNLIKELY(win->sync_active || !win->active)) continue;
                 if (win->wait_for_redraw) {
@@ -725,8 +724,7 @@ void run(void) {
 
                 if (gconfig.trace_misc && win->drawn_somthing) info("Redraw");
 
-                // If we haven't been drawn anything
-                // increase poll timeout
+                /* If we haven't been drawn anything, increase poll timeout. */
                 win->slow_mode = !win->drawn_somthing;
 
                 win->force_redraw = 0;

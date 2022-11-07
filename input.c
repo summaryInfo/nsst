@@ -83,8 +83,8 @@ static inline bool is_ctrl(uint32_t ks) {
 }
 
 static inline bool is_xkb_ctrl(struct key *k) {
-    // Detect if key is something like Ctrl-3
-    // which gets translated to ESC by XKB
+    /* Detect if key is something like Ctrl-3
+     * which gets translated to ESC by XKB */
     return is_ctrl(k->utf32);
 }
 
@@ -496,7 +496,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
 
     if (mode->keylock) return;
 
-    // Appkey can be modified during adjustment
+    /* Appkey can be modified during adjustment */
     bool saved_appkey = mode->appkey;
 
     translate_adjust(&k, mode);
@@ -512,7 +512,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
     };
     if (kfn[mode->keyboard_mapping]) kfn[mode->keyboard_mapping](k.sym, k.is_fkey, &reply);
 
-    if (reply.final) { // Applied in one of fnkey_* functions
+    if (reply.final) { /* Applied in one of fnkey_* functions */
         modify_cursor(param, (k.is_fkey || is_misc_function(k.sym) || is_edit_function(k.sym, mode->delete_is_del)) ?
                 mode->modkey_fn : mode->modkey_cursor, &reply);
         dump_reply(term, &reply);

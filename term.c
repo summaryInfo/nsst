@@ -206,7 +206,6 @@ inline static void term_esc_start(struct term *term) {
 }
 
 inline static void term_esc_start_seq(struct term *term) {
-    //for (size_t i = 0; i <= term->esc.i; i++) term->esc.param[i] = -1;
     memset(term->esc.param, 0xFF, term->esc.i*sizeof *term->esc.param);
 
     term->esc.i = 0;
@@ -262,7 +261,7 @@ static void term_set_132(struct term *term, bool set) {
 }
 
 static void term_set_vt52(struct term *term, bool set) {
-    // This thing is mess...
+    /* This thing is mess... */
     struct screen *scr = &term->scr;
     struct screen_mode *smode = &scr->mode;
     if (set) {
@@ -548,17 +547,17 @@ static void term_dispatch_dsr(struct term *term) {
         case 26: /* Keyboard language -- North American */
             CHK_VT(2);
             term_answerback(term, CSI"?27;1%sn",
-                    term->vt_level >= 4 ? ";0;0" : // ready, LK201
-                    term->vt_level >= 3 ? ";0" : ""); // ready
+                    term->vt_level >= 4 ? ";0;0" : /* ready, LK201 */
+                    term->vt_level >= 3 ? ";0" : ""); /* ready */
             break;
         case 53: /* Report locator status */
         case 55:
             CHK_VT(4);
-            term_answerback(term, CSI"?53n"); // Locator available
+            term_answerback(term, CSI"?53n"); /* Locator available */
             break;
         case 56: /* Report locator type */
             CHK_VT(4);
-            term_answerback(term, CSI"?57;1n"); // Mouse
+            term_answerback(term, CSI"?57;1n"); /* Mouse */
             break;
         case 62: /* DECMSR, Macro space -- No data, no space for macros */
             CHK_VT(4);
@@ -592,46 +591,46 @@ static void term_dispatch_dsr(struct term *term) {
 
 inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
     struct screen *scr = &term->scr;
-    // Cursor Y
+    /* Cursor Y */
     ssize_t y = strtoul(dstr, &dstr, 10);
     if (!dstr || *dstr++ != ';') return 0;
 
-    // Cursor X
+    /* Cursor X */
     ssize_t x = strtoul(dstr, &dstr, 10);
     if (!dstr || *dstr++ != ';') return 0;
 
-    // Page, always '1'
+    /* Page, always '1' */
     if (*dstr++ != '1' || *dstr++ != ';') return 0;
 
-    // SGR
+    /* SGR */
     char sgr0 = *dstr++, sgr1 = 0x40;
     if ((sgr0 & 0xD0) != 0x40) return 0;
 
-    // Optional extended byte
+    /* Optional extended byte */
     if (sgr0 & 0x20) sgr1 = *dstr++;
     if ((sgr1 & 0xF0) != 0x40 || *dstr++ != ';') return 0;
 
-    // Protection
+    /* Protection */
     char prot = *dstr++;
     if ((prot & 0xFE) != 0x40 || *dstr++ != ';') return 0;
 
-    // Flags
+    /* Flags */
     char flags = *dstr++;
     if ((flags & 0xF0) != 0x40 || *dstr++ != ';') return 0;
 
-    // GL
+    /* GL */
     unsigned long gl = strtoul(dstr, &dstr, 10);
     if (!dstr || *dstr++ != ';'|| gl > 3) return 0;
 
-    // GR
+    /* GR */
     unsigned long gr = strtoul(dstr, &dstr, 10);
     if (!dstr || *dstr++ != ';' || gr > 3) return 0;
 
-    // G0 - G3 sizes
+    /* G0 - G3 sizes */
     char c96 = *dstr++;
     if ((flags & 0xF0) != 0x40 || *dstr++ != ';') return 0;
 
-    // G0 - G3
+    /* G0 - G3 */
     enum charset gn[4];
     for (size_t i = 0; i < 4; i++) {
         uparam_t sel = 0;
@@ -645,7 +644,7 @@ inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
                 term->vt_level, term->mode.enable_nrcs)) == nrcs_invalid) return 0;
     }
 
-    // Everything is OK, load
+    /* Everything is OK, load */
     *screen_cursor(scr) = (struct cursor) {
         .x = MIN(x, screen_width(scr) - 1),
         .y = MIN(y, screen_height(scr) - 1),
@@ -696,7 +695,7 @@ inline static bool term_parse_tabs_report(struct term *term, const uint8_t *dstr
 static void term_dispatch_dcs(struct term *term) {
     struct screen *scr = &term->scr;
 
-    // Fixup parameter count
+    /* Fixup parameter count */
     term->esc.i += term->esc.param[term->esc.i] >= 0;
 
     if (term->esc.state != esc_dcs_string) {
@@ -706,7 +705,7 @@ static void term_dispatch_dcs(struct term *term) {
 
     term_esc_dump(term, 1);
 
-    // Only SGR is allowed to have subparams
+    /* Only SGR is allowed to have subparams */
     if (term->esc.subpar_mask) {
         term_esc_dump(term, 0);
         goto finish;
@@ -746,12 +745,12 @@ static void term_dispatch_dcs(struct term *term) {
                         DCS"0$r"ST, screen_min_x(scr) + 1, screen_max_x(scr));
                 break;
             case 't': /* -> DECSLPP */
-                // Can't report less than 24 lines
+                /* Can't report less than 24 lines */
                 term_answerback(term, DCS"1$r%lut"ST, MAX(screen_height(scr), 24));
                 break;
             case '|' << 8 | '$': /* -> DECSCPP */
-                // It should be either 80 or 132 despite actual column count
-                // New apps use ioctl(TIOGWINSZ, ...) instead
+                /* It should be either 80 or 132 despite actual column count
+                 * New apps use ioctl(TIOGWINSZ, ...) instead */
                 term_answerback(term, DCS"1$r%u$|"ST, term->mode.columns_132 ? 132 : 80);
                 break;
             case 'q' << 8 | '"': /* -> DECSCA */
@@ -785,7 +784,7 @@ static void term_dispatch_dcs(struct term *term) {
                 break;
             }
             default:
-                // Invalid request
+                /* Invalid request */
                 term_answerback(term, DCS"0$r"ST);
                 term_esc_dump(term, 0);
             }
@@ -826,10 +825,10 @@ static void term_dispatch_dcs(struct term *term) {
     }
     case C('q') | I0('+'): /* XTGETTCAP */ {
         // TODO Termcap: Support proper tcap db
-        // for now, just implement Co/colors
+        //      for now, just implement Co/colors
         bool valid = 0;
-        if (!strcmp((char *)dstr, "436F") || // "Co"
-                !strcmp((char *)dstr, "636F6C6F7266")) { // "colors"
+        if (!strcmp((char *)dstr, "436F") || /* "Co" */
+                !strcmp((char *)dstr, "636F6C6F7266")) { /* "colors" */
             uint8_t tmp[16];
             int len = snprintf((char *)tmp, sizeof tmp, "%u", PALETTE_SIZE - SPECIAL_PALETTE_SIZE);
             *dend = '=';
@@ -1060,15 +1059,15 @@ static void term_dispatch_osc(struct term *term) {
         if (!strncmp(path, "file://", filelen)) {
             const char *pathstart = path + filelen;
             path = strchr(pathstart, '/');
-            // Only support local host paths
+            /* Only support local host paths */
             valid = path && (path == pathstart || strncmp(gconfig.hostname, pathstart, path - pathstart));
         } else {
-            // No relative paths allowed
+            /* No relative paths allowed */
             valid = (*dstr == '/');
         }
         if (valid) {
             struct stat stt;
-            // No symlinks...
+            /* No symlinks... */
             valid = !stat(path, &stt) &&
                     (stt.st_mode & S_IFMT) == S_IFDIR;
         }
@@ -1107,7 +1106,7 @@ static void term_dispatch_osc(struct term *term) {
     }
 #endif
     case 10: /* Set VT100 foreground color */ {
-        // OSC 10 can also have second argument that works as OSC 11
+        /* OSC 10 can also have second argument that works as OSC 11 */
         uint8_t *str2;
         if ((str2 = memchr(dstr, ';', dend - dstr))) {
             *str2 = '\0';
@@ -1168,7 +1167,7 @@ static void term_dispatch_osc(struct term *term) {
         switch (dstr[0]) {
         case 'A': /* Prompt start */
         case 'D': /* Command finished */
-            // Make sure shell plays well with re-wraping
+            /* Make sure shell plays well with re-wraping */
             if (screen_cursor_x(scr) > screen_min_x(scr))
                 screen_wrap(scr, true);
             screen_unwrap_cursor_line(scr);
@@ -1189,8 +1188,8 @@ static void term_dispatch_osc(struct term *term) {
             term_esc_dump(term, 0);
             break;
         }
-        // For compatibility with older versions,
-        // if res is not normalized, assume it to be 8-bit value
+        /* For compatibility with older versions,
+         * if res is not normalized, assume it to be 8-bit value. */
         if (res > 1) res /= 255;
         window_set_alpha(screen_window(scr), res);
         break;
@@ -1252,7 +1251,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->mstate.mouse_mode = set ? mouse_mode_x10 : mouse_mode_none;
             break;
         case 10: /* Show toolbar */
-            // IGNORE - There is no toolbar
+            /* IGNORE - There is no toolbar */
             break;
         case 12: /* Start blinking cursor */;
             enum cursor_type *shp = &window_cfg(screen_window(scr))->cursor_shape;
@@ -1260,7 +1259,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             break;
         case 13: /* Start blinking cursor (menu item) */
         case 14: /* Enable XOR of controll sequence and menu for blinking */
-            // IGNORE
+            /* IGNORE */
             break;
         case 18: /* DECPFF */
             smode->print_form_feed = set;
@@ -1273,7 +1272,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             smode->hide_cursor = !set;
             break;
         case 30: /* Show scrollbar */
-            // IGNORE - There is no scrollbar
+            /* IGNORE - There is no scrollbar */
             break;
         case 35: /* URXVT Allow change font */
             term->mode.allow_change_font = set;
@@ -1318,7 +1317,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->mstate.mouse_mode = set ? mouse_mode_button : mouse_mode_none;
             break;
         case 1001: /* Highlight mouse tracking */
-            // IGNORE
+            /* IGNORE */
             break;
         case 1002: /* Cell motion mouse tracking on keydown */
             window_set_mouse(screen_window(scr), USE_URI);
@@ -1535,7 +1534,7 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
         case 69: /* DECLRMM */
             val = MODSTATE(smode->lr_margins);
             break;
-        case 80: /* DECSDM */ //TODO SIXEL
+        case 80: /* DECSDM */ // TODO SIXEL
             val = modstate_aways_disabled;
             break;
         case 95: /* DECNCSM */
@@ -1617,7 +1616,7 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = MODSTATE(smode->altscreen);
             break;
         case 1050: /* termcap function keys */
-            val = modstate_aways_disabled; //TODO Termcap
+            val = modstate_aways_disabled; // TODO Termcap
             break;
         case 1051: /* SUN function keys */
             val = MODSTATE(term->kstate.keyboard_mapping == keymap_sun);
@@ -1718,8 +1717,8 @@ static void term_dispatch_mc(struct term *term, bool private, uparam_t func) {
             screen_print_screen(scr, 0);
             break;
         case 4: /* Disable printer */
-            // Well, this is never reached...
-            // but let it be here anyways
+            /* Well, this is never reached...
+             * but let it be here anyways. */
             pr->print_controller = 0;
             break;
         case 5: /* Enable printer */
@@ -1761,7 +1760,7 @@ static void term_dispatch_window_op(struct term *term) {
     struct screen *scr = &term->scr;
     struct window *win = screen_window(scr);
     uparam_t pa = PARAM(0, 24);
-    // Only title operations allowed by default
+    /* Only title operations allowed by default */
     if (!window_cfg(win)->allow_window_ops && (pa < 20 || pa > 23)) return;
 
     switch (pa) {
@@ -1965,7 +1964,7 @@ static void term_report_cursor(struct term *term) {
     if (window_cfg(screen_window(&term->scr))->extended_cir) {
         csgr[0] |= 0x20;
         csgr[1] |= 0x40;
-        // Extended byte
+        /* Extended byte */
         if (sgr->italic) csgr[1] |= 1;
         if (sgr->faint) csgr[1] |= 2;
         if (sgr->strikethrough) csgr[1] |= 4;
@@ -1973,10 +1972,10 @@ static void term_report_cursor(struct term *term) {
     }
 
     char cflags = 0x40;
-    if (c->origin) cflags |= 1; // origin
-    if (c->gl_ss == 2 && c->gl != 2) cflags |= 2; // ss2
-    if (c->gl_ss == 3 && c->gl != 3) cflags |= 4; // ss3
-    if (c->pending) cflags |= 8; // pending wrap
+    if (c->origin) cflags |= 1; /* origin */
+    if (c->gl_ss == 2 && c->gl != 2) cflags |= 2; /* ss2 */
+    if (c->gl_ss == 3 && c->gl != 3) cflags |= 4; /* ss3 */
+    if (c->pending) cflags |= 8; /* pending wrap */
 
     char cg96 = 0x40;
     if (nrcs_is_96(c->gn[0])) cg96 |= 1;
@@ -2132,7 +2131,7 @@ static void term_decode_sgr(struct term *term, size_t i, struct attr *mask, stru
 #undef SETUL
 }
 
-// Utility functions for XTSAVE/XTRESTORE
+/* Utility functions for XTSAVE/XTRESTORE */
 
 inline static void store_mode(uint8_t modbits[], uparam_t mode, bool val) {
     if (mode < 96) modbits += mode / 8;
@@ -2162,13 +2161,13 @@ inline static bool load_mode(uint8_t modbits[], uparam_t mode) {
 }
 
 static void term_dispatch_csi(struct term *term) {
-    // Fix parameter count up
+    /* Fix parameter count up */
     term->esc.i += term->esc.param[term->esc.i] >= 0;
     struct screen *scr = &term->scr;
 
     term_esc_dump(term, 1);
 
-    // Only SGR is allowed to have subparams
+    /* Only SGR is allowed to have subparams */
     if (term->esc.subpar_mask && term->esc.selector != C('m')) return;
 
     switch (term->esc.selector) {
@@ -2561,7 +2560,7 @@ static void term_dispatch_csi(struct term *term) {
         uint16_t sum = screen_checksum(scr, screen_min_ox(scr) + PARAM(3, 1) - 1, screen_min_oy(scr) + PARAM(2, 1) - 1,
                 screen_min_ox(scr) + PARAM(5, screen_max_ox(scr) - screen_min_ox(scr)),
                 screen_min_oy(scr) + PARAM(4, screen_max_oy(scr) - screen_min_oy(scr)), term->checksum_mode, term->mode.enable_nrcs);
-        // DECRPCRA
+        /* DECRPCRA */
         term_answerback(term, DCS"%u!~%04X"ST, PARAM(0, 0), sum);
         break;
     case C('y') | I0('#'): /* XTCHECKSUM */;
@@ -3074,7 +3073,7 @@ static void term_dispatch_vt52(struct term *term, uint32_t ch) {
         term_dispatch_mc(term, 0, 5);
         break;
     case 'X': /* Disable printer printer controller mdoe */
-        // This is never reached...
+        /* This is never reached... */
         term_dispatch_mc(term, 0, 4);
         break;
     case 'Y':
@@ -3153,13 +3152,13 @@ inline static bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
 inline static bool term_dispatch(struct term *term, const uint8_t **start, const uint8_t *end) {
     uint8_t ch = **start;
 
-    // Fast path for graphical characters, it can print one line at a time
+    /* Fast path for graphical characters, it can print one line at a time. */
     if (term->esc.state == esc_ground && !IS_CBYTE(ch))
         return screen_dispatch_print(&term->scr, start, end, term->mode.utf8, term->mode.enable_nrcs);
 
     ++*start;
 
-    // C1 controls are interpreted in all states, try them before others
+    /* C1 controls are interpreted in all states, try them before others */
     if (UNLIKELY(IS_C1(ch)) && term->vt_level > 1) {
         term->esc.old_selector = term->esc.selector;
         term->esc.old_state = term->esc.state;
@@ -3169,13 +3168,13 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         return 1;
     }
 
-    // Treat bytes with 8th bits set as their lower counterparts
-    // (Unless they are a printable character, part of a string or C1 control)
+    /* Treat bytes with 8th bits set as their lower counterparts
+     * (Unless they are a printable character, part of a string or C1 control) */
     ch &= 0x7F;
 
     switch (term->esc.state) {
     case esc_ground:
-        // Only C0 arrives, so ch < 0x20
+        /* Only C0 arrives, so ch < 0x20 */
         term_dispatch_c0(term, ch);
         break;
     case esc_esc_entry:
@@ -3484,7 +3483,7 @@ void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool 
         bool quote_c1 = !term_is_utf8_enabled(term);
         ssize_t i = 0, j = 0;
         while (i < size) {
-            // Prefix control symbols with Ctrl-V
+            /* Prefix control symbols with Ctrl-V */
             if (buf1[i] < 0x20 || buf1[i] == 0x7F ||
                     (quote_c1 && buf1[i] > 0x7F && buf1[i] < 0xA0))
                 buf2[j++] = 0x16;
@@ -3593,8 +3592,8 @@ static size_t encode_c1(uint8_t *out, const uint8_t *in, bool eightbit) {
         if (IS_C1(*it) && !eightbit) {
             *fmtp++ = 0x1B;
             *fmtp++ = *it ^ 0xC0;
-            // Theoretically we can use C1 encoded as UTF-8 if term->mode.utf8
-            // but noone understands that format
+            /* Theoretically we can use C1 encoded as UTF-8 if term->mode.utf8
+             * but noone understands that format */
             //*fmtp++ = 0xC0 | (*it >> 6);
             //*fmtp++ = 0x80 | (*it & 0x3F);
         } else {
@@ -3646,7 +3645,7 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
     uint8_t rep[MAX_REPORT];
     if (encode) len = encode_c1(rep, str, has_8bit(term));
 
-    // Local echo
+    /* Local echo */
     if (term->mode.echo) {
         const uint8_t *start = encode ? rep : str, *ptmp;
         const uint8_t *end = start + len;
@@ -3675,13 +3674,13 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 
     mpa_set_seal_max_pad(&term->scr.mp, width * sizeof(struct cell) + sizeof(struct line), height + 1);
 
-    // First try to read from tty to empty out input queue
-    // since this is input from program not yet aware about resize
+    /* First try to read from tty to empty out input queue
+     * since this is input from program not yet aware about resize */
     if (!term->requested_resize)
         term_read(term);
     term->requested_resize = 0;
 
-    // Notify application
+    /* Notify application */
     int16_t wwidth = window_cfg(screen_window(scr))->width;
     int16_t wheight = window_cfg(screen_window(scr))->height;
     tty_set_winsz(&term->tty, width, height, wwidth, wheight);

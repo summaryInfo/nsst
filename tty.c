@@ -27,7 +27,7 @@
 #include <termios.h>
 #include <unistd.h>
 
-//For opentty() function
+/* For opentty() function */
 #if   defined(__linux)
 #   include <pty.h>
 #elif defined(__OpenBSD__) || defined(__NetBSD__) || defined(__APPLE__)
@@ -478,11 +478,11 @@ inline static void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t le
 
         if (pfd.revents & POLLIN) {
             if (tty->end - tty->start == sizeof tty->fd_buf) {
-                // Since the parser cannot be called recursively
-                // called recursively we cannot empty the input buffer
-                // and tty input queue, so we cannot write the data.
-                // This situation is really rare,
-                // so we can just not write the output for now.
+                /* Since the parser cannot be called recursively
+                 * called recursively we cannot empty the input buffer
+                 * and tty input queue, so we cannot write the data.
+                 * This situation is really rare,
+                 * so we can just not write the output for now. */
                 // FIXME: Add option to defer answerback messages to be written outside the parser.
                 warn("TTY buffer is overfilled, current output buffer is discarded");
                 return;

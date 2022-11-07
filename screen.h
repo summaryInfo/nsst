@@ -355,13 +355,13 @@ inline static void screen_precompose_at_cursor(struct screen *scr, uint32_t ch) 
 
     struct cell *cel = view_cell(cview, scr->c.x);
 
-    // Step back to previous cell
+    /* Step back to previous cell */
     if (scr->c.x) cel--;
     if (!cel->ch && scr->c.x > 1 && cell_wide(cel - 1)) cel--;
 
     ch = try_precompose(cell_get(cel), ch);
 
-    // Only make cell dirty if precomposition happened
+    /* Only make cell dirty if precomposition happened */
     if (cell_get(cel) != ch)
         cell_set(cel, ch);
 }

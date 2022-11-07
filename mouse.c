@@ -154,9 +154,8 @@ void selection_concat(struct selection_state *sel, struct line *dst, struct line
                src_head->segs + offset,
                src_head->size * sizeof *src_head->segs);
 
-        // NOTE dst width computation should be compatible with
-        //      one in line_concat()
-        // Also, this does not change if first segment was merged
+        /* NOTE dst width computation should be compatible with one in line_concat().
+         * Also, this does not change if first segment was merged. */
         dst_head->segs[dst_head->size].offset += dst->size - last_i;
         dst_head->size += src_head->size;
     }
@@ -165,7 +164,7 @@ void selection_concat(struct selection_state *sel, struct line *dst, struct line
 }
 
 void selection_split(struct selection_state *sel, struct line *line, struct line *tail) {
-    // Left line is the old one that contains selected fragments
+    /* Left line is the old one that contains selected fragments. */
 
     struct segments *head = seg_head(sel, line);
     if (!head) return;
@@ -596,9 +595,7 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
     if (sel->state == state_sel_progress || sel->state == state_sel_released)
         decompose(sel, scr, nstart, nend);
 
-    // dump(sel);
-
-    // Make changed cells dirty
+    /* Make changed cells dirty */
     damage_changed(sel, prev_heads, prev_size);
 }
 
@@ -644,7 +641,7 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line *li
         uint8_t buf[UTF8_MAX_LEN];
         if (line->cell[j].ch) {
             size_t len = utf8_encode(cell_get(&line->cell[j]), buf, buf + UTF8_MAX_LEN);
-            // 2 is space for '\n' and '\0'
+            /* 2 is space for '\n' and '\0' */
             adjust_buffer((void **)res, cap, *pos + len + 2, 1);
             memcpy(*res + *pos, buf, len);
             *pos += len;

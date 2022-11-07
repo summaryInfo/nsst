@@ -22,7 +22,7 @@
 static bool has_shm;
 static bool has_shm_pixmaps;
 
-// Returns old image
+/* Returns old image */
 static struct image renderer_create_image(struct window *win, int16_t width, int16_t height) {
     struct image old = win->plat.im;
     xcb_void_cookie_t c;
@@ -94,8 +94,8 @@ void free_render_context(void) {
 }
 
 void init_render_context(void) {
-    // That's kind of hack
-    // Try guessing if DISPLAY refers to localhost
+    /* That's kind of hack
+     * Try guessing if DISPLAY refers to localhost */
 
     char *display = getenv("DISPLAY");
     const char *local[] = { "localhost:", "127.0.0.1:", "unix:", };
@@ -121,7 +121,7 @@ void init_render_context(void) {
 }
 
 
-// X11-independent code is below
+/* X11-independent code is below */
 
 
 static void resize_bounds(struct window *win, bool h_changed) {
@@ -259,16 +259,16 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                 struct rect r_under = { x + fs, y + ch + 1 + ls, cw, ul };
                 struct rect r_strike = { x + fs, y + 2*ch/3 - ul/2 + ls, cw, ul };
 
-                // Background
+                /* Background */
                 image_draw_rect(win->plat.im, r_cell, spec.bg);
 
-                // Glyph
+                /* Glyph */
                 if (glyph) {
                     if (g_wide) r_cell.width = 2*cw;
                     image_compose_glyph(win->plat.im, x + fs, y + ch + ls, glyph, spec.fg, r_cell);
                 }
 
-                // Underline
+                /* Underline */
                 if (spec.underlined) {
                     image_draw_rect(win->plat.im, r_under, spec.ul);
                     if (spec.underlined > 1) {
@@ -278,7 +278,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                     // TODO curly
                 }
 
-                // Strikethrough
+                /* Strikethrough */
                 if (spec.stroke) image_draw_rect(win->plat.im, r_strike, spec.ul);
 
                 if (l_bound.x < 0) l_bound.width = i + g_wide;
@@ -307,7 +307,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
             win->plat.bounds[win->plat.boundc++] = l_bound;
         }
 
-        // Only reset force flag for last part of the line
+        /* Only reset force flag for last part of the line */
         if (!view_wrapped(&view)) view.line->force_damage = 0;
     }
 

@@ -470,7 +470,7 @@ void init_options(void) {
 
     char *charset = nl_langinfo(CODESET);
     if (charset) {
-        // Builtin support for locales only include UTF-8, Latin-1 and ASCII
+        /* Builtin support for locales only include UTF-8, Latin-1 and ASCII */
         // TODO: Check for supported NRCSs and prefer them to luit
         bool utf8 = !strncasecmp(charset, "UTF", 3) && (charset[3] == '8' || charset[4] == '8');
         bool supported = 0;
@@ -838,7 +838,7 @@ e_wrong_line:
     munmap(addr, stt.st_size + 1);
 
 e_open:
-    // Parse all shortcuts
+    /* Parse all shortcuts */
     keyboard_parse_config(cfg);
 
     if (fd < 0) warn("Can't read config file: %s", path ? path : pathbuf);

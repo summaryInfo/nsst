@@ -222,7 +222,7 @@ void platform_init_context(void) {
         die("Can't configure XKB");
     }
 
-    // Intern all used atoms
+    /* Intern all used atoms */
     ctx.atom._NET_WM_PID = intern_atom("_NET_WM_PID");
     ctx.atom._NET_WM_NAME = intern_atom("_NET_WM_NAME");
     ctx.atom._NET_WM_ICON_NAME = intern_atom("_NET_WM_ICON_NAME");
@@ -419,8 +419,8 @@ void platform_set_urgency(struct window *win, bool set) {
     xcb_get_property_reply_t *rep = xcb_get_property_reply(con, c, NULL);
     if (rep) {
         uint32_t *hints = xcb_get_property_value(rep);
-        if (set) *hints |= 256; // UrgentcyHint
-        else *hints &= ~256; // UrgentcyHint
+        if (set) *hints |= 256; /* UrgentcyHint */
+        else *hints &= ~256; /* UrgentcyHint */
         xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->plat.wid, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 32, WM_HINTS_LEN, hints);
         free(rep);
     }
@@ -508,34 +508,34 @@ void platform_update_window_props(struct window *win) {
     if ((extra = win->cfg.window_class))
         xcb_change_property(con, XCB_PROP_MODE_APPEND, win->plat.wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, strlen(extra), extra);
     uint32_t nhints[] = {
-        64 | 256, //PResizeInc, PBaseSize
-        win->cfg.x, win->cfg.y, // Position
-        win->cfg.width, win->cfg.height, // Size
-        win->cfg.left_border * 2 + win->char_width, win->cfg.left_border * 2 + win->char_depth + win->char_height, // Min size
-        0, 0, //Max size
-        win->char_width, win->char_depth + win->char_height, // Size inc
-        0, 0, 0, 0, // Min/max aspect
-        win->cfg.left_border * 2 + win->char_width, win->cfg.left_border * 2 + win->char_depth + win->char_height, // Base size
-        get_win_gravity_from_config(win->cfg.stick_to_right, win->cfg.stick_to_bottom), // Gravity
+        64 | 256, /* PResizeInc, PBaseSize */
+        win->cfg.x, win->cfg.y, /* Position */
+        win->cfg.width, win->cfg.height, /* Size */
+        win->cfg.left_border * 2 + win->char_width, win->cfg.left_border * 2 + win->char_depth + win->char_height, /* Min size */
+        0, 0, /*Max size */
+        win->char_width, win->char_depth + win->char_height, /* Size inc */
+        0, 0, 0, 0, /* Min/max aspect */
+        win->cfg.left_border * 2 + win->char_width, win->cfg.left_border * 2 + win->char_depth + win->char_height, /* Base size */
+        get_win_gravity_from_config(win->cfg.stick_to_right, win->cfg.stick_to_bottom), /* Gravity */
     };
     if (win->cfg.user_geometry)
-        nhints[0] |= 1 | 2 | 512; // USPosition, USSize, PWinGravity
+        nhints[0] |= 1 | 2 | 512; /* USPosition, USSize, PWinGravity */
     else
-        nhints[0] |= 4 | 8; // PPosition, PSize
+        nhints[0] |= 4 | 8; /* PPosition, PSize */
     if (win->cfg.fixed) {
         nhints[7] = nhints[5] = nhints[3];
         nhints[8] = nhints[6] = nhints[4];
-        nhints[0] |= 16 | 32; // PMinSize, PMaxSize
+        nhints[0] |= 16 | 32; /* PMinSize, PMaxSize */
     }
     uint32_t wmhints[] = {
-        1, // Flags: InputHint
-        XCB_WINDOW_CLASS_INPUT_OUTPUT, // Input
-        0, // Inital state
-        XCB_NONE, // Icon pixmap
-        XCB_NONE, // Icon Window
-        0, 0, // Icon X and Y
-        XCB_NONE, // Icon mask bitmap
-        XCB_NONE // Window group
+        1, /* Flags: InputHint */
+        XCB_WINDOW_CLASS_INPUT_OUTPUT, /* Input */
+        0, /* Inital state */
+        XCB_NONE, /* Icon pixmap */
+        XCB_NONE, /* Icon Window */
+        0, 0, /* Icon X and Y */
+        XCB_NONE, /* Icon mask bitmap */
+        XCB_NONE /* Window group */
     };
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, win->plat.wid, ctx.atom.WM_NORMAL_HINTS,
             ctx.atom.WM_SIZE_HINTS, 8*sizeof(*nhints), LEN(nhints), nhints);
@@ -557,7 +557,7 @@ bool platform_init_window(struct window *win) {
     int16_t x = win->cfg.x;
     int16_t y = win->cfg.y;
 
-    // Adjust geometry
+    /* Adjust geometry */
     if (win->cfg.stick_to_right) x += ctx.screen->width_in_pixels - win->cfg.width - 2;
     if (win->cfg.stick_to_bottom) y += ctx.screen->height_in_pixels - win->cfg.height - 2;
 
@@ -790,7 +790,7 @@ void platform_handle_events(void) {
             if (gconfig.trace_events) {
                 info("Event: event=SelectionClear owner=0x%x selection=0x%x", ev->owner, ev->selection);
             }
-            // Clear even if set keep?
+            /* Clear even if set keep? */
             screen_damage_selection(term_screen(win->term));
             selection_clear(term_get_sstate(win->term));
             break;

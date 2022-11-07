@@ -193,14 +193,14 @@ static void append_pending_launch(struct pending_launch *lnch) {
         const char *resps[] = {version_string(), "Features: ", features_string()};
 
         for (size_t i = 0; i < LEN(resps); i++)
-            if (!send_pending_launch_resp(lnch, resps[i])) return; // Don't free pending_launch twice
+            if (!send_pending_launch_resp(lnch, resps[i])) return; /* Don't free pending_launch twice */
 
         free_pending_launch(lnch);
     } else if (buffer[0] == '\025' /* NAK */ && len == 1) /* Usage text request */ {
         ssize_t i = 0;
 
         for (const char *part = usage_string(i++); part; part = usage_string(i++))
-            if (!send_pending_launch_resp(lnch, part)) return; // Don't free pending_launch twice
+            if (!send_pending_launch_resp(lnch, part)) return; /* Don't free pending_launch twice */
 
         free_pending_launch(lnch);
     } else if (buffer[0] == '\031' /* EM */ && len == 1) /* Exit daemon*/ {
@@ -230,13 +230,13 @@ static void accept_pending_launch(void) {
 
 bool daemon_process_clients(void) {
     if (socket_fd < 0) return 0;
-    // Handle daemon requests
+    /* Handle daemon requests */
 
     int rev = poller_index_events(socket_index);
     if (rev & POLLIN) accept_pending_launch();
     else if (rev & (POLLERR | POLLNVAL | POLLHUP)) free_daemon();
 
-    // Handle pending launches
+    /* Handle pending launches */
     for (struct pending_launch *holder = first_pending, *next; holder; holder = next) {
         next = holder->next;
         rev = poller_index_events(holder->poll_index);

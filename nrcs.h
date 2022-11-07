@@ -30,29 +30,29 @@ enum charset {
     nrcs_norwegian_dannish3,
     nrcs_french2,
     nrcs__impl_high = nrcs_french2,
-    nrcs_hebrew, // Not implemented
-    nrcs_greek, // Not implemented
-    nrcs_cyrillic, // Not implemented
+    nrcs_hebrew, /* Not implemented */
+    nrcs_greek, /* Not implemented */
+    nrcs_cyrillic, /* Not implemented */
 
     cs94_ascii,
     cs94_START = cs94_ascii,
     cs94_dec_altchars,
     cs94_dec_altgraph,
-    cs94_british, // Same as latin-1
-    cs94_dec_sup, // User prefered
+    cs94_british, /* Same as latin-1 */
+    cs94_dec_sup, /* User prefered */
     cs94_dec_sup_graph,
     cs94_dec_graph,
     cs94_dec_tech,
-    cs94_dec_greek, // Not implemented
-    cs94_dec_hebrew, // Not implemented
-    cs94_dec_turkish, // Not implemented
+    cs94_dec_greek, /* Not implemented */
+    cs94_dec_hebrew, /* Not implemented */
+    cs94_dec_turkish, /* Not implemented */
     cs94_END = cs94_dec_turkish,
 
     cs96_latin_1,
     cs96_START = cs96_latin_1,
-    cs96_greek, // Not implemented
-    cs96_hebrew, // Not implemented
-    cs96_latin_cyrillic, // Not implemented
+    cs96_greek, /* Not implemented */
+    cs96_hebrew, /* Not implemented */
+    cs96_latin_cyrillic, /* Not implemented */
     cs96_latin_5,
     cs96_END = cs96_latin_5,
 

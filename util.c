@@ -237,7 +237,7 @@ inline static int32_t frombase64digit(uint8_t b) {
 
 color_t parse_color(const uint8_t *str, const uint8_t *end) {
     if (*str == '#') {
-        // Format #RGB
+        /* Format #RGB */
 
         uint64_t val = 0;
         ptrdiff_t sz = end - str;
@@ -276,7 +276,7 @@ color_t parse_color(const uint8_t *str, const uint8_t *end) {
         }
         return col;
     } else if (!strncasecmp((const char*)str, "rgb:", 4)) {
-        // Format rgb:R/G/B
+        /* Format rgb:R/G/B */
         str += 4;
 
         size_t len = 0, i = 0;

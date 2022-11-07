@@ -59,17 +59,17 @@ struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t de
     memset(glyph->data, 0, stride * (height + depth));
 
     enum {
-        NOC = 1 << 1, // No center
-        CUR = 1 << 2, // Curved
-        TL = 1 << 4, BL = 1 << 5, LL = 1 << 6, RL = 1 << 7, // Light lines
-        TD = 1 << 8, BD = 1 << 9, LD = 1 << 10, RD = 1 << 11, // Double lines
-        // These are considered blocks
-        BLK = 1 << 3, // Block
-        TLQ = BLK | 1 << 4, TRQ = BLK | 1 << 5, BLQ = BLK | 1 << 6, BRQ = BLK | 1 << 7, // Quoters
-        V = BLK | 1 << 8, VR = BLK | 1 << 9, // Vertical blocks
-        H = BLK | 1 << 10, HR = BLK | 1 << 11, // Horizontal blocks
-        LX = BLK | 1 << 12, RX = BLK | 1 << 13, // Diagonal lines
-        DT1 = 1 << 14, DT2 = 1 << 15, // Dotted (both for blocks and lines)
+        NOC = 1 << 1, /* No center */
+        CUR = 1 << 2, /* Curved */
+        TL = 1 << 4, BL = 1 << 5, LL = 1 << 6, RL = 1 << 7, /* Light lines */
+        TD = 1 << 8, BD = 1 << 9, LD = 1 << 10, RD = 1 << 11, /* Double lines */
+        /* These are considered blocks */
+        BLK = 1 << 3, /* Block */
+        TLQ = BLK | 1 << 4, TRQ = BLK | 1 << 5, BLQ = BLK | 1 << 6, BRQ = BLK | 1 << 7, /* Quoters */
+        V = BLK | 1 << 8, VR = BLK | 1 << 9, /* Vertical blocks */
+        H = BLK | 1 << 10, HR = BLK | 1 << 11, /* Horizontal blocks */
+        LX = BLK | 1 << 12, RX = BLK | 1 << 13, /* Diagonal lines */
+        DT1 = 1 << 14, DT2 = 1 << 15, /* Dotted (both for blocks and lines) */
     };
     uint16_t desc = (uint16_t[]){
         LL|RL,               LL|LD|RL|RD,         TL|BL,               TL|TD|BL|BD,

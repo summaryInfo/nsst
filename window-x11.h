@@ -34,14 +34,14 @@ struct platform_window {
     xcb_pixmap_t shm_pixmap;
     struct image im;
 
-    // It's size is 2*win->ch
+    /* It's size is 2*win->ch */
     struct rect *bounds;
     size_t boundc;
 #else
-    // Active IDs, actual X11 objects
+    /* Active IDs, actual X11 objects */
     xcb_pixmap_t pid1;
     xcb_render_picture_t pic1;
-    // Cached IDs, used for copying
+    /* Cached IDs, used for copying */
     xcb_pixmap_t pid2;
     xcb_render_picture_t pic2;
 
@@ -50,7 +50,7 @@ struct platform_window {
     xcb_render_pictformat_t pfglyph;
 #endif
 
-    // Used to restore maximized window
+    /* Used to restore maximized window */
     struct rect saved;
 };
 
@@ -67,7 +67,7 @@ inline static bool check_void_cookie(xcb_void_cookie_t ck) {
     return 0;
 }
 
-// The code below is X11-independent
+/* The code below is X11-independent */
 
 struct cellspec {
     color_t fg;
@@ -149,7 +149,7 @@ struct window {
 
     struct title_stack_item *title_stack;
 
-    // Window configuration
+    /* Window configuration */
     struct instance_config cfg;
 };
 
@@ -168,7 +168,7 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr *attr,
     bool has_uri = 0, active_uri = 0;
 #endif
 
-    // Check special colors
+    /* Check special colors */
     if (UNLIKELY(cfg->special_bold) && rcs->palette[SPECIAL_BOLD] && attr->bold)
         attr->fg = rcs->palette[SPECIAL_BOLD], attr->bold = 0;
     if (UNLIKELY(cfg->special_underline) && rcs->palette[SPECIAL_UNDERLINE] && attr->underlined)
@@ -180,7 +180,7 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr *attr,
     if (UNLIKELY(cfg->special_italic) && rcs->palette[SPECIAL_ITALIC] && attr->italic)
         attr->fg = rcs->palette[SPECIAL_ITALIC], attr->italic = 0;
 
-    // Calculate colors
+    /* Calculate colors */
 
     if (attr->bold && !attr->faint && color_idx(attr->fg) < 8) attr->fg = indirect_color(color_idx(attr->fg) + 8);
     res.bg = direct_color(attr->bg, rcs->palette);
@@ -190,7 +190,7 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr *attr,
 
     res.ul = attr->ul != indirect_color(SPECIAL_BG) ? direct_color(attr->ul, rcs->palette) : res.fg;
 
-    // Apply background opacity
+    /* Apply background opacity */
     if (color_idx(attr->bg) == SPECIAL_BG || cfg->blend_all_bg) res.bg = color_apply_a(res.bg, cfg->alpha);
     if (UNLIKELY(cfg->blend_fg)) {
         res.fg = color_apply_a(res.fg, cfg->alpha);
@@ -199,7 +199,7 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr *attr,
 
     if ((!selected && attr->invisible) || (attr->blink && rcs->blink)) res.ul = res.fg = res.bg;
 
-    // If selected colors are set use them
+    /* If selected colors are set use them */
 
     if (selected) {
         if (rcs->palette[SPECIAL_SELECTED_BG]) res.bg = rcs->palette[SPECIAL_SELECTED_BG];
@@ -216,12 +216,12 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr *attr,
         }
     }
 
-    // Optimize rendering of U+2588 FULL BLOCK
+    /* Optimize rendering of U+2588 FULL BLOCK */
 
     if (cell.ch == 0x2588) res.bg = res.fg;
     if (cell.ch == ' ' || res.fg == res.bg) cell.ch = 0;
 
-    // Calculate attributes
+    /* Calculate attributes */
 
     res.ch = cell_get(&cell);
     res.face = 0;
@@ -267,7 +267,7 @@ inline static color_t describe_bg(struct attr *attr, struct instance_config *cfg
         if (attr->reverse ^ selected) SWAP(fg, bg);
     }
 
-    // Apply background opacity
+    /* Apply background opacity */
     if (color_idx(attr->bg) == SPECIAL_BG || cfg->blend_all_bg)
         bg = color_apply_a(bg, cfg->alpha);
 
