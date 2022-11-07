@@ -5,11 +5,9 @@ Roadmap
 
 _NOTE: These plans can change any time_
 
-### Until 2.4
-
-* Fix infinite loop in `fixup_line_seqno()`.
-
 ### Until 2.5 (or later)
+
+* Fix infinite loop in `fixup_line_seqno()` (only happened once).
 
 * Change X cursor according to the situation.
   *  Hand when pointing to the link and I-beam in other situations.

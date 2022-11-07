@@ -24,7 +24,7 @@ This is an implementation of VT220-like X11 terminal emulator.
 * Compiles with `-flto` by default
 * No warnings (see list of all enabled warnings in Makefile)
 * Re-wraps text on resize
-* URL support (no auto-detection yet)
+* URL support (including autodetection)
 
 See TODO file for things that are to be implemented.
 
