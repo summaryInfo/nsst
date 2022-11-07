@@ -376,7 +376,7 @@ static struct option options[] = {
     X(int16, underline_width, "underline-width", "Text underline width", 1, 0, 16),
     X(boolean, urgency_on_bell, "urgent-on-bell", "Set window urgency on bell", false),
     X(color, palette[SPECIAL_URI_TEXT], "uri-color", "Special color of URI text", COLOR_SPECIAL_URI_TEXT),
-    X(enum, uri_mode, "uri-mode", "Allow URI parsing/clicking", uri_mode_auto, uri_mode_off, (const char *[]){"off", "manual", "auto"}),
+    X(enum, uri_mode, "uri-mode", "Allow URI parsing/clicking", uri_mode_auto, uri_mode_off, (const char *[]){"off", "manual", "auto", NULL}),
     X(color, palette[SPECIAL_URI_UNDERLINE], "uri-underline-color", "Special color of URI underline", COLOR_SPECIAL_URI_UNDERLINE),
     X(boolean, utf8, "use-utf8", "Enable UTF-8 I/O", true),
     X(int16, top_border, "vertical-border", "Left and right borders", 8, 0, 200),
