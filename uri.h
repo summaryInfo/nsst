@@ -43,6 +43,7 @@ struct uri_match_state {
 };
 
 #define EMPTY_URI 0
+#define MAX_PROTOCOL_LEN 16
 
 uint32_t uri_add(const char *uri, const char *id);
 void uri_ref(uint32_t uri);

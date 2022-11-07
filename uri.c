@@ -141,7 +141,7 @@ static void proto_tree_free(struct prefix_tree_node *node) {
     }
 }
 
-struct prefix_tree_node *file_leaf;
+static struct prefix_tree_node *file_leaf;
 
 void init_proto_tree(void) {
     FILE *services = fopen("/etc/services", "r");
@@ -172,6 +172,11 @@ void init_proto_tree(void) {
             it++;
 
         *it = '\0';
+
+        if (line - it >= MAX_PROTOCOL_LEN) {
+            warn("Skipping too long protocol name '%s'", it);
+            continue;
+        }
 
         proto_tree_add_proto(proto);
     }
