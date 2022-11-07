@@ -186,7 +186,7 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
     if (ch - 0x21U > 0x5DU) goto finish_nak;
 
     if (!stt->no_copy) {
-        adjust_buffer((void **)&stt->data, &stt->caps, stt->size + 1, 1);
+        adjust_buffer((void **)&stt->data, &stt->caps, stt->size + 2, 1);
         stt->data[stt->size] = ch;
     }
     stt->size++;
