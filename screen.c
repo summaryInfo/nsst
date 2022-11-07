@@ -1327,31 +1327,31 @@ inline static void swap_3(struct line *top_after, struct line *mid_before, struc
 
 HOT
 inline static void shift_handles_up(struct line_handle *screen, ssize_t amount, ssize_t bottom) {
-        ssize_t i = 0;
-        for (; i < amount; i++) {
-            struct line_handle *handle = &screen[i];
+    ssize_t i = 0;
+    for (; i < amount; i++) {
+        struct line_handle *handle = &screen[i];
 
-            struct line_handle *prev = handle->prev;
-            struct line_handle *next = handle->next;
+        struct line_handle *prev = handle->prev;
+        struct line_handle *next = handle->next;
 
-            if (prev) prev->next = next;
-            else handle->line->first_handle = next;
-            if (next) next->prev = prev;
-        }
+        if (prev) prev->next = next;
+        else handle->line->first_handle = next;
+        if (next) next->prev = prev;
+    }
 
-        for (; i < bottom; i++) {
-            struct line_handle *src = &screen[i];
-            struct line_handle *dst = &screen[i - amount];
+    for (; i < bottom; i++) {
+        struct line_handle *src = &screen[i];
+        struct line_handle *dst = &screen[i - amount];
 
-            *dst = *src;
+        *dst = *src;
 
-            struct line_handle *prev = src->prev;
-            struct line_handle *next = src->next;
+        struct line_handle *prev = src->prev;
+        struct line_handle *next = src->next;
 
-            if (prev) prev->next = dst;
-            else dst->line->first_handle = dst;
-            if (next) next->prev = dst;
-        }
+        if (prev) prev->next = dst;
+        else dst->line->first_handle = dst;
+        if (next) next->prev = dst;
+    }
 }
 
 inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool save) {
