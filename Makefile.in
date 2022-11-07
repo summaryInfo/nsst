@@ -30,17 +30,17 @@ install-strip: install
 	strip $(BINDIR)/$(NAME)c
 
 install: all
-	install -D $(NAME) $(BINDIR)/$(NAME)
-	install -D $(NAME)c $(BINDIR)/$(NAME)c
-	install -D nsst-open $(BINDIR)/$(NAME)-open
-	install -Dm 644 docs/nsst.conf $(SHAREDIR)/$(NAME)/nsst.conf
-	install -Dm 644 docs/nsst.1 $(MANDIR)/man1/$(NAME).1
+	install -D $(NAME) $(DESTDIR)$(BINDIR)/$(NAME)
+	install -D $(NAME)c $(DESTDIR)$(BINDIR)/$(NAME)c
+	install -D nsst-open $(DESTDIR)$(BINDIR)/$(NAME)-open
+	install -Dm 644 docs/nsst.conf $(DESTDIR)$(SHAREDIR)/$(NAME)/nsst.conf
+	install -Dm 644 docs/nsst.1 $(DESTDIR)$(MANDIR)/man1/$(NAME).1
 
 uninstall:
-	rm -rf $(SHAREDIR)/nsst
-	rm -f $(MANDIR)/man1/nsst.1
-	rm -f $(BINDIR)/$(NAME)
-	rm -f $(BINDIR)/$(NAME)c
+	rm -rf $(DESTDIR)$(SHAREDIR)/nsst
+	rm -f $(DESTDIR)$(MANDIR)/man1/nsst.1
+	rm -f $(DESTDIR)$(BINDIR)/$(NAME)
+	rm -f $(DESTDIR)$(BINDIR)/$(NAME)c
 
 $(NAME): $(OBJ)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ) $(LDLIBS) -o $@
