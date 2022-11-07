@@ -3151,11 +3151,13 @@ inline static bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
 }
 
 inline static bool term_dispatch(struct term *term, const uint8_t **start, const uint8_t *end) {
-    // Fast path for graphical characters
-    if (term->esc.state == esc_ground && !IS_CBYTE(**start))
+    uint8_t ch = **start;
+
+    // Fast path for graphical characters, it can print one line at a time
+    if (term->esc.state == esc_ground && !IS_CBYTE(ch))
         return screen_dispatch_print(&term->scr, start, end, term->mode.utf8, term->mode.enable_nrcs);
 
-    uint8_t ch = *(*start)++;
+    ++*start;
 
     // C1 controls are interpreted in all states, try them before others
     if (UNLIKELY(IS_C1(ch)) && term->vt_level > 1) {
