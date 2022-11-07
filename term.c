@@ -3334,6 +3334,30 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
     return 1;
 }
 
+#if USE_URI
+inline static void apply_matched_uri(struct term *term) {
+    struct line_handle uri_end = screen_line_iter(&term->scr, screen_cursor_y(&term->scr));
+    struct line_handle *uri_start = screen_get_bookmark(&term->scr);
+    uri_end.offset += screen_cursor_x(&term->scr);
+    /* URI is located on single line, contiguous and has
+     * common SGR, since control characters reset URI match. */
+    struct line *line = uri_end.line;
+
+    assert(uri_end.offset <= line->size);
+    assert(uri_start->offset <= line->size);
+    assert(line == uri_start->line);
+
+    struct attr attr = *view_attr_at(&uri_end, 0);
+    attr.uri = uri_add(uri_match_move(&term->uri_match), NULL);
+    uint32_t attrid = alloc_attr(line, &attr);
+
+    for (ssize_t i = uri_start->offset; i < uri_end.offset; i++)
+        line->cell[i].attrid = attrid;
+
+    uri_unref(attr.uri);
+}
+#endif
+
 HOT
 bool term_read(struct term *term) {
     if (tty_refill(&term->tty) < 0 ||
@@ -3344,9 +3368,29 @@ bool term_read(struct term *term) {
     if (term->mode.scroll_on_output)
         screen_reset_view(&term->scr, 1);
 
+#if USE_URI
+    bool allow_uris = window_cfg(screen_window(term_screen(term)))->allow_uris;
+    if (allow_uris && !screen_altscreen(&term->scr) && !screen_sgr(&term->scr)->uri) {
+        for (const uint8_t *cur = term->tty.start; cur < term->tty.end; cur++) {
+            enum uri_match_result res = uri_match_next(&term->uri_match, *cur);
+            if (res == urim_ground) {
+                screen_set_bookmark(&term->scr, cur + 1);
+                uri_match_reset(&term->uri_match);
+            }
+            if (res == urim_finished) {
+                while (term->tty.start < cur)
+                    if (!term_dispatch(term, (const uint8_t **)&term->tty.start, cur)) break;
+                if (term->esc.state == esc_ground)
+                    apply_matched_uri(term);
+            }
+        }
+    }
+#endif
+
     while (term->tty.start < term->tty.end)
         if (!term_dispatch(term, (const uint8_t **)&term->tty.start, term->tty.end)) break;
 
+    screen_set_bookmark(&term->scr, NULL);
     screen_drain_scrolled(&term->scr);
 
     return true;
