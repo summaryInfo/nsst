@@ -2052,9 +2052,9 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
         scr->prev_ch = xstart[maxw - 1];
         print_buffer(scr, NULL, xstart, maxw);
 
-        if (xstart <= scr->save_handle_at_print && scr->save_handle_at_print < end) {
+        if (xstart <= scr->save_handle_at_print && scr->save_handle_at_print < xstart + maxw) {
             replace_handle(&scr->saved_handle, &scr->screen[scr->c.y]);
-            scr->saved_handle.offset += scr->c.x - (end - scr->save_handle_at_print);
+            scr->saved_handle.offset += scr->c.x - (xstart + maxw - scr->c.pending - scr->save_handle_at_print);
         }
         return res;
     }
@@ -2137,7 +2137,7 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
 
     if (save_offset) {
         replace_handle(&scr->saved_handle, &scr->screen[scr->c.y]);
-        scr->saved_handle.offset += scr->c.x - (pbuf - save_offset);
+        scr->saved_handle.offset += scr->c.x - (pbuf - save_offset - scr->c.pending);
     }
 
     return res;

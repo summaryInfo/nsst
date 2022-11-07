@@ -219,7 +219,6 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
         } else if (ch == ':' && is_leaf_node(stt->ptc)) {
             stt->matched_file_proto = stt->ptc == file_leaf;
             stt->state++;
-            stt->ptc = &proto_tree_head;
             return (stt->res = urim_need_more);
         }
         break;
@@ -309,13 +308,25 @@ enum uri_match_result uri_match_next(struct uri_match_state *stt, uint8_t ch) {
 
 finish_nak:
     stt->state = uris1_ground;
-    return (stt->res = stt->res == urim_may_finish ? urim_finished : urim_ground);
+    stt->ptc = NULL;
+    if (stt->res != urim_may_finish) {
+        stt->size = 0;
+        return (stt->res = urim_ground);
+    } else
+        return (stt->res = urim_finished);
 #undef MATCH
 }
 
-void uri_match_reset(struct uri_match_state *state) {
-    free(state->data);
-    *state = (struct uri_match_state){0};
+void uri_match_reset(struct uri_match_state *state, bool soft) {
+    if (soft) {
+        state->state = uris1_ground;
+        state->res = urim_ground;
+        state->size =  0;
+        state->ptc = NULL;
+    } else {
+        free(state->data);
+        *state = (struct uri_match_state){0};
+    }
 }
 
 char *uri_match_move(struct uri_match_state *state) {

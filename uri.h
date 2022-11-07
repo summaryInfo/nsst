@@ -51,7 +51,7 @@ void uri_open(uint32_t uri);
 const char *uri_get(uint32_t uri);
 
 enum uri_match_result uri_match_next(struct uri_match_state *state, uint8_t ch);
-void uri_match_reset(struct uri_match_state *state);
+void uri_match_reset(struct uri_match_state *state, bool soft);
 char *uri_match_move(struct uri_match_state *state);
 void uri_release_memory(void);
 

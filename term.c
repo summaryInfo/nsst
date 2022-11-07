@@ -389,14 +389,14 @@ static void term_do_reset(struct term *term, bool hard) {
     bool cpending;
     screen_store_cursor_position(scr, &cx, &cy, &cpending);
 
-    screen_load_config(scr, 1);
+    screen_load_config(scr, true);
     screen_reset_margins(scr);
     screen_reset_tabs(scr);
 
-    term_load_config(term, 1);
+    term_load_config(term, true);
     keyboard_reset_udk(term);
 #if USE_URI
-    uri_match_reset(&term->uri_match);
+    uri_match_reset(&term->uri_match, false);
 #endif
 
     // TODO Reset cursor shape to default
@@ -3375,13 +3375,15 @@ bool term_read(struct term *term) {
             enum uri_match_result res = uri_match_next(&term->uri_match, *cur);
             if (res == urim_ground) {
                 screen_set_bookmark(&term->scr, cur + 1);
-                uri_match_reset(&term->uri_match);
-            }
-            if (res == urim_finished) {
+            } else if (res == urim_finished) {;
                 while (term->tty.start < cur)
                     if (!term_dispatch(term, (const uint8_t **)&term->tty.start, cur)) break;
+
                 if (term->esc.state == esc_ground)
                     apply_matched_uri(term);
+                else
+                    uri_match_reset(&term->uri_match, true);
+                screen_set_bookmark(&term->scr, cur);
             }
         }
     }
@@ -3711,7 +3713,7 @@ void free_term(struct term *term) {
     tty_hang(&term->tty);
 
 #if USE_URI
-    uri_match_reset(&term->uri_match);
+    uri_match_reset(&term->uri_match, false);
 #endif
 
     free_screen(&term->scr);
