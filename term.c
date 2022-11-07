@@ -3348,7 +3348,7 @@ inline static void apply_matched_uri(struct term *term) {
     assert(line == uri_start->line);
 
     struct attr attr = *view_attr_at(&uri_end, 0);
-    attr.uri = uri_add(uri_match_move(&term->uri_match), NULL);
+    attr.uri = uri_add(uri_match_get(&term->uri_match), NULL);
     uint32_t attrid = alloc_attr(line, &attr);
 
     for (ssize_t i = uri_start->offset; i < uri_end.offset; i++)
@@ -3381,8 +3381,7 @@ bool term_read(struct term *term) {
 
                 if (term->esc.state == esc_ground)
                     apply_matched_uri(term);
-                else
-                    uri_match_reset(&term->uri_match, true);
+                uri_match_reset(&term->uri_match, true);
                 screen_set_bookmark(&term->scr, cur);
             }
         }

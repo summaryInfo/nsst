@@ -329,17 +329,16 @@ void uri_match_reset(struct uri_match_state *state, bool soft) {
     }
 }
 
-char *uri_match_move(struct uri_match_state *state) {
+char *uri_match_get(struct uri_match_state *state) {
     char *res = state->data;
     if (res) res[state->size] = '\0';
-    *state = (struct uri_match_state){0};
     return res;
 }
 
 inline static size_t vaild_uri_len(const char *uri) {
     if (!uri) return 0;
 
-    struct uri_match_state stt = {.no_copy = 1};
+    struct uri_match_state stt = {.no_copy = true};
     enum uri_match_result res = urim_ground;
     while (*uri) {
         res = uri_match_next(&stt, *uri++);
