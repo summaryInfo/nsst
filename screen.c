@@ -179,9 +179,7 @@ struct line_handle screen_view(struct screen *scr) {
 }
 
 struct line_handle screen_line_iter(struct screen *scr, ssize_t y) {
-    struct line_handle pos = dup_handle(scr->screen);
-    screen_advance_iter(scr, &pos, y);
-    return pos;
+    return dup_handle(&scr->screen[y]);
 }
 
 void screen_reset_view(struct screen *scr, bool damage) {
