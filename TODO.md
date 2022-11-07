@@ -7,11 +7,16 @@ _NOTE: These plans can change any time_
 
 ### Until 2.4
 
-* Hyperlinks auto-detection
+* Implement option `--match-uri=<X>` where `<X>` is one of `off`,`manual`,`auto`
 
-  * `--match-uri=<X>` where `<X>` is one of `off`,`manual`,`auto`
+* Fix infinite loop in `fixup_line_seqno()`.
 
 ### Until 2.5 (or later)
+
+* Change X cursor according to the situation.
+  *  Hand when pointing to the link and I-beam in other situations.
+
+* (Maybe) show helper when hovering over URL.
 
 * Re-implement mouse selection via line_handle's to (mostly) remove special case.
   * "Mostly", because we still would need to notify mouse code upon relocation.
