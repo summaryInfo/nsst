@@ -3373,7 +3373,7 @@ bool term_read(struct term *term) {
         for (const uint8_t *cur = term->tty.start; cur < term->tty.end; cur++) {
             if (term->uri_match.state < uris1_slash1) {
                 /* Skip until potential URI start,
-                 * if we are not in the middle of protocol matching. */
+                 * if we are not in the middle of URL matching. */
                 cur = memchr(cur, ':', term->tty.end - cur);
                 if (LIKELY(!cur)) break;
 
