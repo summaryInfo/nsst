@@ -419,9 +419,12 @@ ssize_t tty_refill(struct tty *tty) {
     ssize_t inc = 0, sz = tty->end - tty->start, inctotal = 0;
 
     if (tty->start != tty->fd_buf) {
-        memmove(tty->fd_buf, tty->start, sz);
-        tty->end = tty->fd_buf + sz;
-        tty->start = tty->fd_buf;
+        /* Always keep last MAX_PROTOCOL_LEN bytes in buffer for URL parsing matching */
+        ssize_t tail = MAX(sz, MAX_PROTOCOL_LEN);
+        memmove(tty->fd_buf, tty->start, tail);
+        tty->start = tty->fd_buf + tail - sz;
+        tty->end = tty->fd_buf + tail;
+        sz = tail;
     }
 
     ssize_t space = sizeof tty->fd_buf - sz;
