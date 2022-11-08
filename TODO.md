@@ -5,6 +5,8 @@ Roadmap
 
 ### Until 2.5
 
+* URIs does not match from text pasted from keyboard.
+
 * Fix infinite loop in `fixup_line_seqno()` (if it's still present; only happened once).
 
 * Make config format more sophisticated. Support arrays and quoted strings.

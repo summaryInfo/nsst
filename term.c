@@ -3341,6 +3341,10 @@ inline static void apply_matched_uri(struct term *term) {
     uri_end.offset += screen_cursor_x(&term->scr);
     uri_start->offset -= term->shift_bookmark;
 
+    // FIXME Match URIs on pasted data too.
+    //       This is only temporary fix.
+    if (!uri_start->line) return;
+
     /* URI is located on single line, contiguous and has
      * common SGR, since control characters reset URI match. */
     struct line *line = uri_end.line;
