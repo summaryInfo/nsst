@@ -147,6 +147,7 @@ struct term {
 #if USE_URI
     /* URI match state for URI autodetection */
     struct uri_match_state uri_match;
+    ssize_t shift_bookmark;
 #endif
 
     /* Bell volume */
@@ -3338,12 +3339,15 @@ inline static void apply_matched_uri(struct term *term) {
     struct line_handle uri_end = screen_line_iter(&term->scr, screen_cursor_y(&term->scr));
     struct line_handle *uri_start = screen_get_bookmark(&term->scr);
     uri_end.offset += screen_cursor_x(&term->scr);
+    uri_start->offset -= term->shift_bookmark;
+
     /* URI is located on single line, contiguous and has
      * common SGR, since control characters reset URI match. */
     struct line *line = uri_end.line;
 
     assert(uri_end.offset <= line->size);
     assert(uri_start->offset <= line->size);
+    assert(uri_start->offset >= 0);
     assert(line == uri_start->line);
 
     struct attr attr = *view_attr_at(&uri_end, 0);
@@ -3380,7 +3384,14 @@ bool term_read(struct term *term) {
                 proto_start = match_reverse_proto_tree(&term->uri_match, cur - 1, MAX_PROTOCOL_LEN - 1);
                 if (!proto_start) continue;
 
-                screen_set_bookmark(&term->scr, proto_start);
+                if (proto_start < term->tty.start) {
+                    term->shift_bookmark = term->tty.start - proto_start;
+                    screen_set_bookmark(&term->scr, term->tty.start);
+                } else {
+                    term->shift_bookmark = 0;
+                    screen_set_bookmark(&term->scr, proto_start);
+                }
+
             }
 
             for (; cur < term->tty.end; cur++) {
