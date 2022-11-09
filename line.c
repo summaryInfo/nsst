@@ -192,14 +192,6 @@ struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t caps)
 
     line->force_damage = true;
 
-#if DEBUG_LINES
-    struct line_handle *h = new->first_handle;
-    while (h) {
-        assert(h->offset <= new->size);
-        h = h->next;
-    }
-#endif
-
     if (new == line)
         return new;
 
