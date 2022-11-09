@@ -179,6 +179,10 @@ struct line_handle screen_view(struct screen *scr) {
 }
 
 struct line_handle screen_line_iter(struct screen *scr, ssize_t y) {
+#if DEBUG_LINES
+    assert(y >= 0);
+    assert(y < scr->height);
+#endif
     return dup_handle(&scr->screen[y]);
 }
 

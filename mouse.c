@@ -520,18 +520,13 @@ void selection_scrolled(struct selection_state *sel, struct screen *scr, int16_t
         if (!sel->start.line || !sel->end.line)
             selection_clear(sel);
 
-        /* NOTE: This is slow, but if the invariant of the lines
-         * on the screen having one-to-one correspondence
-         * between struct line and visual line changes it would
-         * be the only correct way to calculate the position */
-
         struct line_handle top_pos = screen_line_iter(scr, top);
-        struct line_handle bottom_pos = screen_line_iter(scr, bottom);
+        struct line_handle bottom_pos = screen_line_iter(scr, bottom - 1);
         struct line_handle screen_pos = screen_line_iter(scr, 0);
 
         if (line_handle_cmp(&sel->start, &screen_pos) < 0 ||
                 (line_handle_cmp(&sel->start, &top_pos) >= 0 &&
-                 line_handle_cmp(&sel->start, &bottom_pos) < 0)) {
+                 line_handle_cmp(&sel->start, &bottom_pos) <= 0)) {
             ssize_t x_off = virtual_pos(scr, &sel->start);
 
             screen_advance_iter(scr, &sel->start, -x);
