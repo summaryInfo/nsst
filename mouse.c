@@ -527,10 +527,12 @@ void selection_scrolled(struct selection_state *sel, struct screen *scr, int16_t
         if (line_handle_cmp(&sel->start, &screen_pos) < 0 ||
                 (line_handle_cmp(&sel->start, &top_pos) >= 0 &&
                  line_handle_cmp(&sel->start, &bottom_pos) <= 0)) {
+            line_handle_remove(&sel->start);
             ssize_t x_off = virtual_pos(scr, &sel->start);
 
             screen_advance_iter(scr, &sel->start, -x);
             sel->start.offset += x_off;
+            line_handle_add(&sel->start);
 
             selection_view_scrolled(sel, scr);
         }

@@ -108,10 +108,8 @@ struct line_handle screen_view_at(struct screen *scr, struct line_handle *pos) {
 }
 
 inline static ssize_t inc_iter_width_width(struct line_handle *pos, ssize_t width) {
-    bool registered = line_handle_is_registered(pos);
+    assert(!line_handle_is_registered(pos));
     bool res = 0;
-    if (registered)
-        line_handle_remove(pos);
 
     ssize_t offset = line_advance_width(pos->line, pos->offset, width);
     if (offset >= pos->line->size) {
@@ -125,8 +123,6 @@ inline static ssize_t inc_iter_width_width(struct line_handle *pos, ssize_t widt
         pos->offset = offset;
     }
 
-    if (registered)
-        line_handle_add(pos);
     return res;
 }
 
@@ -135,9 +131,7 @@ ssize_t screen_inc_iter(struct screen *scr, struct line_handle *pos) {
 }
 
 inline static ssize_t advance_iter_with_width(struct line_handle *pos, ssize_t amount, ssize_t width) {
-    bool registered = line_handle_is_registered(pos);
-    if (registered)
-        line_handle_remove(pos);
+    assert(!line_handle_is_registered(pos));
 
     if (amount < 0) {
         // TODO Little optimization
@@ -164,8 +158,6 @@ inline static ssize_t advance_iter_with_width(struct line_handle *pos, ssize_t a
         }
     }
 
-    if (registered)
-        line_handle_add(pos);
     return amount;
 
 }
@@ -336,7 +328,9 @@ void screen_scroll_view(struct screen *scr, int16_t amount) {
     /* Shortcut for the case when view is already at the bottom */
     if (old_viewr && amount > 0) return;
 
+    line_handle_remove(&scr->view_pos);
     ssize_t delta = screen_advance_iter(scr, &scr->view_pos, amount) - amount;
+    line_handle_add(&scr->view_pos);
     int new_viewr = line_handle_cmp(&scr->view_pos, scr->screen);
     if (new_viewr > 0) {
         screen_reset_view(scr, 1);
@@ -833,8 +827,8 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
     /* Find line of bottom left cell */
     struct line_handle lower_left = dup_handle(&scr->view_pos);
     if (lower_left.line) {
-        line_handle_add(&lower_left);
         screen_advance_iter(scr, &lower_left, scr->height - 1);
+        line_handle_add(&lower_left);
     }
 
     enum stick_view stick = stick_none;
