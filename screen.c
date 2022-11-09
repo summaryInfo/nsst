@@ -1450,7 +1450,7 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
             replace_handle(&scr->view_pos, &scr->screen[0]);
             window_delay_redraw(scr->win);
             if (UNLIKELY(selection_active(&scr->sstate)))
-                selection_scrolled(&scr->sstate, scr, amount, top, bottom);
+                selection_scrolled(&scr->sstate, scr, top, bottom, save);
         }
 
         /* Update position of selection, if scrolled */

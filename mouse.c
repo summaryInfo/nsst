@@ -512,31 +512,29 @@ void free_selection(struct selection_state *sel) {
     sel->seg = NULL;
 }
 
-void selection_scrolled(struct selection_state *sel, struct screen *scr, int16_t x, ssize_t top, ssize_t bottom) {
+void selection_scrolled(struct selection_state *sel, struct screen *scr, ssize_t top, ssize_t bottom, bool save) {
+    if (!sel->start.line || !sel->end.line) goto clear;
 
-    if (sel->state == state_sel_pressed ||
-            sel->state == state_sel_progress) {
-
-        if (!sel->start.line || !sel->end.line)
-            selection_clear(sel);
-
+    if (!save) {
         struct line_handle top_pos = screen_line_iter(scr, top);
         struct line_handle bottom_pos = screen_line_iter(scr, bottom - 1);
-        struct line_handle screen_pos = screen_line_iter(scr, 0);
 
-        if (line_handle_cmp(&sel->start, &screen_pos) < 0 ||
-                (line_handle_cmp(&sel->start, &top_pos) >= 0 &&
-                 line_handle_cmp(&sel->start, &bottom_pos) <= 0)) {
-            line_handle_remove(&sel->start);
-            ssize_t x_off = virtual_pos(scr, &sel->start);
+        if ((line_handle_cmp(&sel->start, &top_pos) >= 0 &&
+             line_handle_cmp(&sel->start, &bottom_pos) <= 0) !=
+            (line_handle_cmp(&sel->end, &top_pos) >= 0 &&
+             line_handle_cmp(&sel->end, &bottom_pos) <= 0)) goto clear;
+    } else {
+        struct line_handle bottom_pos = screen_line_iter(scr, bottom - 1);
 
-            screen_advance_iter(scr, &sel->start, -x);
-            sel->start.offset += x_off;
-            line_handle_add(&sel->start);
-
-            selection_view_scrolled(sel, scr);
-        }
+        if ((line_handle_cmp(&sel->start, &bottom_pos) <= 0) !=
+            (line_handle_cmp(&sel->end, &bottom_pos) <= 0)) goto clear;
     }
+
+    selection_view_scrolled(sel, scr);
+    return;
+
+clear:
+    selection_clear(sel);
 }
 
 static void selection_changed(struct selection_state *sel, struct screen *scr, uint8_t state, bool rectangular) {
@@ -673,7 +671,7 @@ static uint8_t *selection_data(struct selection_state *sel) {
 }
 
 void selection_view_scrolled(struct selection_state *sel, struct screen *scr) {
-    if (sel->state == state_sel_progress)
+    if (sel->state == state_sel_progress || sel->state == state_sel_pressed)
         selection_changed(sel, scr, state_sel_progress, sel->rectangular);
 }
 
