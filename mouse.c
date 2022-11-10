@@ -905,6 +905,9 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
     /* Paste */
     } else if (ev.button == 1 && ev.event == mouse_event_release) {
         window_paste_clip(term_window(term), clip_primary);
+    /* Clear selection if it just a click */
+    } else if (ev.event == mouse_event_release && ev.button == 0 && sel->state == state_sel_pressed) {
+        sel->state = state_sel_none;
     /* Select */
     } else if (is_selection_event(sel, &ev)) {
 #if USE_URI
