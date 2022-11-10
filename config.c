@@ -16,6 +16,7 @@
 #include <inttypes.h>
 #include <langinfo.h>
 #include <limits.h>
+#include <setjmp.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -749,37 +750,14 @@ void free_config(struct instance_config *src) {
     }
 }
 
-static void parse_config(struct instance_config *cfg, bool allow_global) {
-    char pathbuf[PATH_MAX];
-    const char *path = cfg->config_path;
-    int fd = -1;
+struct mapping {
+    char *addr;
+    ssize_t size;
+};
 
-    /* Config file is search in following places:
-     * 1. Path set with --config=
-     * 2. $XDG_CONFIG_HOME/nsst.conf
-     * 3. $HOME/.config/nsst.conf
-     * If file is not found in those places, just give up */
-
-    if (path) fd = open(path, O_RDONLY);
-    if (fd < 0) {
-        const char *xdg_cfg = getenv("XDG_CONFIG_HOME");
-        if (xdg_cfg) {
-            snprintf(pathbuf, sizeof pathbuf, "%s/nsst.conf", xdg_cfg);
-            fd = open(pathbuf, O_RDONLY);
-        }
-    }
-    if (fd < 0) {
-        const char *home = getenv("HOME");
-        if (home) {
-            snprintf(pathbuf, sizeof pathbuf, "%s/.config/nsst.conf", home);
-            fd = open(pathbuf, O_RDONLY);
-        }
-    }
-
-    if (fd < 0) {
-        if (path) goto e_open;
-        return;
-    }
+struct mapping map_file(const char *path) {
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) goto e_open;
 
     struct stat stt;
     if (fstat(fd, &stt) < 0) goto e_open;
@@ -789,59 +767,280 @@ static void parse_config(struct instance_config *cfg, bool allow_global) {
 
     close(fd);
 
-    char *ptr = addr, *end = addr + stt.st_size;
-    char saved1 = '\0', saved2 = '\0';
-    ssize_t line_n = 0;
-    while (ptr < end) {
-        line_n++;
-
-        while (ptr < end && isspace((unsigned)*ptr)) ptr++;
-        if (ptr >= end) break;
-
-        char *start = ptr;
-        if (isalpha((unsigned)*ptr)) {
-            char *name_start, *name_end, *value_start, *value_end;
-
-            name_start = ptr;
-
-            while (ptr < end && !isspace((unsigned)*ptr) && *ptr != '#' && *ptr != '=') ptr++;
-            name_end = ptr;
-
-            while (ptr < end && isblank((unsigned)*ptr)) ptr++;
-            if (ptr >= end || *ptr++ != '=') goto e_wrong_line;
-            while (ptr < end && isblank((unsigned)*ptr)) ptr++;
-            value_start = ptr;
-
-            while (ptr < end && *ptr != '\n') ptr++;
-            while (ptr > value_start && isblank((unsigned)ptr[-1])) ptr--;
-            value_end = ptr;
-
-            SWAP(*value_end, saved1);
-            SWAP(*name_end, saved2);
-            struct option *opt = find_option_entry(name_start, true);
-            if (opt) set_option_entry(cfg, opt, value_start, allow_global);
-            SWAP(*name_end, saved2);
-            SWAP(*value_end, saved1);
-        } else if (*ptr == '#') {
-            while (ptr < end && *ptr != '\n') ptr++;
-        } else {
-e_wrong_line:
-            ptr = start;
-            while(ptr < end && *ptr != '\n') ptr++;
-            SWAP(*ptr, saved1);
-            warn("Can't parse config line #%zd: %s", line_n, start);
-            SWAP(*ptr, saved1);
-            ptr++;
-        }
-    }
-
-    munmap(addr, stt.st_size + 1);
+    return (struct mapping) { addr, stt.st_size };
 
 e_open:
+    if (fd >= 0) close(fd);
+    info("Failed to map file '%s'", path);
+    return (struct mapping) { NULL, 0 };
+}
+
+void unmap_file(struct mapping map) {
+    munmap(map.addr, map.size + 1);
+}
+
+#define MAX_VAL_LEN 1024
+
+struct parse_state {
+    const char *start;
+    const char *end;
+
+    const char *line_start;
+    ssize_t line_n;
+    bool skip_to_quote;
+    bool skip_to_bracket;
+
+    jmp_buf escape_path;
+};
+
+inline static void skip_spaces(struct parse_state *ps) {
+    while (ps->start < ps->end) {
+        if (*ps->start == '#') {
+            do ps->start++;
+            while (ps->start < ps->end && *ps->start != '\n');
+        } else if (isspace((unsigned)*ps->start)) {
+            if (*ps->start == '\n') {
+                ps->line_start = ps->start + 1;
+                ps->line_n++;
+            }
+            ps->start++;
+        } else break;
+    }
+}
+
+inline static bool is_end(struct parse_state *ps) {
+    return ps->start >= ps->end;
+}
+
+_Noreturn static void complain(struct parse_state *ps, const char *msg) {
+    int col = ps->start - ps->line_start;
+    const char *str_end = strchr(ps->line_start, '\n');
+    if (!str_end) str_end = ps->end;
+    warn("%s at line %zd column %d:", msg, ps->line_n, col);
+    warn("\t%.*s", (int)(str_end - ps->line_start), ps->line_start);
+    warn("%*c", col + 1, '^');
+    longjmp(ps->escape_path, 1);
+}
+
+inline static char comsume_hex_digit(struct parse_state *ps) {
+    unsigned h = *ps->start++;
+    if (h - '0' < 10) return h - '0';
+    if (h - 'A' < 6) return h - 'A';
+    if (h - 'a' < 6) return h - 'a';
+
+    ps->start--;
+    complain(ps, "Expected hex digit");
+}
+
+inline static char comsume_oct_digit(struct parse_state *ps) {
+    unsigned h = *ps->start++;
+    if (h - '0' < 8) return h - '0';
+
+    ps->start--;
+    complain(ps, "Expected octal digit");
+}
+
+inline static void unescaped(struct parse_state *ps, char **dst, char *end) {
+    char ch = *ps->start++;
+    if (!ch) {
+        ps->start--;
+        complain(ps, "Unexpected end of file");
+    } else if (ch == '\\') {
+        switch(ch = *ps->start++) {
+        case '\0':
+            ps->start--;
+            complain(ps, "Unexpected end of file");
+        case '0': case '1': case '2': case '3':
+        case '4': case '5': case '6': case '7': {
+            uint32_t acc = 0;
+            do acc = (acc << 3) | comsume_oct_digit(ps);
+            while ((unsigned)*ps->start - '0' < 8);
+            if (acc > 255)
+                complain(ps, "Constant is too large");
+            ch = acc;
+            break;
+        }
+        case 'x': {
+            uint8_t acc = 0;
+            for (ssize_t i = 0; i < 2; i++)
+                acc = (acc << 4) | comsume_hex_digit(ps);
+            ch = acc;
+            return;
+        }
+        case 'u':
+        case 'U': {
+            uint32_t acc = 0;
+            for (ssize_t i = 0; i < 4*(1 + (ch == 'U')); i++)
+                acc = (acc << 4) | comsume_hex_digit(ps);
+            *dst += utf8_encode(acc, (uint8_t *)*dst, (uint8_t *)end);
+            return;
+        }
+        case 'a': ch = '\a'; break;
+        case 'b': ch = '\b'; break;
+        case 'e': ch = '\033'; break;
+        case 'f': ch = '\f'; break;
+        case 'n': ch = '\n'; break;
+        case 'r': ch = '\r'; break;
+        case 't': ch = '\t'; break;
+        case 'v': ch = '\v'; break;
+        }
+    }
+    if (ch == '\n') {
+        ps->line_start = ps->start;
+        ps->line_n++;
+    }
+    *(*dst)++ = ch;
+}
+
+inline static bool is_word_break(struct parse_state *ps, bool rhs) {
+    if (rhs) return isspace((unsigned)*ps->start) || !*ps->start || strchr("#\"][", *ps->start);
+    return isspace((unsigned)*ps->start) || !*ps->start || strchr("#=", *ps->start);
+}
+
+inline static bool is_quoted_word_break(struct parse_state *ps) {
+    return !*ps->start || *ps->start == '"';
+}
+
+inline static bool comsume_if(struct parse_state *ps, char c) {
+    if (*ps->start == c) {
+        ps->start++;
+        return true;
+    }
+    return false;
+}
+
+static void consume(struct parse_state *ps, char c) {
+    skip_spaces(ps);
+    if (*ps->start++ != c) {
+        ps->start--;
+        complain(ps, "Unexpected character");
+    }
+}
+
+static bool parse_value(struct parse_state *ps, char *dst, char *end, bool rhs, bool allow_array) {
+    skip_spaces(ps);
+    if (is_end(ps)) complain(ps, "Unexpected end of file, expected value");
+
+    if (ps->skip_to_bracket && comsume_if(ps, ']')) {
+        ps->skip_to_bracket = false;
+        return true;
+    } else if (comsume_if(ps, '[')) {
+        ps->skip_to_bracket = true;
+        if (!allow_array) complain(ps, "Arrays are not supported in this context");
+        return true;
+    } else if (comsume_if(ps, '"')) {
+        ps->skip_to_quote = true;
+        while (dst < end) {
+            if (is_quoted_word_break(ps)) break;
+            unescaped(ps, &dst, end);
+        }
+        ps->skip_to_quote = false;
+        if (!comsume_if(ps, '"')) complain(ps, "Unexpected end of file, expected \"");
+    } else {
+        while (dst < end) {
+            if (is_word_break(ps, rhs)) break;
+            unescaped(ps, &dst, end);
+        }
+    }
+    *dst = '\0';
+    return false;
+}
+
+static _Bool set_array_option_index(struct instance_config *cfg, struct option *opt, ssize_t index, const char *value, bool allow_global) {
+    warn("No array options supported yet, but encountered option '%s'", opt->name);
+    (void)cfg, (void)index, (void)value, (void)allow_global;
+    return false;
+}
+
+static void parse_config(struct instance_config *cfg, bool allow_global) {
+    struct mapping cfg_file = {0};
+    static char buf1[MAX(PATH_MAX, MAX_VAL_LEN)];
+    static char buf2[MAX_VAL_LEN];
+    const char *config_taken =  NULL;
+
+    /* Config file is search in following places:
+     * 1. Path set with --config=
+     * 2. $XDG_CONFIG_HOME/nsst.conf
+     * 3. $HOME/.config/nsst.conf
+     * If file is not found in those places, just give up */
+
+    if (cfg->config_path)
+        cfg_file = map_file(config_taken = cfg->config_path);
+    if (!cfg_file.addr) {
+        const char *xdg_cfg = getenv("XDG_CONFIG_HOME");
+        if (xdg_cfg) {
+            snprintf(buf1, sizeof buf1, "%s/nsst.conf", xdg_cfg);
+            cfg_file = map_file(config_taken = buf1);
+        }
+    }
+    if (!cfg_file.addr) {
+        const char *home = getenv("HOME");
+        if (home) {
+            snprintf(buf1, sizeof buf1, "%s/.config/nsst.conf", home);
+            cfg_file = map_file(config_taken = buf1);
+        }
+    }
+    if (!cfg_file.addr)
+        cfg_file = map_file(config_taken = "nsst.conf");
+
+    if (!cfg_file.addr) {
+        warn("Cannot find config file anywhere");
+        return;
+    } else {
+        info("Picked config file '%s'", config_taken);
+    }
+
+    struct parse_state ps = {
+        .start = cfg_file.addr,
+        .end = cfg_file.addr + cfg_file.size,
+        .line_start = cfg_file.addr,
+    };
+
+start_from_next_line:
+    if (setjmp(ps.escape_path)) {
+        // Skip to the place where we know the state
+        if (ps.skip_to_bracket) {
+            while (ps.start < ps.end && *ps.start != ']') ps.start++;
+            ps.skip_to_bracket = 0;
+        } else if (ps.skip_to_quote) {
+            while (ps.start < ps.end && *ps.start != '"') ps.start++;
+            ps.skip_to_quote = 0;
+        } else {
+            while (ps.start < ps.end && *ps.start != '\n') ps.start++;
+        }
+        if (ps.start < ps.end) goto start_from_next_line;
+        unmap_file(cfg_file);
+        return;
+    }
+
+    while (!is_end(&ps)) {
+        parse_value(&ps, buf2, buf2 + sizeof buf2 - 1, false, false);
+        // No array options currently
+        // TODO Make colors an array? -- need to support sparse arrays (is [123] = "xx") in that case
+        bool is_array_option = false;
+        struct option *opt = find_option_entry(buf2, true);
+        if (!opt) longjmp(ps.escape_path, 1);
+
+        consume(&ps, '=');
+
+        if (parse_value(&ps, buf1, buf1 + sizeof buf1 - 1, true, is_array_option)) {
+            ssize_t index = 0;
+            while (!parse_value(&ps, buf1, buf1 + sizeof buf1 - 1, true, false))
+                set_array_option_index(cfg, opt, index++, buf1, allow_global);
+        } else set_option_entry(cfg, opt, buf1, allow_global);
+
+        ssize_t cur_ln = ps.line_n;
+
+        skip_spaces(&ps);
+
+        if (cur_ln == ps.line_n)
+            complain(&ps, "New line expected");
+    }
+
+    unmap_file(cfg_file);
+
     /* Parse all shortcuts */
     keyboard_parse_config(cfg);
-
-    if (fd < 0) warn("Can't read config file: %s", path ? path : pathbuf);
 }
 
 void init_instance_config(struct instance_config *cfg, const char *config_path, bool allow_global) {
