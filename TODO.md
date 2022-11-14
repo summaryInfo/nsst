@@ -11,8 +11,6 @@ Roadmap
 * Refactor screen arrays
   * Lazy resizing?
 
-* `nsst: mouse.c:615: is_selected_prev: Assertion 'it->idx >= 0' failed.`
-
 * URIs does not match from text pasted from keyboard.
 
 * Fix loops in line list that might appear after scrolling.

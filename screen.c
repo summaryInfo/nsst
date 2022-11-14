@@ -230,8 +230,10 @@ void screen_wrap(struct screen *scr, bool hard) {
     /* If paragraph is too long, force hard wrap */
 
     if (scr->screen[scr->c.y].line->prev->size +
-            scr->screen[scr->c.y].line->size > MAX_LINE_LEN)
+            scr->screen[scr->c.y].line->size > MAX_LINE_LEN) {
         scr->screen[scr->c.y].line->prev->wrapped = true;
+        return;
+    }
 
     /* Otherwise if everything is fine and we can wrap */
 
