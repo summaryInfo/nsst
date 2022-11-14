@@ -287,7 +287,7 @@ static struct line_span snap_backward(struct selection_state *sel, struct line_s
         }
 
         for (;;) {
-            /* We should not land on second cell of wide character */
+            /* We should not land on the second cell of a wide character */
             pos.offset -= !line->cell[pos.offset].ch && pos.offset && cell_wide(line->cell + pos.offset - 1);
 
             bool sep_cur = is_separator(cell_get(line->cell + pos.offset), seps);
@@ -317,6 +317,8 @@ static struct line_span snap_backward(struct selection_state *sel, struct line_s
             pos.line = prev;
             pos.offset = line->size - delta;
         }
+    } else {
+        pos.offset -= !pos.line->cell[pos.offset].ch && pos.offset && cell_wide(pos.line->cell + pos.offset - 1);
     }
 
     return pos;
@@ -339,13 +341,11 @@ static struct line_span snap_forward(struct selection_state *sel, struct line_sp
         }
 
         for (;;) {
+            /* We should not land on the second cell of a wide character */
+            pos.offset -= !line->cell[pos.offset].ch && pos.offset && cell_wide(line->cell + pos.offset - 1);
             bool sep_cur = is_separator(cell_get(line->cell + pos.offset), seps);
 
-            /* We should not land on first cell of wide character */
-            pos.offset += cell_wide(line->cell + pos.offset);
-
             /* Go forward until we hit word border */
-
             for (; pos.offset < line->size; ) {
                 int delta = 1 + (cell_wide(line->cell + pos.offset) && pos.offset < line->size - 1);
                 if (line->size <= pos.offset + delta) break;
@@ -368,6 +368,9 @@ static struct line_span snap_forward(struct selection_state *sel, struct line_sp
             pos.line = next;
             pos.offset = 0;
         }
+    } else {
+        if (pos.line && pos.offset + 1 < pos.line->size)
+            pos.offset += cell_wide(pos.line->cell + pos.offset);
     }
 
     return pos;
