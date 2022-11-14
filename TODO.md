@@ -6,6 +6,9 @@ Roadmap
 
 ### Until 2.5
 
+* Sometimes UTF-8 characters get corrupted (likely partially read):
+ * repro: `/usr/bin/printf '\xd0'; sleep 1; /usr/bin/printf '\xb2\n'`
+
  * In *nncmpp* wide character names cause scrollbar to overflow to the next line.
 
 * Refactor screen arrays
