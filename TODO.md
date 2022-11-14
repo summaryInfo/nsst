@@ -3,11 +3,19 @@ Roadmap
 
 ## Future versions
 
+
 ### Until 2.5
+
+ * In *nncmpp* wide character names cause scrollbar to overflow to the next line.
+
+* Refactor screen arrays
+  * Lazy resizing?
+
+* `nsst: mouse.c:615: is_selected_prev: Assertion 'it->idx >= 0' failed.`
 
 * URIs does not match from text pasted from keyboard.
 
-* Fix loops in line_handle list that might appear after scrolling.
+* Fix loops in line list that might appear after scrolling.
 
 * Make config format more sophisticated. Support arrays and quoted strings.
 
