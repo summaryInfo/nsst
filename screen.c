@@ -1894,13 +1894,13 @@ inline static void print_buffer(struct screen *scr, const uint32_t *bstart, cons
     if (astart) {
         copy_ascii_to_cells(cell, astart, astart + totalw, attrid);
         if (UNLIKELY(gconfig.trace_characters)) {
-            for (const uint32_t *px = bstart; px < bstart + totalw; px++)
+            for (const uint8_t *px = astart; px < astart + totalw; px++)
                 info("Char: (%x) '%lc' ", *px, (wint_t)*px);
         }
     } else {
         copy_utf32_to_cells(cell, bstart, bstart + totalw, attrid);
         if (UNLIKELY(gconfig.trace_characters)) {
-            for (const uint8_t *px = astart; px < astart + totalw; px++)
+            for (const uint32_t *px = bstart; px < bstart + totalw; px++)
                 info("Char: (%x) '%lc' ", *px, (wint_t)*px);
         }
     }
