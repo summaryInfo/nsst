@@ -401,7 +401,7 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
         close(slave);
     }
 
-    tty->start = tty->end = tty->fd_buf;
+    tty->start = tty->end = tty->fd_buf + MAX_PROTOCOL_LEN;
 
     if (tty->w.child > 0)
         add_watcher(&tty->w);
@@ -418,7 +418,7 @@ ssize_t tty_refill(struct tty *tty) {
 
     ssize_t inc = 0, sz = tty->end - tty->start, inctotal = 0;
 
-    if (tty->start != tty->fd_buf) {
+    if (tty->start != tty->fd_buf + MAX_PROTOCOL_LEN) {
         /* Always keep last MAX_PROTOCOL_LEN bytes in buffer for URL parsing matching */
         ssize_t tail = MAX(sz, MAX_PROTOCOL_LEN);
         memmove(tty->fd_buf, tty->start, tail);
@@ -477,7 +477,7 @@ inline static void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t le
         }
 
         if (pfd.revents & POLLIN) {
-            if (tty->end - tty->start == sizeof tty->fd_buf) {
+            if (tty->end - tty->start == sizeof tty->fd_buf - MAX_PROTOCOL_LEN) {
                 /* Since the parser cannot be called recursively
                  * called recursively we cannot empty the input buffer
                  * and tty input queue, so we cannot write the data.
