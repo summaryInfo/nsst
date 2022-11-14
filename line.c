@@ -73,7 +73,17 @@ void free_attrs(struct line_attr *attrs) {
     free(attrs);
 }
 
-void free_line(struct multipool *mp, struct line *line) {
+inline static bool need_fix_span_array(struct line *line, struct line_span *first, struct line_span *last) {
+    return first &&
+        (!first->line || first->line->seq <= line->seq) &&
+        (!last[-1].line || line->seq <= last[-1].line->seq);
+}
+
+#define for_span_array_line(line_, first, last) \
+    while ((first) < (last) && (first)->line != (line_)) first++; \
+    for (; (first) < (last) && (first)->line == (line_); (first)++)
+
+void free_line(struct multipool *mp, struct line *line, struct line_span *array_first, struct line_span *array_last) {
 
 	if (!line) return;
 
@@ -94,10 +104,16 @@ void free_line(struct multipool *mp, struct line *line) {
         struct line_handle *handle = line->first_handle;
 #if DEBUG_LINES
         assert(!handle->prev);
-        assert(handle->line == line);
+        assert(handle->s.line == line);
 #endif
         line_handle_remove(handle);
-        handle->line = NULL;
+        handle->s.line = NULL;
+    }
+
+    if (need_fix_span_array(line, array_first, array_last)) {
+        for_span_array_line(line, array_first, array_last) {
+            array_first->line = NULL;
+        }
     }
 
     if (line->attrs)
@@ -183,8 +199,10 @@ struct line *create_line(struct multipool *mp, const struct attr *attr, ssize_t 
     return create_line_with_seq(mp, attr, caps, get_seqno_range(SEQNO_INC));
 }
 
-struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t caps) {
+struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t caps, struct line_span *array_first, struct line_span *array_last) {
     size_t new_size = sizeof(*line) + (size_t)caps * sizeof(line->cell[0]);
+    bool need_fixup_array = need_fix_span_array(line, array_first, array_last);
+
     struct line *new = mpa_realloc(mp, line, new_size, false);
 
     new->size = MIN(caps, new->size);
@@ -203,8 +221,14 @@ struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t caps)
     /* Update registered handles */
     struct line_handle *handle = new->first_handle;
     while (handle) {
-        handle->line = new;
+        handle->s.line = new;
         handle = handle->next;
+    }
+
+    if (need_fixup_array) {
+        for_span_array_line(line, array_first, array_last) {
+            array_first->line = new;
+        }
     }
 
     return new;
@@ -244,7 +268,7 @@ static void optimize_attributes(struct line *line) {
     }
 }
 
-void split_line(struct multipool *mp, struct line *src, ssize_t offset) {
+void split_line(struct multipool *mp, struct line *src, ssize_t offset, struct line_span *array_first, struct line_span *array_last) {
     ssize_t tail_len = src->size - offset;
 #if DEBUG_LINES
     assert(tail_len >= 0);
@@ -284,19 +308,32 @@ void split_line(struct multipool *mp, struct line *src, ssize_t offset) {
     struct line_handle *handle = src->first_handle, *next;
     while (handle) {
         next = handle->next;
-        if (handle->offset >= offset) {
+        if (handle->s.offset >= offset) {
             line_handle_remove(handle);
-            handle->line = tail;
-            handle->offset -= offset;
+            handle->s.line = tail;
+            handle->s.offset -= offset;
             line_handle_add(handle);
         }
         handle = next;
     }
 
+
     if (need_fixup)
         fixup_lines_seqno(tail->next);
 
-    realloc_line(mp, src, offset);
+    struct line *new = realloc_line(mp, src, offset, NULL, NULL);
+
+    if (need_fix_span_array(new, array_first, array_last)) {
+        for_span_array_line(src, array_first, array_last) {
+            if (array_first->offset >= offset) {
+                array_first->line = tail;
+                array_first->offset -= offset;
+            } else {
+                array_first->line = new;
+            }
+        }
+    }
+
 }
 
 void optimize_line(struct multipool *mp, struct line *line) {
@@ -317,7 +354,7 @@ void optimize_line(struct multipool *mp, struct line *line) {
     optimize_attributes(line);
 }
 
-struct line *concat_line(struct multipool *mp, struct line *src1, struct line *src2) {
+struct line *concat_line(struct multipool *mp, struct line *src1, struct line *src2, struct line_span *array_first, struct line_span *array_last) {
 #if DEBUG_LINES
     assert(src1 && src2);
     assert(src1->next == src2);
@@ -326,7 +363,7 @@ struct line *concat_line(struct multipool *mp, struct line *src1, struct line *s
 
     ssize_t len = src2->size + src1->size;
     ssize_t first_len = src1->size;
-    src1 = realloc_line(mp, src1, src1->size + src2->caps);
+    src1 = realloc_line(mp, src1, src1->size + src2->caps, array_first, array_last);
     src1->wrapped = src2->wrapped;
     src1->force_damage |= src2->force_damage;
 
@@ -352,18 +389,25 @@ struct line *concat_line(struct multipool *mp, struct line *src1, struct line *s
     detach_prev_line(src2);
     attach_next_line(src1, next_line);
 
+    if (need_fix_span_array(src2, array_first, array_last)) {
+        for_span_array_line(src2, array_first, array_last) {
+            array_first->line = src1;
+            array_first->offset += first_len;
+        }
+    }
+
     /* Update line handles */
     struct line_handle *handle = src2->first_handle, *next;
     while (handle) {
         next = handle->next;
         line_handle_remove(handle);
-        handle->line = src1;
-        handle->offset += first_len;
+        handle->s.line = src1;
+        handle->s.offset += first_len;
         line_handle_add(handle);
         handle = next;
     }
 
-    free_line(mp, src2);
+    free_line(mp, src2, NULL, NULL);
 
     return src1;
 }

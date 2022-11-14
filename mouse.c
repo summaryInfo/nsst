@@ -213,8 +213,8 @@ void selection_clear(struct selection_state *sel) {
     line_handle_remove(&sel->start);
     line_handle_remove(&sel->end);
 
-    sel->start.line = NULL;
-    sel->end.line = NULL;
+    sel->start.s.line = NULL;
+    sel->end.s.line = NULL;
 
     sel->state = state_sel_none;
 
@@ -268,7 +268,7 @@ inline static bool is_separator(uint32_t ch, char *seps) {
     return strstr(seps, (char *)cbuf);
 }
 
-static struct line_handle snap_backward(struct selection_state *sel, struct line_handle pos) {
+static struct line_span snap_backward(struct selection_state *sel, struct line_span pos) {
     char *seps = window_cfg(sel->win)->word_separators;
 
     if (sel->snap == snap_line) {
@@ -322,7 +322,7 @@ static struct line_handle snap_backward(struct selection_state *sel, struct line
     return pos;
 }
 
-static struct line_handle snap_forward(struct selection_state *sel, struct line_handle pos) {
+static struct line_span snap_forward(struct selection_state *sel, struct line_span pos) {
     char *seps = window_cfg(sel->win)->word_separators;
 
     if (sel->snap == snap_line) {
@@ -380,20 +380,20 @@ static struct line_handle snap_forward(struct selection_state *sel, struct line_
  * as a return value of the function.
  */
 
-inline static ssize_t virtual_pos(struct screen *scr, struct line_handle *pos) {
-    struct line_handle orig = *pos, next = *pos;
+inline static ssize_t virtual_pos(struct screen *scr, struct line_span *pos) {
+    struct line_span orig = *pos, next = *pos;
     next.offset = 0;
 
     do {
         *pos = next;
         if (screen_inc_iter(scr, &next)) break;
-    } while (line_handle_cmp(&orig, &next) >= 0);
+    } while (line_span_cmp(&orig, &next) >= 0);
 
     return orig.offset - pos->offset;
 }
 
-inline static struct line_handle absolute_pos(struct screen *scr, ssize_t x, ssize_t y) {
-    struct line_handle offset = screen_view(scr);
+inline static struct line_span absolute_pos(struct screen *scr, ssize_t x, ssize_t y) {
+    struct line_span offset = screen_view(scr);
     screen_advance_iter(scr, &offset, y);
     offset.offset += x;
     return offset;
@@ -470,9 +470,9 @@ static void damage_changed(struct selection_state *sel, struct segments **old, s
             damage_head(sel->seg[i]);
 }
 
-static void decompose(struct selection_state *sel, struct screen *scr, struct line_handle start, struct line_handle end) {
+static void decompose(struct selection_state *sel, struct screen *scr, struct line_span start, struct line_span end) {
     if (sel->rectangular) {
-        struct line_handle vstart = start, vend = end;
+        struct line_span vstart = start, vend = end;
         ssize_t vstart_x = virtual_pos(scr, &vstart);
         ssize_t vend_x = virtual_pos(scr, &vend);
         if (vstart_x > vend_x)
@@ -481,7 +481,7 @@ static void decompose(struct selection_state *sel, struct screen *scr, struct li
         do {
             append_segment(sel, vstart.line, vstart.offset + vstart_x, vstart.offset + vend_x + 1);
             if (screen_inc_iter(scr, &vstart)) break;
-        } while (line_handle_cmp(&vstart, &vend) <= 0);
+        } while (line_span_cmp(&vstart, &vend) <= 0);
 
     } else {
         for (; start.line->seq < end.line->seq; start.line = start.line->next) {
@@ -513,21 +513,21 @@ void free_selection(struct selection_state *sel) {
 }
 
 void selection_scrolled(struct selection_state *sel, struct screen *scr, ssize_t top, ssize_t bottom, bool save) {
-    if (!sel->start.line || !sel->end.line) goto clear;
+    if (!sel->start.s.line || !sel->end.s.line) goto clear;
 
     if (!save) {
-        struct line_handle top_pos = screen_line_iter(scr, top);
-        struct line_handle bottom_pos = screen_line_iter(scr, bottom - 1);
+        struct line_span top_pos = screen_span(scr, top);
+        struct line_span bottom_pos = screen_span(scr, bottom - 1);
 
-        if ((line_handle_cmp(&sel->start, &top_pos) >= 0 &&
-             line_handle_cmp(&sel->start, &bottom_pos) <= 0) !=
-            (line_handle_cmp(&sel->end, &top_pos) >= 0 &&
-             line_handle_cmp(&sel->end, &bottom_pos) <= 0)) goto clear;
+        if ((line_span_cmp(&sel->start.s, &top_pos) >= 0 &&
+             line_span_cmp(&sel->start.s, &bottom_pos) <= 0) !=
+            (line_span_cmp(&sel->end.s, &top_pos) >= 0 &&
+             line_span_cmp(&sel->end.s, &bottom_pos) <= 0)) goto clear;
     } else {
-        struct line_handle bottom_pos = screen_line_iter(scr, bottom - 1);
+        struct line_span bottom_pos = screen_span(scr, bottom - 1);
 
-        if ((line_handle_cmp(&sel->start, &bottom_pos) <= 0) !=
-            (line_handle_cmp(&sel->end, &bottom_pos) <= 0)) goto clear;
+        if ((line_span_cmp(&sel->start.s, &bottom_pos) <= 0) !=
+            (line_span_cmp(&sel->end.s, &bottom_pos) <= 0)) goto clear;
     }
 
     selection_view_scrolled(sel, scr);
@@ -539,14 +539,11 @@ clear:
 
 static void selection_changed(struct selection_state *sel, struct screen *scr, uint8_t state, bool rectangular) {
     struct instance_config *cfg = window_cfg(sel->win);
-    struct line_handle pos = absolute_pos(scr, sel->pointer_x, sel->pointer_y);
-    assert(!line_handle_is_registered(&pos));
+    struct line_span pos = absolute_pos(scr, sel->pointer_x, sel->pointer_y);
     assert(pos.line);
 
     if (state == state_sel_pressed) {
-        line_handle_remove(&sel->start);
-        sel->start = pos;
-        line_handle_add(&sel->start);
+        replace_handle(&sel->start, &pos);
 
         struct timespec now;
         clock_gettime(CLOCK_TYPE, &now);
@@ -564,14 +561,12 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
 
     sel->state = state;
     sel->rectangular = rectangular;
-    line_handle_remove(&sel->end);
-    sel->end = pos;
-    line_handle_add(&sel->end);
+    replace_handle(&sel->end, &pos);
 
-    struct line_handle nstart = dup_handle(&sel->start);
-    struct line_handle nend = dup_handle(&sel->end);
+    struct line_span nstart = sel->start.s;
+    struct line_span nend = sel->end.s;
 
-    if (line_handle_cmp(&nstart, &nend) > 0)
+    if (line_span_cmp(&nstart, &nend) > 0)
         SWAP(nstart, nend);
 
     nstart = snap_backward(sel, nstart);
@@ -594,7 +589,7 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
     damage_changed(sel, prev_heads, prev_size);
 }
 
-struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_handle *view) {
+struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_span *view) {
     struct segments *head = seg_head(sel, view->line);
     struct mouse_selection_iterator it = { 0 };
     if (!head || !head->size) return it;
@@ -606,7 +601,7 @@ struct mouse_selection_iterator selection_begin_iteration(struct selection_state
     return it;
 }
 
-bool is_selected_prev(struct mouse_selection_iterator *it, struct line_handle *view, int16_t x0) {
+bool is_selected_prev(struct mouse_selection_iterator *it, struct line_span *view, int16_t x0) {
     if (!it->idx) return 0;
 
     ssize_t x = x0 + view->offset;
@@ -792,7 +787,7 @@ static void update_active_uri(struct screen *scr, struct window *win, struct mou
         int16_t y = (ev->y - b.height) / c.height;
 
 
-        struct line_handle pos = screen_view(scr);
+        struct line_span pos = screen_view(scr);
         screen_advance_iter(scr, &pos, y);
 
         if (pos.offset + x < pos.line->size)

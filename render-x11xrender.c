@@ -491,40 +491,40 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
     rctx.glyphs_size = 0;
 
     struct screen *scr = term_screen(win->term);
-    struct line_handle vpos = screen_view(scr);
-    for (ssize_t k = 0; k < win->ch; k++, screen_inc_iter(scr, &vpos)) {
-        struct line_handle view = screen_view_at(scr, &vpos);
+    struct line_span span = screen_view(scr);
+    for (ssize_t k = 0; k < win->ch; k++, screen_inc_iter(scr, &span)) {
+        screen_span_width(scr, &span);
         bool next_dirty = 0, first_in_line = 1;
 
-        struct mouse_selection_iterator sel_it = selection_begin_iteration(term_get_sstate(win->term), &view);
+        struct mouse_selection_iterator sel_it = selection_begin_iteration(term_get_sstate(win->term), &span);
 
-        if (win->cw > view.width) {
-            bool selected = is_selected_prev(&sel_it, &view, win->cw - 1);
-            struct attr attr = *attr_pad(view.line);
+        if (win->cw > span.width) {
+            bool selected = is_selected_prev(&sel_it, &span, win->cw - 1);
+            struct attr attr = *attr_pad(span.line);
             color_t bg = describe_bg(&attr, &win->cfg, &win->rcstate, selected);
 
             push_element(&rctx.background_buf, &(struct element) {
-                .x = win->cfg.left_border + view.width * win->char_width,
+                .x = win->cfg.left_border + span.width * win->char_width,
                 .y = win->cfg.top_border + k * (win->char_height + win->char_depth),
                 .color = bg,
-                .width = (win->cw - view.width) * win->char_width,
+                .width = (win->cw - span.width) * win->char_width,
                 .height = win->char_height + win->char_depth,
             });
 
-            if (cur_y == k && cur_x >= view.width)
+            if (cur_y == k && cur_x >= span.width)
                 *beyond_eol = true;
 
             next_dirty = 1;
             first_in_line = 0;
         }
 
-        for (int16_t i = MIN(win->cw, view.width) - 1; i >= 0; i--) {
-            struct cell *pcell = view_cell(&view, i);
+        for (int16_t i = MIN(win->cw, span.width) - 1; i >= 0; i--) {
+            struct cell *pcell = view_cell(&span, i);
             struct cell cel = *pcell;
             pcell->drawn = 1;
 
-            struct attr attr = *view_attr(&view, cel.attrid);
-            bool dirty = view.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
+            struct attr attr = *view_attr(&span, cel.attrid);
+            bool dirty = span.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
 
             struct cellspec spec;
             struct glyph *glyph = NULL;
@@ -537,7 +537,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                     attr.reverse ^= 1;
                 }
 
-                bool selected = is_selected_prev(&sel_it, &view, i);
+                bool selected = is_selected_prev(&sel_it, &span, i);
                 spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
                 g =  spec.ch | (spec.face << 24);
 
@@ -658,8 +658,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
             next_dirty = dirty;
         }
         /* Only reset force flag for last part of the line */
-        if (!view_wrapped(&view))
-            view.line->force_damage = 0;
+        if (!view_wrapped(&span))
+            span.line->force_damage = 0;
     }
 }
 

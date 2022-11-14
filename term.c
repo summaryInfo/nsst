@@ -3336,8 +3336,8 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
 
 #if USE_URI
 inline static void apply_matched_uri(struct term *term) {
-    struct line_handle uri_end = screen_line_iter(&term->scr, screen_cursor_y(&term->scr));
-    struct line_handle *uri_start = screen_get_bookmark(&term->scr);
+    struct line_span uri_end = screen_span(&term->scr, screen_cursor_y(&term->scr));
+    struct line_span *uri_start = screen_get_bookmark(&term->scr);
     uri_end.offset += screen_cursor_x(&term->scr);
     uri_start->offset -= term->shift_bookmark;
 

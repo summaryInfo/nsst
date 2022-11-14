@@ -93,15 +93,19 @@ struct line_attr {
     struct attr data[];
 };
 
-struct line_handle {
-    struct line_handle *prev;
-    struct line_handle *next;
+struct line_span {
     struct line *line;
     int32_t offset;
 
     /* Only when used as line view, it does not get accounted
      * when splitting. (FIXME) */
     int32_t width;
+} ALIGNED(MPA_ALIGNMENT);
+
+struct line_handle {
+    struct line_handle *prev;
+    struct line_handle *next;
+    struct line_span s;
 } ALIGNED(MPA_ALIGNMENT);
 
 struct line {
@@ -121,15 +125,15 @@ struct line {
 
 uint32_t alloc_attr(struct line *line, const struct attr *attr);
 struct line *create_line(struct multipool *mp, const struct attr *attr, ssize_t width);
-struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t width);
-void split_line(struct multipool *mp, struct line *src, ssize_t offset);
-struct line *concat_line(struct multipool *mp, struct line *src1, struct line *src2);
+struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t width, struct line_span *array_first, struct line_span *array_last);
+void split_line(struct multipool *mp, struct line *src, ssize_t offset, struct line_span *array_first, struct line_span *array_last);
+struct line *concat_line(struct multipool *mp, struct line *src1, struct line *src2, struct line_span *array_first, struct line_span *array_last);
 void optimize_line(struct multipool *mp, struct line *src);
 void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len);
 void fill_cells(struct cell *dst, struct cell c, ssize_t width);
 void copy_utf32_to_cells(struct cell *dst, const uint32_t *src, const uint32_t *end, uint32_t attrid);
 void copy_ascii_to_cells(struct cell *dst, const uint8_t *src, const uint8_t *end, uint32_t attrid);
-void free_line(struct multipool *mp, struct line *line);
+void free_line(struct multipool *mp, struct line *line,  struct line_span *array_first, struct line_span *array_last);
 
 inline static color_t indirect_color(uint32_t idx) { return idx + 1; }
 inline static uint32_t color_idx(color_t c) { return c - 1; }
@@ -305,8 +309,8 @@ inline static bool attr_eq(const struct attr *a, const struct attr *b) {
 
 #if DEBUG_LINES
 inline static bool find_handle_in_line(struct line_handle *handle) {
-    assert(handle->line);
-    struct line_handle *first = handle->line->first_handle;
+    assert(handle->s.line);
+    struct line_handle *first = handle->s.line->first_handle;
     while (first) {
         if (first == handle) return true;
         first = first->next;
@@ -322,8 +326,8 @@ inline static void line_handle_add(struct line_handle *handle) {
     assert(!find_handle_in_line(handle));
 #endif
 
-    struct line_handle *next = handle->line->first_handle;
-    handle->line->first_handle = handle;
+    struct line_handle *next = handle->s.line->first_handle;
+    handle->s.line->first_handle = handle;
     if (next) next->prev = handle;
 
     handle->next = next;
@@ -335,16 +339,16 @@ inline static void line_handle_add(struct line_handle *handle) {
 }
 
 inline static bool line_handle_is_registered(struct line_handle *handle) {
-    return handle->prev || handle == handle->line->first_handle;
+    return handle->prev || handle == handle->s.line->first_handle;
 }
 
 inline static void line_handle_remove(struct line_handle *handle) {
-    if (!handle->line) return;
+    if (!handle->s.line) return;
 
 #if DEBUG_LINES
     assert(find_handle_in_line(handle));
     if (!handle->prev)
-        assert(handle->line->first_handle == handle);
+        assert(handle->s.line->first_handle == handle);
     else
         assert(handle->prev->next == handle);
     if (handle->next)
@@ -355,7 +359,7 @@ inline static void line_handle_remove(struct line_handle *handle) {
     struct line_handle *prev = handle->prev;
 
     if (!prev)
-        handle->line->first_handle = next;
+        handle->s.line->first_handle = next;
     else {
         prev->next = next;
         handle->prev = NULL;
@@ -387,11 +391,11 @@ inline static void fixup_lines_seqno(struct line *line) {
     }
 }
 
-inline static bool line_handle_cmpeq(struct line_handle *a, struct line_handle *b) {
+inline static bool line_span_cmpeq(struct line_span *a, struct line_span *b) {
     return a->line == b->line && a->offset == b->offset;
 }
 
-inline static int line_handle_cmp(struct line_handle *a, struct line_handle *b) {
+inline static int line_span_cmp(struct line_span *a, struct line_span *b) {
     if (a->line != b->line) {
         int64_t a_seq = a->line ? a->line->seq : 0;
         int64_t b_seq = b->line ? b->line->seq : 0;
@@ -400,26 +404,17 @@ inline static int line_handle_cmp(struct line_handle *a, struct line_handle *b) 
     return a->offset < b->offset ? -1 : a->offset > b->offset;
 }
 
-/* Returns unregistered copy of handle */
-inline static struct line_handle dup_handle(struct line_handle *handle) {
-    return (struct line_handle) {
-        .line = handle->line,
-        .offset = handle->offset,
-        .width = handle->width
-    };
-}
-
-inline static void replace_handle(struct line_handle *dst, struct line_handle *src) {
+inline static void replace_handle(struct line_handle *dst, struct line_span *src) {
 #if DEBUG_LINES
     assert(src->line);
     line_handle_remove(dst);
-    *dst = dup_handle(src);
+    dst->s = *src;
     line_handle_add(dst);
 #else
-    if (LIKELY(dst->line)) {
+    if (LIKELY(dst->s.line)) {
         struct line_handle *next = dst->next;
         struct line_handle *prev = dst->prev;
-        if (!prev) dst->line->first_handle = next;
+        if (!prev) dst->s.line->first_handle = next;
         else prev->next = next;
         if (next) next->prev = prev;
     }
@@ -429,12 +424,58 @@ inline static void replace_handle(struct line_handle *dst, struct line_handle *s
     if (next) next->prev = dst;
     line->first_handle = dst;
 
-    dst->line = line;
-    dst->offset = src->offset;
-    dst->width = src->width;
+    dst->s = *src;
     dst->next = next;
     dst->prev = NULL;
 #endif
+}
+
+inline static ssize_t line_increment_span(struct line_span *pos, ssize_t width) {
+    bool res = 0;
+
+    ssize_t offset = line_advance_width(pos->line, pos->offset, width);
+    if (offset >= pos->line->size) {
+        if (pos->line->next) {
+            pos->line = pos->line->next;
+            pos->offset = 0;
+        } else {
+            res = 1;
+        }
+    } else {
+        pos->offset = offset;
+    }
+
+    return res;
+}
+
+inline static ssize_t line_advance_span(struct line_span *pos, ssize_t amount, ssize_t width) {
+    if (amount < 0) {
+        // TODO Little optimization
+        amount += line_segments(pos->line, 0, width) - line_segments(pos->line, pos->offset, width);
+        pos->offset = 0;
+        while (amount < 0) {
+            if (!pos->line->prev)
+                break;
+            pos->line = pos->line->prev;
+            amount += line_segments(pos->line, 0, width);
+        }
+    }
+    if (amount > 0) {
+        while (amount) {
+            ssize_t offset = line_advance_width(pos->line, pos->offset, width);
+            if (offset >= pos->line->size) {
+                if (!pos->line->next)
+                    break;
+                pos->line = pos->line->next;
+                pos->offset = 0;
+            } else
+                pos->offset = offset;
+            amount--;
+        }
+    }
+
+    return amount;
+
 }
 
 #endif
