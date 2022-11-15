@@ -899,7 +899,9 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
         loc->reported_y = ev.y;
     /* Scroll view */
     } else if (ev.event == mouse_event_press && (ev.button == 3 || ev.button == 4)) {
-        term_scroll_view(term, (2 *(ev.button == 3) - 1) * window_cfg(sel->win)->scroll_amount);
+        ssize_t direction = 2 *(ev.button == 3) - 1;
+        if (ev.mask & mask_mod_1) term_scroll_view_to_cmd(term, direction);
+        else term_scroll_view(term, direction * window_cfg(sel->win)->scroll_amount);
     /* Paste */
     } else if (ev.button == 1 && ev.event == mouse_event_release) {
         window_paste_clip(term_window(term), clip_primary);
