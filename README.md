@@ -70,13 +70,6 @@ If font looks to blurry try setting `font-gamma` to value greater than `1`.
 
 Set pixelMode to your monitor's pixel alignment to enable sub-pixel rendering.
 
-For command line arguments see `nsst --help`.
-Config file uses same option names.
-Default config file location is `$XDG_CONFIG_HOME/nsst.conf`.
-Config file path can be set via `--config`/`-C` argument.
-For boolean arguments `--no-X`, `--without-X`, `--disable-X` are interpreted as `--X=0` and
-`--X`, `--with-X`, `--enable-X` are interpreted as `--X=1`.
-
 By default only DEC Special Graphics charset is allowed with UTF-8 mode enabled.
 Spec is even stricter, disallowing any charset translations in UTF-8 mode, but DEC Special Graphics is used by applications frequently so it is allowed anyways.
 To force full NRCS translation in UTF-8 mode set `force-nrsc`.
@@ -89,7 +82,20 @@ For now nsst supports combining characters only via precomposition, but almost e
 The only tricky part is to extract positioning tables and implement basic text shaping. It would be implemented using glyphs with codes `0x110000` - `0x1FFFFF`,
 giving sufficient number of possible custom glyphs. DECDLD is also easy to implement this way.
 
-Hotkeys are now configurable. With syntax `[<Mods>-]<Name>`, where `<Mods>` is XKB key name and mods is a set of one or more of following:
+## Options
+
+For command line arguments see `nsst --help`.
+Config file uses same option names, just without leading `--`.
+Default config file location is `$XDG_CONFIG_HOME/nsst.conf`.
+Config file path can be set via `--config`/`-C` argument.
+For boolean arguments `--no-X`, `--without-X`, `--disable-X` are interpreted as `--X=0` and
+`--X`, `--with-X`, `--enable-X` are interpreted as `--X=1`.
+
+Also take a look at the [manual page](docs/nsst.1) (or `man nsst` if you have installed the terminal.)
+
+## Key bindings
+
+Hotkeys are configurable. Key binds have syntax `[<Mods>-]<Name>`, where `<Mods>` is XKB key name and mods is a set of one or more of following:
 
 * `S` -- Shift
 * `C` -- Control
@@ -119,6 +125,27 @@ Default keybindings:
     key-paste=T-V
     key-jump-next-cmd=T-F
     key-jump-prev-cmd=T-B
+
+Copy URI key copies highlighted URI address. Highlighted URI is underlined by default.
+For `key-jump-next-cmd`/`key-jump-prev-cmd` see shell integration section.
+
+### Mouse support
+
+If you are not using an application that enables mouse reporting, you can use built-in mouse interactions.
+If application enables mouse reporting, built-in interactions can be forces with mouse pressing Ctrl+Shift (Can be configured with `force-mouse-mod` option).
+Built-in mouse interactions:
+
+* Scroll with mouse wheel.
+* Jump between commands with Alt+mouse wheel (if your shell supports it more on shell integration below).
+* Selection with left click, word selection on double left click, line selection on triple left click.
+* Rectangular selection is Alt+left click (double and triple clicks will snap to words/lines).
+
+### Shell integration
+
+The most basic way to enable it is to put `\033]133;A\a` at the beginning of your shell prompt and `\e]133;B\a` at the end to enable jumping between commands with `T-F`/`T-B`.
+To make T-N open window in current directory make sure to wrap `cd` to output `\033]7;$PWD\a` after directory change to notify the terminal.
+
+_FIXME: write terminal integration snippets for most shells._
 
 ## Dependencies
 ### Build
@@ -167,7 +194,7 @@ Then configure and build:
 Default config is generally sane.
 Alternatively do
 
-    ./configure CFLAGS='-flto -O3 -march=native'
+    ./configure CFLAGS='-flto -O2 -march=native'
     make -j
 
 if you want to use it the machine you compile it on.
