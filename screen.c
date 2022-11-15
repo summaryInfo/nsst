@@ -1833,7 +1833,7 @@ inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end
 
 inline static void print_buffer(struct screen *scr, const uint32_t *bstart, const uint8_t *astart, ssize_t totalw) {
     if (scr->mode.wrap) {
-        if (scr->c.pending || (scr->c.x == screen_max_x(scr) - 1 && (bstart && !bstart[1])))
+        if (scr->c.pending || (bstart && scr->c.x == screen_max_x(scr) - 1 && totalw > 1 && !bstart[1]))
             screen_wrap(scr, false);
     } else scr->c.x = MIN(scr->c.x, screen_max_x(scr) - totalw);
 

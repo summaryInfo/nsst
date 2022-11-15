@@ -6,8 +6,6 @@ Roadmap
 
 ### Until 2.5
 
- * In *nncmpp* wide character names cause scrollbar to overflow to the next line.
-
 * Refactor screen arrays
   * Lazy resizing?
 
