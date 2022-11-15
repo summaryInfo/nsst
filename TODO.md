@@ -9,8 +9,6 @@ Roadmap
 * Refactor screen arrays
   * Lazy resizing?
 
-* URIs does not match from text pasted from keyboard.
-
 * Make config format more sophisticated. Support arrays and quoted strings.
 
 * Re-implement mouse selection via line_handle's to (mostly) remove special case.
