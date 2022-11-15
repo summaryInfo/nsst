@@ -1289,17 +1289,6 @@ inline static void swap_3(struct line *top_after, struct line *mid_before, struc
         attach_next_line(mid_before, bottom_after);
 }
 
-#if 0
-inline static void shift_handles_up(struct line_handle *screen, ssize_t amount, ssize_t bottom) {
-}
-
-struct handles_array_desc {
-    struct line_handle *start;
-    struct line_handle *end;
-};
-
-#endif
-
 inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool save) {
     ssize_t bottom = screen_max_y(scr);
 
