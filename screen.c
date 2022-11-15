@@ -274,7 +274,7 @@ void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
 
         free_line_list_until(scr, scr->top_line.s.line, screen_top->line, screen_top);
 
-        replace_handle(&scr->top_line, screen_top);
+        replace_handle(&scr->top_line, &(struct line_span){ .line = screen_top->line });
     }
 
     scr->sb_max_caps = max_size;
@@ -1369,7 +1369,7 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
         scr->scroll_damage = true;
 
         if (should_reset_top)
-            replace_handle(&scr->top_line, &scr->screen[0]);
+            replace_handle(&scr->top_line, &(struct line_span){ .line = scr->screen->line });
 
         if (should_reset_view) {
             replace_handle(&scr->view_pos, &scr->screen[0]);
