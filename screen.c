@@ -83,8 +83,8 @@ void screen_damage_selection(struct screen *scr) {
     for (ssize_t i = 0; i < scr->height; i++) {
         if (prev != view.line)
             selection_damage(&scr->sstate, view.line);
-        screen_inc_iter(scr, &view);
         prev = view.line;
+        screen_inc_iter(scr, &view);
     }
 }
 
