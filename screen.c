@@ -954,6 +954,8 @@ uint16_t screen_checksum(struct screen *scr, int16_t xs, int16_t ys, int16_t xe,
         struct line_span *line = &scr->screen[ys];
         for (int16_t i = xs; i < xe; i++) {
             uint32_t ch_orig = i >= line->width ? 0 : view_cell(line, i)->ch;
+            if (ch_orig == '\t') ch_orig = '\0';
+
             uint32_t ch = ch_orig;
             const struct attr *attr = view_attr_at(line, i);
             if (!(mode.no_implicit) && !ch) ch = ' ';
@@ -1734,6 +1736,13 @@ void screen_tabs(struct screen *scr, int16_t n) {
         if (scr->mode.xterm_more_hack && scr->c.pending)
             screen_wrap(scr, false);
         while (scr->c.x < screen_max_x(scr) - 1 && n--) {
+            /* If current cell is empty, put \t over there */
+            struct cell *c = view_cell(&scr->screen[scr->c.y], scr->c.x);
+            if (scr->screen[scr->c.y].width <= scr->c.x || !c->ch) {
+                screen_adjust_line(scr, scr->c.y, scr->c.x + 1);
+                c->ch = '\t';
+            }
+
             do scr->c.x++;
             while (scr->c.x < screen_max_x(scr) - 1 && !scr->tabs[scr->c.x]);
         }

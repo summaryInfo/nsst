@@ -219,7 +219,7 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr *attr,
     /* Optimize rendering of U+2588 FULL BLOCK */
 
     if (cell.ch == 0x2588) res.bg = res.fg;
-    if (cell.ch == ' ' || res.fg == res.bg) cell.ch = 0;
+    if (cell.ch == '\t' || cell.ch == ' ' || res.fg == res.bg) cell.ch = 0;
 
     /* Calculate attributes */
 

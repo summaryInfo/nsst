@@ -26,6 +26,7 @@ This is an implementation of VT220-like X11 terminal emulator.
 * Re-wraps text on resize
 * URL support (including autodetection)
 * Command line integration (correct wrapping after command output without newline and jumping between commands)
+* Can copy tab characters
 
 See TODO file for things that are to be implemented.
 
