@@ -16,8 +16,6 @@ Roadmap
 * Re-implement mouse selection via line_handle's to (mostly) remove special case.
   * "Mostly", because we still would need to notify mouse code upon relocation.
 
-* Optimize screen_damage_uri to iterate over attributes first to find whether the line has attributes with source URI.
-
 * Fix flaky tests
   * `DECSETTests.test_DECSET_Allow80To132` causes flakes for itself and `DECSETTests.test_DECSET_DECAWM`, `DECSETTests.test_DECSET_DECCOLM`.
 

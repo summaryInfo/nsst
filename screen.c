@@ -92,14 +92,25 @@ void screen_damage_uri(struct screen *scr, uint32_t uri) {
     if (!uri) return;
 
     struct line_span view = screen_view(scr);
-    for (ssize_t i = 0; i < 0 + scr->height; i++) {
-        screen_span_width(scr, &view);
-        for (ssize_t j = 0; j <  MIN(scr->width, view.width); j++) {
-            struct cell *pcell = view_cell(&view, j);
-            if (view_attr(&view, pcell->attrid)->uri == uri)
-                pcell->drawn = 0;
+    for (ssize_t i = 0; i < scr->height; screen_inc_iter(scr, &view), i++) {
+        struct line_attr *attrs = view.line->attrs;
+        if (!attrs) continue;
+
+        bool has_uri = false;
+        for (ssize_t j = 0; j < attrs->caps; j++) {
+            if (attrs->data[j].uri == uri) {
+                has_uri = true;
+                break;
+            }
         }
-        screen_inc_iter(scr, &view);
+        if (!has_uri) continue;
+
+        screen_span_width(scr, &view);
+
+        struct cell *cel = view_cell(&view, 0), *end = view_cell(&view, view.width);
+        for (; cel < end; cel++)
+            if (view_attr(&view, cel->attrid)->uri == uri)
+                cel->drawn = 0;
     }
 }
 
