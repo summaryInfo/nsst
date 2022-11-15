@@ -622,12 +622,12 @@ bool is_selected_prev(struct mouse_selection_iterator *it, struct line_span *vie
     return 0;
 }
 
-static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line *line, ssize_t x0, ssize_t x1, bool first) {
+static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line *line, ssize_t x0, ssize_t x1) {
     ssize_t max_x = MIN(x1, line_length(line));
 
-    if (!first) {
+    if (*pos) {
         adjust_buffer((void **)res, cap, *pos + 2, 1);
-        (*res)[(*pos)++] = ' ';
+        (*res)[(*pos)++] = '\n';
     }
 
     for (ssize_t j = x0; j < max_x; j++) {
@@ -640,11 +640,6 @@ static void append_line(size_t *pos, size_t *cap, uint8_t **res, struct line *li
             *pos += len;
         }
     }
-
-    if (!line->wrapped || (x1 != line->size && x1 != SNAP_RIGHT)) {
-        adjust_buffer((void **)res, cap, *pos + 2, 1);
-        (*res)[(*pos)++] = '\n';
-    }
 }
 
 static uint8_t *selection_data(struct selection_state *sel) {
@@ -654,16 +649,11 @@ static uint8_t *selection_data(struct selection_state *sel) {
 
         for (size_t i = 1; i < sel->seg_size; i++) {
             struct segments *head = sel->seg[i];
-            bool first = 1;
-
-            foreach_segment_indexed(seg, idx, head) {
-                append_line(&pos, &cap, &res, head->line,
-                            idx, idx + seg->length, first);
-                first = 0;
-            }
+            foreach_segment_indexed(seg, idx, head)
+                append_line(&pos, &cap, &res, head->line, idx, idx + seg->length);
         }
 
-        res[pos -= !!pos] = '\0';
+        res[pos] = '\0';
         return res;
     } else return NULL;
 }
