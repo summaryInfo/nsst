@@ -804,7 +804,7 @@ void platform_handle_events(void) {
             }
             if ((ev->atom == XCB_ATOM_PRIMARY || ev->atom == XCB_ATOM_SECONDARY ||
                     ev->atom == ctx.atom.CLIPBOARD) && ev->state == XCB_PROPERTY_NEW_VALUE)
-                receive_selection_data(win, ev->atom, 1);
+                receive_selection_data(win, ev->atom, true);
             break;
         }
         case XCB_SELECTION_NOTIFY: {
@@ -814,7 +814,7 @@ void platform_handle_events(void) {
                 info("Event: event=SelectionNotify owner=0x%x target=0x%x property=0x%x selection=0x%x",
                         ev->requestor, ev->target, ev->property, ev->selection);
             }
-            receive_selection_data(win, ev->property, 0);
+            receive_selection_data(win, ev->property, false);
             break;
         }
         case XCB_SELECTION_REQUEST: {

@@ -74,7 +74,7 @@ void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd) {
     struct line_span view = screen_view(scr);
     screen_advance_iter(scr, &view, ys);
     for (ssize_t i = ys; i < yd; i++, screen_inc_iter(scr, &view))
-        view.line->force_damage = 1;
+        view.line->force_damage = true;
 }
 
 void screen_damage_selection(struct screen *scr) {

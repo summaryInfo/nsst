@@ -244,15 +244,13 @@ bool selection_intersects(struct selection_state *sel, struct line *line, int16_
 static void damage_head(struct segments *head) {
     struct cell *cell = head->line->cell;
     foreach_segment_indexed(seg, idx, head) {
-
         if (head->line->size < idx + seg->length) {
-            head->line->force_damage = 1;
+            head->line->force_damage = true;
             return;
         }
 
-        for (ssize_t i = idx; i < seg->length + idx; i++) {
-            cell[i].drawn = 0;
-        }
+        for (ssize_t i = idx; i < seg->length + idx; i++)
+            cell[i].drawn = false;
     }
 }
 
