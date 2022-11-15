@@ -1172,6 +1172,8 @@ static void term_dispatch_osc(struct term *term) {
             if (screen_cursor_x(scr) > screen_min_x(scr))
                 screen_wrap(scr, true);
             screen_unwrap_cursor_line(scr);
+            if (dstr[0] == 'A')
+                screen_cursor_line_set_prompt(scr);
             break;
         case 'B': /* Command start */
         case 'C': /* Command executed */
@@ -3589,6 +3591,10 @@ void term_handle_focus(struct term *term, bool set) {
     if (term->mode.track_focus)
         term_answerback(term, set ? CSI"I" : CSI"O");
     screen_damage_cursor(&term->scr);
+}
+
+void term_scroll_view_to_cmd(struct term *term, int16_t amount) {
+    screen_scroll_view_to_cmd(&term->scr, amount);
 }
 
 void term_scroll_view(struct term *term, int16_t amount) {

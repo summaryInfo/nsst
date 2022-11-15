@@ -36,6 +36,8 @@ enum shortcut_action {
     shortcut_copy_uri,
     shortcut_paste,
     shortcut_reverse_video,
+    shortcut_view_next_cmd,
+    shortcut_view_prev_cmd,
     shortcut_MAX
 };
 

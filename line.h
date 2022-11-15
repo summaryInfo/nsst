@@ -119,7 +119,8 @@ struct line {
     uint32_t selection_index;
     uint16_t pad_attrid;
     bool force_damage;
-    bool wrapped;
+    bool wrapped : 1;
+    bool sh_ps1_start : 1;
     struct cell cell[];
 } ALIGNED(MPA_ALIGNMENT);
 

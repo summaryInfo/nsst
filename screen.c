@@ -180,6 +180,11 @@ void screen_unwrap_cursor_line(struct screen *scr) {
     screen_split_line(scr, view->line, view->offset, scr->screen, scr->height);
 }
 
+void screen_cursor_line_set_prompt(struct screen *scr) {
+    struct line_span *view = &scr->screen[scr->c.y];
+    view->line->sh_ps1_start = true;
+}
+
 inline static void screen_adjust_line_ex(struct screen *scr, struct line_span *screen, ssize_t y, ssize_t clear_to, ssize_t size) {
     struct line_span *view = &screen[y];
     ssize_t old_size = view->line->size;
@@ -276,6 +281,33 @@ void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
     scr->sb_limit = 0;
 }
 
+void screen_scroll_view_to_cmd(struct screen *scr, int16_t amount) {
+
+    amount = -amount;
+
+    bool old_viewr = line_span_cmpeq(&scr->view_pos.s, scr->screen);
+    /* Shortcut for the case when view is already at the bottom */
+    if (old_viewr && amount > 0) return;
+
+    struct line *line = scr->view_pos.s.line;
+    if (amount > 0) {
+        do line = line->next;
+        while(line && !line->sh_ps1_start && line != scr->screen->line);
+    } else {
+        do line = line->prev;
+        while(line && !line->sh_ps1_start);
+    }
+
+    if (!line) return;
+
+    replace_handle(&scr->view_pos, &(struct line_span) { .line = line });
+    scr->scroll_damage = true;
+
+    selection_view_scrolled(&scr->sstate, scr);
+
+    bool new_viewr = line_span_cmpeq(&scr->view_pos.s, scr->screen);
+    scr->prev_c_view_changed |= old_viewr != new_viewr;
+}
 void screen_scroll_view(struct screen *scr, int16_t amount) {
     if (scr->mode.altscreen || !scr->sb_max_caps) return;
 

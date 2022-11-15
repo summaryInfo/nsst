@@ -310,6 +310,8 @@ static struct option options[] = {
     X(string, key[shortcut_reverse_video], "key-reverse-video", "Toggle reverse video mode hotkey", "T-I"),
     X(string, key[shortcut_scroll_down], "key-scroll-down", "Scroll down hotkey", "T-Down"),
     X(string, key[shortcut_scroll_up], "key-scroll-up", "Scroll up hotkey", "T-Up"),
+    X(string, key[shortcut_view_next_cmd], "key-jump-next-cmd", "Jump to next command beginning hotkey", "T-F"),
+    X(string, key[shortcut_view_prev_cmd], "key-jump-prev-cmd", "Jump to previous command beginning hotkey", "T-B"),
     X(nrcs, keyboard_nrcs, "keyboard-dialect", "National replacement character set to be used in non-UTF-8 mode", cs94_ascii),
     X(enum, mapping, "keyboard-mapping", "Initial keyboad mapping", keymap_default, keymap_legacy, (const char *[]){"legacy", "vt220", "hp", "sun", "sco", NULL}),
     X(int16, line_spacing, "line-spacing", "Additional lines vertical spacing", 0, -100, 100),

@@ -52,6 +52,7 @@ void term_resize(struct term *term, int16_t width, int16_t height);
 void term_handle_focus(struct term *term, bool focused);
 bool term_read(struct term *term);
 void term_scroll_view(struct term *term, int16_t amount);
+void term_scroll_view_to_cmd(struct term *term, int16_t amount);
 void term_reload_config(struct term *term);
 void term_toggle_numlock(struct term *term);
 struct keyboard_state *term_get_kstate(struct term *term);

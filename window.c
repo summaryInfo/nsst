@@ -617,6 +617,12 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
     case shortcut_reverse_video:
         term_set_reverse(win->term, !term_is_reverse(win->term));
         return;
+    case shortcut_view_next_cmd:
+        term_scroll_view_to_cmd(win->term, -1);
+        return;
+    case shortcut_view_prev_cmd:
+        term_scroll_view_to_cmd(win->term, 1);
+        return;
     case shortcut_MAX:
     case shortcut_none:;
     }

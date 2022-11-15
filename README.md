@@ -25,6 +25,7 @@ This is an implementation of VT220-like X11 terminal emulator.
 * No warnings (see list of all enabled warnings in Makefile)
 * Re-wraps text on resize
 * URL support (including autodetection)
+* Command line integration (correct wrapping after command output without newline and jumping between commands)
 
 See TODO file for things that are to be implemented.
 
@@ -116,7 +117,8 @@ Default keybindings:
     key-copy=T-C
     key-copy-uri=T-U
     key-paste=T-V
-
+    key-jump-next-cmd=T-F
+    key-jump-prev-cmd=T-B
 
 ## Dependencies
 ### Build
