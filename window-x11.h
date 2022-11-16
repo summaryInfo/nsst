@@ -156,8 +156,8 @@ struct window {
 extern struct window *win_list_head;
 
 FORCEINLINE
-inline static struct cellspec describe_cell(struct cell cell, struct attr *attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected) {
-    struct cellspec res;
+inline static struct cellspec describe_cell(struct cell cell, struct attr *attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected, bool slow_path) {
+    struct cellspec res = {0};
     // TODO Better URI rendering
     //      -- underline colors
     //      -- dotted underlines
@@ -168,69 +168,84 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr *attr,
     bool has_uri = 0, active_uri = 0;
 #endif
 
-    /* Check special colors */
-    if (UNLIKELY(cfg->special_bold) && rcs->palette[SPECIAL_BOLD] && attr->bold)
-        attr->fg = rcs->palette[SPECIAL_BOLD], attr->bold = 0;
-    if (UNLIKELY(cfg->special_underline) && rcs->palette[SPECIAL_UNDERLINE] && attr->underlined)
-        attr->fg = rcs->palette[SPECIAL_UNDERLINE], attr->underlined = 0;
-    if (UNLIKELY(cfg->special_blink) && rcs->palette[SPECIAL_BLINK] && attr->blink)
-        attr->fg = rcs->palette[SPECIAL_BLINK], attr->blink = 0;
-    if (UNLIKELY(cfg->special_reverse) && rcs->palette[SPECIAL_REVERSE] && attr->reverse)
-        attr->fg = rcs->palette[SPECIAL_REVERSE], attr->reverse = 0;
-    if (UNLIKELY(cfg->special_italic) && rcs->palette[SPECIAL_ITALIC] && attr->italic)
-        attr->fg = rcs->palette[SPECIAL_ITALIC], attr->italic = 0;
+    if (LIKELY(!slow_path && !has_uri)) {
+        /* Calculate colors */
+        if (attr->bold && !attr->faint && color_idx(attr->fg) < 8) attr->fg = indirect_color(color_idx(attr->fg) + 8);
+        res.bg = direct_color(attr->bg, rcs->palette);
+        res.fg = direct_color(attr->fg, rcs->palette);
+        if (!attr->bold && attr->faint) res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
+        if (attr->reverse) SWAP(res.fg, res.bg);
 
-    /* Calculate colors */
+        res.ul = attr->ul != indirect_color(SPECIAL_BG) ? direct_color(attr->ul, rcs->palette) : res.fg;
 
-    if (attr->bold && !attr->faint && color_idx(attr->fg) < 8) attr->fg = indirect_color(color_idx(attr->fg) + 8);
-    res.bg = direct_color(attr->bg, rcs->palette);
-    res.fg = direct_color(attr->fg, rcs->palette);
-    if (!attr->bold && attr->faint) res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
-    if (attr->reverse ^ selected ^ (has_uri && active_uri && rcs->uri_pressed)) SWAP(res.fg, res.bg);
+        /* Apply background opacity */
+        if (color_idx(attr->bg) == SPECIAL_BG) res.bg = color_apply_a(res.bg, cfg->alpha);
+        if (attr->invisible || (attr->blink && rcs->blink)) res.ul = res.fg = res.bg;
 
-    res.ul = attr->ul != indirect_color(SPECIAL_BG) ? direct_color(attr->ul, rcs->palette) : res.fg;
+    } else {
+        /* Check special colors */
+        if (cfg->special_bold && rcs->palette[SPECIAL_BOLD] && attr->bold)
+            attr->fg = rcs->palette[SPECIAL_BOLD], attr->bold = 0;
+        if (cfg->special_underline && rcs->palette[SPECIAL_UNDERLINE] && attr->underlined)
+            attr->fg = rcs->palette[SPECIAL_UNDERLINE], attr->underlined = 0;
+        if (cfg->special_blink && rcs->palette[SPECIAL_BLINK] && attr->blink)
+            attr->fg = rcs->palette[SPECIAL_BLINK], attr->blink = 0;
+        if (cfg->special_reverse && rcs->palette[SPECIAL_REVERSE] && attr->reverse)
+            attr->fg = rcs->palette[SPECIAL_REVERSE], attr->reverse = 0;
+        if (cfg->special_italic && rcs->palette[SPECIAL_ITALIC] && attr->italic)
+            attr->fg = rcs->palette[SPECIAL_ITALIC], attr->italic = 0;
 
-    /* Apply background opacity */
-    if (color_idx(attr->bg) == SPECIAL_BG || cfg->blend_all_bg) res.bg = color_apply_a(res.bg, cfg->alpha);
-    if (UNLIKELY(cfg->blend_fg)) {
-        res.fg = color_apply_a(res.fg, cfg->alpha);
-        res.ul = color_apply_a(res.ul, cfg->alpha);
-    }
+        /* Calculate colors */
+        if (attr->bold && !attr->faint && color_idx(attr->fg) < 8) attr->fg = indirect_color(color_idx(attr->fg) + 8);
+        res.bg = direct_color(attr->bg, rcs->palette);
+        res.fg = direct_color(attr->fg, rcs->palette);
+        if (!attr->bold && attr->faint) res.fg = (res.fg & 0xFF000000) | ((res.fg & 0xFEFEFE) >> 1);
+        if (attr->reverse ^ selected ^ (has_uri && active_uri && rcs->uri_pressed)) SWAP(res.fg, res.bg);
 
-    if ((!selected && attr->invisible) || (attr->blink && rcs->blink)) res.ul = res.fg = res.bg;
+        res.ul = attr->ul != indirect_color(SPECIAL_BG) ? direct_color(attr->ul, rcs->palette) : res.fg;
 
-    /* If selected colors are set use them */
+        /* Apply background opacity */
+        if (color_idx(attr->bg) == SPECIAL_BG || cfg->blend_all_bg) res.bg = color_apply_a(res.bg, cfg->alpha);
+        if (UNLIKELY(cfg->blend_fg)) {
+            res.fg = color_apply_a(res.fg, cfg->alpha);
+            res.ul = color_apply_a(res.ul, cfg->alpha);
+        }
 
-    if (selected) {
-        if (rcs->palette[SPECIAL_SELECTED_BG]) res.bg = rcs->palette[SPECIAL_SELECTED_BG];
-        if (rcs->palette[SPECIAL_SELECTED_FG]) res.fg = rcs->palette[SPECIAL_SELECTED_FG];
-    }
+        if ((!selected && attr->invisible) || (attr->blink && rcs->blink)) res.ul = res.fg = res.bg;
 
-    if (UNLIKELY(has_uri)) {
-        if (rcs->palette[SPECIAL_URI_TEXT])
-            res.fg = rcs->palette[SPECIAL_URI_TEXT];
-        if (active_uri) {
-            if (rcs->palette[SPECIAL_URI_UNDERLINE])
-                res.ul = rcs->palette[SPECIAL_URI_UNDERLINE];
-            res.underlined = 1;
+        /* If selected colors are set use them */
+
+        if (selected) {
+            if (rcs->palette[SPECIAL_SELECTED_BG]) res.bg = rcs->palette[SPECIAL_SELECTED_BG];
+            if (rcs->palette[SPECIAL_SELECTED_FG]) res.fg = rcs->palette[SPECIAL_SELECTED_FG];
+        }
+
+        if (UNLIKELY(has_uri)) {
+            if (rcs->palette[SPECIAL_URI_TEXT])
+                res.fg = rcs->palette[SPECIAL_URI_TEXT];
+            if (active_uri) {
+                if (rcs->palette[SPECIAL_URI_UNDERLINE])
+                    res.ul = rcs->palette[SPECIAL_URI_UNDERLINE];
+                res.underlined = true;
+            }
         }
     }
 
     /* Optimize rendering of U+2588 FULL BLOCK */
-
     if (cell.ch == 0x2588) res.bg = res.fg;
-    if (cell.ch == '\t' || cell.ch == ' ' || res.fg == res.bg) cell.ch = 0;
 
     /* Calculate attributes */
 
-    res.ch = cell_get(&cell);
-    res.face = 0;
-    if (cell.ch && attr->bold) res.face |= face_bold;
-    if (cell.ch && attr->italic) res.face |= face_italic;
-    res.wide = cell_wide(&cell);
-    if (res.ul != res.bg && !(has_uri && active_uri))
-        res.underlined = attr->underlined;
-    res.stroke = attr->strikethrough && res.fg != res.bg;
+    if (res.ul != res.bg) res.underlined |= attr->underlined;
+    if (res.fg != res.bg) {
+        res.stroke = attr->strikethrough;
+
+        if (cell.ch != '\t' && cell.ch != ' ' && (res.ch = cell_get(&cell))) {
+            if (attr->bold) res.face |= face_bold;
+            if (attr->italic) res.face |= face_italic;
+            res.wide = iswide(res.ch);
+        }
+    }
 
     return res;
 }

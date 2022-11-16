@@ -210,6 +210,9 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
     int cd = win->char_depth, ul = win->cfg.underline_width;
     int bw = win->cfg.left_border, bh = win->cfg.top_border;
 
+    bool slow_path = win->cfg.special_bold || win->cfg.special_underline || win->cfg.special_blink || win->cfg.blend_fg ||
+                     win->cfg.special_reverse || win->cfg.special_italic || win->cfg.blend_all_bg || selection_active(term_get_sstate(win->term));
+
     struct screen *scr = term_screen(win->term);
     struct line_span span = screen_view(scr);
     for (ssize_t k = 0; k < win->ch; k++, screen_inc_iter(scr, &span)) {
@@ -243,7 +246,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
                 }
 
                 bool selected = is_selected_prev(&sel_it, &span, i);
-                spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
+                spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected, slow_path);
 
                 if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face, NULL);
                 g_wide = glyph && glyph->x_off > win->char_width - win->cfg.font_spacing;

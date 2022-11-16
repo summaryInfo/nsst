@@ -490,6 +490,9 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
     rctx.decoration_buf.size = 0;
     rctx.glyphs_size = 0;
 
+    bool slow_path = win->cfg.special_bold || win->cfg.special_underline || win->cfg.special_blink || win->cfg.blend_fg ||
+                     win->cfg.special_reverse || win->cfg.special_italic || win->cfg.blend_all_bg || selection_active(term_get_sstate(win->term));
+
     struct screen *scr = term_screen(win->term);
     struct line_span span = screen_view(scr);
     for (ssize_t k = 0; k < win->ch; k++, screen_inc_iter(scr, &span)) {
@@ -538,7 +541,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                 }
 
                 bool selected = is_selected_prev(&sel_it, &span, i);
-                spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected);
+                spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected, slow_path);
                 g =  spec.ch | (spec.face << 24);
 
                 bool is_new = 0;
