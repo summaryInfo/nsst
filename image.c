@@ -232,15 +232,19 @@ inline static __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) 
     /* alpha */
     __m128i al_0 = _mm_cvtepu8_epi16(alpha);
     __m128i al_1 = _mm_unpackhi_epi8(alpha, zero);
-    /* fg*alpha */*    __m128i mfg_0 = _mm_mullo_epi16(fg16, al_0); */
+    /* fg*alpha */
+    __m128i mfg_0 = _mm_mullo_epi16(fg16, al_0);
     __m128i mfg_1 = _mm_mullo_epi16(fg16, al_1);
 
-    /* 255-alpha */*    __m128i mal_0 = _mm_xor_si128(m255, al_0); */
+    /* 255-alpha */
+    __m128i mal_0 = _mm_xor_si128(m255, al_0);
     __m128i mal_1 = _mm_xor_si128(m255, al_1);
-    /* bg*(255-alpha) */*    __m128i mbg_0 = _mm_mullo_epi16(_mm_cvtepu8_epi16(bg8), mal_0); */
+    /* bg*(255-alpha) */
+    __m128i mbg_0 = _mm_mullo_epi16(_mm_cvtepu8_epi16(bg8), mal_0);
     __m128i mbg_1 = _mm_mullo_epi16(_mm_unpackhi_epi8(bg8, zero), mal_1);
 
-    /* bg*(255-alpha) + fg*alpha */*    __m128i res_0 = _mm_adds_epu16(mfg_0, mbg_0); */
+    /* bg*(255-alpha) + fg*alpha */
+    __m128i res_0 = _mm_adds_epu16(mfg_0, mbg_0);
     __m128i res_1 = _mm_adds_epu16(mfg_1, mbg_1);
 
     /* (bg*(255-alpha) + fg*alpha)/255 */

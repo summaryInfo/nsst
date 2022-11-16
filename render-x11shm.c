@@ -213,7 +213,7 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
     struct screen *scr = term_screen(win->term);
     struct line_span span = screen_view(scr);
     for (ssize_t k = 0; k < win->ch; k++, screen_inc_iter(scr, &span)) {
-        line_span_width(scr, &span);
+        screen_span_width(scr, &span);
         bool next_dirty = 0;
         struct rect l_bound = {-1, k, 0, 1};
 
