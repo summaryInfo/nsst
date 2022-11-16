@@ -55,6 +55,7 @@ int tty_open(struct tty *tty, struct instance_config *cfg);
 void tty_break(struct tty *tty);
 void tty_set_winsz(struct tty *tty, int16_t width, int16_t height, int16_t wwidth, int16_t wheight);
 ssize_t tty_refill(struct tty *tty);
+void tty_shift_tail(struct tty *tty);
 void tty_write(struct tty *tty, const uint8_t *buf, size_t len, bool crlf);
 void tty_hang(struct tty *tty);
 

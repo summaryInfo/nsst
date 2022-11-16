@@ -413,22 +413,23 @@ void tty_hang(struct tty *tty) {
     remove_watcher(&tty->w);
 }
 
-ssize_t tty_refill(struct tty *tty) {
-    if (UNLIKELY(tty->w.fd == -1)) return -1;
-
-    ssize_t inc = 0, sz = tty->end - tty->start, inctotal = 0;
-
+void tty_shift_tail(struct tty *tty) {
     if (tty->start != tty->fd_buf + MAX_PROTOCOL_LEN) {
         /* Always keep last MAX_PROTOCOL_LEN bytes in buffer for URL parsing matching */
+        ssize_t sz = tty->end - tty->start;
         ssize_t tail = MAX(sz, MAX_PROTOCOL_LEN);
         memmove(tty->fd_buf, tty->start - (tail - sz), tail);
         tty->start = tty->fd_buf + tail - sz;
         tty->end = tty->fd_buf + tail;
         sz = tail;
     }
+}
+
+ssize_t tty_refill(struct tty *tty) {
+    if (UNLIKELY(tty->w.fd == -1)) return -1;
 
     ssize_t space = (tty->fd_buf + sizeof tty->fd_buf) - tty->end;
-    ssize_t n_read = 0;
+    ssize_t n_read = 0, inc = 0, inctotal = 0, space_init = space;
 
     while (space > 0 && (inc = read(tty->w.fd, tty->end, space)) > 0) {
         space -= inc;
@@ -439,7 +440,7 @@ ssize_t tty_refill(struct tty *tty) {
     if (UNLIKELY(gconfig.trace_misc))
         info("Read TTY (size=%zd n_read=%zd)", inctotal, n_read);
 
-    inctotal = (sizeof tty->fd_buf - sz) - space;
+    inctotal = space_init - space;
 
     if (inc < 0 && errno != EAGAIN) {
         warn("Can't read from tty");
@@ -477,7 +478,7 @@ inline static void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t le
         }
 
         if (pfd.revents & POLLIN) {
-            if (tty->end - tty->start == sizeof tty->fd_buf - MAX_PROTOCOL_LEN) {
+            if (tty->end - tty->start == sizeof tty->fd_buf) {
                 /* Since the parser cannot be called recursively
                  * called recursively we cannot empty the input buffer
                  * and tty input queue, so we cannot write the data.
@@ -488,6 +489,7 @@ inline static void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t le
                 return;
             }
 
+            tty_shift_tail(tty);
             lim = tty_refill(tty);
         }
     }

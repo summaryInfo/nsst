@@ -179,6 +179,7 @@ uint32_t try_precompose(uint32_t ch, uint32_t comb);
 void init_poller(void);
 void free_poller(void);
 int poller_alloc_index(int fd, int events);
+int poller_add_reader(int fd, uint8_t **buffer_start, uint8_t *buffer_end);
 int poller_enable(int i, bool toggle);
 bool poller_is_enabled(int i);
 void poller_free_index(int i);

@@ -3421,6 +3421,7 @@ bool term_read(struct term *term) {
 
     screen_set_bookmark(&term->scr, NULL);
     screen_drain_scrolled(&term->scr);
+    tty_shift_tail(&term->tty);
 
     return true;
 }
@@ -3572,10 +3573,6 @@ bool term_is_reverse(struct term *term) {
     return term->mode.reverse_video;
 }
 
-int term_fd(struct term *term) {
-    return term->tty.w.fd;
-}
-
 void term_break(struct term *term) {
     tty_break(&term->tty);
 }
@@ -3705,6 +3702,11 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     tty_set_winsz(&term->tty, width, height, wwidth, wheight);
 
     screen_resize(scr, width, height);
+}
+
+int term_add_poller_reader(struct term *term) {
+    return poller_add_reader(term->tty.w.fd, &term->tty.end,
+                             term->tty.fd_buf + sizeof term->tty.fd_buf);
 }
 
 struct term *create_term(struct window *win, int16_t width, int16_t height) {

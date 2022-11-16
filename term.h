@@ -60,7 +60,6 @@ struct mouse_state *term_get_mstate(struct term *term);
 struct selection_state *term_get_sstate(struct term *term);
 struct window *term_window(struct term *term);
 color_t *term_palette(struct term *term);
-int term_fd(struct term *term);
 void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool is_first, bool is_last);
 void term_sendkey(struct term *term, const uint8_t *data, size_t size);
 void term_answerback(struct term *term, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
@@ -68,6 +67,7 @@ void term_reset(struct term *term);
 void term_set_reverse(struct term *term, bool set);
 void term_break(struct term *term);
 void term_hang(struct term *term);
+int term_add_poller_reader(struct term *term);
 
 struct screen *term_screen(struct term *term);
 

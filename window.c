@@ -445,7 +445,7 @@ struct window *create_window(struct instance_config *cfg) {
     if (win_list_head) win_list_head->prev = win;
     win_list_head = win;
 
-    win->poll_index = poller_alloc_index(term_fd(win->term), POLLIN | POLLHUP);
+    win->poll_index = term_add_poller_reader(win->term);
     if (win->poll_index < 0) goto error;
 
     platform_map_window(win);
