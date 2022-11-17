@@ -2169,7 +2169,7 @@ static void term_dispatch_csi(struct term *term) {
     term_esc_dump(term, 1);
 
     /* Only SGR is allowed to have subparams */
-    if (term->esc.subpar_mask && term->esc.selector != C('m')) return;
+    if (term->esc.subpar_mask && term->esc.selector != C('m')) goto finish;
 
     switch (term->esc.selector) {
     case C('@'): /* ICH */
@@ -2755,6 +2755,7 @@ static void term_dispatch_csi(struct term *term) {
         term_esc_dump(term, 0);
     }
 
+finish:
     term->esc.state = esc_ground;
 }
 
