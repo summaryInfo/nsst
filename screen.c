@@ -150,14 +150,29 @@ void screen_reset_view(struct screen *scr, bool damage) {
 }
 
 FORCEINLINE
-inline static void screen_split_line(struct screen *scr, struct line *src, ssize_t offset, struct line_span *screen, ssize_t height, bool force) {
-    if (LIKELY(!offset) || (offset >= src->size && !force)) return;
+inline static void screen_split_line_after_ex(struct screen *scr, struct line_span *screen, ssize_t height, ssize_t y) {
+    struct line_span *src = screen + y;
+    ssize_t offset = src->offset + src->width;
+    if (offset >= src->line->size) return;
 
-    split_line(&scr->mp, src, offset, screen, screen + height);
+    split_line(&scr->mp, src->line, offset, screen, screen + height);
+    if (UNLIKELY(src->line->selection_index))
+        selection_split(&scr->sstate, src->line, src->line->next);
+}
 
-    if (UNLIKELY(src->selection_index))
-        selection_split(&scr->sstate, src, src->next);
+FORCEINLINE
+inline static void screen_split_line_before(struct screen *scr, ssize_t y) {
+    struct line_span *src = &scr->screen[y];
+    if (LIKELY(!src->offset)) return;
 
+    split_line(&scr->mp, src->line, src->offset, scr->screen, scr->screen + scr->height);
+    if (UNLIKELY(src->line->selection_index))
+        selection_split(&scr->sstate, src->line, src->line->next);
+}
+
+FORCEINLINE
+inline static void screen_split_line_after(struct screen *scr, ssize_t y) {
+    screen_split_line_after_ex(scr, scr->screen, scr->height, y);
 }
 
 inline static struct line *screen_realloc_line(struct screen *scr, struct line *line, ssize_t width, struct line_span *screen, ssize_t height) {
@@ -167,17 +182,6 @@ inline static struct line *screen_realloc_line(struct screen *scr, struct line *
         selection_relocated(&scr->sstate, new);
 
     return new;
-}
-
-FORCEINLINE
-inline static void screen_unwrap_line(struct screen *scr, ssize_t y) {
-    struct line_span *view = &scr->screen[y];
-    screen_split_line(scr, view->line, view->offset + view->width, scr->screen, scr->height, false);
-}
-
-void screen_unwrap_cursor_line(struct screen *scr) {
-    struct line_span *view = &scr->screen[scr->c.y];
-    screen_split_line(scr, view->line, view->offset, scr->screen, scr->height, true);
 }
 
 void screen_cursor_line_set_prompt(struct screen *scr) {
@@ -220,7 +224,7 @@ inline static void screen_adjust_line(struct screen *scr, ssize_t y, ssize_t siz
     screen_adjust_line_ex(scr, scr->screen, y, size, size);
 }
 
-void screen_wrap(struct screen *scr, bool hard) {
+inline static void screen_wrap(struct screen *scr, bool hard) {
     screen_autoprint(scr);
     bool moved = screen_index(scr);
     screen_cr(scr);
@@ -263,6 +267,12 @@ void screen_wrap(struct screen *scr, bool hard) {
     struct line *new = concat_line(&scr->mp, current->prev, current, scr->screen, scr->screen + scr->height);
     if (UNLIKELY(new->selection_index))
         selection_relocated(&scr->sstate, new);
+}
+
+void screen_ensure_new_paragaph(struct screen *scr) {
+    if (screen_cursor_x(scr) > screen_min_x(scr))
+        screen_wrap(scr, true);
+    screen_split_line_before(scr, scr->c.y);
 }
 
 void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
@@ -741,10 +751,8 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
 
         /* Truncate lines that are below the last line of the screen */
         if (y >= height) {
-            struct line_span *bottom = &screen[height - 1];
-            ssize_t minh = MIN(height, scr->height);
-            screen_split_line(scr, bottom->line, bottom->offset + width, screen, minh, false);
-            free_line_list_until(scr, bottom->line->next, NULL, NULL);
+            screen_split_line_after_ex(scr, screen, MIN(height, scr->height), height -  1);
+            free_line_list_until(scr, screen[height - 1].line->next, NULL, NULL);
             y = height;
         }
 
@@ -886,7 +894,7 @@ inline static void prep_lines(struct screen *scr, ssize_t xs, ssize_t ys, ssize_
     if (erase) {
         ssize_t xs_val = xs, xe_val = xe;
         for (ssize_t i = ys; i < ye; i++) {
-            screen_unwrap_line(scr, i);
+            screen_split_line_after(scr, i);
             struct line_span *view = &scr->screen[i];
             if (view->width <= xe_val && attr_eq(attr_pad(view->line), &scr->sgr)) {
                 if (view->width > xs_val) {
@@ -899,7 +907,7 @@ inline static void prep_lines(struct screen *scr, ssize_t xs, ssize_t ys, ssize_
         }
     } else {
         for (ssize_t i = ys; i < ye; i++) {
-            screen_unwrap_line(scr, i);
+            screen_split_line_after(scr, i);
             screen_adjust_line(scr, i, xe);
         }
     }
@@ -1090,7 +1098,7 @@ void screen_copy(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
         for (; ys < ye; ys++, yd++) {
             screen_adjust_line(scr, ys, xe);
             screen_adjust_line(scr, yd, xd + (xe - xs));
-            screen_unwrap_line(scr, yd);
+            screen_split_line_after(scr, yd);
             struct line_span *sl = &scr->screen[ys], *dl = &scr->screen[yd];
             copy_line(dl->line, xd + dl->offset,
                       sl->line, xs + sl->offset, xe - xs);
@@ -1099,7 +1107,7 @@ void screen_copy(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
         for (yd += ye - ys; ys < ye; ye--, yd--) {
             screen_adjust_line(scr, ye - 1, xe);
             screen_adjust_line(scr, yd - 1, xd + (xe - xs));
-            screen_unwrap_line(scr, yd - 1);
+            screen_split_line_after(scr, yd - 1);
             struct line_span *sl = &scr->screen[ye - 1], *dl = &scr->screen[yd - 1];
             copy_line(dl->line, xd + dl->offset,
                       sl->line, xs + sl->offset, xe - xs);
@@ -1126,14 +1134,14 @@ void screen_fill(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
 void screen_erase_fast(struct screen *scr, int16_t ys, int16_t ye, struct attr *attr) {
 
     struct line_span *view = &scr->screen[ys];
-    screen_split_line(scr, view->line, view->offset, scr->screen, scr->height, true);
+    screen_split_line_before(scr, ys);
 
     while (ys < ye) {
 #if DEBUG_LINES
         assert(!view->offset);
 #endif
 
-        screen_unwrap_line(scr, ys);
+        screen_split_line_after(scr, ys);
 
         screen_realloc_line(scr, view->line, 0, scr->screen, scr->height);
         view->line->pad_attrid = alloc_attr(view->line, attr);
@@ -1301,11 +1309,10 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
 
     struct line_span *first = &scr->screen[top];
     /* Force scrolled region borders to be line borders */
-    if (!save)
-        screen_split_line(scr, first->line, first->offset, scr->screen, scr->height, true);
+    if (!save) screen_split_line_before(scr, top);
 
     struct line_span *last = &scr->screen[bottom - 1];
-    screen_unwrap_line(scr, bottom - 1);
+    screen_split_line_after(scr, bottom - 1);
 
     if (amount > 0) /* up */ {
         amount = MIN(amount, (bottom - top));
@@ -1465,7 +1472,7 @@ void screen_delete_cells(struct screen *scr, int16_t n) {
 
         ssize_t tail = line->width - scr->c.x;
         if (tail > 0) {
-            screen_unwrap_line(scr, scr->c.y);
+            screen_split_line_after(scr, scr->c.y);
             view_adjust_wide_left(line, scr->c.x);
             view_adjust_wide_right(line, scr->c.x + n - 1);
 
@@ -1882,7 +1889,7 @@ inline static void print_buffer(struct screen *scr, const uint32_t *bstart, cons
     struct cell *cell = NULL;
 
     /* Writing to the line resets its wrapping state */
-    screen_unwrap_line(scr, scr->c.y);
+    screen_split_line_after(scr, scr->c.y);
 
     ssize_t max_cx = scr->c.x + totalw, cx = scr->c.x;
     ssize_t max_tx = screen_max_x(scr);
