@@ -6,7 +6,7 @@
 #include "mouse.h"
 #include "term.h"
 #include "tty.h"
-#include "window-x11.h"
+#include "window-impl.h"
 
 #include <fcntl.h>
 #include <poll.h>
@@ -76,8 +76,6 @@ void free_context(void) {
 
     free_render_context();
     platform_free_context();
-
-    memset(&con, 0, sizeof(con));
 
 #if USE_URI
     uri_release_memory();
@@ -412,7 +410,7 @@ struct window *window_find_shared_font(struct window *win, bool need_free) {
 
 
 struct window *create_window(struct instance_config *cfg) {
-    struct window *win = xzalloc(sizeof(struct window));
+    struct window *win = xzalloc(sizeof(struct window) + platform_get_opaque_size());
 
     copy_config(&win->cfg, cfg);
 

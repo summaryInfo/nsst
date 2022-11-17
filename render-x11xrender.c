@@ -5,6 +5,7 @@
 #include "config.h"
 #include "font.h"
 #include "mouse.h"
+#include "window-impl.h"
 #include "window-x11.h"
 
 #include <stdbool.h>
@@ -95,7 +96,7 @@ static void register_glyph(struct window *win, uint32_t ch, struct glyph *glyph)
         .x_off = win->char_width*(1 + (uwidth(ch & 0xFFFFFF) > 1)), .y_off = glyph->y_off
     };
 
-    xcb_render_add_glyphs(con, win->plat.gsid, 1, &ch, &spec,
+    xcb_render_add_glyphs(con, get_plat(win)->gsid, 1, &ch, &spec,
                           glyph->height*glyph->stride, glyph->data);
 }
 
@@ -106,12 +107,12 @@ inline static void do_draw_rects(struct window *win, struct rect *rects, ssize_t
 
     xcb_render_color_t col = MAKE_COLOR(color);
     xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC,
-            win->plat.pic1, col, count, (xcb_rectangle_t *)rects);
+            get_plat(win)->pic1, col, count, (xcb_rectangle_t *)rects);
 }
 
 inline static void do_set_clip(struct window *win, struct rect *rects, ssize_t count) {
     if (!count) return;
-    xcb_render_set_picture_clip_rectangles(con, win->plat.pic1, 0, 0,
+    xcb_render_set_picture_clip_rectangles(con, get_plat(win)->pic1, 0, 0,
                                            count, (xcb_rectangle_t *)rects);
 }
 
@@ -139,44 +140,44 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1;
     int16_t height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1;
 
-    xcb_create_pixmap(con, TRUE_COLOR_ALPHA_DEPTH, win->plat.pid2, win->plat.wid, width, height);
+    xcb_create_pixmap(con, TRUE_COLOR_ALPHA_DEPTH, get_plat(win)->pid2, get_plat(win)->wid, width, height);
     uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
     uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
-    xcb_render_create_picture(con, win->plat.pic2, win->plat.pid2, rctx.pfargb, mask3, values3);
+    xcb_render_create_picture(con, get_plat(win)->pic2, get_plat(win)->pid2, rctx.pfargb, mask3, values3);
 
-    SWAP(win->plat.pid1, win->plat.pid2);
-    SWAP(win->plat.pic1, win->plat.pic2);
+    SWAP(get_plat(win)->pid1, get_plat(win)->pid2);
+    SWAP(get_plat(win)->pic1, get_plat(win)->pic2);
 
     do_draw_rects(win, &(struct rect){0, 0, width, height}, 1, win->bg_premul);
 
     int16_t common_w = MIN(new_cw, new_cw - delta_x) * win->char_width;
     int16_t common_h = MIN(new_ch, new_ch - delta_y) * (win->char_height + win->char_depth);
-    xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, win->plat.pic2, 0, win->plat.pic1,
+    xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, get_plat(win)->pic2, 0, get_plat(win)->pic1,
                          win->cfg.left_border, win->cfg.top_border, 0, 0,
                          win->cfg.left_border, win->cfg.top_border, common_w, common_h);
 
-    xcb_render_free_picture(con, win->plat.pic2);
-    xcb_free_pixmap(con, win->plat.pid2);
+    xcb_render_free_picture(con, get_plat(win)->pic2);
+    xcb_free_pixmap(con, get_plat(win)->pid2);
 }
 
 bool renderer_reload_font(struct window *win, bool need_free) {
     struct window *found = window_find_shared_font(win, need_free);
 
-    win->plat.pfglyph = win->cfg.pixel_mode ? rctx.pfargb : rctx.pfalpha;
+    get_plat(win)->pfglyph = win->cfg.pixel_mode ? rctx.pfargb : rctx.pfalpha;
 
     xcb_void_cookie_t c;
 
     if (need_free) {
-        c = xcb_render_free_glyph_set_checked(con, win->plat.gsid);
+        c = xcb_render_free_glyph_set_checked(con, get_plat(win)->gsid);
         if (check_void_cookie(c)) warn("Can't free glyph set");
     }
-    else win->plat.gsid = xcb_generate_id(con);
+    else get_plat(win)->gsid = xcb_generate_id(con);
 
     if (found && win->font_pixmode == found->font_pixmode) {
-        c = xcb_render_reference_glyph_set_checked(con, win->plat.gsid, found->plat.gsid);
+        c = xcb_render_reference_glyph_set_checked(con, get_plat(win)->gsid, get_plat(found)->gsid);
         if (check_void_cookie(c)) warn("Can't reference glyph set");
     } else {
-        c = xcb_render_create_glyph_set_checked(con, win->plat.gsid, win->plat.pfglyph);
+        c = xcb_render_create_glyph_set_checked(con, get_plat(win)->gsid, get_plat(win)->pfglyph);
         if (check_void_cookie(c)) warn("Can't create glyph set");
 
         for (uint32_t i = ' '; i <= '~'; i++) {
@@ -196,10 +197,10 @@ bool renderer_reload_font(struct window *win, bool need_free) {
         xcb_rectangle_t bound = { 0, 0, (win->cw + 1)*win->char_width + 2*win->cfg.left_border - 1,
                                  (win->ch + 1)*(win->char_depth + win->char_height) + 2*win->cfg.top_border - 1 };
 
-        win->plat.pid1 = xcb_generate_id(con);
-        win->plat.pid2 = xcb_generate_id(con);
+        get_plat(win)->pid1 = xcb_generate_id(con);
+        get_plat(win)->pid2 = xcb_generate_id(con);
 
-        c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, win->plat.pid1, win->plat.wid, bound.width, bound.height );
+        c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, get_plat(win)->pid1, get_plat(win)->wid, bound.width, bound.height );
         if (check_void_cookie(c)) {
             warn("Can't create pixmap");
             return 0;
@@ -208,10 +209,10 @@ bool renderer_reload_font(struct window *win, bool need_free) {
         uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
         uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
 
-        win->plat.pic1 = xcb_generate_id(con);
-        win->plat.pic2 = xcb_generate_id(con);
+        get_plat(win)->pic1 = xcb_generate_id(con);
+        get_plat(win)->pic2 = xcb_generate_id(con);
 
-        c = xcb_render_create_picture_checked(con, win->plat.pic1, win->plat.pid1, rctx.pfargb, mask3, values3);
+        c = xcb_render_create_picture_checked(con, get_plat(win)->pic1, get_plat(win)->pid1, rctx.pfargb, mask3, values3);
         if (check_void_cookie(c)) {
             warn("Can't create XRender picture");
             return 0;
@@ -220,16 +221,16 @@ bool renderer_reload_font(struct window *win, bool need_free) {
         do_draw_rects(win, (struct rect *)&bound, 1, win->bg_premul);
 
         xcb_pixmap_t pid = xcb_generate_id(con);
-        c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, pid, win->plat.wid, 1, 1);
+        c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, pid, get_plat(win)->wid, 1, 1);
         if (check_void_cookie(c)) {
             warn("Can't create pixmap");
             free_window(win);
             return NULL;
         }
 
-        win->plat.pen = xcb_generate_id(con);
+        get_plat(win)->pen = xcb_generate_id(con);
         uint32_t values4[1] = { XCB_RENDER_REPEAT_NORMAL };
-        c = xcb_render_create_picture_checked(con, win->plat.pen, pid, rctx.pfargb, XCB_RENDER_CP_REPEAT, values4);
+        c = xcb_render_create_picture_checked(con, get_plat(win)->pen, pid, rctx.pfargb, XCB_RENDER_CP_REPEAT, values4);
         if (check_void_cookie(c)) {
             warn("Can't create picture");
             free_window(win);
@@ -244,10 +245,10 @@ bool renderer_reload_font(struct window *win, bool need_free) {
 }
 
 void renderer_free(struct window *win) {
-    xcb_render_free_picture(con, win->plat.pen);
-    xcb_render_free_picture(con, win->plat.pic1);
-    xcb_free_pixmap(con, win->plat.pid1);
-    xcb_render_free_glyph_set(con, win->plat.gsid);
+    xcb_render_free_picture(con, get_plat(win)->pen);
+    xcb_render_free_picture(con, get_plat(win)->pic1);
+    xcb_free_pixmap(con, get_plat(win)->pid1);
+    xcb_render_free_glyph_set(con, get_plat(win)->gsid);
 }
 
 void platform_init_render_context(void) {
@@ -297,11 +298,11 @@ void platform_init_render_context(void) {
 }
 
 void renderer_update(struct window *win, struct rect rect) {
-    xcb_copy_area(con, win->plat.pid1, win->plat.wid, win->plat.gc, rect.x, rect.y, rect.x, rect.y, rect.width, rect.height);
+    xcb_copy_area(con, get_plat(win)->pid1, get_plat(win)->wid, get_plat(win)->gc, rect.x, rect.y, rect.x, rect.y, rect.width, rect.height);
 }
 
 void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
-    xcb_copy_area(con, win->plat.pid1, win->plat.pid1, win->plat.gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
+    xcb_copy_area(con, get_plat(win)->pid1, get_plat(win)->pid1, get_plat(win)->gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
 }
 
 inline static void adjust_msg_buffer(void) {
@@ -328,7 +329,7 @@ static void draw_text(struct window *win, struct element_buffer *buf) {
         color_t color = it->color;
         xcb_render_color_t col = MAKE_COLOR(color);
         xcb_rectangle_t rect2 = { .x = 0, .y = 0, .width = 1, .height = 1 };
-        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, win->plat.pen, col, 1, &rect2);
+        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, get_plat(win)->pen, col, 1, &rect2);
 
         /* Build payload... */
 
@@ -364,7 +365,7 @@ static void draw_text(struct window *win, struct element_buffer *buf) {
 
         if (rctx.payload_size) {
             xcb_render_composite_glyphs_32(con, XCB_RENDER_PICT_OP_OVER,
-                    win->plat.pen, win->plat.pic1, win->plat.pfglyph, win->plat.gsid,
+                    get_plat(win)->pen, get_plat(win)->pic1, get_plat(win)->pfglyph, get_plat(win)->gsid,
                     0, 0, rctx.payload_size, rctx.payload);
         }
     }

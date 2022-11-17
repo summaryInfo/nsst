@@ -5,13 +5,14 @@
 
 /* Make linting always work for this
  * file (force choosing the right renderer
- * structure variant in window-x11.h)*/
+ * structure variant in window-impl.h)*/
 #undef USE_X11SHM
 #define USE_X11SHM 1
 
 #include "config.h"
 #include "font.h"
 #include "mouse.h"
+#include "window-impl.h"
 #include "window-x11.h"
 
 #include <stdbool.h>
@@ -24,69 +25,69 @@ static bool has_shm_pixmaps;
 
 /* Returns old image */
 static struct image renderer_create_image(struct window *win, int16_t width, int16_t height) {
-    struct image old = win->plat.im;
+    struct image old = get_plat(win)->im;
     xcb_void_cookie_t c;
 
     if (has_shm) {
-        win->plat.im = create_shm_image(width, height);
+        get_plat(win)->im = create_shm_image(width, height);
 
-        if (!win->plat.shm_seg) {
-            win->plat.shm_seg = xcb_generate_id(con);
+        if (!get_plat(win)->shm_seg) {
+            get_plat(win)->shm_seg = xcb_generate_id(con);
         } else {
-            if (has_shm_pixmaps && win->plat.shm_pixmap)
-                xcb_free_pixmap(con, win->plat.shm_pixmap);
-            xcb_shm_detach_checked(con, win->plat.shm_seg);
+            if (has_shm_pixmaps && get_plat(win)->shm_pixmap)
+                xcb_free_pixmap(con, get_plat(win)->shm_pixmap);
+            xcb_shm_detach_checked(con, get_plat(win)->shm_seg);
         }
 
 #if USE_POSIX_SHM
-        c = xcb_shm_attach_fd_checked(con, win->plat.shm_seg, dup(win->plat.im.shmid), 0);
+        c = xcb_shm_attach_fd_checked(con, get_plat(win)->shm_seg, dup(get_plat(win)->im.shmid), 0);
 #else
-        c = xcb_shm_attach_checked(con, win->plat.shm_seg, win->plat.im.shmid, 0);
+        c = xcb_shm_attach_checked(con, get_plat(win)->shm_seg, get_plat(win)->im.shmid, 0);
 #endif
         if (check_void_cookie(c)) goto error;
 
         if (has_shm_pixmaps) {
-            if (!win->plat.shm_pixmap)
-                win->plat.shm_pixmap = xcb_generate_id(con);
-            c = xcb_shm_create_pixmap(con, win->plat.shm_pixmap,
-                    win->plat.wid, STRIDE(width), height, TRUE_COLOR_ALPHA_DEPTH, win->plat.shm_seg, 0);
+            if (!get_plat(win)->shm_pixmap)
+                get_plat(win)->shm_pixmap = xcb_generate_id(con);
+            c = xcb_shm_create_pixmap(con, get_plat(win)->shm_pixmap,
+                    get_plat(win)->wid, STRIDE(width), height, TRUE_COLOR_ALPHA_DEPTH, get_plat(win)->shm_seg, 0);
             if (check_void_cookie(c)) goto error;
         }
     } else {
-        win->plat.im = create_image(width, height);
+        get_plat(win)->im = create_image(width, height);
     }
 
     return old;
 
 error:
-    free_image(&win->plat.im);
-    win->plat.im = old;
+    free_image(&get_plat(win)->im);
+    get_plat(win)->im = old;
     warn("Can't attach MITSHM image");
     return (struct image) {0};
 }
 
 void renderer_update(struct window *win, struct rect rect) {
     if (has_shm_pixmaps) {
-        xcb_copy_area(con, win->plat.shm_pixmap, win->plat.wid, win->plat.gc, rect.x, rect.y, rect.x, rect.y, rect.width, rect.height);
+        xcb_copy_area(con, get_plat(win)->shm_pixmap, get_plat(win)->wid, get_plat(win)->gc, rect.x, rect.y, rect.x, rect.y, rect.width, rect.height);
     } else if (has_shm) {
-        xcb_shm_put_image(con, win->plat.wid, win->plat.gc, STRIDE(win->plat.im.width), win->plat.im.height, rect.x, rect.y,
-                rect.width, rect.height, rect.x, rect.y, TRUE_COLOR_ALPHA_DEPTH, XCB_IMAGE_FORMAT_Z_PIXMAP, 0, win->plat.shm_seg, 0);
+        xcb_shm_put_image(con, get_plat(win)->wid, get_plat(win)->gc, STRIDE(get_plat(win)->im.width), get_plat(win)->im.height, rect.x, rect.y,
+                rect.width, rect.height, rect.x, rect.y, TRUE_COLOR_ALPHA_DEPTH, XCB_IMAGE_FORMAT_Z_PIXMAP, 0, get_plat(win)->shm_seg, 0);
     } else {
-        xcb_put_image(con, XCB_IMAGE_FORMAT_Z_PIXMAP, win->plat.wid, win->plat.gc,
-                STRIDE(win->plat.im.width), rect.height, 0, rect.y, 0, TRUE_COLOR_ALPHA_DEPTH,
-                rect.height * STRIDE(win->plat.im.width) * sizeof(color_t),
-                (const uint8_t *)(win->plat.im.data + rect.y*STRIDE(win->plat.im.width)));
+        xcb_put_image(con, XCB_IMAGE_FORMAT_Z_PIXMAP, get_plat(win)->wid, get_plat(win)->gc,
+                STRIDE(get_plat(win)->im.width), rect.height, 0, rect.y, 0, TRUE_COLOR_ALPHA_DEPTH,
+                rect.height * STRIDE(get_plat(win)->im.width) * sizeof(color_t),
+                (const uint8_t *)(get_plat(win)->im.data + rect.y*STRIDE(get_plat(win)->im.width)));
     }
 }
 
 void renderer_free(struct window *win) {
     if (has_shm)
-        xcb_shm_detach(con, win->plat.shm_seg);
+        xcb_shm_detach(con, get_plat(win)->shm_seg);
     if (has_shm_pixmaps)
-        xcb_free_pixmap(con, win->plat.shm_pixmap);
-    if (win->plat.im.data)
-        free_image(&win->plat.im);
-    free(win->plat.bounds);
+        xcb_free_pixmap(con, get_plat(win)->shm_pixmap);
+    if (get_plat(win)->im.data)
+        free_image(&get_plat(win)->im);
+    free(get_plat(win)->bounds);
 }
 
 void free_render_context(void) {
@@ -125,21 +126,21 @@ void init_render_context(void) {
 
 
 static void resize_bounds(struct window *win, bool h_changed) {
-    if (win->plat.bounds) {
+    if (get_plat(win)->bounds) {
         size_t j = 0;
-        struct rect *r_dst = win->plat.bounds;
+        struct rect *r_dst = get_plat(win)->bounds;
         if (h_changed) r_dst = xalloc(sizeof(struct rect) * 2 * win->ch);
-        for (size_t i = 0; i < win->plat.boundc; i++)
-            if (intersect_with(&win->plat.bounds[i], &(struct rect){0, 0, win->cw, win->ch}))
-                r_dst[j++] = win->plat.bounds[i];
-        win->plat.boundc = j;
+        for (size_t i = 0; i < get_plat(win)->boundc; i++)
+            if (intersect_with(&get_plat(win)->bounds[i], &(struct rect){0, 0, win->cw, win->ch}))
+                r_dst[j++] = get_plat(win)->bounds[i];
+        get_plat(win)->boundc = j;
         if (h_changed) {
-            SWAP(win->plat.bounds, r_dst);
+            SWAP(get_plat(win)->bounds, r_dst);
             free(r_dst);
         }
     } else {
-        win->plat.boundc = 0;
-        win->plat.bounds = xalloc(sizeof(struct rect) * 2 * win->ch);
+        get_plat(win)->boundc = 0;
+        get_plat(win)->bounds = xalloc(sizeof(struct rect) * 2 * win->ch);
     }
 }
 
@@ -178,12 +179,12 @@ bool renderer_reload_font(struct window *win, bool need_free) {
 
         renderer_create_image(win, (win->cw + 1)*win->char_width - 1 + 2*win->cfg.left_border,
                                    (win->ch + 1)*(win->char_height + win->char_depth) - 1 + 2*win->cfg.top_border);
-        if (!win->plat.im.data) {
+        if (!get_plat(win)->im.data) {
             warn("Can't allocate image");
             return 0;
         }
 
-        image_draw_rect(win->plat.im, (struct rect){0, 0, win->plat.im.width, win->plat.im.height}, win->bg_premul);
+        image_draw_rect(get_plat(win)->im, (struct rect){0, 0, get_plat(win)->im.width, get_plat(win)->im.height}, win->bg_premul);
     }
 
     return 1;
@@ -193,14 +194,14 @@ void renderer_recolor_border(struct window *win) {
     int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
     int bw = win->cfg.left_border, bh = win->cfg.top_border;
 
-    image_draw_rect(win->plat.im, (struct rect) {0, 0, win->cfg.width, win->cfg.top_border}, win->bg_premul);
-    image_draw_rect(win->plat.im, (struct rect) {0, bh, bw, win->ch*(ch + cd)}, win->bg_premul);
-    image_draw_rect(win->plat.im, (struct rect) {win->cw*cw + bw, bh, win->cfg.width - win->cw*cw - bw, win->ch*(ch + cd)}, win->bg_premul);
-    image_draw_rect(win->plat.im, (struct rect) {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh}, win->bg_premul);
+    image_draw_rect(get_plat(win)->im, (struct rect) {0, 0, win->cfg.width, win->cfg.top_border}, win->bg_premul);
+    image_draw_rect(get_plat(win)->im, (struct rect) {0, bh, bw, win->ch*(ch + cd)}, win->bg_premul);
+    image_draw_rect(get_plat(win)->im, (struct rect) {win->cw*cw + bw, bh, win->cfg.width - win->cw*cw - bw, win->ch*(ch + cd)}, win->bg_premul);
+    image_draw_rect(get_plat(win)->im, (struct rect) {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh}, win->bg_premul);
 }
 
 bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
-    bool scrolled = win->plat.boundc;
+    bool scrolled = get_plat(win)->boundc;
     bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
     bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1);
     bool beyond_eol = false;
@@ -263,26 +264,26 @@ bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bo
                 struct rect r_strike = { x + fs, y + 2*ch/3 - ul/2 + ls, cw, ul };
 
                 /* Background */
-                image_draw_rect(win->plat.im, r_cell, spec.bg);
+                image_draw_rect(get_plat(win)->im, r_cell, spec.bg);
 
                 /* Glyph */
                 if (glyph) {
                     if (g_wide) r_cell.width = 2*cw;
-                    image_compose_glyph(win->plat.im, x + fs, y + ch + ls, glyph, spec.fg, r_cell);
+                    image_compose_glyph(get_plat(win)->im, x + fs, y + ch + ls, glyph, spec.fg, r_cell);
                 }
 
                 /* Underline */
                 if (spec.underlined) {
-                    image_draw_rect(win->plat.im, r_under, spec.ul);
+                    image_draw_rect(get_plat(win)->im, r_under, spec.ul);
                     if (spec.underlined > 1) {
                         r_under.y += ul + 1;
-                        image_draw_rect(win->plat.im, r_under, spec.ul);
+                        image_draw_rect(get_plat(win)->im, r_under, spec.ul);
                     }
                     // TODO curly
                 }
 
                 /* Strikethrough */
-                if (spec.stroke) image_draw_rect(win->plat.im, r_strike, spec.ul);
+                if (spec.stroke) image_draw_rect(get_plat(win)->im, r_strike, spec.ul);
 
                 if (l_bound.x < 0) l_bound.width = i + g_wide;
 
@@ -296,7 +297,7 @@ bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bo
                 struct attr attr = *attr_pad(span.line);
                 color_t bg = describe_bg(&attr, &win->cfg, &win->rcstate, last_selected);
 
-                image_draw_rect(win->plat.im, (struct rect){
+                image_draw_rect(get_plat(win)->im, (struct rect){
                     .x = bw + span.width * win->char_width,
                     .y = bh + k * (win->char_height + win->char_depth),
                     .width = (win->cw - span.width) * win->char_width,
@@ -307,7 +308,7 @@ bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bo
             }
 
             l_bound.width = MIN(l_bound.width - l_bound.x + 1, win->cw);
-            win->plat.bounds[win->plat.boundc++] = l_bound;
+            get_plat(win)->bounds[get_plat(win)->boundc++] = l_bound;
         }
 
         /* Only reset force flag for last part of the line */
@@ -346,16 +347,16 @@ bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bo
             }
         }
         for (size_t i = 0; i < count; i++)
-            image_draw_rect(win->plat.im, rects[i + off], win->cursor_fg);
+            image_draw_rect(get_plat(win)->im, rects[i + off], win->cursor_fg);
     }
 
-    bool drawn_any = win->plat.boundc;
+    bool drawn_any = get_plat(win)->boundc;
 
 
     if (win->redraw_borders) {
         if (!has_shm) {
             renderer_update(win, (struct rect) {0, 0, win->cfg.width, win->cfg.height});
-            win->plat.boundc = 0;
+            get_plat(win)->boundc = 0;
         } else {
             renderer_update(win, (struct rect) {0, 0, win->cfg.width, win->cfg.top_border});
             renderer_update(win, (struct rect) {0, bh, bw, win->ch*(ch + cd)});
@@ -365,11 +366,11 @@ bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bo
         win->redraw_borders = 0;
     }
 
-    if (win->plat.boundc) {
-        optimize_bounds(win->plat.bounds, &win->plat.boundc, has_shm);
-        for (size_t k = 0; k < win->plat.boundc; k++)
-            renderer_update(win, rect_shift(rect_scale_up(win->plat.bounds[k], cw, cd + ch), bw, bh));
-        win->plat.boundc = 0;
+    if (get_plat(win)->boundc) {
+        optimize_bounds(get_plat(win)->bounds, &get_plat(win)->boundc, has_shm);
+        for (size_t k = 0; k < get_plat(win)->boundc; k++)
+            renderer_update(win, rect_shift(rect_scale_up(get_plat(win)->bounds[k], cw, cd + ch), bw, bh));
+        get_plat(win)->boundc = 0;
     }
 
 
@@ -377,7 +378,7 @@ bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bo
 }
 
 void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
-    image_copy(win->plat.im, dst, win->plat.im, sx, sy);
+    image_copy(get_plat(win)->im, dst, get_plat(win)->im, sx, sy);
 
     int16_t w = win->char_width, h = win->char_depth + win->char_height;
 
@@ -389,9 +390,9 @@ void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) 
     dst.width = (dst.width + dst.x + w - 1) / w;
     dst.width -= dst.x /= w;
 
-    if (win->plat.boundc + 1 > (size_t)win->ch)
-        optimize_bounds(win->plat.bounds, &win->plat.boundc, 0);
-    win->plat.bounds[win->plat.boundc++] = dst;
+    if (get_plat(win)->boundc + 1 > (size_t)win->ch)
+        optimize_bounds(get_plat(win)->bounds, &get_plat(win)->boundc, 0);
+    get_plat(win)->bounds[get_plat(win)->boundc++] = dst;
 }
 
 void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
@@ -408,7 +409,7 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth));
 
     struct image old = renderer_create_image(win, width, height);
-    image_copy(win->plat.im, (struct rect){0, 0, common_w, common_h}, old, 0, 0);
+    image_copy(get_plat(win)->im, (struct rect){0, 0, common_w, common_h}, old, 0, 0);
     free_image(&old);
 
     resize_bounds(win, delta_y);
@@ -416,15 +417,15 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t xw = win->cw * win->char_width + win->cfg.left_border;
     int16_t xh = win->ch * (win->char_height + win->char_depth) + win->cfg.top_border;
 
-    if (delta_y > 0) image_draw_rect(win->plat.im, (struct rect) { 0, common_h, common_w, height - common_h }, win->bg_premul);
+    if (delta_y > 0) image_draw_rect(get_plat(win)->im, (struct rect) { 0, common_h, common_w, height - common_h }, win->bg_premul);
     else if (delta_y < 0) {
-        image_draw_rect(win->plat.im, (struct rect) { 0, xh, width, height - xh }, win->bg_premul);
+        image_draw_rect(get_plat(win)->im, (struct rect) { 0, xh, width, height - xh }, win->bg_premul);
         win->redraw_borders = 1;
     }
 
-    if (delta_x > 0) image_draw_rect(win->plat.im, (struct rect) { common_w, 0, width - common_w, height }, win->bg_premul);
+    if (delta_x > 0) image_draw_rect(get_plat(win)->im, (struct rect) { common_w, 0, width - common_w, height }, win->bg_premul);
     else if (delta_x < 0) {
-        image_draw_rect(win->plat.im, (struct rect) { xw, 0, width - xw, xh }, win->bg_premul);
+        image_draw_rect(get_plat(win)->im, (struct rect) { xw, 0, width - xw, xh }, win->bg_premul);
         win->redraw_borders = 1;
     }
 }
