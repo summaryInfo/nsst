@@ -431,7 +431,7 @@ inline static void replace_handle(struct line_handle *dst, struct line_span *src
 #endif
 }
 
-inline static ssize_t line_increment_span(struct line_span *pos, ssize_t width) {
+inline static ssize_t line_span_shift(struct line_span *pos, ssize_t width) {
     bool res = 0;
 
     ssize_t offset = line_advance_width(pos->line, pos->offset, width);
@@ -449,7 +449,7 @@ inline static ssize_t line_increment_span(struct line_span *pos, ssize_t width) 
     return res;
 }
 
-inline static ssize_t line_advance_span(struct line_span *pos, ssize_t amount, ssize_t width) {
+inline static ssize_t line_shift_n(struct line_span *pos, ssize_t amount, ssize_t width) {
     if (amount < 0) {
         // TODO Little optimization
         amount += line_segments(pos->line, 0, width) - line_segments(pos->line, pos->offset, width);

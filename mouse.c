@@ -387,7 +387,7 @@ inline static ssize_t virtual_pos(struct screen *scr, struct line_span *pos) {
 
     do {
         *pos = next;
-        if (screen_inc_iter(scr, &next)) break;
+        if (screen_span_shift(scr, &next)) break;
     } while (line_span_cmp(&orig, &next) >= 0);
 
     return orig.offset - pos->offset;
@@ -395,7 +395,7 @@ inline static ssize_t virtual_pos(struct screen *scr, struct line_span *pos) {
 
 inline static struct line_span absolute_pos(struct screen *scr, ssize_t x, ssize_t y) {
     struct line_span offset = screen_view(scr);
-    screen_advance_iter(scr, &offset, y);
+    screen_span_shift_n(scr, &offset, y);
     offset.offset += x;
     return offset;
 }
@@ -481,7 +481,7 @@ static void decompose(struct selection_state *sel, struct screen *scr, struct li
 
         do {
             append_segment(sel, vstart.line, vstart.offset + vstart_x, vstart.offset + vend_x + 1);
-            if (screen_inc_iter(scr, &vstart)) break;
+            if (screen_span_shift(scr, &vstart)) break;
         } while (line_span_cmp(&vstart, &vend) <= 0);
 
     } else {
@@ -779,7 +779,7 @@ static void update_active_uri(struct screen *scr, struct window *win, struct mou
 
 
         struct line_span pos = screen_view(scr);
-        screen_advance_iter(scr, &pos, y);
+        screen_span_shift_n(scr, &pos, y);
 
         if (pos.offset + x < pos.line->size)
             uri = attr_at(pos.line, pos.offset + x)->uri;

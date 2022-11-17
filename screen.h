@@ -162,7 +162,7 @@ void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd);
 void screen_damage_selection(struct screen *scr);
 void screen_damage_uri(struct screen *scr, uint32_t uri);
 void screen_span_width(struct screen *scr, struct line_span *pos);
-ssize_t screen_advance_iter(struct screen *scr, struct line_span *pos, ssize_t amount);
+ssize_t screen_span_shift_n(struct screen *scr, struct line_span *pos, ssize_t amount);
 struct line_span screen_span(struct screen *scr, ssize_t y);
 void screen_reset_view(struct screen *scr, bool damage);
 void screen_free_scrollback(struct screen *scr, ssize_t max_size);

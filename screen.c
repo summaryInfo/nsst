@@ -72,8 +72,8 @@ void free_screen(struct screen *scr) {
  * Faster version for whole lines */
 void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd) {
     struct line_span view = screen_view(scr);
-    screen_advance_iter(scr, &view, ys);
-    for (ssize_t i = ys; i < yd; i++, screen_inc_iter(scr, &view))
+    screen_span_shift_n(scr, &view, ys);
+    for (ssize_t i = ys; i < yd; i++, screen_span_shift(scr, &view))
         view.line->force_damage = true;
 }
 
@@ -84,7 +84,7 @@ void screen_damage_selection(struct screen *scr) {
         if (prev != view.line)
             selection_damage(&scr->sstate, view.line);
         prev = view.line;
-        screen_inc_iter(scr, &view);
+        screen_span_shift(scr, &view);
     }
 }
 
@@ -92,7 +92,7 @@ void screen_damage_uri(struct screen *scr, uint32_t uri) {
     if (!uri) return;
 
     struct line_span view = screen_view(scr);
-    for (ssize_t i = 0; i < scr->height; screen_inc_iter(scr, &view), i++) {
+    for (ssize_t i = 0; i < scr->height; screen_span_shift(scr, &view), i++) {
         struct line_attr *attrs = view.line->attrs;
         if (!attrs) continue;
 
@@ -118,12 +118,12 @@ void screen_span_width(struct screen *scr, struct line_span *pos) {
     pos->width = line_advance_width(pos->line, pos->offset, scr->width) - pos->offset;
 }
 
-ssize_t screen_inc_iter(struct screen *scr, struct line_span *pos) {
-    return line_increment_span(pos, scr->width);
+ssize_t screen_span_shift(struct screen *scr, struct line_span *pos) {
+    return line_span_shift(pos, scr->width);
 }
 
-ssize_t screen_advance_iter(struct screen *scr, struct line_span *pos, ssize_t amount) {
-    return line_advance_span(pos, amount, scr->width);
+ssize_t screen_span_shift_n(struct screen *scr, struct line_span *pos, ssize_t amount) {
+    return line_shift_n(pos, amount, scr->width);
 }
 
 struct line_span screen_view(struct screen *scr) {
@@ -329,7 +329,7 @@ void screen_scroll_view(struct screen *scr, int16_t amount) {
     if (old_viewr && amount > 0) return;
 
     line_handle_remove(&scr->view_pos);
-    ssize_t delta = screen_advance_iter(scr, &scr->view_pos.s, amount) - amount;
+    ssize_t delta = screen_span_shift_n(scr, &scr->view_pos.s, amount) - amount;
     line_handle_add(&scr->view_pos);
     int new_viewr = line_span_cmp(&scr->view_pos.s, scr->screen);
     if (new_viewr > 0) {
@@ -521,7 +521,7 @@ static void fixup_view(struct screen *scr, struct line_handle *lower_left, enum 
         line_handle_remove(&scr->view_pos);
         scr->view_pos.s = lower_left->s;
         scr->view_pos.s.offset -= scr->view_pos.s.offset % scr->width;
-        screen_advance_iter(scr, &scr->view_pos.s, 1 - scr->height);
+        screen_span_shift_n(scr, &scr->view_pos.s, 1 - scr->height);
         line_handle_add(&scr->view_pos);
     }
 
@@ -556,7 +556,7 @@ inline static void translate_screen_position(struct line_span *first, struct lin
             break;
         }
         y++;
-    } while (!line_increment_span(&it, width));
+    } while (!line_span_shift(&it, width));
 
 #if DEBUG_LINES
     if (c->y == -1)
@@ -685,7 +685,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         assert(c->y >= 0);
         struct line_span d0 = it;
 #endif
-        ssize_t rest = line_advance_span(&it, -c->y, width);
+        ssize_t rest = line_shift_n(&it, -c->y, width);
         if (rest) {
         /* Not enough lines in scrollback buffer to keep cursor on it original line,
          * need to allocate more */
@@ -721,7 +721,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
             c->y -= delta;
             saved_c->y = MAX(0, saved_c->y - delta);
 
-            delta = line_advance_span(&it, delta, width);
+            delta = line_shift_n(&it, delta, width);
 #if DEBUG_LINES
             assert(!delta);
 #endif
@@ -747,7 +747,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
             screen[y] = it;
             screen[y].width = view_width - it.offset;
             if (++y >= height) break;
-        } while (!line_increment_span(&it, width));
+        } while (!line_span_shift(&it, width));
 
         /* Truncate lines that are below the last line of the screen */
         if (y >= height) {
@@ -799,7 +799,7 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
     /* Find line of bottom left cell */
     struct line_handle lower_left = { .s = scr->view_pos.s };
     if (lower_left.s.line) {
-        screen_advance_iter(scr, &lower_left.s, scr->height - 1);
+        screen_span_shift_n(scr, &lower_left.s, scr->height - 1);
         line_handle_add(&lower_left);
     }
 

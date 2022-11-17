@@ -77,8 +77,8 @@ void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd);
 void screen_scroll_view(struct screen *scr, int16_t amount);
 struct line_span screen_view(struct screen *scr);
 struct line_span screen_span(struct screen *scr, ssize_t y);
-ssize_t screen_advance_iter(struct screen *scr, struct line_span *pos, ssize_t amount);
-ssize_t screen_inc_iter(struct screen *scr, struct line_span *pos);
+ssize_t screen_span_shift_n(struct screen *scr, struct line_span *pos, ssize_t amount);
+ssize_t screen_span_shift(struct screen *scr, struct line_span *pos);
 void screen_damage_selection(struct screen *scr);
 #if USE_URI
 void screen_damage_uri(struct screen *scr, uint32_t uri);
