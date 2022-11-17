@@ -2458,7 +2458,7 @@ static void term_dispatch_csi(struct term *term) {
     case C('p') | I0('"'): /* DECSCL */
         if (term->vt_version < 200) break;
 
-        term_do_reset(term, 0);
+        term_do_reset(term, true);
         uparam_t p = PARAM(0, 65) - 60;
         if (p && p <= term->vt_version/100)
             term->vt_level = p;
