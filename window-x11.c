@@ -63,6 +63,10 @@ struct context {
     int32_t xkb_core_kbd;
     uint8_t xkb_base_event;
     uint8_t xkb_base_err;
+
+    void (*renderer_recolor_border)(struct window *);
+    void (*renderer_free)(struct window *);
+    void (*renderer_free_context)(void);
 };
 
 static struct context ctx;
@@ -180,7 +184,7 @@ void x11_update_colors(struct window *win) {
     values2[0] = values2[1] = win->bg_premul;
     xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_BACK_PIXEL, values2);
     xcb_change_gc(con, get_plat(win)->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
-    x11_renderer_recolor_border(win);
+    ctx.renderer_recolor_border(win);
 }
 
 void x11_enable_mouse_events(struct window *win, bool enabled) {
@@ -506,7 +510,7 @@ void x11_map_window(struct window *win) {
 void x11_free_window(struct window *win) {
     if (get_plat(win)->wid) {
         xcb_unmap_window(con, get_plat(win)->wid);
-        x11_renderer_free(win);
+        ctx.renderer_free(win);
         xcb_free_gc(con, get_plat(win)->gc);
         xcb_destroy_window(con, get_plat(win)->wid);
         xcb_flush(con);
@@ -841,7 +845,7 @@ void x11_handle_events(void) {
 }
 
 void x11_free(void) {
-    x11_free_render_context();
+    ctx.renderer_free_context();
 
     xkb_state_unref(ctx.xkb_state);
     xkb_keymap_unref(ctx.xkb_keymap);
@@ -854,11 +858,11 @@ void x11_free(void) {
 
 static struct platform_vtable x11_vtable = {
     /* Renderer dependent functions */
-    .update = x11_renderer_update,
-    .reload_font = x11_renderer_reload_font,
-    .resize = x11_renderer_resize,
-    .copy = x11_renderer_copy,
-    .submit_screen = x11_renderer_submit_screen,
+    .update = NULL,
+    .reload_font = NULL,
+    .resize = NULL,
+    .copy = NULL,
+    .submit_screen = NULL,
 
     /* Platform dependent functions */
     .get_screen_size = x11_get_screen_size,
@@ -887,7 +891,18 @@ static struct platform_vtable x11_vtable = {
     .free = x11_free,
 };
 
-const struct platform_vtable *platform_init_x11(void) {
+inline static const char *backend_to_str(enum renderer_backend backend) {
+    switch (backend) {
+    case renderer_x11_shm:
+        return "X11 MIT-SHM";
+    case renderer_x11_xrender:
+        return "X11 XRender";
+    default:
+        return "INVALID";
+    }
+}
+
+const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
     int screenp = 0;
     con = xcb_connect(NULL, &screenp);
     if (!con) die("Can't connect to X server");
@@ -959,9 +974,42 @@ const struct platform_vtable *platform_init_x11(void) {
     xcb_screen_iterator_t it = xcb_setup_roots_iterator(xcb_get_setup(con));
     for (; it.rem; xcb_screen_next(&it))
         if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
-    if (dpi > 0) set_default_dpi(dpi);
+    if (dpi > 0) set_default_dpi(dpi, cfg);
 
-    x11_init_render_context();
+    switch(gconfig.backend) {
+#if USE_XRENDER
+    case renderer_x11_xrender:
+        if (gconfig.trace_misc)
+            info("Selected X11 XRender backend");
+        x11_vtable.update = x11_xrender_update;
+        x11_vtable.reload_font = x11_xrender_reload_font;
+        x11_vtable.resize = x11_xrender_resize;
+        x11_vtable.copy = x11_xrender_copy;
+        x11_vtable.submit_screen = x11_xrender_submit_screen;
+        ctx.renderer_recolor_border = x11_xrender_recolor_border;
+        ctx.renderer_free = x11_xrender_free;
+        ctx.renderer_free_context = x11_xrender_free_context;
+        x11_xrender_init_context();
+        break;
+#endif
+#if USE_X11SHM
+    case renderer_x11_shm:
+        if (gconfig.trace_misc)
+            info("Selected X11 MIT-SHM backend");
+        x11_vtable.update = x11_shm_update;
+        x11_vtable.reload_font = x11_shm_reload_font;
+        x11_vtable.resize = x11_shm_resize;
+        x11_vtable.copy = x11_shm_copy;
+        x11_vtable.submit_screen = x11_shm_submit_screen;
+        ctx.renderer_recolor_border = x11_shm_recolor_border;
+        ctx.renderer_free = x11_shm_free;
+        ctx.renderer_free_context = x11_shm_free_context;
+        x11_shm_init_context();
+        break;
+#endif
+    default:
+        die("Unknown backend '%s'", backend_to_str(gconfig.backend));
+    }
 
     return &x11_vtable;
 }

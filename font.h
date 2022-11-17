@@ -47,10 +47,9 @@ struct glyph {
 struct font *create_font(const char* descr, double size, double dpi, double gamma, bool force_scalable, bool allow_subst);
 void free_font(struct font *font);
 struct font *font_ref(struct font *font);
-struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t ch, enum face_name attr);
 int16_t font_get_size(struct font *font);
 
-struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode, int16_t vspacing, int16_t hspacing, bool boxdraw);
+struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode, int16_t vspacing, int16_t hspacing, bool boxdraw, bool force_aligned);
 struct glyph_cache *glyph_cache_ref(struct glyph_cache *ref);
 void free_glyph_cache(struct glyph_cache *cache);
 void glyph_cache_get_dim(struct glyph_cache *cache, int16_t *w, int16_t *h, int16_t *d);

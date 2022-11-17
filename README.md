@@ -20,7 +20,7 @@ This is an implementation of VT220-like X11 terminal emulator.
     * `nsstc` client that can create new terminal daemon
     * Daemon can be auto-launched by `nsstc` on demand (`nsstc -d ...`)
 * Configuration with symmetrical config file options and command line arguments
-* MIT-SHM and XRender backends (compile time option)
+* MIT-SHM and XRender backends
 * Compiles with `-flto` by default
 * No warnings (see list of all enabled warnings in Makefile)
 * Re-wraps text on resize

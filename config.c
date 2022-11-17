@@ -240,6 +240,14 @@ struct option_type_desc {
 #define G(type_, field_, name_, desc_, ...) \
     G1(type_, field_, 0, name_, desc_, __VA_ARGS__)
 
+#if USE_XRENDER
+#   define DEFAULT_BACKEND renderer_x11_xrender
+#elif USE_X11SHM
+#   define DEFAULT_BACKEND renderer_x11_shm
+#else
+#   error "No rendering backend enabled"
+#endif
+
 static struct option options[] = {
     X1(geometry, palette, 'g', "geometry", "Window geometry, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]", 0),
     X(boolean, autorepeat, "autorepeat", "Enable key autorepeat", true),
@@ -379,6 +387,7 @@ static struct option options[] = {
     X(boolean, urgency_on_bell, "urgent-on-bell", "Set window urgency on bell", false),
     X(color, palette[SPECIAL_URI_TEXT], "uri-color", "Special color of URI text", COLOR_SPECIAL_URI_TEXT),
     X(enum, uri_mode, "uri-mode", "Allow URI parsing/clicking", uri_mode_auto, uri_mode_off, (const char *[]){"off", "manual", "auto", NULL}),
+    G(enum, backend, "backend", "Select renderer backend", DEFAULT_BACKEND, renderer_x11_xrender, (const char *[]){"x11xrender", "x11shm", NULL}),
     X(color, palette[SPECIAL_URI_UNDERLINE], "uri-underline-color", "Special color of URI underline", COLOR_SPECIAL_URI_UNDERLINE),
     X(boolean, utf8, "use-utf8", "Enable UTF-8 I/O", true),
     X(int16, top_border, "vertical-border", "Left and right borders", 8, 0, 200),
@@ -548,7 +557,8 @@ bool set_option_entry(struct instance_config *c, struct option *opt, const char 
     return true;
 }
 
-void set_default_dpi(double dpi) {
+void set_default_dpi(double dpi, struct instance_config *cfg) {
+    if (cfg->dpi == dpi_option_entry->limits.arg_double.dflt) cfg->dpi = dpi;
     dpi_option_entry->limits.arg_double.dflt = dpi;
 }
 

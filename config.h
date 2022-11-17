@@ -41,6 +41,11 @@ enum shortcut_action {
     shortcut_MAX
 };
 
+enum renderer_backend {
+    renderer_x11_xrender,
+    renderer_x11_shm,
+};
+
 enum keyboad_mapping {
     keymap_default,
     keymap_legacy,
@@ -65,6 +70,8 @@ struct global_config {
 
     char *open_command;
     bool unique_uris;
+
+    enum renderer_backend backend;
 
     int log_level;
 
@@ -226,7 +233,7 @@ struct option *find_short_option_entry(char name);
 bool is_boolean_option(struct option *opt);
 
 bool set_option_entry(struct instance_config *c, struct option *, const char *value, bool allow_global);
-void set_default_dpi(double dpi);
+void set_default_dpi(double dpi, struct instance_config *cfg);
 void copy_config(struct instance_config *dst, struct instance_config *src);
 void free_config(struct instance_config *src);
 void init_instance_config(struct instance_config *cfg, const char *config_path, bool allow_global);

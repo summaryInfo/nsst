@@ -401,6 +401,9 @@ const char *features_string(void) {
 #if USE_X11SHM
             "+mitshm"
 #endif
+#if USE_XRENDER
+            "+xrender"
+#endif
 #if USE_POSIX_SHM
             "+posixshm"
 #endif

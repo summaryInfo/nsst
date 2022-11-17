@@ -83,7 +83,7 @@ struct extent {
 
 typedef uint32_t color_t;
 
-void init_context(void);
+void init_context(struct instance_config *cfg);
 void free_context(void);
 void run(void);
 

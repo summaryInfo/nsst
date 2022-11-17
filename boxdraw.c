@@ -33,18 +33,22 @@ static void put(struct glyph *glyph, bool lcd, int16_t x, int16_t y, uint8_t val
         glyph->data[glyph->stride*y + 4*x + i] = val;
 }
 
-struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t depth, enum pixel_mode pixmode, int16_t hspacing, int16_t vspacing) {
+struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t depth, enum pixel_mode pixmode, int16_t hspacing, int16_t vspacing, bool force_aligned) {
     if (!is_boxdraw(c)) return NULL;
 
     bool lcd = pixmode != pixmode_mono;
-#if USE_X11SHM
-    size_t stride = (width + 3) & ~3;
-    if (lcd) stride *= 4;
-#else
-    /* X11 XRender backend requires all glyphs
-     * to be in the same format (i.e. subpixel or not) */
-    size_t stride = lcd ? width * 4 : (width + 3) & ~3;
-#endif
+    size_t stride;
+
+    if (force_aligned) {
+        /* X11 MIT-SHM requires 16 byte alignment */
+        stride = (width + 3) & ~3;
+        if (lcd) stride *= 4;
+    } else {
+        /* X11 XRender backend requires all glyphs
+         * to be in the same format (i.e. subpixel or not) */
+        stride = lcd ? width * 4 : (width + 3) & ~3;
+    }
+
     struct glyph *glyph = aligned_alloc(CACHE_LINE, (sizeof(struct glyph) +
             stride * (height + depth) * sizeof(uint8_t) + CACHE_LINE - 1) & ~(CACHE_LINE - 1));
     if (!glyph) return NULL;

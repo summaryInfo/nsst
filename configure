@@ -1,6 +1,5 @@
 #!/bin/sh
 
-use_x11shm=1
 use_boxdrawing=1
 use_precompose=1
 debug_lines=0
@@ -8,7 +7,8 @@ use_clang=0
 use_uri=1
 prefix=/usr/local
 name=nsst
-backend=x11xrender
+use_x11shm=unset
+use_x11xrender=1
 cflags='-O2 -flto'
 vars=
 version=20405
@@ -59,23 +59,26 @@ dotestwarn() {
 help() {
 cat <<END
 Usage: configure [options]
-    --name=NAME             binary name [$name]
-    --prefix=DIR            installation prefix [$prefix]
-    --mandir=DIR            man install directory [$prefix/share/man]
-    --bindir=DIR            binary install directory [$prefix/bin]
-    --enable-ppoll          enable ppoll() in main loop for better timing [set if available]
-    --disable-ppoll         disable ppoll() in main loop, use poll instead
-    --enable-nanosleep      enable POSIX clock_nanosleep() [set if available]
-    --disable-nanosleep     disable POSIX clock_nanosleep() use nanosleep() instead
-    --enable-boxdrawing     enable built-in box drawing characters [set]
-    --disable-boxdrawing    disable built-in box drawing characters
-    --enable-uri            enable URI handling features [set]
-    --disable-uri           disable URI handling features
-    --enable-precompose     enable unicode combining characters precomposition [set]
-    --disable-precompose    disable unicode combining characters precomposition
-    --enable-posix-shm      enable posix shared memory functions usage
-    --disable-posix-shm     disable posix shared memory functions usa
-    --backend=<targ>        Rendering backend x11shm/[x11xrender]
+    --name=NAME             Binary name [$name]
+    --prefix=DIR            Installation prefix [$prefix]
+    --mandir=DIR            Man install directory [$prefix/share/man]
+    --bindir=DIR            Binary install directory [$prefix/bin]
+    --enable-ppoll          Enable ppoll() in main loop for better timing [set if available]
+    --disable-ppoll         Disable ppoll() in main loop, use poll instead
+    --enable-nanosleep      Enable POSIX clock_nanosleep() [set if available]
+    --disable-nanosleep     Disable POSIX clock_nanosleep() use nanosleep() instead
+    --enable-boxdrawing     Enable built-in box drawing characters [set]
+    --disable-boxdrawing    Disable built-in box drawing characters
+    --enable-uri            Enable URI handling features [set]
+    --disable-uri           Disable URI handling features
+    --enable-precompose     Enable unicode combining characters precomposition [set]
+    --disable-precompose    Disable unicode combining characters precomposition
+    --enable-posix-shm      Enable posix shared memory functions usage
+    --disable-posix-shm     Disable posix shared memory functions usa
+    --enable-x11-shm        Enable X11 MITSHM rendering backend [set if available]
+    --disable-x11-shm       Disable X11 MITSHM rendering backend
+    --enable-x11-xrender    Enable X11 XRender rendering backend [set if available]
+    --disable-x11-xrender   Disable X11 XRender rendering backend
     --use-clang             Configure to compile with clang/lld
     --debug-lines           Enable heavy interal data structures checks
 END
@@ -104,6 +107,14 @@ for i; do
         use_precompose=1 ;;
     --disable-precompose)
         use_precompose=0 ;;
+    --enable-x11-shm)
+        use_x11shm=1 ;;
+    --disable-x11-shm)
+        use_x11shm=0 ;;
+    --enable-x11-xrender)
+        use_x11xrender=1 ;;
+    --disable-x11-xrender)
+        use_x11xrender=0 ;;
     --enable-nanosleep)
         use_nanosleep=1 ;;
     --disable-nanosleep)
@@ -116,8 +127,6 @@ for i; do
         use_clang=1 ;;
     --debug-lines)
         debug_lines=1 ;;
-    --backend=*)
-        backend="${i#--backend=}" ;;
     --name=*)
         name="${i#--name=}" ;;
     --bindir=*)
@@ -182,23 +191,31 @@ deps="fontconfig freetype2 xkbcommon"
 objs="nsst.o util.o font.o term.o screen.o tty.o line.o config.o"
 objs="$objs mouse.o input.o nrcs.o daemon.o poller.o window.o multipool.o"
 
-case "$backend" in
-x11shm)
-    objs="$objs window-x11.o render-x11shm.o image.o"
-    deps="$deps xcb xcb-xkb xcb-shm xkbcommon-x11"
-    use_x11shm=1
-    ;;
-x11xrender)
-    objs="$objs window-x11.o render-x11xrender.o"
-    deps="$deps xcb xcb-xkb xcb-render xkbcommon-x11"
-    use_x11shm=0
-    ;;
-*)
-    echo "\tUnknown backend: '$backend'"
+if [ "$use_x11shm" = unset ]; then
+    if [ "$use_x11xrender" != 1 ]; then
+        use_x11shm=1
+    else
+        use_x11shm=0
+    fi
+fi
+
+if [ "$use_x11shm" != 1 ] && [ "$use_x11xrender" != 1 ]; then
+    echo "\033[1;31mEnable at least one backend (x11-shm or x11-xrender)\033[m"
     help
     exit 1
-    ;;
-esac
+else
+    objs="$objs window-x11.o"
+    deps="$deps xcb xcb-xkb xkbcommon-x11"
+fi
+
+if [ "$use_x11shm" = 1 ]; then
+    objs="$objs render-x11shm.o image.o"
+    deps="$deps xcb-shm"
+fi
+if [ "$use_x11xrender" = 1 ]; then
+    objs="$objs render-x11xrender.o"
+    deps="$deps xcb-render"
+fi
 
 [ x"$use_boxdrawing" = x1 ] && objs="$objs boxdraw.o"
 [ x"$use_uri" = x1 ] && objs="$objs uri.o"
@@ -208,6 +225,7 @@ sed < "./feature.h.in" > "./feature.h" \
     -e "s:@USE_CLOCK_NANOSLEEP@:$use_nanosleep:g" \
     -e "s:@USE_BOXDRAWING@:$use_boxdrawing:g" \
     -e "s:@USE_X11SHM@:$use_x11shm:g" \
+    -e "s:@USE_XRENDER@:$use_x11xrender:g" \
     -e "s:@USE_PRECOMPOSE@:$use_precompose:g" \
     -e "s:@USE_POSIX_SHM@:$use_posix_shm:g" \
     -e "s:@USE_URI@:$use_uri:g" \
@@ -234,13 +252,14 @@ Configure results:
     bindir................... $bindir
     mandir................... $mandir
     sharedir................. $sharedir
-    backend.................. $backend
+    X11 MIT-SHM backend...... $use_x11shm
+    X11 XRender backend...... $use_x11xrender
     boxdrawing............... $use_boxdrawing
-    uri...................... $use_uri
+    URI...................... $use_uri
     precompose............... $use_precompose
-    ppoll.................... $use_ppoll
-    clock_nanosleep.......... $use_nanosleep
-    posix shm................ $use_posix_shm
+    ppoll().................. $use_ppoll
+    clock_nanosleep()........ $use_nanosleep
+    POSIX shm................ $use_posix_shm
     force clang+lld.......... $use_clang
     debug lines.............. $debug_lines
 

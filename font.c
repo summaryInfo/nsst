@@ -318,7 +318,7 @@ static void add_font_substitute(struct font *font, struct face_list *faces, enum
 
 #define GLYPH_STRIDE_ALIGNMENT 4
 
-struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t ch, enum face_name attr) {
+static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t ch, enum face_name attr, bool force_aligned) {
     struct face_list *faces = &font->face_types[attr];
     int glyph_index = 0;
     FT_Face face = faces->faces[0];
@@ -345,19 +345,20 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
     size_t stride = face->glyph->bitmap.width;
 
     if (face->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_LCD) stride /= 3;
-    /* XRender required stride to be aligned exactly to 4,
-     * software renderer wants stride to be aligned to 4/16
-     * depending on whether subpixel rendering is off or on.
-     * */
-#if USE_X11SHM
-    /* Soft renderer backend requires subpixel glyphs
-     * to be aligned on 16 bytes */
-    stride = (stride + GLYPH_STRIDE_ALIGNMENT - 1) & ~(GLYPH_STRIDE_ALIGNMENT - 1);
-    if (lcd) stride *= 4;
-#else
-    if (lcd) stride *= 4;
-    stride = (stride + GLYPH_STRIDE_ALIGNMENT - 1) & ~(GLYPH_STRIDE_ALIGNMENT - 1);
-#endif
+
+    if (force_aligned) {
+         /* Soft renderer backend requires subpixel glyphs
+         * to be aligned on 16 bytes */
+        stride = (stride + GLYPH_STRIDE_ALIGNMENT - 1) & ~(GLYPH_STRIDE_ALIGNMENT - 1);
+        if (lcd) stride *= 4;
+    } else {
+        /* XRender required stride to be aligned exactly to 4,
+         * software renderer wants stride to be aligned to 4/16
+         * depending on whether subpixel rendering is off or on.
+         */
+        if (lcd) stride *= 4;
+        stride = (stride + GLYPH_STRIDE_ALIGNMENT - 1) & ~(GLYPH_STRIDE_ALIGNMENT - 1);
+    }
 
     struct glyph *glyph = aligned_alloc(CACHE_LINE, (sizeof(*glyph) + stride * face->glyph->bitmap.rows + CACHE_LINE - 1) & ~(CACHE_LINE - 1));
     glyph->x = -face->glyph->bitmap_left;
@@ -439,7 +440,7 @@ struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t
     case FT_PIXEL_MODE_BGRA:
         warn("Colored glyph encountered");
         free(glyph);
-        return font_render_glyph(font, ord, 0, attr);
+        return font_render_glyph(font, ord, 0, attr, force_aligned);
     }
 
     if (gconfig.log_level == 3 && gconfig.trace_fonts) {
@@ -470,6 +471,7 @@ struct glyph_cache {
     int16_t vspacing;
     int16_t hspacing;
     bool override_boxdraw;
+    bool force_aligned;
     enum pixel_mode pixmode;
     size_t refc;
 
@@ -484,7 +486,7 @@ static bool glyph_cmp(const ht_head_t *a, const ht_head_t *b) {
     return ga->g == gb->g;
 }
 
-struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmode, int16_t vspacing, int16_t hspacing, bool boxdraw) {
+struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmode, int16_t vspacing, int16_t hspacing, bool boxdraw, bool force_aligned) {
     struct glyph_cache *cache = xzalloc(sizeof(struct glyph_cache));
 
     cache->refc = 1;
@@ -492,6 +494,7 @@ struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmod
     cache->vspacing = vspacing;
     cache->hspacing = hspacing;
     cache->override_boxdraw = boxdraw;
+    cache->force_aligned = force_aligned;
     cache->pixmode = pixmode;
     ht_init(&cache->glyphs, HASH_INIT_CAP, glyph_cmp);
 
@@ -550,10 +553,11 @@ struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum fac
     struct glyph *new;
 #if USE_BOXDRAWING
     if (is_boxdraw(ch) && cache->override_boxdraw)
-        new = make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth, cache->pixmode, cache->hspacing, cache->vspacing);
+        new = make_boxdraw(ch, cache->char_width, cache->char_height, cache->char_depth,
+                           cache->pixmode, cache->hspacing, cache->vspacing, cache->force_aligned);
     else
 #endif
-        new = font_render_glyph(cache->font, cache->pixmode, ch, face);
+        new = font_render_glyph(cache->font, cache->pixmode, ch, face, cache->force_aligned);
     if (!new) return NULL;
 
     new->g = dummy.g;

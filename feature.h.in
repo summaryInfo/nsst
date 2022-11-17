@@ -14,8 +14,11 @@
 /* Ability to override box drawing characters */
 #define USE_BOXDRAWING @USE_BOXDRAWING@
 
-/* X11 Backend (MIT-SHM/XRender) */
+/* X11 Backend (MIT-SHM) */
 #define USE_X11SHM @USE_X11SHM@
+
+/* X11 Backend (XRender) */
+#define USE_XRENDER @USE_XRENDER@
 
 /* Unicode combining characters precomposition */
 #define USE_PRECOMPOSE @USE_PRECOMPOSE@

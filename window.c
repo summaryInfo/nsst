@@ -53,8 +53,8 @@ static void handle_hup(int sig) {
 }
 
 
-void init_context(void) {
-    pvtbl =  platform_init_x11();
+void init_context(struct instance_config *cfg) {
+    pvtbl =  platform_init_x11(cfg);
 
     sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART }, NULL);
     sigaction(SIGUSR2, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART }, NULL);
@@ -361,7 +361,7 @@ void window_set_title(struct window *win, enum title_target which, const char *t
     if (which & target_icon_label) pvtbl->set_icon_label(win, title, utf8);
 }
 
-struct window *window_find_shared_font(struct window *win, bool need_free) {
+struct window *window_find_shared_font(struct window *win, bool need_free, bool force_aligned) {
     bool found_font = 0, found_cache = 0;
     struct window *found = NULL;
 
@@ -388,7 +388,7 @@ struct window *window_find_shared_font(struct window *win, bool need_free) {
     }
 
     struct glyph_cache *newc = found_cache ? glyph_cache_ref(found->font_cache) :
-            create_glyph_cache(newf, win->cfg.pixel_mode, win->cfg.line_spacing, win->cfg.font_spacing, win->cfg.override_boxdraw);
+            create_glyph_cache(newf, win->cfg.pixel_mode, win->cfg.line_spacing, win->cfg.font_spacing, win->cfg.override_boxdraw, force_aligned);
 
     if (need_free) {
         free_glyph_cache(win->font_cache);

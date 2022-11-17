@@ -239,7 +239,7 @@ inline static color_t describe_bg(struct attr *attr, struct instance_config *cfg
     return bg;
 }
 
-const struct platform_vtable *platform_init_x11(void);
+const struct platform_vtable *platform_init_x11(struct instance_config *cfg);
 
 struct platform_vtable {
     /* Renderer dependent functions */
@@ -285,6 +285,6 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
 void handle_resize(struct window *win, int16_t width, int16_t height);
 /* mouse event handler is defined elsewhere */
 
-struct window *window_find_shared_font(struct window *win, bool need_free);
+struct window *window_find_shared_font(struct window *win, bool need_free, bool force_aligned);
 
 #endif

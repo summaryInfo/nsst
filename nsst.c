@@ -151,6 +151,13 @@ int main(int argc, char **argv) {
     init_options();
     atexit(free_options);
 
+    /* Parse config path argument before
+     * parsing config file to use correct one */
+    char *cpath = parse_config_path(argc, argv);
+    init_instance_config(&cfg, cpath, true);
+
+    parse_options(&cfg, argv);
+
 #if USE_URI
     init_proto_tree();
     atexit(uri_release_memory);
@@ -158,17 +165,10 @@ int main(int argc, char **argv) {
     init_poller();
     atexit(free_poller);
 
-    init_context();
+    init_context(&cfg);
     atexit(free_context);
 
     init_default_termios();
-
-    /* Parse config path argument before
-     * parsing config file to use correct one */
-    char *cpath = parse_config_path(argc, argv);
-    init_instance_config(&cfg, cpath, true);
-
-    parse_options(&cfg, argv);
 
     if (gconfig.daemon_mode) {
         atexit(free_daemon);
