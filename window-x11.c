@@ -270,10 +270,8 @@ void x11_window_action(struct window *win, enum window_action act) {
         break;
     case action_maximize:
         save_pos(win);
-        send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE,
-                _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
-        send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE,
-                _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
+        send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
+        send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_VERT);
         uint32_t vals[] = {0, 0, ctx.screen->width_in_pixels, ctx.screen->height_in_pixels};
         xcb_configure_window(con, get_plat(win)->wid, XCB_CONFIG_WINDOW_WIDTH |
                 XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
@@ -296,7 +294,7 @@ void x11_window_action(struct window *win, enum window_action act) {
         break;
     case action_restore:
         send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
-        send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
+        send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_VERT);
         send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_FULLSCREEN);
         restore_pos(win);
         break;
