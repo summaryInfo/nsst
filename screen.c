@@ -318,6 +318,7 @@ void screen_scroll_view_to_cmd(struct screen *scr, int16_t amount) {
     bool new_viewr = line_span_cmpeq(&scr->view_pos.s, scr->screen);
     scr->prev_c_view_changed |= old_viewr != new_viewr;
 }
+
 void screen_scroll_view(struct screen *scr, int16_t amount) {
     if (scr->mode.altscreen || !scr->sb_max_caps) return;
 
