@@ -743,7 +743,7 @@ void run(void) {
         }
 
         next_timeout = MAX(0, next_timeout);
-        xcb_flush(con);
+        platform_flush();
 
         if ((!gconfig.daemon_mode && !win_list_head) || platform_has_error()) break;
     }

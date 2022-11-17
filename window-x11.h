@@ -308,6 +308,7 @@ void platform_free_context(void);
 struct extent platform_get_screen_size(void);
 struct extent platform_get_position(struct window *win);
 bool platform_has_error(void);
+void platform_flush(void);
 void platform_handle_events(void);
 bool platform_init_window(struct window *win);
 void platform_free_window(struct window *win);

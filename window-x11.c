@@ -697,6 +697,10 @@ bool platform_has_error(void) {
     return xcb_connection_has_error(con);
 }
 
+void platform_flush(void) {
+    xcb_flush(con);
+}
+
 void platform_handle_events(void) {
     for (xcb_generic_event_t *event, *nextev = NULL; nextev || (event = xcb_poll_for_event(con)); free(event)) {
         if (nextev) event = nextev, nextev = NULL;
