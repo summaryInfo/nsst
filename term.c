@@ -532,7 +532,7 @@ static void term_dispatch_dsr(struct term *term) {
     if (term->esc.selector & P_MASK) {
         switch (term->esc.param[0]) {
         case 6: /* DECXCPR -- CSI ? Py ; Px ; R ; 1  */
-            term_answerback(term, CSI"%lu;%lu%sR",
+            term_answerback(term, CSI"?%lu;%lu%sR",
                     screen_cursor_y(scr) - screen_min_oy(scr) + 1,
                     screen_cursor_x(scr) - screen_min_ox(scr) + 1,
                     term->vt_level >= 4 ? ";1" : "");
