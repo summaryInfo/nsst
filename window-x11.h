@@ -301,6 +301,7 @@ bool renderer_reload_font(struct window *win, bool need_free);
 void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch);
 void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 void renderer_recolor_border(struct window *win);
+bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
 
 /* Platform dependent functions */
 void platform_init_context(void);

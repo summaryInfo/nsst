@@ -496,6 +496,9 @@ void free_window(struct window *win) {
     free(win);
 }
 
+bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
+    return renderer_submit_screen(win, cur_x, cur_y, cursor, marg);
+}
 
 void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height) {
     ys = MAX(0, MIN(ys, win->ch));
