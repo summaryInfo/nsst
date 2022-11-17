@@ -1010,13 +1010,19 @@ void screen_reverse_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, 
     bool rect = scr->mode.attr_ext_rectangle;
     for (; ys < ye; ys++) {
         struct line_span *line = &scr->screen[ys];
-        // TODO Optimize
-        for (int16_t i = xs; i < (rect || ys == ye - 1 ? xe : screen_max_ox(scr)); i++) {
-            struct attr newa = *view_attr_at(line, i);
-            attr_mask_set(&newa, attr_mask(&newa) ^ mask);
-            struct cell *cell = view_cell(line, i);
-            cell->attrid = alloc_attr(line->line, &newa);
-            cell->drawn = 0;
+        ssize_t xend = rect || ys == ye - 1 ? xe : screen_max_ox(scr);
+        screen_adjust_line(scr, ys, xend);
+
+        uint32_t prev_id = ATTRID_MAX, new_id = ATTRID_MAX;
+        for (struct cell *c = view_cell(line, xs), *cend = view_cell(line, xend); c < cend; c++) {
+            if (UNLIKELY(c->attrid != prev_id)) {
+                struct attr newa = *view_attr(line, c->attrid);
+                attr_mask_set(&newa, attr_mask(&newa) ^ mask);
+                new_id = alloc_attr(line->line, &newa);
+                prev_id = c->attrid;
+            }
+            c->attrid = new_id;
+            c->drawn = false;
         }
         if (!rect) xs = screen_min_ox(scr);
     }
@@ -1029,24 +1035,26 @@ void screen_apply_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, in
 
     bool rect = scr->mode.attr_ext_rectangle;
     for (; ys < ye; ys++) {
-        int16_t xend = rect || ys == ye - 1 ? xe : screen_max_ox(scr);
-        screen_adjust_line(scr, ys, xend);
         struct line_span *line = &scr->screen[ys];
-        // TODO Optimize
-        for (int16_t i = xs; i < xend; i++) {
-            struct attr newa = *view_attr_at(line, i);
-            attr_mask_set(&newa, (attr_mask(&newa) & ~mmsk) | amsk);
-            if (mask->fg) newa.fg = attr->fg;
-            if (mask->bg) newa.bg = attr->bg;
-            if (mask->ul) newa.ul = attr->ul;
+        ssize_t xend = rect || ys == ye - 1 ? xe : screen_max_ox(scr);
+        screen_adjust_line(scr, ys, xend);
 
-            struct cell *cell = view_cell(line, i);
-            cell->attrid = alloc_attr(line->line, &newa);
-            cell->drawn = 0;
+        uint32_t prev_id = ATTRID_MAX, new_id = ATTRID_MAX;
+        for (struct cell *c = view_cell(line, xs), *cend = view_cell(line, xend); c < cend; c++) {
+            if (UNLIKELY(c->attrid != prev_id)) {
+                struct attr newa = *view_attr(line, c->attrid);
+                attr_mask_set(&newa, (attr_mask(&newa) & ~mmsk) | amsk);
+                if (mask->fg) newa.fg = attr->fg;
+                if (mask->bg) newa.bg = attr->bg;
+                if (mask->ul) newa.ul = attr->ul;
+                new_id = alloc_attr(line->line, &newa);
+                prev_id = c->attrid;
+            }
+            c->attrid = new_id;
+            c->drawn = false;
         }
         if (!rect) xs = screen_min_ox(scr);
     }
-
 }
 
 struct attr screen_common_sgr(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t ye) {
