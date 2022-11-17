@@ -75,7 +75,7 @@ struct term_mode {
     bool no_scroll_on_input : 1;
     bool columns_132 : 1;
     bool preserve_display_132 : 1;
-    bool disable_columns_132 : 1;
+    bool enable_columns_132 : 1;
     bool enable_nrcs : 1;
     bool title_set_utf8 : 1;
     bool title_query_utf8 : 1;
@@ -1230,7 +1230,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             if (!set) term_set_vt52(term, 1);
             break;
         case 3: /* DECCOLM */
-            if (!(term->mode.disable_columns_132))
+            if (term->mode.enable_columns_132)
                 term_set_132(term, set);
             break;
         case 4: /* DECSCLM */
@@ -1281,7 +1281,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->mode.allow_change_font = set;
             break;
         case 40: /* 132COLS */
-            term->mode.disable_columns_132 = !set;
+            term->mode.enable_columns_132 = set;
             break;
         case 41: /* XTerm more(1) hack */
             smode->xterm_more_hack = set;
@@ -1511,7 +1511,7 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = MODSTATE(term->mode.allow_change_font);
             break;
         case 40: /* 132COLS */
-            val = MODSTATE(!term->mode.disable_columns_132);
+            val = MODSTATE(term->mode.enable_columns_132);
             break;
         case 41: /* XTerm more(1) hack */
             val = MODSTATE(smode->xterm_more_hack);
