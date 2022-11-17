@@ -67,4 +67,17 @@ inline static bool check_void_cookie(xcb_void_cookie_t ck) {
     return 0;
 }
 
+/* Renderer dependent functions */
+void x11_init_render_context(void);
+void x11_free_render_context(void);
+void x11_renderer_free(struct window *win);
+void x11_renderer_update(struct window *win, struct rect rect);
+bool x11_renderer_reload_font(struct window *win, bool need_free);
+void x11_renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch);
+void x11_renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
+void x11_renderer_recolor_border(struct window *win);
+bool x11_renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
+
+void x11_update_window_props(struct window *win);
+
 #endif

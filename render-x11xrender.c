@@ -116,7 +116,7 @@ inline static void do_set_clip(struct window *win, struct rect *rects, ssize_t c
                                            count, (xcb_rectangle_t *)rects);
 }
 
-void renderer_recolor_border(struct window *win) {
+void x11_renderer_recolor_border(struct window *win) {
     int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
     int bw = win->cfg.left_border, bh = win->cfg.top_border;
 
@@ -130,7 +130,7 @@ void renderer_recolor_border(struct window *win) {
     do_draw_rects(win, rects, LEN(rects), win->bg_premul);
 }
 
-void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
+void x11_renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
 
@@ -160,7 +160,7 @@ void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     xcb_free_pixmap(con, get_plat(win)->pid2);
 }
 
-bool renderer_reload_font(struct window *win, bool need_free) {
+bool x11_renderer_reload_font(struct window *win, bool need_free) {
     struct window *found = window_find_shared_font(win, need_free);
 
     get_plat(win)->pfglyph = win->cfg.pixel_mode ? rctx.pfargb : rctx.pfalpha;
@@ -189,7 +189,7 @@ bool renderer_reload_font(struct window *win, bool need_free) {
 
     if (need_free) {
         handle_resize(win, win->cfg.width, win->cfg.height);
-        platform_update_window_props(win);
+        x11_update_window_props(win);
     } else {
         win->cw = MAX(1, (win->cfg.width - 2*win->cfg.left_border) / win->char_width);
         win->ch = MAX(1, (win->cfg.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
@@ -244,14 +244,14 @@ bool renderer_reload_font(struct window *win, bool need_free) {
     return 1;
 }
 
-void renderer_free(struct window *win) {
+void x11_renderer_free(struct window *win) {
     xcb_render_free_picture(con, get_plat(win)->pen);
     xcb_render_free_picture(con, get_plat(win)->pic1);
     xcb_free_pixmap(con, get_plat(win)->pid1);
     xcb_render_free_glyph_set(con, get_plat(win)->gsid);
 }
 
-void platform_init_render_context(void) {
+void x11_init_render_context2(void) {
     /* Check if XRender is present */
     xcb_render_query_version_cookie_t vc = xcb_render_query_version(con, XCB_RENDER_MAJOR_VERSION, XCB_RENDER_MINOR_VERSION);
     xcb_generic_error_t *err = NULL;
@@ -297,11 +297,11 @@ void platform_init_render_context(void) {
     }
 }
 
-void renderer_update(struct window *win, struct rect rect) {
+void x11_renderer_update(struct window *win, struct rect rect) {
     xcb_copy_area(con, get_plat(win)->pid1, get_plat(win)->wid, get_plat(win)->gc, rect.x, rect.y, rect.x, rect.y, rect.width, rect.height);
 }
 
-void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
+void x11_renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
     xcb_copy_area(con, get_plat(win)->pid1, get_plat(win)->pid1, get_plat(win)->gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
 }
 
@@ -380,7 +380,7 @@ inline static void free_elem_buffer(struct element_buffer *buf) {
     *buf = (struct element_buffer){ 0 };
 }
 
-void free_render_context(void) {
+void x11_free_render_context(void) {
     free(rctx.payload);
     free(rctx.glyphs);
     free_elem_buffer(&rctx.foreground_buf);
@@ -388,14 +388,14 @@ void free_render_context(void) {
     free_elem_buffer(&rctx.decoration_buf);
 }
 
-void init_render_context(void) {
+void x11_init_render_context(void) {
     adjust_buffer((void **)&rctx.payload, &rctx.payload_caps, INIT_PAYLOAD_CAPS, 1);
     adjust_buffer((void **)&rctx.glyphs, &rctx.glyphs_caps, INIT_GLYPHS_CAPS, sizeof(rctx.glyphs[0]));
     adjust_buffer((void **)&rctx.foreground_buf.data, &rctx.foreground_buf.caps, INIT_FG_CAPS, sizeof(struct element));
     adjust_buffer((void **)&rctx.background_buf.data, &rctx.background_buf.caps, INIT_BG_CAPS, sizeof(struct element));
     adjust_buffer((void **)&rctx.decoration_buf.data, &rctx.decoration_buf.caps, INIT_DEC_CAPS, sizeof(struct element));
 
-    platform_init_render_context();
+    x11_init_render_context2();
 }
 
 
@@ -707,7 +707,7 @@ static void draw_rects(struct window *win, struct element_buffer *buf) {
     }
 }
 
-bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
+bool x11_renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
     bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
     bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1);
     bool beyond_eol = false;
@@ -735,7 +735,7 @@ bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bo
     bool drawn = 0;
 
     if (rctx.background_buf.size || win->redraw_borders) {
-        renderer_update(win, (struct rect){0, 0, win->cfg.width, win->cfg.height});
+        x11_renderer_update(win, (struct rect){0, 0, win->cfg.width, win->cfg.height});
         win->redraw_borders = 0;
         drawn = 1;
     }

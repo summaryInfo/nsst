@@ -66,7 +66,7 @@ error:
     return (struct image) {0};
 }
 
-void renderer_update(struct window *win, struct rect rect) {
+void x11_renderer_update(struct window *win, struct rect rect) {
     if (has_shm_pixmaps) {
         xcb_copy_area(con, get_plat(win)->shm_pixmap, get_plat(win)->wid, get_plat(win)->gc, rect.x, rect.y, rect.x, rect.y, rect.width, rect.height);
     } else if (has_shm) {
@@ -80,7 +80,7 @@ void renderer_update(struct window *win, struct rect rect) {
     }
 }
 
-void renderer_free(struct window *win) {
+void x11_renderer_free(struct window *win) {
     if (has_shm)
         xcb_shm_detach(con, get_plat(win)->shm_seg);
     if (has_shm_pixmaps)
@@ -90,11 +90,11 @@ void renderer_free(struct window *win) {
     free(get_plat(win)->bounds);
 }
 
-void free_render_context(void) {
+void x11_free_render_context(void) {
     /* nothing */
 }
 
-void init_render_context(void) {
+void x11_init_render_context2(void) {
     /* That's kind of hack
      * Try guessing if DISPLAY refers to localhost */
 
@@ -164,13 +164,13 @@ static void optimize_bounds(struct rect *bounds, size_t *boundc, bool fine_grain
     *boundc = j;
 }
 
-bool renderer_reload_font(struct window *win, bool need_free) {
+bool x11_renderer_reload_font(struct window *win, bool need_free) {
     window_find_shared_font(win, need_free);
     win->redraw_borders = 1;
 
     if (need_free) {
         handle_resize(win, win->cfg.width, win->cfg.height);
-        platform_update_window_props(win);
+        x11_update_window_props(win);
     } else {
         win->cw = MAX(1, (win->cfg.width - 2*win->cfg.left_border) / win->char_width);
         win->ch = MAX(1, (win->cfg.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
@@ -178,7 +178,7 @@ bool renderer_reload_font(struct window *win, bool need_free) {
         resize_bounds(win, 1);
 
         renderer_create_image(win, (win->cw + 1)*win->char_width - 1 + 2*win->cfg.left_border,
-                                   (win->ch + 1)*(win->char_height + win->char_depth) - 1 + 2*win->cfg.top_border);
+                                  (win->ch + 1)*(win->char_height + win->char_depth) - 1 + 2*win->cfg.top_border);
         if (!get_plat(win)->im.data) {
             warn("Can't allocate image");
             return 0;
@@ -190,7 +190,7 @@ bool renderer_reload_font(struct window *win, bool need_free) {
     return 1;
 }
 
-void renderer_recolor_border(struct window *win) {
+void x11_renderer_recolor_border(struct window *win) {
     int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
     int bw = win->cfg.left_border, bh = win->cfg.top_border;
 
@@ -200,7 +200,7 @@ void renderer_recolor_border(struct window *win) {
     image_draw_rect(get_plat(win)->im, (struct rect) {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh}, win->bg_premul);
 }
 
-bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
+bool x11_renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
     bool scrolled = get_plat(win)->boundc;
     bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
     bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1);
@@ -355,13 +355,13 @@ bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bo
 
     if (win->redraw_borders) {
         if (!has_shm) {
-            renderer_update(win, (struct rect) {0, 0, win->cfg.width, win->cfg.height});
+            x11_renderer_update(win, (struct rect) {0, 0, win->cfg.width, win->cfg.height});
             get_plat(win)->boundc = 0;
         } else {
-            renderer_update(win, (struct rect) {0, 0, win->cfg.width, win->cfg.top_border});
-            renderer_update(win, (struct rect) {0, bh, bw, win->ch*(ch + cd)});
-            renderer_update(win, (struct rect) {win->cw*cw + bw, bh, win->cfg.width - win->cw*cw - bw, win->ch*(ch + cd)});
-            renderer_update(win, (struct rect) {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh});
+            x11_renderer_update(win, (struct rect) {0, 0, win->cfg.width, win->cfg.top_border});
+            x11_renderer_update(win, (struct rect) {0, bh, bw, win->ch*(ch + cd)});
+            x11_renderer_update(win, (struct rect) {win->cw*cw + bw, bh, win->cfg.width - win->cw*cw - bw, win->ch*(ch + cd)});
+            x11_renderer_update(win, (struct rect) {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh});
         }
         win->redraw_borders = 0;
     }
@@ -369,7 +369,7 @@ bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bo
     if (get_plat(win)->boundc) {
         optimize_bounds(get_plat(win)->bounds, &get_plat(win)->boundc, has_shm);
         for (size_t k = 0; k < get_plat(win)->boundc; k++)
-            renderer_update(win, rect_shift(rect_scale_up(get_plat(win)->bounds[k], cw, cd + ch), bw, bh));
+            x11_renderer_update(win, rect_shift(rect_scale_up(get_plat(win)->bounds[k], cw, cd + ch), bw, bh));
         get_plat(win)->boundc = 0;
     }
 
@@ -377,7 +377,7 @@ bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bo
     return drawn_any;
 }
 
-void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
+void x11_renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
     image_copy(get_plat(win)->im, dst, get_plat(win)->im, sx, sy);
 
     int16_t w = win->char_width, h = win->char_depth + win->char_height;
@@ -395,7 +395,7 @@ void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) 
     get_plat(win)->bounds[get_plat(win)->boundc++] = dst;
 }
 
-void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
+void x11_renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
 

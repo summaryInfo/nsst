@@ -175,106 +175,21 @@ cleanup_context:
     return 0;
 }
 
-void platform_init_context(void) {
-    int screenp = 0;
-    con = xcb_connect(NULL, &screenp);
-    if (!con) die("Can't connect to X server");
-
-    poller_alloc_index(xcb_get_file_descriptor(con), POLLIN | POLLHUP);
-
-    xcb_screen_iterator_t sit = xcb_setup_roots_iterator(xcb_get_setup(con));
-    for (; sit.rem; xcb_screen_next(&sit))
-        if (!screenp--) break;
-    if (screenp != -1) {
-        xcb_disconnect(con);
-        die("Can't find default screen");
-    }
-    ctx.screen = sit.data;
-
-    xcb_depth_iterator_t dit = xcb_screen_allowed_depths_iterator(ctx.screen);
-    for (; dit.rem; xcb_depth_next(&dit))
-        if (dit.data->depth == TRUE_COLOR_ALPHA_DEPTH) break;
-    if (dit.data->depth != TRUE_COLOR_ALPHA_DEPTH) {
-        xcb_disconnect(con);
-        die("Can't get 32-bit visual");
-    }
-
-    xcb_visualtype_iterator_t vit = xcb_depth_visuals_iterator(dit.data);
-    for (; vit.rem; xcb_visualtype_next(&vit))
-        if (vit.data->_class == XCB_VISUAL_CLASS_TRUE_COLOR) break;
-
-    if (vit.data->_class != XCB_VISUAL_CLASS_TRUE_COLOR) {
-        xcb_disconnect(con);
-        die("Can't get 32-bit visual");
-    }
-
-    ctx.vis = vit.data;
-
-    ctx.mid = xcb_generate_id(con);
-    xcb_void_cookie_t c = xcb_create_colormap_checked(con, XCB_COLORMAP_ALLOC_NONE,
-                                       ctx.mid, ctx.screen->root, ctx.vis->visual_id);
-    if (check_void_cookie(c)) {
-        xcb_disconnect(con);
-        die("Can't create colormap");
-    }
-
-    if (!configure_xkb()) {
-        xcb_disconnect(con);
-        die("Can't configure XKB");
-    }
-
-    /* Intern all used atoms */
-    ctx.atom._NET_WM_PID = intern_atom("_NET_WM_PID");
-    ctx.atom._NET_WM_NAME = intern_atom("_NET_WM_NAME");
-    ctx.atom._NET_WM_ICON_NAME = intern_atom("_NET_WM_ICON_NAME");
-    ctx.atom._NET_WM_STATE = intern_atom("_NET_WM_STATE");
-    ctx.atom._NET_WM_STATE_FULLSCREEN = intern_atom("_NET_WM_STATE_FULLSCREEN");
-    ctx.atom._NET_WM_STATE_MAXIMIZED_VERT = intern_atom("_NET_WM_STATE_MAXIMIZED_VERT");
-    ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ = intern_atom("_NET_WM_STATE_MAXIMIZED_HORZ");
-    ctx.atom._NET_ACTIVE_WINDOW = intern_atom("_NET_ACTIVE_WINDOW");
-    ctx.atom._NET_MOVERESIZE_WINDOW = intern_atom("_NET_MOVERESIZE_WINDOW");
-    ctx.atom.WM_DELETE_WINDOW = intern_atom("WM_DELETE_WINDOW");
-    ctx.atom.WM_PROTOCOLS = intern_atom("WM_PROTOCOLS");
-    ctx.atom.WM_NORMAL_HINTS = intern_atom("WM_NORMAL_HINTS");
-    ctx.atom.WM_SIZE_HINTS = intern_atom("WM_SIZE_HINTS");
-    ctx.atom.WM_CHANGE_STATE = intern_atom("WM_CHANGE_STATE");
-    ctx.atom.UTF8_STRING = intern_atom("UTF8_STRING");
-    ctx.atom.CLIPBOARD = intern_atom("CLIPBOARD");
-    ctx.atom.INCR = intern_atom("INCR");
-    ctx.atom.TARGETS = intern_atom("TARGETS");
-
-    int32_t dpi = -1;
-    xcb_screen_iterator_t it = xcb_setup_roots_iterator(xcb_get_setup(con));
-    for (; it.rem; xcb_screen_next(&it))
-        if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
-    if (dpi > 0) set_default_dpi(dpi);
-}
-
-void platform_free_context(void) {
-    xkb_state_unref(ctx.xkb_state);
-    xkb_keymap_unref(ctx.xkb_keymap);
-    xkb_context_unref(ctx.xkb_ctx);
-
-    xcb_disconnect(con);
-    con = NULL;
-
-}
-
-void platform_update_colors(struct window *win) {
+void x11_update_colors(struct window *win) {
     uint32_t values2[2];
     values2[0] = values2[1] = win->bg_premul;
     xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_BACK_PIXEL, values2);
     xcb_change_gc(con, get_plat(win)->gc, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND, values2);
-    renderer_recolor_border(win);
+    x11_renderer_recolor_border(win);
 }
 
-void platform_enable_mouse_events(struct window *win, bool enabled) {
+void x11_enable_mouse_events(struct window *win, bool enabled) {
     if (enabled) get_plat(win)->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
     else get_plat(win)->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
     xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_EVENT_MASK, &get_plat(win)->ev_mask);
 }
 
-void platform_resize_window(struct window *win, int16_t width, int16_t height) {
+void x11_resize_window(struct window *win, int16_t width, int16_t height) {
     if (win->cfg.height != height || win->cfg.width != width) {
         uint32_t vals[] = {width, height};
         xcb_configure_window(con, get_plat(win)->wid, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
@@ -282,7 +197,7 @@ void platform_resize_window(struct window *win, int16_t width, int16_t height) {
     }
 }
 
-void platform_move_window(struct window *win, int16_t x, int16_t y) {
+void x11_move_window(struct window *win, int16_t x, int16_t y) {
     uint32_t vals[] = {x, y};
     xcb_configure_window(con, get_plat(win)->wid, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
 }
@@ -332,7 +247,7 @@ inline static void restore_pos(struct window *win) {
     }
 }
 
-void platform_window_action(struct window *win, enum window_action act) {
+void x11_window_action(struct window *win, enum window_action act) {
     switch(act) {
         uint32_t val;
     case action_minimize:
@@ -389,7 +304,7 @@ void platform_window_action(struct window *win, enum window_action act) {
     }
 }
 
-struct extent platform_get_position(struct window *win) {
+struct extent x11_get_position(struct window *win) {
     xcb_get_geometry_cookie_t gc = xcb_get_geometry(con, get_plat(win)->wid);
     xcb_get_geometry_reply_t *rep = xcb_get_geometry_reply(con, gc, NULL);
     struct extent res = {0, 0};
@@ -401,11 +316,11 @@ struct extent platform_get_position(struct window *win) {
     return res;
 }
 
-struct extent platform_get_screen_size(void) {
+struct extent x11_get_screen_size(void) {
     return (struct extent) { ctx.screen->width_in_pixels, ctx.screen->height_in_pixels };
 }
 
-void platform_get_pointer(struct window *win, struct extent *p, int32_t *pmask) {
+void x11_get_pointer(struct window *win, struct extent *p, int32_t *pmask) {
     xcb_query_pointer_cookie_t c = xcb_query_pointer(con, get_plat(win)->wid);
     xcb_query_pointer_reply_t *qre = xcb_query_pointer_reply(con, c, NULL);
     if (qre) {
@@ -417,7 +332,7 @@ void platform_get_pointer(struct window *win, struct extent *p, int32_t *pmask) 
 }
 
 #define WM_HINTS_LEN 8
-void platform_set_urgency(struct window *win, bool set) {
+void x11_set_urgency(struct window *win, bool set) {
     xcb_get_property_cookie_t c = xcb_get_property(con, 0, get_plat(win)->wid, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 0, WM_HINTS_LEN);
     xcb_get_property_reply_t *rep = xcb_get_property_reply(con, c, NULL);
     if (rep) {
@@ -429,18 +344,18 @@ void platform_set_urgency(struct window *win, bool set) {
     }
 }
 
-void platform_bell(struct window *win, uint8_t vol) {
+void x11_bell(struct window *win, uint8_t vol) {
     xcb_xkb_bell(con, XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_ID_DFLT_XI_CLASS,
             XCB_XKB_ID_DFLT_XI_ID, vol, 1, 0, 0, 0, XCB_ATOM_ANY, get_plat(win)->wid);
 }
 
-void platform_set_title(struct window *win, const char *title, bool utf8) {
+void x11_set_title(struct window *win, const char *title, bool utf8) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid,
         utf8 ? ctx.atom._NET_WM_NAME : XCB_ATOM_WM_NAME,
         utf8 ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
-void platform_set_icon_label(struct window *win, const char *title, bool utf8) {
+void x11_set_icon_label(struct window *win, const char *title, bool utf8) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid,
         utf8 ? ctx.atom._NET_WM_ICON_NAME : XCB_ATOM_WM_ICON_NAME,
         utf8 ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, 8, strlen(title), title);
@@ -478,7 +393,7 @@ static char *get_full_property(xcb_window_t wid, xcb_atom_t prop, xcb_atom_t *ty
     return data;
 }
 
-void platform_get_title(struct window *win, enum title_target which, char **name, bool *utf8) {
+void x11_get_title(struct window *win, enum title_target which, char **name, bool *utf8) {
     xcb_atom_t type = XCB_ATOM_ANY;
     char *data = NULL;
     if (which & target_title) {
@@ -502,7 +417,7 @@ inline static uint32_t get_win_gravity_from_config(bool nx, bool ny) {
     }
 }
 
-void platform_update_window_props(struct window *win) {
+void x11_update_window_props(struct window *win) {
     uint32_t pid = getpid();
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, ctx.atom._NET_WM_PID, XCB_ATOM_CARDINAL, 32, 1, &pid);
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, ctx.atom.WM_PROTOCOLS, XCB_ATOM_ATOM, 32, 1, &ctx.atom.WM_DELETE_WINDOW);
@@ -547,7 +462,7 @@ void platform_update_window_props(struct window *win) {
 }
 
 
-bool platform_init_window(struct window *win) {
+bool x11_init_window(struct window *win) {
     xcb_void_cookie_t c;
 
     get_plat(win)->ev_mask = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_VISIBILITY_CHANGE |
@@ -578,20 +493,20 @@ bool platform_init_window(struct window *win) {
     c = xcb_create_gc_checked(con, get_plat(win)->gc, get_plat(win)->wid, mask2, values2);
     if (check_void_cookie(c)) return 0;
 
-    platform_update_window_props(win);
+    x11_update_window_props(win);
 
     return 1;
 }
 
-void platform_map_window(struct window *win) {
+void x11_map_window(struct window *win) {
     xcb_map_window(con, get_plat(win)->wid);
     xcb_flush(con);
 }
 
-void platform_free_window(struct window *win) {
+void x11_free_window(struct window *win) {
     if (get_plat(win)->wid) {
         xcb_unmap_window(con, get_plat(win)->wid);
-        renderer_free(win);
+        x11_renderer_free(win);
         xcb_free_gc(con, get_plat(win)->gc);
         xcb_destroy_window(con, get_plat(win)->wid);
         xcb_flush(con);
@@ -606,7 +521,7 @@ inline static xcb_atom_t target_to_atom(enum clip_target target) {
     }
 }
 
-bool platform_set_clip(struct window *win, uint32_t time, enum clip_target target) {
+bool x11_set_clip(struct window *win, uint32_t time, enum clip_target target) {
     xcb_set_selection_owner(con, get_plat(win)->wid, target_to_atom(target), time);
     xcb_get_selection_owner_cookie_t so = xcb_get_selection_owner_unchecked(con, target_to_atom(target));
     xcb_get_selection_owner_reply_t *rep = xcb_get_selection_owner_reply(con, so, NULL);
@@ -616,7 +531,7 @@ bool platform_set_clip(struct window *win, uint32_t time, enum clip_target targe
     return res;
 }
 
-void platform_paste(struct window *win, enum clip_target target) {
+void x11_paste(struct window *win, enum clip_target target) {
     xcb_convert_selection(con, get_plat(win)->wid, target_to_atom(target),
           term_is_utf8_enabled(win->term) ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
 }
@@ -696,19 +611,19 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, bool pno
     xcb_delete_property(con, get_plat(win)->wid, prop);
 }
 
-bool platform_has_error(void) {
+bool x11_has_error(void) {
     return xcb_connection_has_error(con);
 }
 
-ssize_t platform_get_opaque_size(void) {
+ssize_t x11_get_opaque_size(void) {
     return sizeof(struct platform_window);
 }
 
-void platform_flush(void) {
+void x11_flush(void) {
     xcb_flush(con);
 }
 
-void platform_handle_events(void) {
+void x11_handle_events(void) {
     for (xcb_generic_event_t *event, *nextev = NULL; nextev || (event = xcb_poll_for_event(con)); free(event)) {
         if (nextev) event = nextev, nextev = NULL;
         switch (event->response_type &= 0x7F) {
@@ -923,4 +838,130 @@ void platform_handle_events(void) {
             }
         }
     }
+}
+
+void x11_free(void) {
+    x11_free_render_context();
+
+    xkb_state_unref(ctx.xkb_state);
+    xkb_keymap_unref(ctx.xkb_keymap);
+    xkb_context_unref(ctx.xkb_ctx);
+
+    xcb_disconnect(con);
+    con = NULL;
+
+}
+
+static struct platform_vtable x11_vtable = {
+    /* Renderer dependent functions */
+    .update = x11_renderer_update,
+    .reload_font = x11_renderer_reload_font,
+    .resize = x11_renderer_resize,
+    .copy = x11_renderer_copy,
+    .submit_screen = x11_renderer_submit_screen,
+
+    /* Platform dependent functions */
+    .get_screen_size = x11_get_screen_size,
+    .has_error = x11_has_error,
+    .get_opaque_size = x11_get_opaque_size,
+    .flush = x11_flush,
+    .handle_events = x11_handle_events,
+    .get_position = x11_get_position,
+    .init_window = x11_init_window,
+    .free_window = x11_free_window,
+    .set_clip = x11_set_clip,
+    .bell = x11_bell,
+    .enable_mouse_events = x11_enable_mouse_events,
+    .get_pointer = x11_get_pointer,
+    .get_title = x11_get_title,
+    .map_window = x11_map_window,
+    .move_window = x11_move_window,
+    .paste = x11_paste,
+    .resize_window = x11_resize_window,
+    .set_icon_label = x11_set_icon_label,
+    .set_title = x11_set_title,
+    .set_urgency = x11_set_urgency,
+    .update_colors = x11_update_colors,
+    .window_action = x11_window_action,
+
+    .free = x11_free,
+};
+
+const struct platform_vtable *platform_init_x11(void) {
+    int screenp = 0;
+    con = xcb_connect(NULL, &screenp);
+    if (!con) die("Can't connect to X server");
+
+    poller_alloc_index(xcb_get_file_descriptor(con), POLLIN | POLLHUP);
+
+    xcb_screen_iterator_t sit = xcb_setup_roots_iterator(xcb_get_setup(con));
+    for (; sit.rem; xcb_screen_next(&sit))
+        if (!screenp--) break;
+    if (screenp != -1) {
+        xcb_disconnect(con);
+        die("Can't find default screen");
+    }
+    ctx.screen = sit.data;
+
+    xcb_depth_iterator_t dit = xcb_screen_allowed_depths_iterator(ctx.screen);
+    for (; dit.rem; xcb_depth_next(&dit))
+        if (dit.data->depth == TRUE_COLOR_ALPHA_DEPTH) break;
+    if (dit.data->depth != TRUE_COLOR_ALPHA_DEPTH) {
+        xcb_disconnect(con);
+        die("Can't get 32-bit visual");
+    }
+
+    xcb_visualtype_iterator_t vit = xcb_depth_visuals_iterator(dit.data);
+    for (; vit.rem; xcb_visualtype_next(&vit))
+        if (vit.data->_class == XCB_VISUAL_CLASS_TRUE_COLOR) break;
+
+    if (vit.data->_class != XCB_VISUAL_CLASS_TRUE_COLOR) {
+        xcb_disconnect(con);
+        die("Can't get 32-bit visual");
+    }
+
+    ctx.vis = vit.data;
+
+    ctx.mid = xcb_generate_id(con);
+    xcb_void_cookie_t c = xcb_create_colormap_checked(con, XCB_COLORMAP_ALLOC_NONE,
+                                       ctx.mid, ctx.screen->root, ctx.vis->visual_id);
+    if (check_void_cookie(c)) {
+        xcb_disconnect(con);
+        die("Can't create colormap");
+    }
+
+    if (!configure_xkb()) {
+        xcb_disconnect(con);
+        die("Can't configure XKB");
+    }
+
+    /* Intern all used atoms */
+    ctx.atom._NET_WM_PID = intern_atom("_NET_WM_PID");
+    ctx.atom._NET_WM_NAME = intern_atom("_NET_WM_NAME");
+    ctx.atom._NET_WM_ICON_NAME = intern_atom("_NET_WM_ICON_NAME");
+    ctx.atom._NET_WM_STATE = intern_atom("_NET_WM_STATE");
+    ctx.atom._NET_WM_STATE_FULLSCREEN = intern_atom("_NET_WM_STATE_FULLSCREEN");
+    ctx.atom._NET_WM_STATE_MAXIMIZED_VERT = intern_atom("_NET_WM_STATE_MAXIMIZED_VERT");
+    ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ = intern_atom("_NET_WM_STATE_MAXIMIZED_HORZ");
+    ctx.atom._NET_ACTIVE_WINDOW = intern_atom("_NET_ACTIVE_WINDOW");
+    ctx.atom._NET_MOVERESIZE_WINDOW = intern_atom("_NET_MOVERESIZE_WINDOW");
+    ctx.atom.WM_DELETE_WINDOW = intern_atom("WM_DELETE_WINDOW");
+    ctx.atom.WM_PROTOCOLS = intern_atom("WM_PROTOCOLS");
+    ctx.atom.WM_NORMAL_HINTS = intern_atom("WM_NORMAL_HINTS");
+    ctx.atom.WM_SIZE_HINTS = intern_atom("WM_SIZE_HINTS");
+    ctx.atom.WM_CHANGE_STATE = intern_atom("WM_CHANGE_STATE");
+    ctx.atom.UTF8_STRING = intern_atom("UTF8_STRING");
+    ctx.atom.CLIPBOARD = intern_atom("CLIPBOARD");
+    ctx.atom.INCR = intern_atom("INCR");
+    ctx.atom.TARGETS = intern_atom("TARGETS");
+
+    int32_t dpi = -1;
+    xcb_screen_iterator_t it = xcb_setup_roots_iterator(xcb_get_setup(con));
+    for (; it.rem; xcb_screen_next(&it))
+        if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
+    if (dpi > 0) set_default_dpi(dpi);
+
+    x11_init_render_context();
+
+    return &x11_vtable;
 }

@@ -239,43 +239,43 @@ inline static color_t describe_bg(struct attr *attr, struct instance_config *cfg
     return bg;
 }
 
-/* Renderer dependent functions */
-void init_render_context(void);
-void free_render_context(void);
-void renderer_free(struct window *win);
-void renderer_update(struct window *win, struct rect rect);
-bool renderer_reload_font(struct window *win, bool need_free);
-void renderer_resize(struct window *win, int16_t new_cw, int16_t new_ch);
-void renderer_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
-void renderer_recolor_border(struct window *win);
-bool renderer_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
+const struct platform_vtable *platform_init_x11(void);
 
-/* Platform dependent functions */
-void platform_init_context(void);
-void platform_free_context(void);
-struct extent platform_get_screen_size(void);
-struct extent platform_get_position(struct window *win);
-bool platform_has_error(void);
-ssize_t platform_get_opaque_size(void);
-void platform_flush(void);
-void platform_handle_events(void);
-bool platform_init_window(struct window *win);
-void platform_free_window(struct window *win);
-bool platform_set_clip(struct window *win, uint32_t time, enum clip_target target);
-void platform_bell(struct window *win, uint8_t vol);
-void platform_enable_mouse_events(struct window *win, bool enabled);
-void platform_get_pointer(struct window *win, struct extent *ext, int32_t *mask);
-void platform_get_title(struct window *win, enum title_target which, char **name, bool *utf8);
-void platform_map_window(struct window *win);
-void platform_move_window(struct window *win, int16_t x, int16_t y);
-void platform_paste(struct window *win, enum clip_target target);
-void platform_resize_window(struct window *win, int16_t width, int16_t height);
-void platform_set_icon_label(struct window *win, const char *title, bool utf8);
-void platform_set_title(struct window *win, const char *title, bool utf8);
-void platform_set_urgency(struct window *win, bool set);
-void platform_update_colors(struct window *win);
-void platform_update_window_props(struct window *win);
-void platform_window_action(struct window *win, enum window_action action);
+struct platform_vtable {
+    /* Renderer dependent functions */
+    void (*update)(struct window *win, struct rect rect);
+    bool (*reload_font)(struct window *win, bool need_free);
+    void (*resize)(struct window *win, int16_t new_cw, int16_t new_ch);
+    void (*copy)(struct window *win, struct rect dst, int16_t sx, int16_t sy);
+    bool (*submit_screen)(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
+
+    /* Platform dependent functions */
+    struct extent (*get_screen_size)(void);
+    bool (*has_error)(void);
+    ssize_t (*get_opaque_size)(void);
+    void (*flush)(void);
+    void (*handle_events)(void);
+
+    struct extent (*get_position)(struct window *win);
+    bool (*init_window)(struct window *win);
+    void (*free_window)(struct window *win);
+    bool (*set_clip)(struct window *win, uint32_t time, enum clip_target target);
+    void (*bell)(struct window *win, uint8_t vol);
+    void (*enable_mouse_events)(struct window *win, bool enabled);
+    void (*get_pointer)(struct window *win, struct extent *ext, int32_t *mask);
+    void (*get_title)(struct window *win, enum title_target which, char **name, bool *utf8);
+    void (*map_window)(struct window *win);
+    void (*move_window)(struct window *win, int16_t x, int16_t y);
+    void (*paste)(struct window *win, enum clip_target target);
+    void (*resize_window)(struct window *win, int16_t width, int16_t height);
+    void (*set_icon_label)(struct window *win, const char *title, bool utf8);
+    void (*set_title)(struct window *win, const char *title, bool utf8);
+    void (*set_urgency)(struct window *win, bool set);
+    void (*update_colors)(struct window *win);
+    void (*window_action)(struct window *win, enum window_action action);
+
+    void (*free)();
+};
 
 /* Platform independent functions */
 void handle_expose(struct window *win, struct rect damage);
