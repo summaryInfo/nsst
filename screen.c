@@ -430,13 +430,12 @@ inline static struct line *create_lines_range(struct multipool *mp, struct line 
     if (UNLIKELY(!prev && top))
         replace_handle(top, &(struct line_span) { .line =  line });
 
-    memset(dst, 0, count*sizeof *dst);
-
-    dst->line = line;
+    *dst = (struct line_span) { .line = line };
     attach_prev_line(line, prev);
     prev = line;
 
     if (UNLIKELY(count > 1)) {
+        memset(dst + 1, 0, (count - 1)*sizeof *dst);
         ssize_t i = 1;
         do {
             dst[i].line = line = create_line(mp, attr, width);
