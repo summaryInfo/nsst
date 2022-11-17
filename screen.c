@@ -1658,19 +1658,19 @@ char *encode_sgr(char *dst, char *end, const struct attr *attr) {
     else if (color_idx(attr->fg) < 16) FMT(";%u", 90 + color_idx(attr->fg) - 8);
     else if (color_idx(attr->fg) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";38:5:%u", color_idx(attr->fg));
     else if (color_idx(attr->fg) == SPECIAL_FG) /* FMT(";39") -- default, skip */;
-    else if (is_direct_color(attr->fg)) FMT(";38:2:%u:%u:%u", color_r(attr->fg), color_g(attr->fg), color_b(attr->fg));
+    else if (is_direct_color(attr->fg)) FMT(";38:2:1:%u:%u:%u", color_r(attr->fg), color_g(attr->fg), color_b(attr->fg));
 
     /* Encode background color */
     if (color_idx(attr->bg) < 8) FMT(";%u", 40 + color_idx(attr->bg));
     else if (color_idx(attr->bg) < 16) FMT(";%u", 100 + color_idx(attr->bg) - 8);
     else if (color_idx(attr->bg) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";48:5:%u", color_idx(attr->bg));
     else if (color_idx(attr->bg) == SPECIAL_FG) /* FMT(";49") -- default, skip */;
-    else if (is_direct_color(attr->bg)) FMT(";48:2:%u:%u:%u", color_r(attr->bg), color_g(attr->bg), color_b(attr->bg));
+    else if (is_direct_color(attr->bg)) FMT(";48:2:1:%u:%u:%u", color_r(attr->bg), color_g(attr->bg), color_b(attr->bg));
 
     /* Encode underline color */
     if (color_idx(attr->ul) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";58:5:%u", color_idx(attr->ul));
     else if (color_idx(attr->ul) == SPECIAL_FG) /* FMT(";59") -- default, skip */;
-    else if (is_direct_color(attr->ul)) FMT(";58:2:%u:%u:%u", color_r(attr->ul), color_g(attr->ul), color_b(attr->ul));
+    else if (is_direct_color(attr->ul)) FMT(";58:2:1:%u:%u:%u", color_r(attr->ul), color_g(attr->ul), color_b(attr->ul));
 
     return dst;
 #undef FMT
