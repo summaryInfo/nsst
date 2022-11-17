@@ -898,7 +898,7 @@ inline static const char *backend_to_str(enum renderer_backend backend) {
     case renderer_x11_xrender:
         return "X11 XRender";
     default:
-        return "INVALID";
+        return "UNKNOWN";
     }
 }
 
@@ -1008,7 +1008,7 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
         break;
 #endif
     default:
-        die("Unknown backend '%s'", backend_to_str(gconfig.backend));
+        die("Unsupported backend '%s'", backend_to_str(gconfig.backend));
     }
 
     return &x11_vtable;
