@@ -245,9 +245,11 @@ static void term_request_resize(struct term *term, int16_t w, int16_t h, bool in
     w = !w ? scr.width : w < 0 ? cur.width : w;
     h = !h ? scr.height : h < 0 ? cur.height : h;
 
-    term->requested_resize = 1;
+    term->requested_resize = true;
 
     window_resize(win, w, h);
+
+    term->requested_resize = false;
 }
 
 static void term_set_132(struct term *term, bool set) {

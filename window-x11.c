@@ -196,8 +196,10 @@ void x11_enable_mouse_events(struct window *win, bool enabled) {
 void x11_resize_window(struct window *win, int16_t width, int16_t height) {
     if (win->cfg.height != height || win->cfg.width != width) {
         uint32_t vals[] = {width, height};
-        xcb_configure_window(con, get_plat(win)->wid, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
-        handle_resize(win, width, height);
+        xcb_void_cookie_t c = xcb_configure_window_checked(con, get_plat(win)->wid,
+                XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
+        if (!check_void_cookie(c))
+            handle_resize(win, width, height);
     }
 }
 
