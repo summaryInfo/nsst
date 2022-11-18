@@ -105,6 +105,7 @@ struct instance_config {
     int64_t triple_click_time;
     int64_t select_scroll_time;
     int64_t scrollback_size;
+    int64_t wait_for_configure_delay;
 
     struct shortcut {
         uint32_t ksym;

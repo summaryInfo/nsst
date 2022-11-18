@@ -193,14 +193,14 @@ void x11_enable_mouse_events(struct window *win, bool enabled) {
     xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_EVENT_MASK, &get_plat(win)->ev_mask);
 }
 
-void x11_resize_window(struct window *win, int16_t width, int16_t height) {
+bool x11_resize_window(struct window *win, int16_t width, int16_t height) {
     if (win->cfg.height != height || win->cfg.width != width) {
         uint32_t vals[] = {width, height};
         xcb_void_cookie_t c = xcb_configure_window_checked(con, get_plat(win)->wid,
                 XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
-        if (!check_void_cookie(c))
-            handle_resize(win, width, height);
+        return !check_void_cookie(c);
     }
+    return false;
 }
 
 void x11_move_window(struct window *win, int16_t x, int16_t y) {

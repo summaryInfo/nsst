@@ -128,8 +128,13 @@ void window_move(struct window *win, int16_t x, int16_t y) {
     pvtbl->move_window(win, x, y);
 }
 
-void window_resize(struct window *win, int16_t width, int16_t height) {
-    pvtbl->resize_window(win, width, height);
+bool window_resize(struct window *win, int16_t width, int16_t height) {
+    bool success = pvtbl->resize_window(win, width, height);
+    if (success) {
+        clock_gettime(CLOCK_TYPE, &win->wait_for_configure);
+        poller_enable(win->poll_index, 0);
+    }
+    return success;
 }
 
 
@@ -529,6 +534,8 @@ void handle_resize(struct window *win, int16_t width, int16_t height) {
     int16_t delta_y = new_ch - win->ch;
 
     if (delta_x || delta_y) {
+        clock_gettime(CLOCK_TYPE, &win->wait_for_configure);
+        TIMEINC(win->wait_for_configure, -2*win->cfg.wait_for_configure_delay*1000);
         term_resize(win->term, new_cw, new_ch);
         pvtbl->resize(win, new_cw, new_ch);
         clock_gettime(CLOCK_TYPE, &win->last_read);
@@ -662,17 +669,24 @@ void run(void) {
                 free_window(win);
             } else {
                 bool need_read = evt & POLLIN;
-                /* If we requested flush scroll, pty fd got disabled from polling
+                /* If we requested flush scroll or window resize, pty fd got disabled for polling
                  * to prevent active waiting loop. If smooth scroll timeout got expired
                  * we can enable it back and attempt to read from pty.
                  * If there is nothing to read it won't block since O_NONBLOCK is set for ptys */
-                if (!need_read && !poller_is_enabled(win->poll_index) && TIMEDIFF(win->last_scroll, cur) > win->cfg.smooth_scroll_delay*1000LL) {
-                    poller_enable(win->poll_index, 1);
-                    need_read = 1;
+                if (!need_read && !poller_is_enabled(win->poll_index)) {
+                    int64_t diff_conf = win->cfg.wait_for_configure_delay*1000LL - TIMEDIFF(win->wait_for_configure, cur);
+                    int64_t diff_scroll = win->cfg.smooth_scroll_delay*1000LL - TIMEDIFF(win->last_scroll, cur);
+                    if (diff_conf < 0 && diff_scroll < 0) {
+                        poller_enable(win->poll_index, 1);
+                        need_read = true;
+                    } else {
+                        next_timeout = MIN(diff_conf, next_timeout);
+                        next_timeout = MIN(diff_scroll, next_timeout);
+                    }
                 }
                 if (need_read && term_read(win->term)) {
                     win->last_read = cur;
-                    win->any_event_happend = 1;
+                    win->any_event_happend = true;
                 }
                 if (win->wait_for_redraw) {
                     /* If we are waiting for the frame to finish, we need to

@@ -95,7 +95,7 @@ void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height);
 void window_paste_clip(struct window *win, enum clip_target target);
 void window_delay_redraw(struct window *win);
 void window_request_scroll_flush(struct window *win);
-void window_resize(struct window *win, int16_t width, int16_t height);
+bool window_resize(struct window *win, int16_t width, int16_t height);
 void window_move(struct window *win, int16_t x, int16_t y);
 void window_action(struct window *win, enum window_action act);
 bool window_is_mapped(struct window *win);

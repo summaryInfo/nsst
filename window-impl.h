@@ -71,6 +71,7 @@ struct window {
     struct timespec last_wait_start ALIGNED(16);
     struct timespec last_draw ALIGNED(16);
     struct timespec vbell_start ALIGNED(16);
+    struct timespec wait_for_configure ALIGNED(16);
 
     color_t bg;
     color_t bg_premul;
@@ -267,7 +268,7 @@ struct platform_vtable {
     void (*map_window)(struct window *win);
     void (*move_window)(struct window *win, int16_t x, int16_t y);
     void (*paste)(struct window *win, enum clip_target target);
-    void (*resize_window)(struct window *win, int16_t width, int16_t height);
+    bool (*resize_window)(struct window *win, int16_t width, int16_t height);
     void (*set_icon_label)(struct window *win, const char *title, bool utf8);
     void (*set_title)(struct window *win, const char *title, bool utf8);
     void (*set_urgency)(struct window *win, bool set);

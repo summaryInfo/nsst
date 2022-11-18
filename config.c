@@ -396,6 +396,7 @@ static struct option options[] = {
     X1(int16, vt_version, 'V', "vt-version", "Emulated VT version", 420, 0, 999),
     X1(string, window_class, 'c', "window-class", "X11 Window class", NULL),
     X(boolean, allow_window_ops, "window-ops", "Allow window manipulation with escape sequences", true),
+    X(int64, wait_for_configure_delay, "wait-for-configure-delay", "Time gap in microseconds waiting for configure after resize request", 2000, 0, 10*SEC/1000),
     X(string, word_separators, "word-break", "Symbols treated as word separators when snapping mouse selection", " \t!$^*()+={}[]\\\"'|,;<>~`"),
 };
 

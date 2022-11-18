@@ -14,9 +14,6 @@ Roadmap
 * Re-implement mouse selection via line_handle's to (mostly) remove special case.
   * "Mostly", because we still would need to notify mouse code upon relocation.
 
-* Fix flaky tests
-  * `DECSETTests.test_DECSET_Allow80To132` causes flakes for itself and `DECSETTests.test_DECSET_DECAWM`, `DECSETTests.test_DECSET_DECCOLM`.
-
 * Underlines
   * `CSI 4:3 m` -- curly underline
 

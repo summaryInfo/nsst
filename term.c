@@ -245,9 +245,8 @@ static void term_request_resize(struct term *term, int16_t w, int16_t h, bool in
     w = !w ? scr.width : w < 0 ? cur.width : w;
     h = !h ? scr.height : h < 0 ? cur.height : h;
 
-    term->requested_resize = true;
-    window_resize(win, w, h);
-    term->requested_resize = false;
+    if (window_resize(win, w, h))
+        term->requested_resize = true;
 }
 
 static void term_set_132(struct term *term, bool set) {
@@ -3168,7 +3167,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         term->esc.state = esc_esc_entry;
         term->esc.selector = E(ch ^ 0xC0);
         term_dispatch_esc(term);
-        return true;
+        return !term->requested_resize;
     }
 
     /* Treat bytes with 8th bits set as their lower counterparts
@@ -3334,7 +3333,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         break;
     }
 
-    return true;
+    return !term->requested_resize;
 }
 
 #if USE_URI
@@ -3371,6 +3370,7 @@ bool term_read(struct term *term) {
     if (tty_refill(&term->tty) < 0 ||
         !tty_has_data(&term->tty)) return false;
 
+    term->requested_resize = false;
     printer_intercept(screen_printer(&term->scr), (const uint8_t **)&term->tty.start, term->tty.end);
 
     if (term->mode.scroll_on_output)
@@ -3405,6 +3405,7 @@ bool term_read(struct term *term) {
                 if (res == urim_finished) {
                     while (term->tty.start < cur)
                         if (!term_dispatch(term, (const uint8_t **)&term->tty.start, cur)) break;
+                    if (term->requested_resize) goto finish;
 
                     if (term->esc.state == esc_ground  &&
                         !screen_altscreen(&term->scr) &&
@@ -3419,7 +3420,9 @@ bool term_read(struct term *term) {
 
     while (term->tty.start < term->tty.end)
         if (!term_dispatch(term, (const uint8_t **)&term->tty.start, term->tty.end)) break;
+    if (term->requested_resize) goto finish;
 
+finish:
     screen_set_bookmark(&term->scr, NULL);
     screen_drain_scrolled(&term->scr);
 
