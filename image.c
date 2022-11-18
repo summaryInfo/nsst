@@ -21,7 +21,12 @@
 #   include <sys/shm.h>
 #endif
 
-
+/*
+ * smmintrin.h is required for:
+ *    - _mm_cvtepu8_epi16() // SSE4.1
+ *    - _mm_shuffle_epi8() // SSSE3
+ * All other intrinsics are SSE2 or earlier.
+ */
 #ifdef __SSE4_1__
 #   include <smmintrin.h>
 #elif defined(__SSE2__)
