@@ -255,10 +255,10 @@ static void term_set_132(struct term *term, bool set) {
     term->mode.columns_132 = set;
     screen_reset_margins(scr);
     screen_move_to(scr, screen_min_ox(scr), screen_min_oy(scr));
-    if (!(term->mode.preserve_display_132))
+    if (!term->mode.preserve_display_132)
         screen_erase(scr, 0, 0, screen_width(scr), screen_height(scr), false);
     if (window_cfg(screen_window(scr))->allow_window_ops)
-        term_request_resize(term, set ? 132 : 80, 24, 1);
+        term_request_resize(term, set ? 132 : 80, 24, true);
 }
 
 static void term_set_vt52(struct term *term, bool set) {
@@ -3290,7 +3290,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
                 ssize_t len = 1;
                 if (ch >= 0xC0 && ch < 0xF8 && term->mode.utf8)
                     len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
-                if (len + *start >= end) return 0;
+                if (len + *start >= end) return false;
                 while (len--) {
                     ch = *++*start;
                     if ((ch & 0xA0) != 0x80) break;
@@ -3724,7 +3724,7 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
         return NULL;
     }
 
-    term_load_config(term, 1);
+    term_load_config(term, true);
 
     term->vt_version = window_cfg(win)->vt_version;
     term->vt_level = term->vt_version / 100;

@@ -69,10 +69,10 @@ inline static bool check_void_cookie(xcb_void_cookie_t ck) {
     if (err) {
         warn("[X11 Error] major=%"PRIu8", minor=%"PRIu16", error=%"PRIu8,
                 err->major_code, err->minor_code, err->error_code);
-        return 1;
+        return true;
     }
     free(err);
-    return 0;
+    return false;
 }
 
 #if USE_X11SHM
