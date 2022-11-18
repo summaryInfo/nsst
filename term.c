@@ -330,6 +330,7 @@ static void term_load_config(struct term *term, bool reset) {
             .title_query_utf8 = cfg->utf8,
             .title_set_utf8 = cfg->utf8,
             .utf8 = cfg->utf8,
+            .enable_columns_132 = true,
         };
 
         term->kstate = (struct keyboard_state) {
