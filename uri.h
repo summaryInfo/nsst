@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <unistd.h>
 
 enum uri_match_result {
     urim_ground,
@@ -50,7 +51,7 @@ void uri_unref(uint32_t uri);
 void uri_open(uint32_t uri);
 const char *uri_get(uint32_t uri);
 
-const uint8_t *match_reverse_proto_tree(struct uri_match_state *stt, const uint8_t *str, size_t len);
+const uint8_t *match_reverse_proto_tree(struct uri_match_state *stt, const uint8_t *str, ssize_t len);
 enum uri_match_result uri_match_next_from_colon(struct uri_match_state *state, uint8_t ch);
 void uri_match_reset(struct uri_match_state *state, bool soft);
 char *uri_match_get(struct uri_match_state *state);

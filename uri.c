@@ -173,10 +173,10 @@ void init_proto_tree(void) {
     fclose(services);
 }
 
-const uint8_t *match_reverse_proto_tree(struct uri_match_state *stt, const uint8_t *str, size_t len) {
+const uint8_t *match_reverse_proto_tree(struct uri_match_state *stt, const uint8_t *str, ssize_t len) {
     struct prefix_tree_node *current = &reverse_proto_tree_head;
     const uint8_t *at_valid_proto = 0;
-    for (size_t i = 0; i < len; i++) {
+    for (ssize_t i = 0; i < len; i++) {
         ssize_t idx = char_to_index(str[-i-1]);
         if (idx < 0) {
             current = NULL;

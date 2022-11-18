@@ -32,11 +32,12 @@ inline static struct line_span **get_alt_screen(struct screen *scr) {
 
 inline static void free_line_list_until(struct screen *scr, struct line *line, struct line *until, struct line_span *screen) {
     struct line *next;
+    struct line_span *end = screen ? screen + scr->height : NULL;
     while (line != until) {
         next = line->next;
         if (line->selection_index)
             selection_clear(&scr->sstate);
-        free_line(&scr->mp, line, screen, screen + scr->height);
+        free_line(&scr->mp, line, screen, end);
         line = next;
     }
 }
