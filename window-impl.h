@@ -275,7 +275,7 @@ struct platform_vtable {
     void (*update_colors)(struct window *win);
     void (*window_action)(struct window *win, enum window_action action);
 
-    void (*free)();
+    void (*free)(void);
 };
 
 /* Platform independent functions */
