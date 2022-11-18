@@ -246,21 +246,19 @@ static void term_request_resize(struct term *term, int16_t w, int16_t h, bool in
     h = !h ? scr.height : h < 0 ? cur.height : h;
 
     term->requested_resize = true;
-
     window_resize(win, w, h);
-
     term->requested_resize = false;
 }
 
 static void term_set_132(struct term *term, bool set) {
     struct screen *scr = &term->scr;
+    term->mode.columns_132 = set;
     screen_reset_margins(scr);
     screen_move_to(scr, screen_min_ox(scr), screen_min_oy(scr));
     if (!(term->mode.preserve_display_132))
         screen_erase(scr, 0, 0, screen_width(scr), screen_height(scr), false);
     if (window_cfg(screen_window(scr))->allow_window_ops)
         term_request_resize(term, set ? 132 : 80, 24, 1);
-    term->mode.columns_132 = set;
 }
 
 static void term_set_vt52(struct term *term, bool set) {
@@ -3169,7 +3167,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         term->esc.state = esc_esc_entry;
         term->esc.selector = E(ch ^ 0xC0);
         term_dispatch_esc(term);
-        return 1;
+        return true;
     }
 
     /* Treat bytes with 8th bits set as their lower counterparts
@@ -3334,7 +3332,8 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         }
         break;
     }
-    return 1;
+
+    return true;
 }
 
 #if USE_URI
