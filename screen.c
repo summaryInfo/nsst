@@ -1263,9 +1263,9 @@ void screen_swap_screen(struct screen *scr, bool damage) {
 void screen_set_altscreen(struct screen *scr, bool set, bool clear, bool save) {
     if (scr->mode.disable_altscreen) return;
     if (set != scr->mode.altscreen) {
-        if (set && save) screen_save_cursor(scr, 1);
+        if (set && save) screen_save_cursor(scr, true);
         screen_swap_screen(scr, !set || !clear);
-        if (!set && save) screen_save_cursor(scr, 0);
+        if (!set && save) screen_save_cursor(scr, false);
     }
     if (set && clear) {
         screen_erase(scr, 0, 0, scr->width, scr->height, 0);

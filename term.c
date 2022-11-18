@@ -382,7 +382,7 @@ static void term_do_reset(struct term *term, bool hard) {
     struct window *win = screen_window(scr);
 
     if (term->mode.columns_132)
-        term_set_132(term, 0);
+        term_set_132(term, false);
     screen_set_altscreen(scr, 0, 0, 0);
 
     ssize_t cx, cy;
@@ -3122,7 +3122,7 @@ inline static bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
             ++*start, len = 0;
         }
 
-        if (len + *start >= end) return 0;
+        if (len + *start >= end) return false;
 
         if (UNLIKELY(term->esc.str_len + len + 1 >= term->esc.str_cap)) {
             size_t new_cap = STR_CAP_STEP(term->esc.str_cap);
@@ -3148,7 +3148,7 @@ inline static bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
 
     term_esc_str(term)[term->esc.str_len] = '\0';
 
-    return 1;
+    return true;
 }
 
 inline static bool term_dispatch(struct term *term, const uint8_t **start, const uint8_t *end) {
@@ -3581,7 +3581,7 @@ void term_break(struct term *term) {
 }
 
 void term_reset(struct term *term) {
-    term_do_reset(term, 1);
+    term_do_reset(term, true);
 }
 
 void term_handle_focus(struct term *term, bool set) {
@@ -3691,13 +3691,14 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
 void term_resize(struct term *term, int16_t width, int16_t height) {
     struct screen *scr = &term->scr;
 
-    mpa_set_seal_max_pad(&term->scr.mp, width * sizeof(struct cell) + sizeof(struct line), height + 1);
-
     /* First try to read from tty to empty out input queue
-     * since this is input from program not yet aware about resize */
+     * since this is input from program not yet aware about resize.
+     * Don't empty if it's requested resize, since application is already aware. */
     if (!term->requested_resize)
         term_read(term);
-    term->requested_resize = 0;
+    term->requested_resize = false;
+
+    mpa_set_seal_max_pad(&term->scr.mp, width * sizeof(struct cell) + sizeof(struct line), height + 1);
 
     /* Notify application */
     int16_t wwidth = window_cfg(screen_window(scr))->width;
