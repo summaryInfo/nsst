@@ -64,14 +64,14 @@ struct window {
     int16_t damaged_y0;
     int16_t damaged_y1;
 
-    struct timespec last_scroll ALIGNED(16);
-    struct timespec last_blink ALIGNED(16);
-    struct timespec last_sync ALIGNED(16);
-    struct timespec last_read ALIGNED(16);
-    struct timespec last_wait_start ALIGNED(16);
-    struct timespec last_draw ALIGNED(16);
-    struct timespec vbell_start ALIGNED(16);
-    struct timespec wait_for_configure ALIGNED(16);
+    struct timespec last_scroll ALIGNED(MALLOC_ALIGNMENT);
+    struct timespec last_blink ALIGNED(MALLOC_ALIGNMENT);
+    struct timespec last_sync ALIGNED(MALLOC_ALIGNMENT);
+    struct timespec last_read ALIGNED(MALLOC_ALIGNMENT);
+    struct timespec last_wait_start ALIGNED(MALLOC_ALIGNMENT);
+    struct timespec last_draw ALIGNED(MALLOC_ALIGNMENT);
+    struct timespec vbell_start ALIGNED(MALLOC_ALIGNMENT);
+    struct timespec wait_for_configure ALIGNED(MALLOC_ALIGNMENT);
 
     color_t bg;
     color_t bg_premul;
@@ -98,7 +98,7 @@ struct window {
     /* Window configuration */
     struct instance_config cfg;
 
-    char platform_window_opaque[];
+    char platform_window_opaque[] ALIGNED(MALLOC_ALIGNMENT);
 } ALIGNED(MALLOC_ALIGNMENT);
 
 extern struct window *win_list_head;
