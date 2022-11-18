@@ -13,9 +13,6 @@
 #ifdef __SSE2__
 #include <emmintrin.h>
 #endif
-#ifdef __SSE4_1__
-#include <smmintrin.h>
-#endif
 
 #define MAX_EXTRA_PALETTE (ATTRID_MAX - 1)
 #define INIT_CAP 4
