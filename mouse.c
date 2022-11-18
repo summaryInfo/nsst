@@ -800,6 +800,8 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
 
     uint32_t force_mask = window_cfg(term_window(term))->force_mouse_mask;
 
+    // TODO Cleanup
+
     /* Report mouse */
     if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & mask_mod_mask) != force_mask &&
             !term_get_kstate(term)->keyboad_vt52) {
@@ -896,6 +898,9 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
     /* Clear selection if it just a click */
     } else if (ev.event == mouse_event_release && ev.button == 0 && sel->state == state_sel_pressed) {
         sel->state = state_sel_none;
+#if USE_URI
+        update_active_uri(scr, sel->win, &ev);
+#endif
     /* Select */
     } else if (is_selection_event(sel, &ev)) {
 #if USE_URI
