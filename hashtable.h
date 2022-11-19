@@ -39,8 +39,13 @@ struct ht_iter {
     ht_head_t **elem;
 };
 
-extern void ht_shrink(struct hashtable *ht, intptr_t new_caps);
+extern void ht_shrink(struct hashtable *ht);
 extern void ht_adjust(struct hashtable *ht, intptr_t inc);
+
+inline static size_t ceil_power_of_2(size_t n) {
+    if (n < 2) return n;
+    return 1ULL << (sizeof(n)*8 - (__builtin_clzll(n - 1)));
+}
 
 inline static ht_iter_t ht_begin(hashtable_t *ht) {
     ht_iter_t it = { .ht = ht, ht->data, ht->data };
@@ -102,6 +107,7 @@ inline static void ht_free(hashtable_t *ht) {
 }
 
 inline static void ht_init(hashtable_t *ht, size_t caps, ht_cmpfn_t *cmpfn) {
+    caps = ceil_power_of_2(caps);
     *ht = (hashtable_t) {
         .data = HT_CALLOC(caps * sizeof(ht->data[0])),
         .caps = caps,
@@ -110,7 +116,7 @@ inline static void ht_init(hashtable_t *ht, size_t caps, ht_cmpfn_t *cmpfn) {
 }
 
 inline static ht_head_t **ht_lookup_ptr(hashtable_t *ht, ht_head_t *elem) {
-    ht_head_t **cand = &ht->data[elem->hash % ht->caps];
+    ht_head_t **cand = &ht->data[elem->hash & (ht->caps - 1)];
     while (*cand) {
         if (elem->hash == (*cand)->hash &&
             ht->cmpfn(*cand, elem)) break;

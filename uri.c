@@ -484,11 +484,7 @@ void uri_unref(uint32_t id) {
         free_slot(slot);
         free(uri);
 
-        /* Shrink hash table */
-        if (3*uritab.size/4 > HT_INIT_CAPS &&
-                uritab.size < uritab.caps/2) {
-            ht_shrink(&uritab, uritab.caps/2);
-        }
+        ht_shrink(&uritab);
     }
 }
 

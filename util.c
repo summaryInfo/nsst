@@ -413,13 +413,13 @@ const char *features_string(void) {
             "\n";
 }
 
-#define HT_LOAD_FACTOR(x) (4*(x)/3)
-#define HT_CAPS_STEP(x) (3*(x)/2)
+#define HT_LOAD_FACTOR(x) (15*(x)/16)
+#define HT_CAPS_STEP(x) (2*(x))
 
 void ht_adjust(struct hashtable *ht, intptr_t inc) {
     ht->size += inc;
 
-    if (UNLIKELY(HT_LOAD_FACTOR(ht->size) > ht->caps)) {
+    if (UNLIKELY(ht->size > HT_LOAD_FACTOR(ht->caps))) {
         struct hashtable tmp = {
             .cmpfn = ht->cmpfn,
             .caps = HT_CAPS_STEP(ht->caps),
@@ -434,7 +434,12 @@ void ht_adjust(struct hashtable *ht, intptr_t inc) {
     }
 }
 
-void ht_shrink(struct hashtable *ht, intptr_t new_caps) {
+void ht_shrink(struct hashtable *ht) {
+    ssize_t new_caps = ht->caps;
+    while (ht->size > HT_LOAD_FACTOR(new_caps)/2 &&
+           new_caps > HT_INIT_CAPS)
+        new_caps /= 2;
+
     struct hashtable tmp = {
         .cmpfn = ht->cmpfn,
         .caps = new_caps,
