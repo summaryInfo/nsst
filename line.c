@@ -16,7 +16,7 @@
 
 #define MAX_EXTRA_PALETTE (ATTRID_MAX - 1)
 #define INIT_CAP 4
-#define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, MAX(3*(sz)/2, INIT_CAP))
+#define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, MAX(2*(sz), INIT_CAP))
 
 const struct attr default_attr__ = {
         .fg = SPECIAL_FG + 1,
@@ -44,7 +44,7 @@ inline static bool attr_empty(struct attr *attr) {
 }
 
 static uint32_t insert_attr(struct line_attr *tab, const struct attr *attr, uint32_t hash) {
-    size_t i = hash % tab->caps;
+    size_t i = hash & (tab->caps - 1);
     size_t i0 = i, caps = tab->caps;
     do {
         struct attr *pattr = &tab->data[i];
