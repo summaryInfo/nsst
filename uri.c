@@ -66,8 +66,13 @@ struct id_table {
 
 #define MAX_SERVICE_LINE 128
 
+/* FIXME Optimize this further to only store present indexes and
+ *    42-bit bitfield as a presence indicator.
+ *    In this case popcount() would be used for actual index calcualtion.
+ *    This would reduce overhead per node from 86 to 8 (16 bit for child index + 42 bit indicators + 1 bit leaf flag) */
+
 struct prefix_tree_node {
-    struct prefix_tree_node *children[PT_CHILDREN_COUNT];
+    uint16_t children[PT_CHILDREN_COUNT];
     bool leaf;
 };
 
@@ -75,8 +80,6 @@ struct prefix_tree_node {
 
 static struct id_table idtab;
 static hashtable_t uritab;
-
-static struct prefix_tree_node reverse_proto_tree_head;
 
 inline static ssize_t char_to_index(char ch) {
     if (ch == '.')
@@ -105,8 +108,26 @@ inline static bool is_leaf_node(struct prefix_tree_node *current) {
     return current && current->leaf;
 }
 
+#define NO_CHILD UINT16_MAX
+
+static struct prefix_tree_node *node_array;
+
+static size_t node_count;
+static size_t node_caps;
+static size_t file_leaf;
+
+static uint16_t alloc_child(void) {
+    assert(node_count + 1 < NO_CHILD);
+
+    adjust_buffer((void **)&node_array, &node_caps, node_count + 1, sizeof *node_array);
+    memset(node_array[node_count].children, 0xFF, sizeof node_array->children);
+    node_array[node_count].leaf = false;
+
+    return node_count++;
+}
+
 static bool reverse_proto_tree_add_proto(const char *proto, const char *end) {
-    struct prefix_tree_node *current = &reverse_proto_tree_head;
+    size_t cur = 0;
     char ch;
     for (const char *it = end - 1; it >= proto; it--) {
         ssize_t idx = char_to_index(ch = *it);
@@ -114,38 +135,34 @@ static bool reverse_proto_tree_add_proto(const char *proto, const char *end) {
             warn("Invalid protocol name '%s', unexpected char '%c'", proto, ch);
             return false;
         }
-        if (!current->children[idx])
-            current->children[idx] = xzalloc(sizeof *current);
-        current = current->children[idx];
+
+        size_t next_idx = node_array[cur].children[idx];
+        if (next_idx == NO_CHILD) {
+            next_idx = alloc_child();
+            node_array[cur].children[idx] = next_idx;
+        }
+        cur = next_idx;
     }
 
-    current->leaf = true;
+    node_array[cur].leaf = true;
     return true;
 }
-
-static void proto_tree_free(struct prefix_tree_node *node) {
-    for (size_t i = 0; i < LEN(node->children); i++) {
-        if (!node->children[i]) continue;
-        proto_tree_free(node->children[i]);
-        free(node->children[i]);
-    }
-}
-
-static struct prefix_tree_node *file_leaf;
 
 void init_proto_tree(void) {
     FILE *services = fopen("/etc/services", "r");
     char *line = NULL;
     size_t len = 0;
 
+    alloc_child(); /* Allocate head node */
+
     /* Always include 'file' pseudo protocol */
     const char *file = "\0file";
     reverse_proto_tree_add_proto(file + 1, file + 5);
 
     /* Save file protocol node for fast checking */
-    file_leaf = &reverse_proto_tree_head;
+    file_leaf = 0;
     for (ssize_t i = 4; i > 0; i--)
-        file_leaf = file_leaf->children[char_to_index(file[i])];
+        file_leaf = node_array[file_leaf].children[char_to_index(file[i])];
 
     for (ssize_t sz; (sz = getline(&line, &len, services)) != -1; ) {
         char  *it = line;
@@ -174,19 +191,20 @@ void init_proto_tree(void) {
 }
 
 const uint8_t *match_reverse_proto_tree(struct uri_match_state *stt, const uint8_t *str, ssize_t len) {
-    struct prefix_tree_node *current = &reverse_proto_tree_head;
+    struct prefix_tree_node *current = node_array;
     const uint8_t *at_valid_proto = 0;
     for (ssize_t i = 0; i < len; i++) {
         ssize_t idx = char_to_index(str[-i-1]);
-        if (idx < 0) {
-            current = NULL;
-            break;
-        }
-        current = current->children[idx];
-        if (!current) break;
+        if (idx < 0) break;
+
+        uint16_t next_idx = current->children[idx];
+        if (next_idx == NO_CHILD) break;
+
+        current = &node_array[next_idx];
+
         if (is_leaf_node(current)) {
             at_valid_proto = &str[-i-1];
-            stt->matched_file_proto = current == file_leaf;
+            stt->matched_file_proto = next_idx == file_leaf;
         }
     }
 
@@ -514,9 +532,10 @@ void uri_release_memory(void) {
     }
     free(idtab.slots);
 
-    proto_tree_free(&reverse_proto_tree_head);
+    free(node_array);
+    node_array = NULL;
+    file_leaf = node_caps = node_count = 0;
 
-    memset(&reverse_proto_tree_head, 0, sizeof(reverse_proto_tree_head));
     memset(&idtab, 0, sizeof(idtab));
     memset(&uritab, 0, sizeof(uritab));
 }
