@@ -125,6 +125,7 @@ inline static struct node_head *child_index_add(struct node_head *node, char ch)
             memmove(node_children + child + 1, node_children + child, (node_count - child) * sizeof(*node_children));
         for (; i <= node_count; i++) node_heads[i].first_child++;
         node_count++;
+        assert(node_count < UINT16_MAX);
         node_heads[node_count] = (struct node_head) { .first_child = node_count };
         node_children[child] = node_count;
         node_heads[ii].has_child |= 1ULL << idx1;
