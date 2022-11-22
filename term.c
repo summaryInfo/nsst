@@ -3702,11 +3702,6 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         term_read(term);
     term->requested_resize = false;
 
-    // FIXME Use separate multipool allocators for main screen and alternate screeen
-    //       so that altscreen can use less smaller pools since it does not require
-    //       allocating scrollback lines.
-    mpa_set_seal_max_pad(&term->scr.mp, width * sizeof(struct cell) + sizeof(struct line), 2*(height + 1));
-
     /* Notify application */
     int16_t wwidth = window_cfg(screen_window(scr))->width;
     int16_t wheight = window_cfg(screen_window(scr))->height;
@@ -3736,7 +3731,8 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
     term->vt_level = term->vt_version / 100;
     if (!term->vt_level) term_set_vt52(term, 1);
 
-    mpa_init(&term->scr.mp, MPA_POOL_SIZE);
+    mpa_init(&term->scr.main_screen.pool, MPA_POOL_SIZE);
+    mpa_init(&term->scr.alt_screen.pool, sizeof(struct line) + 400*sizeof(struct cell));
 
     screen_free_scrollback(&term->scr, window_cfg(win)->scrollback_size);
     term_resize(term, width, height);

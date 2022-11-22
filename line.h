@@ -102,6 +102,12 @@ struct line_span {
     int32_t width;
 } ALIGNED(MPA_ALIGNMENT);
 
+struct screen_storage {
+    struct line_span *begin;
+    struct line_span *end;
+    struct multipool pool;
+};
+
 struct line_handle {
     struct line_handle *prev;
     struct line_handle *next;
@@ -125,16 +131,16 @@ struct line {
 } ALIGNED(MPA_ALIGNMENT);
 
 uint32_t alloc_attr(struct line *line, const struct attr *attr);
-struct line *create_line(struct multipool *mp, const struct attr *attr, ssize_t width);
-struct line *realloc_line(struct multipool *mp, struct line *line, ssize_t width, struct line_span *array_first, struct line_span *array_last);
-void split_line(struct multipool *mp, struct line *src, ssize_t offset, struct line_span *array_first, struct line_span *array_last);
-struct line *concat_line(struct multipool *mp, struct line *src1, struct line *src2, struct line_span *array_first, struct line_span *array_last);
-void optimize_line(struct multipool *mp, struct line *src);
+struct line *create_line(struct screen_storage *screen, const struct attr *attr, ssize_t width);
+struct line *realloc_line(struct screen_storage *screen, struct line *line, ssize_t width);
+void split_line(struct screen_storage *screen, struct line *src, ssize_t offset);
+struct line *concat_line(struct screen_storage *screen, struct line *src1, struct line *src2);
+void optimize_line(struct screen_storage *screen, struct line *src);
 void copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, ssize_t len);
 void fill_cells(struct cell *dst, struct cell c, ssize_t width);
 void copy_utf32_to_cells(struct cell *dst, const uint32_t *src, const uint32_t *end, uint32_t attrid);
 void copy_ascii_to_cells(struct cell *dst, const uint8_t *src, const uint8_t *end, uint32_t attrid);
-void free_line(struct multipool *mp, struct line *line,  struct line_span *array_first, struct line_span *array_last);
+void free_line(struct screen_storage *screen, struct line *line);
 
 inline static color_t indirect_color(uint32_t idx) { return idx + 1; }
 inline static uint32_t color_idx(color_t c) { return c - 1; }

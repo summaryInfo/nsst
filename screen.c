@@ -22,22 +22,17 @@ inline static bool screen_at_bottom(struct screen *scr) {
     return line_span_cmpeq(&scr->view_pos.s, scr->screen);
 }
 
-inline static struct line_span **get_main_screen(struct screen *scr) {
-    return scr->mode.altscreen ? &scr->back_screen : &scr->screen;
+inline static struct screen_storage *get_current_screen(struct screen *scr) {
+    return scr->mode.altscreen ? &scr->alt_screen : &scr->main_screen;
 }
 
-inline static struct line_span **get_alt_screen(struct screen *scr) {
-    return !scr->mode.altscreen ? &scr->back_screen : &scr->screen;
-}
-
-inline static void free_line_list_until(struct screen *scr, struct line *line, struct line *until, struct line_span *screen) {
+inline static void free_line_list_until(struct screen *scr, struct screen_storage *screen, struct line *line, struct line *until) {
     struct line *next;
-    struct line_span *end = screen ? screen + scr->height : NULL;
     while (line != until) {
         next = line->next;
         if (line->selection_index)
             selection_clear(&scr->sstate);
-        free_line(&scr->mp, line, screen, end);
+        free_line(screen, line);
         line = next;
     }
 }
@@ -52,20 +47,18 @@ void free_screen(struct screen *scr) {
     uri_unref(scr->back_saved_sgr.uri);
 #endif
 
-    struct line_span *main = *get_main_screen(scr);
-    free_line_list_until(scr, scr->top_line.s.line, NULL, main);
+    free_line_list_until(scr, &scr->main_screen, scr->top_line.s.line, NULL);
+    free_line_list_until(scr, &scr->alt_screen, scr->alt_screen.begin->line, NULL);
 
-    struct line_span *alt = *get_alt_screen(scr);
-    free_line_list_until(scr, alt->line, NULL, alt);
-
-    free(scr->screen);
-    free(scr->back_screen);
+    free(scr->main_screen.begin);
+    free(scr->alt_screen.begin);
     free(scr->temp_screen);
 
     free(scr->tabs);
     free(scr->predec_buf);
 
-    mpa_release(&scr->mp);
+    mpa_release(&scr->main_screen.pool);
+    mpa_release(&scr->alt_screen.pool);
 }
 
 
@@ -151,12 +144,12 @@ void screen_reset_view(struct screen *scr, bool damage) {
 }
 
 FORCEINLINE
-inline static void screen_split_line_after_ex(struct screen *scr, struct line_span *screen, ssize_t height, ssize_t y) {
-    struct line_span *src = screen + y;
+inline static void screen_split_line_after_ex(struct screen *scr, struct screen_storage *screen, ssize_t y) {
+    struct line_span *src = screen->begin + y;
     ssize_t offset = src->offset + src->width;
     if (offset >= src->line->size) return;
 
-    split_line(&scr->mp, src->line, offset, screen, screen + height);
+    split_line(screen, src->line, offset);
     if (UNLIKELY(src->line->selection_index))
         selection_split(&scr->sstate, src->line, src->line->next);
 }
@@ -166,18 +159,18 @@ inline static void screen_split_line_before(struct screen *scr, ssize_t y) {
     struct line_span *src = &scr->screen[y];
     if (LIKELY(!src->offset)) return;
 
-    split_line(&scr->mp, src->line, src->offset, scr->screen, scr->screen + scr->height);
+    split_line(get_current_screen(scr), src->line, src->offset);
     if (UNLIKELY(src->line->selection_index))
         selection_split(&scr->sstate, src->line, src->line->next);
 }
 
 FORCEINLINE
 inline static void screen_split_line_after(struct screen *scr, ssize_t y) {
-    screen_split_line_after_ex(scr, scr->screen, scr->height, y);
+    screen_split_line_after_ex(scr, get_current_screen(scr), y);
 }
 
-inline static struct line *screen_realloc_line(struct screen *scr, struct line *line, ssize_t width, struct line_span *screen, ssize_t height) {
-    struct line *new = realloc_line(&scr->mp, line, width, screen, screen + height);
+inline static struct line *screen_realloc_line(struct screen *scr, struct line *line, ssize_t width, struct screen_storage *screen) {
+    struct line *new = realloc_line(screen, line, width);
 
     if (UNLIKELY(new->selection_index))
         selection_relocated(&scr->sstate, new);
@@ -190,8 +183,8 @@ void screen_cursor_line_set_prompt(struct screen *scr) {
     view->line->sh_ps1_start = true;
 }
 
-inline static void screen_adjust_line_ex(struct screen *scr, struct line_span *screen, ssize_t y, ssize_t clear_to, ssize_t size) {
-    struct line_span *view = &screen[y];
+inline static void screen_adjust_line_ex(struct screen *scr, struct screen_storage *screen, ssize_t y, ssize_t clear_to, ssize_t size) {
+    struct line_span *view = &screen->begin[y];
     ssize_t old_size = view->line->size;
     ssize_t new_size = view->offset + size;
     clear_to += view->offset;
@@ -199,7 +192,7 @@ inline static void screen_adjust_line_ex(struct screen *scr, struct line_span *s
     if (LIKELY(old_size >= new_size)) return;
 
     if (new_size > view->line->caps)
-        screen_realloc_line(scr, view->line, new_size, screen, scr->height);
+        screen_realloc_line(scr, view->line, new_size, screen);
 
     if (clear_to > old_size) {
         struct cell c = MKCELL(0, view->line->pad_attrid);
@@ -211,9 +204,9 @@ inline static void screen_adjust_line_ex(struct screen *scr, struct line_span *s
      * to ensure all wrapped parts are withing the line (sic)
      * and are wrapped to the screen width. */
     if (UNLIKELY(view->offset) && y > 0) {
-        assert(screen[y].offset <= old_size);
-        while (--y > 0 && screen[y].line == view->line)
-            assert(screen[y].width == scr->width);
+        assert(screen->begin[y].offset <= old_size);
+        while (--y > 0 && screen->begin[y].line == view->line)
+            assert(screen->begin[y].width == scr->width);
     }
 #endif
 
@@ -222,7 +215,7 @@ inline static void screen_adjust_line_ex(struct screen *scr, struct line_span *s
 }
 
 inline static void screen_adjust_line(struct screen *scr, ssize_t y, ssize_t size) {
-    screen_adjust_line_ex(scr, scr->screen, y, size, size);
+    screen_adjust_line_ex(scr, get_current_screen(scr), y, size, size);
 }
 
 inline static void screen_wrap(struct screen *scr, bool hard) {
@@ -265,7 +258,7 @@ inline static void screen_wrap(struct screen *scr, bool hard) {
 
     selection_concat(&scr->sstate, current->prev, current);
 
-    struct line *new = concat_line(&scr->mp, current->prev, current, scr->screen, scr->screen + scr->height);
+    struct line *new = concat_line(&scr->main_screen, current->prev, current);
     if (UNLIKELY(new->selection_index))
         selection_relocated(&scr->sstate, new);
 }
@@ -277,13 +270,13 @@ void screen_ensure_new_paragaph(struct screen *scr) {
 }
 
 void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
-    struct line_span *screen_top = *get_main_screen(scr);
+    struct line_span *screen_top = scr->main_screen.begin;
     if (screen_top) {
 
         if (screen_top->line->prev)
             screen_reset_view(scr, 0);
 
-        free_line_list_until(scr, scr->top_line.s.line, screen_top->line, screen_top);
+        free_line_list_until(scr, &scr->main_screen, scr->top_line.s.line, screen_top->line);
 
         replace_handle(&scr->top_line, &(struct line_span){ .line = screen_top->line });
     }
@@ -351,7 +344,6 @@ void screen_scroll_view(struct screen *scr, int16_t amount) {
 
 HOT
 bool free_extra_lines(struct screen *scr) {
-    struct line_span *screen = *get_main_screen(scr);
     ssize_t extra = scr->sb_limit - scr->sb_max_caps;
     if (extra <= 0) return false;
 
@@ -369,9 +361,9 @@ bool free_extra_lines(struct screen *scr) {
         struct line *top = next;
         next = top->next;
 
-        if (UNLIKELY(top == screen->line)) {
+        if (UNLIKELY(top == scr->main_screen.begin->line)) {
             line_handle_remove(&scr->top_line);
-            next = screen->line;
+            next = scr->main_screen.begin->line;
             goto finish;
         }
         if (UNLIKELY(top == scr->view_pos.s.line))
@@ -379,7 +371,7 @@ bool free_extra_lines(struct screen *scr) {
         if (UNLIKELY(top->selection_index))
             selection_clear(&scr->sstate);
 
-        free_line(&scr->mp, top, screen, screen + scr->height);
+        free_line(&scr->main_screen, top);
     }
 
 finish:
@@ -398,7 +390,7 @@ inline static void push_history_until(struct screen *scr, struct line *from, str
     if (LIKELY(from->seq < to->seq)) {
         /* Push to history */
         for (; from->seq < to->seq; from = from->next) {
-            optimize_line(&scr->mp, from);
+            optimize_line(&scr->main_screen, from);
             scr->sb_limit++;
         }
     } else {
@@ -422,14 +414,16 @@ static void resize_tabs(struct screen *scr, int16_t width) {
     }
 }
 
-inline static struct line *create_lines_range(struct multipool *mp, struct line *prev, struct line *next,
-                                              struct line_span *dst, ssize_t width, const struct attr *attr,
+inline static struct line *create_lines_range(struct screen_storage *screen, struct line *prev, struct line *next,
+                                              ssize_t y, ssize_t width, const struct attr *attr,
                                               ssize_t count, struct line_handle *top) {
     if (count <= 0) return NULL;
 
-    struct line *line = create_line(mp, attr, width);
+    struct line *line = create_line(screen, attr, width);
     if (UNLIKELY(!prev && top))
         replace_handle(top, &(struct line_span) { .line =  line });
+
+    struct line_span *dst = screen->begin + y;
 
     *dst = (struct line_span) { .line = line };
     attach_prev_line(line, prev);
@@ -439,7 +433,7 @@ inline static struct line *create_lines_range(struct multipool *mp, struct line 
         memset(dst + 1, 0, (count - 1)*sizeof *dst);
         ssize_t i = 1;
         do {
-            dst[i].line = line = create_line(mp, attr, width);
+            dst[i].line = line = create_line(screen, attr, width);
             attach_prev_line(line, prev);
             prev = line;
         } while (++i < count);
@@ -451,26 +445,29 @@ inline static struct line *create_lines_range(struct multipool *mp, struct line 
 }
 
 static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) {
-    struct line_span **alts = get_alt_screen(scr);
-    struct line_span *screen = *alts;
+    struct line_span *screen = scr->alt_screen.begin;
     ssize_t minh = MIN(scr->height, height);
 
     if (height < scr->height)
-        free_line_list_until(scr, screen[height].line, NULL, screen);
+        free_line_list_until(scr, &scr->alt_screen, screen[height].line, NULL);
 
     static_assert(MALLOC_ALIGNMENT == _Alignof(struct line_handle), "Insufficient alignment");
     screen = xrealloc(screen, scr->height * sizeof *screen, height * sizeof *screen);
-    *alts = screen;
+    scr->alt_screen.begin = screen;
+    scr->alt_screen.end = screen + MIN(height, scr->height);
+    if (scr->mode.altscreen) scr->screen = screen;
 
     for (ssize_t i = 0; i < minh; i++) {
-        screen[i].line = screen_realloc_line(scr, screen[i].line, width, screen, minh);
+        screen[i].line = screen_realloc_line(scr, screen[i].line, width, &scr->alt_screen);
         screen[i].width = MIN(screen[i].width, width);
     }
 
     if (scr->height < height) {
-        create_lines_range(&scr->mp, scr->height ? screen[scr->height - 1].line : NULL, NULL,
-                           &screen[scr->height], width, &ATTR_DEFAULT, height - scr->height, NULL);
+        create_lines_range(&scr->alt_screen, scr->height ? screen[scr->height - 1].line : NULL, NULL,
+                           scr->height, width, &ATTR_DEFAULT, height - scr->height, NULL);
     }
+
+    scr->alt_screen.end = screen + height;
 
     /* Adjust altscreen saved cursor position */
 
@@ -569,7 +566,7 @@ inline static void translate_screen_position(struct line_span *first, struct lin
 
 #if DEBUG_LINES
 static void validate_main_screen(struct screen *scr) {
-    struct line_span *screen = *get_main_screen(scr);
+    struct line_span *screen = scr->main_screen.begin;
 
     struct line *prev_ln = NULL;
     assert(!scr->top_line.s.line->prev);
@@ -612,7 +609,7 @@ static void validate_main_screen(struct screen *scr) {
 }
 
 static void validate_altscreen(struct screen *scr) {
-    struct line_span *altscr = *get_alt_screen(scr);
+    struct line_span *altscr = scr->alt_screen.begin;
 
     struct line_span *prev = NULL;
     assert(!altscr[0].line->prev);
@@ -650,8 +647,7 @@ inline static void round_offset_to_width(struct line_span *handle, ssize_t width
 enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t height, struct line_span *lower_left) {
     enum stick_view ret = stick_none;
 
-    struct line_span **pscr = get_main_screen(scr);
-    struct line_span *screen = *pscr;
+    struct line_span *screen = scr->main_screen.begin;
 
     ssize_t y = 0;
 
@@ -674,13 +670,16 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         } };
         line_handle_add(&saved_cursor_handle);
 
-        screen_adjust_line_ex(scr, screen, c->y, c->x + 1, c->x + 1);
-        screen_adjust_line_ex(scr, screen, saved_c->y, saved_c->x + 1, saved_c->x + 1);
+        screen_adjust_line_ex(scr, &scr->main_screen, c->y, c->x + 1, c->x + 1);
+        screen_adjust_line_ex(scr, &scr->main_screen, saved_c->y, saved_c->x + 1, saved_c->x + 1);
 
         struct line_span it = cursor_handle.s;
         round_offset_to_width(&it, width);
 
-        *pscr = screen = xrealloc(*pscr, scr->height * sizeof **pscr, height * sizeof **pscr);
+        screen = xrezalloc(screen, scr->height * sizeof *screen, height * sizeof *screen);
+        scr->main_screen.begin = screen;
+        scr->main_screen.end = screen + height;
+        if (!scr->mode.altscreen) scr->screen = screen;
 
 #if DEBUG_LINES
         assert(c->y >= 0);
@@ -699,14 +698,14 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
                 assert(find_handle_in_line(&scr->top_line));
 #endif
             scr->sb_limit += -rest;
-            create_lines_range(&scr->mp, NULL, it.line, screen, width,
+            create_lines_range(&scr->main_screen, NULL, it.line, 0, width,
                                &ATTR_DEFAULT, -rest, &scr->top_line);
             fixup_lines_seqno(it.line);
             it.line = scr->top_line.s.line;
 #if DEBUG_LINES
         } else {
             struct line_span d = it;
-            assert(!line_advance_span(&d, c->y, width));
+            assert(!line_shift_n(&d, c->y, width));
             assert(!line_span_cmp(&d, &d0));
 #endif
         }
@@ -752,8 +751,8 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
 
         /* Truncate lines that are below the last line of the screen */
         if (y >= height) {
-            screen_split_line_after_ex(scr, screen, MIN(height, scr->height), height -  1);
-            free_line_list_until(scr, screen[height - 1].line->next, NULL, NULL);
+            screen_split_line_after_ex(scr, &scr->main_screen, height -  1);
+            free_line_list_until(scr, &scr->main_screen, screen[height - 1].line->next, NULL);
             y = height;
         }
 
@@ -766,11 +765,14 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         assert(find_handle_in_line(&scr->top_line));
 #endif
     } else {
-        *pscr = screen = xalloc(height * sizeof **pscr);
+        screen = xzalloc(height * sizeof *screen);
+        scr->main_screen.begin = screen;
+        scr->main_screen.end = screen + height;
+        if (!scr->mode.altscreen) scr->screen = screen;
     }
 
-    create_lines_range(&scr->mp, y ? screen[y - 1].line : NULL, NULL,
-                       &screen[y], width, &ATTR_DEFAULT, height - y, &scr->top_line);
+    create_lines_range(&scr->main_screen, y ? screen[y - 1].line : NULL, NULL,
+                       y, width, &ATTR_DEFAULT, height - y, &scr->top_line);
 
     if (ret == stick_none && !lower_left->line)
         ret = stick_to_bottom;
@@ -786,6 +788,9 @@ void screen_drain_scrolled(struct screen *scr) {
 }
 
 void screen_resize(struct screen *scr, int16_t width, int16_t height) {
+
+    mpa_set_seal_max_pad(&scr->main_screen.pool, width * sizeof(struct cell) + sizeof(struct line), INT32_MAX);
+    mpa_set_seal_max_pad(&scr->alt_screen.pool, width * sizeof(struct cell) + sizeof(struct line), 1);
 
     screen_drain_scrolled(scr);
 #if USE_URI
@@ -899,7 +904,7 @@ inline static void prep_lines(struct screen *scr, ssize_t xs, ssize_t ys, ssize_
             struct line_span *view = &scr->screen[i];
             if (view->width <= xe_val && attr_eq(attr_pad(view->line), &scr->sgr)) {
                 if (view->width > xs_val) {
-                    screen_realloc_line(scr, view->line, view->offset + xs_val, scr->screen, scr->height);
+                    screen_realloc_line(scr, view->line, view->offset + xs_val, get_current_screen(scr));
                     view->width = xs_val;
                 }
             } else {
@@ -1152,7 +1157,7 @@ void screen_erase_fast(struct screen *scr, int16_t ys, int16_t ye, struct attr *
 
         screen_split_line_after(scr, ys);
 
-        screen_realloc_line(scr, view->line, 0, scr->screen, scr->height);
+        screen_realloc_line(scr, view->line, 0, get_current_screen(scr));
         view->line->pad_attrid = alloc_attr(view->line, attr);
         view->width = 0;
 
@@ -1257,7 +1262,7 @@ void screen_swap_screen(struct screen *scr, bool damage) {
     scr->mode.altscreen ^= 1;
     SWAP(scr->back_saved_c, scr->saved_c);
     SWAP(scr->back_saved_sgr, scr->saved_sgr);
-    SWAP(scr->back_screen, scr->screen);
+    scr->screen = get_current_screen(scr)->begin;
     screen_reset_view(scr, damage);
 }
 
@@ -1340,7 +1345,7 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
             if (bottom_next) assert(!bottom_next->prev);
 #endif
 
-            create_lines_range(&scr->mp, bottom_line, bottom_next, &scr->screen[rest],
+            create_lines_range(&scr->main_screen, bottom_line, bottom_next, rest,
                                scr->width, &scr->sgr, amount, NULL);
 
             fixup_lines_seqno(bottom_next);
@@ -1361,6 +1366,13 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
 
             if (bottom - amount >= 0)
                 fixup_lines_seqno(scr->screen[bottom - amount].line);
+        }
+
+        if (scr->main_screen.pool.unsealed_count == 0) {
+            if (free_extra_lines(scr)) {
+                replace_handle(&scr->view_pos, &scr->top_line.s);
+                selection_view_scrolled(&scr->sstate, scr);
+            }
         }
     } else if (amount < 0) /* down */ {
         amount = MAX(amount, -(bottom - top));
@@ -1494,7 +1506,7 @@ void screen_delete_cells(struct screen *scr, int16_t n) {
             }
 
             if (max_x >= line->width) {
-                screen_realloc_line(scr, line->line, line->offset + scr->c.x + MAX(0, tail_len), scr->screen, scr->height);
+                screen_realloc_line(scr, line->line, line->offset + scr->c.x + MAX(0, tail_len), get_current_screen(scr));
                 line->width = scr->c.x + MAX(0, tail_len);
             }
         }
@@ -1932,7 +1944,7 @@ inline static void print_buffer(struct screen *scr, const uint32_t *bstart, cons
     if (UNLIKELY(scr->mode.insert) && max_cx < max_tx && cx < line->width) {
         ssize_t max_new_size = MIN(max_tx, line->width + totalw);
         if (line->width < max_new_size)
-            screen_adjust_line_ex(scr, scr->screen, scr->c.y, cx, max_new_size);
+            screen_adjust_line_ex(scr, get_current_screen(scr), scr->c.y, cx, max_new_size);
 
         cell = view_cell(line, cx);
 
@@ -1940,7 +1952,7 @@ inline static void print_buffer(struct screen *scr, const uint32_t *bstart, cons
         memmove(cell + totalw, cell, (max_tx - max_cx)*sizeof(*cell));
     } else {
         if (line->width < max_cx)
-            screen_adjust_line_ex(scr, scr->screen, scr->c.y, cx, max_cx);
+            screen_adjust_line_ex(scr, get_current_screen(scr), scr->c.y, cx, max_cx);
         cell = view_cell(line, cx);
     }
 

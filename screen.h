@@ -73,8 +73,10 @@ struct checksum_mode {
  * alternate screen; same with saved_c/back_saved_c and saved_sgr/saved_back_sgr */
 
 struct screen {
-    struct line_span *screen;
-    struct line_span *back_screen;
+    struct screen_storage main_screen;
+    struct screen_storage alt_screen;
+
+    struct line_span *screen; /* either main_screen.screen or alt_screen.screen */
     struct line_span *temp_screen;
 
     /* History topmost line */
@@ -148,8 +150,6 @@ struct screen {
     /* Last written character
      * Used for REP */
     uint32_t prev_ch;
-
-    struct multipool mp;
 
     const uint8_t *save_handle_at_print;
     struct line_handle saved_handle;
