@@ -111,11 +111,11 @@ struct line_handle {
 struct line {
     struct line *next;
     struct line *prev;
-    uint64_t  seq; /* Global history counter */
     struct line_handle *first_handle;
     struct line_attr *attrs;
-    ssize_t size;
-    ssize_t caps;
+    uint64_t  seq; /* Global history counter */
+    int32_t size;
+    int32_t caps;
     uint32_t selection_index;
     uint16_t pad_attrid;
     bool force_damage;
