@@ -3702,7 +3702,10 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
         term_read(term);
     term->requested_resize = false;
 
-    mpa_set_seal_max_pad(&term->scr.mp, width * sizeof(struct cell) + sizeof(struct line), height + 1);
+    // FIXME Use separate multipool allocators for main screen and alternate screeen
+    //       so that altscreen can use less smaller pools since it does not require
+    //       allocating scrollback lines.
+    mpa_set_seal_max_pad(&term->scr.mp, width * sizeof(struct cell) + sizeof(struct line), 2*(height + 1));
 
     /* Notify application */
     int16_t wwidth = window_cfg(screen_window(scr))->width;
