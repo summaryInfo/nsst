@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 
 #define ROUNDUP(x, align) (((x) + (align) - 1) & ~((align) - 1))
@@ -47,7 +48,7 @@
         clock_gettime(CLOCK_TYPE, &start__);
 #define PROFILE_END(label) \
         clock_gettime(CLOCK_TYPE, &end__); \
-        warn(label " took %lfms", TIMEDIFF(start__, end__)/1000.); \
+        warn(label " took %lfms", TIMEDIFF(start__, end__)/1000000.); \
     } while(0)
 
 #define PROFILE_FUNC(f) \
