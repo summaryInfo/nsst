@@ -66,14 +66,10 @@ struct id_table {
 
 #define MAX_SERVICE_LINE 128
 
-/* FIXME Optimize this further to only store present indexes and
- *    42-bit bitfield as a presence indicator.
- *    In this case popcount() would be used for actual index calcualtion.
- *    This would reduce overhead per node from 86 to 8 (16 bit for child index + 42 bit indicators + 1 bit leaf flag) */
-
-struct prefix_tree_node {
-    uint16_t children[PT_CHILDREN_COUNT];
-    bool leaf;
+struct node_head {
+    uint64_t first_child : 16;
+    uint64_t has_child : 45;
+    uint64_t leaf : 1;
 };
 
 #define mkurikey(_id, idlen, _uri, urilen) ((const struct uri){ .head = (ht_head_t){ .hash = hash64(_id, idlen) ^ hash64(_uri, urilen) }, .id = _id, .uri = _uri})
@@ -104,47 +100,65 @@ inline static ssize_t char_to_index(char ch) {
     return -1;
 }
 
-inline static bool is_leaf_node(struct prefix_tree_node *current) {
-    return current && current->leaf;
+static struct node_head *node_heads;
+static size_t node_count;
+static size_t node_heads_caps;
+
+static uint16_t *node_children;
+static size_t node_children_caps;
+static ssize_t file_leaf;
+
+inline static struct node_head *child_index_add(struct node_head *node, char ch) {
+    ssize_t idx1 = char_to_index(ch);
+    if (idx1 < 0) return NULL;
+
+    bool has_child = node->has_child & (1ULL << idx1);
+
+    ssize_t child = node->first_child;
+    child += __builtin_popcountll(node->has_child & ((1ULL << idx1) - 1));
+
+    if (!has_child) {
+        size_t i = node - node_heads + 1, ii = node - node_heads;
+        adjust_buffer((void **)&node_children, &node_children_caps, node_count + 1, sizeof(*node_children));
+        adjust_buffer((void **)&node_heads, &node_heads_caps, node_count + 2, sizeof(*node_heads));
+        if ((ssize_t)node_count > child)
+            memmove(node_children + child + 1, node_children + child, (node_count - child) * sizeof(*node_children));
+        for (; i <= node_count; i++) node_heads[i].first_child++;
+        node_count++;
+        node_heads[node_count] = (struct node_head) { .first_child = node_count };
+        node_children[child] = node_count;
+        node_heads[ii].has_child |= 1ULL << idx1;
+    }
+
+    return &node_heads[node_children[child]];
 }
 
-#define NO_CHILD UINT16_MAX
 
-static struct prefix_tree_node *node_array;
+inline static struct node_head *child_index(struct node_head *node, char ch) {
+    ssize_t idx1 = char_to_index(ch);
+    if (idx1 < 0) return NULL;
 
-static size_t node_count;
-static size_t node_caps;
-static size_t file_leaf;
+    bool has_child = node->has_child & (1ULL << idx1);
+    if (!has_child) return NULL;
 
-static uint16_t alloc_child(void) {
-    assert(node_count + 1 < NO_CHILD);
+    ssize_t child = node->first_child;
+    child += __builtin_popcountll(node->has_child & ((1ULL << idx1) - 1));
 
-    adjust_buffer((void **)&node_array, &node_caps, node_count + 1, sizeof *node_array);
-    memset(node_array[node_count].children, 0xFF, sizeof node_array->children);
-    node_array[node_count].leaf = false;
-
-    return node_count++;
+    return &node_heads[node_children[child]];
 }
 
 static bool reverse_proto_tree_add_proto(const char *proto, const char *end) {
-    size_t cur = 0;
     char ch;
+    struct node_head *node = node_heads;
     for (const char *it = end - 1; it >= proto; it--) {
-        ssize_t idx = char_to_index(ch = *it);
-        if (idx < 0) {
+        node = child_index_add(node, ch = *it);
+        if (!node) {
             warn("Invalid protocol name '%s', unexpected char '%c'", proto, ch);
             return false;
         }
-
-        size_t next_idx = node_array[cur].children[idx];
-        if (next_idx == NO_CHILD) {
-            next_idx = alloc_child();
-            node_array[cur].children[idx] = next_idx;
-        }
-        cur = next_idx;
     }
 
-    node_array[cur].leaf = true;
+    node->leaf = true;
     return true;
 }
 
@@ -153,16 +167,18 @@ void init_proto_tree(void) {
     char *line = NULL;
     size_t len = 0;
 
-    alloc_child(); /* Allocate head node */
+    adjust_buffer((void **)&node_heads, &node_heads_caps, 1, sizeof(*node_heads));
+    node_heads[0] = (struct node_head) {0};
 
     /* Always include 'file' pseudo protocol */
     const char *file = "\0file";
     reverse_proto_tree_add_proto(file + 1, file + 5);
 
     /* Save file protocol node for fast checking */
-    file_leaf = 0;
+    struct node_head *node = node_heads;
     for (ssize_t i = 4; i > 0; i--)
-        file_leaf = node_array[file_leaf].children[char_to_index(file[i])];
+        node = child_index(node, file[i]);
+    file_leaf = node - node_heads;
 
     for (ssize_t sz; (sz = getline(&line, &len, services)) != -1; ) {
         char  *it = line;
@@ -191,20 +207,15 @@ void init_proto_tree(void) {
 }
 
 const uint8_t *match_reverse_proto_tree(struct uri_match_state *stt, const uint8_t *str, ssize_t len) {
-    struct prefix_tree_node *current = node_array;
+    struct node_head *node = node_heads;
     const uint8_t *at_valid_proto = 0;
     for (ssize_t i = 0; i < len; i++) {
-        ssize_t idx = char_to_index(str[-i-1]);
-        if (idx < 0) break;
+        node = child_index(node, str[-i-1]);
+        if (!node) break;
 
-        uint16_t next_idx = current->children[idx];
-        if (next_idx == NO_CHILD) break;
-
-        current = &node_array[next_idx];
-
-        if (is_leaf_node(current)) {
+        if (node->leaf) {
             at_valid_proto = &str[-i-1];
-            stt->matched_file_proto = next_idx == file_leaf;
+            stt->matched_file_proto = node - node_heads == file_leaf;
         }
     }
 
@@ -532,9 +543,15 @@ void uri_release_memory(void) {
     }
     free(idtab.slots);
 
-    free(node_array);
-    node_array = NULL;
-    file_leaf = node_caps = node_count = 0;
+    file_leaf = 0;
+
+    free(node_heads);
+    node_heads = NULL;
+    node_heads_caps = node_count = 0;
+
+    free(node_children);
+    node_children = NULL;
+    node_children_caps = node_count = 0;
 
     memset(&idtab, 0, sizeof(idtab));
     memset(&uritab, 0, sizeof(uritab));
