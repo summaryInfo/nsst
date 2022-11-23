@@ -48,8 +48,11 @@ struct pool {
     int32_t offset;
     int32_t size;
     bool sealed;
-    uint8_t data[];
+    uint8_t data[] ALIGNED(MPA_ALIGNMENT/2);
 };
+
+#define INIT_OFFSET ((int32_t)(ROUNDUP(sizeof(struct pool) + sizeof(struct header), MPA_ALIGNMENT)\
+                     - (sizeof(struct pool) + sizeof(struct header))))
 
 inline static void pool_detach(struct pool **head, struct pool *pool) {
     struct pool *next = pool->next;
@@ -87,7 +90,7 @@ static struct pool *get_fitting_pool(struct multipool *mp, ssize_t size) {
         pool = pool->next;
 
     if (!pool) {
-        ssize_t pool_size = MAX(mp->pool_size, size);
+        ssize_t pool_size = MAX(mp->pool_size, size + INIT_OFFSET);
 
         pool = DO_ALLOC(sizeof *pool + pool_size);
         if (pool == ALLOC_ERROR) return NULL;
@@ -96,6 +99,7 @@ static struct pool *get_fitting_pool(struct multipool *mp, ssize_t size) {
 
         mp->pool_count++;
         pool->size = pool_size;
+        pool->offset = INIT_OFFSET;
         pool_unseal(mp, pool);
     }
 
@@ -149,8 +153,14 @@ void mpa_set_seal_max_pad(struct multipool *mp, ssize_t max_pad, ssize_t max_uns
     mp->max_unsealed = max_unsealed;
 }
 
+inline static int32_t round_size(int32_t size) {
+    static_assert(sizeof(struct header)*2 == MPA_ALIGNMENT, "Alignment and header size are not synchronized");
+    static_assert(0 == (MPA_ALIGNMENT & (MPA_ALIGNMENT - 1)), "Alignment is not a power of two");
+    return ROUNDUP(size + sizeof(struct header), MPA_ALIGNMENT);
+}
+
 void *mpa_alloc(struct multipool *mp, ssize_t size) {
-    size = ROUNDUP(size + sizeof (struct header), MPA_ALIGNMENT);
+    size = round_size(size);
 
     struct pool *pool = get_fitting_pool(mp, MAX(size, mp->max_pad));
     if (!pool) return NULL;
@@ -176,7 +186,7 @@ void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size, bool pin) {
     struct header *header = GET_PTR_HEADER(ptr);
     struct pool *pool = GET_HEADER_POOL(header);
 
-    size = ROUNDUP(size + sizeof (struct header), MPA_ALIGNMENT);
+    size = round_size(size);
 
     bool is_last = header->offset + header->size == pool->offset;
 

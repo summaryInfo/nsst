@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <unistd.h>
 
-#define MPA_ALIGNMENT (_Alignof(max_align_t))
+#define MPA_ALIGNMENT MAX(16, _Alignof(max_align_t))
 #define MPA_POOL_SIZE 65536ULL
 
 struct pool;
