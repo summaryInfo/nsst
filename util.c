@@ -57,7 +57,7 @@ void *xalloc(size_t size) {
     void *res;
 #ifdef __SSE2__
     if (_Alignof(max_align_t) < MALLOC_ALIGNMENT) {
-        size = (size + MALLOC_ALIGNMENT - 1) & ~(MALLOC_ALIGNMENT - 1);
+        size = ROUNDUP(size, MALLOC_ALIGNMENT);
         res = aligned_alloc(MALLOC_ALIGNMENT, size);
     } else
 #endif
@@ -75,7 +75,7 @@ void *xrealloc(void *src, size_t old_size, size_t size) {
 
 #ifdef __SSE2__
     if (_Alignof(max_align_t) < MALLOC_ALIGNMENT) {
-        size = (size + MALLOC_ALIGNMENT - 1) & ~(MALLOC_ALIGNMENT - 1);
+        size = ROUNDUP(size, MALLOC_ALIGNMENT);
         res = aligned_alloc(MALLOC_ALIGNMENT, size);
         if (res && src) memcpy(res, src, MIN(old_size, size));
         free(src);
@@ -92,7 +92,7 @@ void *xzalloc(size_t size) {
     void *res;
 #ifdef __SSE2__
     if (_Alignof(max_align_t) < MALLOC_ALIGNMENT) {
-        size = (size + MALLOC_ALIGNMENT - 1) & ~(MALLOC_ALIGNMENT - 1);
+        size = ROUNDUP(size, MALLOC_ALIGNMENT);
         res = aligned_alloc(MALLOC_ALIGNMENT, size);
         if (res) memset(res, 0, size);
     } else
@@ -111,7 +111,7 @@ void *xrezalloc(void *src, size_t old_size, size_t size) {
 
 #ifdef __SSE2__
     if (_Alignof(max_align_t) < MALLOC_ALIGNMENT) {
-        size = (size + MALLOC_ALIGNMENT - 1) & ~(MALLOC_ALIGNMENT - 1);
+        size = ROUNDUP(size, MALLOC_ALIGNMENT);
         res = aligned_alloc(MALLOC_ALIGNMENT, size);
         if (src && res) memcpy(res, src, MIN(old_size, size));
         free(src);
