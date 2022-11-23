@@ -44,7 +44,7 @@ extern void ht_adjust(struct hashtable *ht, intptr_t inc);
 
 inline static size_t ceil_power_of_2(size_t n) {
     if (n < 2) return n;
-    return 1ULL << (sizeof(n)*8 - (__builtin_clzll(n - 1)));
+    return 1UL << (sizeof(n)*8 - (__builtin_clzl(n - 1)));
 }
 
 inline static ht_iter_t ht_begin(hashtable_t *ht) {
