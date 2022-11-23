@@ -205,7 +205,7 @@ struct line *realloc_line_(struct multipool *pool, struct line *line, ssize_t ca
     new->size = MIN(caps, new->size);
     new->caps = caps;
 
-    line->force_damage = true;
+    new->force_damage = true;
 
     if (new == line)
         return new;
@@ -231,7 +231,7 @@ struct line *realloc_line(struct screen_storage *screen, struct line *line, ssiz
     struct line *new = realloc_line_(&screen->pool, line, caps);
 
     if (new != line && need_fixup_array) {
-        for_span_array_line(new, it, screen->begin, screen->end) {
+        for_span_array_line(line, it, screen->begin, screen->end) {
             it->line = new;
         }
     }
