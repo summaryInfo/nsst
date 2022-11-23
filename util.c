@@ -55,12 +55,10 @@ static void do_log(int level, const char *fmt, va_list args) {
 
 void *xalloc(size_t size) {
     void *res;
-#ifdef __SSE2__
     if (_Alignof(max_align_t) < MALLOC_ALIGNMENT) {
         size = ROUNDUP(size, MALLOC_ALIGNMENT);
         res = aligned_alloc(MALLOC_ALIGNMENT, size);
     } else
-#endif
         res = malloc(size);
 
     if (!res)
@@ -73,14 +71,12 @@ void *xrealloc(void *src, size_t old_size, size_t size) {
 
     assert(size);
 
-#ifdef __SSE2__
     if (_Alignof(max_align_t) < MALLOC_ALIGNMENT) {
         size = ROUNDUP(size, MALLOC_ALIGNMENT);
         res = aligned_alloc(MALLOC_ALIGNMENT, size);
         if (res && src) memcpy(res, src, MIN(old_size, size));
         free(src);
     } else
-#endif
         res = realloc(src, size);
 
     if (!res)
@@ -90,13 +86,11 @@ void *xrealloc(void *src, size_t old_size, size_t size) {
 
 void *xzalloc(size_t size) {
     void *res;
-#ifdef __SSE2__
     if (_Alignof(max_align_t) < MALLOC_ALIGNMENT) {
         size = ROUNDUP(size, MALLOC_ALIGNMENT);
         res = aligned_alloc(MALLOC_ALIGNMENT, size);
         if (res) memset(res, 0, size);
     } else
-#endif
         res = calloc(1, size);
 
     if (!res)
@@ -109,14 +103,12 @@ void *xrezalloc(void *src, size_t old_size, size_t size) {
 
     assert(size);
 
-#ifdef __SSE2__
     if (_Alignof(max_align_t) < MALLOC_ALIGNMENT) {
         size = ROUNDUP(size, MALLOC_ALIGNMENT);
         res = aligned_alloc(MALLOC_ALIGNMENT, size);
         if (src && res) memcpy(res, src, MIN(old_size, size));
         free(src);
     } else
-#endif
         res = realloc(src, size);
 
     if (!res)
