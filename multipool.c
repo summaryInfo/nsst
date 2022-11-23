@@ -32,9 +32,9 @@
 /* allocation metadata */
 struct header {
     /* allocation size */
-    uint32_t size;
+    int32_t size;
     /* offset from pool beginning */
-    uint32_t offset;
+    int32_t offset;
     /* allocation data */
     uint8_t data[];
 };
@@ -44,10 +44,10 @@ struct pool {
     struct pool *next;
     struct pool *prev;
 
-    uint32_t n_alloc;
+    int32_t n_alloc;
+    int32_t offset;
+    int32_t size;
     bool sealed;
-    ssize_t offset;
-    ssize_t size;
     uint8_t data[];
 };
 
@@ -178,10 +178,10 @@ void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size, bool pin) {
 
     size = ROUNDUP(size + sizeof (struct header), MPA_ALIGNMENT);
 
-    bool is_last = (ssize_t)header->offset + (ssize_t)header->size == (ssize_t)pool->offset;
+    bool is_last = header->offset + header->size == pool->offset;
 
     /* Can resize inside pool */
-    if (is_last && size - (ssize_t)header->size <= pool->size - pool->offset) {
+    if (is_last && size - header->size <= pool->size - pool->offset) {
         pool->offset += size - header->size;
         header->size = size;
 

@@ -17,8 +17,8 @@ struct segments {
     uint16_t size;
     uint16_t caps;
     struct segment {
-        uint32_t offset;
-        uint32_t length;
+        int32_t offset;
+        int32_t length;
     } segs[];
 };
 
