@@ -532,7 +532,7 @@ static void term_dispatch_dsr(struct term *term) {
     if (term->esc.selector & P_MASK) {
         switch (term->esc.param[0]) {
         case 6: /* DECXCPR -- CSI ? Py ; Px ; R ; 1  */
-            term_answerback(term, CSI"?%lu;%lu%sR",
+            term_answerback(term, CSI"?%zu;%zu%sR",
                     screen_cursor_y(scr) - screen_min_oy(scr) + 1,
                     screen_cursor_x(scr) - screen_min_ox(scr) + 1,
                     term->vt_level >= 4 ? ";1" : "");
@@ -582,7 +582,7 @@ static void term_dispatch_dsr(struct term *term) {
             term_answerback(term, CSI"0n");
             break;
         case 6: /* CPR -- CSI Py ; Px R */
-            term_answerback(term, CSI"%lu;%luR",
+            term_answerback(term, CSI"%zu;%zuR",
                     screen_cursor_y(scr) - screen_min_oy(scr) + 1,
                     screen_cursor_x(scr) - screen_min_ox(scr) + 1);
             break;
@@ -739,15 +739,16 @@ static void term_dispatch_dcs(struct term *term) {
                 break;
             }
             case 'r': /* -> DECSTBM */
-                term_answerback(term, DCS"1$r%lu;%lur"ST, screen_min_y(scr) + 1, screen_max_y(scr));
+                term_answerback(term, DCS"1$r%zu;%zur"ST,
+                                screen_min_y(scr) + 1, screen_max_y(scr));
                 break;
             case 's': /* -> DECSLRM */
-                term_answerback(term, term->vt_level >= 4 ? DCS"1$r%lu;%lus"ST :
-                        DCS"0$r"ST, screen_min_x(scr) + 1, screen_max_x(scr));
+                term_answerback(term, term->vt_level >= 4 ? DCS"1$r%zu;%zus"ST : DCS"0$r"ST,
+                                screen_min_x(scr) + 1, screen_max_x(scr));
                 break;
             case 't': /* -> DECSLPP */
                 /* Can't report less than 24 lines */
-                term_answerback(term, DCS"1$r%lut"ST, MAX(screen_height(scr), 24));
+                term_answerback(term, DCS"1$r%zut"ST, MAX(screen_height(scr), 24));
                 break;
             case '|' << 8 | '$': /* -> DECSCPP */
                 /* It should be either 80 or 132 despite actual column count
@@ -761,7 +762,7 @@ static void term_dispatch_dcs(struct term *term) {
                 term_answerback(term, DCS"1$r%u q"ST, window_cfg(screen_window(scr))->cursor_shape);
                 break;
             case '|' << 8 | '*': /* -> DECSLNS */
-                term_answerback(term, DCS"1$r%lu*|"ST, screen_height(scr));
+                term_answerback(term, DCS"1$r%zu*|"ST, screen_height(scr));
                 break;
             case 'x' << 8 | '*': /* -> DECSACE */;
                 struct screen_mode *smode = &scr->mode;
@@ -1874,7 +1875,7 @@ static void term_dispatch_window_op(struct term *term) {
         break;
     }
     case 18: /* Report grid size (in cell units) */
-        term_answerback(term, CSI"8;%lu;%lut", screen_height(scr), screen_width(scr));
+        term_answerback(term, CSI"8;%zu;%zut", screen_height(scr), screen_width(scr));
         break;
     case 19: /* Report screen size (in cell units) */ {
         struct extent s = window_get_screen_size(win);
@@ -1984,7 +1985,7 @@ static void term_report_cursor(struct term *term) {
     if (nrcs_is_96(c->gn[2])) cg96 |= 4;
     if (nrcs_is_96(c->gn[3])) cg96 |= 8;
 
-    term_answerback(term, DCS"1$u%lu;%lu;1;%s;%c;%c;%u;%u;%c;%s%s%s%s"ST,
+    term_answerback(term, DCS"1$u%zu;%zu;1;%s;%c;%c;%u;%u;%c;%s%s%s%s"ST,
         /* line */ c->y + 1,
         /* column */ c->x + 1,
         /* attributes */ csgr,

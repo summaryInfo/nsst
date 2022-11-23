@@ -445,7 +445,7 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
 
     if (gconfig.log_level == 3 && gconfig.trace_fonts) {
         info("[Glyph] char=%"PRId32"(%lc) pixel_mode=%d num_grays=%d width=%d height=%d data:",
-            ch, (wchar_t)ch, face->glyph->bitmap.pixel_mode,
+            ch, (wint_t)ch, face->glyph->bitmap.pixel_mode,
             face->glyph->bitmap.num_grays, glyph->width, glyph->height);
 
         for (size_t k = 0; k < glyph->height; k++) {
