@@ -243,17 +243,19 @@ inline static void save_pos(struct window *win) {
     }
 }
 
-inline static void restore_pos(struct window *win) {
+inline static bool restore_pos(struct window *win) {
+    xcb_void_cookie_t c;
     if (get_plat(win)->saved.width > 0) {
         uint32_t vals[] = {get_plat(win)->saved.x, get_plat(win)->saved.y, get_plat(win)->saved.width, get_plat(win)->saved.height};
-        xcb_configure_window(con, get_plat(win)->wid, XCB_CONFIG_WINDOW_WIDTH |
+        c = xcb_configure_window_checked(con, get_plat(win)->wid, XCB_CONFIG_WINDOW_WIDTH |
                 XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
-        handle_resize(win, vals[2], vals[3]);
         get_plat(win)->saved.width = 0;
+        return !check_void_cookie(c);
     }
+    return false;
 }
 
-void x11_window_action(struct window *win, enum window_action act) {
+bool x11_window_action(struct window *win, enum window_action act) {
     switch(act) {
         uint32_t val;
     case action_minimize:
@@ -275,10 +277,10 @@ void x11_window_action(struct window *win, enum window_action act) {
         send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
         send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_VERT);
         uint32_t vals[] = {0, 0, ctx.screen->width_in_pixels, ctx.screen->height_in_pixels};
-        xcb_configure_window(con, get_plat(win)->wid, XCB_CONFIG_WINDOW_WIDTH |
+        xcb_void_cookie_t c;
+        c = xcb_configure_window_checked(con, get_plat(win)->wid, XCB_CONFIG_WINDOW_WIDTH |
                 XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
-        handle_resize(win, vals[2], vals[3]);
-        break;
+        return !check_void_cookie(c);
     case action_maximize_width:
         save_pos(win);
         send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE,
@@ -298,14 +300,13 @@ void x11_window_action(struct window *win, enum window_action act) {
         send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_HORZ);
         send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_MAXIMIZED_VERT);
         send_wm_client_event(get_plat(win)->wid, ctx.atom._NET_WM_STATE, _NET_WM_STATE_REMOVE,  ctx.atom._NET_WM_STATE_FULLSCREEN);
-        restore_pos(win);
-        break;
+        return restore_pos(win);
     case action_toggle_fullscreen:
-        window_action(win, get_plat(win)->saved.width > 0 ? action_restore : action_fullscreen);
-        /* fallthrough */
+        return x11_window_action(win, get_plat(win)->saved.width > 0 ? action_restore : action_fullscreen);
     case action_none:
         break;
     }
+    return false;
 }
 
 struct extent x11_get_position(struct window *win) {

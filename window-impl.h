@@ -273,7 +273,7 @@ struct platform_vtable {
     void (*set_title)(struct window *win, const char *title, bool utf8);
     void (*set_urgency)(struct window *win, bool set);
     void (*update_colors)(struct window *win);
-    void (*window_action)(struct window *win, enum window_action action);
+    bool (*window_action)(struct window *win, enum window_action action);
 
     void (*free)(void);
 };

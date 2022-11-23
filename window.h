@@ -97,7 +97,7 @@ void window_delay_redraw(struct window *win);
 void window_request_scroll_flush(struct window *win);
 bool window_resize(struct window *win, int16_t width, int16_t height);
 void window_move(struct window *win, int16_t x, int16_t y);
-void window_action(struct window *win, enum window_action act);
+bool window_action(struct window *win, enum window_action act);
 bool window_is_mapped(struct window *win);
 void window_bell(struct window *win, uint8_t vol);
 

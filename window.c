@@ -120,8 +120,13 @@ void window_set_mouse(struct window *win, bool enabled) {
     pvtbl->enable_mouse_events(win, enabled);
 }
 
-void window_action(struct window *win, enum window_action act) {
-    pvtbl->window_action(win, act);
+bool window_action(struct window *win, enum window_action act) {
+    bool success = pvtbl->window_action(win, act);
+    if (success) {
+        clock_gettime(CLOCK_TYPE, &win->wait_for_configure);
+        poller_enable(win->poll_index, 0);
+    }
+    return success;
 }
 
 void window_move(struct window *win, int16_t x, int16_t y) {

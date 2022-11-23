@@ -245,8 +245,7 @@ static void term_request_resize(struct term *term, int16_t w, int16_t h, bool in
     w = !w ? scr.width : w < 0 ? cur.width : w;
     h = !h ? scr.height : h < 0 ? cur.height : h;
 
-    if (window_resize(win, w, h))
-        term->requested_resize = true;
+    term->requested_resize |= window_resize(win, w, h);
 }
 
 static void term_set_132(struct term *term, bool set) {
@@ -1767,10 +1766,10 @@ static void term_dispatch_window_op(struct term *term) {
 
     switch (pa) {
     case 1: /* Undo minimize */
-        window_action(win, action_restore_minimized);
+        term->requested_resize |= window_action(win, action_restore_minimized);
         break;
     case 2: /* Minimize */
-        window_action(win, action_minimize);
+        term->requested_resize |= window_action(win, action_minimize);
         break;
     case 3: /* Move */
         window_move(win, PARAM(1,0), PARAM(2,0));
@@ -1807,7 +1806,7 @@ static void term_dispatch_window_op(struct term *term) {
         default:
             term_esc_dump(term, 0);
         }
-        window_action(win, act);
+        term->requested_resize |= window_action(win, act);
         break;
     }
     case 10: /* Fullscreen operations */ {
@@ -1826,7 +1825,7 @@ static void term_dispatch_window_op(struct term *term) {
         default:
             term_esc_dump(term, 0);
         }
-        window_action(win, act);
+        term->requested_resize |= window_action(win, act);
         break;
     }
     case 11: /* Report state */
