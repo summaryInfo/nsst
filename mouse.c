@@ -79,6 +79,7 @@ inline static void adjust_head(struct selection_state *sel, struct segments **ph
 #define SNAP_RIGHT INT16_MAX
 
 static void append_segment(struct selection_state *sel, struct line *line, ssize_t x0, ssize_t x1) {
+
     struct segments *head = seg_head(sel, line);
 
     x0 = MIN(line->size, x0);
@@ -414,7 +415,7 @@ static void damage_changed(struct selection_state *sel, struct segments **old, s
 
             new_head->new_line_flag = 0;
 
-            for (; seg_new < seg_new_end || seg_old < seg_old_end;) {
+            for (; new_end != INTPTR_MAX || old_end != INTPTR_MAX;) {
                 bool advance_new = 0, advance_old = 0;
                 ssize_t from = 0, to = 0;
 
@@ -442,7 +443,7 @@ static void damage_changed(struct selection_state *sel, struct segments **old, s
                 } else line->force_damage = 1;
 
                 if (advance_old) {
-                    if (seg_old < seg_old_end) {
+                    if (seg_old + 1 < seg_old_end) {
                         seg_old++;
                         old_start = old_end + seg_old->offset;
                         old_end = old_start + seg_old->length;
@@ -451,7 +452,7 @@ static void damage_changed(struct selection_state *sel, struct segments **old, s
                     }
                 }
                 if (advance_new) {
-                    if (seg_new < seg_new_end) {
+                    if (seg_new + 1 < seg_new_end) {
                         seg_new++;
                         new_start = new_end + seg_new->offset;
                         new_end = new_start + seg_new->length;
@@ -578,11 +579,11 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
 
     struct segments **prev_heads = sel->seg;
     size_t prev_size = sel->seg_size;
-    init_selection(sel, sel->win);
 
     for (size_t i = 1; i < prev_size; i++)
         prev_heads[i]->line->selection_index = 0;
 
+    init_selection(sel, sel->win);
     if (sel->state == state_sel_progress || sel->state == state_sel_released)
         decompose(sel, scr, nstart, nend);
 
