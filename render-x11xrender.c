@@ -715,19 +715,19 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
 
     prepare_multidraw(win, cur_x, cur_y, reverse_cursor, &beyond_eol);
 
-    sort_by_color(&rctx.foreground_buf);
     sort_by_color(&rctx.background_buf);
-    sort_by_color(&rctx.decoration_buf);
-
     set_clip(win, &rctx.background_buf);
 
     /* Draw cells backgrounds */
     draw_rects(win, &rctx.background_buf);
+
+    sort_by_color(&rctx.foreground_buf);
     draw_text(win, &rctx.foreground_buf);
 
     if (rctx.background_buf.size) reset_clip(win);
 
     /* Draw underline and strikethrough lines */
+    sort_by_color(&rctx.decoration_buf);
     draw_rects(win, &rctx.decoration_buf);
 
     if (cursor) draw_cursor(win, cur_x, cur_y, marg, beyond_eol);
