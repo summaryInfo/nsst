@@ -436,7 +436,7 @@ inline static uint32_t push_char(uint32_t ch) {
 
 inline static void sort_by_color(struct element_buffer *buf) {
     struct element *dst = buf->data + buf->size, *src = buf->data;
-    for (size_t k = 2; k < buf->size; k += k) {
+    for (size_t k = 2; k < 2*buf->size; k += k) {
         for (size_t i = 0; i < buf->size; ) {
             size_t l_1 = i, h_1 = MIN(i + k/2, buf->size);
             size_t l_2 = h_1, h_2 = MIN(i + k, buf->size);
