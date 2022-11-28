@@ -43,6 +43,7 @@ struct element {
 
 struct element_buffer {
     struct element *data;
+    struct element *sorted;
     size_t size;
     size_t caps;
 };
@@ -324,7 +325,7 @@ inline static struct glyph_msg *start_msg(int16_t dx, int16_t dy) {
 }
 
 static void draw_text(struct window *win, struct element_buffer *buf) {
-    for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; ) {
+    for (struct element *it = buf->sorted, *end = buf->sorted + buf->size; it < end; ) {
         /* Prepare pen */
         color_t color = it->color;
         xcb_render_color_t col = MAKE_COLOR(color);
@@ -447,8 +448,7 @@ inline static void sort_by_color(struct element_buffer *buf) {
         }
         SWAP(dst, src);
     }
-    if (dst < src) for (size_t i = 0; i < buf->size; i++)
-        dst[i] = src[i];
+    buf->sorted = src;
 }
 
 static void draw_cursor(struct window *win, int16_t cur_x, int16_t cur_y, bool on_margin, bool beyond_eol) {
@@ -673,7 +673,7 @@ static void reset_clip(struct window *win) {
 
 static void set_clip(struct window *win, struct element_buffer *buf) {
     rctx.payload_size = 0;
-    for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; ) {
+    for (struct element *it = buf->sorted, *end = buf->sorted + buf->size; it < end; ) {
         struct element *it2 = it;
         do it2++;
         while (it2 < end && it2->y == it->y &&
@@ -690,7 +690,7 @@ static void set_clip(struct window *win, struct element_buffer *buf) {
 }
 
 static void draw_rects(struct window *win, struct element_buffer *buf) {
-    for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; ) {
+    for (struct element *it = buf->sorted, *end = buf->sorted + buf->size; it < end; ) {
         color_t color = it ->color;
 
         rctx.payload_size = 0;
