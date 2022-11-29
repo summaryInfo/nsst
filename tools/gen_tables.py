@@ -252,7 +252,6 @@ inline static uint32_t uncompact(uint32_t u) {
 
 inline static uint32_t compact(uint32_t u) {
     return u < CELL_ENC_UTF8_BASE ? u : u - (CELL_ENC_UTF8_BASE - CELL_ENC_COMPACT_BASE);
-
 }
 
 """
