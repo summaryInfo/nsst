@@ -49,26 +49,26 @@ $(NAME)c: nsstc.o
 	$(CC) $(CFLAGS) $(LDFLAGS) nsstc.o -o $@
 
 nsstc.o: feature.h
-nsst.o: feature.h config.h font.h line.h util.h nrcs.h input.h tty.h window.h hashtable.h multipool.h
-util.o: feature.h config.h font.h line.h util.h nrcs.h precompose-table.h hashtable.h wide.h multipool.h
-config.o: feature.h config.h font.h line.h util.h nrcs.h input.h window.h hashtable.h multipool.h
-poller.o: feature.h config.h util.h
-daemon.o: feature.h config.h util.h window.h font.h
-input.o: feature.h config.h font.h line.h util.h nrcs.h input.h term.h window.h hashtable.h multipool.h
-mouse.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h uri.h window.h hashtable.h multipool.h
-nrcs.o: feature.h nrcs.h util.h
+nsst.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h tty.h window.h hashtable.h multipool.h
+util.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h precompose-table.h hashtable.h width-table.h multipool.h
+config.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h window.h hashtable.h multipool.h
+poller.o: feature.h config.h util.h iswide.h
+daemon.o: feature.h config.h util.h iswide.h window.h font.h
+input.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h term.h window.h hashtable.h multipool.h
+mouse.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h mouse.h term.h uri.h window.h hashtable.h multipool.h
+nrcs.o: feature.h nrcs.h util.h iswide.h
 multipool.o: feature.h multipool.h
-line.o: feature.h line.h uri.h util.h multipool.h
-screen.o : feature.h config.h line.h util.h nrcs.h mouse.h term.h window.h uri.h hashtable.h screen.h multipool.h
-uri.o: feature.h config.h uri.h font.h line.h util.h nrcs.h hashtable.h multipool.h
-tty.o: feature.h config.h font.h line.h util.h nrcs.h tty.h hashtable.h multipool.h
-term.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h tty.h uri.h hashtable.h screen.h multipool.h
-boxdraw.o: feature.h config.h font.h line.h util.h nrcs.h boxdraw.h term.h window.h hashtable.h multipool.h
-font.o: feature.h config.h font.h line.h util.h nrcs.h window.h hashtable.h multipool.h
-image.o: feature.h util.h image.h font.h hashtable.h
-window.o: feature.h config.h font.h line.h util.h nrcs.h input.h mouse.h term.h window.h window-impl.h uri.h multipool.h
-window-x11.o: feature.h config.h line.h util.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h uri.h multipool.h
-render-x11shm.o: feature.h config.h font.h line.h util.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h hashtable.h multipool.h
-render-x11xrender.o: feature.h config.h font.h line.h util.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h hashtable.h multipool.h
+line.o: feature.h line.h uri.h util.h iswide.h multipool.h
+screen.o : feature.h config.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h uri.h hashtable.h screen.h multipool.h
+uri.o: feature.h config.h uri.h font.h line.h util.h iswide.h nrcs.h hashtable.h multipool.h
+tty.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h tty.h hashtable.h multipool.h
+term.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h mouse.h term.h window.h tty.h uri.h hashtable.h screen.h multipool.h
+boxdraw.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h boxdraw.h term.h window.h hashtable.h multipool.h
+font.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h window.h hashtable.h multipool.h
+image.o: feature.h util.h iswide.h image.h font.h hashtable.h
+window.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h mouse.h term.h window.h window-impl.h uri.h multipool.h
+window-x11.o: feature.h config.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h uri.h multipool.h
+render-x11shm.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h hashtable.h multipool.h
+render-x11xrender.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h hashtable.h multipool.h
 
 .PHONY: all clean install install-strip uninstall force

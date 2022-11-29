@@ -478,4 +478,4 @@ static uint32_t try_precompose(uint32_t ch, uint32_t comb) { (void)comb; return 
 
 #endif
 
-#include "wide.h"
+#include "width-table.h"
