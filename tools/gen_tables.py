@@ -222,9 +222,44 @@ def gen_precompose(precompose_file):
 
 def gen_wide(wide_file, iswide_file):
     with open(wide_file, 'w') as f, open(iswide_file, 'w') as g:
+        preambula="""#ifndef _ISWIDE_H
+#define _ISWIDE_H 1
+
+#include <stdbool.h>
+#include <stdint.h>
+
+/*
+ * Since Unicode does not allocate code points
+ * in planes 4-13 (and plane 14 contains only control characters),
+ * we can save a few bits for attributes by compressing unicode like:
+ *
+ *  [0x00000, 0x3FFFF] -> [0x00000, 0x3FFFF] (planes 0-3)
+ *  [0x40000, 0xDFFFF] -> nothing
+ *  [0xE0000,0x10FFFF] -> [0x40000, 0x7FFFF] (planes 14-16 -- Special Purpose Plane, PUA)
+ *
+ * And with this encoding scheme
+ * we can encode all defined characters only with 19 bits.
+ *
+ * And so we have as much as 13 bits left for flags and attributes.
+ */
+
+#define CELL_ENC_COMPACT_BASE 0x40000
+#define CELL_ENC_UTF8_BASE 0xE0000
+
+inline static uint32_t uncompact(uint32_t u) {
+    return u < CELL_ENC_COMPACT_BASE ? u : u + (CELL_ENC_UTF8_BASE - CELL_ENC_COMPACT_BASE);
+}
+
+inline static uint32_t compact(uint32_t u) {
+    return u < CELL_ENC_UTF8_BASE ? u : u - (CELL_ENC_UTF8_BASE - CELL_ENC_COMPACT_BASE);
+
+}
+
+"""
+
         # FIXME Support ambiguos characters in nsst
         f.write('#ifndef _WIDE_H\n#define _WIDE_H 1\n\n#include <stdint.h>\n\n')
-        g.write('#ifndef _ISWIDE_H\n#define _ISWIDE_H 1\n\n#include <stdbool.h>\n#include <stdint.h>\n\n')
+        g.write(preambula)
         wtab, wtab_min = compress_table(mk_wide())
         ctab, ctab_min = compress_table(mk_combining())
         #atab, atab_min = compress_table(mk_ambiguous())

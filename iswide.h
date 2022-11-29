@@ -4,6 +4,33 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/*
+ * Since Unicode does not allocate code points
+ * in planes 4-13 (and plane 14 contains only control characters),
+ * we can save a few bits for attributes by compressing unicode like:
+ *
+ *  [0x00000, 0x3FFFF] -> [0x00000, 0x3FFFF] (planes 0-3)
+ *  [0x40000, 0xDFFFF] -> nothing
+ *  [0xE0000,0x10FFFF] -> [0x40000, 0x7FFFF] (planes 14-16 -- Special Purpose Plane, PUA)
+ *
+ * And with this encoding scheme
+ * we can encode all defined characters only with 19 bits.
+ *
+ * And so we have as much as 13 bits left for flags and attributes.
+ */
+
+#define CELL_ENC_COMPACT_BASE 0x40000
+#define CELL_ENC_UTF8_BASE 0xE0000
+
+inline static uint32_t uncompact(uint32_t u) {
+    return u < CELL_ENC_COMPACT_BASE ? u : u + (CELL_ENC_UTF8_BASE - CELL_ENC_COMPACT_BASE);
+}
+
+inline static uint32_t compact(uint32_t u) {
+    return u < CELL_ENC_UTF8_BASE ? u : u - (CELL_ENC_UTF8_BASE - CELL_ENC_COMPACT_BASE);
+
+}
+
 extern const uint8_t wide_table1_[804];
 extern const uint8_t combining_table1_[1026];
 extern const uint32_t width_data_[119][8];
