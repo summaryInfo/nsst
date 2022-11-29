@@ -224,7 +224,7 @@ def gen_wide(wide_file, iswide_file):
     with open(wide_file, 'w') as f, open(iswide_file, 'w') as g:
         # FIXME Support ambiguos characters in nsst
         f.write('#ifndef _WIDE_H\n#define _WIDE_H 1\n\n#include <stdint.h>\n\n')
-        g.write('#ifndef _ISWIDE_H\n#define _ISWIDE_H 1\n\n#include <stdint.h>\n\n')
+        g.write('#ifndef _ISWIDE_H\n#define _ISWIDE_H 1\n\n#include <stdbool.h>\n#include <stdint.h>\n\n')
         wtab, wtab_min = compress_table(mk_wide())
         ctab, ctab_min = compress_table(mk_combining())
         #atab, atab_min = compress_table(mk_ambiguous())

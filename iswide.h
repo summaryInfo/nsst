@@ -1,6 +1,7 @@
 #ifndef _ISWIDE_H
 #define _ISWIDE_H 1
 
+#include <stdbool.h>
 #include <stdint.h>
 
 extern const uint8_t wide_table1_[804];
