@@ -2046,16 +2046,19 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
         scr->c.gl_ss = scr->c.gl; /* Reset single shift */
 
         prev = ch;
+        ch = compact(ch);
 
-        if (UNLIKELY(iscombining(ch))) {
+        if (UNLIKELY(iscombining_compact(ch))) {
             /* Don't put zero-width charactes to predecode buffer */
             if (!totalw) screen_precompose_at_cursor(scr, ch);
             else {
                 uint32_t *p = pbuf - 1 - !pbuf[-1];
-                *p = compact(try_precompose(uncompact(*p), ch));
+                /* Don't need uncompact/compact since all characters
+                 * in precomposition table are less than CELL_ENC_COMPACT_BASE. */
+                *p = try_precompose(*p, ch);
             }
         } else {
-            int wid = 1 + iswide(ch);
+            int wid = 1 + iswide_compact(ch);
 
             /* Don't include char if its too wide, unless its a wide char
              * at right margin, or autowrap is disabled, and we are at right size of the screen.
@@ -2074,7 +2077,7 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
                 }
             }
 
-            *pbuf++ = compact(ch);
+            *pbuf++ = ch;
             totalw += wid;
 
             if (wid > 1)
