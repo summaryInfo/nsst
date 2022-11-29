@@ -177,11 +177,11 @@ inline static color_t color_apply_a(color_t c, double a) {
 #define CELL_ENC_UTF8_BASE 0xF0000
 
 inline static uint32_t uncompact(uint32_t u) {
-    return u < CELL_ENC_COMPACT_BASE ? u : u + (CELL_ENC_UTF8_BASE - CELL_ENC_UTF8_BASE);
+    return u < CELL_ENC_COMPACT_BASE ? u : u + (CELL_ENC_UTF8_BASE - CELL_ENC_COMPACT_BASE);
 }
 
 inline static uint32_t compact(uint32_t u) {
-    return u < CELL_ENC_UTF8_BASE ? u : u - (CELL_ENC_UTF8_BASE - CELL_ENC_UTF8_BASE);
+    return u < CELL_ENC_UTF8_BASE ? u : u - (CELL_ENC_UTF8_BASE - CELL_ENC_COMPACT_BASE);
 
 }
 
