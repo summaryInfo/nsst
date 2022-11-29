@@ -1643,6 +1643,10 @@ bool screen_load_config(struct screen *scr, bool reset) {
 
 bool init_screen(struct screen *scr, struct window *win) {
     scr->win = win;
+
+    mpa_init(&scr->main_screen.pool, MPA_POOL_SIZE);
+    mpa_init(&scr->alt_screen.pool, sizeof(struct line) + 400*sizeof(struct cell));
+
     init_printer(&scr->printer, window_cfg(win));
     return screen_load_config(scr, 1);
 }
