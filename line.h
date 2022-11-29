@@ -163,18 +163,18 @@ inline static color_t color_apply_a(color_t c, double a) {
  * in planes 4-13 (and plane 14 contains only control characters),
  * we can save a few bits for attributes by compressing unicode like:
  *
- *  [0x00000, 0x5FFFF] -> [0x00000, 0x5FFFF] (planes 0-4)
- *  [0x60000, 0xEFFFF] -> nothing
- *  [0xF0000,0x10FFFF] -> [0x60000, 0x7FFFF] (planes 15-16 -- PUA)
+ *  [0x00000, 0x3FFFF] -> [0x00000, 0x3FFFF] (planes 0-3)
+ *  [0x40000, 0xDFFFF] -> nothing
+ *  [0xE0000,0x10FFFF] -> [0x40000, 0x7FFFF] (planes 14-16 -- Special Purpose Plane, PUA)
  *
  * And with this encoding scheme
- * we can encode all defined characters only with 19 bits
+ * we can encode all defined characters only with 19 bits.
  *
- * And so we have as much as 13 bits left for flags and attributes
+ * And so we have as much as 13 bits left for flags and attributes.
  */
 
-#define CELL_ENC_COMPACT_BASE 0x60000
-#define CELL_ENC_UTF8_BASE 0xF0000
+#define CELL_ENC_COMPACT_BASE 0x40000
+#define CELL_ENC_UTF8_BASE 0xE0000
 
 inline static uint32_t uncompact(uint32_t u) {
     return u < CELL_ENC_COMPACT_BASE ? u : u + (CELL_ENC_UTF8_BASE - CELL_ENC_COMPACT_BASE);
