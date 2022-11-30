@@ -173,7 +173,7 @@ def write_predicate(f, min_elem, x):
             f'}}\n'
             f'\ninline static bool is{x}(uint32_t x) {{\n'
             f'    return is{x}_compact(compact(x));\n'
-            f'}}\n')
+            f'}}\n\n')
 
 def set_predicate(table, fun):
     for cp in codepoints:
@@ -203,7 +203,7 @@ def mk_combining():
     return table
 
 def mk_ambiguous():
-    # FIXME: This suggests to mark every character, that is not wide as ambiguos,
+    # FIXME: This suggests to mark every character, that is not wide as ambiguous,
     # not sure if it should be like this...
     #     uniset +0000..DFFF -4e00..9fd5 +F900..10FFFD unknown +2028..2029 c
     #set_ranges(table, [0, 0x4DFF], [0x9FD6, 0xDFFF], [0xF900, 0x10FFFD], [0x2028, 0x2029])
@@ -216,13 +216,14 @@ def mk_ambiguous():
     set_predicate(table, lambda cp: cp.widthtype == 'A')
     return table
 
-def gen_precompose(precompose_file):
-    with open(precompose_file, 'w') as f:
-        write_precompose(f, filter_compose())
+generated_msg="""/*
+ * This file was generated with tools/gen_tables.py.
+ * DO NOT EDIT IT DIRECTLY.
+ * Edit generator instead.
+ */
 
-def gen_wide(wide_file, iswide_file):
-    with open(wide_file, 'w') as f, open(iswide_file, 'w') as g:
-        preambula="""#ifndef _ISWIDE_H
+"""
+iswide_preambula="""#ifndef _ISWIDE_H
 #define _ISWIDE_H 1
 
 #include <stdbool.h>
@@ -256,9 +257,18 @@ inline static uint32_t compact(uint32_t u) {
 
 """
 
+def gen_precompose(precompose_file):
+    with open(precompose_file, 'w') as f:
+        f.write(generated_msg)
+        write_precompose(f, filter_compose())
+
+def gen_wide(wide_file, iswide_file):
+    with open(wide_file, 'w') as f, open(iswide_file, 'w') as g:
         # FIXME Support ambiguos characters in nsst
+        f.write(generated_msg)
         f.write('#ifndef _WIDE_H\n#define _WIDE_H 1\n\n#include <stdint.h>\n\n')
-        g.write(preambula)
+        g.write(generated_msg)
+        g.write(iswide_preambula)
         wtab, wtab_min = compress_table(mk_wide())
         ctab, ctab_min = compress_table(mk_combining())
         #atab, atab_min = compress_table(mk_ambiguous())
