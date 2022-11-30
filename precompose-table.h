@@ -1,3 +1,9 @@
+/*
+ * This file was generated with tools/gen_tables.py.
+ * DO NOT EDIT IT DIRECTLY.
+ * Edit generator instead.
+ */
+
 #ifndef _PRECOMPOSE_H
 #define _PRECOMPOSE_H 1
 

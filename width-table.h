@@ -1,3 +1,9 @@
+/*
+ * This file was generated with tools/gen_tables.py.
+ * DO NOT EDIT IT DIRECTLY.
+ * Edit generator instead.
+ */
+
 #ifndef _WIDE_H
 #define _WIDE_H 1
 
