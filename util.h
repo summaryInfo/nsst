@@ -12,7 +12,8 @@
 #include <unistd.h>
 
 #define ROUNDUP(x, align) (((x) + (align) - 1) & ~((align) - 1))
-#define ROUNDDOWN(x, align) ((x) & ~(align))
+#define ROUNDDOWN(x, align) ((x) & ~((align) - 1))
+
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
