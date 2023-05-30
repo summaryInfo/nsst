@@ -137,6 +137,7 @@ void mpa_free(struct multipool *mp, void *ptr) {
         pool->offset -= header->size;
 
     if (!--pool->n_alloc) {
+        pool->offset = INIT_OFFSET;
         if (mp->unsealed_count + 1 > mp->max_unsealed) {
             if (!pool->sealed)
                 pool_seal(mp, pool);
@@ -144,7 +145,6 @@ void mpa_free(struct multipool *mp, void *ptr) {
             DO_FREE(pool, pool->size + sizeof *pool);
             mp->pool_count--;
         } else if (pool->sealed) {
-            pool->offset = INIT_OFFSET;
             pool_unseal(mp, pool);
         }
     }
