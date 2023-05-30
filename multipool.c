@@ -143,14 +143,29 @@ void mpa_free(struct multipool *mp, void *ptr) {
 
             DO_FREE(pool, pool->size + sizeof *pool);
             mp->pool_count--;
-        } else if (pool->sealed)
+        } else if (pool->sealed) {
+            pool->offset = INIT_OFFSET;
             pool_unseal(mp, pool);
+        }
     }
 }
 
 void mpa_set_seal_max_pad(struct multipool *mp, ssize_t max_pad, ssize_t max_unsealed)  {
     mp->max_pad = max_pad + sizeof(struct header);
     mp->max_unsealed = max_unsealed;
+
+    struct pool *pool = mp->unsealed;
+    while (pool) {
+        struct pool *next = pool->next;
+        if (pool->size < max_pad + pool->offset) {
+            pool_seal(mp, pool);
+            if (pool->offset == INIT_OFFSET) {
+                DO_FREE(pool, pool->size + sizeof *pool);
+                mp->pool_count--;
+            }
+        }
+        pool = next;
+    }
 }
 
 inline static int32_t round_size(int32_t size) {
