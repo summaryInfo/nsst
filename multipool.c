@@ -149,7 +149,7 @@ void mpa_free(struct multipool *mp, void *ptr) {
 }
 
 void mpa_set_seal_max_pad(struct multipool *mp, ssize_t max_pad, ssize_t max_unsealed)  {
-    mp->max_pad = max_pad;
+    mp->max_pad = max_pad + sizeof(struct header);
     mp->max_unsealed = max_unsealed;
 }
 
