@@ -1,4 +1,4 @@
-/* Copyright (c) 2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2023, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
