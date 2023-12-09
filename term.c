@@ -1061,7 +1061,7 @@ static void term_dispatch_osc(struct term *term) {
             const char *pathstart = path + filelen;
             path = strchr(pathstart, '/');
             /* Only support local host paths */
-            valid = path && (path == pathstart || strncmp(gconfig.hostname, pathstart, path - pathstart));
+            valid = path && (path == pathstart || !strncmp(gconfig.hostname, pathstart, path - pathstart));
         } else {
             /* No relative paths allowed */
             valid = (*dstr == '/');
