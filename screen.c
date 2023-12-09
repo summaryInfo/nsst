@@ -933,9 +933,9 @@ FORCEINLINE
 inline static void screen_erase_pre(struct screen *scr, int16_t *xs, int16_t *ys, int16_t *xe, int16_t *ye, bool origin, bool erase) {
     if (origin) screen_rect_pre(scr, xs, ys, xe, ye, erase);
     else {
-        *xs = MAX(0, MIN(*xs, scr->width - 1));
+        *xs = MAX(0, MIN(*xs, scr->width));
         *xe = MAX(0, MIN(*xe, scr->width));
-        *ys = MAX(0, MIN(*ys, scr->height - 1));
+        *ys = MAX(0, MIN(*ys, scr->height));
         *ye = MAX(0, MIN(*ye, scr->height));
 
         prep_lines(scr, *xs, *ys, *xe, *ye, erase);
@@ -1098,10 +1098,10 @@ void screen_copy(struct screen *scr, int16_t xs, int16_t ys, int16_t xe, int16_t
         xe = MAX(screen_min_ox(scr), MIN(MIN(xe - xs + xd, screen_max_ox(scr)) - xd + xs, screen_max_ox(scr)));
         ye = MAX(screen_min_oy(scr), MIN(MIN(ye - ys + yd, screen_max_oy(scr)) - yd + ys, screen_max_oy(scr)));
     } else {
-        xs = MAX(0, MIN(xs, scr->width - 1));
-        ys = MAX(0, MIN(ys, scr->height - 1));
-        xd = MAX(0, MIN(xd, scr->width - 1));
-        yd = MAX(0, MIN(yd, scr->height - 1));
+        xs = MAX(0, MIN(xs, scr->width));
+        ys = MAX(0, MIN(ys, scr->height));
+        xd = MAX(0, MIN(xd, scr->width));
+        yd = MAX(0, MIN(yd, scr->height));
         xe = MAX(0, MIN(MIN(xe - xs + xd, scr->width) - xd + xs, scr->width));
         ye = MAX(0, MIN(MIN(ye - ys + yd, scr->height) - yd + ys, scr->height));
     }
