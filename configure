@@ -11,7 +11,7 @@ use_x11shm=unset
 use_x11xrender=1
 cflags='-O2 -flto'
 vars=
-version=20408
+version=20409
 
 # Test some features by trying compiling snippets
 linkrt=' -lrt '
