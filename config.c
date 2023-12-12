@@ -851,10 +851,8 @@ e_wrong_line:
     munmap(addr, stt.st_size + 1);
 
 e_open:
-    /* Parse all shortcuts */
-    keyboard_parse_config(cfg);
-
     if (fd < 0) warn("Can't read config file: %s", path ? path : pathbuf);
+
 }
 
 void init_instance_config(struct instance_config *cfg, const char *config_path, bool allow_global) {
@@ -876,6 +874,9 @@ void init_instance_config(struct instance_config *cfg, const char *config_path, 
         set_option_entry(cfg, cpath, config_path, 0);
 
     parse_config(cfg, allow_global);
+
+    /* Parse all shortcuts */
+    keyboard_parse_config(cfg);
 }
 
 
