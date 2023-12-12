@@ -675,7 +675,7 @@ void x11_handle_events(void) {
             xcb_key_press_event_t *ev = (xcb_key_press_event_t *)event;
             if (!(win = window_for_xid(ev->event))) break;
             if (gconfig.trace_events) {
-                info("Event: event=KeyPress win=0x%x keycode=0x%x", ev->event, ev->detail);
+                info("Event: event=KeyPress win=0x%x keycode=0x%x state=%x", ev->event, ev->detail, ev->state);
             }
             handle_keydown(win, ctx.xkb_state, ev->detail);
             break;
