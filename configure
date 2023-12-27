@@ -9,7 +9,7 @@ prefix=/usr/local
 name=nsst
 use_x11shm=unset
 use_x11xrender=1
-cflags='-O2 -flto'
+cflags='-O2 -flto=auto'
 vars=
 version=20409
 
