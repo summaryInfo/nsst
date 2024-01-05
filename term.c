@@ -3386,7 +3386,7 @@ bool term_read(struct term *term) {
                 if (LIKELY(!cur)) break;
 
                 const uint8_t *proto_start;
-                proto_start = match_reverse_proto_tree(&term->uri_match, cur - 1, MAX_PROTOCOL_LEN - 1);
+                proto_start = match_reverse_proto_tree(&term->uri_match, cur, MAX_PROTOCOL_LEN - 1);
                 if (!proto_start) continue;
 
                 if (proto_start < term->tty.start) {
