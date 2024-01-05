@@ -4,8 +4,10 @@ HOSTNAME="$(uname -n)"
 file="${1#file://$HOSTNAME}"
 
 if [ x"${file}" != x"${1}" ]; then
+    # Decode filename if it has percent-encoded characters
+    # since they can not be parsed by xdg-open.
+    file="$(echo "${file}" | sed 's@+@ @g;s@%@\\x@g' | xargs -0 printf "%b")"
     xdg-open "$file"
 else
     xdg-open "$1"
 fi
-
