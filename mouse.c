@@ -703,10 +703,18 @@ bool selection_pending_scroll(struct selection_state *sel, struct screen *scr) {
     return sel->pending_scroll;
 }
 
-bool is_selection_event(struct selection_state *sel, struct mouse_event *ev) {
+#define THRESHHOLD (3*3)
+
+static inline bool significantly_moved(struct selection_state *sel, struct mouse_event *ev) {
+    return (sel->pointer_x_raw - ev->x)*(sel->pointer_x_raw - ev->x) +
+           (sel->pointer_y_raw - ev->y)*(sel->pointer_y_raw - ev->y) > THRESHHOLD;
+}
+
+static inline bool is_selection_event(struct selection_state *sel, struct mouse_event *ev) {
     return (ev->event == mouse_event_press && ev->button == 0) ||
            (ev->event == mouse_event_motion && ev->mask & mask_button_1 &&
-            (sel->state == state_sel_progress || sel->state == state_sel_pressed)) ||
+            (sel->state == state_sel_progress ||
+             (sel->state == state_sel_pressed && significantly_moved(sel, ev)))) ||
            (ev->event == mouse_event_release && ev->button == 0 && sel->state == state_sel_progress);
 }
 
@@ -909,6 +917,8 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
         else window_set_active_uri(term_window(term), EMPTY_URI, 0);
 #endif
         int16_t y = ev.y;
+        sel->pointer_x_raw = ev.x;
+        sel->pointer_y_raw = ev.y;
         adj_coords(sel->win, &ev.x, &ev.y, 0);
         sel->pointer_x = ev.x;
         sel->pointer_y = ev.y;

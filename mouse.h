@@ -95,6 +95,8 @@ struct selection_state {
     int32_t pending_scroll;
     int16_t pointer_x;
     int16_t pointer_y;
+    int16_t pointer_x_raw;
+    int16_t pointer_y_raw;
 
     enum clip_target targ;
 
