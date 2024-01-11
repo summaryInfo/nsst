@@ -703,11 +703,11 @@ bool selection_pending_scroll(struct selection_state *sel, struct screen *scr) {
     return sel->pending_scroll;
 }
 
-#define THRESHHOLD (3*3)
+#define THRESHOLD (3*3)
 
 static inline bool significantly_moved(struct selection_state *sel, struct mouse_event *ev) {
     return (sel->pointer_x_raw - ev->x)*(sel->pointer_x_raw - ev->x) +
-           (sel->pointer_y_raw - ev->y)*(sel->pointer_y_raw - ev->y) > THRESHHOLD;
+           (sel->pointer_y_raw - ev->y)*(sel->pointer_y_raw - ev->y) > THRESHOLD;
 }
 
 static inline bool is_selection_event(struct selection_state *sel, struct mouse_event *ev) {
