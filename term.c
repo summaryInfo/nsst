@@ -207,7 +207,7 @@ inline static void term_esc_start(struct term *term) {
 }
 
 inline static void term_esc_start_seq(struct term *term) {
-    memset(term->esc.param, 0xFF, term->esc.i*sizeof *term->esc.param);
+    memset(term->esc.param, 0xFF, (term->esc.i + 1)*sizeof term->esc.param[0]);
 
     term->esc.i = 0;
     term->esc.subpar_mask = 0;
@@ -321,6 +321,9 @@ static void term_load_config(struct term *term, bool reset) {
     struct instance_config *cfg = window_cfg(screen_window(&term->scr));
 
     if (reset) {
+        /* Initialize escape parameters to default values */
+        memset(term->esc.param, 0xFF, sizeof term->esc.param);
+
         term->mstate = (struct mouse_state) {0};
 
         term->mode = (struct term_mode) {
@@ -3222,10 +3225,10 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
                 MAX(term->esc.param[term->esc.i] * 10, 0);
         else if (ch == 0x3B) {
             if (term->esc.i < ESC_MAX_PARAM - 1)
-                term->esc.param[++term->esc.i] = -1;
+                ++term->esc.i;
         } else if (ch == 0x3A) {
             if (term->esc.i < ESC_MAX_PARAM - 1) {
-                term->esc.param[++term->esc.i] = -1;
+                ++term->esc.i;
                 term->esc.subpar_mask |= 1 << term->esc.i;
             }
         } else
