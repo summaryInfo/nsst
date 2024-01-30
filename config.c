@@ -331,7 +331,7 @@ static struct option options[] = {
     X(int16, margin_bell_column, "margin-bell-column", "Columnt at which margin bell rings when armed", 10, 0, 200),
     X(uint8, margin_bell_high_volume, "margin-bell-high-volume", "High volume value for DECSWBV", 100, 0, 100),
     X(uint8, margin_bell_low_volume, "margin-bell-low-volume", "Low volume value for DECSWBV", 50, 0, 100),
-    X(int64, max_frame_time, "max-frame-time", "Maximal time between frames in microseconds", SEC/20000, 0, 10*SEC/1000),
+    X(int64, max_frame_time, "max-frame-time", "Maximal time between frames in microseconds", -1, 0, 10*SEC/1000),
     X(boolean, meta_is_esc, "meta-sends-escape", "Alt/Meta sends escape prefix instead of setting 8-th bit", true),
     X(uint8, modify_cursor, "modify-cursor", "Enable encoding modifiers for cursor keys", 3, 0, 3),
     X(uint8, modify_function, "modify-function", "Enable encoding modifiers for function keys", 3, 0, 3),
@@ -874,6 +874,10 @@ void init_instance_config(struct instance_config *cfg, const char *config_path, 
         set_option_entry(cfg, cpath, config_path, 0);
 
     parse_config(cfg, allow_global);
+
+    /* Initialize max frame time depending on FPS */
+    if (cfg->max_frame_time == -1)
+        cfg->max_frame_time = 2*SEC/(1000*cfg->fps);
 
     /* Parse all shortcuts */
     keyboard_parse_config(cfg);
