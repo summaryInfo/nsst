@@ -2461,17 +2461,15 @@ static void term_dispatch_csi(struct term *term) {
     case C('p') | I0('"'): /* DECSCL */
         if (term->vt_version < 200) break;
 
-        term_do_reset(term, true);
         uparam_t p = PARAM(0, 65) - 60;
-        if (p && p <= term->vt_version/100)
-            term->vt_level = p;
-        if (p > 1) switch (PARAM(1, 2)) {
-        case 2: term->mode.eight_bit = 1; break;
-        case 1: term->mode.eight_bit = 0; break;
-        default:
-            term->esc.state = esc_csi_2;
-            term_esc_dump(term, 0);
-        }
+        uparam_t p2 = PARAM(1, 2);
+        if (p <= 1 || p2 < 3) {
+            term_do_reset(term, true);
+            if (p && p <= term->vt_version/100)
+                term->vt_level = p;
+            if (p > 1)
+                term->mode.eight_bit = p2 - 1;
+        } else term_esc_dump(term, 0);
         break;
     case C('q') | I0('"'): /* DECSCA */
         switch (PARAM(0, 2)) {
@@ -3170,7 +3168,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         term->esc.state = esc_esc_entry;
         term->esc.selector = E(ch ^ 0xC0);
         term_dispatch_esc(term);
-        return true;
+        return !term->requested_resize;
     }
 
     /* Treat bytes with 8th bits set as their lower counterparts
@@ -3257,10 +3255,8 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
             term->esc.selector |= C(ch);
             if (esc_dcs_entry <= term->esc.state && term->esc.state <= esc_dcs_2)
                 term->esc.state = esc_dcs_string;
-            else {
+            else
                 term_dispatch_csi(term);
-                return !term->requested_resize;
-            }
         } else
         /* fallthrough */
     case esc_csi_ignore:
@@ -3348,7 +3344,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         break;
     }
 
-    return true;
+    return !term->requested_resize;
 }
 
 #if USE_URI
