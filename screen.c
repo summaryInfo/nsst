@@ -2017,7 +2017,7 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
             replace_handle(&scr->saved_handle, &scr->screen[scr->c.y]);
             scr->saved_handle.s.offset += scr->c.x - (xstart + maxw - scr->c.pending - scr->save_handle_at_print);
         }
-        return res;
+        return true;
     }
 
     uint32_t *pbuf = scr->predec_buf;

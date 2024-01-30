@@ -3170,7 +3170,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         term->esc.state = esc_esc_entry;
         term->esc.selector = E(ch ^ 0xC0);
         term_dispatch_esc(term);
-        return !term->requested_resize;
+        return true;
     }
 
     /* Treat bytes with 8th bits set as their lower counterparts
@@ -3220,16 +3220,25 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         /* fallthrough */
     case esc_csi_0:
     case esc_dcs_0:
-        if (0x30 <= ch && ch <= 0x39)
-            term->esc.param[term->esc.i] = (ch - 0x30) +
-                MAX(term->esc.param[term->esc.i] * 10, 0);
-        else if (ch == 0x3B) {
-            if (term->esc.i < ESC_MAX_PARAM - 1)
-                ++term->esc.i;
-        } else if (ch == 0x3A) {
-            if (term->esc.i < ESC_MAX_PARAM - 1) {
-                ++term->esc.i;
-                term->esc.subpar_mask |= 1 << term->esc.i;
+        if (0x30 <= ch && ch <= 0x3B) {
+            /* Parse CSI arguments in a tight loop for optimization */
+            for (;;) {
+                if (ch <= 0x39) {
+                    term->esc.param[term->esc.i] = (ch - 0x30) +
+                        term->esc.param[term->esc.i] * 10 * (term->esc.param[term->esc.i] > 0);
+                } else if (LIKELY(term->esc.i < ESC_MAX_PARAM - 1)) {
+                    ++term->esc.i;
+                    term->esc.subpar_mask |= (ch == 0x3A) << term->esc.i;
+                }
+                if (UNLIKELY(*start >= end)) break;
+                if (UNLIKELY((ch = **start) - 0x30U > 0x3BU-0x30U)) {
+                    if (ch - 0x40U <= 0x7EU-0x40U) {
+                        ++*start;
+                        goto do_fast_csi;
+                    }
+                    break;
+                }
+                ++*start;
             }
         } else
         /* fallthrough */
@@ -3244,11 +3253,14 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
     case esc_csi_2:
     case esc_dcs_2:
         if (0x40 <= ch && ch <= 0x7E) {
+    do_fast_csi:
             term->esc.selector |= C(ch);
             if (esc_dcs_entry <= term->esc.state && term->esc.state <= esc_dcs_2)
                 term->esc.state = esc_dcs_string;
-            else
+            else {
                 term_dispatch_csi(term);
+                return !term->requested_resize;
+            }
         } else
         /* fallthrough */
     case esc_csi_ignore:
@@ -3336,7 +3348,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
         break;
     }
 
-    return !term->requested_resize;
+    return true;
 }
 
 #if USE_URI
@@ -3387,6 +3399,7 @@ bool term_read(struct term *term) {
                  * if we are not in the middle of URL matching. */
                 cur = memchr(cur, ':', term->tty.end - cur);
                 if (LIKELY(!cur)) break;
+                if (LIKELY(cur + 1 < term->tty.end) && cur[1] != '/') continue;
 
                 const uint8_t *proto_start;
                 proto_start = match_reverse_proto_tree(&term->uri_match, cur, MAX_PROTOCOL_LEN - 1);
