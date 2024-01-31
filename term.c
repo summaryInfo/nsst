@@ -3220,16 +3220,22 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
     case esc_dcs_0:
         if (0x30 <= ch && ch <= 0x3B) {
             /* Parse CSI arguments in a tight loop for optimization */
+            iparam_t last_arg = term->esc.param[term->esc.i];
             for (;;) {
                 if (ch <= 0x39) {
-                    term->esc.param[term->esc.i] = (ch - 0x30) +
-                        term->esc.param[term->esc.i] * 10 * (term->esc.param[term->esc.i] > 0);
+                    last_arg = (ch - 0x30) +
+                        last_arg * 10 * (last_arg > 0);
                 } else if (LIKELY(term->esc.i < ESC_MAX_PARAM - 1)) {
-                    ++term->esc.i;
+                    term->esc.param[term->esc.i++] = last_arg;
+                    last_arg = -1;
                     term->esc.subpar_mask |= (ch == 0x3A) << term->esc.i;
                 }
-                if (UNLIKELY(*start >= end)) break;
+                if (UNLIKELY(*start >= end)) {
+                    term->esc.param[term->esc.i] = last_arg;
+                    break;
+                }
                 if (UNLIKELY((ch = **start) - 0x30U > 0x3BU-0x30U)) {
+                    term->esc.param[term->esc.i] = last_arg;
                     if (ch - 0x40U <= 0x7EU-0x40U) {
                         ++*start;
                         goto do_fast_csi;
