@@ -318,7 +318,84 @@ static void add_font_substitute(struct font *font, struct face_list *faces, enum
 
 #define GLYPH_STRIDE_ALIGNMENT 4
 
-static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t ch, enum face_name attr, bool force_aligned) {
+#define FIXPREC 16
+
+FORCEINLINE
+static inline color_t color_mix(color_t dstc, color_t srcc, ssize_t fixalpha) {
+    return mk_color(
+            (color_r(dstc)*((1LL << FIXPREC) - fixalpha) + color_r(srcc)*fixalpha) >> FIXPREC,
+            (color_g(dstc)*((1LL << FIXPREC) - fixalpha) + color_g(srcc)*fixalpha) >> FIXPREC,
+            (color_b(dstc)*((1LL << FIXPREC) - fixalpha) + color_b(srcc)*fixalpha) >> FIXPREC,
+            (color_a(dstc)*((1LL << FIXPREC) - fixalpha) + color_a(srcc)*fixalpha) >> FIXPREC);
+}
+
+FORCEINLINE
+static inline uint32_t fetch32(uint8_t *data) {
+    uint32_t u = 0;
+    memcpy(&u, __builtin_assume_aligned(data, CACHE_LINE), sizeof u);
+    return u;
+}
+
+FORCEINLINE
+static inline color_t image_sample(struct glyph *glyph, ssize_t x, ssize_t y) {
+    x *= glyph->width;
+    y *= glyph->height;
+
+    ssize_t x0 = MIN(x >> FIXPREC, glyph->width - 1);
+    ssize_t y0 = MIN(y >> FIXPREC, glyph->height - 1);
+
+    ssize_t x1 = MIN((x + (1LL << FIXPREC) - 1) >> FIXPREC, glyph->width - 1);
+    ssize_t y1 = MIN((y + (1LL << FIXPREC) - 1) >> FIXPREC, glyph->height - 1);
+    ssize_t valpha = y & ((1LL << FIXPREC) - 1);
+    ssize_t halpha = x & ((1LL << FIXPREC) - 1);
+
+    y0 *= glyph->stride, x0 *= sizeof(color_t);
+    y1 *= glyph->stride, x1 *= sizeof(color_t);
+
+    color_t v0 = color_mix(fetch32(&glyph->data[x0+y0]), fetch32(&glyph->data[x1+y0]), halpha);
+    color_t v1 = color_mix(fetch32(&glyph->data[x0+y1]), fetch32(&glyph->data[x1+y1]), halpha);
+
+    return color_mix(v0, v1, valpha);
+}
+
+#define HALF (1LL << (FIXPREC - 1))
+
+HOT
+static struct glyph *downsample_glyph(struct glyph *glyph, uint32_t targ_width, bool force_aligned) {
+    uint64_t scale = glyph->width > 2*targ_width ? HALF : (((uint64_t)targ_width << FIXPREC) + HALF)/glyph->width;
+
+    ssize_t stride = (glyph->stride * scale + HALF) >> FIXPREC;
+    if (!force_aligned) stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
+    else stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT*sizeof(color_t));
+
+    ssize_t nheight = (glyph->height * scale +  HALF) >> FIXPREC;
+    struct glyph *nglyph = aligned_alloc(CACHE_LINE, ROUNDUP(sizeof(*glyph) + stride * nheight, CACHE_LINE));
+    *nglyph = *glyph;
+
+    nglyph->x = (nglyph->x * scale + HALF) >> FIXPREC;
+    nglyph->y = (nglyph->y * scale + HALF) >> FIXPREC;
+    nglyph->width = (nglyph->width * scale + HALF) >> FIXPREC;
+    nglyph->height = nheight;
+    nglyph->x_off = (nglyph->x_off * scale + HALF) >> FIXPREC;
+    nglyph->y_off = (nglyph->y_off * scale + HALF) >> FIXPREC;
+    nglyph->stride = stride;
+
+
+    for (ssize_t i = 0; i < nheight; i++) {
+        for (size_t j = 0; j < nglyph->width; j++) {
+            ssize_t xp = ((j << FIXPREC) + HALF)/nglyph->width;
+            ssize_t yp = ((i << FIXPREC) + HALF)/nglyph->height;
+            color_t c = image_sample(glyph, xp, yp);
+            memcpy(&nglyph->data[nglyph->stride*i + 4*j], &c, sizeof(c));
+        }
+        memset(nglyph->data + stride*i + nglyph->width * 4, 0, stride - nglyph->width * 4);
+    }
+
+    free(glyph);
+    return nglyph;
+}
+
+static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t ch, enum face_name attr, bool force_aligned, uint32_t targ_width) {
     struct face_list *faces = &font->face_types[attr];
     int glyph_index = 0;
     FT_Face face = faces->faces[0];
@@ -334,7 +411,7 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
         }
     }
 
-    FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT);
+    FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT | FT_LOAD_COLOR);
 
     bool ordv = ord == pixmode_bgrv || ord == pixmode_rgbv;
     bool ordrev = ord == pixmode_bgr || ord == pixmode_bgrv;
@@ -349,7 +426,7 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
     if (force_aligned) {
          /* Soft renderer backend requires subpixel glyphs
          * to be aligned on 16 bytes */
-        stride = (stride + GLYPH_STRIDE_ALIGNMENT - 1) & ~(GLYPH_STRIDE_ALIGNMENT - 1);
+        stride = ROUNDUP(stride, + GLYPH_STRIDE_ALIGNMENT);
         if (lcd) stride *= 4;
     } else {
         /* XRender required stride to be aligned exactly to 4,
@@ -357,10 +434,10 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
          * depending on whether subpixel rendering is off or on.
          */
         if (lcd) stride *= 4;
-        stride = (stride + GLYPH_STRIDE_ALIGNMENT - 1) & ~(GLYPH_STRIDE_ALIGNMENT - 1);
+        stride = ROUNDUP(stride, + GLYPH_STRIDE_ALIGNMENT);
     }
 
-    struct glyph *glyph = aligned_alloc(CACHE_LINE, (sizeof(*glyph) + stride * face->glyph->bitmap.rows + CACHE_LINE - 1) & ~(CACHE_LINE - 1));
+    struct glyph *glyph = aligned_alloc(CACHE_LINE, ROUNDUP(sizeof(*glyph) + stride * face->glyph->bitmap.rows, CACHE_LINE));
     glyph->x = -face->glyph->bitmap_left;
     glyph->y = face->glyph->bitmap_top;
     glyph->width = face->glyph->bitmap.width;
@@ -438,9 +515,12 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
         }
         break;
     case FT_PIXEL_MODE_BGRA:
-        warn("Colored glyph encountered");
-        free(glyph);
-        return font_render_glyph(font, ord, 0, attr, force_aligned);
+        for (size_t i = 0; i < glyph->height; i++) {
+            memcpy(glyph->data + stride*i, src + pitch*i, glyph->width * 4);
+            memset(glyph->data + stride*i + glyph->width * 4, 0, stride - glyph->width * 4);
+        }
+        while (glyph->width > targ_width)
+            glyph = downsample_glyph(glyph, targ_width, force_aligned);
     }
 
     if (gconfig.log_level == 3 && gconfig.trace_fonts) {
@@ -557,7 +637,7 @@ struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum fac
                            cache->pixmode, cache->hspacing, cache->vspacing, cache->force_aligned);
     else
 #endif
-        new = font_render_glyph(cache->font, cache->pixmode, ch, face, cache->force_aligned);
+        new = font_render_glyph(cache->font, cache->pixmode, ch, face, cache->force_aligned, cache->char_width*2);
     if (!new) return NULL;
 
     new->g = dummy.g;
