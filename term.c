@@ -3342,6 +3342,8 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
             else term->esc.state++;
         }
         break;
+    default:
+        __builtin_unreachable();
     }
 
     return !term->requested_resize;
