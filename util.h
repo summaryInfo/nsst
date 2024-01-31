@@ -11,8 +11,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define ROUNDUP(x, align) (((x) + (align) - 1) & ~((align) - 1))
-#define ROUNDDOWN(x, align) ((x) & ~((align) - 1))
+#define ROUNDUP(x, align) (((x) + (align) - 1) & ~((uintptr_t)(align) - 1))
+#define ROUNDDOWN(x, align) ((x) & ~((uintptr_t)(align) - 1))
 
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
