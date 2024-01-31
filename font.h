@@ -28,6 +28,7 @@ enum pixel_mode {
     pixmode_rgb,
     pixmode_bgrv,
     pixmode_rgbv,
+    pixmode_bgra,
 };
 
 struct glyph {
