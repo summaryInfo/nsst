@@ -1368,12 +1368,8 @@ inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_
                 fixup_lines_seqno(scr->screen[bottom - amount].line);
         }
 
-        if (scr->main_screen.pool.unsealed_count == 0) {
-            if (free_extra_lines(scr)) {
-                replace_handle(&scr->view_pos, &scr->top_line.s);
-                selection_view_scrolled(&scr->sstate, scr);
-            }
-        }
+        if (scr->main_screen.pool.unsealed_count == 0)
+            screen_drain_scrolled(scr);
     } else if (amount < 0) /* down */ {
         amount = MAX(amount, -(bottom - top));
         ssize_t rest = (bottom - top) + amount;
