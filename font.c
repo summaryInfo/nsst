@@ -318,102 +318,78 @@ static void add_font_substitute(struct font *font, struct face_list *faces, enum
 
 #define GLYPH_STRIDE_ALIGNMENT 4
 
-#define FIXPREC 16
-
 FORCEINLINE
-static inline color_t color_mix(color_t dstc, color_t srcc, ssize_t fixalpha) {
+static inline color_t image_sample(struct glyph *glyph, double x0, double x1, double y0, double y1, double gamma) {
+    assert(x1 - x0 >= 1.);
+    assert(y1 - y0 >= 1.);
+
+    double x0_w = 1 - (x0 - floor(x0));
+    double x1_w = x1 - floor(x1);
+    double y0_w = 1 - (y0 - floor(y0));
+    double y1_w = y1 - floor(y1);
+    double rgamma = 1/gamma;
+
+    ssize_t x0_i = MIN((ssize_t)x0, glyph->width - 1);
+    ssize_t x1_i = MIN((ssize_t)x1, glyph->width - 1);
+    ssize_t y0_i = MIN((ssize_t)y0, glyph->height - 1);
+    ssize_t y1_i = MIN((ssize_t)y1, glyph->height - 1);
+
+    double acc[4] = {0};
+
+    for (ssize_t y = y0_i; y <= y1_i; y++) {
+        uint8_t *data = glyph->data + y*glyph->stride;
+        for (ssize_t x = x0_i; x <= x1_i; x++) {
+            double w = 1;
+            if (x == x0_i) w *= x0_w;
+            if (x == x1_i) w *= x1_w;
+            if (y == y0_i) w *= y0_w;
+            if (y == y1_i) w *= y1_w;
+
+            double ralpha = data[4*x + 3] ? 1./data[4*x + 3] : 0.;
+            acc[0] += pow(data[4*x + 0]*ralpha, rgamma) * w;
+            acc[1] += pow(data[4*x + 1]*ralpha, rgamma) * w;
+            acc[2] += pow(data[4*x + 2]*ralpha, rgamma) * w;
+            acc[3] += data[4*x + 3] * w;
+        }
+    }
+
+    double scale = 1./((x1-x0)*(y1-y0));
+    double alpha = acc[3]*scale;
     return mk_color(
-            (color_r(dstc)*((1LL << FIXPREC) - fixalpha) + color_r(srcc)*fixalpha) >> FIXPREC,
-            (color_g(dstc)*((1LL << FIXPREC) - fixalpha) + color_g(srcc)*fixalpha) >> FIXPREC,
-            (color_b(dstc)*((1LL << FIXPREC) - fixalpha) + color_b(srcc)*fixalpha) >> FIXPREC,
-            (color_a(dstc)*((1LL << FIXPREC) - fixalpha) + color_a(srcc)*fixalpha) >> FIXPREC);
+        (MIN(pow(acc[2]*scale, gamma)*alpha, 255)),
+        (MIN(pow(acc[1]*scale, gamma)*alpha, 255)),
+        (MIN(pow(acc[0]*scale, gamma)*alpha, 255)),
+        (MIN(alpha, 255)));
 }
-
-FORCEINLINE
-static inline uint32_t fetch32(uint8_t *data) {
-    uint32_t u = 0;
-    memcpy(&u, __builtin_assume_aligned(data, CACHE_LINE), sizeof u);
-    return u;
-}
-
-FORCEINLINE
-static inline color_t image_sample(struct glyph *glyph, ssize_t x, ssize_t y) {
-    x *= glyph->width;
-    y *= glyph->height;
-
-    ssize_t x0 = MIN(x >> FIXPREC, glyph->width - 1);
-    ssize_t y0 = MIN(y >> FIXPREC, glyph->height - 1);
-
-    ssize_t x1 = MIN((x + (1LL << FIXPREC) - 1) >> FIXPREC, glyph->width - 1);
-    ssize_t y1 = MIN((y + (1LL << FIXPREC) - 1) >> FIXPREC, glyph->height - 1);
-    ssize_t valpha = y & ((1LL << FIXPREC) - 1);
-    ssize_t halpha = x & ((1LL << FIXPREC) - 1);
-
-    y0 *= glyph->stride, x0 *= sizeof(color_t);
-    y1 *= glyph->stride, x1 *= sizeof(color_t);
-
-    color_t v0 = color_mix(fetch32(&glyph->data[x0+y0]), fetch32(&glyph->data[x1+y0]), halpha);
-    color_t v1 = color_mix(fetch32(&glyph->data[x0+y1]), fetch32(&glyph->data[x1+y1]), halpha);
-
-    return color_mix(v0, v1, valpha);
-}
-
-static void glyph_from_premultiplied(struct glyph *glyph) {
-    // NOTE: This operation is fundamentally bad but freetype2 does not allow us to
-    //       get non-premultipled images...
-    for (ssize_t i = 0; i < glyph->height; i++) {
-        for (size_t j = 0; j < glyph->width; j++) {
-            uint8_t *data = &glyph->data[glyph->stride*i + 4*j];
-            if (!data[3]) continue;
-            uint32_t xalpha = (255 << FIXPREC)/data[3];
-            data[0] = MIN(data[0]*xalpha >> FIXPREC, 255);
-            data[1] = MIN(data[1]*xalpha >> FIXPREC, 255);
-            data[2] = MIN(data[2]*xalpha >> FIXPREC, 255);
-        }
-    }
-}
-
-static void glyph_to_premultiplied(struct glyph *glyph) {
-    for (ssize_t i = 0; i < glyph->height; i++) {
-        for (size_t j = 0; j < glyph->width; j++) {
-            uint8_t *data = &glyph->data[glyph->stride*i + 4*j];
-            uint32_t alpha = (data[3] << FIXPREC)/255;
-            data[0] = MIN(data[0]*alpha >> FIXPREC, 255);
-            data[1] = MIN(data[1]*alpha >> FIXPREC, 255);
-            data[2] = MIN(data[2]*alpha >> FIXPREC, 255);
-        }
-    }
-}
-
-#define HALF (1LL << (FIXPREC - 1))
 
 HOT
-static struct glyph *downsample_glyph(struct glyph *glyph, uint32_t targ_width, bool force_aligned) {
-    uint64_t scale = ((uint64_t)targ_width << FIXPREC)/glyph->width;
+static struct glyph *downsample_glyph(struct glyph *glyph, uint32_t targ_width, bool force_aligned, double gamma) {
+    double scale = targ_width/(double)glyph->width;
 
-    ssize_t stride = (glyph->stride * scale + HALF) >> FIXPREC;
+    ssize_t stride = targ_width*sizeof(color_t);
     if (!force_aligned) stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
     else stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT*sizeof(color_t));
 
-    ssize_t nheight = (glyph->height * scale +  HALF) >> FIXPREC;
-    struct glyph *nglyph = aligned_alloc(CACHE_LINE, ROUNDUP(sizeof(*glyph) + stride * nheight, CACHE_LINE));
-    *nglyph = *glyph;
-
-    nglyph->x = (nglyph->x * scale + HALF) >> FIXPREC;
-    nglyph->y = (nglyph->y * scale + HALF) >> FIXPREC;
-    nglyph->width = (nglyph->width * scale + HALF) >> FIXPREC;
-    nglyph->height = nheight;
-    nglyph->x_off = (nglyph->x_off * scale + HALF) >> FIXPREC;
-    nglyph->y_off = (nglyph->y_off * scale + HALF) >> FIXPREC;
+    ssize_t targ_height = nearbyint(glyph->height * scale);
+    struct glyph *nglyph = aligned_alloc(CACHE_LINE, ROUNDUP(sizeof(*glyph) + stride * targ_height, CACHE_LINE));
+    nglyph->x = nearbyint(glyph->x * scale);
+    nglyph->y = nearbyint(glyph->y * scale);
+    nglyph->width = targ_width;
+    nglyph->height = targ_height;
+    nglyph->x_off = nearbyint(glyph->x_off * scale);
+    nglyph->y_off = nearbyint(glyph->y_off * scale);
     nglyph->stride = stride;
+    nglyph->pixmode = glyph->pixmode;
+    nglyph->g = glyph->g;
 
-
-    for (ssize_t i = 0; i < nheight; i++) {
-        for (size_t j = 0; j < nglyph->width; j++) {
-            ssize_t xp = ((j << FIXPREC))/nglyph->width;
-            ssize_t yp = ((i << FIXPREC))/nglyph->height;
-            color_t c = image_sample(glyph, xp, yp);
-            memcpy(&nglyph->data[nglyph->stride*i + 4*j], &c, sizeof(c));
+    for (ssize_t i = 0; i < targ_height; i++) {
+        for (ssize_t j = 0; j < targ_width; j++) {
+            double xp = glyph->width*j/(double)targ_width;
+            double xe = glyph->width*(j + 1)/(double)targ_width;
+            double yp = glyph->height*i/(double)targ_height;
+            double ye = glyph->height*(i + 1)/(double)targ_height;
+            color_t c = image_sample(glyph, xp, xe, yp, ye, gamma);
+            memcpy(&nglyph->data[stride*i + 4*j], &c, sizeof(c));
         }
         memset(nglyph->data + stride*i + nglyph->width * 4, 0, stride - nglyph->width * 4);
     }
@@ -557,20 +533,8 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
         } else {
             memcpy(glyph->data, src, glyph->height * glyph->width * 4);
         }
-        if (glyph->width > targ_width) {
-            glyph_from_premultiplied(glyph);
-
-            /* First resample to targ_width*2^k for some k
-             * Then donwnsample by the factor of 2. This way we lose less precision */
-            uint32_t rounded_width = targ_width;
-            while (rounded_width < glyph->width/2)
-                rounded_width *= 2;
-
-            for (; glyph->width > targ_width; rounded_width /= 2) {
-                glyph = downsample_glyph(glyph, rounded_width, force_aligned);
-            }
-            glyph_to_premultiplied(glyph);
-        }
+        if (glyph->width > targ_width)
+            glyph = downsample_glyph(glyph, targ_width, force_aligned, gamma);
     }
 
     if (gconfig.log_level == 3 && gconfig.trace_fonts) {
