@@ -422,11 +422,15 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
     size_t stride = face->glyph->bitmap.width;
 
     if (face->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_LCD) stride /= 3;
+    else if (face->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_BGRA) {
+        lcd = true;
+        ord = pixmode_bgra;
+    }
 
     if (force_aligned) {
          /* Soft renderer backend requires subpixel glyphs
          * to be aligned on 16 bytes */
-        stride = ROUNDUP(stride, + GLYPH_STRIDE_ALIGNMENT);
+        stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
         if (lcd) stride *= 4;
     } else {
         /* XRender required stride to be aligned exactly to 4,
@@ -434,7 +438,7 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
          * depending on whether subpixel rendering is off or on.
          */
         if (lcd) stride *= 4;
-        stride = ROUNDUP(stride, + GLYPH_STRIDE_ALIGNMENT);
+        stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
     }
 
     struct glyph *glyph = aligned_alloc(CACHE_LINE, ROUNDUP(sizeof(*glyph) + stride * face->glyph->bitmap.rows, CACHE_LINE));
