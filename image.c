@@ -413,12 +413,12 @@ inline static void op_over_subpix(color_t *bg, color_t fg, uint8_t *alpha) {
 }
 
 inline static void op_blend(color_t *bg, color_t fg) {
-    ssize_t alpha = 255 - ((fg >> 24) & 0xFF);
+    uint32_t ralpha = 255 - ((fg >> 24) & 0xFF);
     *bg =
-        (((*bg >>  0) & 0xFF) * alpha / 255 + (fg >>  0)) << 0 |
-        (((*bg >>  8) & 0xFF) * alpha / 255 + (fg >>  8)) << 8 |
-        (((*bg >> 16) & 0xFF) * alpha / 255 + (fg >> 16)) << 16 |
-        (((*bg >> 24) & 0xFF) * alpha / 255 + (fg >> 24)) << 24;
+        (((*bg >>  0) & 0xFF) * ralpha / 255 + ((fg >>  0) & 0xFF)) << 0 |
+        (((*bg >>  8) & 0xFF) * ralpha / 255 + ((fg >>  8) & 0xFF)) << 8 |
+        (((*bg >> 16) & 0xFF) * ralpha / 255 + ((fg >> 16) & 0xFF)) << 16 |
+        (((*bg >> 24) & 0xFF) * ralpha / 255 + ((fg >> 24) & 0xFF)) << 24;
 }
 #endif
 
