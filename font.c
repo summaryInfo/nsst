@@ -519,9 +519,16 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
         }
         break;
     case FT_PIXEL_MODE_BGRA:
-        for (size_t i = 0; i < glyph->height; i++) {
-            memcpy(glyph->data + stride*i, src + pitch*i, glyph->width * 4);
-            memset(glyph->data + stride*i + glyph->width * 4, 0, stride - glyph->width * 4);
+        if (stride != glyph->width * 4) {
+            for (size_t i = 0; i < glyph->height; i++) {
+                memcpy(glyph->data + stride*i, src + pitch*i, glyph->width * 4);
+                memset(glyph->data + stride*i + glyph->width * 4, 0, stride - glyph->width * 4);
+            }
+        } else if (stride != (size_t)pitch) {
+            for (size_t i = 0; i < glyph->height; i++)
+                memcpy(glyph->data + stride*i, src + pitch*i, glyph->width * 4);
+        } else {
+            memcpy(glyph->data, src, glyph->height * glyph->width * 4);
         }
         while (glyph->width > targ_width)
             glyph = downsample_glyph(glyph, targ_width, force_aligned);
