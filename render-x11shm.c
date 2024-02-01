@@ -170,6 +170,12 @@ bool x11_shm_reload_font(struct window *win, bool need_free) {
 
     if (need_free) {
         handle_resize(win, win->cfg.width, win->cfg.height);
+
+        int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
+        int bw = win->cfg.left_border, bh = win->cfg.top_border;
+        image_draw_rect(get_plat(win)->im, (struct rect) {win->cw*cw + bw, bh, win->cfg.width - win->cw*cw - bw, win->ch*(ch + cd)}, win->bg_premul);
+        image_draw_rect(get_plat(win)->im, (struct rect) {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh}, win->bg_premul);
+
         x11_update_window_props(win);
     } else {
         win->cw = MAX(1, (win->cfg.width - 2*win->cfg.left_border) / win->char_width);
