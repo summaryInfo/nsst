@@ -358,11 +358,38 @@ static inline color_t image_sample(struct glyph *glyph, ssize_t x, ssize_t y) {
     return color_mix(v0, v1, valpha);
 }
 
+static void glyph_from_premultiplied(struct glyph *glyph) {
+    // NOTE: This operation is fundamentally bad but freetype2 does not allow us to
+    //       get non-premultipled images...
+    for (ssize_t i = 0; i < glyph->height; i++) {
+        for (size_t j = 0; j < glyph->width; j++) {
+            uint8_t *data = &glyph->data[glyph->stride*i + 4*j];
+            if (!data[3]) continue;
+            uint32_t xalpha = (255 << FIXPREC)/data[3];
+            data[0] = MIN(data[0]*xalpha >> FIXPREC, 255);
+            data[1] = MIN(data[1]*xalpha >> FIXPREC, 255);
+            data[2] = MIN(data[2]*xalpha >> FIXPREC, 255);
+        }
+    }
+}
+
+static void glyph_to_premultiplied(struct glyph *glyph) {
+    for (ssize_t i = 0; i < glyph->height; i++) {
+        for (size_t j = 0; j < glyph->width; j++) {
+            uint8_t *data = &glyph->data[glyph->stride*i + 4*j];
+            uint32_t alpha = (data[3] << FIXPREC)/255;
+            data[0] = MIN(data[0]*alpha >> FIXPREC, 255);
+            data[1] = MIN(data[1]*alpha >> FIXPREC, 255);
+            data[2] = MIN(data[2]*alpha >> FIXPREC, 255);
+        }
+    }
+}
+
 #define HALF (1LL << (FIXPREC - 1))
 
 HOT
 static struct glyph *downsample_glyph(struct glyph *glyph, uint32_t targ_width, bool force_aligned) {
-    uint64_t scale = glyph->width > 2*targ_width ? HALF : (((uint64_t)targ_width << FIXPREC) + HALF)/glyph->width;
+    uint64_t scale = ((uint64_t)targ_width << FIXPREC)/glyph->width;
 
     ssize_t stride = (glyph->stride * scale + HALF) >> FIXPREC;
     if (!force_aligned) stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
@@ -383,8 +410,8 @@ static struct glyph *downsample_glyph(struct glyph *glyph, uint32_t targ_width, 
 
     for (ssize_t i = 0; i < nheight; i++) {
         for (size_t j = 0; j < nglyph->width; j++) {
-            ssize_t xp = ((j << FIXPREC) + HALF)/nglyph->width;
-            ssize_t yp = ((i << FIXPREC) + HALF)/nglyph->height;
+            ssize_t xp = ((j << FIXPREC))/nglyph->width;
+            ssize_t yp = ((i << FIXPREC))/nglyph->height;
             color_t c = image_sample(glyph, xp, yp);
             memcpy(&nglyph->data[nglyph->stride*i + 4*j], &c, sizeof(c));
         }
@@ -530,8 +557,20 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
         } else {
             memcpy(glyph->data, src, glyph->height * glyph->width * 4);
         }
-        while (glyph->width > targ_width)
-            glyph = downsample_glyph(glyph, targ_width, force_aligned);
+        if (glyph->width > targ_width) {
+            glyph_from_premultiplied(glyph);
+
+            /* First resample to targ_width*2^k for some k
+             * Then donwnsample by the factor of 2. This way we lose less precision */
+            uint32_t rounded_width = targ_width;
+            while (rounded_width < glyph->width/2)
+                rounded_width *= 2;
+
+            for (; glyph->width > targ_width; rounded_width /= 2) {
+                glyph = downsample_glyph(glyph, rounded_width, force_aligned);
+            }
+            glyph_to_premultiplied(glyph);
+        }
     }
 
     if (gconfig.log_level == 3 && gconfig.trace_fonts) {
