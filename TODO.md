@@ -94,8 +94,6 @@ _NOTE: These plans can change any time_
 
 ### Shell integration
 
-* Select whole output or executed command
-
 * Mouse interaction with shell line editing (?)
 
 ### VTxxx/XTerm compatibility and emulation
