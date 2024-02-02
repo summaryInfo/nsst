@@ -25,8 +25,6 @@ _NOTE: These plans can change any time_
 
 * (Maybe) show helper when hovering over URL.
 
-* Allow selecting over the end of the short line
-
 * Wayland
 
 * IME support
@@ -76,14 +74,9 @@ _NOTE: These plans can change any time_
       parse fonts to determine relative glyphs positions and render glyphs
       one atop another to create new glyph and associate it with private rune in glyph cache.
 
-* Use multiple separate buffers in XRender backend for background/lines/glyphs to sort less
-
 * MIT-SHM (software)
 
   * Threaded rendering?
-  * Better `image_copy()` (just like `image_draw_rect()`, `image_compose_glyph()`)
-
-* Refactor window/renderer code to separate X-independent parts
 
 * Wayland (**EVERYTHING**)
 
@@ -104,8 +97,6 @@ _NOTE: These plans can change any time_
 * Select whole output or executed command
 
 * Mouse interaction with shell line editing (?)
-
-* Jumping between shell prompts in scrollback
 
 ### VTxxx/XTerm compatibility and emulation
 
