@@ -195,7 +195,7 @@ Then configure and build:
 Default config is generally sane.
 Alternatively do
 
-    ./configure CFLAGS='-flto -O2 -march=native'
+    ./configure CFLAGS='-flto=auto -O2 -march=native'
     make -j
 
 if you want to use it the machine you compile it on.
