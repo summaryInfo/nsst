@@ -22,13 +22,16 @@
 #endif
 
 /*
- * smmintrin.h is required for:
- *    - _mm_cvtepu8_epi16() // SSE4.1
- *    - _mm_shuffle_epi8() // SSSE3
+ * smmintrin.h (SSE4.1) is required for:
+ *    - _mm_cvtepu8_epi16()
+ * tmmintrin.h (SSSE3) is required for
+ *    - _mm_shuffle_epi8()
  * All other intrinsics are SSE2 or earlier.
  */
 #ifdef __SSE4_1__
 #   include <smmintrin.h>
+#elif defined(__SSSE3__)
+#   include <tmmintrin.h>
 #elif defined(__SSE2__)
 #   include <emmintrin.h>
 #endif
@@ -193,20 +196,26 @@ void image_draw_rect(struct image im, struct rect rect, color_t fg) {
     }
 }
 
-#ifdef __SSE4_1__
+#ifdef __SSE2__
 FORCEINLINE
 inline static __m128i op_over4(__m128i bg8, __m128i fg16, uint32_t alpha) {
     const __m128i m255 = _mm_set1_epi32(0x00FF00FF);
     const __m128i zero = _mm_set1_epi32(0x00000000);
     const __m128i div  = _mm_set1_epi16(-32639);
-    const __m128i allo = _mm_setr_epi32(0xFF00FF00, 0xFF00FF00, 0xFF01FF01, 0xFF01FF01);
-    const __m128i alhi = _mm_setr_epi32(0xFF02FF02, 0xFF02FF02, 0xFF03FF03, 0xFF03FF03);
-
-    __m128i valpha = _mm_set1_epi32(alpha);
 
     /* alpha */
+#ifdef __SSSE3__
+    const __m128i allo = _mm_setr_epi32(0xFF00FF00, 0xFF00FF00, 0xFF01FF01, 0xFF01FF01);
+    const __m128i alhi = _mm_setr_epi32(0xFF02FF02, 0xFF02FF02, 0xFF03FF03, 0xFF03FF03);
+    __m128i valpha = _mm_set1_epi32(alpha);
     __m128i al_0 = _mm_shuffle_epi8(valpha, allo);
     __m128i al_1 = _mm_shuffle_epi8(valpha, alhi);
+#else
+    __m128i valpha = _mm_unpacklo_epi8(_mm_set1_epi32(alpha), zero);
+    __m128i al_0 = _mm_shufflehi_epi16(_mm_shufflelo_epi16(valpha, 0x00), 0x55);
+    __m128i al_1 = _mm_shufflehi_epi16(_mm_shufflelo_epi16(valpha, 0xAA), 0xFF);
+#endif
+
     /* fg*alpha */
     __m128i mfg_0 = _mm_mullo_epi16(fg16, al_0);
     __m128i mfg_1 = _mm_mullo_epi16(fg16, al_1);
@@ -215,7 +224,11 @@ inline static __m128i op_over4(__m128i bg8, __m128i fg16, uint32_t alpha) {
     __m128i mal_0 = _mm_xor_si128(m255, al_0);
     __m128i mal_1 = _mm_xor_si128(m255, al_1);
     /* bg*(255-alpha) */
+#ifdef __SSE4_1__
     __m128i mbg_0 = _mm_mullo_epi16(_mm_cvtepu8_epi16(bg8), mal_0);
+#else
+    __m128i mbg_0 = _mm_mullo_epi16(_mm_unpacklo_epi8(bg8, zero), mal_0);
+#endif
     __m128i mbg_1 = _mm_mullo_epi16(_mm_unpackhi_epi8(bg8, zero), mal_1);
 
     /* bg*(255-alpha) + fg*alpha */
@@ -235,7 +248,11 @@ inline static __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) 
     const __m128i div  = _mm_set1_epi16(-32639);
 
     /* alpha */
+#ifdef __SSE4_1__
     __m128i al_0 = _mm_cvtepu8_epi16(alpha);
+#else
+    __m128i al_0 = _mm_unpacklo_epi8(alpha, zero);
+#endif
     __m128i al_1 = _mm_unpackhi_epi8(alpha, zero);
     /* fg*alpha */
     __m128i mfg_0 = _mm_mullo_epi16(fg16, al_0);
@@ -245,7 +262,11 @@ inline static __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) 
     __m128i mal_0 = _mm_xor_si128(m255, al_0);
     __m128i mal_1 = _mm_xor_si128(m255, al_1);
     /* bg*(255-alpha) */
+#ifdef __SSE4_1__
     __m128i mbg_0 = _mm_mullo_epi16(_mm_cvtepu8_epi16(bg8), mal_0);
+#else
+    __m128i mbg_0 = _mm_mullo_epi16(_mm_unpacklo_epi8(bg8, zero), mal_0);
+#endif
     __m128i mbg_1 = _mm_mullo_epi16(_mm_unpackhi_epi8(bg8, zero), mal_1);
 
     /* bg*(255-alpha) + fg*alpha */
@@ -348,7 +369,7 @@ void image_compose_glyph(struct image im, int16_t dx, int16_t dy, struct glyph *
         int16_t i0 = rect.x - dx + glyph->x, j0 = rect.y - dy + glyph->y;
         ssize_t width = rect.width, height = rect.height;
         ssize_t stride = STRIDE(im.width), gstride = glyph->stride;
-#if defined(__SSE4_1__)
+#ifdef __SSE2__
         if (glyph->pixmode == pixmode_mono) {
             uint8_t *aptr = glyph->data + j0 * gstride + i0  - (rect.x & 3);
             color_t *dptr = im.data + rect.y * stride + (rect.x & ~3);
@@ -357,7 +378,12 @@ void image_compose_glyph(struct image im, int16_t dx, int16_t dy, struct glyph *
             ssize_t suffix = (rect.x + width) & 3;
             ssize_t width4 = ((width + rect.x + 3) & ~3) - (rect.x & ~3);
 
+#ifndef __SSE4_1__
+            const __m128i zero = _mm_set1_epi32(0x00000000);
+            __m128i fg16 = _mm_unpacklo_epi8(_mm_set1_epi32(fg), zero);
+#else
             __m128i fg16 = _mm_cvtepu8_epi16(_mm_set1_epi32(fg));
+#endif
             __m128i pmask = _mm_cmpgt_epi32(_mm_set1_epi32(prefix), _mm_setr_epi32(3,2,1,0));
             __m128i smask = _mm_cmpgt_epi32(_mm_set1_epi32(suffix), _mm_setr_epi32(0,1,2,3));
 
@@ -418,7 +444,12 @@ void image_compose_glyph(struct image im, int16_t dx, int16_t dy, struct glyph *
             ssize_t suffix = (rect.x + width) & 3;
             ssize_t width4 = ((width + rect.x + 3) & ~3) - (rect.x & ~3);
 
+#ifdef __SSE4_1__
             __m128i fg16 = _mm_cvtepu8_epi16(_mm_set1_epi32(fg));
+#else
+            const __m128i zero = _mm_set1_epi32(0x0);
+            __m128i fg16 = _mm_unpacklo_epi8(_mm_set1_epi32(fg), zero);
+#endif
             __m128i pmask = _mm_cmpgt_epi32(_mm_set1_epi32(prefix), _mm_setr_epi32(3,2,1,0));
             __m128i smask = _mm_cmpgt_epi32(_mm_set1_epi32(suffix), _mm_setr_epi32(0,1,2,3));
 
