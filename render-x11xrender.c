@@ -75,6 +75,7 @@ struct render_context {
     struct element_buffer foreground_buf;
     struct element_buffer background_buf;
     struct element_buffer decoration_buf;
+    struct element_buffer decoration_buf2;
     struct element_buffer image_buf;
 
     /* To avoid leaking IDs of XRender pictures we cache
@@ -234,6 +235,8 @@ bool x11_xrender_reload_font(struct window *win, bool need_free) {
             glyph->x_off = win->char_width;
             register_glyph(win, i, glyph);
         }
+
+        register_glyph(win, GLYPH_UNDERCURL, win->undercurl_glyph);
     }
 
     if (need_free) {
@@ -423,6 +426,53 @@ static void draw_text(struct window *win, struct element_buffer *buf) {
     }
 }
 
+static void draw_undercurls(struct window *win, struct element_buffer *buf) {
+    for (struct element *it = buf->sorted, *end = buf->sorted + buf->size; it < end; ) {
+        /* Prepare pen */
+        color_t color = it->color;
+        xcb_render_color_t col = MAKE_COLOR(color);
+        xcb_rectangle_t rect2 = { .x = 0, .y = 0, .width = 1, .height = 1 };
+        xcb_render_fill_rectangles(con, XCB_RENDER_PICT_OP_SRC, get_plat(win)->pen, col, 1, &rect2);
+
+        /* Build payload... */
+
+        rctx.payload_size = 0;
+
+        int16_t old_x = 0, old_y = 0, x = it->x;
+        uint32_t count = it->width;
+        for (;;) {
+            adjust_msg_buffer();
+
+            struct glyph_msg *head = start_msg(x - old_x, it->y - old_y);
+            old_x = x, old_y = it->y;
+
+            do {
+                uint32_t g = GLYPH_UNDERCURL;
+                memcpy(rctx.payload + rctx.payload_size, &g, sizeof g);
+                rctx.payload_size += sizeof g;
+                head->len++;
+
+                x += win->char_width;
+                old_x += win->char_width;
+            } while (--count && head->len < CHARS_PER_MESG);
+
+            if (!count) {
+                if (++it >= end || color != it->color) break;
+                count = it->width;
+                x = it->x;
+            }
+        }
+
+        /* ..and send it */
+
+        if (rctx.payload_size) {
+            xcb_render_composite_glyphs_32(con, XCB_RENDER_PICT_OP_OVER,
+                    get_plat(win)->pen, get_plat(win)->pic1, get_plat(win)->pfglyph, get_plat(win)->gsid,
+                    0, 0, rctx.payload_size, rctx.payload);
+        }
+    }
+}
+
 
 /* X11-independent code is below */
 
@@ -439,6 +489,7 @@ void x11_xrender_free_context(void) {
     free_elem_buffer(&rctx.foreground_buf);
     free_elem_buffer(&rctx.background_buf);
     free_elem_buffer(&rctx.decoration_buf);
+    free_elem_buffer(&rctx.decoration_buf2);
     free_elem_buffer(&rctx.image_buf);
 }
 
@@ -448,6 +499,7 @@ void x11_xrender_init_context(void) {
     adjust_buffer((void **)&rctx.foreground_buf.data, &rctx.foreground_buf.caps, INIT_FG_CAPS, sizeof(struct element));
     adjust_buffer((void **)&rctx.background_buf.data, &rctx.background_buf.caps, INIT_BG_CAPS, sizeof(struct element));
     adjust_buffer((void **)&rctx.decoration_buf.data, &rctx.decoration_buf.caps, INIT_DEC_CAPS, sizeof(struct element));
+    adjust_buffer((void **)&rctx.decoration_buf2.data, &rctx.decoration_buf2.caps, INIT_DEC_CAPS, sizeof(struct element));
     adjust_buffer((void **)&rctx.image_buf.data, &rctx.image_buf.caps, INIT_DEC_CAPS, sizeof(struct element));
 
     xrender_init_context();
@@ -543,6 +595,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
     rctx.foreground_buf.size = 0;
     rctx.background_buf.size = 0;
     rctx.decoration_buf.size = 0;
+    rctx.decoration_buf2.size = 0;
     rctx.image_buf.size = 0;
     rctx.glyphs_size = 0;
 
@@ -663,38 +716,52 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
 
                 if (UNLIKELY(spec.underlined)) {
                     int16_t line_y = y + win->char_height + 1 + win->cfg.line_spacing/2;
-                    struct element *prev_dec = rctx.decoration_buf.data + rctx.decoration_buf.size - 1;
-                    if (rctx.decoration_buf.size && prev_dec->y == line_y  && prev_dec->color == spec.bg &&
-                            prev_dec->x == (i + 1)*win->char_width) {
-                        prev_dec->x -= win->char_width;
-                        prev_dec->width += win->char_width;
-                    } else if (rctx.decoration_buf.size > 1 && prev_dec[-1].y == line_y  && prev_dec[-1].color == spec.bg &&
-                            prev_dec[-1].x == (i + 1)*win->char_width) {
-                        prev_dec[-1].x -= win->char_width;
-                        prev_dec[-1].width += win->char_width;
-                    } else if (rctx.decoration_buf.size > 2 && prev_dec[-2].y == line_y  && prev_dec[-2].color == spec.ul &&
-                            prev_dec[-2].x == (i + 1)*win->char_width) {
-                        prev_dec[-2].x -= win->char_width;
-                        prev_dec[-2].width += win->char_width;
+                    if (spec.underlined == 3) {
+                        struct element *prev_dec = rctx.decoration_buf2.data + rctx.decoration_buf2.size - 1;
+                        if (rctx.decoration_buf2.size && prev_dec->y == line_y && prev_dec->color == spec.ul &&
+                                prev_dec->x == (i + 1)*win->char_width) {
+                            prev_dec->width++;
+                            prev_dec->x -= win->char_width;
+                        } else {
+                            push_element(&rctx.decoration_buf2, &(struct element) {
+                                .x = win->cfg.left_border + i * win->char_width,
+                                .y = win->cfg.top_border + line_y,
+                                .color = spec.ul,
+                                .width = 1,
+                            });
+                        }
                     } else {
-                        push_element(&rctx.decoration_buf, &(struct element) {
-                            .x = win->cfg.left_border + i * win->char_width,
-                            .y = win->cfg.top_border + line_y,
-                            .color = spec.ul,
-                            .width = win->char_width,
-                            .height = win->cfg.underline_width,
-                        });
-                        if (spec.underlined > 1) {
+                        struct element *prev_dec = rctx.decoration_buf.data + rctx.decoration_buf.size - 1;
+                        if (rctx.decoration_buf.size && prev_dec->y == line_y  && prev_dec->color == spec.ul &&
+                                prev_dec->x == (i + 1)*win->char_width) {
+                            prev_dec->x -= win->char_width;
+                            prev_dec->width += win->char_width;
+                        } else if (rctx.decoration_buf.size > 1 && prev_dec[-1].y == line_y  && prev_dec[-1].color == spec.ul &&
+                                prev_dec[-1].x == (i + 1)*win->char_width) {
+                            prev_dec[-1].x -= win->char_width;
+                            prev_dec[-1].width += win->char_width;
+                        } else if (rctx.decoration_buf.size > 2 && prev_dec[-2].y == line_y && prev_dec[-2].color == spec.ul &&
+                                prev_dec[-2].x == (i + 1)*win->char_width) {
+                            prev_dec[-2].x -= win->char_width;
+                            prev_dec[-2].width += win->char_width;
+                        } else {
                             push_element(&rctx.decoration_buf, &(struct element) {
                                 .x = win->cfg.left_border + i * win->char_width,
-                                .y = win->cfg.top_border + line_y + win->cfg.underline_width + 1,
+                                .y = win->cfg.top_border + line_y,
                                 .color = spec.ul,
                                 .width = win->char_width,
                                 .height = win->cfg.underline_width,
                             });
+                            if (spec.underlined > 1) {
+                                push_element(&rctx.decoration_buf, &(struct element) {
+                                    .x = win->cfg.left_border + i * win->char_width,
+                                    .y = win->cfg.top_border + line_y + win->cfg.underline_width + 1,
+                                    .color = spec.ul,
+                                    .width = win->char_width,
+                                    .height = win->cfg.underline_width,
+                                });
+                            }
                         }
-
-                        // TODO curly
                     }
                 }
 
@@ -802,6 +869,9 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
     /* Draw underline and strikethrough lines */
     sort_by_color(&rctx.decoration_buf);
     draw_rects(win, &rctx.decoration_buf);
+
+    sort_by_color(&rctx.decoration_buf2);
+    draw_undercurls(win, &rctx.decoration_buf2);
 
     if (cursor) draw_cursor(win, cur_x, cur_y, marg, beyond_eol);
 

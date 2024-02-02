@@ -15,4 +15,3 @@ inline static bool is_boxdraw(uint32_t ch) {
 }
 
 #endif
-

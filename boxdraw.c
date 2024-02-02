@@ -41,16 +41,16 @@ struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t de
 
     if (force_aligned) {
         /* X11 MIT-SHM requires 16 byte alignment */
-        stride = (width + 3) & ~3;
+        stride = ROUNDUP(width, 4);
         if (lcd) stride *= 4;
     } else {
         /* X11 XRender backend requires all glyphs
          * to be in the same format (i.e. subpixel or not) */
-        stride = lcd ? width * 4 : (width + 3) & ~3;
+        stride = lcd ? width * 4U : ROUNDUP(width, 4);
     }
 
-    struct glyph *glyph = aligned_alloc(CACHE_LINE, (sizeof(struct glyph) +
-            stride * (height + depth) * sizeof(uint8_t) + CACHE_LINE - 1) & ~(CACHE_LINE - 1));
+    struct glyph *glyph = aligned_alloc(CACHE_LINE, sizeof(struct glyph) +
+            ROUNDUP(stride * (height + depth) * sizeof(uint8_t), CACHE_LINE));
     if (!glyph) return NULL;
 
     glyph->y_off = 0;

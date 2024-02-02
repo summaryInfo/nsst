@@ -87,6 +87,7 @@ struct window {
     int16_t char_height;
     struct font *font;
     struct glyph_cache *font_cache;
+    struct glyph *undercurl_glyph;
     enum pixel_mode font_pixmode;
 
     struct term *term;

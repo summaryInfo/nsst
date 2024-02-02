@@ -398,7 +398,8 @@ struct window *window_find_shared_font(struct window *win, bool need_free, bool 
     }
 
     struct glyph_cache *newc = found_cache ? glyph_cache_ref(found->font_cache) :
-            create_glyph_cache(newf, win->cfg.pixel_mode, win->cfg.line_spacing, win->cfg.font_spacing, win->cfg.override_boxdraw, force_aligned);
+            create_glyph_cache(newf, win->cfg.pixel_mode, win->cfg.line_spacing, win->cfg.font_spacing,
+                               win->cfg.underline_width, win->cfg.override_boxdraw, force_aligned);
 
     if (need_free) {
         free_glyph_cache(win->font_cache);
@@ -407,6 +408,7 @@ struct window *window_find_shared_font(struct window *win, bool need_free, bool 
 
     win->font = newf;
     win->font_cache = newc;
+    win->undercurl_glyph = glyph_cache_fetch(win->font_cache, GLYPH_UNDERCURL, face_normal, NULL);
     win->cfg.font_size = font_get_size(newf);
 
     /* Initialize default font size */

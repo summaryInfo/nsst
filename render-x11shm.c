@@ -280,12 +280,16 @@ bool x11_shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, boo
 
                 /* Underline */
                 if (spec.underlined) {
-                    image_draw_rect(get_plat(win)->im, r_under, spec.ul);
-                    if (spec.underlined > 1) {
-                        r_under.y += ul + 1;
+                    if (spec.underlined < 3) {
                         image_draw_rect(get_plat(win)->im, r_under, spec.ul);
+                        if (spec.underlined == 2) {
+                            image_draw_rect(get_plat(win)->im, r_under, spec.ul);
+                            r_under.y += ul + 1;
+                        }
+                    } else {
+                        r_under.height = win->char_depth + 1;
+                        image_compose_glyph(get_plat(win)->im, r_under.x, r_under.y, win->undercurl_glyph, spec.ul, r_under);
                     }
-                    // TODO curly
                 }
 
                 /* Strikethrough */
