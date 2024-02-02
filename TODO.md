@@ -6,13 +6,7 @@ Roadmap
 
 ### Until 2.5
 
-* Refactor screen arrays
-  * Lazy resizing?
-
-* Make config format more sophisticated. Support arrays and quoted strings.
-
-* Re-implement mouse selection via line_handle's to (mostly) remove special case.
-  * "Mostly", because we still would need to notify mouse code upon relocation.
+* Wayland
 
 * Underlines
   * `CSI 4:3 m` -- curly underline
@@ -23,9 +17,15 @@ _NOTE: These plans can change any time_
 
 ### Until 2.6 (or later)
 
-* (Maybe) show helper when hovering over URL.
+* Refactor screen arrays
+  * Lazy resizing?
 
-* Wayland
+* Make config format more sophisticated. Support arrays and quoted strings.
+
+* Re-implement mouse selection via line_handle's to (mostly) remove special case.
+  * "Mostly", because we still would need to notify mouse code upon relocation.
+
+* (Maybe) show helper when hovering over URL.
 
 * IME support
 
