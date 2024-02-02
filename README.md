@@ -138,13 +138,15 @@ Built-in mouse interactions:
 
 * Scroll with mouse wheel.
 * Jump between commands with Alt+mouse wheel (if your shell supports it more on shell integration below).
-* Selection with left click, word selection on double left click, line selection on triple left click.
-* Rectangular selection is Alt+left click (double and triple clicks will snap to words/lines).
+* Select with left click, select snapping on words on double left click, select snapping on lines on triple left click.
+* Select rectangular area with Alt+left click (double click will snap to words).
+* Select whole command output with Alt+triple click (requires shell integration).
 
 ### Shell integration
 
 The most basic way to enable it is to put `\033]133;A\a` at the beginning of your shell prompt and `\e]133;B\a` at the end to enable jumping between commands with `T-F`/`T-B`.
 To make T-N open window in current directory make sure to wrap `cd` to output `\033]7;$PWD\a` after directory change to notify the terminal.
+To enable selecting whole command output (with Alt+triple click) additionally put `\033]133;D\a` at the end of the right prompt or before the beginning of the command output.
 
 _FIXME: write terminal integration snippets for most shells._
 
