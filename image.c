@@ -280,25 +280,22 @@ inline static __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) 
 }
 
 FORCEINLINE
-inline static __m128i load_n_higher(void *src, int w) {
-    // TODO This definitely could be done better
+inline static __m128i load_masked(void *src, int w, int s) {
     uint32_t *ptr = src;
-    switch (w) {
-    case 1: return _mm_setr_epi32(0, 0, 0, ptr[0]);
-    case 2: return _mm_setr_epi32(0, 0, ptr[0], ptr[1]);
-    case 3: return _mm_setr_epi32(0, ptr[0], ptr[1], ptr[2]);
-    default: return _mm_set1_epi32(0);
-    }
-}
-
-FORCEINLINE
-inline static __m128i load_n_lower(void *src, int w) {
-    uint32_t *ptr = src;
-    switch (w) {
-    case 1: return _mm_setr_epi32(ptr[0], 0, 0, 0);
-    case 2: return _mm_setr_epi32(ptr[0], ptr[1], 0, 0);
-    case 3: return _mm_setr_epi32(ptr[0], ptr[1], ptr[2], 0);
-    default: return _mm_set1_epi32(0);
+    if (s) {
+        switch (w) {
+        case 1: return _mm_setr_epi32(0, 0, 0, ptr[0]);
+        case 2: return _mm_setr_epi32(0, 0, ptr[0], ptr[1]);
+        case 3: return _mm_setr_epi32(0, ptr[0], ptr[1], ptr[2]);
+        default: return _mm_set1_epi32(0);
+        }
+    } else {
+        switch (w) {
+        case 1: return _mm_setr_epi32(ptr[0], 0, 0, 0);
+        case 2: return _mm_setr_epi32(ptr[0], ptr[1], 0, 0);
+        case 3: return _mm_setr_epi32(ptr[0], ptr[1], ptr[2], 0);
+        default: return _mm_set1_epi32(0);
+        }
     }
 }
 
@@ -322,7 +319,7 @@ inline static void over(void *dst, __m128i fg16, void *palpha) {
 
 FORCEINLINE
 inline static void over_mask_subpix(void *dst, __m128i fg16, __m128i mask, void *palpha, int d, int s) {
-    __m128i alpha = (s ? load_n_higher : load_n_lower)(palpha, d);
+    __m128i alpha = load_masked(palpha, d, s);
     __m128i pref = _mm_load_si128(dst);
     __m128i dstm = _mm_andnot_si128(mask, pref);
     __m128i srcm = _mm_and_si128(mask, op_over4_subpix(pref, fg16, alpha));
