@@ -202,13 +202,17 @@ static void load_face_list(struct font *font, struct face_list* faces, const cha
         if (pats.length + 1 > pats.caps)
             adjust_buffer((void **)&pats.pats, &pats.caps, pats.length + 1, sizeof(*pats.pats));
 
+        FcValue fc_color;
+        if (FcPatternGet(final_pat, FC_COLOR, 0, &fc_color) != FcResultMatch)
+            fc_color.u.b = false;
+
         FcValue pixsize;
-        if (FcPatternGet(final_pat, FC_PIXEL_SIZE, 0, &pixsize) == FcResultMatch) {
+        if (!fc_color.u.b && FcPatternGet(final_pat, FC_PIXEL_SIZE, 0, &pixsize) == FcResultMatch) {
             if (pixsize.u.d > font->pixel_size)
                 font->pixel_size = pixsize.u.d;
         }
         FcValue fsize;
-        if (size < 2 && FcPatternGet(final_pat, FC_SIZE, 0, &fsize) == FcResultMatch) {
+        if (!fc_color.u.b && size < 2 && FcPatternGet(final_pat, FC_SIZE, 0, &fsize) == FcResultMatch) {
             if (fsize.u.d > font->size) {
                 font->size = fsize.u.d;
             }
