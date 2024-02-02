@@ -107,6 +107,21 @@ struct image create_image(int16_t width, int16_t height) {
     return im;
 }
 
+static inline FORCEINLINE void draw_mask(uint32_t *dst, __m128i mask, __m128i value) {
+    __m128i p = _mm_andnot_si128(mask, _mm_load_si128((__m128i *)dst));
+    _mm_store_si128((__m128i *)dst, _mm_or_si128(p, value));
+}
+
+static inline FORCEINLINE void draw_bulk(uint32_t rem, __m128i *dst, __m128i *limit, __m128i value) {
+    switch (rem) do {
+        case 0: _mm_store_si128(dst + 4 - 4, value); /* fallthrough */
+        case 3: _mm_store_si128(dst + 4 - 3, value); /* fallthrough */
+        case 2: _mm_store_si128(dst + 4 - 2, value); /* fallthrough */
+        case 1: _mm_store_si128(dst + 4 - 1, value); continue;
+        default: __builtin_unreachable();
+    } while ((dst += 4) < limit);
+}
+
 void image_draw_rect(struct image im, struct rect rect, color_t fg) {
     if (intersect_with(&rect, &(struct rect){0, 0, im.width, im.height})) {
         /* That's a hack for PutImage
@@ -122,6 +137,9 @@ void image_draw_rect(struct image im, struct rect rect, color_t fg) {
         ssize_t prefix = -rect.x & 3;
         ssize_t suffix = (rect.x + width) & 3;
         ssize_t width4 = ((width + rect.x + 3) & ~3) - (rect.x & ~3);
+        ssize_t xmax = (width4 + 3)/4 - !!suffix;
+        ssize_t xrem = (xmax - !!prefix) & 3;
+        ssize_t xinit = !!prefix + (xrem - 4)*!!xrem;
 
         __m128i fg4 = _mm_set1_epi32(fg);
         __m128i pmask = _mm_cmpgt_epi32(_mm_set1_epi32(prefix), _mm_setr_epi32(3,2,1,0));
@@ -131,61 +149,48 @@ void image_draw_rect(struct image im, struct rect rect, color_t fg) {
 
         if (suffix && prefix) {
             if (width4 > 8) /* big with unaligned suffix and prefix */ {
-                for (ssize_t y = 0; y < height; y++) {
-                    __m128i p = _mm_andnot_si128(pmask, _mm_load_si128((__m128i *)&ptr[y * stride]));
-                    _mm_store_si128((__m128i *)&ptr[y * stride], _mm_or_si128(p, pmask_fg));
-                    for (ssize_t x = 4; x < width4 - 4; x += 4)
-                        _mm_store_si128((__m128i *)&ptr[y * stride + x], fg4);
-                    __m128i s = _mm_andnot_si128(smask, _mm_load_si128((__m128i *)&ptr[y * stride + width4 - 4]));
-                    _mm_store_si128((__m128i *)&ptr[y * stride + width4 - 4], _mm_or_si128(s, smask_fg));
+                for (uint32_t *y = ptr, *yend = ptr + stride*height; y < yend; y += stride) {
+                    draw_mask(y, pmask, pmask_fg);
+                    draw_bulk(xrem, (__m128i *)y + xinit, (__m128i *)y + xmax, fg4);
+                    draw_mask(y + width4 - 4, smask, smask_fg);
                 }
             } else if (width4 > 4) /* small with unaligned suffix and prefix */ {
-                for (ssize_t y = 0; y < height; y++) {
-                    __m128i p = _mm_andnot_si128(pmask, _mm_load_si128((__m128i *)&ptr[y * stride]));
-                    _mm_store_si128((__m128i *)&ptr[y * stride], _mm_or_si128(p, pmask_fg));
-                    __m128i s = _mm_andnot_si128(smask, _mm_load_si128((__m128i *)&ptr[y * stride + 4]));
-                    _mm_store_si128((__m128i *)&ptr[y * stride + 4], _mm_or_si128(s, smask_fg));
+                for (uint32_t *y = ptr, *yend = ptr + stride*height; y < yend; y += stride) {
+                    draw_mask(y, pmask, pmask_fg);
+                    draw_mask(y + 4, smask, smask_fg);
                 }
             } else /* less than 4, unaligned */ {
                 __m128i mask = _mm_and_si128(pmask, smask);
                 __m128i mask_fg = _mm_and_si128(fg4, mask);
-                for (ssize_t y = 0; y < height; y++) {
-                    __m128i s = _mm_andnot_si128(mask, _mm_load_si128((__m128i *)&ptr[y * stride]));
-                    _mm_store_si128((__m128i *)&ptr[y * stride], _mm_or_si128(s, mask_fg));
+                for (uint32_t *y = ptr, *yend = ptr + stride*height; y < yend; y += stride) {
+                    draw_mask(y, mask, mask_fg);
                 }
             }
         } else if (suffix) {
             if (width4 > 4) /* big with unaligned suffix */ {
-                for (ssize_t y = 0; y < height; y++) {
-                    for (ssize_t x = 0; x < width4 - 4; x += 4)
-                        _mm_store_si128((__m128i *)&ptr[y * stride + x], fg4);
-                    __m128i s = _mm_andnot_si128(smask, _mm_load_si128((__m128i *)&ptr[y * stride + width4 - 4]));
-                    _mm_store_si128((__m128i *)&ptr[y * stride + width4 - 4], _mm_or_si128(s, smask_fg));
+                for (uint32_t *y = ptr, *yend = ptr + stride*height; y < yend; y += stride) {
+                    draw_bulk(xrem, (__m128i *)y + xinit, (__m128i *)y + xmax, fg4);
+                    draw_mask(y + width4 - 4, smask, smask_fg);
                 }
             } else /* small with unaligned suffix */ {
-                for (ssize_t y = 0; y < height; y++) {
-                    __m128i s = _mm_andnot_si128(smask, _mm_load_si128((__m128i *)&ptr[y * stride]));
-                    _mm_store_si128((__m128i *)&ptr[y * stride], _mm_or_si128(s, smask_fg));
+                for (uint32_t *y = ptr, *yend = ptr + stride*height; y < yend; y += stride) {
+                    draw_mask(y, smask, smask_fg);
                 }
             }
         } else if (prefix) {
             if (width4 > 4) /* big with unaligned prefix */ {
-                for (ssize_t y = 0; y < height; y++) {
-                    __m128i p = _mm_andnot_si128(pmask, _mm_load_si128((__m128i *)&ptr[y * stride]));
-                    _mm_store_si128((__m128i *)&ptr[y * stride], _mm_or_si128(p, pmask_fg));
-                    for (ssize_t x = 4; x < width4; x += 4)
-                        _mm_store_si128((__m128i *)&ptr[y * stride + x], fg4);
+                for (uint32_t *y = ptr, *yend = ptr + stride*height; y < yend; y += stride) {
+                    draw_mask(y, pmask, pmask_fg);
+                    draw_bulk(xrem, (__m128i *)y + xinit, (__m128i *)y + xmax, fg4);
                 }
             } else /* small with unaligned prefix */ {
-                for (ssize_t y = 0; y < height; y++) {
-                    __m128i p = _mm_andnot_si128(pmask, _mm_load_si128((__m128i *)&ptr[y * stride]));
-                    _mm_store_si128((__m128i *)&ptr[y * stride], _mm_or_si128(p, pmask_fg));
+                for (uint32_t *y = ptr, *yend = ptr + stride*height; y < yend; y += stride) {
+                    draw_mask(y, pmask, pmask_fg);
                 }
             }
         } else /* everything is aligned */ {
-            for (ssize_t y = 0; y < height; y++) {
-                for (ssize_t x = 0; x < width4; x += 4)
-                    _mm_store_si128((__m128i *)&ptr[y * stride + x], fg4);
+            for (uint32_t *y = ptr, *yend = ptr + stride*height; y < yend; y += stride) {
+                draw_bulk(xrem, (__m128i *)y + xinit, (__m128i *)y + xmax, fg4);
             }
         }
 #else
