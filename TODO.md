@@ -67,11 +67,6 @@ _NOTE: These plans can change any time_
 
 * Font rendering
 
-  * Colored glyphs
-
-      This will allow rendering emoji
-      In XRender this will require to use PutImage on every emoji (the most straight-forward solution)
-
   * Add options to select width of ambiguous characters
 
   * Combining characters support
