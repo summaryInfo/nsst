@@ -385,6 +385,7 @@ static struct glyph *downsample_glyph(struct glyph *glyph, uint32_t targ_width, 
     nglyph->stride = stride;
     nglyph->pixmode = glyph->pixmode;
     nglyph->g = glyph->g;
+    nglyph->id = 0;
 
     for (ssize_t i = 0; i < targ_height; i++) {
         for (ssize_t j = 0; j < targ_width; j++) {
@@ -457,6 +458,7 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
     glyph->y_off = face->glyph->advance.y/64.;
     glyph->stride = stride;
     glyph->pixmode = ord;
+    glyph->id = 0;
 
     double gamma = font->gamma;
 
@@ -631,8 +633,13 @@ void glyph_cache_get_dim(struct glyph_cache *cache, int16_t *w, int16_t *h, int1
 void free_glyph_cache(struct glyph_cache *cache) {
     if (!--cache->refc) {
         ht_iter_t it = ht_begin(&cache->glyphs);
-        while (ht_current(&it))
-            free(ht_erase_current(&it));
+        while (ht_current(&it)) {
+            ht_head_t *elem = ht_erase_current(&it);
+#if USE_XRENDER
+            x11_xrender_release_glyph((struct glyph *)elem);
+#endif
+            free(elem);
+        }
         ht_free(&cache->glyphs);
         free(cache);
     }

@@ -21,6 +21,8 @@ struct glyph_msg {
     uint8_t data[];
 };
 
+#define FREE_IDS_INIT_CAPS 32
+
 struct element {
     /* Only one structure is used
      * for both text and rectangles
@@ -28,7 +30,10 @@ struct element {
      * sort function */
     int16_t x;
     int16_t y;
-    color_t color;
+    union {
+        color_t color;
+        uint32_t picture;
+    };
     union {
         /* Width and height of rectangle to draw */
         struct {
@@ -70,6 +75,13 @@ struct render_context {
     struct element_buffer foreground_buf;
     struct element_buffer background_buf;
     struct element_buffer decoration_buf;
+    struct element_buffer image_buf;
+
+    /* To avoid leaking IDs of XRender pictures we cache
+     * free IDs in this array and reuse them as necessary */
+    uint32_t *free_ids;
+    size_t id_capacity;
+    size_t id_count;
 };
 
 static struct render_context rctx;
@@ -90,15 +102,43 @@ static struct render_context rctx;
 #define INIT_DEC_CAPS 16
 #define INIT_PAYLOAD_CAPS (WORDS_IN_MESSAGE * sizeof(uint32_t))
 
-static void register_glyph(struct window *win, uint32_t ch, struct glyph *glyph) {
-    xcb_render_glyphinfo_t spec = {
-        .width = glyph->width, .height = glyph->height,
-        .x = glyph->x - win->cfg.font_spacing/2, .y = glyph->y - win->cfg.line_spacing/2,
-        .x_off = win->char_width*(1 + (uwidth(ch & 0xFFFFFF) > 1)), .y_off = glyph->y_off
-    };
+static uint32_t alloc_cached_id(void) {
+    if (rctx.id_count == 0)
+        return xcb_generate_id(con);
+    return rctx.free_ids[--rctx.id_count];
+}
 
-    xcb_render_add_glyphs(con, get_plat(win)->gsid, 1, &ch, &spec,
-                          glyph->height*glyph->stride, glyph->data);
+static void free_cached_id(uint32_t id) {
+    adjust_buffer((void **)&rctx.free_ids, &rctx.id_capacity, rctx.id_count + 1, sizeof *rctx.free_ids);
+    rctx.free_ids[rctx.id_count++] = id;
+}
+
+static void register_glyph(struct window *win, uint32_t ch, struct glyph *glyph) {
+    if (glyph->pixmode == pixmode_bgra) {
+        glyph->id = alloc_cached_id();
+
+        if (get_plat(win)->glyph_pid == 0)
+            get_plat(win)->glyph_pid = xcb_generate_id(con);
+
+        xcb_create_pixmap(con, TRUE_COLOR_ALPHA_DEPTH, get_plat(win)->glyph_pid, get_plat(win)->wid, glyph->width, glyph->height);
+        xcb_put_image(con, XCB_IMAGE_FORMAT_Z_PIXMAP, get_plat(win)->glyph_pid, get_plat(win)->gc,
+                glyph->stride/sizeof(color_t), glyph->height, 0, 0, 0, TRUE_COLOR_ALPHA_DEPTH,
+                glyph->height * glyph->stride, (const uint8_t *)glyph->data);
+        uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
+        uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
+        xcb_render_create_picture(con, glyph->id, get_plat(win)->glyph_pid, rctx.pfargb, mask3, values3);
+        xcb_free_pixmap(con, get_plat(win)->glyph_pid);
+
+    } else {
+        xcb_render_glyphinfo_t spec = {
+            .width = glyph->width, .height = glyph->height,
+            .x = glyph->x - win->cfg.font_spacing/2, .y = glyph->y - win->cfg.line_spacing/2,
+            .x_off = win->char_width*(1 + (uwidth(ch & 0xFFFFFF) > 1)), .y_off = glyph->y_off
+        };
+
+        xcb_render_add_glyphs(con, get_plat(win)->gsid, 1, &ch, &spec,
+                              glyph->height*glyph->stride, glyph->data);
+    }
 }
 
 inline static void do_draw_rects(struct window *win, struct rect *rects, ssize_t count, color_t color) {
@@ -159,6 +199,14 @@ void x11_xrender_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
 
     xcb_render_free_picture(con, get_plat(win)->pic2);
     xcb_free_pixmap(con, get_plat(win)->pid2);
+}
+
+
+void x11_xrender_release_glyph(struct glyph *glyph) {
+    if (glyph->pixmode == pixmode_bgra && glyph->id) {
+        xcb_render_free_picture(con, glyph->id);
+        free_cached_id(glyph->id);
+    }
 }
 
 bool x11_xrender_reload_font(struct window *win, bool need_free) {
@@ -296,6 +344,9 @@ static void xrender_init_context(void) {
         xcb_disconnect(con);
         die("Can't find suitable picture format");
     }
+
+    rctx.free_ids = xalloc(FREE_IDS_INIT_CAPS * sizeof *rctx.free_ids);
+    rctx.id_capacity = FREE_IDS_INIT_CAPS;
 }
 
 void x11_xrender_update(struct window *win, struct rect rect) {
@@ -384,9 +435,11 @@ inline static void free_elem_buffer(struct element_buffer *buf) {
 void x11_xrender_free_context(void) {
     free(rctx.payload);
     free(rctx.glyphs);
+    free(rctx.free_ids);
     free_elem_buffer(&rctx.foreground_buf);
     free_elem_buffer(&rctx.background_buf);
     free_elem_buffer(&rctx.decoration_buf);
+    free_elem_buffer(&rctx.image_buf);
 }
 
 void x11_xrender_init_context(void) {
@@ -395,6 +448,7 @@ void x11_xrender_init_context(void) {
     adjust_buffer((void **)&rctx.foreground_buf.data, &rctx.foreground_buf.caps, INIT_FG_CAPS, sizeof(struct element));
     adjust_buffer((void **)&rctx.background_buf.data, &rctx.background_buf.caps, INIT_BG_CAPS, sizeof(struct element));
     adjust_buffer((void **)&rctx.decoration_buf.data, &rctx.decoration_buf.caps, INIT_DEC_CAPS, sizeof(struct element));
+    adjust_buffer((void **)&rctx.image_buf.data, &rctx.image_buf.caps, INIT_DEC_CAPS, sizeof(struct element));
 
     xrender_init_context();
 }
@@ -489,6 +543,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
     rctx.foreground_buf.size = 0;
     rctx.background_buf.size = 0;
     rctx.decoration_buf.size = 0;
+    rctx.image_buf.size = 0;
     rctx.glyphs_size = 0;
 
     bool slow_path = win->cfg.special_bold || win->cfg.special_underline || win->cfg.special_blink || win->cfg.blend_fg ||
@@ -576,20 +631,30 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                 /* Push character if present, grouping by color */
 
                 if (spec.ch) {
-                    g |=  (uint32_t)spec.wide << 31;
-                    struct element *prev_fg = rctx.foreground_buf.data + rctx.foreground_buf.size - 1;
-                    if (LIKELY(rctx.foreground_buf.size && prev_fg->y == y + win->char_height &&
-                            prev_fg->color == spec.fg && prev_fg->x == (i + spec.wide + 1)*win->char_width)) {
-                        prev_fg->glyphs = push_char(g);
-                        prev_fg->x -= win->char_width*(1 + spec.wide);
-                    } else {
-                        push_char(0);
-                        push_element(&rctx.foreground_buf, &(struct element) {
-                            .x = win->cfg.left_border + i * win->char_width,
-                            .y = win->cfg.top_border + y + win->char_height,
-                            .color = spec.fg,
-                            .glyphs = push_char(g),
+                    if (glyph->pixmode == pixmode_bgra) {
+                        push_element(&rctx.image_buf, &(struct element) {
+                            .x = win->cfg.left_border + i * win->char_width - glyph->x,
+                            .y = win->cfg.top_border + y + win->char_height - glyph->y,
+                            .picture = glyph->id,
+                            .width = glyph->width,
+                            .height = glyph->height,
                         });
+                    } else {
+                        g |=  (uint32_t)spec.wide << 31;
+                        struct element *prev_fg = rctx.foreground_buf.data + rctx.foreground_buf.size - 1;
+                        if (LIKELY(rctx.foreground_buf.size && prev_fg->y == y + win->char_height &&
+                                prev_fg->color == spec.fg && prev_fg->x == (i + spec.wide + 1)*win->char_width)) {
+                            prev_fg->glyphs = push_char(g);
+                            prev_fg->x -= win->char_width*(1 + spec.wide);
+                        } else {
+                            push_char(0);
+                            push_element(&rctx.foreground_buf, &(struct element) {
+                                .x = win->cfg.left_border + i * win->char_width,
+                                .y = win->cfg.top_border + y + win->char_height,
+                                .color = spec.fg,
+                                .glyphs = push_char(g),
+                            });
+                        }
                     }
                 }
 
@@ -707,6 +772,13 @@ static void draw_rects(struct window *win, struct element_buffer *buf) {
     }
 }
 
+static void draw_images(struct window *win, struct element_buffer *buf) {
+    for (struct element *it = buf->data, *end = buf->data + buf->size; it < end; it++) {
+        xcb_render_composite(con, XCB_RENDER_PICT_OP_OVER, it->picture, 0, get_plat(win)->pic1,
+                             0, 0, 0, 0, it->x, it->y, it->width, it->height);
+    }
+}
+
 bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
     bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
     bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1);
@@ -723,6 +795,7 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
 
     sort_by_color(&rctx.foreground_buf);
     draw_text(win, &rctx.foreground_buf);
+    draw_images(win, &rctx.image_buf);
 
     if (rctx.background_buf.size) reset_clip(win);
 

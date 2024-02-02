@@ -134,4 +134,6 @@ bool init_daemon(void);
 void free_daemon(void);
 bool daemon_process_clients(void);
 
+void x11_xrender_release_glyph(struct glyph *);
+
 #endif

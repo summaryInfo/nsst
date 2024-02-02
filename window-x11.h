@@ -47,6 +47,8 @@ struct platform_window {
             xcb_pixmap_t pid2;
             xcb_render_picture_t pic2;
 
+            xcb_pixmap_t glyph_pid;
+
             xcb_render_picture_t pen;
             xcb_render_glyphset_t gsid;
             xcb_render_pictformat_t pfglyph;

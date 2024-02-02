@@ -34,6 +34,10 @@ enum pixel_mode {
 struct glyph {
     ht_head_t head;
 
+#ifdef USE_XRENDER
+    uint32_t id;
+#endif
+
     uint32_t g;
     uint16_t width, height;
     int16_t x, y;
