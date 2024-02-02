@@ -133,7 +133,7 @@ _NOTE: These plans can change any time_
 
   * `CSI 4:4 m` -- dotted underline
   * `CSI 4:5 m` -- dashed underline
-  * `CSI ? 1039 l` / `CSI ? 1039 h` -- Alt sends escape (There's no plant to differentiate `Alt` and `Meta`)
+  * `CSI ? 1039 l` / `CSI ? 1039 h` -- Alt sends escape (There's no plans to differentiate `Alt` and `Meta`)
   * `CSI ? 14 l` / `CSI ? 14 h` -- Cursor blinking XORing
   * `CSI Pm # p, CSI Pm # {` -- **XTPUSHSGR**
   * `CSI # q, CSI # }` -- **XTPOPSGR**
