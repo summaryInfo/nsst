@@ -8,9 +8,6 @@ Roadmap
 
 * Wayland
 
-* Underlines
-  * `CSI 4:3 m` -- curly underline
-
 * Allow geometry to be specified in characters
 
 _NOTE: These plans can change any time_
