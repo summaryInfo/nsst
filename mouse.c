@@ -296,7 +296,7 @@ static struct line_span snap_backward(struct selection_state *sel, struct line_s
             for (; pos.offset; ) {
                 int delta = 1 + (pos.offset > 1 && cell_wide(line->cell + pos.offset - 2));
                 if (pos.offset - delta < 0) break;
-                if (sep_cur != is_separator(cell_get(line->cell + pos.offset - delta), seps)) return pos;
+                if (sep_cur != is_separator(cell_get(line->cell + pos.offset - delta), seps)) goto out;
                 pos.offset -= delta;
             }
 
@@ -316,9 +316,10 @@ static struct line_span snap_backward(struct selection_state *sel, struct line_s
             pos.line = prev;
             pos.offset = line->size - delta;
         }
-    } else {
-        pos.offset -= !pos.line->cell[pos.offset].ch && pos.offset && cell_wide(pos.line->cell + pos.offset - 1);
     }
+
+out:
+    pos.offset -= !pos.line->cell[pos.offset].ch && pos.offset && cell_wide(pos.line->cell + pos.offset - 1);
 
     return pos;
 }
@@ -348,7 +349,7 @@ static struct line_span snap_forward(struct selection_state *sel, struct line_sp
             for (; pos.offset < line->size; ) {
                 int delta = 1 + (cell_wide(line->cell + pos.offset) && pos.offset < line->size - 1);
                 if (line->size <= pos.offset + delta) break;
-                if (sep_cur != is_separator(cell_get(line->cell + pos.offset + delta), seps)) return pos;
+                if (sep_cur != is_separator(cell_get(line->cell + pos.offset + delta), seps)) goto out;
                 pos.offset += delta;
             }
 
@@ -367,10 +368,12 @@ static struct line_span snap_forward(struct selection_state *sel, struct line_sp
             pos.line = next;
             pos.offset = 0;
         }
-    } else {
-        if (pos.line && pos.offset + 1 < pos.line->size)
-            pos.offset += cell_wide(pos.line->cell + pos.offset);
     }
+
+out:
+    /* We should not land on the first cell of a wide character */
+    if (pos.line && pos.offset + 1 < pos.line->size)
+        pos.offset += cell_wide(pos.line->cell + pos.offset);
 
     return pos;
 }
