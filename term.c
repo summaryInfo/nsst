@@ -1176,8 +1176,10 @@ static void term_dispatch_osc(struct term *term) {
             if (dstr[0] == 'A')
                 screen_cursor_line_set_prompt(scr);
             break;
-        case 'B': /* Command start */
         case 'C': /* Command executed */
+            screen_cursor_line_set_cmd_start(scr);
+            break;
+        case 'B': /* Command start */
             /* nothing */
             break;
         default:

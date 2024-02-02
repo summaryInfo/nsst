@@ -179,8 +179,16 @@ inline static struct line *screen_realloc_line(struct screen *scr, struct line *
 }
 
 void screen_cursor_line_set_prompt(struct screen *scr) {
-    struct line_span *view = &scr->screen[scr->c.y];
-    view->line->sh_ps1_start = true;
+    struct line *line = scr->screen[scr->c.y].line;
+    line->sh_ps1_start = true;
+}
+
+void screen_cursor_line_set_cmd_start(struct screen *scr) {
+    struct line *line = scr->screen[scr->c.y].line;
+    if (screen_cursor_x(scr) <= screen_min_x(scr))
+        line = line->prev;
+    if (line)
+        line->sh_cmd_start = true;
 }
 
 inline static void screen_adjust_line_ex(struct screen *scr, struct screen_storage *screen, ssize_t y, ssize_t clear_to, ssize_t size) {

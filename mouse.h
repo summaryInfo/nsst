@@ -79,6 +79,7 @@ struct selection_state {
         snap_none,
         snap_word,
         snap_line,
+        snap_command,
     } snap;
 
     enum {

@@ -270,7 +270,17 @@ inline static bool is_separator(uint32_t ch, char *seps) {
 static struct line_span snap_backward(struct selection_state *sel, struct line_span pos) {
     char *seps = window_cfg(sel->win)->word_separators;
 
-    if (sel->snap == snap_line) {
+    if (sel->snap == snap_command) {
+        pos.offset = 0;
+        struct line *prev_line;
+        for (;;) {
+            prev_line = pos.line->prev;
+            if (!prev_line ||
+                prev_line->sh_cmd_start ||
+                pos.line->sh_ps1_start) break;
+            pos.line = prev_line;
+        }
+    } else if (sel->snap == snap_line) {
         pos.offset = 0;
         struct line *prev_line;
         for (;;) {
@@ -327,7 +337,15 @@ out:
 static struct line_span snap_forward(struct selection_state *sel, struct line_span pos) {
     char *seps = window_cfg(sel->win)->word_separators;
 
-    if (sel->snap == snap_line) {
+    if (sel->snap == snap_command) {
+        struct line *next = pos.line, *line;
+        do line = next, next = line->next;
+        while (next &&
+               !next->sh_ps1_start &&
+               !line->sh_cmd_start);
+        pos.line = line;
+        pos.offset = SNAP_RIGHT;
+    } else if (sel->snap == snap_line) {
         struct line *next = pos.line, *line;
         do line = next, next = line->next;
         while (next && line->wrapped);
@@ -554,7 +572,7 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
         clock_gettime(CLOCK_TYPE, &now);
 
         if (TIMEDIFF(sel->click1, now) < cfg->triple_click_time*1000LL)
-            sel->snap = snap_line;
+            sel->snap = rectangular ? snap_command : snap_line;
         else if (TIMEDIFF(sel->click0, now) < cfg->double_click_time*1000LL)
             sel->snap = snap_word;
         else

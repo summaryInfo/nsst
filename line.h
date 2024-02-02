@@ -127,6 +127,7 @@ struct line {
     bool force_damage;
     bool wrapped : 1;
     bool sh_ps1_start : 1;
+    bool sh_cmd_start : 1;
     struct cell cell[];
 } ALIGNED(MPA_ALIGNMENT);
 
