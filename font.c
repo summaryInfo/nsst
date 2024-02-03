@@ -681,24 +681,22 @@ static struct glyph *make_undercurl(int16_t width, int16_t depth, int16_t underl
     glyph->pixmode = pixmode;
     memset(glyph->data, 0x00, stride * depth);
 
-    if (underline_width > depth - 2)
-        underline_width = depth - 2;
-    else if (underline_width < depth/3)
-        underline_width = depth/3;
+    double underline = MAX(depth/4., MIN(underline_width, depth - 2));
 
     for (ssize_t x = 0; x < width; x++) {
-        double y = (depth - underline_width - 1.5)*.5*(cos(x*2*M_PI/(width)) + 1);
-        ssize_t y0 = MAX(0, MIN(floor(y), depth - 1));
-        ssize_t y1 = MAX(0, MIN(ceil(y), depth - 1));
+        double y0f = (depth - underline - 1.5)*.5*(cos((x-width/4.)*2*M_PI/width) + 1);
+        double y1f = y0f + underline;
+        ssize_t y0 = MAX(0, MIN((ssize_t)y0f, depth - 1));
+        ssize_t y1 = MAX(0, MIN((ssize_t)y1f, depth - 1));
         if (y0 != y1) {
-            put(glyph, lcd, x, y0, MIN(255, 255*(y1 - y)));
-            for (ssize_t i = 1; i < underline_width; i++)
-                put(glyph, lcd, x, y0+i, 255);
-            put(glyph, lcd, x, y0 + underline_width, MIN(255, 255*(y - y0)));
+            bool offset_0 = ceil(y0f) != y0;
+            if (offset_0)
+                put(glyph, lcd, x, y0, MIN(255, 255*(1 - (y0f - y0))));
+            for (ssize_t i = y0 + offset_0; i < y1; i++)
+                put(glyph, lcd, x, i, 255);
+            put(glyph, lcd, x, y1, MIN(255, 255*(y1f - y1)));
         } else {
-            put(glyph, lcd, x, y0, 255);
-            for (ssize_t i = 1; i < underline_width; i++)
-                put(glyph, lcd, x, y0+i, 255);
+            put(glyph, lcd, x, y0, 255*underline);
         }
     }
 
