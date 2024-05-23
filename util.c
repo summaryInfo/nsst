@@ -428,9 +428,12 @@ void ht_adjust(struct hashtable *ht, intptr_t inc) {
 
 void ht_shrink(struct hashtable *ht) {
     ssize_t new_caps = ht->caps;
-    while (ht->size > HT_LOAD_FACTOR(new_caps)/2 &&
+    while (ht->size <= HT_LOAD_FACTOR(new_caps)/2 &&
            new_caps > HT_INIT_CAPS)
         new_caps /= 2;
+
+    if (ht->caps == new_caps)
+        return;
 
     struct hashtable tmp = {
         .cmpfn = ht->cmpfn,
