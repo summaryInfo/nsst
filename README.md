@@ -5,7 +5,7 @@ This is an implementation of VT220-like X11 terminal emulator.
 ## Features
 * Quite fast rendering
     * Almost same latency as `XTerm`, which is a lot lower than for other modern terminals
-    * Scrolling performance is on par with fastest terminals my system (`alacritty` and `urxvt`)
+    * Scrolling performance is on par with fastest terminals on my system (`alacritty` and `urxvt`)
 * Small size and almost no dependencies
 * Uses xcb as X11 interface library
     * A little bit faster because of its asynchrony
