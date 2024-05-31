@@ -203,7 +203,7 @@ void image_draw_rect(struct image im, struct rect rect, color_t fg) {
 
 #ifdef __SSE2__
 FORCEINLINE
-inline static __m128i op_over4(__m128i bg8, __m128i fg16, uint32_t alpha) {
+static inline __m128i op_over4(__m128i bg8, __m128i fg16, uint32_t alpha) {
     const __m128i m255 = _mm_set1_epi32(0x00FF00FF);
     const __m128i zero = _mm_set1_epi32(0x00000000);
     const __m128i div  = _mm_set1_epi16(-32639);
@@ -247,7 +247,7 @@ inline static __m128i op_over4(__m128i bg8, __m128i fg16, uint32_t alpha) {
 }
 
 FORCEINLINE
-inline static __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) {
+static inline __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) {
     const __m128i m255 = _mm_set1_epi32(0x00FF00FF);
     const __m128i zero = _mm_set1_epi32(0x00000000);
     const __m128i div  = _mm_set1_epi16(-32639);
@@ -285,7 +285,7 @@ inline static __m128i op_over4_subpix(__m128i bg8, __m128i fg16, __m128i alpha) 
 }
 
 FORCEINLINE
-inline static __m128i op_blend(__m128i under, __m128i over) {
+static inline __m128i op_blend(__m128i under, __m128i over) {
     const __m128i zero = _mm_set1_epi32(0x00000000);
     const __m128  m255 = (__m128)_mm_set1_epi32(0x00FF00FF);
     const __m128i div  = _mm_set1_epi16(-32639);
@@ -313,7 +313,7 @@ inline static __m128i op_blend(__m128i under, __m128i over) {
 }
 
 FORCEINLINE
-inline static __m128i load_masked(void *src, int w, int s) {
+static inline __m128i load_masked(void *src, int w, int s) {
     uint32_t *ptr = src;
     if (s) {
         switch (w) {
@@ -333,7 +333,7 @@ inline static __m128i load_masked(void *src, int w, int s) {
 }
 
 FORCEINLINE
-inline static void over_mask(void *dst, __m128i fg16, __m128i mask, void *palpha, int d, int s) {
+static inline void over_mask(void *dst, __m128i fg16, __m128i mask, void *palpha, int d, int s) {
     uint32_t alpha = 0;
     memcpy(&alpha, palpha, d);
     __m128i pref = _mm_load_si128(dst);
@@ -343,7 +343,7 @@ inline static void over_mask(void *dst, __m128i fg16, __m128i mask, void *palpha
 }
 
 FORCEINLINE
-inline static void over(void *dst, __m128i fg16, void *palpha) {
+static inline void over(void *dst, __m128i fg16, void *palpha) {
     uint32_t alpha;
     memcpy(&alpha, palpha, sizeof(alpha));
     __m128i pref = _mm_load_si128(dst);
@@ -351,7 +351,7 @@ inline static void over(void *dst, __m128i fg16, void *palpha) {
 }
 
 FORCEINLINE
-inline static void over_mask_subpix(void *dst, __m128i fg16, __m128i mask, void *palpha, int d, int s) {
+static inline void over_mask_subpix(void *dst, __m128i fg16, __m128i mask, void *palpha, int d, int s) {
     __m128i alpha = load_masked(palpha, d, s);
     __m128i pref = _mm_load_si128(dst);
     __m128i dstm = _mm_andnot_si128(mask, pref);
@@ -360,21 +360,21 @@ inline static void over_mask_subpix(void *dst, __m128i fg16, __m128i mask, void 
 }
 
 FORCEINLINE
-inline static void over_subpix(void *dst, __m128i fg16, void *palpha) {
+static inline void over_subpix(void *dst, __m128i fg16, void *palpha) {
     __m128i alpha = _mm_loadu_si128(palpha);
     __m128i pref = _mm_load_si128(dst);
     _mm_store_si128(dst, op_over4_subpix(pref, fg16, alpha));
 }
 
 FORCEINLINE
-inline static void over_subpix_aligned(void *dst, __m128i fg16, void *palpha) {
+static inline void over_subpix_aligned(void *dst, __m128i fg16, void *palpha) {
     __m128i alpha = _mm_load_si128(palpha);
     __m128i pref = _mm_load_si128(dst);
     _mm_store_si128(dst, op_over4_subpix(pref, fg16, alpha));
 }
 
 FORCEINLINE
-inline static void blend_mask(void *dst, __m128i mask, void *palpha, int d, int s) {
+static inline void blend_mask(void *dst, __m128i mask, void *palpha, int d, int s) {
     __m128i alpha = load_masked(palpha, d, s);
     __m128i pref = _mm_load_si128(dst);
     __m128i dstm = _mm_andnot_si128(mask, pref);
@@ -383,20 +383,20 @@ inline static void blend_mask(void *dst, __m128i mask, void *palpha, int d, int 
 }
 
 FORCEINLINE
-inline static void blend(void *dst, void *palpha) {
+static inline void blend(void *dst, void *palpha) {
     __m128i alpha = _mm_loadu_si128(palpha);
     __m128i pref = _mm_load_si128(dst);
     _mm_store_si128(dst, op_blend(pref, alpha));
 }
 
 FORCEINLINE
-inline static void blend_aligned(void *dst, void *palpha) {
+static inline void blend_aligned(void *dst, void *palpha) {
     __m128i alpha = _mm_load_si128(palpha);
     __m128i pref = _mm_load_si128(dst);
     _mm_store_si128(dst, op_blend(pref, alpha));
 }
 #else
-inline static void op_over(color_t *bg, color_t fg, uint8_t alpha) {
+static inline void op_over(color_t *bg, color_t fg, uint8_t alpha) {
     *bg =
         (((*bg >>  0) & 0xFF) * (255 - alpha) + ((fg >>  0) & 0xFF) * alpha) / 255 << 0 |
         (((*bg >>  8) & 0xFF) * (255 - alpha) + ((fg >>  8) & 0xFF) * alpha) / 255 << 8 |
@@ -404,7 +404,7 @@ inline static void op_over(color_t *bg, color_t fg, uint8_t alpha) {
         (((*bg >> 24) & 0xFF) * (255 - alpha) + ((fg >> 24) & 0xFF) * alpha) / 255 << 24;
 }
 
-inline static void op_over_subpix(color_t *bg, color_t fg, uint8_t *alpha) {
+static inline void op_over_subpix(color_t *bg, color_t fg, uint8_t *alpha) {
     *bg =
         (((*bg >>  0) & 0xFF) * (255 - alpha[0]) + ((fg >>  0) & 0xFF) * alpha[0]) / 255 << 0 |
         (((*bg >>  8) & 0xFF) * (255 - alpha[1]) + ((fg >>  8) & 0xFF) * alpha[1]) / 255 << 8 |
@@ -412,7 +412,7 @@ inline static void op_over_subpix(color_t *bg, color_t fg, uint8_t *alpha) {
         (((*bg >> 24) & 0xFF) * (255 - alpha[3]) + ((fg >> 24) & 0xFF) * alpha[3]) / 255 << 24;
 }
 
-inline static void op_blend(color_t *bg, color_t fg) {
+static inline void op_blend(color_t *bg, color_t fg) {
     uint32_t ralpha = 255 - ((fg >> 24) & 0xFF);
     *bg =
         (((*bg >>  0) & 0xFF) * ralpha / 255 + ((fg >>  0) & 0xFF)) << 0 |

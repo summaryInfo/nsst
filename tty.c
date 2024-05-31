@@ -451,7 +451,7 @@ ssize_t tty_refill(struct tty *tty) {
 }
 
 
-inline static void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t len) {
+static inline void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t len) {
     ssize_t res, lim = TTY_MAX_WRITE;
     struct pollfd pfd = {
         .events = POLLIN | POLLOUT,

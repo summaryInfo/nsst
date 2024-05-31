@@ -18,15 +18,15 @@
 #define CBUF_STEP(c,m) ((c) ? MIN(4 * (c) / 3, m) : MIN(16, m))
 #define PRINT_BLOCK_SIZE 256
 
-inline static bool screen_at_bottom(struct screen *scr) {
+static inline bool screen_at_bottom(struct screen *scr) {
     return line_span_cmpeq(&scr->view_pos.s, scr->screen);
 }
 
-inline static struct screen_storage *get_current_screen(struct screen *scr) {
+static inline struct screen_storage *get_current_screen(struct screen *scr) {
     return scr->mode.altscreen ? &scr->alt_screen : &scr->main_screen;
 }
 
-inline static void free_line_list_until(struct screen *scr, struct screen_storage *screen, struct line *line, struct line *until) {
+static inline void free_line_list_until(struct screen *scr, struct screen_storage *screen, struct line *line, struct line *until) {
     struct line *next;
     while (line != until) {
         next = line->next;
@@ -144,7 +144,7 @@ void screen_reset_view(struct screen *scr, bool damage) {
 }
 
 FORCEINLINE
-inline static void screen_split_line_after_ex(struct screen *scr, struct screen_storage *screen, ssize_t y) {
+static inline void screen_split_line_after_ex(struct screen *scr, struct screen_storage *screen, ssize_t y) {
     struct line_span *src = screen->begin + y;
     ssize_t offset = src->offset + src->width;
     if (offset >= src->line->size) return;
@@ -155,7 +155,7 @@ inline static void screen_split_line_after_ex(struct screen *scr, struct screen_
 }
 
 FORCEINLINE
-inline static void screen_split_line_before(struct screen *scr, ssize_t y) {
+static inline void screen_split_line_before(struct screen *scr, ssize_t y) {
     struct line_span *src = &scr->screen[y];
     if (LIKELY(!src->offset)) return;
 
@@ -165,11 +165,11 @@ inline static void screen_split_line_before(struct screen *scr, ssize_t y) {
 }
 
 FORCEINLINE
-inline static void screen_split_line_after(struct screen *scr, ssize_t y) {
+static inline void screen_split_line_after(struct screen *scr, ssize_t y) {
     screen_split_line_after_ex(scr, get_current_screen(scr), y);
 }
 
-inline static struct line *screen_realloc_line(struct screen *scr, struct line *line, ssize_t width, struct screen_storage *screen) {
+static inline struct line *screen_realloc_line(struct screen *scr, struct line *line, ssize_t width, struct screen_storage *screen) {
     struct line *new = realloc_line(screen, line, width);
 
     if (UNLIKELY(new->selection_index))
@@ -191,7 +191,7 @@ void screen_cursor_line_set_cmd_start(struct screen *scr) {
         line->sh_cmd_start = true;
 }
 
-inline static void screen_adjust_line_ex(struct screen *scr, struct screen_storage *screen, ssize_t y, ssize_t clear_to, ssize_t size) {
+static inline void screen_adjust_line_ex(struct screen *scr, struct screen_storage *screen, ssize_t y, ssize_t clear_to, ssize_t size) {
     struct line_span *view = &screen->begin[y];
     ssize_t old_size = view->line->size;
     ssize_t new_size = view->offset + size;
@@ -222,11 +222,11 @@ inline static void screen_adjust_line_ex(struct screen *scr, struct screen_stora
     view->line->size = new_size;
 }
 
-inline static void screen_adjust_line(struct screen *scr, ssize_t y, ssize_t size) {
+static inline void screen_adjust_line(struct screen *scr, ssize_t y, ssize_t size) {
     screen_adjust_line_ex(scr, get_current_screen(scr), y, size, size);
 }
 
-inline static void screen_wrap(struct screen *scr, bool hard) {
+static inline void screen_wrap(struct screen *scr, bool hard) {
     screen_autoprint(scr);
     bool moved = screen_index(scr);
     screen_cr(scr);
@@ -394,7 +394,7 @@ finish:
     return view_moved;
 }
 
-inline static void push_history_until(struct screen *scr, struct line *from, struct line *to) {
+static inline void push_history_until(struct screen *scr, struct line *from, struct line *to) {
     if (LIKELY(from->seq < to->seq)) {
         /* Push to history */
         for (; from->seq < to->seq; from = from->next) {
@@ -422,7 +422,7 @@ static void resize_tabs(struct screen *scr, int16_t width) {
     }
 }
 
-inline static struct line *create_lines_range(struct screen_storage *screen, struct line *prev, struct line *next,
+static inline struct line *create_lines_range(struct screen_storage *screen, struct line *prev, struct line *next,
                                               ssize_t y, ssize_t width, const struct attr *attr,
                                               ssize_t count, struct line_handle *top) {
     if (count <= 0) return NULL;
@@ -536,7 +536,7 @@ static void fixup_view(struct screen *scr, struct line_handle *lower_left, enum 
 #endif
 }
 
-inline static void translate_screen_position(struct line_span *first, struct line_span *pos, struct cursor *c, ssize_t width) {
+static inline void translate_screen_position(struct line_span *first, struct line_span *pos, struct cursor *c, ssize_t width) {
     struct line_span it = *first;
 
     if (line_span_cmp(&it, pos) > 0) {
@@ -637,7 +637,7 @@ static void validate_altscreen(struct screen *scr) {
 }
 #endif
 
-inline static void round_offset_to_width(struct line_span *handle, ssize_t width) {
+static inline void round_offset_to_width(struct line_span *handle, ssize_t width) {
     ssize_t to = handle->offset;
     handle->offset = 0;
 
@@ -904,7 +904,7 @@ void screen_reset_margins(struct screen *scr) {
 
 
 FORCEINLINE
-inline static void prep_lines(struct screen *scr, ssize_t xs, ssize_t ys, ssize_t xe, ssize_t ye, bool erase) {
+static inline void prep_lines(struct screen *scr, ssize_t xs, ssize_t ys, ssize_t xe, ssize_t ye, bool erase) {
     if (erase) {
         ssize_t xs_val = xs, xe_val = xe;
         for (ssize_t i = ys; i < ye; i++) {
@@ -928,7 +928,7 @@ inline static void prep_lines(struct screen *scr, ssize_t xs, ssize_t ys, ssize_
 }
 
 FORCEINLINE
-inline static void screen_rect_pre(struct screen *scr, int16_t *xs, int16_t *ys, int16_t *xe, int16_t *ye, bool erase) {
+static inline void screen_rect_pre(struct screen *scr, int16_t *xs, int16_t *ys, int16_t *xe, int16_t *ye, bool erase) {
     *xs = MAX(screen_min_oy(scr), MIN(*xs, screen_max_ox(scr) - 1));
     *xe = MAX(screen_min_oy(scr), MIN(*xe, screen_max_ox(scr)));
     *ys = MAX(screen_min_oy(scr), MIN(*ys, screen_max_oy(scr) - 1));
@@ -938,7 +938,7 @@ inline static void screen_rect_pre(struct screen *scr, int16_t *xs, int16_t *ys,
 }
 
 FORCEINLINE
-inline static void screen_erase_pre(struct screen *scr, int16_t *xs, int16_t *ys, int16_t *xe, int16_t *ye, bool origin, bool erase) {
+static inline void screen_erase_pre(struct screen *scr, int16_t *xs, int16_t *ys, int16_t *xe, int16_t *ye, bool origin, bool erase) {
     if (origin) screen_rect_pre(scr, xs, ys, xe, ye, erase);
     else {
         *xs = MAX(0, MIN(*xs, scr->width));
@@ -1306,7 +1306,7 @@ void screen_scroll_horizontal(struct screen *scr, int16_t left, int16_t amount) 
     }
 }
 
-inline static void swap_3(struct line *top_after, struct line *mid_before, struct line *bottom_before) {
+static inline void swap_3(struct line *top_after, struct line *mid_before, struct line *bottom_before) {
         struct line *top_before = detach_prev_line(top_after);
         struct line *mid_after = detach_next_line(mid_before);
         struct line *bottom_after = detach_next_line(bottom_before);
@@ -1321,7 +1321,7 @@ inline static void swap_3(struct line *top_after, struct line *mid_before, struc
         attach_next_line(mid_before, bottom_after);
 }
 
-inline static int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool save) {
+static inline int16_t screen_scroll_fast(struct screen *scr, int16_t top, int16_t amount, bool save) {
     ssize_t bottom = screen_max_y(scr);
 
     save &= save && !scr->mode.altscreen && top == 0 && amount >= 0;
@@ -1798,7 +1798,7 @@ void screen_reset_tabs(struct screen *scr) {
 }
 
 HOT
-inline static int32_t decode_special(const uint8_t **buf, const uint8_t *end, bool raw) {
+static inline int32_t decode_special(const uint8_t **buf, const uint8_t *end, bool raw) {
     uint32_t part = *(*buf)++, i;
     if (LIKELY(part < 0xC0 || raw)) return part;
     if (UNLIKELY(part > 0xF7)) return UTF_INVAL;
@@ -1834,18 +1834,18 @@ typedef __m128i block_type;
 
 typedef uint64_t block_type;
 
-inline static block_type read_aligned(const uint8_t *ptr) {
+static inline block_type read_aligned(const uint8_t *ptr) {
     return *(const block_type *)ptr;
 }
 
-inline static block_type read_unaligned(const uint8_t *ptr) {
+static inline block_type read_unaligned(const uint8_t *ptr) {
     /* Let's hope memcpy to be optimized out */
     block_type d;
     memcpy(&d, ptr, sizeof d);
     return d;
 }
 
-inline static uint32_t movemask(block_type b) {
+static inline uint32_t movemask(block_type b) {
     b &= 0x8080808080808080;
     b = (b >> 7) | (b >> 14);
     b |= b >> 14;
@@ -1855,19 +1855,19 @@ inline static uint32_t movemask(block_type b) {
 
 #endif
 
-inline static uint32_t block_mask(block_type b) {
+static inline uint32_t block_mask(block_type b) {
     return movemask(~((b << 2) | (b << 1)));
 }
 
-inline static const uint8_t *mask_offset(const uint8_t *start, const uint8_t *end, uint32_t mask) {
+static inline const uint8_t *mask_offset(const uint8_t *start, const uint8_t *end, uint32_t mask) {
     return MIN(end, start + __builtin_ffsl(mask) - 1);
 }
 
-inline static uint32_t contains_non_ascii(block_type b) {
+static inline uint32_t contains_non_ascii(block_type b) {
     return movemask(b);
 }
 
-inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end, ssize_t max_chunk, bool *has_nonascii) {
+static inline const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end, ssize_t max_chunk, bool *has_nonascii) {
     if (start + max_chunk < end)
         end = start + max_chunk;
 
@@ -1908,7 +1908,7 @@ inline static const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end
     return end;
 }
 
-inline static void print_buffer(struct screen *scr, const uint32_t *bstart, const uint8_t *astart, ssize_t totalw) {
+static inline void print_buffer(struct screen *scr, const uint32_t *bstart, const uint8_t *astart, ssize_t totalw) {
     if (scr->mode.wrap) {
         if (scr->c.pending || (bstart && scr->c.x == screen_max_x(scr) - 1 && totalw > 1 && !bstart[1]))
             screen_wrap(scr, false);

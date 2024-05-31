@@ -62,11 +62,11 @@ struct platform_window {
 
 extern xcb_connection_t *con;
 
-inline static struct platform_window *get_plat(struct window *win) {
+static inline struct platform_window *get_plat(struct window *win) {
     return (struct platform_window *)win->platform_window_opaque;
 }
 
-inline static bool check_void_cookie(xcb_void_cookie_t ck) {
+static inline bool check_void_cookie(xcb_void_cookie_t ck) {
     xcb_generic_error_t *err = xcb_request_check(con, ck);
     if (err) {
         warn("[X11 Error] major=%"PRIu8", minor=%"PRIu16", error=%"PRIu8,

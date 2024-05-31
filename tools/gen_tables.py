@@ -166,12 +166,12 @@ def write_precompose(f, precomp):
     f.write('};\n\n\n#endif\n')
 
 def write_predicate(f, min_elem, x):
-    f.write(f'\ninline static bool is{x}_compact(uint32_t x) {{\n'
+    f.write(f'\nstatic inline bool is{x}_compact(uint32_t x) {{\n'
             f'    return x - 0x{min_elem:X}U < 0x{LEVEL2_TABLE_WIDTH:X}*sizeof({x}_table1_)/sizeof({x}_table1_[0]) - 0x{min_elem:X}U &&\n'
             f'           width_data_[{x}_table1_[x >> {LEVEL2_TABLE_BITS}]][(x >> 5) &'
             f' {(LEVEL2_TABLE_WIDTH//LEVEL2_TABLE_ELEMENT_BITS)-1}] & (1U << (x & 0x1F));\n'
             f'}}\n'
-            f'\ninline static bool is{x}(uint32_t x) {{\n'
+            f'\nstatic inline bool is{x}(uint32_t x) {{\n'
             f'    return is{x}_compact(compact(x));\n'
             f'}}\n\n')
 
@@ -247,11 +247,11 @@ iswide_preambula="""#ifndef _ISWIDE_H
 #define CELL_ENC_COMPACT_BASE 0x40000
 #define CELL_ENC_UTF8_BASE 0xE0000
 
-inline static uint32_t uncompact(uint32_t u) {
+static inline uint32_t uncompact(uint32_t u) {
     return u < CELL_ENC_COMPACT_BASE ? u : u + (CELL_ENC_UTF8_BASE - CELL_ENC_COMPACT_BASE);
 }
 
-inline static uint32_t compact(uint32_t u) {
+static inline uint32_t compact(uint32_t u) {
     return u < CELL_ENC_UTF8_BASE ? u : u - (CELL_ENC_UTF8_BASE - CELL_ENC_COMPACT_BASE);
 }
 

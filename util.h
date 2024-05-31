@@ -79,31 +79,31 @@ void *xzalloc(size_t size);
 void *xrealloc(void *src, size_t old_size, size_t size);
 void *xrezalloc(void *src, size_t old_size, size_t size);
 
-inline static struct rect rect_scale_up(struct rect rect, int16_t x_factor, int16_t y_factor) {
+static inline struct rect rect_scale_up(struct rect rect, int16_t x_factor, int16_t y_factor) {
     rect.x *= x_factor;
     rect.y *= y_factor;
     rect.width *= x_factor;
     rect.height *= y_factor;
     return rect;
 }
-inline static struct rect rect_scale_down(struct rect rect, int16_t x_factor, int16_t y_factor) {
+static inline struct rect rect_scale_down(struct rect rect, int16_t x_factor, int16_t y_factor) {
     rect.x /= x_factor;
     rect.y /= y_factor;
     rect.width /= x_factor;
     rect.height /= y_factor;
     return rect;
 }
-inline static struct rect rect_shift(struct rect rect, int16_t x_off, int16_t y_off) {
+static inline struct rect rect_shift(struct rect rect, int16_t x_off, int16_t y_off) {
     rect.x += x_off;
     rect.y += y_off;
     return rect;
 }
-inline static struct rect rect_resize(struct rect rect, int16_t x_off, int16_t y_off) {
+static inline struct rect rect_resize(struct rect rect, int16_t x_off, int16_t y_off) {
     rect.width += x_off;
     rect.height += y_off;
     return rect;
 }
-inline static struct rect rect_union(struct rect rect, struct rect other) {
+static inline struct rect rect_union(struct rect rect, struct rect other) {
     rect.width = MAX(rect.width + rect.x, other.width + other.x);
     rect.height = MAX(rect.height + rect.y, other.height + other.y);
     rect.width -= rect.x = MIN(rect.x, other.x);
@@ -111,7 +111,7 @@ inline static struct rect rect_union(struct rect rect, struct rect other) {
     return rect;
 }
 
-inline static bool intersect_with(struct rect *src, struct rect *dst) {
+static inline bool intersect_with(struct rect *src, struct rect *dst) {
         struct rect inters = { .x = MAX(src->x, dst->x), .y = MAX(src->y, dst->y) };
 
         int32_t x1 = MIN(src->x + (int32_t)src->width, dst->x + (int32_t)dst->width);
@@ -141,7 +141,7 @@ const char *usage_string(ssize_t idx);
 
 #include "iswide.h"
 
-inline static int uwidth(uint32_t x) {
+static inline int uwidth(uint32_t x) {
     /* This variant wcwidth treats
      * C0 and C1 characters as of width 1 */
     if (LIKELY(x < 0x300)) return 1;

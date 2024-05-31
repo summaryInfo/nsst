@@ -26,20 +26,20 @@ const struct attr default_attr__ = {
 
 uint64_t line_next_seqno = 1;
 
-inline static bool attr_eq_prot(const struct attr *a, const struct attr *b) {
+static inline bool attr_eq_prot(const struct attr *a, const struct attr *b) {
     static_assert(sizeof(struct attr) == 2*sizeof(uint64_t), "Wrong attribute size");
     return a->mask64[0] == b->mask64[0] && a->mask64[1] == b->mask64[1];
     //return a->fg == b->fg && a->bg == b->bg && a->ul == b->ul && a->mask == b->mask;
 }
 
-inline static uint32_t attr_hash(const struct attr *attr) {
+static inline uint32_t attr_hash(const struct attr *attr) {
     return uint_hash32(attr->bg) ^
             uint_hash32(attr->fg) ^
             uint_hash32(attr->ul) ^
             uint_hash32(attr->mask);
 }
 
-inline static bool attr_empty(struct attr *attr) {
+static inline bool attr_empty(struct attr *attr) {
     return attr->fg == 0;
 }
 
@@ -70,7 +70,7 @@ void free_attrs(struct line_attr *attrs) {
     free(attrs);
 }
 
-inline static bool need_fix_span_array(struct line *line, struct line_span *first, struct line_span *last) {
+static inline bool need_fix_span_array(struct line *line, struct line_span *first, struct line_span *last) {
     return first &&
         (!first->line || first->line->seq <= line->seq) &&
         (!last[-1].line || line->seq <= last[-1].line->seq);
@@ -570,7 +570,7 @@ short_copy:
 }
 
 #ifdef __SSE2__
-inline static __m128i unpack_u8x4_to_cells(const void *pdata, __m128i zero, __m128i attr) {
+static inline __m128i unpack_u8x4_to_cells(const void *pdata, __m128i zero, __m128i attr) {
     uint32_t data;
     memcpy(&data, pdata, sizeof data);
     return _mm_or_si128(attr, _mm_unpacklo_epi16(_mm_unpacklo_epi8(_mm_set1_epi32(data), zero), zero));

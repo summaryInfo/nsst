@@ -401,7 +401,7 @@ static struct option options[] = {
     X(string, word_separators, "word-break", "Symbols treated as word separators when snapping mouse selection", " \t!$^*()+={}[]\\\"'|,;<>~`"),
 };
 
-inline static color_t default_color(uint32_t n) {
+static inline color_t default_color(uint32_t n) {
     static_assert(CN_GRAY + CN_EXT + CN_BASE == PALETTE_SIZE - SPECIAL_PALETTE_SIZE, "Palette size mismatch");
     static_assert(PALETTE_SIZE - SPECIAL_PALETTE_SIZE == 256, "Palette size mismatch");
     assert(n < PALETTE_SIZE - SPECIAL_PALETTE_SIZE);
@@ -413,7 +413,7 @@ inline static color_t default_color(uint32_t n) {
 
 #define NO_INDEX SIZE_MAX
 
-inline static size_t short_opt_i(char ch) {
+static inline size_t short_opt_i(char ch) {
     if ('a' <= ch && ch <= 'z')
         return ch - 'a';
     if ('A' <= ch && ch <= 'Z')

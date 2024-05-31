@@ -34,11 +34,11 @@ static const char *cwd;
 static bool need_daemon;
 static bool need_exit;
 
-inline static void send_char(int fd, char c) {
+static inline void send_char(int fd, char c) {
     while (send(fd, (char[1]){c}, 1, 0) < 0 && errno == EAGAIN);
 }
 
-inline static void recv_response(int fd) {
+static inline void recv_response(int fd) {
     ssize_t res = 0;
     while ((res = recv(fd, buffer, sizeof buffer - 1, 0)) > 0) {
         buffer[res] = '\0';
@@ -151,7 +151,7 @@ static bool is_boolean_short_option(char opt) {
     return opt == 'q' || opt == 'd' || opt == 'h' || opt == 'v';
 }
 
-inline static bool is_client_only_option(const char *opt) {
+static inline bool is_client_only_option(const char *opt) {
     if (!strcmp(opt, "config")) return true;
     if (!strcmp(opt, "socket")) return true;
     if (!strcmp(opt, "cwd")) return true;
@@ -159,7 +159,7 @@ inline static bool is_client_only_option(const char *opt) {
     return false;
 }
 
-inline static bool is_client_only_short_option(char opt) {
+static inline bool is_client_only_short_option(char opt) {
     return opt == 'q' || opt == 's' || opt == 'C' || opt == 'd';
 }
 

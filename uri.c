@@ -77,7 +77,7 @@ struct node_head {
 static struct id_table idtab;
 static hashtable_t uritab;
 
-inline static ssize_t char_to_index(char ch) {
+static inline ssize_t char_to_index(char ch) {
     if (ch == '.')
         return PT_POINT_IDX;
     else if (ch == '-')
@@ -108,7 +108,7 @@ static uint16_t *node_children;
 static size_t node_children_caps;
 static ssize_t file_leaf;
 
-inline static struct node_head *child_index_add(struct node_head *node, char ch) {
+static inline struct node_head *child_index_add(struct node_head *node, char ch) {
     ssize_t idx1 = char_to_index(ch);
     if (idx1 < 0) return NULL;
 
@@ -135,7 +135,7 @@ inline static struct node_head *child_index_add(struct node_head *node, char ch)
 }
 
 
-inline static struct node_head *child_index(struct node_head *node, char ch) {
+static inline struct node_head *child_index(struct node_head *node, char ch) {
     ssize_t idx1 = char_to_index(ch);
     if (idx1 < 0) return NULL;
 
@@ -376,7 +376,7 @@ char *uri_match_get(struct uri_match_state *state) {
     return res;
 }
 
-inline static size_t valid_uri_len(const char *uri) {
+static inline size_t valid_uri_len(const char *uri) {
     if (!uri) return 0;
 
     struct uri_match_state stt = {.no_copy = true};
@@ -396,7 +396,7 @@ inline static size_t valid_uri_len(const char *uri) {
     return 0;
 }
 
-inline static struct slot *alloc_slot(void) {
+static inline struct slot *alloc_slot(void) {
     if (idtab.first_free != EMPTY_URI) {
         struct slot *slot = &idtab.slots[idtab.first_free - 1];
         idtab.first_free = slot->next;
@@ -412,7 +412,7 @@ inline static struct slot *alloc_slot(void) {
     }
 }
 
-inline static void free_slot(struct slot *slot) {
+static inline void free_slot(struct slot *slot) {
     slot->next = idtab.first_free;
     idtab.first_free = slot - idtab.slots + 1;
 }

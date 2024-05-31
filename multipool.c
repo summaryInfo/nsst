@@ -54,7 +54,7 @@ struct pool {
 #define INIT_OFFSET ((int32_t)(ROUNDUP(sizeof(struct pool) + sizeof(struct header), MPA_ALIGNMENT)\
                      - (sizeof(struct pool) + sizeof(struct header))))
 
-inline static void pool_detach(struct pool **head, struct pool *pool) {
+static inline void pool_detach(struct pool **head, struct pool *pool) {
     struct pool *next = pool->next;
     struct pool *prev = pool->prev;
 
@@ -63,7 +63,7 @@ inline static void pool_detach(struct pool **head, struct pool *pool) {
     else *head = next;
 }
 
-inline static void pool_attach(struct pool **head, struct pool *pool) {
+static inline void pool_attach(struct pool **head, struct pool *pool) {
     if (*head)
         (*head)->prev = pool;
 
@@ -72,13 +72,13 @@ inline static void pool_attach(struct pool **head, struct pool *pool) {
     *head = pool;
 }
 
-inline static void pool_seal(struct multipool *mp, struct pool *pool) {
+static inline void pool_seal(struct multipool *mp, struct pool *pool) {
     pool_detach(&mp->unsealed, pool);
     mp->unsealed_count--;
     pool->sealed = true;
 }
 
-inline static void pool_unseal(struct multipool *mp, struct pool *pool) {
+static inline void pool_unseal(struct multipool *mp, struct pool *pool) {
     pool_attach(&mp->unsealed, pool);
     mp->unsealed_count++;
     pool->sealed = false;
@@ -168,7 +168,7 @@ void mpa_set_seal_max_pad(struct multipool *mp, ssize_t max_pad, ssize_t max_uns
     }
 }
 
-inline static int32_t round_size(int32_t size) {
+static inline int32_t round_size(int32_t size) {
     static_assert(sizeof(struct header)*2 == MPA_ALIGNMENT, "Alignment and header size are not synchronized");
     static_assert(0 == (MPA_ALIGNMENT & (MPA_ALIGNMENT - 1)), "Alignment is not a power of two");
     return ROUNDUP(size + sizeof(struct header), MPA_ALIGNMENT);

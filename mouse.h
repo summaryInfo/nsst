@@ -125,12 +125,12 @@ void selection_scrolled(struct selection_state *sel, struct screen *scr, ssize_t
 bool selection_intersects(struct selection_state *sel, struct line *line, int16_t x0, int16_t x1);
 bool selection_pending_scroll(struct selection_state *sel, struct screen *scr);
 
-inline static bool selection_active(struct selection_state *sel) {
+static inline bool selection_active(struct selection_state *sel) {
     return sel->state != state_sel_none &&
            sel->state != state_sel_pressed;
 }
 
-inline static bool view_selection_intersects(struct selection_state *sel, struct line_span *line, int16_t x0, int16_t x1) {
+static inline bool view_selection_intersects(struct selection_state *sel, struct line_span *line, int16_t x0, int16_t x1) {
     ssize_t offset = line->offset;
     return selection_intersects(sel, line->line, x0 + offset, x1 + offset);
 }

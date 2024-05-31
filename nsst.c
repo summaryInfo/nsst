@@ -124,7 +124,7 @@ finish:
     keyboard_parse_config(cfg);
 }
 
-inline static char *parse_config_path(int argc, char **argv) {
+static inline char *parse_config_path(int argc, char **argv) {
     char *config_path = NULL;
 
     for (int opt_i = 1; opt_i < argc; opt_i++) {

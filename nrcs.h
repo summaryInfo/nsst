@@ -99,7 +99,7 @@ enum charset {
 #define I0_CHAR(s) ((s) >> I0_SHIFT ? (((s) >> I0_SHIFT) - 1) | ' ' : 0)
 #define I1_CHAR(s) ((s) >> I1_SHIFT ? (((s) >> I1_SHIFT) - 1) | ' ' : 0)
 
-inline static bool nrcs_is_96(enum charset cs) {
+static inline bool nrcs_is_96(enum charset cs) {
     return cs >= cs96_latin_1;
 }
 

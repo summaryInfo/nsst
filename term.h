@@ -22,27 +22,27 @@ typedef int32_t iparam_t;
 
 #define SCNparam SCNu32
 
-inline static bool view_wrapped(struct line_span *view) {
+static inline bool view_wrapped(struct line_span *view) {
     return view->line->size > view->offset + view->width;
 }
 
-inline static struct cell *view_cell(struct line_span *view, ssize_t x) {
+static inline struct cell *view_cell(struct line_span *view, ssize_t x) {
     return view->line->cell + view->offset + x;
 }
 
-inline static const struct attr *view_attr_at(struct line_span *view, ssize_t x) {
+static inline const struct attr *view_attr_at(struct line_span *view, ssize_t x) {
     return attr_at(view->line, view->offset + x);
 }
 
-inline static const struct attr *view_attr(struct line_span *view, uint32_t attrid) {
+static inline const struct attr *view_attr(struct line_span *view, uint32_t attrid) {
     return attrid ? &view->line->attrs->data[attrid - 1] : &ATTR_DEFAULT;
 }
 
-inline static void view_adjust_wide_right(struct line_span *view, ssize_t x) {
+static inline void view_adjust_wide_right(struct line_span *view, ssize_t x) {
     adjust_wide_right(view->line, view->offset + x);
 }
 
-inline static void view_adjust_wide_left(struct line_span *view, ssize_t x) {
+static inline void view_adjust_wide_left(struct line_span *view, ssize_t x) {
     adjust_wide_left(view->line, view->offset + x);
 }
 

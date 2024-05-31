@@ -234,7 +234,7 @@ static void send_wm_client_event(xcb_window_t win, uint32_t type, uint32_t data0
 #define _NET_WM_STATE_ADD 1
 #define _NET_WM_STATE_TOGGLE 2
 
-inline static void save_pos(struct window *win) {
+static inline void save_pos(struct window *win) {
     if (get_plat(win)->saved.width > 0) {
         struct extent p = window_get_position(win);
         struct extent s = window_get_size(win);
@@ -243,7 +243,7 @@ inline static void save_pos(struct window *win) {
     }
 }
 
-inline static bool restore_pos(struct window *win) {
+static inline bool restore_pos(struct window *win) {
     xcb_void_cookie_t c;
     if (get_plat(win)->saved.width > 0) {
         uint32_t vals[] = {get_plat(win)->saved.x, get_plat(win)->saved.y, get_plat(win)->saved.width, get_plat(win)->saved.height};
@@ -413,7 +413,7 @@ void x11_get_title(struct window *win, enum title_target which, char **name, boo
     else free(data);
 }
 
-inline static uint32_t get_win_gravity_from_config(bool nx, bool ny) {
+static inline uint32_t get_win_gravity_from_config(bool nx, bool ny) {
     switch (nx + 2 * ny) {
     case 0: return XCB_GRAVITY_NORTH_WEST;
     case 1: return XCB_GRAVITY_NORTH_EAST;
@@ -518,7 +518,7 @@ void x11_free_window(struct window *win) {
     }
 }
 
-inline static xcb_atom_t target_to_atom(enum clip_target target) {
+static inline xcb_atom_t target_to_atom(enum clip_target target) {
     switch (target) {
     case clip_secondary: return XCB_ATOM_SECONDARY;
     case clip_primary: return XCB_ATOM_PRIMARY;
@@ -892,7 +892,7 @@ static struct platform_vtable x11_vtable = {
     .free = x11_free,
 };
 
-inline static const char *backend_to_str(enum renderer_backend backend) {
+static inline const char *backend_to_str(enum renderer_backend backend) {
     switch (backend) {
     case renderer_x11_shm:
         return "X11 MIT-SHM";

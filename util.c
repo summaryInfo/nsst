@@ -201,11 +201,11 @@ inval2:
     return 1;
 }
 
-inline static uint8_t tohexdigit(uint8_t c) {
+static inline uint8_t tohexdigit(uint8_t c) {
     return  c > 9 ? c + 'A' - 10 : c + '0';
 }
 
-inline static uint8_t fromhexdigit(uint8_t c) {
+static inline uint8_t fromhexdigit(uint8_t c) {
     if (c - (unsigned)'0' < 10U)
         return  c - '0';
     else if (c - (unsigned)'A' < 6U)
@@ -216,7 +216,7 @@ inline static uint8_t fromhexdigit(uint8_t c) {
         return 0;
 }
 
-inline static int32_t frombase64digit(uint8_t b) {
+static inline int32_t frombase64digit(uint8_t b) {
     if ('A' <= b && b <= 'Z') return b - 'A';
     if ('a' <= b && b <= 'z') return b - 'a' + 26;
     if ('0' <= b && b <= '9') return b - '0' + 52;

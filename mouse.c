@@ -19,14 +19,14 @@
     ssize_t idx = 0; for (struct segment *seg = (head)->segs; seg < (head)->segs + (head)->size ? (idx += seg->offset, 1) : 0; idx += seg->length, seg++)
 
 
-inline static struct segments *seg_head(struct selection_state *sel, struct line *line) {
+static inline struct segments *seg_head(struct selection_state *sel, struct line *line) {
     /* First pointer is always 0,
      * so we don't have to perform
      * addition checks */
     return sel->seg[line->selection_index];
 }
 
-inline static void free_segments(struct selection_state *sel, struct segments *head) {
+static inline void free_segments(struct selection_state *sel, struct segments *head) {
 
     /* Here we need to offset all selection below current by one
      * to keep selected lines heads continuous.
@@ -48,7 +48,7 @@ inline static void free_segments(struct selection_state *sel, struct segments *h
 
 #define SEGS_INIT_SIZE 2
 
-inline static struct segments *alloc_head(struct selection_state *sel, struct line *line) {
+static inline struct segments *alloc_head(struct selection_state *sel, struct line *line) {
     adjust_buffer((void **)&sel->seg, &sel->seg_caps, sel->seg_size + 2, sizeof *sel->seg);
     struct segments *head = xalloc(sizeof *head + sizeof *head->segs * SEGS_INIT_SIZE);
 
@@ -62,7 +62,7 @@ inline static struct segments *alloc_head(struct selection_state *sel, struct li
     return head;
 }
 
-inline static void adjust_head(struct selection_state *sel, struct segments **phead, ssize_t inc) {
+static inline void adjust_head(struct selection_state *sel, struct segments **phead, ssize_t inc) {
     struct segments *head = *phead;
     if (head->size + inc > head->caps) {
         ssize_t new_caps = MAX(4 * head->caps / 3, head->size + inc);
@@ -260,7 +260,7 @@ void selection_damage(struct selection_state *sel, struct line *line) {
     if (head) damage_head(head);
 }
 
-inline static bool is_separator(uint32_t ch, char *seps) {
+static inline bool is_separator(uint32_t ch, char *seps) {
     if (!ch) return 1;
     uint8_t cbuf[UTF8_MAX_LEN + 1];
     cbuf[utf8_encode(ch, cbuf, cbuf + UTF8_MAX_LEN)] = '\0';
@@ -403,7 +403,7 @@ out:
  * as a return value of the function.
  */
 
-inline static ssize_t virtual_pos(struct screen *scr, struct line_span *pos) {
+static inline ssize_t virtual_pos(struct screen *scr, struct line_span *pos) {
     struct line_span orig = *pos, next = *pos;
     next.offset = 0;
 
@@ -415,7 +415,7 @@ inline static ssize_t virtual_pos(struct screen *scr, struct line_span *pos) {
     return orig.offset - pos->offset;
 }
 
-inline static struct line_span absolute_pos(struct screen *scr, ssize_t x, ssize_t y) {
+static inline struct line_span absolute_pos(struct screen *scr, ssize_t x, ssize_t y) {
     struct line_span offset = screen_view(scr);
     screen_span_shift_n(scr, &offset, y);
     offset.offset += x;
@@ -683,7 +683,7 @@ void selection_view_scrolled(struct selection_state *sel, struct screen *scr) {
         selection_changed(sel, scr, state_sel_progress, sel->rectangular);
 }
 
-inline static void adj_coords(struct window *win, int16_t *x, int16_t *y, bool pixel) {
+static inline void adj_coords(struct window *win, int16_t *x, int16_t *y, bool pixel) {
     struct extent c = window_get_cell_size(win);
     struct extent b = window_get_border(win);
     struct extent g = window_get_grid_size(win);
@@ -790,7 +790,7 @@ void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, 
 }
 
 #if USE_URI
-inline static bool is_button1_down(struct mouse_event *ev) {
+static inline bool is_button1_down(struct mouse_event *ev) {
     return (ev->event == mouse_event_press && ev->button == 0) ||
            (ev->mask & mask_button_1 && (ev->event != mouse_event_release || ev->button != 0));
 }

@@ -343,7 +343,7 @@ static bool fnkey_sun(uint32_t ks, bool is_fkey, struct reply *reply) {
     return 1;
 }
 
-inline static uint32_t translate_keypad(uint32_t in) {
+static inline uint32_t translate_keypad(uint32_t in) {
     struct { uint32_t from, to; } tab[] = {
         { XKB_KEY_Delete, XKB_KEY_DRemove },
         { XKB_KEY_Home, XKB_KEY_Find },

@@ -10,7 +10,7 @@
 
 struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t depth, enum pixel_mode pixmode, int16_t hspacing, int16_t vspacing, bool force_same);
 
-inline static bool is_boxdraw(uint32_t ch) {
+static inline bool is_boxdraw(uint32_t ch) {
     return ch >= 0x2500 && ch < 0x25A0;
 }
 

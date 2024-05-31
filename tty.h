@@ -44,7 +44,7 @@ struct tty {
     uint8_t *end;
 };
 
-inline static bool tty_has_data(struct tty *tty) {
+static inline bool tty_has_data(struct tty *tty) {
     return tty->start < tty->end;
 }
 

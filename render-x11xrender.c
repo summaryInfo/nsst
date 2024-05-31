@@ -142,7 +142,7 @@ static void register_glyph(struct window *win, uint32_t ch, struct glyph *glyph)
     }
 }
 
-inline static void do_draw_rects(struct window *win, struct rect *rects, ssize_t count, color_t color) {
+static inline void do_draw_rects(struct window *win, struct rect *rects, ssize_t count, color_t color) {
     if (!count) return;
 
     static_assert(sizeof(struct rect) == sizeof(xcb_rectangle_t), "Rectangle types does not match");
@@ -152,7 +152,7 @@ inline static void do_draw_rects(struct window *win, struct rect *rects, ssize_t
             get_plat(win)->pic1, col, count, (xcb_rectangle_t *)rects);
 }
 
-inline static void do_set_clip(struct window *win, struct rect *rects, ssize_t count) {
+static inline void do_set_clip(struct window *win, struct rect *rects, ssize_t count) {
     if (!count) return;
     xcb_render_set_picture_clip_rectangles(con, get_plat(win)->pic1, 0, 0,
                                            count, (xcb_rectangle_t *)rects);
@@ -360,7 +360,7 @@ void x11_xrender_copy(struct window *win, struct rect dst, int16_t sx, int16_t s
     xcb_copy_area(con, get_plat(win)->pid1, get_plat(win)->pid1, get_plat(win)->gc, sx, sy, dst.x, dst.y, dst.width, dst.height);
 }
 
-inline static void adjust_msg_buffer(void) {
+static inline void adjust_msg_buffer(void) {
     if (UNLIKELY(rctx.payload_size + WORDS_IN_MESSAGE * sizeof(uint32_t) > rctx.payload_caps)) {
         rctx.payload = xrealloc(rctx.payload, rctx.payload_caps,
                                 rctx.payload_caps + WORDS_IN_MESSAGE * sizeof(uint32_t));
@@ -368,7 +368,7 @@ inline static void adjust_msg_buffer(void) {
     }
 }
 
-inline static struct glyph_msg *start_msg(int16_t dx, int16_t dy) {
+static inline struct glyph_msg *start_msg(int16_t dx, int16_t dy) {
     struct glyph_msg *head = (struct glyph_msg *)(rctx.payload + rctx.payload_size);
     *head = (struct glyph_msg) {
         .dx = dx,
@@ -477,7 +477,7 @@ static void draw_undercurls(struct window *win, struct element_buffer *buf) {
 /* X11-independent code is below */
 
 
-inline static void free_elem_buffer(struct element_buffer *buf) {
+static inline void free_elem_buffer(struct element_buffer *buf) {
     free(buf->data);
     *buf = (struct element_buffer){ 0 };
 }
@@ -517,14 +517,14 @@ static void push_rect(struct rect *rect) {
     rctx.payload_size += sizeof(*rect);
 }
 
-inline static void push_element(struct element_buffer *dst, struct element *elem) {
+static inline void push_element(struct element_buffer *dst, struct element *elem) {
     /* We need buffer twice as big a the number of elements to
      * be able to use merge sort efficiently */
     adjust_buffer((void **)&dst->data, &dst->caps, 2*(dst->size + 1), sizeof *elem);
     dst->data[dst->size++] = *elem;
 }
 
-inline static uint32_t push_char(uint32_t ch) {
+static inline uint32_t push_char(uint32_t ch) {
     /* Character are pushed in buffer in reverse order,
      * since lines are scanned in reverse order */
     if (UNLIKELY(rctx.glyphs_size + 1 > rctx.glyphs_caps)) {
@@ -541,7 +541,7 @@ inline static uint32_t push_char(uint32_t ch) {
     return new_pos;
 }
 
-inline static void sort_by_color(struct element_buffer *buf) {
+static inline void sort_by_color(struct element_buffer *buf) {
     struct element *dst = buf->data + buf->size, *src = buf->data;
     for (size_t k = 2; k < 2*buf->size; k += k) {
         for (size_t i = 0; i < buf->size; ) {

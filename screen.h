@@ -218,140 +218,140 @@ void screen_drain_scrolled(struct screen *scr);
 
 char *encode_sgr(char *dst, char *end, const struct attr *attr);
 
-inline static void screen_set_bookmark(struct screen *scr, const uint8_t *pin) {
+static inline void screen_set_bookmark(struct screen *scr, const uint8_t *pin) {
     scr->save_handle_at_print = pin;
 }
 
-inline static struct line_span *screen_get_bookmark(struct screen *scr) {
+static inline struct line_span *screen_get_bookmark(struct screen *scr) {
     return &scr->saved_handle.s;
 }
 
-inline static ssize_t screen_width(struct screen *scr) {
+static inline ssize_t screen_width(struct screen *scr) {
     return scr->width;
 }
 
-inline static ssize_t screen_height(struct screen *scr) {
+static inline ssize_t screen_height(struct screen *scr) {
     return scr->height;
 }
 
-inline static ssize_t screen_max_y(struct screen *scr) {
+static inline ssize_t screen_max_y(struct screen *scr) {
     return scr->bottom + 1;
 }
 
-inline static ssize_t screen_min_y(struct screen *scr) {
+static inline ssize_t screen_min_y(struct screen *scr) {
     return scr->top;
 }
 
-inline static ssize_t screen_max_x(struct screen *scr) {
+static inline ssize_t screen_max_x(struct screen *scr) {
     return scr->mode.lr_margins ? scr->right + 1 : scr->width;
 }
 
-inline static ssize_t screen_min_x(struct screen *scr) {
+static inline ssize_t screen_min_x(struct screen *scr) {
     return scr->mode.lr_margins ? scr->left : 0;
 }
 
-inline static ssize_t screen_max_ox(struct screen *scr) {
+static inline ssize_t screen_max_ox(struct screen *scr) {
     return (scr->mode.lr_margins && scr->c.origin) ? scr->right + 1: scr->width;
 }
 
-inline static ssize_t screen_min_ox(struct screen *scr) {
+static inline ssize_t screen_min_ox(struct screen *scr) {
     return (scr->mode.lr_margins && scr->c.origin) ? scr->left : 0;
 }
 
-inline static ssize_t screen_max_oy(struct screen *scr) {
+static inline ssize_t screen_max_oy(struct screen *scr) {
     return scr->c.origin ? scr->bottom + 1: scr->height;
 }
 
-inline static ssize_t screen_min_oy(struct screen *scr) {
+static inline ssize_t screen_min_oy(struct screen *scr) {
     return scr->c.origin ? scr->top : 0;
 }
 
-inline static ssize_t screen_cursor_x(struct screen *scr) {
+static inline ssize_t screen_cursor_x(struct screen *scr) {
     return scr->c.x;
 }
 
-inline static ssize_t screen_cursor_y(struct screen *scr) {
+static inline ssize_t screen_cursor_y(struct screen *scr) {
     return scr->c.y;
 }
 
-inline static void screen_reset_pending(struct screen *scr) {
+static inline void screen_reset_pending(struct screen *scr) {
     scr->c.pending = 0;
 }
 
-inline static bool screen_cursor_in_region(struct screen *scr) {
+static inline bool screen_cursor_in_region(struct screen *scr) {
     return scr->c.x >= screen_min_x(scr) && scr->c.x < screen_max_x(scr) &&
             scr->c.y >= screen_min_y(scr) && scr->c.y < screen_max_y(scr);
 }
 
-inline static void screen_cursor_adjust_wide_left(struct screen *scr) {
+static inline void screen_cursor_adjust_wide_left(struct screen *scr) {
     view_adjust_wide_left(&scr->screen[scr->c.y], scr->c.x);
 }
 
-inline static void screen_cursor_adjust_wide_right(struct screen *scr) {
+static inline void screen_cursor_adjust_wide_right(struct screen *scr) {
     view_adjust_wide_right(&scr->screen[scr->c.y], scr->c.x);
 }
 
-inline static void screen_damage_cursor(struct screen *scr) {
+static inline void screen_damage_cursor(struct screen *scr) {
     struct line_span *cview = &scr->screen[scr->c.y];
     if (cview->width <= scr->c.x) cview->line->force_damage = 1;
     else view_cell(cview, scr->c.x)->drawn = 0;
 }
 
-inline static void screen_move_width_origin(struct screen *scr, int16_t x, int16_t y) {
+static inline void screen_move_width_origin(struct screen *scr, int16_t x, int16_t y) {
     (scr->c.origin ? screen_bounded_move_to : screen_move_to)(scr, x, y);
 }
 
-inline static struct attr *screen_sgr(struct screen *scr) {
+static inline struct attr *screen_sgr(struct screen *scr) {
     return &scr->sgr;
 }
 
-inline static struct window *screen_window(struct screen *scr) {
+static inline struct window *screen_window(struct screen *scr) {
     return scr->win;
 }
 
-inline static struct selection_state *screen_selection(struct screen *scr) {
+static inline struct selection_state *screen_selection(struct screen *scr) {
     return &scr->sstate;
 }
 
-inline static ssize_t screen_scrollback_top(struct screen *scr) {
+static inline ssize_t screen_scrollback_top(struct screen *scr) {
     return -scr->sb_limit;
 }
 
-inline static bool screen_has_tab(struct screen *scr, int16_t i) {
+static inline bool screen_has_tab(struct screen *scr, int16_t i) {
     return scr->tabs[i];
 }
 
-inline static struct printer *screen_printer(struct screen *scr) {
+static inline struct printer *screen_printer(struct screen *scr) {
     return &scr->printer;
 }
 
-inline static void screen_set_tab(struct screen *scr, ssize_t i, bool set) {
+static inline void screen_set_tab(struct screen *scr, ssize_t i, bool set) {
     scr->tabs[i] = set;
 }
 
-inline static void screen_clear_tabs(struct screen *scr) {
+static inline void screen_clear_tabs(struct screen *scr) {
     memset(scr->tabs, 0, scr->width*sizeof *scr->tabs);
 }
 
-inline static void screen_store_cursor_position(struct screen *scr, ssize_t *cx,
+static inline void screen_store_cursor_position(struct screen *scr, ssize_t *cx,
                                                 ssize_t *cy, bool *cpending) {
     *cx = scr->c.x;
     *cy = scr->c.y;
     *cpending = scr->c.pending;
 }
 
-inline static void screen_load_cursor_position(struct screen *scr, ssize_t cx,
+static inline void screen_load_cursor_position(struct screen *scr, ssize_t cx,
                                                ssize_t cy, bool cpending) {
     scr->c.x = cx;
     scr->c.y = cy;
     scr->c.pending = cpending;
 }
 
-inline static void screen_print_cursor_line(struct screen *scr) {
+static inline void screen_print_cursor_line(struct screen *scr) {
     screen_print_line(scr, &scr->screen[scr->c.y]);
 }
 
-inline static void screen_precompose_at_cursor(struct screen *scr, uint32_t ch) {
+static inline void screen_precompose_at_cursor(struct screen *scr, uint32_t ch) {
     struct line_span *cview = &scr->screen[scr->c.y];
     if (cview->width <= scr->c.x) return;
 
@@ -368,50 +368,50 @@ inline static void screen_precompose_at_cursor(struct screen *scr, uint32_t ch) 
         cell_set(cel, ch);
 }
 
-inline static enum charset screen_get_upcs(struct screen *scr) {
+static inline enum charset screen_get_upcs(struct screen *scr) {
     return scr->upcs;
 }
 
-inline static void screen_set_upcs(struct screen *scr, enum charset upcs) {
+static inline void screen_set_upcs(struct screen *scr, enum charset upcs) {
     scr->upcs = upcs;
 }
 
-inline static void screen_set_gl(struct screen *scr, ssize_t gl, bool once) {
+static inline void screen_set_gl(struct screen *scr, ssize_t gl, bool once) {
     if (!once) scr->c.gl = gl;
     scr->c.gl_ss = gl;
 }
 
-inline static void screen_set_gr(struct screen *scr, ssize_t gr) {
+static inline void screen_set_gr(struct screen *scr, ssize_t gr) {
     scr->c.gr = gr;
 }
 
-inline static void screen_set_charset(struct screen *scr, ssize_t idx, enum charset cs) {
+static inline void screen_set_charset(struct screen *scr, ssize_t idx, enum charset cs) {
     scr->c.gn[idx] = cs;
 }
 
-inline static struct cursor *screen_cursor(struct screen *scr) {
+static inline struct cursor *screen_cursor(struct screen *scr) {
     return &scr->c;
 }
 
-inline static void screen_rep(struct screen *scr, ssize_t rep) {
+static inline void screen_rep(struct screen *scr, ssize_t rep) {
     while (rep > 0)
         rep = screen_dispatch_rep(scr, scr->prev_ch, rep);
 }
 
-inline static void screen_putchar(struct screen *scr, uint32_t ch) {
+static inline void screen_putchar(struct screen *scr, uint32_t ch) {
     screen_dispatch_rep(scr, ch, 1);
 }
 
-inline static bool screen_altscreen(struct screen *scr) {
+static inline bool screen_altscreen(struct screen *scr) {
     return scr->mode.altscreen;
 }
 
-inline static void screen_set_origin(struct screen *scr, bool set) {
+static inline void screen_set_origin(struct screen *scr, bool set) {
     scr->c.origin = set;
     screen_move_to(scr, screen_min_ox(scr), screen_min_oy(scr));
 }
 
-inline static void screen_autoprint(struct screen *scr) {
+static inline void screen_autoprint(struct screen *scr) {
     if (scr->mode.print_auto)
         screen_print_line(scr, &scr->screen[scr->c.y]);
 }

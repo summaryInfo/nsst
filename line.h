@@ -143,37 +143,37 @@ void copy_utf32_to_cells(struct cell *dst, const uint32_t *src, const uint32_t *
 void copy_ascii_to_cells(struct cell *dst, const uint8_t *src, const uint8_t *end, uint32_t attrid);
 void free_line(struct screen_storage *screen, struct line *line);
 
-inline static color_t indirect_color(uint32_t idx) { return idx + 1; }
-inline static uint32_t color_idx(color_t c) { return c - 1; }
-inline static bool is_direct_color(color_t c) { return c >= PALETTE_SIZE; }
-inline static color_t direct_color(color_t c, color_t *pal) { return is_direct_color(c) ? c : pal[color_idx(c)]; }
+static inline color_t indirect_color(uint32_t idx) { return idx + 1; }
+static inline uint32_t color_idx(color_t c) { return c - 1; }
+static inline bool is_direct_color(color_t c) { return c >= PALETTE_SIZE; }
+static inline color_t direct_color(color_t c, color_t *pal) { return is_direct_color(c) ? c : pal[color_idx(c)]; }
 
-inline static uint8_t color_r(color_t c) { return (c >> 16) & 0xFF; }
-inline static uint8_t color_g(color_t c) { return (c >> 8) & 0xFF; }
-inline static uint8_t color_b(color_t c) { return c & 0xFF; }
-inline static uint8_t color_a(color_t c) { return c >> 24; }
-inline static color_t mk_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+static inline uint8_t color_r(color_t c) { return (c >> 16) & 0xFF; }
+static inline uint8_t color_g(color_t c) { return (c >> 8) & 0xFF; }
+static inline uint8_t color_b(color_t c) { return c & 0xFF; }
+static inline uint8_t color_a(color_t c) { return c >> 24; }
+static inline color_t mk_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
     return ((color_t)a << 24U) | (r << 16U) | (g << 8U) | b;
 }
-inline static color_t color_apply_a(color_t c, double a) {
+static inline color_t color_apply_a(color_t c, double a) {
     return mk_color(color_r(c)*a, color_g(c)*a, color_b(c)*a, 255*a);
 }
 
-inline static uint32_t cell_get(struct cell *cell) {
+static inline uint32_t cell_get(struct cell *cell) {
     return uncompact(cell->ch);
 }
 
-inline static void cell_set(struct cell *cell, uint32_t ch) {
+static inline void cell_set(struct cell *cell, uint32_t ch) {
     cell->drawn = 0;
     cell->ch = compact(ch);
 }
 
-inline static bool cell_wide(struct cell *cell) {
+static inline bool cell_wide(struct cell *cell) {
     return iswide(uncompact(cell->ch));
 }
 
 
-inline static struct line *detach_prev_line(struct line *line) {
+static inline struct line *detach_prev_line(struct line *line) {
     struct line *prev = line->prev;
     if (prev)
         prev->next = NULL;
@@ -181,7 +181,7 @@ inline static struct line *detach_prev_line(struct line *line) {
     return prev;
 }
 
-inline static struct line *detach_next_line(struct line *line) {
+static inline struct line *detach_next_line(struct line *line) {
     struct line *next = line->next;
     if (next)
         next->prev = NULL;
@@ -189,7 +189,7 @@ inline static struct line *detach_next_line(struct line *line) {
     return next;
 }
 
-inline static void attach_next_line(struct line *line, struct line *next) {
+static inline void attach_next_line(struct line *line, struct line *next) {
     if (next) {
 #if DEBUG_LINES
         assert(!next->prev);
@@ -202,7 +202,7 @@ inline static void attach_next_line(struct line *line, struct line *next) {
     line->next = next;
 }
 
-inline static void attach_prev_line(struct line *line, struct line *prev) {
+static inline void attach_prev_line(struct line *line, struct line *prev) {
     if (prev) {
 #if DEBUG_LINES
         assert(!prev->next);
@@ -215,7 +215,7 @@ inline static void attach_prev_line(struct line *line, struct line *prev) {
     line->prev = prev;
 }
 
-inline static ssize_t line_length(struct line *line) {
+static inline ssize_t line_length(struct line *line) {
     int16_t max_x = line->size;
     if (!line->wrapped) {
         while (LIKELY(max_x > 0) &&
@@ -225,14 +225,14 @@ inline static ssize_t line_length(struct line *line) {
     return max_x;
 }
 
-inline static ssize_t line_advance_width(struct line *ln, ssize_t offset, ssize_t width) {
+static inline ssize_t line_advance_width(struct line *ln, ssize_t offset, ssize_t width) {
     offset += width;
     if (offset - 1 < ln->size)
         offset -= cell_wide(&ln->cell[offset - 1]);
     return MIN(offset, ln->size);
 }
 
-inline static ssize_t line_segments(struct line *ln, ssize_t offset, ssize_t width) {
+static inline ssize_t line_segments(struct line *ln, ssize_t offset, ssize_t width) {
     if (!ln->size && !offset)
         return 1;
 
@@ -252,36 +252,36 @@ inline static ssize_t line_segments(struct line *ln, ssize_t offset, ssize_t wid
     .reverse = true, .blink = true, .protected = true}.mask)
 #define PROTECTED_MASK64 ((struct attr){ .protected = true }.mask64[1])
 
-inline static uint32_t attr_mask(const struct attr *a) {
+static inline uint32_t attr_mask(const struct attr *a) {
     return a->mask & ATTR_MASK;
 }
 
-inline static void attr_mask_set(struct attr *a, uint32_t mask) {
+static inline void attr_mask_set(struct attr *a, uint32_t mask) {
     a->mask = (a->mask & ~ATTR_MASK) | (mask & ATTR_MASK);
 }
 
-inline static const struct attr *attr_pad(struct line *ln) {
+static inline const struct attr *attr_pad(struct line *ln) {
     return ln->pad_attrid ? &ln->attrs->data[ln->pad_attrid - 1] : &ATTR_DEFAULT;
 }
 
-inline static const struct attr *attr_at(struct line *ln, ssize_t x) {
+static inline const struct attr *attr_at(struct line *ln, ssize_t x) {
     if (x >= ln->size) return attr_pad(ln);
     return ln->cell[x].attrid ? &ln->attrs->data[ln->cell[x].attrid - 1] : &ATTR_DEFAULT;
 }
 
-inline static void adjust_wide_left(struct line *line, ssize_t x) {
+static inline void adjust_wide_left(struct line *line, ssize_t x) {
     if (x < 1 || x > line->size || !line->size) return;
     struct cell *cell = line->cell + x - 1;
     if (cell_wide(cell)) *cell = MKCELL(0, cell->attrid);
 }
 
-inline static void adjust_wide_right(struct line *line, ssize_t x) {
+static inline void adjust_wide_right(struct line *line, ssize_t x) {
     if (x >= line->size - 1) return;
     struct cell *cell = &line->cell[x + 1];
     if (cell_wide(cell - 1)) cell->drawn = 0;
 }
 
-inline static bool attr_eq(const struct attr *a, const struct attr *b) {
+static inline bool attr_eq(const struct attr *a, const struct attr *b) {
     return a->mask64[0] == b->mask64[0] &&
            !((a->mask64[1] ^ b->mask64[1]) & ~PROTECTED_MASK64);
     // return a->fg == b->fg && a->bg == b->bg &&
@@ -289,7 +289,7 @@ inline static bool attr_eq(const struct attr *a, const struct attr *b) {
 }
 
 #if DEBUG_LINES
-inline static bool find_handle_in_line(struct line_handle *handle) {
+static inline bool find_handle_in_line(struct line_handle *handle) {
     assert(handle->s.line);
     struct line_handle *first = handle->s.line->first_handle;
     while (first) {
@@ -300,7 +300,7 @@ inline static bool find_handle_in_line(struct line_handle *handle) {
 }
 #endif
 
-inline static void line_handle_add(struct line_handle *handle) {
+static inline void line_handle_add(struct line_handle *handle) {
 #if DEBUG_LINES
     assert(!handle->next);
     assert(!handle->prev);
@@ -319,11 +319,11 @@ inline static void line_handle_add(struct line_handle *handle) {
 #endif
 }
 
-inline static bool line_handle_is_registered(struct line_handle *handle) {
+static inline bool line_handle_is_registered(struct line_handle *handle) {
     return handle->prev || handle == handle->s.line->first_handle;
 }
 
-inline static void line_handle_remove(struct line_handle *handle) {
+static inline void line_handle_remove(struct line_handle *handle) {
     if (!handle->s.line) return;
 
 #if DEBUG_LINES
@@ -359,24 +359,24 @@ inline static void line_handle_remove(struct line_handle *handle) {
 
 extern uint64_t line_next_seqno;
 
-inline static uint64_t get_seqno_range(uint64_t inc) {
+static inline uint64_t get_seqno_range(uint64_t inc) {
     uint64_t ret = line_next_seqno;
     line_next_seqno += inc;
     return ret;
 }
 
-inline static void fixup_lines_seqno(struct line *line) {
+static inline void fixup_lines_seqno(struct line *line) {
     while (line) {
         line->seq = get_seqno_range(SEQNO_INC);
         line = line->next;
     }
 }
 
-inline static bool line_span_cmpeq(struct line_span *a, struct line_span *b) {
+static inline bool line_span_cmpeq(struct line_span *a, struct line_span *b) {
     return a->line == b->line && a->offset == b->offset;
 }
 
-inline static int line_span_cmp(struct line_span *a, struct line_span *b) {
+static inline int line_span_cmp(struct line_span *a, struct line_span *b) {
     if (a->line != b->line) {
         int64_t a_seq = a->line ? a->line->seq : 0;
         int64_t b_seq = b->line ? b->line->seq : 0;
@@ -385,7 +385,7 @@ inline static int line_span_cmp(struct line_span *a, struct line_span *b) {
     return a->offset < b->offset ? -1 : a->offset > b->offset;
 }
 
-inline static void replace_handle(struct line_handle *dst, struct line_span *src) {
+static inline void replace_handle(struct line_handle *dst, struct line_span *src) {
 #if DEBUG_LINES
     assert(src->line);
     line_handle_remove(dst);
@@ -411,7 +411,7 @@ inline static void replace_handle(struct line_handle *dst, struct line_span *src
 #endif
 }
 
-inline static ssize_t line_span_shift(struct line_span *pos, ssize_t width) {
+static inline ssize_t line_span_shift(struct line_span *pos, ssize_t width) {
     bool res = 0;
 
     ssize_t offset = line_advance_width(pos->line, pos->offset, width);
@@ -429,7 +429,7 @@ inline static ssize_t line_span_shift(struct line_span *pos, ssize_t width) {
     return res;
 }
 
-inline static ssize_t line_shift_n(struct line_span *pos, ssize_t amount, ssize_t width) {
+static inline ssize_t line_shift_n(struct line_span *pos, ssize_t amount, ssize_t width) {
     if (amount < 0) {
         // TODO Little optimization
         amount += line_segments(pos->line, 0, width) - line_segments(pos->line, pos->offset, width);

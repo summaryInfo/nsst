@@ -42,12 +42,12 @@ struct ht_iter {
 extern void ht_shrink(struct hashtable *ht);
 extern void ht_adjust(struct hashtable *ht, intptr_t inc);
 
-inline static size_t ceil_power_of_2(size_t n) {
+static inline size_t ceil_power_of_2(size_t n) {
     if (n < 2) return n;
     return 1UL << (sizeof(n)*8 - (__builtin_clzl(n - 1)));
 }
 
-inline static ht_iter_t ht_begin(hashtable_t *ht) {
+static inline ht_iter_t ht_begin(hashtable_t *ht) {
     ht_iter_t it = { .ht = ht, ht->data, ht->data };
     ht_head_t **end = ht->data + ht->caps;
 
@@ -56,7 +56,7 @@ inline static ht_iter_t ht_begin(hashtable_t *ht) {
     return it;
 }
 
-inline static ht_head_t *ht_next(ht_iter_t *it) {
+static inline ht_head_t *ht_next(ht_iter_t *it) {
     ht_head_t **end = it->ht->data + it->ht->caps;
     if (it->bucket >= end) return NULL;
 
@@ -74,13 +74,13 @@ inline static ht_head_t *ht_next(ht_iter_t *it) {
     return cur;
 }
 
-inline static ht_head_t *ht_current(ht_iter_t *it) {
+static inline ht_head_t *ht_current(ht_iter_t *it) {
     ht_head_t **end = it->ht->data + it->ht->caps;
     if (it->bucket >= end) return NULL;
     return *it->elem;
 }
 
-inline static ht_head_t *ht_erase_current(ht_iter_t *it) {
+static inline ht_head_t *ht_erase_current(ht_iter_t *it) {
     ht_head_t **end = it->ht->data + it->ht->caps;
     if (it->bucket >= end) return NULL;
 
@@ -98,7 +98,7 @@ inline static ht_head_t *ht_erase_current(ht_iter_t *it) {
     return cur;
 }
 
-inline static void ht_free(hashtable_t *ht) {
+static inline void ht_free(hashtable_t *ht) {
     /* This function assumes, that all elements was freed before */
     assert(!ht->size);
 
@@ -106,7 +106,7 @@ inline static void ht_free(hashtable_t *ht) {
     *ht = (hashtable_t){ 0 };
 }
 
-inline static void ht_init(hashtable_t *ht, size_t caps, ht_cmpfn_t *cmpfn) {
+static inline void ht_init(hashtable_t *ht, size_t caps, ht_cmpfn_t *cmpfn) {
     caps = ceil_power_of_2(caps);
     *ht = (hashtable_t) {
         .data = HT_CALLOC(caps * sizeof(ht->data[0])),
@@ -115,7 +115,7 @@ inline static void ht_init(hashtable_t *ht, size_t caps, ht_cmpfn_t *cmpfn) {
     };
 }
 
-inline static ht_head_t **ht_lookup_ptr(hashtable_t *ht, ht_head_t *elem) {
+static inline ht_head_t **ht_lookup_ptr(hashtable_t *ht, ht_head_t *elem) {
     ht_head_t **cand = &ht->data[elem->hash & (ht->caps - 1)];
     while (*cand) {
         if (elem->hash == (*cand)->hash &&
@@ -126,7 +126,7 @@ inline static ht_head_t **ht_lookup_ptr(hashtable_t *ht, ht_head_t *elem) {
     return cand;
 }
 
-inline static ht_head_t *ht_insert_hint(hashtable_t *ht, ht_head_t **cand, ht_head_t *elem) {
+static inline ht_head_t *ht_insert_hint(hashtable_t *ht, ht_head_t **cand, ht_head_t *elem) {
     ht_head_t *old = *cand;
     if (!*cand) {
         *cand = elem;
@@ -136,7 +136,7 @@ inline static ht_head_t *ht_insert_hint(hashtable_t *ht, ht_head_t **cand, ht_he
     return old;
 }
 
-inline static ht_head_t *ht_replace_hint(hashtable_t *ht, ht_head_t **cand, ht_head_t *elem) {
+static inline ht_head_t *ht_replace_hint(hashtable_t *ht, ht_head_t **cand, ht_head_t *elem) {
     ht_head_t *old = *cand;
 
     *cand = elem;
@@ -150,7 +150,7 @@ inline static ht_head_t *ht_replace_hint(hashtable_t *ht, ht_head_t **cand, ht_h
     return old;
 }
 
-inline static ht_head_t *ht_erase_hint(hashtable_t *ht, ht_head_t **cand) {
+static inline ht_head_t *ht_erase_hint(hashtable_t *ht, ht_head_t **cand) {
     ht_head_t *old = *cand;
     if (old) {
         *cand = old->next;
@@ -160,27 +160,27 @@ inline static ht_head_t *ht_erase_hint(hashtable_t *ht, ht_head_t **cand) {
     return old;
 }
 
-inline static ht_head_t *ht_find(hashtable_t *ht, ht_head_t *elem) {
+static inline ht_head_t *ht_find(hashtable_t *ht, ht_head_t *elem) {
     return *ht_lookup_ptr(ht, elem);
 }
 
-inline static ht_head_t *ht_replace(hashtable_t *ht, ht_head_t *elem) {
+static inline ht_head_t *ht_replace(hashtable_t *ht, ht_head_t *elem) {
     ht_head_t **cand = ht_lookup_ptr(ht, elem);
     return ht_replace_hint(ht, cand, elem);
 }
 
-inline static ht_head_t *ht_insert(hashtable_t *ht, ht_head_t *elem) {
+static inline ht_head_t *ht_insert(hashtable_t *ht, ht_head_t *elem) {
     ht_head_t **cand = ht_lookup_ptr(ht, elem);
     return ht_insert_hint(ht, cand, elem);
 }
 
-inline static ht_head_t *ht_erase(hashtable_t *ht, ht_head_t *elem) {
+static inline ht_head_t *ht_erase(hashtable_t *ht, ht_head_t *elem) {
     ht_head_t **cand = ht_lookup_ptr(ht, elem);
     return ht_erase_hint(ht, cand);
 }
 
 /* Murmur64A */
-inline static uint64_t hash64(const void *vdata, size_t len) {
+static inline uint64_t hash64(const void *vdata, size_t len) {
     const uint64_t m = 0xC6A4A7935BD1E995LLU;
 
 
@@ -212,7 +212,7 @@ inline static uint64_t hash64(const void *vdata, size_t len) {
     return h;
 }
 
-inline static uint64_t uint_hash64(uint64_t h) {
+static inline uint64_t uint_hash64(uint64_t h) {
     h ^= h >> 33;
     h *= 0xFF51AFD7ED558CCDUL;
     h ^= h >> 33;
@@ -221,7 +221,7 @@ inline static uint64_t uint_hash64(uint64_t h) {
     return h;
 }
 
-inline static uint32_t uint_hash32(uint32_t v) {
+static inline uint32_t uint_hash32(uint32_t v) {
     v = ((v >> 16) ^ v) * 0x45D9F3B;
     v = ((v >> 16) ^ v) * 0x45D9F3B;
     v = (v >> 16) ^ v;

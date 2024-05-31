@@ -105,7 +105,7 @@ struct window {
 extern struct window *win_list_head;
 
 FORCEINLINE
-inline static struct cellspec describe_cell(struct cell cell, struct attr *attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected, bool slow_path) {
+static inline struct cellspec describe_cell(struct cell cell, struct attr *attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected, bool slow_path) {
     struct cellspec res = {0};
     // TODO Better URI rendering
     //      -- underline colors
@@ -204,7 +204,7 @@ inline static struct cellspec describe_cell(struct cell cell, struct attr *attr,
  * background color. It is used for padding rendering.
  */
 FORCEINLINE
-inline static color_t describe_bg(struct attr *attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected) {
+static inline color_t describe_bg(struct attr *attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected) {
     color_t bg = direct_color(attr->bg, rcs->palette);
 
     if (UNLIKELY(attr->reverse ^ selected)) {

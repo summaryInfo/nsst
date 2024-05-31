@@ -202,11 +202,11 @@ struct term {
     color_t palette[PALETTE_SIZE];
 };
 
-inline static void term_esc_start(struct term *term) {
+static inline void term_esc_start(struct term *term) {
     term->esc.selector = 0;
 }
 
-inline static void term_esc_start_seq(struct term *term) {
+static inline void term_esc_start_seq(struct term *term) {
     memset(term->esc.param, 0xFF, (term->esc.i + 1)*sizeof term->esc.param[0]);
 
     term->esc.i = 0;
@@ -214,18 +214,18 @@ inline static void term_esc_start_seq(struct term *term) {
     term->esc.selector = 0;
 }
 
-inline static uint8_t *term_esc_str(struct term *term) {
+static inline uint8_t *term_esc_str(struct term *term) {
     return term->esc.str_ptr ? term->esc.str_ptr : term->esc.str_data;
 }
 
-inline static void term_esc_start_string(struct term *term) {
+static inline void term_esc_start_string(struct term *term) {
     term->esc.str_len = 0;
     term->esc.str_data[0] = 0;
     term->esc.str_cap = ESC_MAX_STR;
     term->esc.selector = 0;
 }
 
-inline static void term_esc_finish_string(struct term *term) {
+static inline void term_esc_finish_string(struct term *term) {
     free(term->esc.str_ptr);
     term->esc.str_ptr = NULL;
 }
@@ -592,7 +592,7 @@ static void term_dispatch_dsr(struct term *term) {
     }
 }
 
-inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
+static inline bool term_parse_cursor_report(struct term *term, char *dstr) {
     struct screen *scr = &term->scr;
     /* Cursor Y */
     ssize_t y = strtoul(dstr, &dstr, 10);
@@ -681,7 +681,7 @@ inline static bool term_parse_cursor_report(struct term *term, char *dstr) {
     return 1;
 }
 
-inline static bool term_parse_tabs_report(struct term *term, const uint8_t *dstr, const uint8_t *dend) {
+static inline bool term_parse_tabs_report(struct term *term, const uint8_t *dstr, const uint8_t *dend) {
     screen_clear_tabs(&term->scr);
     for (ssize_t tab = 0; dstr <= dend; dstr++) {
         if (*dstr == '/' || dstr == dend) {
@@ -924,7 +924,7 @@ static void term_do_reset_color(struct term *term) {
             palette[SPECIAL_CURSOR_BG] : term->palette[cid]);
 }
 
-inline static bool is_osc_state(uint32_t state) {
+static inline bool is_osc_state(uint32_t state) {
     return state == esc_osc_string || state == esc_osc_1 || state == esc_osc_2;
 }
 
@@ -2139,7 +2139,7 @@ static void term_decode_sgr(struct term *term, size_t i, struct attr *mask, stru
 
 /* Utility functions for XTSAVE/XTRESTORE */
 
-inline static void store_mode(uint8_t modbits[], uparam_t mode, bool val) {
+static inline void store_mode(uint8_t modbits[], uparam_t mode, bool val) {
     if (mode < 96) modbits += mode / 8;
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
     else if (2000 <= mode && mode < 2007) modbits += 20;
@@ -2153,7 +2153,7 @@ inline static void store_mode(uint8_t modbits[], uparam_t mode, bool val) {
     else *modbits &= ~(1 << (mode % 8));
 }
 
-inline static bool load_mode(uint8_t modbits[], uparam_t mode) {
+static inline bool load_mode(uint8_t modbits[], uparam_t mode) {
     if (mode < 96) modbits += mode / 8;
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
     else if (2000 <= mode && mode < 2007) modbits += 20;
@@ -3111,7 +3111,7 @@ static void term_dispatch_vt52_cup(struct term *term) {
 }
 
 
-inline static bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const uint8_t **start, const uint8_t *end) {
+static inline bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const uint8_t **start, const uint8_t *end) {
     ch = *--*start;
 
     bool utf8 = term->mode.utf8 || (term->mode.title_set_utf8 && !term->mode.title_set_hex
@@ -3154,7 +3154,7 @@ inline static bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
     return true;
 }
 
-inline static bool term_dispatch(struct term *term, const uint8_t **start, const uint8_t *end) {
+static inline bool term_dispatch(struct term *term, const uint8_t **start, const uint8_t *end) {
     uint8_t ch = **start;
 
     /* Fast path for graphical characters, it can print one line at a time. */
@@ -3358,7 +3358,7 @@ inline static bool term_dispatch(struct term *term, const uint8_t **start, const
 }
 
 #if USE_URI
-inline static void apply_matched_uri(struct term *term) {
+static inline void apply_matched_uri(struct term *term) {
     struct line_span uri_end = screen_span(&term->scr, screen_cursor_y(&term->scr));
     struct line_span *uri_start = screen_get_bookmark(&term->scr);
     uri_end.offset += screen_cursor_x(&term->scr);
@@ -3451,7 +3451,7 @@ finish:
     return true;
 }
 
-inline static bool is_osc52_reply(struct term *term) {
+static inline bool is_osc52_reply(struct term *term) {
     return term->paste_from;
 }
 
@@ -3649,7 +3649,7 @@ static size_t encode_c1(uint8_t *out, const uint8_t *in, bool eightbit) {
     return fmtp - out;
 }
 
-inline static bool has_8bit(struct term *term) {
+static inline bool has_8bit(struct term *term) {
     return term->mode.eight_bit && term->vt_level > 1;
 }
 
