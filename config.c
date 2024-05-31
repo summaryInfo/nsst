@@ -37,10 +37,11 @@
 
 
 struct global_config gconfig;
+
 static hashtable_t options_hashtable;
 static struct option *short_opts[26*2];
 static ssize_t max_help_line_len;
-struct option *dpi_option_entry;
+static struct option *dpi_option_entry;
 
 #define COLOR_SPECIAL_SELECTED_BG 0
 #define COLOR_SPECIAL_SELECTED_FG 0
