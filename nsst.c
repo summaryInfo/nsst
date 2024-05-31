@@ -23,7 +23,7 @@ static _Noreturn void usage(const char *argv0, int code) {
     if (gconfig.log_level > 0 || code == EXIT_SUCCESS) {
         ssize_t i = 0;
         do fputs(argv0, stdout);
-        while((argv0 = usage_string(i++)));
+        while ((argv0 = usage_string(i++)));
     }
     exit(code);
 }

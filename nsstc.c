@@ -311,7 +311,7 @@ static void do_fork(const char *spath) {
     case -1:
         exit(1);
     case 0:
-        switch((res = fork())) {
+        switch ((res = fork())) {
         case 0:
             setsid();
             execlp("nsst", "nsst", "-d", NULL);
@@ -320,7 +320,7 @@ static void do_fork(const char *spath) {
             _exit(res <= 0);
         }
     default:
-        while(wait(NULL) < 0 && errno == EINTR);
+        while (wait(NULL) < 0 && errno == EINTR);
         /* Wait for socket */
         struct timespec ts = {.tv_nsec = STARTUP_DELAY};
         for (int i = 0; stat(spath, &stt) < 0 && i < MAX_WAIT_LOOP; i++)

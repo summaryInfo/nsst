@@ -275,7 +275,7 @@ color_t parse_color(const uint8_t *str, const uint8_t *end) {
         uint32_t rgb[3] = {0};
         for (; str < end && i < 3; i++) {
             size_t clen = 0;
-            while(str + clen < end && str[clen] != '/') {
+            while (str + clen < end && str[clen] != '/') {
                 if (!isxdigit(str[clen])) return 0;
                 rgb[i] = (rgb[i] << 4) | fromhexdigit(str[clen]);
                clen++;
@@ -289,7 +289,7 @@ color_t parse_color(const uint8_t *str, const uint8_t *end) {
         }
         if (i != 3 || str - 1 != end) return 0;
 
-        switch(len) {
+        switch (len) {
         case 1:
             return 0xFF000000 |
                 (rgb[0] << 20) |
@@ -419,7 +419,7 @@ void ht_adjust(struct hashtable *ht, intptr_t inc) {
         };
 
         ht_iter_t it = ht_begin(ht);
-        while(ht_current(&it))
+        while (ht_current(&it))
             ht_insert(&tmp, ht_erase_current(&it));
         free(ht->data);
         *ht = tmp;
@@ -442,7 +442,7 @@ void ht_shrink(struct hashtable *ht) {
     };
 
     ht_iter_t it = ht_begin(ht);
-    while(ht_current(&it))
+    while (ht_current(&it))
         ht_insert(&tmp, ht_erase_current(&it));
     free(ht->data);
     *ht = tmp;

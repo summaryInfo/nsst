@@ -188,7 +188,7 @@ static inline uint64_t hash64(const void *vdata, size_t len) {
     const uint64_t *end = data + (len >> 3);
 
     uint64_t k = 0, h = 123 ^ (len * m);
-    while(data < end) {
+    while (data < end) {
         memcpy(&k, data++, sizeof(k));
         k *= m, k ^= k >> 47, k *= m;
         h ^= k, h *= m;

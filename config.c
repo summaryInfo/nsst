@@ -841,7 +841,7 @@ static void parse_config(struct instance_config *cfg, bool allow_global) {
         } else {
 e_wrong_line:
             ptr = start;
-            while(ptr < end && *ptr != '\n') ptr++;
+            while (ptr < end && *ptr != '\n') ptr++;
             SWAP(*ptr, saved1);
             warn("Can't parse config line #%zd: %s", line_n, start);
             SWAP(*ptr, saved1);

@@ -256,7 +256,7 @@ static inline bool restore_pos(struct window *win) {
 }
 
 bool x11_window_action(struct window *win, enum window_action act) {
-    switch(act) {
+    switch (act) {
         uint32_t val;
     case action_minimize:
         send_wm_client_event(get_plat(win)->wid, ctx.atom.WM_CHANGE_STATE, WM_STATE_ICONIC, 0);
@@ -391,7 +391,7 @@ static char *get_full_property(xcb_window_t wid, xcb_atom_t prop, xcb_atom_t *ty
         data[size += len] = 0;
 
         free(rep);
-    } while(left);
+    } while (left);
 
     if (psize) *psize = size - 1;
 
@@ -977,7 +977,7 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
         if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
     if (dpi > 0) set_default_dpi(dpi, cfg);
 
-    switch(gconfig.backend) {
+    switch (gconfig.backend) {
 #if USE_XRENDER
     case renderer_x11_xrender:
         if (gconfig.trace_misc)

@@ -304,10 +304,10 @@ void screen_scroll_view_to_cmd(struct screen *scr, int16_t amount) {
     struct line *line = scr->view_pos.s.line;
     if (amount > 0) {
         do line = line->next;
-        while(line && !line->sh_ps1_start && line != scr->screen->line);
+        while (line && !line->sh_ps1_start && line != scr->screen->line);
     } else {
         do line = line->prev;
-        while(line && !line->sh_ps1_start);
+        while (line && !line->sh_ps1_start);
     }
 
     if (!line) return;
@@ -2093,7 +2093,7 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
         }
 
         /* Since maxw < width == length of predec_buf, don't check it */
-    } while(totalw < maxw && /* count < FD_BUF_SIZE && */ xstart < chunk);
+    } while (totalw < maxw && /* count < FD_BUF_SIZE && */ xstart < chunk);
 
     if (prev != -1U) scr->prev_ch = prev; /* For REP CSI */
 

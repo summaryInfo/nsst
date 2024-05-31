@@ -544,7 +544,7 @@ void printer_print_string(struct printer *pr, const uint8_t *str, ssize_t size) 
             break;
         }
         wri += res;
-    } while(wri < size);
+    } while (wri < size);
 }
 
 bool printer_is_available(struct printer *pr) {

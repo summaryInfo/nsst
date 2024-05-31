@@ -361,7 +361,7 @@ static void term_load_config(struct term *term, bool reset) {
         term->palette[i] = cfg->palette[i];
     term_set_reverse(term, cfg->reverse_video);
 
-    switch(cfg->bell_volume) {
+    switch (cfg->bell_volume) {
     case 0: term->bvol = 0; break;
     case 1: term->bvol = cfg->bell_low_volume; break;
     case 2: term->bvol = cfg->bell_high_volume;
@@ -733,7 +733,7 @@ static void term_dispatch_dcs(struct term *term) {
     case C('q') | I0('$'): /* DECRQSS -> DECRPSS */ {
         if (term->esc.str_len && term->esc.str_len < 3) {
             uint16_t id = *dstr | dstr[1] << 8;
-            switch(id) {
+            switch (id) {
             case 'm': /* -> SGR */ {
                 char sgr[SGR_BUFSIZ];
                 encode_sgr(sgr, sgr + sizeof sgr, screen_sgr(scr));
@@ -796,7 +796,7 @@ static void term_dispatch_dcs(struct term *term) {
         break;
     }
     case C('t') | I0('$'): /* DECRSPS */
-        switch(PARAM(0, 0)) {
+        switch (PARAM(0, 0)) {
         case 1: /* <- DECCIR */
             if (!term_parse_cursor_report(term, (char *)term_esc_str(term)))
                 term_esc_dump(term, 0);
@@ -866,7 +866,7 @@ static enum clip_target decode_target(uint8_t targ, bool mode) {
 }
 
 static uint32_t selector_to_cid(uint32_t sel, bool rev) {
-    switch(sel) {
+    switch (sel) {
     case 10: return rev ? SPECIAL_BG : SPECIAL_FG;
     case 11: return rev ? SPECIAL_FG : SPECIAL_BG;
     case 12: return rev ? SPECIAL_CURSOR_BG : SPECIAL_CURSOR_FG;
@@ -879,19 +879,19 @@ static uint32_t selector_to_cid(uint32_t sel, bool rev) {
 
 static void term_colors_changed(struct term *term, uint32_t sel, color_t col) {
     struct window *win = screen_window(&term->scr);
-    switch(sel) {
+    switch (sel) {
     case 10:
-        if(term->mode.reverse_video)
+        if (term->mode.reverse_video)
             window_set_colors(win, col, 0);
         break;
     case 11:
-        if(!(term->mode.reverse_video))
+        if (!(term->mode.reverse_video))
             window_set_colors(win, term->palette[SPECIAL_CURSOR_BG] = col, 0);
         else
             window_set_colors(win, 0, term->palette[SPECIAL_CURSOR_FG] = col);
         break;
     case 12:
-        if(!(term->mode.reverse_video))
+        if (!(term->mode.reverse_video))
             window_set_colors(win, 0, col);
         break;
     case 17: case 19:
@@ -988,7 +988,7 @@ static void term_dispatch_osc(struct term *term) {
             else pnext = dend;
 
             if (!errno && s_end == parg - 1 && idx < PALETTE_SIZE - SPECIAL_PALETTE_SIZE + 5) {
-                if (term->mode.reverse_video) switch(idx) {
+                if (term->mode.reverse_video) switch (idx) {
                     case 0: idx = 7; break;
                     case 7: idx = 0; break;
                     case 8: idx =15; break;
@@ -1022,7 +1022,7 @@ static void term_dispatch_osc(struct term *term) {
                 errno = 0;
                 unsigned long idx = strtoul((char *)dstr, (char **)&s_end, 10);
                 if (term->esc.selector == 105) idx += SPECIAL_BOLD;
-                if (term->mode.reverse_video) switch(idx) {
+                if (term->mode.reverse_video) switch (idx) {
                     case 0: idx = 7; break;
                     case 7: idx = 0; break;
                     case 8: idx =15; break;
@@ -1460,7 +1460,7 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
     enum mode_status val = modstate_unrecognized;
 #define MODSTATE(x) (modstate_enabled + !(x))
     if (private) {
-        switch(mode) {
+        switch (mode) {
         case 1: /* DECCKM */
             val = MODSTATE(term->kstate.appcursor);
             break;
@@ -1655,7 +1655,7 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             term_esc_dump(term, 0);
         }
     } else {
-        switch(mode) {
+        switch (mode) {
         case 1: /* GATM */
         case 5: /* SRTM */
         case 7: /* VEM */
@@ -1795,7 +1795,7 @@ static void term_dispatch_window_op(struct term *term) {
     case 9: /* Maximize operations */ {
         enum window_action act = action_none;
 
-        switch(PARAM(1, 0)) {
+        switch (PARAM(1, 0)) {
         case 0: /* Undo maximize */
             act = action_restore;
             break;
@@ -1817,7 +1817,7 @@ static void term_dispatch_window_op(struct term *term) {
     case 10: /* Fullscreen operations */ {
         enum window_action act = action_none;
 
-        switch(PARAM(1, 0)) {
+        switch (PARAM(1, 0)) {
         case 0: /* Undo fullscreen */
             act = action_restore;
             break;
@@ -1837,7 +1837,7 @@ static void term_dispatch_window_op(struct term *term) {
         term_answerback(term, CSI"%ut", 1 + !window_is_mapped(win));
         break;
     case 13: /* Report position opetations */
-        switch(PARAM(1,0)) {
+        switch (PARAM(1,0)) {
         case 0: /* Report window position */ {
             struct extent ext = window_get_position(win);
             term_answerback(term, CSI"3;%u;%ut", ext.width, ext.height);
@@ -1853,7 +1853,7 @@ static void term_dispatch_window_op(struct term *term) {
         }
         break;
     case 14: /* Report size operations */
-        switch(PARAM(1,0)) {
+        switch (PARAM(1,0)) {
         case 0: /* Report grid size */ {
             struct extent ext = window_get_grid_size(win);
             term_answerback(term, CSI"4;%u;%ut", ext.height, ext.width);
@@ -2233,7 +2233,7 @@ static void term_dispatch_csi(struct term *term) {
         void (*erase)(struct screen *, int16_t, int16_t, int16_t, int16_t, bool) =
                 term->esc.selector & P_MASK ? (term->mode.protected ? screen_erase : screen_selective_erase) :
                 term->mode.protected ? screen_protective_erase : screen_erase;
-        switch(PARAM(0, 0)) {
+        switch (PARAM(0, 0)) {
         case 0: /* Below */
             screen_cursor_adjust_wide_left(scr);
             erase(scr, screen_cursor_x(scr), screen_cursor_y(scr), screen_width(scr), screen_cursor_y(scr) + 1, false);
@@ -2528,7 +2528,7 @@ static void term_dispatch_csi(struct term *term) {
         break;
     }
     case C('w') | I0('$'): /* DECRQPSR */
-        switch(PARAM(0, 0)) {
+        switch (PARAM(0, 0)) {
         case 1: /* -> DECCIR */
             term_report_cursor(term);
             break;
@@ -2612,7 +2612,7 @@ static void term_dispatch_csi(struct term *term) {
             uparam_t mode = PARAM(i, 0);
             enum mode_status val = term_get_mode(term, 1, mode);
             if (val == modstate_enabled || val == modstate_disabled) {
-                switch(mode) {
+                switch (mode) {
                 case 1005: case 1006: case 1015: case 1016:
                     term->saved_mouse_format = term->mstate.mouse_format;
                     break;
@@ -2639,7 +2639,7 @@ static void term_dispatch_csi(struct term *term) {
     case C('r') | P('?'): /* XTRESTORE */
         for (size_t i = 0; i < term->esc.i; i++) {
             uparam_t mode = PARAM(i, 0);
-            switch(mode) {
+            switch (mode) {
             case 1005: case 1006: case 1015: case 1016:
                 term->mstate.mouse_format = term->saved_mouse_format;
                 break;
@@ -2690,7 +2690,7 @@ static void term_dispatch_csi(struct term *term) {
         break;
     }
     case C('z') | I0('\''): /* DECELR */
-        switch(PARAM(0, 0)) {
+        switch (PARAM(0, 0)) {
         case 0:
             term->mstate.locator_enabled = 0;
             break;
@@ -2703,7 +2703,7 @@ static void term_dispatch_csi(struct term *term) {
         default:
             term_esc_dump(term, 0);
         }
-        switch(PARAM(1, 2)) {
+        switch (PARAM(1, 2)) {
         case 2:
             term->mstate.locator_pixels = 0;
             break;
@@ -2717,7 +2717,7 @@ static void term_dispatch_csi(struct term *term) {
     case C('{') | I0('\''): /* DECSLE */
         term->esc.i += !term->esc.i;
         for (size_t i = 0; i < term->esc.i; i++) {
-            switch(PARAM(i, 0)) {
+            switch (PARAM(i, 0)) {
             case 0: /* Only explicit requests */
                 term->mstate.locator_report_press = 0;
                 /* fallthrough */

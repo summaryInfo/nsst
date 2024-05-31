@@ -18,7 +18,7 @@
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
-#define SWAP(a, b) do{__typeof__(a) t__ = (a); (a) = (b); (b) = t__;}while(0)
+#define SWAP(a, b) do {__typeof__(a) t__ = (a); (a) = (b); (b) = t__;}while (0)
 
 #define SEC 1000000000LL
 #define CACHE_LINE 64
@@ -50,7 +50,7 @@
 #define PROFILE_END(label) \
         clock_gettime(CLOCK_TYPE, &end__); \
         warn(label " took %lfms", TIMEDIFF(start__, end__)/1000000.); \
-    } while(0)
+    } while (0)
 
 #define PROFILE_FUNC(f) \
     PROFILE_BEGIN\

@@ -255,7 +255,7 @@ enum uri_match_result uri_match_next_from_colon(struct uri_match_state *stt, uin
     }
     stt->size++;
 
-    switch(stt->state) {
+    switch (stt->state) {
     case uris1_ground:
         assert(false);
         break;

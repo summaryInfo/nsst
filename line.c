@@ -485,7 +485,7 @@ void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
 #else
     ssize_t i = (width+7)/8, inc = width % 8;
     if (!inc) inc = 8;
-    switch(inc) do {
+    switch (inc) do {
         dst += inc;
         inc = 8; /* fallthrough */
     case 8: dst[7] = c; /* fallthrough */
@@ -496,7 +496,7 @@ void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
     case 3: dst[2] = c; /* fallthrough */
     case 2: dst[1] = c; /* fallthrough */
     case 1: dst[0] = c;
-    } while(--i > 0);
+    } while (--i > 0);
 #endif
 }
 
@@ -535,7 +535,7 @@ void copy_utf32_to_cells(struct cell *dst, const uint32_t *src, const uint32_t *
                                           _mm_load_si128((__m128i *)(src + i*4))));
     }
 #else
-    switch(pref) {
+    switch (pref) {
         case 3: dstp[2] = src[2] | attrid; /* fallthrough */
         case 2: dstp[1] = src[1] | attrid; /* fallthrough */
         case 1: dstp[0] = src[0] | attrid; /* fallthrough */
@@ -560,7 +560,7 @@ void copy_utf32_to_cells(struct cell *dst, const uint32_t *src, const uint32_t *
     dstp += blocks*4;
 
 short_copy:
-    switch((end - src)) {
+    switch ((end - src)) {
         case 3: dstp[2] = src[2] | attrid; /* fallthrough */
         case 2: dstp[1] = src[1] | attrid; /* fallthrough */
         case 1: dstp[0] = src[0] | attrid; /* fallthrough */
@@ -607,7 +607,7 @@ void copy_ascii_to_cells(struct cell *dst, const uint8_t *src, const uint8_t *en
                         unpack_u8x4_to_cells(src + i*4, zero, four_attrs));
 
 #else
-    switch(pref) {
+    switch (pref) {
         case 3: dstp[2] = src[2] | attrid; /* fallthrough */
         case 2: dstp[1] = src[1] | attrid; /* fallthrough */
         case 1: dstp[0] = src[0] | attrid; /* fallthrough */
@@ -632,7 +632,7 @@ void copy_ascii_to_cells(struct cell *dst, const uint8_t *src, const uint8_t *en
     dstp += blocks*4;
 
 short_copy:
-    switch((end - src)) {
+    switch ((end - src)) {
         case 3: dstp[2] = src[2] | attrid; /* fallthrough */
         case 2: dstp[1] = src[1] | attrid; /* fallthrough */
         case 1: dstp[0] = src[0] | attrid; /* fallthrough */
