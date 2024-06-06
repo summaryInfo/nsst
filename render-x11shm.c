@@ -206,7 +206,7 @@ void x11_shm_recolor_border(struct window *win) {
     image_draw_rect(get_plat(win)->im, (struct rect) {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh}, win->bg_premul);
 }
 
-bool x11_shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
+bool x11_shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool on_margin) {
     bool scrolled = get_plat(win)->boundc;
     bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
     bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1);
@@ -326,42 +326,12 @@ bool x11_shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, boo
     }
 
     if (cursor) {
-        cur_x = cur_x*cw + bw;
-        cur_y = cur_y*(cd + ch) + bh;
-        struct rect rects[4] = {
-            {cur_x, cur_y, 1, ch + cd},
-            {cur_x, cur_y, cw, 1},
-            {cur_x + cw - 1, cur_y, 1, ch + cd},
-            {cur_x, cur_y + (cd + ch - 1), cw, 1}
-        };
-        size_t off = 0, count = 4;
-        if (win->focused) {
-            if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_bar) {
-                if (marg) {
-                    off = 2;
-                    rects[2].width = win->cfg.cursor_width;
-                    rects[2].x -= win->cfg.cursor_width - 1;
-                } else
-                    rects[0].width = win->cfg.cursor_width;
-                count = 1;
-            } else if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_underline) {
-                count = 1;
-                off = 3;
-                rects[3].height = win->cfg.cursor_width;
-                rects[3].y -= win->cfg.cursor_width - 1;
-            } else if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block && beyond_eol) {
-                count = 1;
-                rects[0].width = win->char_width;
-            } else {
-                count = 0;
-            }
-        }
-        for (size_t i = 0; i < count; i++)
-            image_draw_rect(get_plat(win)->im, rects[i + off], win->cursor_fg);
+        struct cursor_rects cr = describe_cursor(win, cur_x, cur_y, on_margin, beyond_eol);
+        for (size_t i = 0; i < cr.count; i++)
+            image_draw_rect(get_plat(win)->im, cr.rects[i + cr.offset], win->cursor_fg);
     }
 
     bool drawn_any = get_plat(win)->boundc;
-
 
     if (win->redraw_borders) {
         if (!has_shm) {

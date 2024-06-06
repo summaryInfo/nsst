@@ -200,7 +200,7 @@ static inline struct cellspec describe_cell(struct cell cell, struct attr *attr,
 }
 
 /*
- * This is specialized version of function above that only calculates
+ * This is a specialized version of the function above that only calculates
  * background color. It is used for padding rendering.
  */
 FORCEINLINE
@@ -239,6 +239,56 @@ static inline color_t describe_bg(struct attr *attr, struct instance_config *cfg
         bg = rcs->palette[SPECIAL_SELECTED_BG];
 
     return bg;
+}
+
+struct cursor_rects {
+    size_t offset;
+    size_t count;
+    struct rect rects[4];
+};
+
+FORCEINLINE
+static inline struct cursor_rects describe_cursor(struct window *win, int16_t cur_x, int16_t cur_y,
+                                                  bool on_margin, bool beyond_eol) {
+    struct cursor_rects cr;
+    cur_x = cur_x * win->char_width + win->cfg.left_border;
+    cur_y = cur_y * (win->char_depth + win->char_height) + win->cfg.top_border;
+
+    cr.rects[0] = (struct rect) {cur_x, cur_y, 1, win->char_height + win->char_depth};
+    cr.rects[1] = (struct rect) {cur_x, cur_y, win->char_width, 1};
+    cr.rects[2] = (struct rect) {cur_x + win->char_width - 1, cur_y, 1, win->char_height + win->char_depth};
+    cr.rects[3] = (struct rect) {cur_x, cur_y + (win->char_depth + win->char_height - 1), win->char_width, 1};
+
+    if (win->focused) {
+        if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_bar) {
+            if (on_margin) {
+                cr.offset = 2;
+                cr.rects[2].width = win->cfg.cursor_width;
+                cr.rects[2].x -= win->cfg.cursor_width - 1;
+            } else {
+                cr.offset = 0;
+                cr.rects[0].width = win->cfg.cursor_width;
+            }
+            cr.count = 1;
+        } else if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_underline) {
+            cr.offset = 3;
+            cr.count = 1;
+            cr.rects[3].height = win->cfg.cursor_shape;
+            cr.rects[3].y -= win->cfg.cursor_shape - 1;
+        } else if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block && beyond_eol) {
+            cr.offset = 0;
+            cr.count = 1;
+            cr.rects[0].width = win->char_width;
+        } else {
+            cr.offset = 0;
+            cr.count = 0;
+        }
+    } else {
+        cr.offset = 0;
+        cr.count = 4;
+    }
+
+    return cr;
 }
 
 const struct platform_vtable *platform_init_x11(struct instance_config *cfg);

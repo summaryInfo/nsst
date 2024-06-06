@@ -557,40 +557,6 @@ static inline void sort_by_color(struct element_buffer *buf) {
     buf->sorted = src;
 }
 
-static void draw_cursor(struct window *win, int16_t cur_x, int16_t cur_y, bool on_margin, bool beyond_eol) {
-    cur_x = cur_x * win->char_width + win->cfg.left_border;
-    cur_y = cur_y * (win->char_depth + win->char_height) + win->cfg.top_border;
-    struct rect rects[4] = {
-        {cur_x, cur_y, 1, win->char_height + win->char_depth},
-        {cur_x, cur_y, win->char_width, 1},
-        {cur_x + win->char_width - 1, cur_y, 1, win->char_height + win->char_depth},
-        {cur_x, cur_y + (win->char_depth + win->char_height - 1), win->char_width, 1}
-    };
-    size_t off = 0, count = 4;
-    if (win->focused) {
-        if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_bar) {
-            if (on_margin) {
-                off = 2;
-                rects[2].width = win->cfg.cursor_width;
-                rects[2].x -= win->cfg.cursor_width - 1;
-            } else
-                rects[0].width = win->cfg.cursor_width;
-            count = 1;
-        } else if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_underline) {
-            count = 1;
-            off = 3;
-            rects[3].height = win->cfg.cursor_shape;
-            rects[3].y -= win->cfg.cursor_shape - 1;
-        } else if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block && beyond_eol) {
-            count = 1;
-            rects[0].width = win->char_width;
-        } else {
-            count = 0;
-        }
-    }
-    do_draw_rects(win, rects + off, count, win->cursor_fg);
-}
-
 static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool reverse_cursor, bool *beyond_eol) {
     rctx.foreground_buf.size = 0;
     rctx.background_buf.size = 0;
@@ -846,7 +812,7 @@ static void draw_images(struct window *win, struct element_buffer *buf) {
     }
 }
 
-bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
+bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool on_margin) {
     bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
     bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1);
     bool beyond_eol = false;
@@ -873,7 +839,10 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
     sort_by_color(&rctx.decoration_buf2);
     draw_undercurls(win, &rctx.decoration_buf2);
 
-    if (cursor) draw_cursor(win, cur_x, cur_y, marg, beyond_eol);
+    if (cursor) {
+        struct cursor_rects cr = describe_cursor(win, cur_x, cur_y, on_margin, beyond_eol);
+        do_draw_rects(win, cr.rects + cr.offset, cr.count, win->cursor_fg);
+    }
 
     bool drawn = 0;
 
