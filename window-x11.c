@@ -179,7 +179,7 @@ cleanup_context:
     return 0;
 }
 
-void x11_update_colors(struct window *win) {
+static void x11_update_colors(struct window *win) {
     uint32_t values2[2];
     values2[0] = values2[1] = win->bg_premul;
     xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_BACK_PIXEL, values2);
@@ -187,14 +187,14 @@ void x11_update_colors(struct window *win) {
     ctx.renderer_recolor_border(win);
 }
 
-void x11_enable_mouse_events(struct window *win, bool enabled) {
+static void x11_enable_mouse_events(struct window *win, bool enabled) {
     if (enabled) get_plat(win)->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
     else get_plat(win)->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
     xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_EVENT_MASK, &get_plat(win)->ev_mask);
 }
 
-bool x11_resize_window(struct window *win, int16_t width, int16_t height) {
-    if (win->cfg.height != height || win->cfg.width != width) {
+static bool x11_resize_window(struct window *win, int16_t width, int16_t height) {
+    if (win->cfg.geometry.r.height != height || win->cfg.geometry.r.width != width) {
         uint32_t vals[] = {width, height};
         xcb_void_cookie_t c = xcb_configure_window_checked(con, get_plat(win)->wid,
                 XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
@@ -203,7 +203,7 @@ bool x11_resize_window(struct window *win, int16_t width, int16_t height) {
     return false;
 }
 
-void x11_move_window(struct window *win, int16_t x, int16_t y) {
+static void x11_move_window(struct window *win, int16_t x, int16_t y) {
     uint32_t vals[] = {x, y};
     xcb_configure_window(con, get_plat(win)->wid, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, vals);
 }
@@ -255,7 +255,7 @@ static inline bool restore_pos(struct window *win) {
     return false;
 }
 
-bool x11_window_action(struct window *win, enum window_action act) {
+static bool x11_window_action(struct window *win, enum window_action act) {
     switch (act) {
         uint32_t val;
     case action_minimize:
@@ -309,7 +309,7 @@ bool x11_window_action(struct window *win, enum window_action act) {
     return false;
 }
 
-struct extent x11_get_position(struct window *win) {
+static struct extent x11_get_position(struct window *win) {
     xcb_get_geometry_cookie_t gc = xcb_get_geometry(con, get_plat(win)->wid);
     xcb_get_geometry_reply_t *rep = xcb_get_geometry_reply(con, gc, NULL);
     struct extent res = {0, 0};
@@ -325,19 +325,19 @@ struct extent x11_get_screen_size(void) {
     return (struct extent) { ctx.screen->width_in_pixels, ctx.screen->height_in_pixels };
 }
 
-void x11_get_pointer(struct window *win, struct extent *p, int32_t *pmask) {
+static void x11_get_pointer(struct window *win, struct extent *p, int32_t *pmask) {
     xcb_query_pointer_cookie_t c = xcb_query_pointer(con, get_plat(win)->wid);
     xcb_query_pointer_reply_t *qre = xcb_query_pointer_reply(con, c, NULL);
     if (qre) {
-        p->width = MIN(MAX(0, qre->win_x), win->cfg.width);
-        p->height = MIN(MAX(0, qre->win_y), win->cfg.height);
+        p->width = MIN(MAX(0, qre->win_x), win->cfg.geometry.r.width);
+        p->height = MIN(MAX(0, qre->win_y), win->cfg.geometry.r.height);
         *pmask = qre->mask;
         free(qre);
     }
 }
 
 #define WM_HINTS_LEN 8
-void x11_set_urgency(struct window *win, bool set) {
+static void x11_set_urgency(struct window *win, bool set) {
     xcb_get_property_cookie_t c = xcb_get_property(con, 0, get_plat(win)->wid, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 0, WM_HINTS_LEN);
     xcb_get_property_reply_t *rep = xcb_get_property_reply(con, c, NULL);
     if (rep) {
@@ -349,18 +349,18 @@ void x11_set_urgency(struct window *win, bool set) {
     }
 }
 
-void x11_bell(struct window *win, uint8_t vol) {
+static void x11_bell(struct window *win, uint8_t vol) {
     xcb_xkb_bell(con, XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_ID_DFLT_XI_CLASS,
             XCB_XKB_ID_DFLT_XI_ID, vol, 1, 0, 0, 0, XCB_ATOM_ANY, get_plat(win)->wid);
 }
 
-void x11_set_title(struct window *win, const char *title, bool utf8) {
+static void x11_set_title(struct window *win, const char *title, bool utf8) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid,
         utf8 ? ctx.atom._NET_WM_NAME : XCB_ATOM_WM_NAME,
         utf8 ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, 8, strlen(title), title);
 }
 
-void x11_set_icon_label(struct window *win, const char *title, bool utf8) {
+static void x11_set_icon_label(struct window *win, const char *title, bool utf8) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid,
         utf8 ? ctx.atom._NET_WM_ICON_NAME : XCB_ATOM_WM_ICON_NAME,
         utf8 ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, 8, strlen(title), title);
@@ -398,7 +398,7 @@ static char *get_full_property(xcb_window_t wid, xcb_atom_t prop, xcb_atom_t *ty
     return data;
 }
 
-void x11_get_title(struct window *win, enum title_target which, char **name, bool *utf8) {
+static void x11_get_title(struct window *win, enum title_target which, char **name, bool *utf8) {
     xcb_atom_t type = XCB_ATOM_ANY;
     char *data = NULL;
     if (which & target_title) {
@@ -432,19 +432,26 @@ void x11_update_window_props(struct window *win) {
         xcb_change_property(con, XCB_PROP_MODE_APPEND, get_plat(win)->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, strlen(extra), extra);
     uint32_t nhints[] = {
         64 | 256, /* PResizeInc, PBaseSize */
-        win->cfg.x, win->cfg.y, /* Position */
-        win->cfg.width, win->cfg.height, /* Size */
+        win->cfg.geometry.r.x, win->cfg.geometry.r.y, /* Position */
+        win->cfg.geometry.r.width, win->cfg.geometry.r.height, /* Size */
         win->cfg.left_border * 2 + win->char_width, win->cfg.left_border * 2 + win->char_depth + win->char_height, /* Min size */
         0, 0, /*Max size */
         win->char_width, win->char_depth + win->char_height, /* Size inc */
         0, 0, 0, 0, /* Min/max aspect */
         win->cfg.left_border * 2 + win->char_width, win->cfg.left_border * 2 + win->char_depth + win->char_height, /* Base size */
-        get_win_gravity_from_config(win->cfg.stick_to_right, win->cfg.stick_to_bottom), /* Gravity */
+        get_win_gravity_from_config(win->cfg.geometry.stick_to_right, win->cfg.geometry.stick_to_bottom), /* Gravity */
     };
-    if (win->cfg.user_geometry)
-        nhints[0] |= 1 | 2 | 512; /* USPosition, USSize, PWinGravity */
+
+    if (win->cfg.geometry.has_position)
+        nhints[0] |= 1 | 512; /* USPosition, PWinGravity */
     else
-        nhints[0] |= 4 | 8; /* PPosition, PSize */
+        nhints[0] |= 4; /* PPosition */
+
+    if (win->cfg.geometry.has_extent)
+        nhints[0] |= 2; /* USSize */
+    else
+        nhints[0] |= 8; /* PPosition, PSize */
+
     if (win->cfg.fixed) {
         nhints[7] = nhints[5] = nhints[3];
         nhints[8] = nhints[6] = nhints[4];
@@ -466,8 +473,36 @@ void x11_update_window_props(struct window *win) {
             XCB_ATOM_WM_HINTS, 8*sizeof(*wmhints), LEN(wmhints), wmhints);
 }
 
+void x11_fixup_geometry(struct window *win) {
+    if (win->cfg.geometry.char_geometry) {
+        win->ch = MAX(win->cfg.geometry.r.height, 1);
+        win->cw = MAX(win->cfg.geometry.r.width, 1);
+        win->cfg.geometry.r.width = win->char_width * win->cw + win->cfg.left_border * 2;
+        win->cfg.geometry.r.height = (win->char_height + win->char_depth) * win->ch + win->cfg.top_border * 2;
 
-bool x11_init_window(struct window *win) {
+        struct extent ssize = x11_get_screen_size();
+        if (win->cfg.geometry.stick_to_right)
+            win->cfg.geometry.r.x += ssize.width - win->cfg.geometry.r.width - 2;
+        if (win->cfg.geometry.stick_to_bottom)
+            win->cfg.geometry.r.y += ssize.height - win->cfg.geometry.r.height - 2;
+
+        uint32_t vals[] = {
+            win->cfg.geometry.r.x,
+            win->cfg.geometry.r.y,
+            win->cfg.geometry.r.width,
+            win->cfg.geometry.r.height
+        };
+
+        xcb_configure_window(con, get_plat(win)->wid,
+            XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
+            XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
+    } else {
+        win->cw = MAX(1, (win->cfg.geometry.r.height - 2*win->cfg.left_border) / win->char_width);
+        win->ch = MAX(1, (win->cfg.geometry.r.width - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
+    }
+}
+
+static bool x11_init_window(struct window *win) {
     xcb_void_cookie_t c;
 
     get_plat(win)->ev_mask = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_VISIBILITY_CHANGE |
@@ -477,38 +512,42 @@ bool x11_init_window(struct window *win) {
         XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
     uint32_t values1[5] = { win->bg_premul, win->bg_premul, XCB_GRAVITY_NORTH_WEST, get_plat(win)->ev_mask, ctx.mid };
 
-    int16_t x = win->cfg.x;
-    int16_t y = win->cfg.y;
-
-    /* Adjust geometry */
-    if (win->cfg.stick_to_right) x += ctx.screen->width_in_pixels - win->cfg.width - 2;
-    if (win->cfg.stick_to_bottom) y += ctx.screen->height_in_pixels - win->cfg.height - 2;
+    /* Adjust geometry. It will be incorrect if specified in characters. */
+    struct rect r;
+    if (!win->cfg.geometry.char_geometry) {
+        if (win->cfg.geometry.stick_to_right)
+            win->cfg.geometry.r.x += ctx.screen->width_in_pixels - win->cfg.geometry.r.width - 2;
+        if (win->cfg.geometry.stick_to_bottom)
+            win->cfg.geometry.r.y += ctx.screen->height_in_pixels - win->cfg.geometry.r.height - 2;
+        r = win->cfg.geometry.r;
+    } else {
+        /* Dummy size */
+        r = (struct rect) {0, 0, 640, 480};
+    }
 
     get_plat(win)->wid = xcb_generate_id(con);
     c = xcb_create_window_checked(con, TRUE_COLOR_ALPHA_DEPTH, get_plat(win)->wid, ctx.screen->root,
-                                  x, y, win->cfg.width, win->cfg.height, 0,
+                                  r.x, r.y, r.width, r.height, 0,
                                   XCB_WINDOW_CLASS_INPUT_OUTPUT,
                                   ctx.vis->visual_id, mask1, values1);
-    if (check_void_cookie(c)) return 0;
+    if (check_void_cookie(c)) return false;
 
     get_plat(win)->gc = xcb_generate_id(con);
     uint32_t mask2 = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_GRAPHICS_EXPOSURES;
     uint32_t values2[3] = { win->bg_premul, win->bg_premul, 0 };
 
     c = xcb_create_gc_checked(con, get_plat(win)->gc, get_plat(win)->wid, mask2, values2);
-    if (check_void_cookie(c)) return 0;
+    if (check_void_cookie(c)) return false;
 
-    x11_update_window_props(win);
-
-    return 1;
+    return true;
 }
 
-void x11_map_window(struct window *win) {
+static void x11_map_window(struct window *win) {
     xcb_map_window(con, get_plat(win)->wid);
     xcb_flush(con);
 }
 
-void x11_free_window(struct window *win) {
+static void x11_free_window(struct window *win) {
     if (get_plat(win)->wid) {
         xcb_unmap_window(con, get_plat(win)->wid);
         ctx.renderer_free(win);
@@ -526,7 +565,7 @@ static inline xcb_atom_t target_to_atom(enum clip_target target) {
     }
 }
 
-bool x11_set_clip(struct window *win, uint32_t time, enum clip_target target) {
+static bool x11_set_clip(struct window *win, uint32_t time, enum clip_target target) {
     xcb_set_selection_owner(con, get_plat(win)->wid, target_to_atom(target), time);
     xcb_get_selection_owner_cookie_t so = xcb_get_selection_owner_unchecked(con, target_to_atom(target));
     xcb_get_selection_owner_reply_t *rep = xcb_get_selection_owner_reply(con, so, NULL);
@@ -536,7 +575,7 @@ bool x11_set_clip(struct window *win, uint32_t time, enum clip_target target) {
     return res;
 }
 
-void x11_paste(struct window *win, enum clip_target target) {
+static void x11_paste(struct window *win, enum clip_target target) {
     xcb_convert_selection(con, get_plat(win)->wid, target_to_atom(target),
           term_is_utf8_enabled(win->term) ? ctx.atom.UTF8_STRING : XCB_ATOM_STRING, target_to_atom(target), XCB_CURRENT_TIME);
 }
@@ -616,19 +655,19 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, bool pno
     xcb_delete_property(con, get_plat(win)->wid, prop);
 }
 
-bool x11_has_error(void) {
+static bool x11_has_error(void) {
     return xcb_connection_has_error(con);
 }
 
-ssize_t x11_get_opaque_size(void) {
+static ssize_t x11_get_opaque_size(void) {
     return sizeof(struct platform_window);
 }
 
-void x11_flush(void) {
+static void x11_flush(void) {
     xcb_flush(con);
 }
 
-void x11_handle_events(void) {
+static void x11_handle_events(void) {
     for (xcb_generic_event_t *event, *nextev = NULL; nextev || (event = xcb_poll_for_event(con)); free(event)) {
         if (nextev) event = nextev, nextev = NULL;
         switch (event->response_type &= 0x7F) {
@@ -652,7 +691,7 @@ void x11_handle_events(void) {
                         ev->window, ev->x, ev->y, ev->width, ev->height, ev->border_width,
                         ev->override_redirect, ev->above_sibling, ev->event);
             }
-            if (ev->width != win->cfg.width || ev->height != win->cfg.height)
+            if (ev->width != win->cfg.geometry.r.width || ev->height != win->cfg.geometry.r.height)
                 handle_resize(win, ev->width, ev->height);
             break;
         }
@@ -845,7 +884,7 @@ void x11_handle_events(void) {
     }
 }
 
-void x11_free(void) {
+static void x11_free(void) {
     ctx.renderer_free_context();
 
     xkb_state_unref(ctx.xkb_state);

@@ -291,6 +291,23 @@ static inline struct cursor_rects describe_cursor(struct window *win, int16_t cu
     return cr;
 }
 
+FORCEINLINE
+static inline void describe_borders(struct window *win, struct rect rects[static 4]) {
+    int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
+    int bw = win->cfg.left_border, bh = win->cfg.top_border;
+    int w = win->cfg.geometry.r.width, h = win->cfg.geometry.r.height;
+
+    rects[0] = (struct rect) {0, 0, w, win->cfg.top_border};
+    rects[1] = (struct rect) {0, bh, bw, win->ch*(ch + cd)};
+    rects[2] = (struct rect) {win->cw*cw + bw, bh, w - win->cw*cw - bw, win->ch*(ch + cd)};
+    rects[3] = (struct rect) {0, win->ch*(ch + cd) + bh, w, h - win->ch*(ch + cd) - bh};
+}
+
+FORCEINLINE
+static inline struct rect window_rect(struct window *win) {
+    return (struct rect) {0, 0, win->cfg.geometry.r.width, win->cfg.geometry.r.height};
+}
+
 const struct platform_vtable *platform_init_x11(struct instance_config *cfg);
 
 struct platform_vtable {

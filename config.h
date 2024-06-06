@@ -87,6 +87,15 @@ struct global_config {
     bool log_color;
 };
 
+struct geometry {
+    struct rect r;
+    bool stick_to_bottom : 1;
+    bool stick_to_right : 1;
+    bool char_geometry : 1;
+    bool has_position : 1;
+    bool has_extent : 1;
+};
+
 struct instance_config {
     color_t palette[PALETTE_SIZE];
 
@@ -130,7 +139,6 @@ struct instance_config {
     char *shell;
     char *uri_click_mod;
 
-
     enum keyboad_mapping mapping;
     enum cursor_type cursor_shape;
     enum pixel_mode pixel_mode;
@@ -143,14 +151,12 @@ struct instance_config {
     uint32_t force_mouse_mask;
     uint32_t uri_click_mask;
 
+    struct geometry geometry;
+
     int16_t tab_width;
     int16_t vt_version;
     int16_t margin_bell_column;
     int16_t smooth_scroll_step;
-    int16_t x;
-    int16_t y;
-    int16_t width;
-    int16_t height;
     int16_t underline_width;
     int16_t cursor_width;
     int16_t left_border;
@@ -212,10 +218,7 @@ struct instance_config {
     bool special_underline;
     bool special_italic;
     bool special_reverse;
-    bool stick_to_bottom;
-    bool stick_to_right;
     bool fixed;
-    bool user_geometry;
     bool allow_subst_font;
     bool force_scalable;
     bool autorepeat;

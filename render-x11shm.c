@@ -168,18 +168,19 @@ bool x11_shm_reload_font(struct window *win, bool need_free) {
     window_find_shared_font(win, need_free, true);
     win->redraw_borders = 1;
 
+    int w = win->cfg.geometry.r.width, h = win->cfg.geometry.r.height;
     if (need_free) {
-        handle_resize(win, win->cfg.width, win->cfg.height);
+        handle_resize(win, w, h);
 
         int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
         int bw = win->cfg.left_border, bh = win->cfg.top_border;
-        image_draw_rect(get_plat(win)->im, (struct rect) {win->cw*cw + bw, bh, win->cfg.width - win->cw*cw - bw, win->ch*(ch + cd)}, win->bg_premul);
-        image_draw_rect(get_plat(win)->im, (struct rect) {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh}, win->bg_premul);
+        image_draw_rect(get_plat(win)->im, (struct rect) {win->cw*cw + bw, bh, w - win->cw*cw - bw, win->ch*(ch + cd)}, win->bg_premul);
+        image_draw_rect(get_plat(win)->im, (struct rect) {0, win->ch*(ch + cd) + bh, w, h - win->ch*(ch + cd) - bh}, win->bg_premul);
 
-        x11_update_window_props(win);
     } else {
-        win->cw = MAX(1, (win->cfg.width - 2*win->cfg.left_border) / win->char_width);
-        win->ch = MAX(1, (win->cfg.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
+        /* We need to resize window here if
+         * it's size is specified in chracters */
+        x11_fixup_geometry(win);
 
         resize_bounds(win, 1);
 
@@ -193,17 +194,16 @@ bool x11_shm_reload_font(struct window *win, bool need_free) {
         image_draw_rect(get_plat(win)->im, (struct rect){0, 0, get_plat(win)->im.width, get_plat(win)->im.height}, win->bg_premul);
     }
 
+    x11_update_window_props(win);
+
     return 1;
 }
 
 void x11_shm_recolor_border(struct window *win) {
-    int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
-    int bw = win->cfg.left_border, bh = win->cfg.top_border;
-
-    image_draw_rect(get_plat(win)->im, (struct rect) {0, 0, win->cfg.width, win->cfg.top_border}, win->bg_premul);
-    image_draw_rect(get_plat(win)->im, (struct rect) {0, bh, bw, win->ch*(ch + cd)}, win->bg_premul);
-    image_draw_rect(get_plat(win)->im, (struct rect) {win->cw*cw + bw, bh, win->cfg.width - win->cw*cw - bw, win->ch*(ch + cd)}, win->bg_premul);
-    image_draw_rect(get_plat(win)->im, (struct rect) {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh}, win->bg_premul);
+    struct rect rects[4];
+    describe_borders(win, rects);
+    for (size_t i = 0; i < LEN(rects); i++)
+        image_draw_rect(get_plat(win)->im, rects[i], win->bg_premul);
 }
 
 bool x11_shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool on_margin) {
@@ -335,15 +335,15 @@ bool x11_shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, boo
 
     if (win->redraw_borders) {
         if (!has_shm) {
-            x11_shm_update(win, (struct rect) {0, 0, win->cfg.width, win->cfg.height});
+            x11_shm_update(win, window_rect(win));
             get_plat(win)->boundc = 0;
         } else {
-            x11_shm_update(win, (struct rect) {0, 0, win->cfg.width, win->cfg.top_border});
-            x11_shm_update(win, (struct rect) {0, bh, bw, win->ch*(ch + cd)});
-            x11_shm_update(win, (struct rect) {win->cw*cw + bw, bh, win->cfg.width - win->cw*cw - bw, win->ch*(ch + cd)});
-            x11_shm_update(win, (struct rect) {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh});
+            struct rect rects[4];
+            describe_borders(win, rects);
+            for (size_t i = 0; i < LEN(rects); i++)
+                x11_shm_update(win, rects[i]);
         }
-        win->redraw_borders = 0;
+        win->redraw_borders = false;
     }
 
     if (get_plat(win)->boundc) {

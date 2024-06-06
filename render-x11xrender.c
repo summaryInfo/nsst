@@ -159,16 +159,8 @@ static inline void do_set_clip(struct window *win, struct rect *rects, ssize_t c
 }
 
 void x11_xrender_recolor_border(struct window *win) {
-    int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
-    int bw = win->cfg.left_border, bh = win->cfg.top_border;
-
-    struct rect rects[] = {
-        {0, 0, win->cfg.width, win->cfg.top_border},
-        {0, bh, bw, win->ch*(ch + cd)},
-        {win->cw*cw + bw, bh, win->cfg.width - win->cw*cw - bw, win->ch*(ch + cd)},
-        {0, win->ch*(ch + cd) + bh, win->cfg.width, win->cfg.height - win->ch*(ch + cd) - bh},
-    };
-
+    struct rect rects[4];
+    describe_borders(win, rects);
     do_draw_rects(win, rects, LEN(rects), win->bg_premul);
 }
 
@@ -240,11 +232,11 @@ bool x11_xrender_reload_font(struct window *win, bool need_free) {
     }
 
     if (need_free) {
-        handle_resize(win, win->cfg.width, win->cfg.height);
-        x11_update_window_props(win);
+        handle_resize(win, win->cfg.geometry.r.width, win->cfg.geometry.r.height);
     } else {
-        win->cw = MAX(1, (win->cfg.width - 2*win->cfg.left_border) / win->char_width);
-        win->ch = MAX(1, (win->cfg.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
+        /* We need to resize window here if
+         * it's size is specified in chracters */
+        x11_fixup_geometry(win);
 
         xcb_rectangle_t bound = { 0, 0, (win->cw + 1)*win->char_width + 2*win->cfg.left_border - 1,
                                  (win->ch + 1)*(win->char_depth + win->char_height) + 2*win->cfg.top_border - 1 };
@@ -290,6 +282,8 @@ bool x11_xrender_reload_font(struct window *win, bool need_free) {
         }
         xcb_free_pixmap(con, pid);
     }
+
+    x11_update_window_props(win);
 
     win->redraw_borders = 1;
 
@@ -766,7 +760,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
 }
 
 static void reset_clip(struct window *win) {
-    do_set_clip(win, &(struct rect){ 0, 0, win->cfg.width, win->cfg.height}, 1);
+    struct rect rect = window_rect(win);
+    do_set_clip(win, &rect, 1);
 }
 
 static void set_clip(struct window *win, struct element_buffer *buf) {
@@ -847,7 +842,7 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
     bool drawn = 0;
 
     if (rctx.background_buf.size || win->redraw_borders) {
-        x11_xrender_update(win, (struct rect){0, 0, win->cfg.width, win->cfg.height});
+        x11_xrender_update(win, window_rect(win));
         win->redraw_borders = 0;
         drawn = 1;
     }

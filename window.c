@@ -274,7 +274,7 @@ struct extent window_get_border(struct window *win) {
 }
 
 struct extent window_get_size(struct window *win) {
-    return (struct extent) { win->cfg.width, win->cfg.height };
+    return (struct extent) { win->cfg.geometry.r.width, win->cfg.geometry.r.height };
 }
 
 void window_get_title(struct window *win, enum title_target which, char **name, bool *utf8) {
@@ -325,26 +325,27 @@ void window_pop_title(struct window *win, enum title_target which) {
 }
 
 static void reload_window(struct window *win) {
-    int16_t w = win->cfg.width, h = win->cfg.height;
+    int16_t w = win->cfg.geometry.r.width, h = win->cfg.geometry.r.height;
 
     char *cpath = win->cfg.config_path;
     win->cfg.config_path = NULL;
 
-    init_instance_config(&win->cfg, cpath, 0);
+    init_instance_config(&win->cfg, cpath, false);
 
-    win->cfg.width = w, win->cfg.height = h;
+    win->cfg.geometry.r.width = w;
+    win->cfg.geometry.r.height = h;
 
     window_set_alpha(win, win->cfg.alpha);
     term_reload_config(win->term);
     screen_damage_lines(term_screen(win->term), 0, win->ch);
 
-    pvtbl->reload_font(win, 1);
+    pvtbl->reload_font(win, true);
 }
 
 static void do_reload_config(void) {
     for (struct window *win = win_list_head; win; win = win->next)
         reload_window(win);
-    reload_config = 0;
+    reload_config = false;
 }
 
 static void window_set_font(struct window *win, const char * name, int32_t size) {
@@ -418,7 +419,6 @@ struct window *window_find_shared_font(struct window *win, bool need_free, bool 
 
     return found;
 }
-
 
 struct window *create_window(struct instance_config *cfg) {
     struct window *win = xzalloc(sizeof(struct window) + pvtbl->get_opaque_size());
@@ -526,17 +526,17 @@ void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height) {
 }
 
 void handle_expose(struct window *win, struct rect damage) {
-    if (intersect_with(&damage, &(struct rect) { 0, 0, win->cfg.width, win->cfg.height }))
+    if (intersect_with(&damage, &(struct rect) { 0, 0, win->cfg.geometry.r.width, win->cfg.geometry.r.height }))
         pvtbl->update(win, damage);
 }
 
 void handle_resize(struct window *win, int16_t width, int16_t height) {
 
-    win->cfg.width = width;
-    win->cfg.height = height;
+    win->cfg.geometry.r.width = width;
+    win->cfg.geometry.r.height = height;
 
-    int16_t new_cw = MAX(2, (win->cfg.width - 2*win->cfg.left_border)/win->char_width);
-    int16_t new_ch = MAX(1, (win->cfg.height - 2*win->cfg.top_border)/(win->char_height+win->char_depth));
+    int16_t new_cw = MAX(2, (win->cfg.geometry.r.width - 2*win->cfg.left_border)/win->char_width);
+    int16_t new_ch = MAX(1, (win->cfg.geometry.r.height - 2*win->cfg.top_border)/(win->char_height+win->char_depth));
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
 

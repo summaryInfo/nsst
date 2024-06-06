@@ -3725,9 +3725,8 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
     term->requested_resize = false;
 
     /* Notify application */
-    int16_t wwidth = window_cfg(screen_window(scr))->width;
-    int16_t wheight = window_cfg(screen_window(scr))->height;
-    tty_set_winsz(&term->tty, width, height, wwidth, wheight);
+    struct extent ext = window_get_size(screen_window(scr));
+    tty_set_winsz(&term->tty, width, height, ext.width, ext.height);
 
     screen_resize(scr, width, height);
 }

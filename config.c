@@ -132,7 +132,7 @@ union opt_limits {
         enum charset dflt;
     } arg_nrcs;
     struct geometry_arg {
-        int dflt; /* dummy */
+        bool in_char;
     } arg_geometry;
 #define arg_int16 arg_int64
 #define arg_uint8 arg_int64
@@ -196,7 +196,7 @@ struct option_type_desc {
     T(color, "color", color_t),
     T(double, "real", double),
     T(enum, "enum", int),
-    T(geometry, "geometry", color_t[PALETTE_SIZE]),
+    T(geometry, "geometry", struct geometry),
     T(int16, "int", int16_t),
     T(int64, "int", int64_t),
     T(nrcs, "charset string", enum charset),
@@ -250,7 +250,8 @@ struct option_type_desc {
 #endif
 
 static struct option options[] = {
-    X1(geometry, palette, 'g', "geometry", "Window geometry, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]", 0),
+    X1(geometry, geometry, 'g', "geometry", "Window geometry, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]", false),
+    X1(geometry, geometry, 'G', "char-geometry", "Window geometry in characters, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]", true),
     X(boolean, autorepeat, "autorepeat", "Enable key autorepeat", true),
     X(boolean, allow_altscreen, "allow-alternate", "Enable alternate screen", true),
     X(boolean, allow_blinking, "allow-blinking", "Allow blinking text and cursor", true),
@@ -705,40 +706,58 @@ static bool do_parse_color(const char *str, void *dst, union opt_limits *limits)
 }
 
 static bool do_parse_geometry(const char *value, void *dst, union opt_limits *limits) {
-    struct instance_config *cfg = dst;
-
-    (void)limits;
+    struct geometry *g = dst;
 
     if (!strcasecmp(value, "default")) {
-        cfg->user_geometry = 0;
+        *g = (struct geometry) {
+            .char_geometry = true,
+            .has_extent = true,
+            .r = { .width = 80, .height = 24, }
+        };
         return true;
     }
 
     int16_t x = 0, y = 0, w = 0, h = 0;
-    char xsgn = '+', ysgn = '+';
+    char xsgn[2] = "+", ysgn[2] = "+";
+
     if (value[0] == '=') value++;
+
     if (value[0] == '+' || value[0] == '-') {
-        bool scanned = sscanf(value, "%c%"SCNd16"%c%"SCNd16, &xsgn, &x, &ysgn, &y) == 4;
-        if (!scanned || (xsgn != '+' && xsgn != '-') || (ysgn != '+' && ysgn != '-')) return false;
-        if (xsgn == '-') x = -x;
-        if (ysgn == '-') y = -y;
+        if (sscanf(value, "%1[-+]%"SCNd16"%1[-+]%"SCNd16, xsgn, &x, ysgn, &y) != 4)
+            return false;
+        g->has_position = true;
+        g->has_extent = false;
+        g->char_geometry = true;
+        g->r.width = 80;
+        g->r.height = 24;
     } else {
-        int res = sscanf(value, "%"SCNd16"%*[xX]%"SCNd16"%c%"SCNd16"%c%"SCNd16,
-                &w, &h, &xsgn, &x, &ysgn, &y);
+        int res = sscanf(value, "%"SCNd16"%*[xX]%"SCNd16"%1[-+]%"SCNd16"%1[-+]%"SCNd16,
+                &w, &h, xsgn, &x, ysgn, &y);
         if (res == 6) {
-            if ((xsgn != '+' && xsgn != '-') || (ysgn != '+' && ysgn != '-')) return false;
-            if (xsgn == '-') x = -x;
-            if (ysgn == '-') y = -y;
-        } else if (res != 2) return false;
-        cfg->width = w;
-        cfg->height = h;
+            g->has_position = true;
+        } else if (res == 2) {
+            g->has_position = false;
+            x = 0, y = 0;
+        } else return false;
+        g->has_extent = true;
+        g->char_geometry = limits->arg_geometry.in_char;
+        g->r.width = w;
+        g->r.height = h;
     }
 
-    cfg->user_geometry = 1;
-    cfg->x = x;
-    cfg->y = y;
-    cfg->stick_to_right = xsgn == '-';
-    cfg->stick_to_bottom = ysgn == '-';
+    if (xsgn[0] == '-') {
+        g->stick_to_right = true;
+        x = -x;
+    }
+
+    if (ysgn[0] == '-') {
+        g->stick_to_bottom = true;
+        y = -y;
+    }
+
+    g->r.x = x;
+    g->r.y = y;
+
     return true;
 }
 
@@ -865,11 +884,6 @@ void init_instance_config(struct instance_config *cfg, const char *config_path, 
             set_option_entry(cfg, &options[i], "default", allow_global);
     for (size_t i = 0; i < PALETTE_SIZE - SPECIAL_PALETTE_SIZE; i++)
         cfg->palette[i] = default_color(i);
-
-    cfg->x = 200;
-    cfg->y = 200;
-    cfg->width = 800;
-    cfg->height = 600;
 
     if (config_path)
         set_option_entry(cfg, cpath, config_path, 0);
