@@ -8,8 +8,6 @@ Roadmap
 
 * Wayland
 
-* Allow geometry to be specified in characters
-
 _NOTE: These plans can change any time_
 
 ### Until 2.6 (or later)
