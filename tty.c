@@ -430,11 +430,19 @@ ssize_t tty_refill(struct tty *tty) {
     ssize_t space = (tty->fd_buf + sizeof tty->fd_buf) - tty->end;
     ssize_t n_read = 0;
 
+#if 0
     while (space > 0 && (inc = read(tty->w.fd, tty->end, space)) > 0) {
         space -= inc;
         tty->end += inc;
         n_read++;
     }
+#else
+    if (space > 0 && (inc = read(tty->w.fd, tty->end, space)) > 0) {
+        space -= inc;
+        tty->end += inc;
+        n_read++;
+    }
+#endif
 
     if (UNLIKELY(gconfig.trace_misc))
         info("Read TTY (size=%zd n_read=%zd)", inctotal, n_read);
