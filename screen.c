@@ -1829,6 +1829,7 @@ typedef __m128i block_type;
 #define read_aligned(ptr) _mm_load_si128((const __m128i *)(ptr))
 #define read_unaligned(ptr) _mm_loadu_si128((const __m128i *)(ptr))
 #define movemask(x) _mm_movemask_epi8(x)
+#define const8(x) _mm_set1_epi8(x)
 
 #else
 
@@ -1845,8 +1846,12 @@ static inline block_type read_unaligned(const uint8_t *ptr) {
     return d;
 }
 
+static inline block_type const8(uint8_t x) {
+    return 0x0101010101010101UL*x;
+}
+
 static inline uint32_t movemask(block_type b) {
-    b &= 0x8080808080808080;
+    b &= const8(0x80);
     b = (b >> 7) | (b >> 14);
     b |= b >> 14;
     b |= b >> 28;
@@ -1864,7 +1869,7 @@ static inline const uint8_t *mask_offset(const uint8_t *start, const uint8_t *en
 }
 
 static inline uint32_t contains_non_ascii(block_type b) {
-    return movemask(b);
+    return movemask(b | (b + const8(1)));
 }
 
 static inline const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end, ssize_t max_chunk, bool *has_nonascii) {
@@ -1996,7 +2001,7 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
     enum charset glv = scr->c.gn[scr->c.gl_ss];
 
     bool fast_nrcs = utf8 && !window_cfg(scr->win)->force_utf8_nrcs;
-    bool skip_del = glv > cs96_latin_1 || (!nrcs && (glv == cs96_latin_1 || glv == cs94_british));
+    bool skip_del = LIKELY(fast_nrcs) || glv < cs96_START || (!nrcs && (glv == cs96_latin_1 || glv == cs94_british));
     bool has_non_ascii = false;
 
     /* Find the actual end of buffer (control character or number of characters)
@@ -2008,9 +2013,7 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
     const uint8_t *chunk = find_chunk(xstart, end, maxw*4, &has_non_ascii);
 
     /* Really fast short path for common case */
-    if ((LIKELY(!has_non_ascii) || !utf8) &&
-        LIKELY(!skip_del && fast_nrcs &&
-               glv != cs94_dec_graph && scr->c.gl_ss == scr->c.gl) ) {
+    if (LIKELY(!has_non_ascii && fast_nrcs && glv != cs94_dec_graph && scr->c.gl_ss == scr->c.gl)) {
 
         maxw = MIN(chunk - xstart, maxw);
         *start = xstart + maxw;
