@@ -494,8 +494,8 @@ static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) 
 
 static void resize_aux(struct screen *scr, ssize_t width, ssize_t height) {
     /* Resize predecode buffer */
-    size_t old_pbuf_size = ROUNDUP(scr->width*sizeof *scr->predec_buf, MPA_ALIGNMENT);
-    size_t new_pbuf_size = ROUNDUP(width*sizeof *scr->predec_buf, MPA_ALIGNMENT);
+    size_t old_pbuf_size = ROUNDUP(2 + scr->width*sizeof *scr->predec_buf, MPA_ALIGNMENT);
+    size_t new_pbuf_size = ROUNDUP(2 + width*sizeof *scr->predec_buf, MPA_ALIGNMENT);
     scr->predec_buf = xrealloc(scr->predec_buf, old_pbuf_size, new_pbuf_size);
 
     /* Resize temporary screen buffer */
@@ -1798,27 +1798,43 @@ void screen_reset_tabs(struct screen *scr) {
 }
 
 HOT
-static inline int32_t decode_special(const uint8_t **buf, const uint8_t *end, bool raw) {
-    uint32_t part = *(*buf)++, i;
-    if (LIKELY(part < 0xC0 || raw)) return part;
-    if (UNLIKELY(part > 0xF7)) return UTF_INVAL;
+static inline int32_t decode_special(const uint8_t **pbuf, const uint8_t *end, bool raw) {
+    const uint8_t *buf = *pbuf;
+    uint32_t part = *buf++;
 
-    uint32_t len = (0xFA55000000000000ULL >> 2*(part >> 3U)) & 3U;
-
-    if (*buf + len > end) {
-        (*buf)--;
-        return -1;
+    if (LIKELY(part < 0xC0 || raw)) {
+        *pbuf = buf;
+        return part;
+    } else if (LIKELY(part < 0xE0)) {
+        part = (part & 0x1F) << 6 |
+               (buf[0] & 0x3F);
+        if (UNLIKELY((buf += 1) > end))
+            return -1;
+        *pbuf = buf;
+        part = UNLIKELY(part < 0x80U) ? UTF_INVAL : part;
+    } else if (LIKELY(part < 0xF0)) {
+        part = (part & 0xF) << 12 |
+               (buf[0] & 0x3F) << 6 |
+               (buf[1] & 0x3F);
+        if (UNLIKELY((buf += 2) > end))
+            return -1;
+        *pbuf = buf;
+        part = UNLIKELY(part < 0x800U || part - 0xD800U < 0x800U) ? UTF_INVAL : part;
+    } else if (LIKELY(part < 0xF8)) {
+        part = (part & 0x7) << 18 |
+               (buf[0] & 0x3F) << 12 |
+               (buf[1] & 0x3F) << 6 |
+               (buf[2] & 0x3F);
+        if (UNLIKELY((buf += 3) > end))
+            return -1;
+        *pbuf = buf;
+        part = UNLIKELY(part - 0x10000U < 0x100000U) ? UTF_INVAL : part;
+    } else {
+        *pbuf = buf;
+        part = UTF_INVAL;
     }
 
-    part &= 0x7F >> len;
-    for (i = len; i--;) {
-        if (UNLIKELY((**buf & 0xC0) != 0x80)) return UTF_INVAL;
-        part = (part << 6) | (*(*buf)++ & 0x3F);
-    }
-
-    static const uint32_t maxv[] = {0x80, 0x800, 0x10000, 0x110000};
-    if (UNLIKELY(part >= maxv[len] || part - 0xD800 < 0xE000 - 0xD800)) return UTF_INVAL;
-
+    ASSUME(part < INT32_MAX);
     return part;
 }
 
@@ -1991,9 +2007,9 @@ static inline void print_buffer(struct screen *scr, const uint32_t *bstart, cons
 }
 
 bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs) {
-    bool res = true;
+    bool complete = true;
 
-    /* Compute maximal with to be printed at once */
+    /* Compute maximum width to be printed at once */
     register ssize_t maxw = screen_max_x(scr) - screen_min_x(scr);
     if (!scr->c.pending || !scr->mode.wrap)
         maxw = (scr->c.x >= screen_max_x(scr) ? screen_width(scr) : screen_max_x(scr)) - scr->c.x;
@@ -2007,7 +2023,7 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
     /* Find the actual end of buffer (control character or number of characters)
      * to prevent checking that on each iteration and preload cache.
      * Maximal possible size of the chunk is 4 times width of the lines since
-     * each UTF-8 can be at most 4 bytes single width */
+     * each UTF-8 can be at most 4 bytes single width. */
 
     const uint8_t *xstart = *start;
     const uint8_t *chunk = find_chunk(xstart, end, maxw*4, &has_non_ascii);
@@ -2024,20 +2040,21 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
             replace_handle(&scr->saved_handle, &scr->screen[scr->c.y]);
             scr->saved_handle.s.offset += scr->c.x - (xstart + maxw - scr->c.pending - scr->save_handle_at_print);
         }
+
         return true;
     }
 
-    uint32_t *pbuf = scr->predec_buf;
+    register uint32_t *pbuf = scr->predec_buf;
+    uint32_t *pbuf_end = pbuf + maxw;
     uint32_t *save_offset = NULL;
     register int32_t ch;
-    register ssize_t totalw = 0;
     uint32_t prev = -1U;
 
     do {
         const uint8_t *char_start = xstart;
         if (UNLIKELY((ch = decode_special(&xstart, end, !utf8)) < 0)) {
             /* If we encountered partial UTF-8, print all we have and return */
-            res = false;
+            complete = false;
             break;
         }
 
@@ -2054,14 +2071,17 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
             ch = nrcs_decode_fast(glv, ch);
         else
             ch = nrcs_decode(glv, scr->c.gn[scr->c.gr], scr->upcs, ch, nrcs);
-        scr->c.gl_ss = scr->c.gl; /* Reset single shift */
+
+        /* Reset single shift */
+        scr->c.gl_ss = scr->c.gl;
 
         prev = ch;
         ch = compact(ch);
 
         if (UNLIKELY(iscombining_compact(ch))) {
             /* Don't put zero-width charactes to predecode buffer */
-            if (!totalw) screen_precompose_at_cursor(scr, ch);
+            if (pbuf == scr->predec_buf)
+                screen_precompose_at_cursor(scr, ch);
             else {
                 uint32_t *p = pbuf - 1 - !pbuf[-1];
                 /* Don't need uncompact/compact since all characters
@@ -2069,36 +2089,34 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
                 *p = try_precompose(*p, ch);
             }
         } else {
-            int wid = 1 + iswide_compact(ch);
-
-            /* Don't include char if its too wide, unless its a wide char
-             * at right margin, or autowrap is disabled, and we are at right size of the screen.
-             * In those cases recalculate maxw. */
-            if (UNLIKELY(totalw + wid > maxw)) {
-                if (LIKELY(totalw || wid != 2)) {
-                    xstart = char_start;
-                    break;
-                } else if (scr->c.x == screen_max_x(scr) - 1) {
-                    maxw = scr->mode.wrap ? screen_max_x(scr) - screen_min_x(scr) : wid;
-                } else if (scr->c.x == screen_width(scr) - 1) {
-                    maxw = wid;
-                } else {
-                    xstart = char_start;
-                    break;
-                }
-            }
+            bool wide = iswide_compact(ch);
 
             *pbuf++ = ch;
-            totalw += wid;
+            if (wide) *pbuf++ = 0;
 
-            if (wid > 1)
-                *pbuf++ = 0;
+            /* Don't include char if its too wide, unless we haven't printed anything
+             * it's a wide char at the right margin, or autowrap is disabled,
+             * and we are at right size of the screen. In those cases recalculate the limit. */
+            if (UNLIKELY(pbuf > pbuf_end)) {
+                uint32_t *pbuf_p = pbuf - (1 + wide);
+                if (UNLIKELY(pbuf_p == scr->predec_buf && wide)) {
+                    if (scr->c.x == screen_max_x(scr) - 1) {
+                        pbuf_end = scr->predec_buf + (scr->mode.wrap ? screen_max_x(scr) - screen_min_x(scr) : 2);
+                        continue;
+                    } else if (scr->c.x == screen_width(scr) - 1) {
+                        pbuf_end = scr->predec_buf + 2;
+                        continue;
+                    }
+                }
+                pbuf = pbuf_p;
+                xstart = char_start;
+                break;
+            }
         }
+    } while (/* count < FD_BUF_SIZE && */ xstart < chunk);
 
-        /* Since maxw < width == length of predec_buf, don't check it */
-    } while (totalw < maxw && /* count < FD_BUF_SIZE && */ xstart < chunk);
-
-    if (prev != -1U) scr->prev_ch = prev; /* For REP CSI */
+    if (prev != -1U)
+        scr->prev_ch = prev; /* For REP CSI */
 
     *start = xstart;
 
@@ -2109,7 +2127,7 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
         scr->saved_handle.s.offset += scr->c.x - (pbuf - save_offset - scr->c.pending);
     }
 
-    return res;
+    return complete;
 }
 
 ssize_t screen_dispatch_rep(struct screen *scr, int32_t rune, ssize_t rep) {

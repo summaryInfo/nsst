@@ -33,6 +33,7 @@
 
 #define LIKELY(x) (__builtin_expect(!!(x), 1))
 #define UNLIKELY(x) (__builtin_expect((x), 0))
+#define ASSUME(x) do { if(!(x)) __builtin_unreachable(); }while(0)
 #define PACKED __attribute__((packed))
 #define HOT __attribute__((hot))
 #define FORCEINLINE __attribute__((always_inline))
