@@ -199,7 +199,8 @@ def mk_wide():
 def mk_combining():
     table=[False]*UNICODE_MAX
     set_ranges(table, True, [0x1160, 0x11FF], [0xD7B0, 0xD7C6], [0xD7CB,0xD7FB]) # Hangul
-    set_predicate(table, lambda cp: cp.category in ['Me', 'Mn', 'Cf'])
+    # Consider "SOFT HYPHEN" to be a printable character for compatibility
+    set_predicate(table, lambda cp: cp.category in ['Me', 'Mn', 'Cf'] and cp.value != 0xAD)
     return table
 
 def mk_ambiguous():
