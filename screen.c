@@ -11,7 +11,9 @@
 #include <stdio.h>
 #include <strings.h>
 
-#ifdef __SSE2__
+#ifdef __AVX__
+#include <immintrin.h>
+#elif defined(__SSE2__)
 #include <emmintrin.h>
 #endif
 
@@ -147,7 +149,7 @@ FORCEINLINE
 static inline void screen_split_line_after_ex(struct screen *scr, struct screen_storage *screen, ssize_t y) {
     struct line_span *src = screen->begin + y;
     ssize_t offset = src->offset + src->width;
-    if (offset >= src->line->size) return;
+    if (LIKELY(offset >= src->line->size)) return;
 
     split_line(screen, src->line, offset);
     if (UNLIKELY(src->line->selection_index))
@@ -1797,7 +1799,16 @@ void screen_reset_tabs(struct screen *scr) {
         scr->tabs[i] = 1;
 }
 
-#if __SSE2__
+#ifdef __AVX__
+
+typedef __m256i block_type;
+
+#define read_aligned(ptr) _mm256_load_si256((const __m256i *)(ptr))
+#define read_unaligned(ptr) _mm256_loadu_si256((const __m256i *)(ptr))
+#define movemask(x) _mm256_movemask_epi8(x)
+#define const8(x) _mm256_set1_epi8(x)
+
+#elif defined(__SSE2__)
 
 typedef __m128i block_type;
 
@@ -1843,8 +1854,8 @@ static inline const uint8_t *mask_offset(const uint8_t *start, const uint8_t *en
     return MIN(end, start + __builtin_ffsl(mask) - 1);
 }
 
-static inline uint32_t contains_non_ascii(block_type b) {
-    return movemask(b | (b + const8(1)));
+static inline uint32_t contains_non_ascii(block_type b, block_type ones) {
+    return movemask(b | (b + ones));
 }
 
 static inline const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end, ssize_t max_chunk, bool *has_nonascii) {
@@ -1856,16 +1867,17 @@ static inline const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end
     if (prefix >= (ssize_t)sizeof(block_type))
         prefix = -(uintptr_t)start & (sizeof(block_type) - 1);
 
+    const block_type ones = const8(0x01);
+
     if (prefix) {
         block_type b = read_unaligned(start);
-        uint32_t msk = (1U << prefix) - 1U;
-        static_assert(sizeof(block_type) < sizeof(msk)*8, "Mask is too small");
 
-        if (contains_non_ascii(b) & msk)
-            *has_nonascii = true;
+        uint32_t msk = (1U << prefix) - 1U;
+        static_assert(sizeof(block_type) <= sizeof(msk)*8, "Mask is too small");
+
+        *has_nonascii = contains_non_ascii(b, ones) & msk;
 
         msk &= block_mask(b);
-
         if (msk)
             return mask_offset(start, end, msk);
 
@@ -1875,15 +1887,14 @@ static inline const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end
     /* We have out-of bounds read here but it should be fine,
      * since it is aligned and buffer size is a power of two */
 
-    for (; start < end; start += sizeof(block_type)) {
+    if (start < end) do {
         block_type b = read_aligned(start);
-        if (contains_non_ascii(b))
-            *has_nonascii = true;
+        *has_nonascii |= contains_non_ascii(b, ones);
 
         uint32_t msk = block_mask(b);
         if (UNLIKELY(msk))
             return mask_offset(start, end, msk);
-    }
+    } while ((start += sizeof(block_type)) < end);
 
     return end;
 }
@@ -2019,10 +2030,9 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
                 if (UNLIKELY(IS_DEL(ch)))
                     continue;
 
-                *pbuf++ = nrcs_decode_fast(glv, ch);
-
                 scr->c.gl_ss = scr->c.gl;
 
+                *pbuf++ = nrcs_decode_fast(glv, ch);
                 if (UNLIKELY(pbuf > pbuf_end)) {
                     pbuf--;
                     xstart = char_start;

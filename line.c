@@ -473,7 +473,7 @@ void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
     memcpy(&cell_val, &c, sizeof cell_val);
     const __m128i four_cells = _mm_set1_epi32(cell_val);
     for (ssize_t i = 0; i < (width & ~3); i += 4)
-        _mm_stream_si128((__m128i *)&dst[i], four_cells);
+        _mm_store_si128((__m128i *)&dst[i], four_cells);
 
     dst += width & ~3;
     switch (width & 3) {

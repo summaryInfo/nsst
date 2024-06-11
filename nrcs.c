@@ -152,7 +152,7 @@ bool nrcs_encode(enum charset set, uint32_t *ch, bool nrcs) {
 
 uint32_t nrcs_decode_fast(enum charset gl, uint32_t ch) {
     if (UNLIKELY(gl == cs94_dec_graph)) {
-        if (0x5F <= ch && ch <= 0x7E)
+        if (ch - 0x5FU < 0x7EU - 0x5FU)
             ch = graph_tr[ch - 0x5F];
     }
     return ch;
