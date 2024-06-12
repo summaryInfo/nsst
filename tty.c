@@ -485,7 +485,7 @@ static inline void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t le
         }
 
         if (pfd.revents & POLLIN) {
-            if (tty->end - tty->start == sizeof tty->fd_buf - MAX_PROTOCOL_LEN) {
+            if (tty->end - tty->start >= (ssize_t)sizeof tty->fd_buf - MAX_PROTOCOL_LEN) {
                 /* Since the parser cannot be called recursively
                  * called recursively we cannot empty the input buffer
                  * and tty input queue, so we cannot write the data.
