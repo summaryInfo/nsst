@@ -2055,7 +2055,7 @@ partial:
                     break;
                 }
                 ch = (ch & 0x7) << 18 | (char_start[1] & 0x3F) << 12 | (char_start[2] & 0x3F) << 6 | (char_start[3] & 0x3F);
-                ch = UNLIKELY(ch - 0x10000U < 0x100000U) ? UTF_INVAL : compact(ch);
+                ch = UNLIKELY(ch - 0x10000U > 0xFFFFFU) ? UTF_INVAL : compact(ch);
             } else {
                 ch = UTF_INVAL;
             }
@@ -2150,7 +2150,7 @@ partial2:          /* If we have encountered a partial UTF-8, print all we have 
                 }
 
                 ch = (ch & 0x7) << 18 | (char_start[1] & 0x3F) << 12 | (char_start[2] & 0x3F) << 6 | (char_start[3] & 0x3F);
-                ch = UNLIKELY(ch - 0x10000U < 0x100000U) ? UTF_INVAL : compact(ch);
+                ch = UNLIKELY(ch - 0x10000U > 0xFFFFFU) ? UTF_INVAL : compact(ch);
             } else {
                 ch = UTF_INVAL;
             }
