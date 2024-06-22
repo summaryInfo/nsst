@@ -22,20 +22,14 @@
 #define TRUE_COLOR_ALPHA_DEPTH 32
 
 struct platform_window {
-    xcb_window_t wid;
-    xcb_gcontext_t gc;
-    xcb_event_mask_t ev_mask;
-
     union {
 #if USE_X11SHM
         struct {
+            /* This must be the first member so that
+             * get_shm() in render-shm.c functions correctly*/
+            struct  platform_shm shm;
             xcb_shm_seg_t shm_seg;
             xcb_pixmap_t shm_pixmap;
-            struct image im;
-
-            /* It's size is 2*win->ch */
-            struct rect *bounds;
-            size_t boundc;
         };
 #endif
 #if USE_XRENDER
@@ -55,6 +49,10 @@ struct platform_window {
         };
 #endif
     };
+
+    xcb_window_t wid;
+    xcb_gcontext_t gc;
+    xcb_event_mask_t ev_mask;
 
     /* Used to restore maximized window */
     struct rect saved;
@@ -82,11 +80,13 @@ void x11_shm_init_context(void);
 void x11_shm_free_context(void);
 void x11_shm_free(struct window *win);
 void x11_shm_update(struct window *win, struct rect rect);
-bool x11_shm_reload_font(struct window *win, bool need_free);
-void x11_shm_resize(struct window *win, int16_t new_cw, int16_t new_ch);
-void x11_shm_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
-void x11_shm_recolor_border(struct window *win);
-bool x11_shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
+struct image x11_shm_create_image(struct window *win, int16_t width, int16_t height);
+
+void shm_recolor_border(struct window *win);
+bool shm_reload_font(struct window *win, bool need_free);
+bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
+void shm_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
+void shm_resize(struct window *win, int16_t new_cw, int16_t new_ch);
 #endif
 
 #if USE_XRENDER

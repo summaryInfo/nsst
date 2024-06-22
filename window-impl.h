@@ -6,6 +6,7 @@
 #include "feature.h"
 
 #include "window.h"
+#include "image.h"
 #include "config.h"
 #include "term.h"
 
@@ -41,6 +42,15 @@ struct render_cell_state {
     uint32_t dummy_ : 7;
     bool blink : 1;
     bool uri_pressed : 1;
+};
+
+/* This structure is common to both X11 and Wayland */
+struct platform_shm {
+    struct image im;
+
+    /* It's size is 2*win->ch */
+    struct rect *bounds;
+    size_t boundc;
 };
 
 struct window {
@@ -103,6 +113,7 @@ struct window {
 } ALIGNED(MALLOC_ALIGNMENT);
 
 extern struct window *win_list_head;
+extern const struct platform_vtable *pvtbl;
 
 FORCEINLINE
 static inline struct cellspec describe_cell(struct cell cell, struct attr *attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected, bool slow_path) {
@@ -342,6 +353,9 @@ struct platform_vtable {
     void (*set_urgency)(struct window *win, bool set);
     void (*update_colors)(struct window *win);
     bool (*window_action)(struct window *win, enum window_action action);
+    void (*update_props)(struct window *win);
+    void (*fixup_geometry)(struct window *win);
+    struct image (*shm_create_image)(struct window *win, int16_t width, int16_t height);
 
     void (*free)(void);
 };

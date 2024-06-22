@@ -473,6 +473,13 @@ void x11_update_window_props(struct window *win) {
             XCB_ATOM_WM_HINTS, 8*sizeof(*wmhints), LEN(wmhints), wmhints);
 }
 
+static void x11_move_resize(struct window *win, struct rect r) {
+    uint32_t vals[] = { r.x, r.y, r.width, r.height };
+    xcb_configure_window(con, get_plat(win)->wid,
+        XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
+        XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
+}
+
 void x11_fixup_geometry(struct window *win) {
     if (win->cfg.geometry.char_geometry) {
         win->ch = MAX(win->cfg.geometry.r.height, 1);
@@ -486,16 +493,7 @@ void x11_fixup_geometry(struct window *win) {
         if (win->cfg.geometry.stick_to_bottom)
             win->cfg.geometry.r.y += ssize.height - win->cfg.geometry.r.height - 2;
 
-        uint32_t vals[] = {
-            win->cfg.geometry.r.x,
-            win->cfg.geometry.r.y,
-            win->cfg.geometry.r.width,
-            win->cfg.geometry.r.height
-        };
-
-        xcb_configure_window(con, get_plat(win)->wid,
-            XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
-            XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
+        x11_move_resize(win, win->cfg.geometry.r);
     } else {
         win->cw = MAX(1, (win->cfg.geometry.r.height - 2*win->cfg.left_border) / win->char_width);
         win->ch = MAX(1, (win->cfg.geometry.r.width - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
@@ -927,6 +925,8 @@ static struct platform_vtable x11_vtable = {
     .set_urgency = x11_set_urgency,
     .update_colors = x11_update_colors,
     .window_action = x11_window_action,
+    .update_props = x11_update_window_props,
+    .fixup_geometry = x11_fixup_geometry,
 
     .free = x11_free,
 };
@@ -1037,11 +1037,12 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
         if (gconfig.trace_misc)
             info("Selected X11 MIT-SHM backend");
         x11_vtable.update = x11_shm_update;
-        x11_vtable.reload_font = x11_shm_reload_font;
-        x11_vtable.resize = x11_shm_resize;
-        x11_vtable.copy = x11_shm_copy;
-        x11_vtable.submit_screen = x11_shm_submit_screen;
-        ctx.renderer_recolor_border = x11_shm_recolor_border;
+        x11_vtable.reload_font = shm_reload_font;
+        x11_vtable.resize = shm_resize;
+        x11_vtable.copy = shm_copy;
+        x11_vtable.submit_screen = shm_submit_screen;
+        x11_vtable.shm_create_image = x11_shm_create_image;
+        ctx.renderer_recolor_border = shm_recolor_border;
         ctx.renderer_free = x11_shm_free;
         ctx.renderer_free_context = x11_shm_free_context;
         x11_shm_init_context();

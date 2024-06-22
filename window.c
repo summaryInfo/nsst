@@ -25,7 +25,7 @@ struct context {
 };
 
 static struct context ctx;
-static const struct platform_vtable *pvtbl;
+const struct platform_vtable *pvtbl;
 
 struct window *win_list_head = NULL;
 static volatile sig_atomic_t reload_config;

@@ -209,7 +209,7 @@ else
 fi
 
 if [ "$use_x11shm" = 1 ]; then
-    objs="$objs render-x11shm.o image.o"
+    objs="$objs render-shm.o render-x11shm.o image.o"
     deps="$deps xcb-shm"
 fi
 if [ "$use_x11xrender" = 1 ]; then

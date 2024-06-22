@@ -28,4 +28,3 @@ struct image create_image(int16_t width, int16_t height);
 #define STRIDE(x) (((x) + STRIDE_ALIGNMENT - 1) & ~(STRIDE_ALIGNMENT - 1))
 
 #endif
-
