@@ -14,6 +14,9 @@
 #define ROUNDUP(x, align) (((x) + (align) - 1) & ~((uintptr_t)(align) - 1))
 #define ROUNDDOWN(x, align) ((x) & ~((uintptr_t)(align) - 1))
 
+#define CONTAINEROF(ptr, T, member) ({ \
+    static_assert(IS_SAME_TYPE_(&((T*)0)->member, ptr), "Pointer type mismatch"); \
+    (T*)__builtin_assume_aligned((char *)ptr - offsetof(T, member), _Alignof(T)); })
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
