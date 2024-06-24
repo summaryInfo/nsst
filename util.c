@@ -8,6 +8,7 @@
 #include "util.h"
 
 #include <ctype.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -15,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <unistd.h>
 
 #define LOG_BUFFER_SIZE 1024
 
@@ -118,6 +120,20 @@ void *xrezalloc(void *src, size_t old_size, size_t size) {
         memset((char *)res + old_size, 0, size - old_size);
 
     return res;
+}
+
+int set_cloexec(int fd) {
+    int fl = fcntl(fd, F_GETFD);
+    if (fl < 0) return fl;
+
+    return fcntl(fd, F_SETFD, fl | FD_CLOEXEC);
+}
+
+int set_nonblocking(int fd) {
+    int fl = fcntl(fd, F_GETFL);
+    if (fl < 0) return fl;
+
+    return fcntl(fd, F_SETFL, fl | O_NONBLOCK);
 }
 
 _Noreturn void die(const char *fmt, ...) {

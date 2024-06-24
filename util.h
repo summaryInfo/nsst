@@ -179,4 +179,7 @@ void poller_free_index(int i);
 void poller_poll(int64_t timeout);
 int poller_index_events(int i);
 
+int set_cloexec(int fd);
+int set_nonblocking(int fd);
+
 #endif

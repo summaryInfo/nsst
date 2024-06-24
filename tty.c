@@ -371,10 +371,8 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
         return -1;
     }
 
-    int fld = fcntl(tty->w.fd, F_GETFD);
-    if (fld >= 0) fcntl(tty->w.fd, F_SETFD, fld | FD_CLOEXEC);
-    int fl = fcntl(tty->w.fd, F_GETFL);
-    if (fl >= 0) fcntl(tty->w.fd, F_SETFL, fl | O_NONBLOCK);
+    set_cloexec(tty->w.fd);
+    set_nonblocking(tty->w.fd);
 
     switch ((tty->w.child = fork())) {
     case -1:
@@ -593,15 +591,12 @@ void init_printer(struct printer *pr, struct instance_config *cfg) {
     }
 
     if (pr->w.fd < 0 && cfg->printer_file) {
-        if (cfg->printer_file[0] == '-' && !cfg->printer_file[1])
+        if (cfg->printer_file[0] == '-' && !cfg->printer_file[1]) {
             pr->w.fd = STDOUT_FILENO;
-        else
-            pr->w.fd = open(cfg->printer_file, O_WRONLY | O_CREAT, 0660);
-    }
-
-    if (pr->w.fd >= 0) {
-        int fl = fcntl(pr->w.fd, F_GETFL);
-        if (fl >= 0) fcntl(pr->w.fd, F_SETFL, fl | O_CLOEXEC);
+            set_cloexec(pr->w.fd);
+        } else {
+            pr->w.fd = open(cfg->printer_file, O_WRONLY | O_CREAT | O_CLOEXEC, 0660);
+        }
     }
 
     if (pr->w.child > 0)
