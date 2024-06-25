@@ -657,8 +657,6 @@ static void handle_data_source_send(void *data, struct wl_data_source *wl_data_s
 
     win->any_event_happend = true;
 
-    // FIXME Support clip_primary/clip_secondary
-
     uint8_t *source = term_is_keep_clipboard_enabled(win->term) ? win->clipboard : win->clipped[clip_clipboard];
     if (!source) goto empty;
 
@@ -851,7 +849,7 @@ static bool do_set_clipboard(struct window *win) {
 
 static bool do_set_primary(struct window *win) {
     if (!ctx.primary_selection_device_manager)
-        return false;
+        return true;
 
     if (get_plat(win)->primary_selection_source)
         zwp_primary_selection_source_v1_destroy(get_plat(win)->primary_selection_source);
