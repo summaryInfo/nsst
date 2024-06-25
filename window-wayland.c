@@ -568,6 +568,8 @@ static void wayland_free_window(struct window *win) {
         xdg_surface_destroy(get_plat(win)->xdg_surface);
     if (get_plat(win)->surface)
         wl_surface_destroy(get_plat(win)->surface);
+    if (get_plat(win)->frame_callback)
+        wl_callback_destroy(get_plat(win)->frame_callback);
 
     if (get_plat(win)->title)
         free(get_plat(win)->title);
@@ -1952,6 +1954,7 @@ static void handle_callback_done(void *data, struct wl_callback *wl_callback, ui
     (void)callback_data;
     win->active = true;
     wl_callback_destroy(wl_callback);
+    get_plat(win)->frame_callback = NULL;
 }
 
 struct wl_callback_listener frame_callback_listener = {
@@ -1963,6 +1966,7 @@ static void wayland_draw_done(struct window *win) {
 
     struct wl_callback *cb = wl_surface_frame(get_plat(win)->surface);
     wl_callback_add_listener(cb, &frame_callback_listener, win);
+    get_plat(win)->frame_callback = cb;
     win->active = false;
 
     wl_surface_commit(get_plat(win)->surface);
