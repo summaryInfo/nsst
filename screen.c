@@ -852,9 +852,12 @@ bool screen_redraw(struct screen *scr, bool blink_commited) {
     if (scr->c.x != scr->prev_c_x || scr->c.y != scr->prev_c_y ||
             scr->prev_c_hidden != c_hidden || scr->prev_c_view_changed || !blink_commited) {
         if (!c_hidden) screen_damage_cursor(scr);
-        if ((!scr->prev_c_hidden || scr->prev_c_view_changed) &&
-                scr->prev_c_y < scr->height && scr->prev_c_x < scr->screen[scr->prev_c_y].width)
-            view_cell(&scr->screen[scr->prev_c_y],scr->prev_c_x)->drawn = 0;
+        if ((!scr->prev_c_hidden || scr->prev_c_view_changed) && scr->prev_c_y < scr->height) {
+            if (scr->prev_c_x < scr->screen[scr->prev_c_y].width)
+                view_cell(&scr->screen[scr->prev_c_y],scr->prev_c_x)->drawn = 0;
+            else if (scr->prev_c_x == scr->screen[scr->prev_c_y].width)
+                scr->screen[scr->prev_c_y].line->force_damage = true;
+        }
     }
 
     scr->prev_c_x = scr->c.x;
