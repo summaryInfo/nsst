@@ -13,6 +13,10 @@ Makefile
 feature.h
 *-protocol.[ch]
 
+# Table generator resources
+tools/EastAsianWidth.txt
+tools/UnicodeData.txt
+
 # Binaries (with default names)
 nsst
 nsstc
