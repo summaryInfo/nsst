@@ -73,7 +73,8 @@ static struct context ctx;
 xcb_connection_t *con = NULL;
 
 static struct window *window_for_xid(xcb_window_t xid) {
-    for (struct window *win = win_list_head; win; win = win->next) {
+    LIST_FOREACH(it, &win_list_head) {
+        struct window *win = CONTAINEROF(it, struct window, link);
         if (get_plat(win)->wid == xid) {
             win->any_event_happend = 1;
             return win;

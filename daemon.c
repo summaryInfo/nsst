@@ -26,7 +26,7 @@
 #define NUM_PENDING 8
 
 struct pending_launch {
-    struct pending_launch *next, *prev;
+    struct list_head link;
     ssize_t argn;
     ssize_t argcap;
     ssize_t poll_index;
@@ -35,7 +35,7 @@ struct pending_launch {
     struct instance_config cfg;
 };
 
-static struct pending_launch *first_pending;
+static struct list_head pending_launches;
 
 static int socket_index = 1;
 static int socket_fd = -1;
@@ -68,6 +68,7 @@ static void daemonize(void) {
 
 
 bool init_daemon(void) {
+    list_init(&pending_launches);
 
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof addr);
@@ -119,18 +120,16 @@ void free_daemon(void) {
 }
 
 static void free_pending_launch(struct pending_launch *lnch) {
-        if (lnch->next) lnch->next->prev = lnch->prev;
-        if (lnch->prev) lnch->prev->next = lnch->prev;
-        else first_pending = lnch->next;
+    list_remove(&lnch->link);
 
-        close(lnch->fd);
-        poller_free_index(lnch->poll_index);
+    close(lnch->fd);
+    poller_free_index(lnch->poll_index);
 
-        for (ssize_t i = 0; i < lnch->argn; i++)
-            free(lnch->args[i]);
-        free(lnch->args);
-        free_config(&lnch->cfg);
-        free(lnch);
+    for (ssize_t i = 0; i < lnch->argn; i++)
+        free(lnch->args[i]);
+    free(lnch->args);
+    free_config(&lnch->cfg);
+    free(lnch);
 }
 
 static bool send_pending_launch_resp(struct pending_launch *lnch, const char *str) {
@@ -222,9 +221,7 @@ static void accept_pending_launch(void) {
         warn("Can't create pending launch: %s", strerror(errno));
     } else {
         lnch->fd = fd;
-        lnch->next = first_pending;
-        if (first_pending) first_pending->prev = lnch;
-        first_pending = lnch;
+        list_insert_after(&pending_launches, &lnch->link);
     }
 }
 
@@ -237,8 +234,8 @@ bool daemon_process_clients(void) {
     else if (rev & (POLLERR | POLLNVAL | POLLHUP)) free_daemon();
 
     /* Handle pending launches */
-    for (struct pending_launch *holder = first_pending, *next; holder; holder = next) {
-        next = holder->next;
+    LIST_FOREACH_SAFE(it, &pending_launches) {
+        struct pending_launch *holder = CONTAINEROF(it, struct pending_launch, link);
         rev = poller_index_events(holder->poll_index);
         if (rev & POLLIN) append_pending_launch(holder);
         else if (rev & (POLLERR | POLLHUP | POLLNVAL)) free_pending_launch(holder);

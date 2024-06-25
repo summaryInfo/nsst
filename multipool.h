@@ -3,6 +3,8 @@
 
 #include "feature.h"
 
+#include "list.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <unistd.h>
@@ -13,7 +15,7 @@
 struct pool;
 
 struct multipool {
-    struct pool *unsealed;
+    struct list_head unsealed;
     ssize_t max_pad;
     ssize_t pool_size;
     ssize_t unsealed_count;

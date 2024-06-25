@@ -4,6 +4,7 @@
 #define LIST_H_ 1
 
 #include <stdbool.h>
+#include <stddef.h>
 
 struct list_head {
     struct list_head *next;
@@ -28,6 +29,7 @@ struct list_head {
 static inline struct list_head *list_remove(struct list_head *head) {
     head->next->prev = head->prev;
     head->prev->next = head->next;
+    head->next = head->prev = NULL;
     return head;
 }
 

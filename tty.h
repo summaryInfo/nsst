@@ -6,14 +6,14 @@
 #define FD_BUF_SIZE 16384
 
 #include "config.h"
+#include "list.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <unistd.h>
 
 struct watcher {
-    struct watcher *next;
-    struct watcher *prev;
+    struct list_head link;
     pid_t child;
     int fd;
 };

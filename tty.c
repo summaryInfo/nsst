@@ -40,7 +40,7 @@
 #define TTY_MAX_WRITE 256
 
 /* Head of TTYs list with alive child process */
-static struct watcher *first_child;
+static struct list_head children;
 
 /* Default termios, initialized from main */
 static struct termios dtio;
@@ -60,7 +60,8 @@ static void handle_chld(int arg) {
         else if (WIFSIGNALED(status))
             info("Child terminated due to the signal: %d\n", WTERMSIG(status));
 
-        for (struct watcher *w = first_child; w; w = w->next) {
+        LIST_FOREACH(it, &children) {
+            struct watcher *w = CONTAINEROF(it, struct watcher, link);
             if (w->child == pid) {
                 close(w->fd);
                 w->fd = -1;
@@ -143,6 +144,8 @@ static _Noreturn void exec_shell(char **args, char *sh, char *termname, char *lu
 }
 
 void init_default_termios(void) {
+    list_init(&children);
+
     /* Use stdin as base configuration */
     if (tcgetattr(STDIN_FILENO, &dtio) < 0)
         memset(&dtio, 0, sizeof(dtio));
@@ -316,32 +319,26 @@ void init_default_termios(void) {
 }
 
 static void add_watcher(struct watcher *w) {
-    w->next = first_child;
-    w->prev = NULL;
-
-    if (first_child)
-        first_child->prev = w;
-    first_child = w;
+    assert(w->fd >= 0);
+    list_insert_after(&children, &w->link);
 }
 
 static void remove_watcher(struct watcher *w) {
-    if (w->next) w->next->prev = w->prev;
-    if (w->prev) w->prev->next = w->next;
-    else if (first_child == w) first_child = w->next;
-    w->next = w->prev = NULL;
-
     if (w->fd >= 0) {
         close(w->fd);
         w->fd = -1;
     }
 
-    if (w->child > 0)
+    if (w->child > 0) {
+        list_remove(&w->link);
         kill(w->child, SIGHUP);
+        w->child = -1;
+    }
 }
 
 void hang_watched_children(void) {
-    while (first_child)
-        remove_watcher(first_child);
+    LIST_FOREACH_SAFE(it, &children)
+        remove_watcher(CONTAINEROF(it, struct watcher, link));
 }
 
 int tty_open(struct tty *tty, struct instance_config *cfg) {

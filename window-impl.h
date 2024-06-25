@@ -5,10 +5,11 @@
 
 #include "feature.h"
 
-#include "window.h"
-#include "image.h"
 #include "config.h"
+#include "image.h"
+#include "list.h"
 #include "term.h"
+#include "window.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -54,7 +55,7 @@ struct platform_shm {
 };
 
 struct window {
-    struct window *prev, *next;
+    struct list_head link;
 
     bool focused : 1;
     bool active : 1;
@@ -112,7 +113,7 @@ struct window {
     char platform_window_opaque[] ALIGNED(MALLOC_ALIGNMENT);
 } ALIGNED(MALLOC_ALIGNMENT);
 
-extern struct window *win_list_head;
+extern struct list_head win_list_head;
 extern const struct platform_vtable *pvtbl;
 
 FORCEINLINE

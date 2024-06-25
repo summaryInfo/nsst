@@ -4,6 +4,7 @@
 
 #define _GNU_SOURCE
 
+#include "list.h"
 #include "util.h"
 
 #include <assert.h>
@@ -41,7 +42,7 @@ struct header {
 
 /* pool metadata */
 struct pool {
-    struct pool *next;
+    struct list_head link;
     struct pool *prev;
 
     int32_t n_alloc;
@@ -54,40 +55,27 @@ struct pool {
 #define INIT_OFFSET ((int32_t)(ROUNDUP(sizeof(struct pool) + sizeof(struct header), MPA_ALIGNMENT)\
                      - (sizeof(struct pool) + sizeof(struct header))))
 
-static inline void pool_detach(struct pool **head, struct pool *pool) {
-    struct pool *next = pool->next;
-    struct pool *prev = pool->prev;
-
-    if (next) next->prev = prev;
-    if (prev) prev->next = next;
-    else *head = next;
-}
-
-static inline void pool_attach(struct pool **head, struct pool *pool) {
-    if (*head)
-        (*head)->prev = pool;
-
-    pool->next = *head;
-    pool->prev = NULL;
-    *head = pool;
-}
-
 static inline void pool_seal(struct multipool *mp, struct pool *pool) {
-    pool_detach(&mp->unsealed, pool);
+    list_remove(&pool->link);
     mp->unsealed_count--;
     pool->sealed = true;
 }
 
 static inline void pool_unseal(struct multipool *mp, struct pool *pool) {
-    pool_attach(&mp->unsealed, pool);
+    list_insert_after(&mp->unsealed, &pool->link);
     mp->unsealed_count++;
     pool->sealed = false;
 }
 
 static struct pool *get_fitting_pool(struct multipool *mp, ssize_t size) {
-    struct pool *pool = mp->unsealed;
-    while (pool && pool->size - pool->offset < size)
-        pool = pool->next;
+    struct pool *pool = NULL;
+    LIST_FOREACH(it, &mp->unsealed) {
+        struct pool *p = CONTAINEROF(it, struct pool, link);
+        if (p->size - p->offset < size) {
+            pool = p;
+            break;
+        }
+    }
 
     if (!pool) {
         ssize_t pool_size = MAX(mp->pool_size, size + INIT_OFFSET);
@@ -107,12 +95,10 @@ static struct pool *get_fitting_pool(struct multipool *mp, ssize_t size) {
 }
 
 void mpa_release(struct multipool *mp) {
-    struct pool *pool = mp->unsealed, *next;
-
-    while (pool) {
-        next = pool->next;
-        DO_FREE(pool, sizeof *pool + pool->size);
-        pool = next;
+    LIST_FOREACH_SAFE(it, &mp->unsealed) {
+        struct pool *p = CONTAINEROF(it, struct pool, link);
+        list_remove(it);
+        DO_FREE(p, sizeof *p + p->size);
     }
 
     assert(mp->pool_count == mp->unsealed_count);
@@ -121,10 +107,10 @@ void mpa_release(struct multipool *mp) {
 }
 
 void mpa_init(struct multipool *mp, ssize_t pool_size) {
+    list_init(&mp->unsealed);
     mp->max_pad = 0;
     mp->pool_count = mp->unsealed_count = 0;
     mp->pool_size = pool_size;
-    mp->unsealed = NULL;
 }
 
 void mpa_free(struct multipool *mp, void *ptr) {
@@ -154,17 +140,16 @@ void mpa_set_seal_max_pad(struct multipool *mp, ssize_t max_pad, ssize_t max_uns
     mp->max_pad = max_pad + sizeof(struct header);
     mp->max_unsealed = max_unsealed;
 
-    struct pool *pool = mp->unsealed;
-    while (pool) {
-        struct pool *next = pool->next;
+    LIST_FOREACH_SAFE(it, &mp->unsealed) {
+        struct pool *pool = CONTAINEROF(it, struct pool, link);
         if (pool->size < max_pad + pool->offset) {
             pool_seal(mp, pool);
             if (pool->n_alloc == 0) {
+                list_remove(it);
                 DO_FREE(pool, pool->size + sizeof *pool);
                 mp->pool_count--;
             }
         }
-        pool = next;
     }
 }
 

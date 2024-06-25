@@ -27,7 +27,7 @@ struct context {
 static struct context ctx;
 const struct platform_vtable *pvtbl;
 
-struct window *win_list_head = NULL;
+struct list_head win_list_head;
 static volatile sig_atomic_t reload_config;
 
 static void handle_sigusr1(int sig) {
@@ -56,6 +56,8 @@ static void handle_hup(int sig) {
 const struct platform_vtable *platform_init_wayland(struct instance_config *cfg);
 
 void init_context(struct instance_config *cfg) {
+    list_init(&win_list_head);
+
     if (!pvtbl && USE_WAYLAND)
         pvtbl = platform_init_wayland(cfg);
     if (!pvtbl && USE_X11)
@@ -75,8 +77,8 @@ void init_context(struct instance_config *cfg) {
 }
 
 void free_context(void) {
-    while (win_list_head)
-        free_window(win_list_head);
+    LIST_FOREACH_SAFE(it, &win_list_head)
+        free_window(CONTAINEROF(it, struct window, link));
 
     if (gconfig.daemon_mode)
         unlink(gconfig.sockpath);
@@ -352,8 +354,8 @@ static void reload_window(struct window *win) {
 }
 
 static void do_reload_config(void) {
-    for (struct window *win = win_list_head; win; win = win->next)
-        reload_window(win);
+    LIST_FOREACH_SAFE(it, &win_list_head)
+        reload_window(CONTAINEROF(it, struct window, link));
     reload_config = false;
 }
 
@@ -385,7 +387,8 @@ struct window *window_find_shared_font(struct window *win, bool need_free, bool 
     bool found_font = 0, found_cache = 0;
     struct window *found = NULL;
 
-    for (struct window *src = win_list_head; src; src = src->next) {
+    LIST_FOREACH_SAFE(it, &win_list_head) {
+        struct window *src = CONTAINEROF(it, struct window, link);
         if ((src->cfg.font_size == win->cfg.font_size || (!win->cfg.font_size && src->cfg.font_size == ctx.font_size)) &&
                 src->cfg.dpi == win->cfg.dpi && src->cfg.force_scalable == win->cfg.force_scalable &&
                 src->cfg.allow_subst_font == win->cfg.allow_subst_font && src->cfg.gamma == win->cfg.gamma &&
@@ -459,10 +462,7 @@ struct window *create_window(struct instance_config *cfg) {
     window_set_title(win, target_title | target_icon_label, NULL,
                      win->cfg.utf8 || win->cfg.force_utf8_title);
 
-    win->next = win_list_head;
-    win->prev = NULL;
-    if (win_list_head) win_list_head->prev = win;
-    win_list_head = win;
+    list_insert_after(&win_list_head, &win->link);
 
     win->poll_index = poller_alloc_index(term_fd(win->term), POLLIN | POLLHUP);
     if (win->poll_index < 0) goto error;
@@ -484,9 +484,7 @@ void free_window(struct window *win) {
      * windows if window gets freed during blink. */
     if (win->in_blink) ctx.vbell_count--;
 
-    if (win->next) win->next->prev = win->prev;
-    if (win->prev) win->prev->next = win->next;
-    else win_list_head =  win->next;
+    list_remove(&win->link);
 
     if (win->poll_index > 0)
         poller_free_index(win->poll_index);
@@ -679,8 +677,8 @@ void run(void) {
         clock_gettime(CLOCK_TYPE, &cur);
 
         /* Then read for PTYs */
-        for (struct window *win = win_list_head, *next; win; win = next) {
-            next = win->next;
+        LIST_FOREACH_SAFE(it, &win_list_head) {
+            struct window *win = CONTAINEROF(it, struct window, link);
             int evt = poller_index_events(win->poll_index);
             if (UNLIKELY(evt & (POLLERR | POLLNVAL | POLLHUP))) {
                 free_window(win);
@@ -716,7 +714,8 @@ void run(void) {
             }
         }
 
-        for (struct window *win = win_list_head; win; win = win->next) {
+        LIST_FOREACH(it, &win_list_head) {
+            struct window *win = CONTAINEROF(it, struct window, link);
             next_timeout = MIN(next_timeout, (win->in_blink ? win->cfg.visual_bell_time : win->cfg.blink_time)*1000LL);
 
             /* Scroll down selection */
@@ -778,6 +777,6 @@ void run(void) {
         next_timeout = MAX(0, next_timeout);
         pvtbl->flush();
 
-        if ((!gconfig.daemon_mode && !win_list_head) || pvtbl->has_error()) break;
+        if ((!gconfig.daemon_mode && list_empty(&win_list_head)) || pvtbl->has_error()) break;
     }
 }
