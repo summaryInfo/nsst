@@ -8,15 +8,17 @@ Roadmap
 _NOTE: These plans can change any time_
 
 * Wayland
-  * (BUG) Sometimes old cursor is not getting damaged
-      * E.g. on Cava shutdown
-      * Font resize right bottom border artifact
-  * Dynamically change window DPI/subpixel mode depending on the output
-  * Log all events (optional: `WAYLAND_DEBUG` exists)
-  * Support HiDPI. Scale surface content
-  * Explicitly specify required versions of protocols
-  * Fractional scale
   * Support better CSD decorations
+      * Support separate border sizes
+      * Show special cursor surfaces on edges, use I-beam cursor on the main area
+      *    (in X11 also)
+      * Support rendering titlebar (title, close, maximize, minimize, double click, recolor on focus)
+  * Explicitly specify required versions of protocols
+  * Log all events (optional: `WAYLAND_DEBUG` exists)
+  * Dynamic output properties tracking:
+      * Dynamically change window DPI/subpixel mode depending on the output
+      * Support HiDPI. Scale surface content
+      * Fractional scale
   * Support server side cursors
   * Support xdg-activation-v1
 
@@ -38,6 +40,7 @@ _NOTE: These plans can change any time_
 * IME support
 
 * OSC 50 ; Pt ST -- Set font
+* OSC 22 ; Pt ST -- Set pointer shape
 
 * `CSI ? 35 l` / `CSI ? 35 h` -- font shifting functions
 
