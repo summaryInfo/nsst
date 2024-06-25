@@ -102,19 +102,26 @@ static inline void win_ptr_ping(struct window_ptr *ptr) {
     }
 }
 
+static inline struct extent wayland_image_size(struct window *win) {
+    return (struct extent) {
+        .width = win->cw * win->char_width + 2*win->cfg.left_border,
+        .height = win->ch * (win->char_height + win->char_depth) + 2*win->cfg.top_border,
+    };
+}
+
 #if USE_WAYLANDSHM
 void wayland_shm_init_context(void);
 void wayland_shm_free_context(void);
 void wayland_shm_free(struct window *win);
 void wayland_shm_update(struct window *win, struct rect rect);
-struct extent wayland_shm_size(struct window *win);
+struct extent wayland_shm_size(struct window *win, bool artificial);
 struct image wayland_shm_create_image(struct window *win, int16_t width, int16_t height);
 
 void shm_recolor_border(struct window *win);
 bool shm_reload_font(struct window *win, bool need_free);
 bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
 void shm_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
-void shm_resize(struct window *win, int16_t new_cw, int16_t new_ch);
+void shm_resize(struct window *win, int16_t new_cw, int16_t new_ch, bool artificial);
 #endif
 
 #endif

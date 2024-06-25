@@ -482,7 +482,7 @@ static void x11_move_resize(struct window *win, struct rect r) {
         XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
 }
 
-void x11_fixup_geometry(struct window *win) {
+struct extent x11_fixup_geometry(struct window *win) {
     if (win->cfg.geometry.char_geometry) {
         win->ch = MAX(win->cfg.geometry.r.height, 1);
         win->cw = MAX(win->cfg.geometry.r.width, 1);
@@ -501,6 +501,8 @@ void x11_fixup_geometry(struct window *win) {
         win->cw = MAX(1, (win->cfg.geometry.r.height - 2*win->cfg.left_border) / win->char_width);
         win->ch = MAX(1, (win->cfg.geometry.r.width - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
     }
+
+    return x11_image_size(win);
 }
 
 static bool x11_init_window(struct window *win) {
@@ -695,7 +697,7 @@ static void x11_handle_events(void) {
                         ev->override_redirect, ev->above_sibling, ev->event);
             }
             if (ev->width != win->cfg.geometry.r.width || ev->height != win->cfg.geometry.r.height)
-                handle_resize(win, ev->width, ev->height);
+                handle_resize(win, ev->width, ev->height, false);
             break;
         }
         case XCB_KEY_RELEASE: {

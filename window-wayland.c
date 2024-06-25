@@ -192,7 +192,7 @@ static bool wayland_resize_window(struct window *win, int16_t width, int16_t hei
 
 static void wayland_after_read(struct window *win) {
     if (get_plat(win)->pending_configure.resize) {
-        handle_resize(win, get_plat(win)->pending_configure.width, get_plat(win)->pending_configure.height);
+        handle_resize(win, get_plat(win)->pending_configure.width, get_plat(win)->pending_configure.height, true);
         get_plat(win)->pending_configure.resize = false;
     }
 }
@@ -301,7 +301,7 @@ void wayland_update_window_props(struct window *win) {
     wl_surface_commit(get_plat(win)->surface);
 }
 
-void wayland_fixup_geometry(struct window *win) {
+struct extent wayland_fixup_geometry(struct window *win) {
     win->cfg.geometry.r.x = 0;
     win->cfg.geometry.r.y = 0;
     win->cfg.geometry.stick_to_bottom = false;
@@ -314,6 +314,8 @@ void wayland_fixup_geometry(struct window *win) {
         win->cfg.geometry.r.height = (win->char_height + win->char_depth) * ch + win->cfg.top_border * 2;
         win->cfg.geometry.char_geometry = false;
     }
+
+    return wayland_image_size(win);
 }
 
 static void handle_surface_enter(void *data, struct wl_surface *wl_surface, struct wl_output *wl_output) {
@@ -373,7 +375,7 @@ void handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, u
     uint32_t height = get_plat(win)->pending_configure.height ? get_plat(win)->pending_configure.height : win->cfg.geometry.r.height;
     //xdg_surface_set_window_geometry(xdg_surface, 0, 0, width, height);
 
-    handle_resize(win, width, height);
+    handle_resize(win, width, height, false);
 
     wl_surface_attach(get_plat(win)->surface, get_plat(win)->buffer, 0, 0);
     wl_surface_commit(get_plat(win)->surface);

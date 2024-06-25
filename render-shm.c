@@ -69,7 +69,7 @@ bool shm_reload_font(struct window *win, bool need_free) {
 
     int w = win->cfg.geometry.r.width, h = win->cfg.geometry.r.height;
     if (need_free) {
-        handle_resize(win, w, h);
+        handle_resize(win, w, h, true);
 
         int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
         int bw = win->cfg.left_border, bh = win->cfg.top_border;
@@ -78,12 +78,11 @@ bool shm_reload_font(struct window *win, bool need_free) {
     } else {
         /* We need to resize window here if
          * it's size is specified in chracters */
-        pvtbl->fixup_geometry(win);
+        struct extent bx = pvtbl->fixup_geometry(win);
 
         resize_bounds(win, 1);
 
-        pvtbl->shm_create_image(win, (win->cw + 1)*win->char_width - 1 + 2*win->cfg.left_border,
-                                  (win->ch + 1)*(win->char_height + win->char_depth) - 1 + 2*win->cfg.top_border);
+        pvtbl->shm_create_image(win, bx.width, bx.height);
         if (!get_shm(win)->im.data) {
             warn("Can't allocate image");
             return 0;
@@ -275,14 +274,14 @@ void shm_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
     get_shm(win)->bounds[get_shm(win)->boundc++] = dst;
 }
 
-void shm_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
+void shm_resize(struct window *win, int16_t new_cw, int16_t new_ch, bool artificial) {
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
 
     win->cw = new_cw;
     win->ch = new_ch;
 
-    struct extent sz = pvtbl->adjust_size(win);
+    struct extent sz = pvtbl->adjust_size(win, artificial);
 
     int16_t width = sz.width;
     int16_t height = sz.height;

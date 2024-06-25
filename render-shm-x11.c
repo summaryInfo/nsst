@@ -80,11 +80,9 @@ void x11_shm_update(struct window *win, struct rect rect) {
     }
 }
 
-struct extent x11_shm_size(struct window *win) {
-    return (struct extent) {
-        .width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1,
-        .height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1,
-    };
+struct extent x11_shm_size(struct window *win, bool artificial) {
+    (void)artificial;
+    return x11_image_size(win);
 }
 
 void x11_shm_free(struct window *win) {

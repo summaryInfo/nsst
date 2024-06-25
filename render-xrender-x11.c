@@ -164,12 +164,14 @@ void x11_xrender_recolor_border(struct window *win) {
     do_draw_rects(win, rects, LEN(rects), win->bg_premul);
 }
 
-void x11_xrender_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
+void x11_xrender_resize(struct window *win, int16_t new_cw, int16_t new_ch, bool artificial) {
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
 
     win->cw = new_cw;
     win->ch = new_ch;
+
+    (void)artificial;
 
     int16_t width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1;
     int16_t height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1;
@@ -232,14 +234,12 @@ bool x11_xrender_reload_font(struct window *win, bool need_free) {
     }
 
     if (need_free) {
-        handle_resize(win, win->cfg.geometry.r.width, win->cfg.geometry.r.height);
+        handle_resize(win, win->cfg.geometry.r.width, win->cfg.geometry.r.height, true);
     } else {
         /* We need to resize window here if
          * it's size is specified in chracters */
-        x11_fixup_geometry(win);
-
-        xcb_rectangle_t bound = { 0, 0, (win->cw + 1)*win->char_width + 2*win->cfg.left_border - 1,
-                                 (win->ch + 1)*(win->char_depth + win->char_height) + 2*win->cfg.top_border - 1 };
+        struct extent bx = x11_fixup_geometry(win);
+        xcb_rectangle_t bound = { 0, 0, bx.width, bx.height };
 
         get_plat(win)->pid1 = xcb_generate_id(con);
         get_plat(win)->pid2 = xcb_generate_id(con);

@@ -538,7 +538,7 @@ void handle_expose(struct window *win, struct rect damage) {
         pvtbl->update(win, damage);
 }
 
-void handle_resize(struct window *win, int16_t width, int16_t height) {
+void handle_resize(struct window *win, int16_t width, int16_t height, bool artificial) {
 
     win->cfg.geometry.r.width = width;
     win->cfg.geometry.r.height = height;
@@ -552,7 +552,7 @@ void handle_resize(struct window *win, int16_t width, int16_t height) {
         clock_gettime(CLOCK_TYPE, &win->wait_for_configure);
         TIMEINC(win->wait_for_configure, -2*win->cfg.wait_for_configure_delay*1000);
         term_resize(win->term, new_cw, new_ch);
-        pvtbl->resize(win, new_cw, new_ch);
+        pvtbl->resize(win, new_cw, new_ch, artificial);
         clock_gettime(CLOCK_TYPE, &win->last_read);
         window_delay_redraw(win);
     }

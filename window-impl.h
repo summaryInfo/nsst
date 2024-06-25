@@ -327,10 +327,10 @@ struct platform_vtable {
     /* Renderer dependent functions */
     void (*update)(struct window *win, struct rect rect);
     bool (*reload_font)(struct window *win, bool need_free);
-    void (*resize)(struct window *win, int16_t new_cw, int16_t new_ch);
+    void (*resize)(struct window *win, int16_t new_cw, int16_t new_ch, bool artificial);
     void (*copy)(struct window *win, struct rect dst, int16_t sx, int16_t sy);
     bool (*submit_screen)(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
-    struct extent (*adjust_size)(struct window *win);
+    struct extent (*adjust_size)(struct window *win, bool artificial);
 
     /* Platform dependent functions */
     struct extent (*get_screen_size)(struct window *win);
@@ -358,7 +358,7 @@ struct platform_vtable {
     void (*update_colors)(struct window *win);
     bool (*window_action)(struct window *win, enum window_action action);
     void (*update_props)(struct window *win);
-    void (*fixup_geometry)(struct window *win);
+    struct extent (*fixup_geometry)(struct window *win);
     void (*set_autorepeat)(struct window *win, bool set);
     struct image (*shm_create_image)(struct window *win, int16_t width, int16_t height);
     void (*draw_end)(struct window *win);
@@ -368,10 +368,9 @@ struct platform_vtable {
 
 /* Platform independent functions */
 void handle_expose(struct window *win, struct rect damage);
-void handle_resize(struct window *win, int16_t width, int16_t height);
+void handle_resize(struct window *win, int16_t width, int16_t height, bool artificial);
 void handle_focus(struct window *win, bool focused);
 void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t keycode);
-void handle_resize(struct window *win, int16_t width, int16_t height);
 /* mouse event handler is defined elsewhere */
 
 struct window *window_find_shared_font(struct window *win, bool need_free, bool force_aligned);

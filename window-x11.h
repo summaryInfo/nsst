@@ -75,19 +75,26 @@ static inline bool check_void_cookie(xcb_void_cookie_t ck) {
     return false;
 }
 
+static inline struct extent x11_image_size(struct window *win) {
+    return (struct extent) {
+        .width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1,
+        .height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1,
+    };
+}
+
 #if USE_X11SHM
 void x11_shm_init_context(void);
 void x11_shm_free_context(void);
 void x11_shm_free(struct window *win);
 void x11_shm_update(struct window *win, struct rect rect);
 struct image x11_shm_create_image(struct window *win, int16_t width, int16_t height);
-struct extent x11_shm_size(struct window *win);
+struct extent x11_shm_size(struct window *win, bool artificial);
 
 void shm_recolor_border(struct window *win);
 bool shm_reload_font(struct window *win, bool need_free);
 bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
 void shm_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
-void shm_resize(struct window *win, int16_t new_cw, int16_t new_ch);
+void shm_resize(struct window *win, int16_t new_cw, int16_t new_ch, bool artificial);
 #endif
 
 #if USE_XRENDER
@@ -96,7 +103,7 @@ void x11_xrender_free_context(void);
 void x11_xrender_free(struct window *win);
 void x11_xrender_update(struct window *win, struct rect rect);
 bool x11_xrender_reload_font(struct window *win, bool need_free);
-void x11_xrender_resize(struct window *win, int16_t new_cw, int16_t new_ch);
+void x11_xrender_resize(struct window *win, int16_t new_cw, int16_t new_ch, bool artificial);
 void x11_xrender_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 void x11_xrender_recolor_border(struct window *win);
 bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
@@ -104,6 +111,6 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
 
 void x11_update_window_props(struct window *win);
 struct extent x11_get_screen_size(struct window *win);
-void x11_fixup_geometry(struct window *win);
+struct extent x11_fixup_geometry(struct window *win);
 
 #endif
