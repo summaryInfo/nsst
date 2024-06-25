@@ -3,14 +3,32 @@ Roadmap
 
 ## Future versions
 
-
 ### Until 2.5
 
 * Wayland
+  * Support `wl_output` for screen size reporting and dynamic DPI
+  * Use frame callabacks to prevent fast rendering
+    * Make window inactive until `callback.done` is received
+
+### Until 2.6
 
 _NOTE: These plans can change any time_
 
-### Until 2.6 (or later)
+* Wayland
+  * Support multiple backend creation
+  * Log all events (optional: `WAYLAND_DEBUG` exists)
+  * Support hidpi. Scale surface content
+  * Support simple CSD
+  * Use memfd for shared memory
+  * Explicitly specify required versions of protocols
+
+* Refactor code
+    * Make poller mode sophisticated
+        * Use callbacks and userspace timer queue?
+    * Make title encoding more straight forward
+    * Use list.h everywhere
+
+### Until 2.7 (or later)
 
 * Refactor screen arrays
   * Lazy resizing?
