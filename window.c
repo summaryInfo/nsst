@@ -515,10 +515,7 @@ void free_window(struct window *win) {
 }
 
 bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
-    bool some = pvtbl->submit_screen(win, cur_x, cur_y, cursor, marg);
-    if (some && pvtbl->draw_done)
-        pvtbl->draw_done(win);
-    return some;
+    return pvtbl->submit_screen(win, cur_x, cur_y, cursor, marg);
 }
 
 void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height) {

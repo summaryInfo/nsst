@@ -2003,7 +2003,7 @@ static struct platform_vtable wayland_vtable = {
     .update_props = wayland_update_window_props,
     .fixup_geometry = wayland_fixup_geometry,
     .set_autorepeat = wayland_set_autorepeat,
-    .draw_done = wayland_draw_done,
+    .draw_end = wayland_draw_done,
 
     .free = wayland_free,
 };
