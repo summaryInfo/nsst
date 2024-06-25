@@ -127,20 +127,17 @@ static void send_header(int fd, const char *cpath) {
 static bool is_boolean_option(const char *opt) {
     // TODO Use hash table?
     const char *bool_opts[] = {
-        "autorepeat", "allow-uris", "allow-alternate", "allow-blinking",
-        "allow-modify-edit-keypad", "allow-modify-function", "allow-modify-keypad",
-        "allow-modify-misc", "alternate-scroll", "appcursor", "appkey",
-        "autowrap", "backspace-is-del", "blend-all-background", "blend-foreground",
-        "daemon", "delete-is-del", "erase-scrollback", "extended-cir",
-        "fixed", "force-nrcs", "force-scalable", "fork", "has-meta",
-        "keep-clipboard", "keep-selection", "lock-keyboard", "luit",
-        "meta-sends-escape", "nrcs", "numlock",
-        "override-boxdrawing", "unique-uris", "print-attributes", "raise-on-bell",
-        "reverse-video", "scroll-on-input", "scroll-on-output", "select-to-clipboard",
-        "smooth-scroll", "special-blink", "special-bold", "special-italic",
-        "special-reverse", "special-underlined", "substitute-fonts", "trace-characters",
-        "trace-controls", "trace-events", "trace-fonts", "trace-input", "trace-misc",
-        "urgent-on-bell", "use-utf8", "visual-bell", "window-ops",
+        "allow-alternate", "allow-blinking", "allow-modify-edit-keypad", "allow-modify-function",
+        "allow-modify-keypad", "allow-modify-misc", "allow-uris", "alternate-scroll", "appcursor",
+        "appkey", "autorepeat", "autowrap", "backspace-is-del", "blend-all-background",
+        "blend-foreground", "daemon", "delete-is-del", "erase-scrollback", "extended-cir",
+        "fixed", "force-nrcs", "force-scalable", "force-wayland-csd", "fork", "has-meta",
+        "keep-clipboard", "keep-selection", "lock-keyboard", "luit", "meta-sends-escape", "nrcs",
+        "numlock", "override-boxdrawing", "print-attributes", "raise-on-bell", "reverse-video",
+        "scroll-on-input", "scroll-on-output", "select-to-clipboard", "smooth-scroll", "special-blink",
+        "special-bold", "special-italic", "special-reverse", "special-underlined", "substitute-fonts",
+        "trace-characters", "trace-controls", "trace-events", "trace-fonts", "trace-input",
+        "trace-misc", "unique-uris", "urgent-on-bell", "use-utf8", "visual-bell", "window-ops",
     };
     for (size_t i = 0; i < sizeof bool_opts/sizeof *bool_opts; i++)
         if (!strcmp(bool_opts[i], opt)) return true;
