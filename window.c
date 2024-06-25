@@ -270,8 +270,7 @@ struct extent window_get_grid_size(struct window *win) {
 }
 
 struct extent window_get_screen_size(struct window *win) {
-    (void)win;
-    return pvtbl->get_screen_size();
+    return pvtbl->get_screen_size(win);
 }
 
 struct extent window_get_cell_size(struct window *win) {

@@ -271,6 +271,9 @@ if [ "$use_waylandshm" = 1 ]; then
     vars="${vars}${nl}"'XDGDECORATIONPROTOCOL = $(WAYLANDPROTOCOLSDIR)/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml'
     objs="$objs xdg-decoration-protocol.o"
 
+    vars="${vars}${nl}"'XDGOUTPUTPROTOCOL = $(WAYLANDPROTOCOLSDIR)/unstable/xdg-output/xdg-output-unstable-v1.xml'
+    objs="$objs xdg-output-protocol.o"
+
     use_wayland=1
 fi
 

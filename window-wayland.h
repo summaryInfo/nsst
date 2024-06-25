@@ -62,6 +62,8 @@ struct wayland_window {
         int32_t height;
     } pending_configure;
 
+    struct extent output_size;
+
     bool can_maximize : 1;
     bool can_minimize : 1;
     bool can_fullscreen : 1;

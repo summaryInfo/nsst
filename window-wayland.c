@@ -35,6 +35,7 @@
 
 #include "xdg-shell-protocol.h"
 #include "xdg-decoration-protocol.h"
+#include "xdg-output-protocol.h"
 #include "primary-selection-protocol.h"
 
 #define NSST_CLASS "Nsst"
@@ -58,6 +59,25 @@ struct active_paste {
     bool tail;
     int fd;
     int index;
+};
+
+struct output {
+    struct list_head link;
+    struct wl_output *output;
+    struct zxdg_output_v1 *xdg_output;
+    struct rect logical;
+    struct rect physical;
+    struct extent mm;
+    char *name;
+    char *descr;
+    uint32_t id;
+    int32_t refresh;
+    enum wl_output_subpixel subpixel;
+    enum wl_output_transform transform;
+    int32_t scale;
+    bool xdg_output_done;
+    bool output_done;
+    double dpi;
 };
 
 struct seat {
@@ -132,6 +152,7 @@ struct context {
     struct wl_data_device_manager *data_device_manager;
     struct zxdg_decoration_manager_v1 *decoration_manager;
     struct zwp_primary_selection_device_manager_v1 *primary_selection_device_manager;
+    struct zxdg_output_manager_v1 *output_manager;
 
     struct wl_cursor_theme *cursor_theme;
     struct wl_cursor *cursor;
@@ -140,6 +161,7 @@ struct context {
 
     struct list_head paste_fds;
     struct list_head seats;
+    struct list_head outputs;
 
     void (*renderer_recolor_border)(struct window *);
     void (*renderer_free)(struct window *);
@@ -214,9 +236,8 @@ static struct extent wayland_get_position(struct window *win) {
     return (struct extent) {0, 0};
 }
 
-static struct extent wayland_get_screen_size(void) {
-    // FIXME Listen to wl_output changes to query display positions
-    return (struct extent) { 0, 0 };
+static struct extent wayland_get_screen_size(struct window *win) {
+    return get_plat(win)->output_size;
 }
 
 static void wayland_get_pointer(struct window *win, struct extent *p, int32_t *pmask) {
@@ -298,6 +319,49 @@ void wayland_fixup_geometry(struct window *win) {
         win->cfg.geometry.r.height = (win->char_height + win->char_depth) * ch + win->cfg.top_border * 2;
     }
 }
+
+static void handle_surface_enter(void *data, struct wl_surface *wl_surface, struct wl_output *wl_output) {
+    struct window *win = data;
+    (void)wl_surface;
+
+    struct output *output = wl_output_get_user_data(wl_output);
+    if (output) {
+        if (ctx.output_manager) {
+            get_plat(win)->output_size.height = output->logical.height;
+            get_plat(win)->output_size.width = output->logical.width;
+        } else {
+            get_plat(win)->output_size.height = output->physical.height / output->scale;
+            get_plat(win)->output_size.width = output->physical.width / output->scale;
+        }
+    }
+
+    // FIXME Adjust fonts and scale to the new output
+}
+
+static void handle_surface_leave(void *data, struct wl_surface *wl_surface, struct wl_output *output) {
+    struct window *win = data;
+    (void)wl_surface;
+
+    // FIXME Adjust fonts and scale to the new output
+    (void)output, (void)win;
+}
+
+static void handle_surface_preferred_buffer_scale(void *data, struct wl_surface *wl_surface, int32_t factor) {
+    (void)data, (void)wl_surface, (void)factor;
+    // FIXME HiDPI
+}
+
+static void handle_surface_preferred_buffer_transform(void *data, struct wl_surface *wl_surface, uint32_t transform) {
+    (void)data, (void)wl_surface, (void)transform;
+    // FIXME HiDPI
+}
+
+struct wl_surface_listener surface_listener = {
+	.enter = handle_surface_enter,
+	.leave = handle_surface_leave,
+	.preferred_buffer_scale = handle_surface_preferred_buffer_scale,
+	.preferred_buffer_transform = handle_surface_preferred_buffer_transform,
+};
 
 void handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
     struct window *win = data;
@@ -449,7 +513,7 @@ static bool wayland_init_window(struct window *win) {
     ww->surface = wl_compositor_create_surface(ctx.compositor);
     if (!ww->surface)
         return false;
-    wl_surface_set_user_data(ww->surface, win);
+    wl_surface_add_listener(ww->surface, &surface_listener, win);
 
     ww->xdg_surface = xdg_wm_base_get_xdg_surface(ctx.xdg_wm_base, ww->surface);
     if (!ww->xdg_surface)
@@ -1474,6 +1538,120 @@ static struct xdg_wm_base_listener xdg_wm_base_listener = {
     .ping = handle_xdg_wm_base_pong,
 };
 
+static void output_compute_dpi(struct output *output) {
+    double dpi;
+    if (ctx.output_manager)
+        dpi = output->logical.width;
+    else {
+        if (output->scale == 0)
+            output->scale = 1;
+        dpi = output->physical.width / output->scale;
+    }
+
+    if (!output->mm.width) {
+        dpi = 96;
+    } else {
+        dpi *= 25.4/output->mm.width;
+        if (dpi > 1000) dpi = 96;
+    }
+
+    output->dpi = dpi;
+}
+
+static void handle_output_geometry(void *data, struct wl_output *wl_output, int32_t x, int32_t y,
+                                   int32_t physical_width, int32_t physical_height, int32_t subpixel,
+                                   const char *make, const char *model, int32_t transform) {
+    struct output *output = data;
+    (void)wl_output, (void)make, (void)model;
+    output->physical.x = x;
+    output->physical.y = y;
+    output->mm.height = physical_height;
+    output->mm.width = physical_width;
+    output->subpixel = subpixel;
+    output->transform = transform;
+}
+
+static void handle_output_mode(void *data, struct wl_output *wl_output, uint32_t flags, int32_t width, int32_t height, int32_t refresh) {
+    struct output *output = data;
+    (void)wl_output;
+    if (flags & WL_OUTPUT_MODE_CURRENT) {
+        output->refresh = refresh;
+        output->physical.height = height;
+        output->physical.width = width;
+    }
+}
+
+static void handle_output_done(void *data, struct wl_output *wl_output) {
+    struct output *output = data;
+    (void)wl_output;
+    output_compute_dpi(output);
+    output->output_done = true;
+}
+
+static void handle_output_scale(void *data, struct wl_output *wl_output, int32_t factor) {
+    struct output *output = data;
+    (void)wl_output;
+    output->scale = factor;
+}
+
+static void handle_output_name(void *data, struct wl_output *wl_output, const char *name) {
+    struct output *output = data;
+    (void)wl_output;
+    output->name= strdup(name);
+}
+
+static void handle_output_description(void *data, struct wl_output *wl_output, const char *description) {
+    struct output *output = data;
+    (void)wl_output;
+    output->descr = strdup(description);
+}
+
+static struct wl_output_listener output_listener = {
+	.geometry = handle_output_geometry,
+	.mode = handle_output_mode,
+	.done = handle_output_done,
+	.scale = handle_output_scale,
+	.name = handle_output_name,
+	.description = handle_output_description,
+};
+
+static void handle_xdg_output_logical_position(void *data, struct zxdg_output_v1 *zxdg_output_v1, int32_t x, int32_t y) {
+    struct output *output = data;
+    (void)zxdg_output_v1;
+    output->logical.x = x;
+    output->logical.y = y;
+}
+
+static void handle_xdg_output_logical_size(void *data, struct zxdg_output_v1 *zxdg_output_v1, int32_t width, int32_t height) {
+    struct output *output = data;
+    (void)zxdg_output_v1;
+    output->logical.width = width;
+    output->logical.height = height;
+}
+
+static void handle_xdg_output_done(void *data, struct zxdg_output_v1 *zxdg_output_v1) {
+    // NOTE: Deprecated
+    (void)data, (void)zxdg_output_v1;
+}
+
+static void handle_xdg_output_name(void *data, struct zxdg_output_v1 *zxdg_output_v1, const char *name) {
+    // NOTE: Deprecated
+    (void)data, (void)zxdg_output_v1, (void)name;
+}
+
+static void handle_xdg_output_description(void *data, struct zxdg_output_v1 *zxdg_output_v1, const char *description) {
+    // NOTE: Deprecated
+    (void)data, (void)zxdg_output_v1, (void)description;
+}
+
+static struct zxdg_output_v1_listener xdg_output_listener = {
+	.logical_position = handle_xdg_output_logical_position,
+	.logical_size = handle_xdg_output_logical_size,
+	.done = handle_xdg_output_done,
+	.name = handle_xdg_output_name,
+	.description = handle_xdg_output_description,
+};
+
 static void handle_registry_global(void *data, struct wl_registry *wl_registry, uint32_t name, const char *interface, uint32_t version) {
     (void)data;
 
@@ -1495,8 +1673,33 @@ static void handle_registry_global(void *data, struct wl_registry *wl_registry, 
         ctx.primary_selection_device_manager = wl_registry_bind(wl_registry, name, &zwp_primary_selection_device_manager_v1_interface, version);
     } else if (!strcmp(interface, zxdg_decoration_manager_v1_interface.name)) {
         ctx.decoration_manager = wl_registry_bind(wl_registry, name, &zxdg_decoration_manager_v1_interface, version);
+    } else if (!strcmp(interface, zxdg_output_manager_v1_interface.name)) {
+        ctx.output_manager = wl_registry_bind(wl_registry, name, &zxdg_output_manager_v1_interface, version);
+        if (ctx.output_manager) {
+            /* Iterate over all output objects encountered before zxdg_output_manager_v1 was found */
+            LIST_FOREACH(it, &ctx.outputs) {
+                struct output *output = CONTAINEROF(it, struct output, link);
+                output->xdg_output = zxdg_output_manager_v1_get_xdg_output(ctx.output_manager, output->output);
+                zxdg_output_v1_add_listener(output->xdg_output, &xdg_output_listener, output);
+            }
+        }
+    } else if (!strcmp(interface, wl_output_interface.name)) {
+        struct wl_output *wl_output = wl_registry_bind(wl_registry, name, &wl_output_interface, version);
+        if (wl_output) {
+            struct output *output = xzalloc(sizeof *output);
+            output->id = name;
+            output->output = wl_output;
+            wl_output_add_listener(wl_output, &output_listener, output);
+            if (ctx.output_manager) {
+                list_insert_after(&ctx.outputs, &output->link);
+                output->xdg_output = zxdg_output_manager_v1_get_xdg_output(ctx.output_manager, wl_output);
+                zxdg_output_v1_add_listener(output->xdg_output, &xdg_output_listener, output);
+            } else {
+                free(output);
+            }
+        }
     } else if (!strcmp(interface, wl_seat_interface.name)) {
-        struct seat *seat = xzalloc(sizeof(struct seat));
+        struct seat *seat = xzalloc(sizeof *seat);
         seat->seat = wl_registry_bind(wl_registry, name, &wl_seat_interface, version);
 
         if (seat->seat) {
@@ -1507,6 +1710,20 @@ static void handle_registry_global(void *data, struct wl_registry *wl_registry, 
             free(seat);
         }
     }
+}
+
+static void free_output(struct output *output) {
+    list_remove(&output->link);
+
+    if (output->xdg_output)
+        zxdg_output_v1_destroy(output->xdg_output);
+    if (output->output)
+        wl_output_destroy(output->output);
+    if (output->name)
+        free(output->name);
+    if (output->descr)
+        free(output->descr);
+    free(output);
 }
 
 static void free_seat(struct seat *seat) {
@@ -1574,6 +1791,14 @@ static void handle_registry_global_remove(void *data, struct wl_registry *wl_reg
         }
     }
 
+    LIST_FOREACH_SAFE(it, &ctx.outputs) {
+        struct output *output = CONTAINEROF(it, struct output, link);
+        if (output->id == name) {
+            free_output(output);
+            return;
+        }
+    }
+
     warn("Unknown global removed: %x", name);
 }
 
@@ -1588,6 +1813,11 @@ static void wayland_free(void) {
     LIST_FOREACH_SAFE(it, &ctx.seats) {
         struct seat *seat = CONTAINEROF(it, struct seat, link);
         free_seat(seat);
+    }
+
+    LIST_FOREACH_SAFE(it, &ctx.outputs) {
+        struct output *output = CONTAINEROF(it, struct output, link);
+        free_output(output);
     }
 
     if (ctx.cursor_surface)
@@ -1607,6 +1837,8 @@ static void wayland_free(void) {
         zwp_primary_selection_device_manager_v1_destroy(ctx.primary_selection_device_manager);
     if (ctx.decoration_manager)
         zxdg_decoration_manager_v1_destroy(ctx.decoration_manager);
+    if (ctx.output_manager)
+        zxdg_output_manager_v1_destroy(ctx.output_manager);
     if (ctx.xdg_wm_base)
         xdg_wm_base_destroy(ctx.xdg_wm_base);
 
@@ -1756,6 +1988,7 @@ const struct platform_vtable *platform_init_wayland(struct instance_config *cfg)
     ctx.dpl_index = poller_alloc_index(wl_display_get_fd(dpl), POLLIN | POLLHUP);
     list_init(&ctx.paste_fds);
     list_init(&ctx.seats);
+    list_init(&ctx.outputs);
 
     ctx.registry = wl_display_get_registry(dpl);
     if (!ctx.registry) {
@@ -1797,13 +2030,13 @@ const struct platform_vtable *platform_init_wayland(struct instance_config *cfg)
         }
     }
 
-    // FIXME Get DPI
+    wl_display_roundtrip(dpl);
 
-    int32_t dpi = 96;
-    //xcb_screen_iterator_t it = xcb_setup_roots_iterator(xcb_get_setup(con));
-    //for (; it.rem; xcb_screen_next(&it))
-    //    if (it.data) dpi = MAX(dpi, (it.data->width_in_pixels * 25.4)/it.data->width_in_millimeters);
-    if (dpi > 0) set_default_dpi(dpi, cfg);
+    double dpi = 0;
+    LIST_FOREACH(it, &ctx.outputs)
+        dpi = MAX(dpi, CONTAINEROF(it, struct output, link)->dpi);
+    if (dpi > 0)
+        set_default_dpi(dpi, cfg);
 
     switch (gconfig.backend) {
     case renderer_auto:

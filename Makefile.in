@@ -66,6 +66,12 @@ xdg-shell-protocol.h:
 xdg-shell-protocol.c:
 	$(WAYLANDSCANNER) private-code $(XDGSHELLPROTOCOL) $@
 
+window-wayland.o: xdg-output-protocol.h
+xdg-output-protocol.h:
+	$(WAYLANDSCANNER) client-header $(XDGOUTPUTPROTOCOL) $@
+xdg-output-protocol.c:
+	$(WAYLANDSCANNER) private-code $(XDGOUTPUTPROTOCOL) $@
+
 nsstc.o: feature.h
 nsst.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h tty.h window.h hashtable.h multipool.h
 util.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h precompose-table.h hashtable.h width-table.h multipool.h

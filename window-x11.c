@@ -321,7 +321,8 @@ static struct extent x11_get_position(struct window *win) {
     return res;
 }
 
-struct extent x11_get_screen_size(void) {
+struct extent x11_get_screen_size(struct window *win) {
+    (void)win;
     return (struct extent) { ctx.screen->width_in_pixels, ctx.screen->height_in_pixels };
 }
 
@@ -487,7 +488,7 @@ void x11_fixup_geometry(struct window *win) {
         win->cfg.geometry.r.width = win->char_width * win->cw + win->cfg.left_border * 2;
         win->cfg.geometry.r.height = (win->char_height + win->char_depth) * win->ch + win->cfg.top_border * 2;
 
-        struct extent ssize = x11_get_screen_size();
+        struct extent ssize = x11_get_screen_size(win);
         if (win->cfg.geometry.stick_to_right)
             win->cfg.geometry.r.x += ssize.width - win->cfg.geometry.r.width - 2;
         if (win->cfg.geometry.stick_to_bottom)

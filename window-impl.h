@@ -331,7 +331,7 @@ struct platform_vtable {
     bool (*submit_screen)(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
 
     /* Platform dependent functions */
-    struct extent (*get_screen_size)(void);
+    struct extent (*get_screen_size)(struct window *win);
     bool (*has_error)(void);
     ssize_t (*get_opaque_size)(void);
     void (*flush)(void);

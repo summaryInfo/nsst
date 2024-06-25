@@ -102,7 +102,7 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
 #endif
 
 void x11_update_window_props(struct window *win);
-struct extent x11_get_screen_size(void);
+struct extent x11_get_screen_size(struct window *win);
 void x11_fixup_geometry(struct window *win);
 
 #endif
