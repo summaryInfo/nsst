@@ -26,15 +26,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-/* These probably need to use alternate description when ignored:
-    "allow-uris", "Allow URI parsing/clicking, ignored"
-    "open-cmd", "A command used to open URIs when clicked, ignored"
-    "uri-click-mod", "keyboard modifer used to click-open URIs, ignored"
-    "unique-uris", "Make distinction between URIs with the same location, ignored"
-    "key-copy-uri", "Copy underlying URL hotkey, ignored"
-    "override-boxdrawing", "Use built-in box drawing characters, ignored"
-*/
-
+/* FIXME: These probably need to use alternate description when ignored:
+ * "uri-mode", "open-cmd", "uri-click-mod", "unique-uris", "key-copy-uri", "override-boxdrawing", */
 
 struct global_config gconfig;
 
