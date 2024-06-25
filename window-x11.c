@@ -904,6 +904,7 @@ static struct platform_vtable x11_vtable = {
     .resize = NULL,
     .copy = NULL,
     .submit_screen = NULL,
+    .adjust_size = NULL,
 
     /* Platform dependent functions */
     .get_screen_size = x11_get_screen_size,
@@ -1062,6 +1063,7 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
         x11_vtable.copy = shm_copy;
         x11_vtable.submit_screen = shm_submit_screen;
         x11_vtable.shm_create_image = x11_shm_create_image;
+        x11_vtable.adjust_size = x11_shm_size;
         ctx.renderer_recolor_border = shm_recolor_border;
         ctx.renderer_free = x11_shm_free;
         ctx.renderer_free_context = x11_shm_free_context;

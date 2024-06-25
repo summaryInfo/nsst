@@ -494,11 +494,11 @@ static void handle_xdg_toplevel_decoration_configure(void *data, struct zxdg_top
     struct window *win = data;
     (void)zxdg_toplevel_decoration_v1;
 
-    if (mode != ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE)
+    if (mode != ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE) {
         warn("Wayland compositor does not support server side decorations");
-
-    // FIXME CSD
-    (void)win;
+    } else {
+        get_plat(win)->use_ssd = true;
+    }
 }
 
 static struct zxdg_toplevel_decoration_v1_listener xdg_toplevel_decoration_listener = {
@@ -1391,6 +1391,69 @@ static inline int32_t button_decode_one(uint32_t btn) {
     }
 }
 
+static bool try_handle_csd_button(struct window *win, struct seat *seat, int32_t code, bool pressed, int32_t x, int32_t y) {
+    bool handled = false;
+    /* If server does not provide server side decorations, provide some controls ourselves */
+    if (get_plat(win)->use_ssd) return false;
+    if (code >= 3) return false;
+    if (!pressed) return false;
+
+    bool left = x < win->cfg.left_border;
+    bool right = x > win->cw*win->char_width + win->cfg.left_border;
+    bool top = y < win->cfg.top_border;
+    bool bottom = y > win->ch*(win->char_height + win->char_depth) + win->cfg.top_border;
+    if (!left && !right && !top && !bottom) return false;
+
+    if (code == 1) {
+        /* Middle mouse button on top border --- close */
+        if (top) {
+            handled = true;
+            free_window(win);
+        }
+    } else if (code == 0) {
+        /* Left mouse button --- move */
+        handled = true;
+        xdg_toplevel_move(get_plat(win)->xdg_toplevel, seat->seat, seat->pointer.serial);
+    } else if (code == 2) {
+        /* Right mouse button --- resize */
+        handled = true;
+        enum xdg_toplevel_resize_edge edges = 0;
+        if (left) edges |= XDG_TOPLEVEL_RESIZE_EDGE_LEFT;
+        if (right) edges |= XDG_TOPLEVEL_RESIZE_EDGE_RIGHT;
+        if (top) edges |= XDG_TOPLEVEL_RESIZE_EDGE_TOP;
+        if (bottom) edges |= XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM;
+        xdg_toplevel_resize(get_plat(win)->xdg_toplevel, seat->seat, seat->pointer.serial, edges);
+    }
+    return handled;
+}
+
+static bool try_handle_csd_axis(struct window *win, struct seat *seat, int step, int32_t y) {
+    /* If server does not provide server side decorations, provide some controls ourselves */
+    if (get_plat(win)->use_ssd) return false;
+    if (!seat->pointer.axes[0].discrete) return false;
+
+    bool top = y < win->cfg.top_border;
+    if (!top) return false;
+
+    if (step > 0) {
+        if (get_plat(win)->is_maximized) {
+            xdg_toplevel_set_fullscreen(get_plat(win)->xdg_toplevel, NULL);
+        } else {
+            xdg_toplevel_set_maximized(get_plat(win)->xdg_toplevel);
+        }
+    } else if (step < 0) {
+        if (get_plat(win)->is_fullscreen) {
+            xdg_toplevel_unset_fullscreen(get_plat(win)->xdg_toplevel);
+        } else if (get_plat(win)->is_maximized) {
+            xdg_toplevel_unset_maximized(get_plat(win)->xdg_toplevel);
+        } else {
+            xdg_toplevel_set_minimized(get_plat(win)->xdg_toplevel);
+        }
+    }
+
+    return true;
+}
+
 static void handle_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
     struct seat *seat = data;
     (void)wl_pointer;
@@ -1410,35 +1473,36 @@ static void handle_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
 
     if (seat->pointer.event_mask & POINTER_EVENT_BUTTON) {
         int32_t code = button_decode_one(seat->pointer.button);
-        if (code >= 0) {
-            if (seat->pointer.state == WL_POINTER_BUTTON_STATE_PRESSED)
-                seat->pointer.mask |= mask_button_1 << code;
+        bool pressed = seat->pointer.state == WL_KEYBOARD_KEY_STATE_PRESSED;
+        if (code >= 0 && !try_handle_csd_button(win, seat, code, pressed, x, y)) {
+            if (pressed) seat->pointer.mask |= mask_button_1 << code;
             mouse_handle_input(win->term, (struct mouse_event) {
                 /* mouse_event_press/mouse_event_release */
-                .event = seat->pointer.state != WL_POINTER_BUTTON_STATE_PRESSED,
+                .event = !pressed,
                 .mask = seat->pointer.mask | seat->keyboard.mask,
                 .x = x, .y = y,
                 .button = code,
             });
-            if (seat->pointer.state != WL_POINTER_BUTTON_STATE_PRESSED)
-                seat->pointer.mask &= ~(mask_button_1 << code);
+            if (!pressed) seat->pointer.mask &= ~(mask_button_1 << code);
         }
     }
 
     /* Scroll wheel might report multiple button presses */
     if (seat->pointer.event_mask & POINTER_EVENT_AXIS_DISCRETE && seat->pointer.axes[0].used) {
-        for (int step = 1 - 2*(seat->pointer.axes[0].discrete > 0);
-                 seat->pointer.axes[0].discrete; seat->pointer.axes[0].discrete += step) {
-            struct mouse_event evt = {
-                .event = mouse_event_press,
-                .mask = seat->pointer.mask | seat->keyboard.mask,
-                .x = x, .y = y,
-                .button = 3 + (step < 0),
-            };
-            mouse_handle_input(win->term, evt);
-            evt.mask |= mask_button_1 << evt.button;
-            evt.event = mouse_event_release;
-            mouse_handle_input(win->term, evt);
+        int step = 1 - 2*(seat->pointer.axes[0].discrete > 0);
+        if (!try_handle_csd_axis(win, seat, step, y)) {
+            for (; seat->pointer.axes[0].discrete; seat->pointer.axes[0].discrete += step) {
+                struct mouse_event evt = {
+                    .event = mouse_event_press,
+                    .mask = seat->pointer.mask | seat->keyboard.mask,
+                    .x = x, .y = y,
+                    .button = 3 + (step < 0),
+                };
+                mouse_handle_input(win->term, evt);
+                evt.mask |= mask_button_1 << evt.button;
+                evt.event = mouse_event_release;
+                mouse_handle_input(win->term, evt);
+            }
         }
     }
 
@@ -1548,7 +1612,7 @@ static void output_compute_dpi(struct output *output) {
     else {
         if (output->scale == 0)
             output->scale = 1;
-        dpi = output->physical.width / output->scale;
+        dpi = output->physical.width / (double)output->scale;
     }
 
     if (!output->mm.width) {
@@ -1634,7 +1698,10 @@ static void handle_xdg_output_logical_size(void *data, struct zxdg_output_v1 *zx
 
 static void handle_xdg_output_done(void *data, struct zxdg_output_v1 *zxdg_output_v1) {
     // NOTE: Deprecated
-    (void)data, (void)zxdg_output_v1;
+    struct output *output = data;
+    (void)zxdg_output_v1;
+    output_compute_dpi(output);
+    output->output_done = true;
 }
 
 static void handle_xdg_output_name(void *data, struct zxdg_output_v1 *zxdg_output_v1, const char *name) {
@@ -1908,6 +1975,7 @@ static struct platform_vtable wayland_vtable = {
     .resize = NULL,
     .copy = NULL,
     .submit_screen = NULL,
+    .adjust_size = NULL,
 
     /* Platform dependent functions */
     .get_screen_size = wayland_get_screen_size,
@@ -2070,6 +2138,7 @@ const struct platform_vtable *platform_init_wayland(struct instance_config *cfg)
         wayland_vtable.copy = shm_copy;
         wayland_vtable.submit_screen = shm_submit_screen;
         wayland_vtable.shm_create_image = wayland_shm_create_image;
+        wayland_vtable.adjust_size = wayland_shm_size;
         ctx.renderer_recolor_border = shm_recolor_border;
         ctx.renderer_free = wayland_shm_free;
         ctx.renderer_free_context = wayland_shm_free_context;

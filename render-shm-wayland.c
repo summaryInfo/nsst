@@ -53,6 +53,15 @@ error:
     return (struct image) {0};
 }
 
+struct extent wayland_shm_size(struct window *win) {
+    if (get_plat(win)->is_maximized || get_plat(win)->is_fullscreen)
+        return (struct extent) { win->cfg.geometry.r.width, win->cfg.geometry.r.height };
+    return (struct extent) {
+        .width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1,
+        .height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1,
+    };
+}
+
 void wayland_shm_update(struct window *win, struct rect rect) {
     wl_surface_damage_buffer(get_plat(win)->surface, rect.x, rect.y, rect.width, rect.height);
 }

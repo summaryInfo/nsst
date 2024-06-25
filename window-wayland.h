@@ -69,6 +69,7 @@ struct wayland_window {
     bool can_fullscreen : 1;
     bool is_maximized : 1;
     bool is_fullscreen : 1;
+    bool use_ssd : 1;
 } ALIGNED(MALLOC_ALIGNMENT);
 
 extern struct wl_shm *wl_shm;
@@ -104,6 +105,7 @@ void wayland_shm_init_context(void);
 void wayland_shm_free_context(void);
 void wayland_shm_free(struct window *win);
 void wayland_shm_update(struct window *win, struct rect rect);
+struct extent wayland_shm_size(struct window *win);
 struct image wayland_shm_create_image(struct window *win, int16_t width, int16_t height);
 
 void shm_recolor_border(struct window *win);

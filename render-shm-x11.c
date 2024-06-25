@@ -80,6 +80,13 @@ void x11_shm_update(struct window *win, struct rect rect) {
     }
 }
 
+struct extent x11_shm_size(struct window *win) {
+    return (struct extent) {
+        .width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1,
+        .height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1,
+    };
+}
+
 void x11_shm_free(struct window *win) {
     if (has_fast_damage)
         xcb_shm_detach(con, get_plat(win)->shm_seg);

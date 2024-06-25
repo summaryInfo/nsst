@@ -329,6 +329,7 @@ struct platform_vtable {
     void (*resize)(struct window *win, int16_t new_cw, int16_t new_ch);
     void (*copy)(struct window *win, struct rect dst, int16_t sx, int16_t sy);
     bool (*submit_screen)(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
+    struct extent (*adjust_size)(struct window *win);
 
     /* Platform dependent functions */
     struct extent (*get_screen_size)(struct window *win);

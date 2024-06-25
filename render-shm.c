@@ -280,8 +280,10 @@ void shm_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     win->cw = new_cw;
     win->ch = new_ch;
 
-    int16_t width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1;
-    int16_t height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1;
+    struct extent sz = pvtbl->adjust_size(win);
+
+    int16_t width = sz.width;
+    int16_t height = sz.height;
 
     int16_t common_w = MIN(width, width  - delta_x * win->char_width);
     int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth));

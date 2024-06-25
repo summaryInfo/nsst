@@ -81,6 +81,7 @@ void x11_shm_free_context(void);
 void x11_shm_free(struct window *win);
 void x11_shm_update(struct window *win, struct rect rect);
 struct image x11_shm_create_image(struct window *win, int16_t width, int16_t height);
+struct extent x11_shm_size(struct window *win);
 
 void shm_recolor_border(struct window *win);
 bool shm_reload_font(struct window *win, bool need_free);
