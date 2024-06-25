@@ -23,6 +23,7 @@ testcc='cc'
 emptytest="int main(){}\n"
 shmtest="#define _POSIX_C_SOURCE 200809L\n#include <sys/mman.h>\nint main(){shm_open(0,0,0);}\n"
 ppolltest="#define _GNU_SOURCE\n#include <poll.h>\nint main(){ppoll(0,0,0,0);}\n"
+memfdtest="#define _GNU_SOURCE\n#include <sys/mman.h>\nint main(){memfd_create(0,0);}\n"
 nanosleeptest="#define _POSIX_C_SOURCE 200809L\n#include <time.h>\nint main(){clock_nanosleep(0,0,0,0);}\n"
 
 warns="-Walloca -Wno-aggressive-loop-optimizations"
@@ -68,6 +69,9 @@ Usage: configure [options]
     --bindir=DIR            Binary install directory [$prefix/bin]
     --enable-ppoll          Enable ppoll() in main loop for better timing [set if available]
     --disable-ppoll         Disable ppoll() in main loop, use poll instead
+    --enable-memfd          Enable memfd_create() for shared memory buffer creation [set if available]
+    --disable-memfd         Disable memfd_create() for shared memory buffer creation
+    --disable-ppoll         Disable ppoll() in main loop, use poll instead
     --enable-nanosleep      Enable POSIX clock_nanosleep() [set if available]
     --disable-nanosleep     Disable POSIX clock_nanosleep() use nanosleep() instead
     --enable-boxdrawing     Enable built-in box drawing characters [set]
@@ -104,6 +108,10 @@ for i; do
         use_ppoll=1 ;;
     --disable-ppoll)
         use_ppoll=0 ;;
+    --enable-memfd)
+        use_memfd=1 ;;
+    --disable-memfd)
+        use_memfd=0 ;;
     --enable-boxdrawing)
         use_boxdrawing=1 ;;
     --disable-boxdrawing)
@@ -198,6 +206,10 @@ fi
 if [ -z $use_ppoll ]; then
     dotest "$ppolltest" "ppoll() function" && use_ppoll=1 || use_ppoll=0
 fi
+# Test if system supports memfd()
+if [ -z $use_memfd ]; then
+    dotest "$memfdtest" "memfd() function" && use_memfd=1 || use_memfd=0
+fi
 # Test if system supports POSIX clock_nanosleep()
 if [ -z $use_nanosleep ]; then
     dotest "$nanosleeptest" "clock_nanosleep() function" && use_nanosleep=1 || use_nanosleep=0
@@ -291,6 +303,7 @@ sed < "./feature.h.in" > "./feature.h" \
     -e "s:@USE_WAYLAND@:$use_wayland:g" \
     -e "s:@USE_WAYLANDSHM@:$use_waylandshm:g" \
     -e "s:@USE_POSIX_SHM@:$use_posix_shm:g" \
+    -e "s:@USE_MEMFD@:$use_memfd:g" \
     -e "s:@USE_URI@:$use_uri:g" \
     -e "s:@DEBUG_LINES@:$debug_lines:g" \
     -e "s:@VERSION@:$version:g"
@@ -322,6 +335,7 @@ Configure results:
     URI...................... $use_uri
     precompose............... $use_precompose
     ppoll().................. $use_ppoll
+    memfd_create()........... $use_memfd
     clock_nanosleep()........ $use_nanosleep
     POSIX shm................ $use_posix_shm
     force clang+lld.......... $use_clang

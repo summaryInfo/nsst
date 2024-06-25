@@ -3,13 +3,15 @@
 
 #include "feature.h"
 
+#define _GNU_SOURCE 1
+
 #include "util.h"
 #include "image.h"
 
 #include <stdint.h>
 #include <string.h>
 
-#if USE_POSIX_SHM
+#if USE_POSIX_SHM || USE_MEMFD
 #   include <errno.h>
 #   include <fcntl.h>
 #   include <sys/mman.h>
@@ -60,7 +62,11 @@ struct image create_shm_image(int16_t width, int16_t height) {
     };
     size_t size = STRIDE(width) * height * sizeof(color_t);
 
-#if USE_POSIX_SHM
+#if USE_MEMFD || USE_POSIX_SHM
+#if USE_MEMFD
+    im.shmid = memfd_create("buffer", MFD_CLOEXEC | MFD_ALLOW_SEALING);
+    fcntl(im.shmid, F_ADD_SEALS, F_SEAL_SHRINK | F_SEAL_SEAL);
+#else
     char temp[] = "/nsst-XXXXXX";
     int32_t attempts = 16;
 
@@ -74,7 +80,7 @@ struct image create_shm_image(int16_t width, int16_t height) {
     } while (im.shmid < 0 && errno == EEXIST && attempts-- > 0);
 
     shm_unlink(temp);
-
+#endif
     if (im.shmid < 0) goto error;
 
     if (ftruncate(im.shmid, size) < 0) goto error;

@@ -9,6 +9,8 @@
 /* This allows better frames timing */
 #define USE_PPOLL @USE_PPOLL@
 
+#define USE_MEMFD @USE_MEMFD@
+
 #define USE_CLOCK_NANOSLEEP @USE_CLOCK_NANOSLEEP@
 
 /* Ability to override box drawing characters */
