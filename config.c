@@ -286,6 +286,7 @@ static struct option options[] = {
     X(int16, font_size, "font-size", "Font size in points", 0, 1, 1000),
     X(int16, font_size_step, "font-size-step", "Font size step in points", 1, 0, 250),
     X(int16, font_spacing, "font-spacing", "Additional spacing for individual symbols", 0, -100, 100),
+    X(boolean, force_wayland_csd, "force-wayland-csd", "Don't request SSD", false),
     X(string, force_mouse_mod, "force-mouse-mod", "Modifer to force mouse action", "T"),
     X(boolean, force_utf8_nrcs, "force-nrcs", "Enable NRCS translation when UTF-8 mode is enabled", false),
     X(boolean, force_scalable, "force-scalable", "Do not search for pixmap fonts", false),

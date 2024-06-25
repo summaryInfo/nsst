@@ -506,7 +506,8 @@ static void handle_xdg_toplevel_decoration_configure(void *data, struct zxdg_top
     (void)zxdg_toplevel_decoration_v1;
 
     if (mode != ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE) {
-        warn("Wayland compositor does not support server side decorations");
+        if (!win->cfg.force_wayland_csd)
+            warn("Wayland compositor does not support server side decorations");
     } else {
         get_plat(win)->use_ssd = true;
     }
@@ -544,7 +545,12 @@ static bool wayland_init_window(struct window *win) {
         if (!ww->decoration)
             return false;
         zxdg_toplevel_decoration_v1_add_listener(ww->decoration, &xdg_toplevel_decoration_listener, win);
-        zxdg_toplevel_decoration_v1_set_mode(ww->decoration, ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+        uint32_t mode = win->cfg.force_wayland_csd ?
+                ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE :
+                ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE;
+        zxdg_toplevel_decoration_v1_set_mode(ww->decoration, mode);
+    } else {
+        warn("Wayland compositor does not support server side decorations");
     }
 
     return true;
