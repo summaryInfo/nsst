@@ -61,6 +61,7 @@ struct wayland_window {
     struct {
         int32_t width;
         int32_t height;
+        bool resize;
     } pending_configure;
 
     struct extent output_size;

@@ -703,6 +703,8 @@ void run(void) {
                 if (need_read && term_read(win->term)) {
                     win->last_read = cur;
                     win->any_event_happend = true;
+                    if (pvtbl->after_read)
+                        pvtbl->after_read(win);
                 }
                 if (win->wait_for_redraw) {
                     /* If we are waiting for the frame to finish, we need to

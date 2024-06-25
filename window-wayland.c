@@ -184,9 +184,17 @@ static void wayland_enable_mouse_events(struct window *win, bool enabled) {
 }
 
 static bool wayland_resize_window(struct window *win, int16_t width, int16_t height) {
-    (void)win, (void)width, (void)height;
-    // TODO: Hmm... Can we at least resize windows??
+    get_plat(win)->pending_configure.resize = true;
+    get_plat(win)->pending_configure.width = width;
+    get_plat(win)->pending_configure.height = height;
     return false;
+}
+
+static void wayland_after_read(struct window *win) {
+    if (get_plat(win)->pending_configure.resize) {
+        handle_resize(win, get_plat(win)->pending_configure.width, get_plat(win)->pending_configure.height);
+        get_plat(win)->pending_configure.resize = false;
+    }
 }
 
 static void wayland_move_window(struct window *win, int16_t x, int16_t y) {
@@ -2008,6 +2016,7 @@ static struct platform_vtable wayland_vtable = {
     .fixup_geometry = wayland_fixup_geometry,
     .set_autorepeat = wayland_set_autorepeat,
     .draw_end = wayland_draw_done,
+    .after_read = wayland_after_read,
 
     .free = wayland_free,
 };

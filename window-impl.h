@@ -341,6 +341,7 @@ struct platform_vtable {
     struct extent (*get_position)(struct window *win);
     bool (*init_window)(struct window *win);
     void (*free_window)(struct window *win);
+    void (*after_read)(struct window *win);
     bool (*set_clip)(struct window *win, enum clip_target target);
     void (*bell)(struct window *win, uint8_t vol);
     void (*enable_mouse_events)(struct window *win, bool enabled);

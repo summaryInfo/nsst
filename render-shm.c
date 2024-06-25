@@ -251,6 +251,8 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
         get_shm(win)->boundc = 0;
     }
 
+    if (drawn_any && pvtbl->draw_end)
+        pvtbl->draw_end(win);
 
     return drawn_any;
 }
