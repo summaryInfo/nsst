@@ -3,24 +3,19 @@ Roadmap
 
 ## Future versions
 
-### Until 2.5
-
-* Wayland
-  * Support `wl_output` for screen size reporting and dynamic DPI
-  * Use frame callabacks to prevent fast rendering
-    * Make window inactive until `callback.done` is received
-
 ### Until 2.6
 
 _NOTE: These plans can change any time_
 
 * Wayland
-  * Support multiple backend creation
+  * (BUG) Sometimes old cursor is not getting damaged
+      * E.g. on Cava shutdown
+  * Dynamically change window DPI depending on the output
   * Log all events (optional: `WAYLAND_DEBUG` exists)
-  * Support hidpi. Scale surface content
-  * Support simple CSD
-  * Use memfd for shared memory
+  * Support xdg-activation-v1
+  * Support HiDPI. Scale surface content
   * Explicitly specify required versions of protocols
+  * Add setting to force CSD
 
 * Refactor code
     * Make poller mode sophisticated
@@ -29,6 +24,10 @@ _NOTE: These plans can change any time_
     * Use list.h everywhere
 
 ### Until 2.7 (or later)
+
+* Wayland
+  * Support better CSD decorations
+  * Support server side cursors
 
 * Refactor screen arrays
   * Lazy resizing?
@@ -90,8 +89,6 @@ _NOTE: These plans can change any time_
 * MIT-SHM (software)
 
   * Threaded rendering?
-
-* Wayland (**EVERYTHING**)
 
 ### Input
 
