@@ -239,7 +239,7 @@ void window_request_scroll_flush(struct window *win) {
 void window_bell(struct window *win, uint8_t vol) {
     if (!win->focused) {
         if (term_is_bell_raise_enabled(win->term))
-            window_action(win, action_restore_minimized);
+            window_action(win, action_raise);
         if (term_is_bell_urgent_enabled(win->term))
             pvtbl->set_urgency(win, 1);
     }
