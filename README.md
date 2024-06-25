@@ -1,15 +1,15 @@
 Not So Simple Terminal
 ======================
-This is an implementation of VT220-like X11 terminal emulator.
+This is an implementation of VT220-like X11/Wayland terminal emulator.
 
 ## Features
 * Quite fast rendering
     * Almost same latency as `XTerm`, which is a lot lower than for other modern terminals
     * Scrolling performance is on par with fastest terminals on my system (`alacritty` and `urxvt`)
 * Small size and almost no dependencies
-* Uses xcb as X11 interface library
+* Uses xcb for X11 and libwayland for Wayland directly,
     * A little bit faster because of its asynchrony
-    * `size` including all loaded shared libs is only 80% of `st` on my system
+    * `size` including all loaded shared libs is only 80% of `st` on my system for X11
 * Most escape sequences from XTerm are implemented
 * Full keyboard mode from XTerm
 * Synchronous updates DCS
@@ -20,7 +20,7 @@ This is an implementation of VT220-like X11 terminal emulator.
     * `nsstc` client that can create new terminal daemon
     * Daemon can be auto-launched by `nsstc` on demand (`nsstc -d ...`)
 * Configuration with symmetrical config file options and command line arguments
-* MIT-SHM and XRender backends
+* X11 MIT-SHM, X11 XRender and Wayland `wl_shm` backends
 * Compiles with `-flto` by default
 * No warnings (see list of all enabled warnings in Makefile)
 * Re-wraps text on resize
@@ -29,6 +29,7 @@ This is an implementation of VT220-like X11 terminal emulator.
 * Can copy tab characters
 
 See TODO file for things that are to be implemented.
+Importantly wayland backend is in-progress and lacks some features (e.g. CSD), but generally usable.
 
 ## Source structure
 
@@ -45,8 +46,10 @@ See TODO file for things that are to be implemented.
 * `nsstc.c` -- Thin client that is able to connect to nsst daemon
 * `nsst.c` -- `main` function and arguments parsing
 * `poller.c` -- Event handling (`poll()` wrapper)
-* `render-x11xrender.c` -- X11 XRender backend
-* `render-x12shm.c` -- X11 MIT-SHM backend
+* `render-xrender-x11.c` -- X11 XRender backend
+* `render-shm.c` -- common software rendening code
+* `render-shm-x11.c` -- X11 MIT-SHM backend
+* `render-shm-wayland.c` -- Wayland `wl_shm` backend
 * `screen.c` -- Screen manipulation routines
 * `term.c` -- Terminal logic
 * `tty.c` -- Low level TTY/PTY code
@@ -54,6 +57,7 @@ See TODO file for things that are to be implemented.
 * `util.c` -- General utilities (encoding/decoding and logging)
 * `window.c` -- Common window code
 * `window-x11.c` -- X11 specific window code
+* `window-wayland.c` -- Wayland specific window code
 
 ## Notes
 
@@ -166,19 +170,29 @@ _FIXME: write terminal integration snippets for most shells._
 
 #### Void Linux
 
-    xbps-install libxcb-devel libxkbcommon-devel \
-        fontconfig-devel freetype-devel
+    xbps-install libxkbcommon-devel fontconfig-devel freetype-devel
+    # For X11
+    xbps-install libxcb-devel
+    # For Wayland
+    xbps-install wayland-devel wayland-protocols
 
 #### Arch Linux and derivatives
 
-    pacman -S libxcb libxkbcommon libxkbcommon-x11 \
-        fontconfig freetype2
+    pacman -S libxkbcommon fontconfig freetype2
+    # For X11
+    pacman -S libxcb libxkbcommon-x11
+    # For Wayland
+    pacman -S wayland wayland-protocols
 
 #### Debian and derivatives
 
     apt update
+    apt install libxkbcommon-dev libfontconfig1-dev libfreetype-dev
+    # For X11
     apt install libx11-xcb-dev libxcb-shm0-dev libxcb-render0-dev \
-        libxkbcommon-dev xkbcommon-x11-dev libfontconfig1-dev libfreetype-dev
+        xkbcommon-x11-dev
+    # For Wayland
+    apt install libwayland-dev wayland-protocols
 
 ## How to get it
 
@@ -207,7 +221,9 @@ It's more relevant for MIT-SHM backend.
 XRender backend is slightly faster in general,
 but a lot slower in some corner cases (e.g. small font and a lot of true color cells).
 XRender backend is default.
-In order to switch to MIT-SHM backend use `--backend=x11shm`.
+In order to force MIT-SHM backend use `--backend=x11shm`.
+In order to switch to Wayland use `--backend=waylandshm`.
+By default wayland is used if available.
 
 See `./configure --help` for more.
 
