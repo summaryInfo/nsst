@@ -10,24 +10,20 @@ _NOTE: These plans can change any time_
 * Wayland
   * (BUG) Sometimes old cursor is not getting damaged
       * E.g. on Cava shutdown
-  * Dynamically change window DPI depending on the output
+      * Font resize right bottom border artifact
+  * Dynamically change window DPI/subpixel mode depending on the output
   * Log all events (optional: `WAYLAND_DEBUG` exists)
-  * Support xdg-activation-v1
   * Support HiDPI. Scale surface content
   * Explicitly specify required versions of protocols
-  * Add setting to force CSD
-
-* Refactor code
-    * Make poller mode sophisticated
-        * Use callbacks and userspace timer queue?
-    * Make title encoding more straight forward
-    * Use list.h everywhere
-
-### Until 2.7 (or later)
-
-* Wayland
+  * Fractional scale
   * Support better CSD decorations
   * Support server side cursors
+  * Support xdg-activation-v1
+
+* Cleanup poller
+    * Use callbacks and userspace timer queue?
+
+### Until 2.7 (or later)
 
 * Refactor screen arrays
   * Lazy resizing?
