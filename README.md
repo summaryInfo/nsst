@@ -29,7 +29,6 @@ This is an implementation of VT220-like X11/Wayland terminal emulator.
 * Can copy tab characters
 
 See TODO file for things that are to be implemented.
-Importantly wayland backend is in-progress and lacks some features (e.g. CSD), but generally usable.
 
 ## Source structure
 
@@ -153,6 +152,17 @@ To make T-N open window in current directory make sure to wrap `cd` to output `\
 To enable selecting whole command output (with Alt+triple click) additionally put `\033]133;D\a` at the end of the right prompt or before the beginning of the command output.
 
 _FIXME: write terminal integration snippets for most shells._
+
+### Wayland CSD
+
+This implementation does not have first class support of CSD decorations, trying to rely on SSD instead.
+Despite that terminal provides some mouse controls when SSD are not available:
+
+* Use **Right** mouse button on the border to resize
+* Use **Left** mouse button on the border to move
+* Use **Middle** mouse button on the **top** border to close the window
+* Scroll **up** on the top border to set maximized or fullscreen (in order)
+* Scroll **down** on the top border to set maximized, normal or minimized (in order)
 
 ## Dependencies
 ### Build
