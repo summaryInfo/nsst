@@ -786,19 +786,28 @@ static void parse_config(struct instance_config *cfg, bool allow_global) {
      * If file is not found in those places, just give up */
 
     if (path) fd = open(path, O_RDONLY);
-    if (fd < 0) {
-        const char *xdg_cfg = getenv("XDG_CONFIG_HOME");
-        if (xdg_cfg) {
-            snprintf(pathbuf, sizeof pathbuf, "%s/nsst.conf", xdg_cfg);
-            fd = open(pathbuf, O_RDONLY);
-        }
+
+    const char *xdg_cfg = getenv("XDG_CONFIG_HOME");
+    const char *home = getenv("HOME");
+
+    if (fd < 0 && xdg_cfg) {
+        snprintf(pathbuf, sizeof pathbuf, "%s/nsst.conf", xdg_cfg);
+        fd = open(pathbuf, O_RDONLY);
     }
-    if (fd < 0) {
-        const char *home = getenv("HOME");
-        if (home) {
-            snprintf(pathbuf, sizeof pathbuf, "%s/.config/nsst.conf", home);
-            fd = open(pathbuf, O_RDONLY);
-        }
+
+    if (fd < 0 && xdg_cfg) {
+        snprintf(pathbuf, sizeof pathbuf, "%s/nsst/nsst.conf", xdg_cfg);
+        fd = open(pathbuf, O_RDONLY);
+    }
+
+    if (fd < 0 && home) {
+        snprintf(pathbuf, sizeof pathbuf, "%s/.config/nsst.conf", home);
+        fd = open(pathbuf, O_RDONLY);
+    }
+
+    if (fd < 0 && home) {
+        snprintf(pathbuf, sizeof pathbuf, "%s/.config/nsst/nsst.conf", home);
+        fd = open(pathbuf, O_RDONLY);
     }
 
     if (fd < 0) {
