@@ -319,12 +319,15 @@ void wayland_update_window_props(struct window *win) {
 void wayland_fixup_geometry(struct window *win) {
     win->cfg.geometry.r.x = 0;
     win->cfg.geometry.r.y = 0;
+    win->cfg.geometry.stick_to_bottom = false;
+    win->cfg.geometry.stick_to_right = false;
 
     if (win->cfg.geometry.char_geometry) {
         int16_t ch = MAX(win->cfg.geometry.r.height, 1);
         int16_t cw = MAX(win->cfg.geometry.r.width, 2);
         win->cfg.geometry.r.width = win->char_width * cw + win->cfg.left_border * 2;
         win->cfg.geometry.r.height = (win->char_height + win->char_depth) * ch + win->cfg.top_border * 2;
+        win->cfg.geometry.char_geometry = false;
     }
 }
 

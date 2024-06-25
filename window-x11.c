@@ -487,6 +487,7 @@ void x11_fixup_geometry(struct window *win) {
         win->cw = MAX(win->cfg.geometry.r.width, 1);
         win->cfg.geometry.r.width = win->char_width * win->cw + win->cfg.left_border * 2;
         win->cfg.geometry.r.height = (win->char_height + win->char_depth) * win->ch + win->cfg.top_border * 2;
+        win->cfg.geometry.char_geometry = false;
 
         struct extent ssize = x11_get_screen_size(win);
         if (win->cfg.geometry.stick_to_right)
