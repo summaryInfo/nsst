@@ -204,6 +204,7 @@ struct instance_config {
     bool fixed;
     bool force_scalable;
     bool force_utf8_nrcs;
+    bool force_utf8_title;
     bool force_wayland_csd;
     bool has_meta;
     bool keep_clipboard;

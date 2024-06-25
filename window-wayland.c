@@ -266,28 +266,12 @@ static void wayland_bell(struct window *win, uint8_t vol) {
     (void)win, (void)vol;
 }
 
-static char *latin1_dup_utf8(const char *src) {
-    // FIXME Factor out this code with term.c
-
-    size_t len = 1;
-    for (const char *it = src; *it; it++)
-        len += 1 + ((unsigned)*it > 0x7F);
-
-    uint8_t *dst = xalloc(len);
-    uint8_t *end = dst + len;
-
-    for (const char *it = src; *it; it++)
-        dst += utf8_encode(*it, dst, end);
-
-    *dst = 0;
-    return (char *)dst;
-}
-
 static void wayland_set_title(struct window *win, const char *title, bool utf8) {
     if (get_plat(win)->title)
         free(get_plat(win)->title);
 
-    get_plat(win)->title = utf8 ? strdup(title) : latin1_dup_utf8(title);
+    assert(utf8);
+    get_plat(win)->title = strdup(title);
     xdg_toplevel_set_title(get_plat(win)->xdg_toplevel, get_plat(win)->title);
 }
 
@@ -295,7 +279,8 @@ static void wayland_set_icon_label(struct window *win, const char *icon_title, b
     if (get_plat(win)->icon_title)
         free(get_plat(win)->icon_title);
 
-    get_plat(win)->icon_title = utf8 ? strdup(icon_title) : latin1_dup_utf8(icon_title);
+    assert(utf8);
+    get_plat(win)->icon_title = strdup(icon_title);
     // NOTE: Wayland does not support separate icon title
 }
 
@@ -522,6 +507,7 @@ static bool wayland_init_window(struct window *win) {
 
     // FIXME Remove manual FPS tracking at all
     win->cfg.fps = 1000;
+    win->cfg.force_utf8_title = true;
 
     list_init(&get_plat(win)->pointers);
 

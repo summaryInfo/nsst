@@ -414,7 +414,8 @@ static void term_do_reset(struct term *term, bool hard) {
         term->vt_level = term->vt_version / 100;
         if (!term->vt_level) term_set_vt52(term, 1);
 
-        window_set_title(win, target_icon_label | target_title, NULL, term->mode.title_set_utf8);
+        window_set_title(win, target_icon_label | target_title, NULL,
+                         term->mode.utf8 || term->mode.title_set_utf8);
     } else {
         screen_load_cursor_position(scr, cx, cy, cpending);
     }
@@ -952,15 +953,17 @@ static void term_dispatch_osc(struct term *term) {
             }
             dend = memchr(dstr, 0, ESC_MAX_STR);
         }
+
+        bool set_utf8 = term->mode.utf8 || window_cfg(term_window(term))->force_utf8_title;
         uint8_t *res = NULL;
-        if (term->mode.title_set_utf8 && !term->mode.utf8) {
+        if (term->mode.title_set_utf8 && !set_utf8) {
             uint8_t *dst = dstr;
             const uint8_t *ptr = dst;
             uint32_t val = 0;
             while (*ptr && utf8_decode(&val, &ptr, dend))
                 *dst++ = val;
             *dst = '\0';
-        } else if (!term->mode.title_set_utf8 && term->mode.utf8) {
+        } else if (!term->mode.title_set_utf8 && set_utf8) {
             res = xalloc(term->esc.str_len * 2 + 1);
             uint8_t *ptr = res, *src = dstr;
             if (res) {
@@ -969,7 +972,7 @@ static void term_dispatch_osc(struct term *term) {
                 dstr = res;
             }
         }
-        window_set_title(screen_window(scr), 3 - term->esc.selector, (char *)dstr, term->mode.utf8);
+        window_set_title(screen_window(scr), 3 - term->esc.selector, (char *)dstr, set_utf8);
         free(res);
         break;
     }

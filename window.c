@@ -456,7 +456,8 @@ struct window *create_window(struct instance_config *cfg) {
     };
     if (!win->term) goto error;
 
-    window_set_title(win, target_title | target_icon_label, NULL, win->cfg.utf8);
+    window_set_title(win, target_title | target_icon_label, NULL,
+                     win->cfg.utf8 || win->cfg.force_utf8_title);
 
     win->next = win_list_head;
     win->prev = NULL;
