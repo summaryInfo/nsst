@@ -42,8 +42,12 @@ enum shortcut_action {
 };
 
 enum renderer_backend {
+    renderer_auto,
+    renderer_x11,
+    renderer_wayland,
     renderer_x11_xrender,
     renderer_x11_shm,
+    renderer_wayland_shm,
 };
 
 enum keyboad_mapping {

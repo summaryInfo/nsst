@@ -320,6 +320,7 @@ static inline struct rect window_rect(struct window *win) {
 }
 
 const struct platform_vtable *platform_init_x11(struct instance_config *cfg);
+const struct platform_vtable *platform_init_wayland(struct instance_config *cfg);
 
 struct platform_vtable {
     /* Renderer dependent functions */
@@ -339,7 +340,7 @@ struct platform_vtable {
     struct extent (*get_position)(struct window *win);
     bool (*init_window)(struct window *win);
     void (*free_window)(struct window *win);
-    bool (*set_clip)(struct window *win, uint32_t time, enum clip_target target);
+    bool (*set_clip)(struct window *win, enum clip_target target);
     void (*bell)(struct window *win, uint8_t vol);
     void (*enable_mouse_events)(struct window *win, bool enabled);
     void (*get_pointer)(struct window *win, struct extent *ext, int32_t *mask);
@@ -355,7 +356,9 @@ struct platform_vtable {
     bool (*window_action)(struct window *win, enum window_action action);
     void (*update_props)(struct window *win);
     void (*fixup_geometry)(struct window *win);
+    void (*set_autorepeat)(struct window *win, bool set);
     struct image (*shm_create_image)(struct window *win, int16_t width, int16_t height);
+    void (*draw_done)(struct window *win);
 
     void (*free)(void);
 };

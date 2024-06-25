@@ -412,6 +412,9 @@ const char *features_string(void) {
 #if USE_XRENDER
             "+xrender"
 #endif
+#if USE_WAYLANDSHM
+            "+waylandshm"
+#endif
 #if USE_POSIX_SHM
             "+posixshm"
 #endif

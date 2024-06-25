@@ -14,10 +14,6 @@
 #define ROUNDUP(x, align) (((x) + (align) - 1) & ~((uintptr_t)(align) - 1))
 #define ROUNDDOWN(x, align) ((x) & ~((uintptr_t)(align) - 1))
 
-#define CONTAINEROF(ptr, T, member) ({ \
-    static_assert(IS_SAME_TYPE_(&((T*)0)->member, ptr), "Pointer type mismatch"); \
-    (T*)__builtin_assume_aligned((char *)ptr - offsetof(T, member), _Alignof(T)); })
-
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
@@ -31,6 +27,9 @@
 #define IS_SAME_TYPE_(a, b) __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
 #define IS_ARRAY_(arr) (!IS_SAME_TYPE_((arr), &(arr)[0]))
 #define MUST_BE_(e) (0*(size_t)sizeof(struct {_Static_assert(e, "Argument has wrong type");int dummy__;}))
+
+#define CONTAINEROF(ptr, T, member) ((T*)__builtin_assume_aligned((char *)ptr - offsetof(T, member), _Alignof(T)) \
+                                     + MUST_BE_(IS_SAME_TYPE_(&((T*)0)->member, ptr)))
 
 #define LEN(x) (sizeof(x)/sizeof((x)[0]) + MUST_BE_(IS_ARRAY_(x)))
 

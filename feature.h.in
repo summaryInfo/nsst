@@ -14,11 +14,20 @@
 /* Ability to override box drawing characters */
 #define USE_BOXDRAWING @USE_BOXDRAWING@
 
+/* X11 Support */
+#define USE_X11 @USE_X11@
+
 /* X11 Backend (MIT-SHM) */
 #define USE_X11SHM @USE_X11SHM@
 
 /* X11 Backend (XRender) */
 #define USE_XRENDER @USE_XRENDER@
+
+/* Wayland Support */
+#define USE_WAYLAND @USE_WAYLAND@
+
+/* Wayland Shared memory Backend Support */
+#define USE_WAYLANDSHM @USE_WAYLANDSHM@
 
 /* Unicode combining characters precomposition */
 #define USE_PRECOMPOSE @USE_PRECOMPOSE@

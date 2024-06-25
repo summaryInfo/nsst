@@ -75,7 +75,6 @@ bool shm_reload_font(struct window *win, bool need_free) {
         int bw = win->cfg.left_border, bh = win->cfg.top_border;
         image_draw_rect(get_shm(win)->im, (struct rect) {win->cw*cw + bw, bh, w - win->cw*cw - bw, win->ch*(ch + cd)}, win->bg_premul);
         image_draw_rect(get_shm(win)->im, (struct rect) {0, win->ch*(ch + cd) + bh, w, h - win->ch*(ch + cd) - bh}, win->bg_premul);
-
     } else {
         /* We need to resize window here if
          * it's size is specified in chracters */
@@ -296,15 +295,17 @@ void shm_resize(struct window *win, int16_t new_cw, int16_t new_ch) {
     int16_t xw = win->cw * win->char_width + win->cfg.left_border;
     int16_t xh = win->ch * (win->char_height + win->char_depth) + win->cfg.top_border;
 
-    if (delta_y > 0) image_draw_rect(get_shm(win)->im, (struct rect) { 0, common_h, common_w, height - common_h }, win->bg_premul);
-    else if (delta_y < 0) {
+    if (delta_y > 0) {
+        image_draw_rect(get_shm(win)->im, (struct rect) { 0, common_h, common_w, height - common_h }, win->bg_premul);
+    } else if (delta_y < 0) {
         image_draw_rect(get_shm(win)->im, (struct rect) { 0, xh, width, height - xh }, win->bg_premul);
-        win->redraw_borders = 1;
+        win->redraw_borders = true;
     }
 
-    if (delta_x > 0) image_draw_rect(get_shm(win)->im, (struct rect) { common_w, 0, width - common_w, height }, win->bg_premul);
-    else if (delta_x < 0) {
+    if (delta_x > 0) {
+        image_draw_rect(get_shm(win)->im, (struct rect) { common_w, 0, width - common_w, height }, win->bg_premul);
+    } else if (delta_x < 0) {
         image_draw_rect(get_shm(win)->im, (struct rect) { xw, 0, width - xw, xh }, win->bg_premul);
-        win->redraw_borders = 1;
+        win->redraw_borders = true;
     }
 }

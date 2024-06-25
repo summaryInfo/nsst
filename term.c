@@ -1156,7 +1156,7 @@ static void term_dispatch_osc(struct term *term) {
                 for (ssize_t i = 0; i < clip_MAX; i++) {
                     if (ts[i]) {
                         if (i == screen_selection(scr)->targ) screen_selection(scr)->targ = clip_invalid;
-                        window_set_clip(screen_window(scr), parg ? (uint8_t *)strdup((char *)parg) : parg, CLIP_TIME_NOW, i);
+                        window_set_clip(screen_window(scr), parg ? (uint8_t *)strdup((char *)parg) : parg, i);
                     }
                 }
             }

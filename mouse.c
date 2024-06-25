@@ -227,7 +227,7 @@ void selection_clear(struct selection_state *sel) {
     sel->seg_size = 1;
 
     if (sel->targ != clip_invalid && !sel->keep_selection) {
-        window_set_clip(sel->win, NULL, CLIP_TIME_NOW, sel->targ);
+        window_set_clip(sel->win, NULL, sel->targ);
         sel->targ = clip_invalid;
     }
 }
@@ -949,7 +949,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
 
         if (ev.event == mouse_event_release) {
             sel->targ = sel->select_to_clipboard ? clip_clipboard : clip_primary;
-            window_set_clip(sel->win, selection_data(sel), CLIP_TIME_NOW, sel->targ);
+            window_set_clip(sel->win, selection_data(sel), sel->targ);
         }
 #if USE_URI
     } else {

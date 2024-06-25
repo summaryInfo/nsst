@@ -563,8 +563,10 @@ static inline xcb_atom_t target_to_atom(enum clip_target target) {
     }
 }
 
-static bool x11_set_clip(struct window *win, uint32_t time, enum clip_target target) {
-    xcb_set_selection_owner(con, get_plat(win)->wid, target_to_atom(target), time);
+#define CLIP_TIME_NOW 0
+
+static bool x11_set_clip(struct window *win, enum clip_target target) {
+    xcb_set_selection_owner(con, get_plat(win)->wid, target_to_atom(target), CLIP_TIME_NOW);
     xcb_get_selection_owner_cookie_t so = xcb_get_selection_owner_unchecked(con, target_to_atom(target));
     xcb_get_selection_owner_reply_t *rep = xcb_get_selection_owner_reply(con, so, NULL);
     bool res = rep && rep->owner == get_plat(win)->wid;
@@ -937,15 +939,30 @@ static inline const char *backend_to_str(enum renderer_backend backend) {
         return "X11 MIT-SHM";
     case renderer_x11_xrender:
         return "X11 XRender";
+    case renderer_x11:
+        return "X11";
+    case renderer_wayland:
+        return "Wayland";
+    case renderer_auto:
+        return "Auto";
     default:
         return "UNKNOWN";
     }
 }
 
 const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
+    if (gconfig.backend != renderer_x11_xrender &&
+        gconfig.backend != renderer_x11_shm &&
+        gconfig.backend != renderer_x11 &&
+        gconfig.backend != renderer_auto) return NULL;
+
     int screenp = 0;
     con = xcb_connect(NULL, &screenp);
-    if (!con) die("Can't connect to X server");
+    if (!con) {
+        if (gconfig.backend == renderer_auto)
+            return NULL;
+        die("Can't connect to X server");
+    }
 
     poller_alloc_index(xcb_get_file_descriptor(con), POLLIN | POLLHUP);
 
@@ -1017,6 +1034,8 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
     if (dpi > 0) set_default_dpi(dpi, cfg);
 
     switch (gconfig.backend) {
+    case renderer_auto:
+    case renderer_x11:
 #if USE_XRENDER
     case renderer_x11_xrender:
         if (gconfig.trace_misc)

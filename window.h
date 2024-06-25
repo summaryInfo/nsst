@@ -120,15 +120,13 @@ void window_set_mouse(struct window *win, bool enabled);
 void window_set_colors(struct window *win, color_t bg, color_t cursor_fg);
 void window_get_pointer(struct window *win, int16_t *px, int16_t *py, uint32_t *pmask);
 enum cursor_type window_get_cursor(struct window *win);
-void window_set_clip(struct window *win, uint8_t *data, uint32_t time, enum clip_target target);
+void window_set_clip(struct window *win, uint8_t *data, enum clip_target target);
 void window_set_sync(struct window *win, bool state);
 bool window_get_sync(struct window *win);
 void window_set_autorepeat(struct window *win, bool state);
 bool window_get_autorepeat(struct window *win);
 void window_set_alpha(struct window *win, double alpha);
 struct instance_config *window_cfg(struct window *win);
-
-#define CLIP_TIME_NOW 0
 
 bool init_daemon(void);
 void free_daemon(void);

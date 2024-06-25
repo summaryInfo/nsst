@@ -53,8 +53,15 @@ static void handle_hup(int sig) {
 }
 
 
+const struct platform_vtable *platform_init_wayland(struct instance_config *cfg);
+
 void init_context(struct instance_config *cfg) {
-    pvtbl =  platform_init_x11(cfg);
+    if (!pvtbl && USE_WAYLAND)
+        pvtbl = platform_init_wayland(cfg);
+    if (!pvtbl && USE_X11)
+        pvtbl = platform_init_x11(cfg);
+    if (!pvtbl)
+        die("Cannot find suitable backend");
 
     sigaction(SIGUSR1, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART }, NULL);
     sigaction(SIGUSR2, &(struct sigaction){ .sa_handler = handle_sigusr1, .sa_flags = SA_RESTART }, NULL);
@@ -152,13 +159,13 @@ void window_get_pointer(struct window *win, int16_t *px, int16_t *py, uint32_t *
     if (pmask) *pmask = mask;
 }
 
-void window_set_clip(struct window *win, uint8_t *data, uint32_t time, enum clip_target target) {
+void window_set_clip(struct window *win, uint8_t *data, enum clip_target target) {
     if (target == clip_invalid) {
         warn("Invalid clipboard target");
         free(data);
         return;
     }
-    if (data && !pvtbl->set_clip(win, time, target)) {
+    if (data && !pvtbl->set_clip(win, target)) {
         free(data);
         data = NULL;
     }
@@ -204,6 +211,8 @@ bool window_get_sync(struct window *win) {
 }
 
 void window_set_autorepeat(struct window *win, bool state) {
+    if (pvtbl->set_autorepeat)
+        pvtbl->set_autorepeat(win, state);
     win->autorepeat = state;
 }
 
@@ -340,6 +349,7 @@ static void reload_window(struct window *win) {
     screen_damage_lines(term_screen(win->term), 0, win->ch);
 
     pvtbl->reload_font(win, true);
+    win->force_redraw = true;
 }
 
 static void do_reload_config(void) {
@@ -358,9 +368,9 @@ static void window_set_font(struct window *win, const char * name, int32_t size)
     if (size >= 0) win->cfg.font_size = size;
 
     if (reload) {
-        pvtbl->reload_font(win, 1);
+        pvtbl->reload_font(win, true);
         screen_damage_lines(term_screen(win->term), 0, win->ch);
-        win->force_redraw = 1;
+        win->force_redraw = true;
     }
 }
 
@@ -439,7 +449,7 @@ struct window *create_window(struct instance_config *cfg) {
 
     if (!pvtbl->init_window(win)) goto error;
 
-    if (!pvtbl->reload_font(win, 0)) goto error;
+    if (!pvtbl->reload_font(win, false)) goto error;
 
     win->term = create_term(win, MAX(win->cw, 2), MAX(win->ch, 1));
     win->rcstate = (struct render_cell_state) {
@@ -506,7 +516,10 @@ void free_window(struct window *win) {
 }
 
 bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg) {
-    return pvtbl->submit_screen(win, cur_x, cur_y, cursor, marg);
+    bool some = pvtbl->submit_screen(win, cur_x, cur_y, cursor, marg);
+    if (some && pvtbl->draw_done)
+        pvtbl->draw_done(win);
+    return some;
 }
 
 void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height) {
@@ -574,7 +587,7 @@ static void clip_copy(struct window *win, bool uri) {
             free(win->clipboard);
             win->clipboard = dup2;
         }
-        window_set_clip(win, dup, CLIP_TIME_NOW, clip_clipboard);
+        window_set_clip(win, dup, clip_clipboard);
     }
 }
 

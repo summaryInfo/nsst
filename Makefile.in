@@ -3,6 +3,7 @@ PERFIX ?= @PREFIX@
 BINDIR ?= @BINDIR@
 MANDIR ?= @MANDIR@
 SHAREDIR ?= @SHAREDIR@
+PKGCONFIG ?= pkg-config
 
 @VARS@
 
@@ -10,12 +11,11 @@ CFLAGS += -std=c11 -Wall -Wextra -Wpedantic @EXTRAWARNINGS@
 
 OBJ := @OBJECTS@
 
-LIBS != pkg-config @DEPS@ --libs
-INCLUES != pkg-config @DEPS@ --cflags
+LIBS != $(PKGCONFIG) @DEPS@ --libs
+INCLUES != $(PKGCONFIG) @DEPS@ --cflags
 
 LDLIBS += @LIBRT@ -lm -lutil $(LIBS)
 CFLAGS += $(INCLUES)
-
 
 all: $(NAME) $(NAME)c
 
@@ -48,6 +48,24 @@ $(NAME): $(OBJ)
 $(NAME)c: nsstc.o
 	$(CC) $(CFLAGS) $(LDFLAGS) nsstc.o -o $@
 
+window-wayland.o: xdg-decoration-protocol.h
+xdg-decoration-protocol.h:
+	$(WAYLANDSCANNER) client-header $(XDGDECORATIONPROTOCOL) $@
+xdg-decoration-protocol.c:
+	$(WAYLANDSCANNER) private-code $(XDGDECORATIONPROTOCOL) $@
+
+window-wayland.o: primary-selection-protocol.h
+primary-selection-protocol.h:
+	$(WAYLANDSCANNER) client-header $(PRIMARYSELECTIONPROTOCOL) $@
+primary-selection-protocol.c:
+	$(WAYLANDSCANNER) private-code $(PRIMARYSELECTIONPROTOCOL) $@
+
+window-wayland.o: xdg-shell-protocol.h
+xdg-shell-protocol.h:
+	$(WAYLANDSCANNER) client-header $(XDGSHELLPROTOCOL) $@
+xdg-shell-protocol.c:
+	$(WAYLANDSCANNER) private-code $(XDGSHELLPROTOCOL) $@
+
 nsstc.o: feature.h
 nsst.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h tty.h window.h hashtable.h multipool.h
 util.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h precompose-table.h hashtable.h width-table.h multipool.h
@@ -68,7 +86,10 @@ font.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h window.h hashtab
 image.o: feature.h util.h iswide.h image.h font.h hashtable.h
 window.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h mouse.h term.h window.h window-impl.h uri.h multipool.h
 window-x11.o: feature.h config.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h uri.h multipool.h
-render-x11shm.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h hashtable.h multipool.h
-render-x11xrender.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h hashtable.h multipool.h
+window-wayland.o: feature.h config.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-wayland.h uri.h multipool.h
+render-shm.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h hashtable.h multipool.h
+render-shm-wayland.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-wayland.h hashtable.h multipool.h
+render-shm-x11.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h hashtable.h multipool.h
+render-xrender-x11.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h hashtable.h multipool.h
 
 .PHONY: all clean install install-strip uninstall force
