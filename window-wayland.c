@@ -508,6 +508,9 @@ static struct zxdg_toplevel_decoration_v1_listener xdg_toplevel_decoration_liste
 static bool wayland_init_window(struct window *win) {
     struct wayland_window *ww = get_plat(win);
 
+    // FIXME Remove manual FPS tracking at all
+    win->cfg.fps = 1000;
+
     list_init(&get_plat(win)->pointers);
 
     ww->surface = wl_compositor_create_surface(ctx.compositor);
@@ -1877,8 +1880,24 @@ static void wayland_handle_events(void) {
     }
 }
 
+static void handle_callback_done(void *data, struct wl_callback *wl_callback, uint32_t callback_data) {
+    struct window *win = data;
+    (void)callback_data;
+    win->active = true;
+    wl_callback_destroy(wl_callback);
+}
+
+struct wl_callback_listener frame_callback_listener = {
+    .done = handle_callback_done,
+};
+
 static void wayland_draw_done(struct window *win) {
     wl_surface_attach(get_plat(win)->surface, get_plat(win)->buffer, 0, 0);
+
+    struct wl_callback *cb = wl_surface_frame(get_plat(win)->surface);
+    wl_callback_add_listener(cb, &frame_callback_listener, win);
+    win->active = false;
+
     wl_surface_commit(get_plat(win)->surface);
 }
 

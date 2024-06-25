@@ -815,7 +815,7 @@ static void x11_handle_events(void) {
             if (gconfig.trace_events) {
                 info("Event: event=UnmapNotify window=0x%x", ev->window);
             }
-            win->active = 0;
+            win->active = false;
             break;
         }
         case XCB_MAP_NOTIFY: {
@@ -824,7 +824,7 @@ static void x11_handle_events(void) {
             if (gconfig.trace_events) {
                 info("Event: event=MapNotify window=0x%x", ev->window);
             }
-            win->active = 1;
+            win->active = true;
             break;
         }
         case XCB_VISIBILITY_NOTIFY: {

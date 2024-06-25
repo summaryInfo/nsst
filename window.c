@@ -438,8 +438,8 @@ struct window *create_window(struct instance_config *cfg) {
     win->cursor_fg = win->cfg.palette[cfg->reverse_video ? SPECIAL_CURSOR_BG : SPECIAL_CURSOR_FG];
     win->bg_premul = color_apply_a(win->bg, win->cfg.alpha);
     win->autorepeat = win->cfg.autorepeat;
-    win->active = 1;
-    win->focused = 1;
+    win->active = true;
+    win->focused = true;
 
     if (!win->cfg.font_name) {
         free_window(win);
