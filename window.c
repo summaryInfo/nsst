@@ -533,11 +533,6 @@ void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height) {
     pvtbl->copy(win, (struct rect){xs, yd, width, height}, xs, ys);
 }
 
-void handle_expose(struct window *win, struct rect damage) {
-    if (intersect_with(&damage, &(struct rect) { 0, 0, win->cfg.geometry.r.width, win->cfg.geometry.r.height }))
-        pvtbl->update(win, damage);
-}
-
 static inline void window_wait_for_configure(struct window *win) {
     clock_gettime(CLOCK_TYPE, &win->wait_for_configure);
     TIMEINC(win->wait_for_configure, -2*win->cfg.wait_for_configure_delay*1000);

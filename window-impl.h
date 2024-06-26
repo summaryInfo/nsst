@@ -367,7 +367,6 @@ struct platform_vtable {
 };
 
 /* Platform independent functions */
-void handle_expose(struct window *win, struct rect damage);
 void handle_resize(struct window *win, int16_t width, int16_t height, bool artificial);
 void handle_focus(struct window *win, bool focused);
 void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t keycode);

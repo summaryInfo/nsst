@@ -684,7 +684,9 @@ static void x11_handle_events(void) {
                 info("Event: event=Expose win=0x%x x=%x y=%d width=%d height=%d",
                         ev->window, ev->x, ev->y, ev->width, ev->height);
             }
-            handle_expose(win, (struct rect){ev->x, ev->y, ev->width, ev->height});
+            struct rect damage = {ev->x, ev->y, ev->width, ev->height}, win_rect = window_rect(win);
+            if (intersect_with(&damage, &win_rect))
+                pvtbl->update(win, damage);
             break;
         }
         case XCB_CONFIGURE_NOTIFY: {
