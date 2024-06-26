@@ -123,7 +123,7 @@ void shm_recolor_border(struct window *win);
 bool shm_reload_font(struct window *win, bool need_free);
 bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
 void shm_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
-void shm_resize(struct window *win, int16_t new_cw, int16_t new_ch, bool artificial);
+void shm_resize(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw, int16_t new_ch, bool artificial);
 #endif
 
 #endif

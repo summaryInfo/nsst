@@ -49,6 +49,8 @@ static inline void view_adjust_wide_left(struct line_span *view, ssize_t x) {
 struct term *create_term(struct window *win, int16_t width, int16_t height);
 void free_term(struct term *term);
 void term_resize(struct term *term, int16_t width, int16_t height);
+bool term_is_requested_resize(struct term *term);
+void term_notify_resize(struct term *term, int16_t width, int16_t height, int16_t cw, int16_t ch);
 void term_handle_focus(struct term *term, bool focused);
 bool term_read(struct term *term);
 void term_scroll_view(struct term *term, int16_t amount);

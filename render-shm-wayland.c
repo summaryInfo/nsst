@@ -54,7 +54,7 @@ error:
 }
 
 struct extent wayland_shm_size(struct window *win, bool artificial) {
-    if (get_plat(win)->is_maximized || get_plat(win)->is_fullscreen || artificial)
+    if (artificial)
         return (struct extent) { win->cfg.geometry.r.width, win->cfg.geometry.r.height };
     return wayland_image_size(win);
 }

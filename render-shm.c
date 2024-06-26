@@ -274,7 +274,12 @@ void shm_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
     get_shm(win)->bounds[get_shm(win)->boundc++] = dst;
 }
 
-void shm_resize(struct window *win, int16_t new_cw, int16_t new_ch, bool artificial) {
+void shm_resize(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw, int16_t new_ch, bool artificial) {
+    win->cfg.geometry.r.width = new_w;
+    win->cfg.geometry.r.height = new_h;
+
+    if (!artificial && win->cw == new_cw && win->ch == new_ch) return;
+
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
 

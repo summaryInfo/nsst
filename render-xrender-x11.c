@@ -164,19 +164,22 @@ void x11_xrender_recolor_border(struct window *win) {
     do_draw_rects(win, rects, LEN(rects), win->bg_premul);
 }
 
-void x11_xrender_resize(struct window *win, int16_t new_cw, int16_t new_ch, bool artificial) {
+void x11_xrender_resize(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw, int16_t new_ch, bool artificial) {
+    win->cfg.geometry.r.width = new_w;
+    win->cfg.geometry.r.height = new_h;
+
+    if (win->cw == new_cw && win->ch == new_ch) return;
+    (void)artificial;
+
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
 
     win->cw = new_cw;
     win->ch = new_ch;
 
-    (void)artificial;
+    struct extent bx = x11_image_size(win);
 
-    int16_t width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1;
-    int16_t height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1;
-
-    xcb_create_pixmap(con, TRUE_COLOR_ALPHA_DEPTH, get_plat(win)->pid2, get_plat(win)->wid, width, height);
+    xcb_create_pixmap(con, TRUE_COLOR_ALPHA_DEPTH, get_plat(win)->pid2, get_plat(win)->wid, bx.width, bx.height);
     uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
     uint32_t values3[3] = { 0, XCB_RENDER_POLY_EDGE_SMOOTH, XCB_RENDER_POLY_MODE_IMPRECISE };
     xcb_render_create_picture(con, get_plat(win)->pic2, get_plat(win)->pid2, rctx.pfargb, mask3, values3);
@@ -184,7 +187,7 @@ void x11_xrender_resize(struct window *win, int16_t new_cw, int16_t new_ch, bool
     SWAP(get_plat(win)->pid1, get_plat(win)->pid2);
     SWAP(get_plat(win)->pic1, get_plat(win)->pic2);
 
-    do_draw_rects(win, &(struct rect){0, 0, width, height}, 1, win->bg_premul);
+    do_draw_rects(win, &(struct rect){0, 0, bx.width, bx.height}, 1, win->bg_premul);
 
     int16_t common_w = MIN(new_cw, new_cw - delta_x) * win->char_width;
     int16_t common_h = MIN(new_ch, new_ch - delta_y) * (win->char_height + win->char_depth);

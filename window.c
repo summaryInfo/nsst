@@ -538,24 +538,39 @@ void handle_expose(struct window *win, struct rect damage) {
         pvtbl->update(win, damage);
 }
 
+static inline void window_wait_for_configure(struct window *win) {
+    clock_gettime(CLOCK_TYPE, &win->wait_for_configure);
+    TIMEINC(win->wait_for_configure, -2*win->cfg.wait_for_configure_delay*1000);
+}
+
 void handle_resize(struct window *win, int16_t width, int16_t height, bool artificial) {
+    int16_t new_cw = MAX(2, (width - 2*win->cfg.left_border)/win->char_width);
+    int16_t new_ch = MAX(1, (height - 2*win->cfg.top_border)/(win->char_height + win->char_depth));
 
-    win->cfg.geometry.r.width = width;
-    win->cfg.geometry.r.height = height;
+    if (new_cw != win->cw || new_ch != win->ch) {
+        /* First try to read from tty to empty out input queue since this is input
+         * from an application that is not yet aware about the resize. Don't try reading
+         * if it's a requested resize, since the application is already aware. */
+        if (term_is_requested_resize(win->term)) {
+            term_read(win->term);
+            window_wait_for_configure(win);
+        }
 
-    int16_t new_cw = MAX(2, (win->cfg.geometry.r.width - 2*win->cfg.left_border)/win->char_width);
-    int16_t new_ch = MAX(1, (win->cfg.geometry.r.height - 2*win->cfg.top_border)/(win->char_height+win->char_depth));
-    int16_t delta_x = new_cw - win->cw;
-    int16_t delta_y = new_ch - win->ch;
-
-    if (delta_x || delta_y) {
-        clock_gettime(CLOCK_TYPE, &win->wait_for_configure);
-        TIMEINC(win->wait_for_configure, -2*win->cfg.wait_for_configure_delay*1000);
-        term_resize(win->term, new_cw, new_ch);
-        pvtbl->resize(win, new_cw, new_ch, artificial);
-        clock_gettime(CLOCK_TYPE, &win->last_read);
+        /* Notify application and delay window redraw expecting the application to redraw
+         * itself to reduce visual artifacts. */
+        term_notify_resize(win->term, width, height, new_cw, new_ch);
         window_delay_redraw(win);
+
+        term_resize(win->term, new_cw, new_ch);
+        clock_gettime(CLOCK_TYPE, &win->last_read);
+
+        // FIXME: Hack! Need to move active size from geometry
+        win->cfg.geometry.r.width = 0;
     }
+
+    if (width != win->cfg.geometry.r.width || height != win->cfg.geometry.r.height)
+        pvtbl->resize(win, width, height, new_cw, new_ch, artificial);
+
 }
 
 void handle_focus(struct window *win, bool focused) {

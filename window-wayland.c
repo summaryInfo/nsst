@@ -373,9 +373,9 @@ void handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, u
 
     uint32_t width = get_plat(win)->pending_configure.width ? get_plat(win)->pending_configure.width : win->cfg.geometry.r.width;
     uint32_t height = get_plat(win)->pending_configure.height ? get_plat(win)->pending_configure.height : win->cfg.geometry.r.height;
-    //xdg_surface_set_window_geometry(xdg_surface, 0, 0, width, height);
+    bool exact = get_plat(win)->is_maximized || get_plat(win)->is_fullscreen || get_plat(win)->is_tiled;
 
-    handle_resize(win, width, height, false);
+    handle_resize(win, width, height, exact);
 
     wl_surface_attach(get_plat(win)->surface, get_plat(win)->buffer, 0, 0);
     wl_surface_commit(get_plat(win)->surface);
@@ -424,6 +424,7 @@ void handle_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel
         case XDG_TOPLEVEL_STATE_TILED_TOP:
         case XDG_TOPLEVEL_STATE_TILED_BOTTOM:
             get_plat(win)->is_tiled = true;
+            break;
         default:
             break;
         }

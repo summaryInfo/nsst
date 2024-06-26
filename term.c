@@ -3717,21 +3717,17 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
     tty_write(&term->tty, encode ? rep : str, len, term->mode.crlf);
 }
 
+bool term_is_requested_resize(struct term *term) {
+    return term->requested_resize;
+}
+
+void term_notify_resize(struct term *term, int16_t width, int16_t height, int16_t cw, int16_t ch) {
+    tty_set_winsz(&term->tty, cw, ch, width, height);
+}
+
 void term_resize(struct term *term, int16_t width, int16_t height) {
-    struct screen *scr = &term->scr;
-
-    /* First try to read from tty to empty out input queue
-     * since this is input from program not yet aware about resize.
-     * Don't empty if it's requested resize, since application is already aware. */
-    if (!term->requested_resize)
-        term_read(term);
     term->requested_resize = false;
-
-    /* Notify application */
-    struct extent ext = window_get_size(screen_window(scr));
-    tty_set_winsz(&term->tty, width, height, ext.width, ext.height);
-
-    screen_resize(scr, width, height);
+    screen_resize(&term->scr, width, height);
 }
 
 struct term *create_term(struct window *win, int16_t width, int16_t height) {
@@ -3756,6 +3752,10 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
     if (!term->vt_level) term_set_vt52(term, 1);
 
     screen_free_scrollback(&term->scr, window_cfg(win)->scrollback_size);
+
+    struct extent ext = window_get_size(win);
+    term_notify_resize(term, ext.width, ext.height, width, height);
+
     term_resize(term, width, height);
 
     return term;
