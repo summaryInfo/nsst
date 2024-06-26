@@ -14,7 +14,7 @@ use_x11xrender=1
 use_waylandshm=unset
 cflags='-O2 -flto=auto'
 vars=
-version=20503
+version=20504
 
 # Test some features by trying compiling snippets
 linkrt=' -lrt '
