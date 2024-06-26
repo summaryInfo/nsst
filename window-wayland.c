@@ -301,21 +301,24 @@ void wayland_update_window_props(struct window *win) {
     wl_surface_commit(get_plat(win)->surface);
 }
 
-struct extent wayland_fixup_geometry(struct window *win) {
+void wayland_fixup_geometry(struct window *win) {
     win->cfg.geometry.r.x = 0;
     win->cfg.geometry.r.y = 0;
     win->cfg.geometry.stick_to_bottom = false;
     win->cfg.geometry.stick_to_right = false;
 
     if (win->cfg.geometry.char_geometry) {
-        int16_t ch = MAX(win->cfg.geometry.r.height, 1);
         int16_t cw = MAX(win->cfg.geometry.r.width, 2);
+        int16_t ch = MAX(win->cfg.geometry.r.height, 1);
         win->cfg.geometry.r.width = win->char_width * cw + win->cfg.left_border * 2;
         win->cfg.geometry.r.height = (win->char_height + win->char_depth) * ch + win->cfg.top_border * 2;
         win->cfg.geometry.char_geometry = false;
+        win->cw = cw;
+        win->ch = ch;
+    } else {
+        win->cw = MAX(2, (win->cfg.geometry.r.width - 2*win->cfg.left_border) / win->char_width);
+        win->ch = MAX(1, (win->cfg.geometry.r.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
     }
-
-    return wayland_image_size(win);
 }
 
 static void handle_surface_enter(void *data, struct wl_surface *wl_surface, struct wl_output *wl_output) {
@@ -1984,15 +1987,6 @@ static void wayland_draw_done(struct window *win) {
 }
 
 static struct platform_vtable wayland_vtable = {
-    /* Renderer dependent functions */
-    .update = NULL,
-    .reload_font = NULL,
-    .resize = NULL,
-    .copy = NULL,
-    .submit_screen = NULL,
-    .adjust_size = NULL,
-
-    /* Platform dependent functions */
     .get_screen_size = wayland_get_screen_size,
     .has_error = wayland_has_error,
     .get_opaque_size = wayland_get_opaque_size,
@@ -2020,7 +2014,6 @@ static struct platform_vtable wayland_vtable = {
     .set_autorepeat = wayland_set_autorepeat,
     .draw_end = wayland_draw_done,
     .after_read = wayland_after_read,
-
     .free = wayland_free,
 };
 
@@ -2151,10 +2144,10 @@ const struct platform_vtable *platform_init_wayland(struct instance_config *cfg)
         wayland_vtable.update = wayland_shm_update;
         wayland_vtable.reload_font = shm_reload_font;
         wayland_vtable.resize = shm_resize;
+        wayland_vtable.resize_exact = wayland_shm_resize_exact;
         wayland_vtable.copy = shm_copy;
         wayland_vtable.submit_screen = shm_submit_screen;
         wayland_vtable.shm_create_image = wayland_shm_create_image;
-        wayland_vtable.adjust_size = wayland_shm_size;
         ctx.renderer_recolor_border = shm_recolor_border;
         ctx.renderer_free = wayland_shm_free;
         ctx.renderer_free_context = wayland_shm_free_context;

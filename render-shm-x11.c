@@ -80,11 +80,6 @@ void x11_shm_update(struct window *win, struct rect rect) {
     }
 }
 
-struct extent x11_shm_size(struct window *win, bool artificial) {
-    (void)artificial;
-    return x11_image_size(win);
-}
-
 void x11_shm_free(struct window *win) {
     if (has_fast_damage)
         xcb_shm_detach(con, get_plat(win)->shm_seg);

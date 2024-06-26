@@ -78,7 +78,8 @@ bool shm_reload_font(struct window *win, bool need_free) {
     } else {
         /* We need to resize window here if
          * it's size is specified in chracters */
-        struct extent bx = pvtbl->fixup_geometry(win);
+        pvtbl->fixup_geometry(win);
+        struct extent bx = win_image_size(win);
 
         resize_bounds(win, 1);
 
@@ -275,10 +276,17 @@ void shm_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
 }
 
 void shm_resize(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw, int16_t new_ch, bool artificial) {
+    int16_t old_w = win->cfg.geometry.r.width;
+    int16_t old_h = win->cfg.geometry.r.height;
+
     win->cfg.geometry.r.width = new_w;
     win->cfg.geometry.r.height = new_h;
 
-    if (!artificial && win->cw == new_cw && win->ch == new_ch) return;
+    if (win->cw == new_cw && win->ch == new_ch) {
+        if (artificial && pvtbl->resize_exact)
+            pvtbl->resize_exact(win, new_w, new_h, old_w, old_h);
+        return;
+    }
 
     int16_t delta_x = new_cw - win->cw;
     int16_t delta_y = new_ch - win->ch;
@@ -286,15 +294,11 @@ void shm_resize(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw
     win->cw = new_cw;
     win->ch = new_ch;
 
-    struct extent sz = pvtbl->adjust_size(win, artificial);
+    struct extent sz = win_image_size(win);
+    int16_t common_w = MIN(sz.width, sz.width  - delta_x * win->char_width);
+    int16_t common_h = MIN(sz.height, sz.height - delta_y * (win->char_height + win->char_depth));
 
-    int16_t width = sz.width;
-    int16_t height = sz.height;
-
-    int16_t common_w = MIN(width, width  - delta_x * win->char_width);
-    int16_t common_h = MIN(height, height - delta_y * (win->char_height + win->char_depth));
-
-    struct image old = pvtbl->shm_create_image(win, width, height);
+    struct image old = pvtbl->shm_create_image(win, sz.width, sz.height);
     image_copy(get_shm(win)->im, (struct rect){0, 0, common_w, common_h}, old, 0, 0);
     free_image(&old);
 
@@ -304,16 +308,16 @@ void shm_resize(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw
     int16_t xh = win->ch * (win->char_height + win->char_depth) + win->cfg.top_border;
 
     if (delta_y > 0) {
-        image_draw_rect(get_shm(win)->im, (struct rect) { 0, common_h, common_w, height - common_h }, win->bg_premul);
+        image_draw_rect(get_shm(win)->im, (struct rect) { 0, common_h, common_w, sz.height - common_h }, win->bg_premul);
     } else if (delta_y < 0) {
-        image_draw_rect(get_shm(win)->im, (struct rect) { 0, xh, width, height - xh }, win->bg_premul);
+        image_draw_rect(get_shm(win)->im, (struct rect) { 0, xh, sz.width, sz.height - xh }, win->bg_premul);
         win->redraw_borders = true;
     }
 
     if (delta_x > 0) {
-        image_draw_rect(get_shm(win)->im, (struct rect) { common_w, 0, width - common_w, height }, win->bg_premul);
+        image_draw_rect(get_shm(win)->im, (struct rect) { common_w, 0, sz.width - common_w, sz.height }, win->bg_premul);
     } else if (delta_x < 0) {
-        image_draw_rect(get_shm(win)->im, (struct rect) { xw, 0, width - xw, xh }, win->bg_premul);
+        image_draw_rect(get_shm(win)->im, (struct rect) { xw, 0, sz.width - xw, xh }, win->bg_premul);
         win->redraw_borders = true;
     }
 }

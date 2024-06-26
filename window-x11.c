@@ -482,10 +482,10 @@ static void x11_move_resize(struct window *win, struct rect r) {
         XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
 }
 
-struct extent x11_fixup_geometry(struct window *win) {
+void x11_fixup_geometry(struct window *win) {
     if (win->cfg.geometry.char_geometry) {
         win->ch = MAX(win->cfg.geometry.r.height, 1);
-        win->cw = MAX(win->cfg.geometry.r.width, 1);
+        win->cw = MAX(win->cfg.geometry.r.width, 2);
         win->cfg.geometry.r.width = win->char_width * win->cw + win->cfg.left_border * 2;
         win->cfg.geometry.r.height = (win->char_height + win->char_depth) * win->ch + win->cfg.top_border * 2;
         win->cfg.geometry.char_geometry = false;
@@ -498,11 +498,9 @@ struct extent x11_fixup_geometry(struct window *win) {
 
         x11_move_resize(win, win->cfg.geometry.r);
     } else {
-        win->cw = MAX(1, (win->cfg.geometry.r.height - 2*win->cfg.left_border) / win->char_width);
-        win->ch = MAX(1, (win->cfg.geometry.r.width - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
+        win->cw = MAX(2, (win->cfg.geometry.r.width - 2*win->cfg.left_border) / win->char_width);
+        win->ch = MAX(1, (win->cfg.geometry.r.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
     }
-
-    return x11_image_size(win);
 }
 
 static bool x11_init_window(struct window *win) {
@@ -904,15 +902,6 @@ static void x11_free(void) {
 }
 
 static struct platform_vtable x11_vtable = {
-    /* Renderer dependent functions */
-    .update = NULL,
-    .reload_font = NULL,
-    .resize = NULL,
-    .copy = NULL,
-    .submit_screen = NULL,
-    .adjust_size = NULL,
-
-    /* Platform dependent functions */
     .get_screen_size = x11_get_screen_size,
     .has_error = x11_has_error,
     .get_opaque_size = x11_get_opaque_size,
@@ -937,7 +926,6 @@ static struct platform_vtable x11_vtable = {
     .window_action = x11_window_action,
     .update_props = x11_update_window_props,
     .fixup_geometry = x11_fixup_geometry,
-
     .free = x11_free,
 };
 
@@ -1069,7 +1057,6 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
         x11_vtable.copy = shm_copy;
         x11_vtable.submit_screen = shm_submit_screen;
         x11_vtable.shm_create_image = x11_shm_create_image;
-        x11_vtable.adjust_size = x11_shm_size;
         ctx.renderer_recolor_border = shm_recolor_border;
         ctx.renderer_free = x11_shm_free;
         ctx.renderer_free_context = x11_shm_free_context;

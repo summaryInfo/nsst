@@ -32,6 +32,7 @@ struct wayland_window {
         struct {
             struct platform_shm shm;
             struct wl_buffer *buffer;
+            struct wl_shm_pool *pool;
         };
 #endif
     };
@@ -104,18 +105,12 @@ static inline void win_ptr_ping(struct window_ptr *ptr) {
     }
 }
 
-static inline struct extent wayland_image_size(struct window *win) {
-    return (struct extent) {
-        .width = win->cw * win->char_width + 2*win->cfg.left_border,
-        .height = win->ch * (win->char_height + win->char_depth) + 2*win->cfg.top_border,
-    };
-}
-
 #if USE_WAYLANDSHM
 void wayland_shm_init_context(void);
 void wayland_shm_free_context(void);
 void wayland_shm_free(struct window *win);
 void wayland_shm_update(struct window *win, struct rect rect);
+void wayland_shm_resize_exact(struct window *win, int16_t new_w, int16_t new_h, int16_t old_w, int16_t old_h);
 struct extent wayland_shm_size(struct window *win, bool artificial);
 struct image wayland_shm_create_image(struct window *win, int16_t width, int16_t height);
 

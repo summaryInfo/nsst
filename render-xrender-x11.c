@@ -177,7 +177,7 @@ void x11_xrender_resize(struct window *win, int16_t new_w, int16_t new_h, int16_
     win->cw = new_cw;
     win->ch = new_ch;
 
-    struct extent bx = x11_image_size(win);
+    struct extent bx = win_image_size(win);
 
     xcb_create_pixmap(con, TRUE_COLOR_ALPHA_DEPTH, get_plat(win)->pid2, get_plat(win)->wid, bx.width, bx.height);
     uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
@@ -239,15 +239,14 @@ bool x11_xrender_reload_font(struct window *win, bool need_free) {
     if (need_free) {
         handle_resize(win, win->cfg.geometry.r.width, win->cfg.geometry.r.height, true);
     } else {
-        /* We need to resize window here if
-         * it's size is specified in chracters */
-        struct extent bx = x11_fixup_geometry(win);
-        xcb_rectangle_t bound = { 0, 0, bx.width, bx.height };
+        /* We need to resize window here if it's size is specified in chracters */
+        x11_fixup_geometry(win);
+        struct extent bx = win_image_size(win);
 
         get_plat(win)->pid1 = xcb_generate_id(con);
         get_plat(win)->pid2 = xcb_generate_id(con);
 
-        c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, get_plat(win)->pid1, get_plat(win)->wid, bound.width, bound.height );
+        c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, get_plat(win)->pid1, get_plat(win)->wid, bx.width, bx.height );
         if (check_void_cookie(c)) {
             warn("Can't create pixmap");
             return 0;
@@ -265,7 +264,7 @@ bool x11_xrender_reload_font(struct window *win, bool need_free) {
             return 0;
         }
 
-        do_draw_rects(win, (struct rect *)&bound, 1, win->bg_premul);
+        do_draw_rects(win, &(struct rect) { 0, 0, bx.width, bx.height }, 1, win->bg_premul);
 
         xcb_pixmap_t pid = xcb_generate_id(con);
         c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, pid, get_plat(win)->wid, 1, 1);

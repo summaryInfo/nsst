@@ -75,13 +75,6 @@ static inline bool check_void_cookie(xcb_void_cookie_t ck) {
     return false;
 }
 
-static inline struct extent x11_image_size(struct window *win) {
-    return (struct extent) {
-        .width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1,
-        .height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1,
-    };
-}
-
 #if USE_X11SHM
 void x11_shm_init_context(void);
 void x11_shm_free_context(void);
@@ -111,6 +104,6 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
 
 void x11_update_window_props(struct window *win);
 struct extent x11_get_screen_size(struct window *win);
-struct extent x11_fixup_geometry(struct window *win);
+void x11_fixup_geometry(struct window *win);
 
 #endif

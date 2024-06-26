@@ -320,6 +320,14 @@ static inline struct rect window_rect(struct window *win) {
     return (struct rect) {0, 0, win->cfg.geometry.r.width, win->cfg.geometry.r.height};
 }
 
+FORCEINLINE
+static inline struct extent win_image_size(struct window *win) {
+    return (struct extent) {
+        .width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1,
+        .height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1,
+    };
+}
+
 const struct platform_vtable *platform_init_x11(struct instance_config *cfg);
 const struct platform_vtable *platform_init_wayland(struct instance_config *cfg);
 
@@ -328,9 +336,9 @@ struct platform_vtable {
     void (*update)(struct window *win, struct rect rect);
     bool (*reload_font)(struct window *win, bool need_free);
     void (*resize)(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw, int16_t new_ch, bool artificial);
+    void (*resize_exact)(struct window *win, int16_t new_w, int16_t new_h, int16_t old_w, int16_t old_h);
     void (*copy)(struct window *win, struct rect dst, int16_t sx, int16_t sy);
     bool (*submit_screen)(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
-    struct extent (*adjust_size)(struct window *win, bool artificial);
 
     /* Platform dependent functions */
     struct extent (*get_screen_size)(struct window *win);
@@ -358,7 +366,7 @@ struct platform_vtable {
     void (*update_colors)(struct window *win);
     bool (*window_action)(struct window *win, enum window_action action);
     void (*update_props)(struct window *win);
-    struct extent (*fixup_geometry)(struct window *win);
+    void (*fixup_geometry)(struct window *win);
     void (*set_autorepeat)(struct window *win, bool set);
     struct image (*shm_create_image)(struct window *win, int16_t width, int16_t height);
     void (*draw_end)(struct window *win);
