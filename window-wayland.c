@@ -279,6 +279,11 @@ static bool cursor_cmp(const ht_head_t *a, const ht_head_t *b) {
     return !strcmp(ua->name, ub->name);
 }
 
+static inline struct cursor *ref_cursor(struct cursor *csr) {
+    csr->refcount++;
+    return csr;
+}
+
 static struct cursor *get_cursor(const char *name) {
     if (!ctx.cursor_theme) return NULL;
 
@@ -331,6 +336,7 @@ static struct cursor *get_cursor(const char *name) {
 }
 
 static void put_cursor(struct cursor *csr) {
+    if (!csr) return;
     if (!--csr->refcount) {
         ht_erase(&ctx.cursors, &csr->link);
         wl_surface_destroy(csr->cursor_surface);
@@ -352,17 +358,14 @@ static void activate_cursor_for_seat(struct window *win, struct seat *seat, stru
 }
 
 static void do_select_cursor(struct window *win, struct cursor *csr) {
-    if (get_plat(win)->cursor)
-        put_cursor(get_plat(win)->cursor);
+    put_cursor(get_plat(win)->cursor);
 
     get_plat(win)->cursor = csr;
 
     LIST_FOREACH(it, &ctx.seats) {
         struct seat *seat = CONTAINEROF(it, struct seat, link);
-        if (seat->pointer.wptr.win == win) {
+        if (seat->pointer.wptr.win == win)
             activate_cursor_for_seat(win, seat, csr);
-            break;
-        }
     }
 }
 
@@ -659,6 +662,26 @@ static bool wayland_init_window(struct window *win) {
         warn("Wayland compositor does not support server side decorations");
     }
 
+    // FIXME Reload cursor upon setting reloading (pointer_shape can change)
+    // FIXME Try more cursor shapes, not just fall back to default one
+    // FIXME Cleanup
+
+    get_plat(win)->cursor_resize = get_cursor("size_all");
+    if (!get_plat(win)->cursor_resize)
+        get_plat(win)->cursor_resize = get_cursor("default");
+    get_plat(win)->cursor_uri = get_cursor("hand1");
+    if (!get_plat(win)->cursor_uri)
+        get_plat(win)->cursor_uri = get_cursor("pointing_hand");
+    if (!get_plat(win)->cursor_uri)
+        get_plat(win)->cursor_uri = get_cursor("default");
+    get_plat(win)->cursor_default = get_cursor(win->cfg.pointer_shape);
+    if (!get_plat(win)->cursor_default)
+        get_plat(win)->cursor_default = get_cursor("xterm");
+    if (!get_plat(win)->cursor_default)
+        get_plat(win)->cursor_default = get_cursor("ibeam");
+    if (!get_plat(win)->cursor_default)
+        get_plat(win)->cursor_default = get_cursor("default");
+
     return true;
 }
 
@@ -678,8 +701,11 @@ static void free_paste(struct active_paste *paste) {
 static void wayland_free_window(struct window *win) {
     ctx.renderer_free(win);
 
-    if (get_plat(win)->cursor)
-        put_cursor(get_plat(win)->cursor);
+    put_cursor(get_plat(win)->cursor);
+    put_cursor(get_plat(win)->cursor_uri);
+    put_cursor(get_plat(win)->cursor_resize);
+    put_cursor(get_plat(win)->cursor_default);
+
     if (get_plat(win)->primary_selection_source)
         zwp_primary_selection_source_v1_destroy(get_plat(win)->primary_selection_source);
     if (get_plat(win)->data_source)
@@ -1578,6 +1604,21 @@ static bool try_handle_csd_axis(struct window *win, struct seat *seat, int step,
     return true;
 }
 
+static struct cursor *cursor_for_position(struct window *win, int32_t x, int32_t y) {
+    bool left = x < win->cfg.border.left;
+    bool right = x > win->cw*win->char_width + win->cfg.border.left;
+    bool top = y < win->cfg.border.top;
+    bool bottom = y > win->ch*(win->char_height + win->char_depth) + win->cfg.border.top;
+
+    if ((left || right || top || bottom) && !get_plat(win)->use_ssd) {
+        return ref_cursor(get_plat(win)->cursor_resize);
+    } else {
+        if (win->rcstate.active_uri != EMPTY_URI && !win->rcstate.uri_pressed)
+            return ref_cursor(get_plat(win)->cursor_uri);
+        return ref_cursor(get_plat(win)->cursor_default);
+    }
+}
+
 static void handle_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
     struct seat *seat = data;
     (void)wl_pointer;
@@ -1631,6 +1672,15 @@ static void handle_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
     }
 
     if (seat->pointer.event_mask & (POINTER_EVENT_ENTER | POINTER_EVENT_MOTION)) {
+
+        /* Select appropriate cursor shape depending on context */
+        struct cursor *cursor = cursor_for_position(win, x, y);
+        if (get_plat(win)->cursor == cursor) {
+           put_cursor(cursor);
+        } else {
+            do_select_cursor(win, cursor);
+        }
+
         mouse_handle_input(win->term, (struct mouse_event) {
             .event = mouse_event_motion,
             .mask = seat->pointer.mask | seat->keyboard.mask,

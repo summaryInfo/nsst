@@ -46,7 +46,6 @@ struct context {
 
     hashtable_t cursors;
     xcb_cursor_t hidden_cursor;
-    struct cursor *cursor_xterm;
 
     struct atom_ {
         xcb_atom_t _NET_WM_PID;
@@ -407,6 +406,7 @@ static struct cursor *get_cursor(const char *name) {
 }
 
 static void put_cursor(struct cursor *csr) {
+    if (!csr) return;
     if (!--csr->refcount) {
         ht_erase(&ctx.cursors, &csr->link);
         xcb_free_cursor(con, csr->xcursor);
@@ -415,9 +415,13 @@ static void put_cursor(struct cursor *csr) {
     }
 }
 
+static inline struct cursor *ref_cursor(struct cursor *csr) {
+    csr->refcount++;
+    return csr;
+}
+
 static void do_select_cursor(struct window *win, struct cursor *csr) {
-    if (get_plat(win)->cursor)
-        put_cursor(get_plat(win)->cursor);
+    put_cursor(get_plat(win)->cursor);
 
     get_plat(win)->cursor = csr;
 
@@ -682,6 +686,23 @@ static bool x11_init_window(struct window *win) {
     c = xcb_create_gc_checked(con, get_plat(win)->gc, get_plat(win)->wid, mask2, values2);
     if (check_void_cookie(c)) return false;
 
+    // FIXME Reload cursor upon setting reloading (pointer_shape can change)
+    // FIXME Try more cursor shapes, not just fall back to default one
+    // FIXME Cleanup
+
+    get_plat(win)->cursor_uri = get_cursor("hand1");
+    if (!get_plat(win)->cursor_uri)
+        get_plat(win)->cursor_uri = get_cursor("pointing_hand");
+    if (!get_plat(win)->cursor_uri)
+        get_plat(win)->cursor_uri = get_cursor("default");
+    get_plat(win)->cursor_default = get_cursor(win->cfg.pointer_shape);
+    if (!get_plat(win)->cursor_default)
+        get_plat(win)->cursor_default = get_cursor("xterm");
+    if (!get_plat(win)->cursor_default)
+        get_plat(win)->cursor_default = get_cursor("ibeam");
+    if (!get_plat(win)->cursor_default)
+        get_plat(win)->cursor_default = get_cursor("default");
+
     return true;
 }
 
@@ -691,8 +712,9 @@ static void x11_map_window(struct window *win) {
 }
 
 static void x11_free_window(struct window *win) {
-    if (get_plat(win)->cursor)
-        put_cursor(get_plat(win)->cursor);
+    put_cursor(get_plat(win)->cursor);
+    put_cursor(get_plat(win)->cursor_default);
+    put_cursor(get_plat(win)->cursor_uri);
 
     if (get_plat(win)->wid) {
         xcb_unmap_window(con, get_plat(win)->wid);
@@ -815,6 +837,12 @@ static void x11_flush(void) {
     xcb_flush(con);
 }
 
+static struct cursor *cursor_for_position(struct window *win) {
+    if (win->rcstate.active_uri != EMPTY_URI && !win->rcstate.uri_pressed)
+        return ref_cursor(get_plat(win)->cursor_uri);
+    return ref_cursor(get_plat(win)->cursor_default);
+}
+
 static void x11_handle_events(void) {
     for (xcb_generic_event_t *event, *nextev = NULL; nextev || (event = xcb_poll_for_event(con)); free(event)) {
         if (nextev) event = nextev, nextev = NULL;
@@ -891,6 +919,12 @@ static void x11_handle_events(void) {
                         ev->response_type == XCB_BUTTON_RELEASE ? "ButtonRelease" : "MotionNotify",
                         ev->state, ev->detail, ev->event_x, ev->event_y);
             }
+
+            struct cursor *csr = cursor_for_position(win);
+            if (csr != get_plat(win)->cursor)
+                do_select_cursor(win, csr);
+            else
+                put_cursor(csr);
 
             mouse_handle_input(win->term, (struct mouse_event) {
                 /* XCB_BUTTON_PRESS -> mouse_event_press
@@ -1038,8 +1072,6 @@ static void x11_free(void) {
     ctx.renderer_free_context();
 
     if (ctx.cursors.data) {
-        if (ctx.cursor_xterm)
-            put_cursor(ctx.cursor_xterm);
         ht_iter_t it = ht_begin(&ctx.cursors);
         assert(!ht_current(&it));
         ht_free(&ctx.cursors);
