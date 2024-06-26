@@ -71,6 +71,8 @@ struct wayland_window {
     bool can_fullscreen : 1;
     bool is_maximized : 1;
     bool is_fullscreen : 1;
+    bool is_resizing : 1;
+    bool is_tiled : 1;
     bool use_ssd : 1;
 } ALIGNED(MALLOC_ALIGNMENT);
 

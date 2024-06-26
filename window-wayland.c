@@ -392,6 +392,8 @@ void handle_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel
 
     get_plat(win)->is_maximized = false;
     get_plat(win)->is_fullscreen = false;
+    get_plat(win)->is_resizing = false;
+    get_plat(win)->is_tiled = false;
     if (height) get_plat(win)->pending_configure.height = height;
     if (width) get_plat(win)->pending_configure.width = width;
     win->any_event_happend = true;
@@ -414,11 +416,14 @@ void handle_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel
         case XDG_TOPLEVEL_STATE_SUSPENDED:
             win->active = false;
             break;
-        // case XDG_TOPLEVEL_STATE_RESIZING:
-        // case XDG_TOPLEVEL_STATE_TILED_LEFT:
-        // case XDG_TOPLEVEL_STATE_TILED_RIGHT:
-        // case XDG_TOPLEVEL_STATE_TILED_TOP:
-        // case XDG_TOPLEVEL_STATE_TILED_BOTTOM:
+        case XDG_TOPLEVEL_STATE_RESIZING:
+            get_plat(win)->is_resizing = true;
+            break;
+        case XDG_TOPLEVEL_STATE_TILED_LEFT:
+        case XDG_TOPLEVEL_STATE_TILED_RIGHT:
+        case XDG_TOPLEVEL_STATE_TILED_TOP:
+        case XDG_TOPLEVEL_STATE_TILED_BOTTOM:
+            get_plat(win)->is_tiled = true;
         default:
             break;
         }
