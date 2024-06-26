@@ -555,7 +555,7 @@ static bool wayland_init_window(struct window *win) {
 
 static void wayland_map_window(struct window *win) {
     (void)win;
-    wl_display_flush(dpl);
+    wl_display_roundtrip(dpl);
 }
 
 static void free_paste(struct active_paste *paste) {
