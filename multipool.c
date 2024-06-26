@@ -43,7 +43,6 @@ struct header {
 /* pool metadata */
 struct pool {
     struct list_head link;
-    struct pool *prev;
 
     int32_t n_alloc;
     int32_t offset;
@@ -68,28 +67,23 @@ static inline void pool_unseal(struct multipool *mp, struct pool *pool) {
 }
 
 static struct pool *get_fitting_pool(struct multipool *mp, ssize_t size) {
-    struct pool *pool = NULL;
     LIST_FOREACH(it, &mp->unsealed) {
         struct pool *p = CONTAINEROF(it, struct pool, link);
-        if (p->size - p->offset < size) {
-            pool = p;
-            break;
-        }
+        if (p->size - p->offset >= size)
+            return p;
     }
 
-    if (!pool) {
-        ssize_t pool_size = MAX(mp->pool_size, size + INIT_OFFSET);
+    ssize_t pool_size = MAX(mp->pool_size, size + INIT_OFFSET);
 
-        pool = DO_ALLOC(sizeof *pool + pool_size);
-        if (pool == ALLOC_ERROR) return NULL;
+    struct pool *pool = DO_ALLOC(sizeof *pool + pool_size);
+    if (pool == ALLOC_ERROR) return NULL;
 
-        memset(pool, 0, sizeof *pool);
+    memset(pool, 0, sizeof *pool);
 
-        mp->pool_count++;
-        pool->size = pool_size;
-        pool->offset = INIT_OFFSET;
-        pool_unseal(mp, pool);
-    }
+    mp->pool_count++;
+    pool->size = pool_size;
+    pool->offset = INIT_OFFSET;
+    pool_unseal(mp, pool);
 
     return pool;
 }
@@ -110,7 +104,7 @@ void mpa_init(struct multipool *mp, ssize_t pool_size) {
     list_init(&mp->unsealed);
     mp->max_pad = 0;
     mp->pool_count = mp->unsealed_count = 0;
-    mp->pool_size = pool_size;
+    mp->pool_size = pool_size - sizeof(struct pool);
 }
 
 void mpa_free(struct multipool *mp, void *ptr) {
@@ -136,27 +130,26 @@ void mpa_free(struct multipool *mp, void *ptr) {
     }
 }
 
+static inline int32_t round_size(int32_t size) {
+    static_assert(sizeof(struct header)*2 == MPA_ALIGNMENT, "Alignment and header size are not synchronized");
+    static_assert(0 == (MPA_ALIGNMENT & (MPA_ALIGNMENT - 1)), "Alignment is not a power of two");
+    return ROUNDUP(size + sizeof(struct header), MPA_ALIGNMENT);
+}
+
 void mpa_set_seal_max_pad(struct multipool *mp, ssize_t max_pad, ssize_t max_unsealed)  {
-    mp->max_pad = max_pad + sizeof(struct header);
+    mp->max_pad = max_pad = round_size(max_pad);
     mp->max_unsealed = max_unsealed;
 
     LIST_FOREACH_SAFE(it, &mp->unsealed) {
         struct pool *pool = CONTAINEROF(it, struct pool, link);
         if (pool->size < max_pad + pool->offset) {
             pool_seal(mp, pool);
-            if (pool->n_alloc == 0) {
-                list_remove(it);
+            if (!pool->n_alloc) {
                 DO_FREE(pool, pool->size + sizeof *pool);
                 mp->pool_count--;
             }
         }
     }
-}
-
-static inline int32_t round_size(int32_t size) {
-    static_assert(sizeof(struct header)*2 == MPA_ALIGNMENT, "Alignment and header size are not synchronized");
-    static_assert(0 == (MPA_ALIGNMENT & (MPA_ALIGNMENT - 1)), "Alignment is not a power of two");
-    return ROUNDUP(size + sizeof(struct header), MPA_ALIGNMENT);
 }
 
 void *mpa_alloc(struct multipool *mp, ssize_t size) {
@@ -196,7 +189,7 @@ void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size, bool pin) {
         header->size = size;
 
     } else if (header->size < size) {
-        void *new = mpa_alloc(mp, size);
+        void *new = mpa_alloc(mp, size - sizeof *header);
         if (!new) return NULL;
 
         memcpy(new, ptr, MIN(header->size, size) - sizeof *header);
