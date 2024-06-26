@@ -52,6 +52,15 @@ enum pointer_event_mask {
     POINTER_EVENT_AXIS_RELATIVE_DIRECTION = 1 << 9,
 };
 
+struct cursor {
+    ht_head_t link;
+    char *name;
+    int32_t refcount;
+    struct wl_cursor *cursor;
+    struct wl_buffer *cursor_buffer;
+    struct wl_surface *cursor_surface;
+};
+
 struct active_paste {
     struct list_head link;
     struct window_ptr wptr;
@@ -155,9 +164,7 @@ struct context {
     struct zxdg_output_manager_v1 *output_manager;
 
     struct wl_cursor_theme *cursor_theme;
-    struct wl_cursor *cursor;
-    struct wl_buffer *cursor_buffer;
-    struct wl_surface *cursor_surface;
+    hashtable_t cursors;
 
     struct list_head paste_fds;
     struct list_head seats;
@@ -264,6 +271,108 @@ static void wayland_set_urgency(struct window *win, bool set) {
 static void wayland_bell(struct window *win, uint8_t vol) {
     // NOTE Not supported on wayland
     (void)win, (void)vol;
+}
+
+static bool cursor_cmp(const ht_head_t *a, const ht_head_t *b) {
+    const struct cursor *ua = (const struct cursor *)a;
+    const struct cursor *ub = (const struct cursor *)b;
+    return !strcmp(ua->name, ub->name);
+}
+
+static struct cursor *get_cursor(const char *name) {
+    if (!ctx.cursor_theme) return NULL;
+
+    struct cursor dummy = {
+        .name = (char *)name,
+        .link.hash = hash64(name, strlen(name)),
+    };
+
+    ht_head_t **it = ht_lookup_ptr(&ctx.cursors, &dummy.link);
+    if (*it) {
+        struct cursor *found = (struct cursor *)*it;
+        found->refcount++;
+        return found;
+    }
+
+    struct wl_cursor *cursor = wl_cursor_theme_get_cursor(ctx.cursor_theme, name);
+    if (!cursor) {
+        warn("Unable to load cursor '%s'", name);
+        return NULL;
+    }
+
+    struct wl_surface *cursor_surface = wl_compositor_create_surface(ctx.compositor);
+    if (!cursor_surface) {
+        warn("Unable to create cursor surface");
+        return NULL;
+    }
+
+    struct wl_buffer *cursor_buffer = wl_cursor_image_get_buffer(cursor->images[0]);
+    if (!cursor_buffer) {
+        warn("Unable to create cursor buffer");
+        return NULL;
+    }
+
+    wl_surface_attach(cursor_surface, cursor_buffer, 0, 0);
+    wl_surface_damage_buffer(cursor_surface, 0, 0, UINT32_MAX, UINT32_MAX);
+    wl_surface_commit(cursor_surface);
+
+    struct cursor *new = xalloc(sizeof *new);
+    *new = (struct cursor) {
+        .link.hash = dummy.link.hash,
+        .name = strdup(name),
+        .refcount = 1,
+        .cursor = cursor,
+        .cursor_buffer = cursor_buffer,
+        .cursor_surface = cursor_surface,
+    };
+
+    ht_insert_hint(&ctx.cursors, it, &new->link);
+    return new;
+}
+
+static void put_cursor(struct cursor *csr) {
+    if (!--csr->refcount) {
+        ht_erase(&ctx.cursors, &csr->link);
+        wl_surface_destroy(csr->cursor_surface);
+        /* NOTE: cursor_buffer and cursor and owned by cursor_theme */
+        free(csr->name);
+        free(csr);
+    }
+}
+
+static void activate_cursor_for_seat(struct window *win, struct seat *seat, struct cursor *csr) {
+    if (!csr) {
+        wl_pointer_set_cursor(seat->pointer.pointer, seat->pointer.serial, NULL, 0, 0);
+    } else {
+        wl_pointer_set_cursor(seat->pointer.pointer, seat->pointer.serial,
+                              get_plat(win)->cursor->cursor_surface,
+                              get_plat(win)->cursor->cursor->images[0]->hotspot_x,
+                              get_plat(win)->cursor->cursor->images[0]->hotspot_y);
+    }
+}
+
+static void do_select_cursor(struct window *win, struct cursor *csr) {
+    if (get_plat(win)->cursor)
+        put_cursor(get_plat(win)->cursor);
+
+    get_plat(win)->cursor = csr;
+
+    LIST_FOREACH(it, &ctx.seats) {
+        struct seat *seat = CONTAINEROF(it, struct seat, link);
+        if (seat->pointer.wptr.win == win) {
+            activate_cursor_for_seat(win, seat, csr);
+            break;
+        }
+    }
+}
+
+static void wayland_select_cursor(struct window *win, const char *name) {
+    if (name) {
+        struct cursor *csr = get_cursor(name);
+        if (csr) do_select_cursor(win, csr);
+    } else {
+        do_select_cursor(win, NULL);
+    }
 }
 
 static void wayland_set_title(struct window *win, const char *title, bool utf8) {
@@ -569,6 +678,8 @@ static void free_paste(struct active_paste *paste) {
 static void wayland_free_window(struct window *win) {
     ctx.renderer_free(win);
 
+    if (get_plat(win)->cursor)
+        put_cursor(get_plat(win)->cursor);
     if (get_plat(win)->primary_selection_source)
         zwp_primary_selection_source_v1_destroy(get_plat(win)->primary_selection_source);
     if (get_plat(win)->data_source)
@@ -1253,10 +1364,7 @@ static void handle_pointer_enter(void *data, struct wl_pointer *wl_pointer, uint
              data, (void *)win, serial, wl_fixed_to_double(surface_x), wl_fixed_to_double(surface_y));
     }
 
-    if (ctx.cursor_surface) {
-        wl_pointer_set_cursor(wl_pointer, serial, ctx.cursor_surface,
-                              ctx.cursor->images[0]->hotspot_x, ctx.cursor->images[0]->hotspot_y);
-    }
+    activate_cursor_for_seat(win, seat, get_plat(win)->cursor);
 
     win->any_event_happend = true;
     win_ptr_set(&seat->pointer.wptr, win, win_ptr_other);
@@ -1906,11 +2014,14 @@ static void wayland_free(void) {
         free_output(output);
     }
 
-    if (ctx.cursor_surface)
-        wl_surface_destroy(ctx.cursor_surface);
+    if (ctx.cursors.data) {
+        ht_iter_t it = ht_begin(&ctx.cursors);
+        assert(!ht_current(&it));
+        ht_free(&ctx.cursors);
+    }
+
     if (ctx.cursor_theme)
         wl_cursor_theme_destroy(ctx.cursor_theme);
-
     if (wl_shm)
         wl_shm_destroy(wl_shm);
     if (ctx.registry)
@@ -2012,6 +2123,7 @@ static struct platform_vtable wayland_vtable = {
     .update_props = wayland_update_window_props,
     .fixup_geometry = wayland_fixup_geometry,
     .set_autorepeat = wayland_set_autorepeat,
+    .select_cursor = wayland_select_cursor,
     .draw_end = wayland_draw_done,
     .after_read = wayland_after_read,
     .free = wayland_free,
@@ -2031,6 +2143,8 @@ static void load_cursor_theme(void) {
     const char *size_string = getenv("XCURSOR_SIZE");
     ssize_t size = 24;
 
+    ht_init(&ctx.cursors, HT_INIT_CAPS, cursor_cmp);
+
     if (size_string) {
         errno = 0;
         char *end = NULL;
@@ -2046,28 +2160,6 @@ static void load_cursor_theme(void) {
         warn("Unable to load cursor theme '%s'", theme);
         return;
     }
-
-    ctx.cursor = wl_cursor_theme_get_cursor(ctx.cursor_theme, "left_ptr");
-    if (!ctx.cursor) {
-        warn("Unable to load cursor '%s' from theme '%s'", "left_ptr", theme);
-        return;
-    }
-
-    ctx.cursor_surface = wl_compositor_create_surface(ctx.compositor);
-    if (!ctx.cursor_surface) {
-        warn("Unable to create cursor surface from theme '%s'", theme);
-        return;
-    }
-
-    ctx.cursor_buffer = wl_cursor_image_get_buffer(ctx.cursor->images[0]);
-    if (!ctx.cursor_buffer) {
-        warn("Unable to create cursor buffer from theme '%s'", theme);
-        return;
-    }
-
-    wl_surface_attach(ctx.cursor_surface, ctx.cursor_buffer, 0, 0);
-    wl_surface_damage_buffer(ctx.cursor_surface, 0, 0, UINT32_MAX, UINT32_MAX);
-    wl_surface_commit(ctx.cursor_surface);
 }
 
 const struct platform_vtable *platform_init_wayland(struct instance_config *cfg) {
@@ -2105,7 +2197,7 @@ const struct platform_vtable *platform_init_wayland(struct instance_config *cfg)
 
     load_cursor_theme();
 
-    // FIXME: Can we do that inside the callback?
+    // FIXME: Can we do that inside a callback?
 
     LIST_FOREACH(it, &ctx.seats) {
         struct seat *seat = CONTAINEROF(it, struct seat, link);

@@ -44,6 +44,7 @@ struct wayland_window {
     struct zwp_primary_selection_source_v1 *primary_selection_source;
     struct zxdg_toplevel_decoration_v1 *decoration;
     struct wl_callback *frame_callback;
+    struct cursor *cursor;
 
     /* We cannot query the title so we need to store them */
     char *title;
