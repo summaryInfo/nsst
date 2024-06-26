@@ -376,7 +376,7 @@ void handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, u
 
     uint32_t width = get_plat(win)->pending_configure.width ? get_plat(win)->pending_configure.width : win->cfg.geometry.r.width;
     uint32_t height = get_plat(win)->pending_configure.height ? get_plat(win)->pending_configure.height : win->cfg.geometry.r.height;
-    bool exact = get_plat(win)->is_maximized || get_plat(win)->is_fullscreen || get_plat(win)->is_tiled;
+    bool exact = get_plat(win)->is_maximized || get_plat(win)->is_fullscreen || get_plat(win)->is_tiled || win->cfg.smooth_resize;
 
     handle_resize(win, width, height, exact);
 

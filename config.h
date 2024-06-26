@@ -219,6 +219,7 @@ struct instance_config {
     bool scroll_on_input;
     bool scroll_on_output;
     bool select_to_clipboard;
+    bool smooth_resize;
     bool smooth_scroll;
     bool special_blink;
     bool special_bold;

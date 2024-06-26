@@ -386,6 +386,7 @@ static struct option options[] = {
     X(boolean, allow_window_ops, "window-ops", "Allow window manipulation with escape sequences", true),
     X(int64, wait_for_configure_delay, "wait-for-configure-delay", "Time gap in microseconds waiting for configure after resize request", 2000, 0, 10*SEC/1000),
     X(string, word_separators, "word-break", "Symbols treated as word separators when snapping mouse selection", " \t!$^*()+={}[]\\\"'|,;<>~`"),
+    X(boolean, smooth_resize, "smooth-resize", "Don't force window size to be aligned on character size", false),
 };
 
 static inline color_t default_color(uint32_t n) {

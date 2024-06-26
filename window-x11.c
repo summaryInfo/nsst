@@ -432,17 +432,24 @@ void x11_update_window_props(struct window *win) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(NSST_CLASS), NSST_CLASS);
     if ((extra = win->cfg.window_class))
         xcb_change_property(con, XCB_PROP_MODE_APPEND, get_plat(win)->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, strlen(extra), extra);
+
     uint32_t nhints[] = {
-        64 | 256, /* PResizeInc, PBaseSize */
+        256, /* PBaseSize */
         win->cfg.geometry.r.x, win->cfg.geometry.r.y, /* Position */
         win->cfg.geometry.r.width, win->cfg.geometry.r.height, /* Size */
         win->cfg.left_border * 2 + win->char_width, win->cfg.left_border * 2 + win->char_depth + win->char_height, /* Min size */
-        0, 0, /*Max size */
-        win->char_width, win->char_depth + win->char_height, /* Size inc */
+        0, 0, /* Max size */
+        0, 0, /* Size increment */
         0, 0, 0, 0, /* Min/max aspect */
         win->cfg.left_border * 2 + win->char_width, win->cfg.left_border * 2 + win->char_depth + win->char_height, /* Base size */
         get_win_gravity_from_config(win->cfg.geometry.stick_to_right, win->cfg.geometry.stick_to_bottom), /* Gravity */
     };
+
+    if (!win->cfg.smooth_resize) {
+        nhints[0] |= 64; /* PResizeInc */
+        nhints[9] |= win->char_width; /* Size increment X */
+        nhints[10] |= win->char_depth + win->char_height; /* Size increment Y */
+    }
 
     if (win->cfg.geometry.has_position)
         nhints[0] |= 1 | 512; /* USPosition, PWinGravity */
@@ -459,6 +466,7 @@ void x11_update_window_props(struct window *win) {
         nhints[8] = nhints[6] = nhints[4];
         nhints[0] |= 16 | 32; /* PMinSize, PMaxSize */
     }
+
     uint32_t wmhints[] = {
         1, /* Flags: InputHint */
         XCB_WINDOW_CLASS_INPUT_OUTPUT, /* Input */

@@ -134,10 +134,11 @@ static bool is_boolean_option(const char *opt) {
         "fixed", "force-nrcs", "force-scalable", "force-wayland-csd", "fork", "has-meta",
         "keep-clipboard", "keep-selection", "lock-keyboard", "luit", "meta-sends-escape", "nrcs",
         "numlock", "override-boxdrawing", "print-attributes", "raise-on-bell", "reverse-video",
-        "scroll-on-input", "scroll-on-output", "select-to-clipboard", "smooth-scroll", "special-blink",
-        "special-bold", "special-italic", "special-reverse", "special-underlined", "substitute-fonts",
-        "trace-characters", "trace-controls", "trace-events", "trace-fonts", "trace-input",
-        "trace-misc", "unique-uris", "urgent-on-bell", "use-utf8", "visual-bell", "window-ops",
+        "scroll-on-input", "scroll-on-output", "select-to-clipboard", "smooth-resize", "smooth-scroll",
+        "special-blink", "special-bold", "special-italic", "special-reverse", "special-underlined",
+        "substitute-fonts", "trace-characters", "trace-controls", "trace-events", "trace-fonts",
+        "trace-input", "trace-misc", "unique-uris", "urgent-on-bell", "use-utf8", "visual-bell",
+        "window-ops",
     };
     for (size_t i = 0; i < sizeof bool_opts/sizeof *bool_opts; i++)
         if (!strcmp(bool_opts[i], opt)) return true;
