@@ -256,6 +256,14 @@ void window_bell(struct window *win, uint8_t vol) {
     }
 }
 
+void window_set_pointer_mode(struct window *win, enum hide_pointer_mode mode) {
+    pvtbl->set_pointer_mode(win, mode);
+}
+
+void window_set_pointer_shape(struct window *win, const char *shape) {
+    pvtbl->select_cursor(win, shape);
+}
+
 struct extent window_get_position(struct window *win) {
     return pvtbl->get_position(win);
 }
@@ -452,9 +460,6 @@ struct window *create_window(struct instance_config *cfg) {
     if (!pvtbl->init_window(win)) goto error;
 
     if (!pvtbl->reload_font(win, false)) goto error;
-
-    if (pvtbl->select_cursor)
-        pvtbl->select_cursor(win, win->cfg.pointer_shape);
 
     win->term = create_term(win, MAX(win->cw, 2), MAX(win->ch, 1));
     win->rcstate = (struct render_cell_state) {

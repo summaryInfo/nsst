@@ -1203,6 +1203,11 @@ static void term_dispatch_osc(struct term *term) {
         window_set_alpha(screen_window(scr), res);
         break;
     }
+    case 22: /* Set Mouse pointer shape */ {
+        *dend = '\0';
+        window_set_pointer_shape(term_window(term), (const char *)dstr);
+        break;
+    }
     //case 50: /* Set Font */ // TODO OSC 50
     //    break;
     //case 13: /* Set Mouse foreground color */ // TODO Pointer
@@ -1256,8 +1261,8 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             window_set_autorepeat(screen_window(scr), set);
             break;
         case 9: /* X10 Mouse tracking */
-            window_set_mouse(screen_window(scr), USE_URI);
             term->mstate.mouse_mode = set ? mouse_mode_x10 : mouse_mode_none;
+            window_set_mouse(screen_window(scr), USE_URI);
             break;
         case 10: /* Show toolbar */
             /* IGNORE - There is no toolbar */
@@ -1322,19 +1327,19 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->mode.preserve_display_132 = set;
             break;
         case 1000: /* X11 Mouse tracking */
-            window_set_mouse(screen_window(scr), USE_URI);
             term->mstate.mouse_mode = set ? mouse_mode_button : mouse_mode_none;
+            window_set_mouse(screen_window(scr), USE_URI);
             break;
         case 1001: /* Highlight mouse tracking */
             /* IGNORE */
             break;
         case 1002: /* Cell motion mouse tracking on keydown */
-            window_set_mouse(screen_window(scr), USE_URI);
             term->mstate.mouse_mode = set ? mouse_mode_drag : mouse_mode_none;
+            window_set_mouse(screen_window(scr), USE_URI);
             break;
         case 1003: /* All motion mouse tracking */
-            window_set_mouse(screen_window(scr), set || USE_URI);
             term->mstate.mouse_mode = set ? mouse_mode_motion : mouse_mode_none;
+            window_set_mouse(screen_window(scr), set || USE_URI);
             break;
         case 1004: /* Focus in/out events */
             term->mode.track_focus = set;
@@ -2751,8 +2756,26 @@ static void term_dispatch_csi(struct term *term) {
     case C('q') | P('>'): /* XTVERSION */
         term_answerback(term, DCS">|%s"ST, version_string());
         break;
-    //case C('p') | P('>'): /* XTSMPOINTER */ // TODO Pointer
-    //    break;
+    case C('p') | P('>'): /* XTSMPOINTER */ {
+        enum hide_pointer_mode mode = hide_invalid;
+        switch (PARAM(0, 0)) {
+            case 0: /* Never hide */
+                mode = hide_never;
+                break;
+            case 1: /* Hide if mouse tracking disabled */
+                mode = hide_no_tracking;
+                break;
+            case 2: /* Hide on window  */
+            case 3: /* Hide always (not supported)  */
+                mode = hide_always;
+                break;
+            default:
+                term_esc_dump(term, 0);
+        }
+        if (mode != hide_invalid)
+            window_set_pointer_mode(term_window(term), mode);
+        break;
+    }
     //case C('S') | P('?'): /* XTSMSGRAPHICS */ // TODO SIXEL
     //    break;
     //case C('S') | P('>'): /* Set graphics attributes, xterm */ //TODO SIXEL

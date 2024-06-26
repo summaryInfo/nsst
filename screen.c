@@ -1631,7 +1631,7 @@ bool screen_load_config(struct screen *scr, bool reset) {
         };
 
 #if USE_URI
-        window_set_mouse(scr->win, 1);
+        window_set_mouse(scr->win, true);
         uri_unref(scr->sgr.uri);
         uri_unref(scr->saved_sgr.uri);
         uri_unref(scr->back_saved_sgr.uri);

@@ -369,6 +369,7 @@ struct platform_vtable {
     void (*fixup_geometry)(struct window *win);
     void (*set_autorepeat)(struct window *win, bool set);
     void (*select_cursor)(struct window *win, const char *name);
+    void (*set_pointer_mode)(struct window *win, enum hide_pointer_mode mode);
     struct image (*shm_create_image)(struct window *win, int16_t width, int16_t height);
     void (*draw_end)(struct window *win);
 

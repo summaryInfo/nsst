@@ -185,11 +185,6 @@ static void wayland_update_colors(struct window *win) {
     ctx.renderer_recolor_border(win);
 }
 
-static void wayland_enable_mouse_events(struct window *win, bool enabled) {
-    // NOTE: Cannot disable events in wayland, they are always listened to
-    (void)win, (void)enabled;
-}
-
 static bool wayland_resize_window(struct window *win, int16_t width, int16_t height) {
     get_plat(win)->pending_configure.resize = true;
     get_plat(win)->pending_configure.width = width;
@@ -346,8 +341,8 @@ static void put_cursor(struct cursor *csr) {
     }
 }
 
-static void activate_cursor_for_seat(struct window *win, struct seat *seat, struct cursor *csr) {
-    if (!csr) {
+static void activate_cursor_for_seat(struct window *win, struct seat *seat) {
+    if (get_plat(win)->cursor_is_hidden) {
         wl_pointer_set_cursor(seat->pointer.pointer, seat->pointer.serial, NULL, 0, 0);
     } else {
         wl_pointer_set_cursor(seat->pointer.pointer, seat->pointer.serial,
@@ -357,25 +352,53 @@ static void activate_cursor_for_seat(struct window *win, struct seat *seat, stru
     }
 }
 
-static void do_select_cursor(struct window *win, struct cursor *csr) {
-    put_cursor(get_plat(win)->cursor);
-
-    get_plat(win)->cursor = csr;
-
+static void activate_cursor(struct window *win) {
     LIST_FOREACH(it, &ctx.seats) {
         struct seat *seat = CONTAINEROF(it, struct seat, link);
         if (seat->pointer.wptr.win == win)
-            activate_cursor_for_seat(win, seat, csr);
+            activate_cursor_for_seat(win, seat);
     }
 }
 
-static void wayland_select_cursor(struct window *win, const char *name) {
-    if (name) {
-        struct cursor *csr = get_cursor(name);
-        if (csr) do_select_cursor(win, csr);
-    } else {
-        do_select_cursor(win, NULL);
+static void select_cursor(struct window *win, struct cursor *csr) {
+    ref_cursor(csr);
+    put_cursor(get_plat(win)->cursor);
+    get_plat(win)->cursor = csr;
+
+    activate_cursor(win);
+}
+
+static void update_hide_cursor(struct window *win) {
+    bool hide = (get_plat(win)->cursor_mode == hide_always ||
+                (get_plat(win)->cursor_mode == hide_no_tracking &&
+                     term_get_mstate(win->term)->mouse_mode == mouse_mode_none));
+    if (hide && !get_plat(win)->cursor_is_hidden) {
+        get_plat(win)->cursor_is_hidden = true;
+        activate_cursor(win);
+    } else if (!hide && get_plat(win)->cursor_is_hidden) {
+        get_plat(win)->cursor_is_hidden = false;
+        assert(get_plat(win)->cursor);
+        activate_cursor(win);
     }
+}
+
+static void wayland_enable_mouse_events(struct window *win, bool enabled) {
+    (void)enabled;
+    update_hide_cursor(win);
+}
+
+static void wayland_select_cursor(struct window *win, const char *name) {
+    struct cursor *csr = get_cursor(name);
+    put_cursor(get_plat(win)->cursor_user);
+    get_plat(win)->cursor_user = csr;
+
+    if (!csr) csr = get_plat(win)->cursor_default;
+    select_cursor(win, csr);
+}
+
+static void wayland_set_pointer_mode(struct window *win, enum hide_pointer_mode mode) {
+    get_plat(win)->cursor_mode = mode;
+    update_hide_cursor(win);
 }
 
 static void wayland_set_title(struct window *win, const char *title, bool utf8) {
@@ -682,6 +705,8 @@ static bool wayland_init_window(struct window *win) {
     if (!get_plat(win)->cursor_default)
         get_plat(win)->cursor_default = get_cursor("default");
 
+    select_cursor(win, get_plat(win)->cursor_default);
+    update_hide_cursor(win);
     return true;
 }
 
@@ -705,6 +730,7 @@ static void wayland_free_window(struct window *win) {
     put_cursor(get_plat(win)->cursor_uri);
     put_cursor(get_plat(win)->cursor_resize);
     put_cursor(get_plat(win)->cursor_default);
+    put_cursor(get_plat(win)->cursor_user);
 
     if (get_plat(win)->primary_selection_source)
         zwp_primary_selection_source_v1_destroy(get_plat(win)->primary_selection_source);
@@ -1390,7 +1416,7 @@ static void handle_pointer_enter(void *data, struct wl_pointer *wl_pointer, uint
              data, (void *)win, serial, wl_fixed_to_double(surface_x), wl_fixed_to_double(surface_y));
     }
 
-    activate_cursor_for_seat(win, seat, get_plat(win)->cursor);
+    activate_cursor_for_seat(win, seat);
 
     win->any_event_happend = true;
     win_ptr_set(&seat->pointer.wptr, win, win_ptr_other);
@@ -1604,19 +1630,26 @@ static bool try_handle_csd_axis(struct window *win, struct seat *seat, int step,
     return true;
 }
 
-static struct cursor *cursor_for_position(struct window *win, int32_t x, int32_t y) {
+static void update_cursor(struct window *win, int32_t x, int32_t y) {
+    struct cursor *new = NULL;
     bool left = x < win->cfg.border.left;
     bool right = x > win->cw*win->char_width + win->cfg.border.left;
     bool top = y < win->cfg.border.top;
     bool bottom = y > win->ch*(win->char_height + win->char_depth) + win->cfg.border.top;
 
     if ((left || right || top || bottom) && !get_plat(win)->use_ssd) {
-        return ref_cursor(get_plat(win)->cursor_resize);
+        new = get_plat(win)->cursor_resize;
     } else {
-        if (win->rcstate.active_uri != EMPTY_URI && !win->rcstate.uri_pressed)
-            return ref_cursor(get_plat(win)->cursor_uri);
-        return ref_cursor(get_plat(win)->cursor_default);
+        if (get_plat(win)->cursor_user)
+            new = get_plat(win)->cursor_user;
+        else if (win->rcstate.active_uri != EMPTY_URI && !win->rcstate.uri_pressed)
+            new = get_plat(win)->cursor_uri;
+        else
+            new = get_plat(win)->cursor_default;
     }
+
+    if (new != get_plat(win)->cursor)
+        select_cursor(win, new);
 }
 
 static void handle_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
@@ -1674,12 +1707,7 @@ static void handle_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
     if (seat->pointer.event_mask & (POINTER_EVENT_ENTER | POINTER_EVENT_MOTION)) {
 
         /* Select appropriate cursor shape depending on context */
-        struct cursor *cursor = cursor_for_position(win, x, y);
-        if (get_plat(win)->cursor == cursor) {
-           put_cursor(cursor);
-        } else {
-            do_select_cursor(win, cursor);
-        }
+        update_cursor(win, x, y);
 
         mouse_handle_input(win->term, (struct mouse_event) {
             .event = mouse_event_motion,
@@ -2174,6 +2202,7 @@ static struct platform_vtable wayland_vtable = {
     .fixup_geometry = wayland_fixup_geometry,
     .set_autorepeat = wayland_set_autorepeat,
     .select_cursor = wayland_select_cursor,
+    .set_pointer_mode = wayland_set_pointer_mode,
     .draw_end = wayland_draw_done,
     .after_read = wayland_after_read,
     .free = wayland_free,

@@ -200,12 +200,6 @@ static void x11_update_colors(struct window *win) {
     ctx.renderer_recolor_border(win);
 }
 
-static void x11_enable_mouse_events(struct window *win, bool enabled) {
-    if (enabled) get_plat(win)->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
-    else get_plat(win)->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
-    xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_EVENT_MASK, &get_plat(win)->ev_mask);
-}
-
 static bool x11_resize_window(struct window *win, int16_t width, int16_t height) {
     if (win->cfg.geometry.r.height != height || win->cfg.geometry.r.width != width) {
         uint32_t vals[] = {width, height};
@@ -420,13 +414,35 @@ static inline struct cursor *ref_cursor(struct cursor *csr) {
     return csr;
 }
 
-static void do_select_cursor(struct window *win, struct cursor *csr) {
+static void update_hide_cursor(struct window *win) {
+    bool hide = (get_plat(win)->cursor_mode == hide_always ||
+                (get_plat(win)->cursor_mode == hide_no_tracking &&
+                     term_get_mstate(win->term)->mouse_mode == mouse_mode_none));
+    if (hide && !get_plat(win)->cursor_is_hidden) {
+        uint32_t xc = ctx.hidden_cursor;
+        xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_CURSOR, &xc);
+        get_plat(win)->cursor_is_hidden = true;
+    } else if (!hide && get_plat(win)->cursor_is_hidden) {
+        assert(get_plat(win)->cursor);
+        uint32_t xc = get_plat(win)->cursor->xcursor;
+        xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_CURSOR, &xc);
+        get_plat(win)->cursor_is_hidden = false;
+    }
+}
+
+static void x11_enable_mouse_events(struct window *win, bool enabled) {
+    if (enabled) get_plat(win)->ev_mask |= XCB_EVENT_MASK_POINTER_MOTION;
+    else get_plat(win)->ev_mask &= ~XCB_EVENT_MASK_POINTER_MOTION;
+    xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_EVENT_MASK, &get_plat(win)->ev_mask);
+    update_hide_cursor(win);
+}
+
+static void select_cursor(struct window *win, struct cursor *csr) {
+    ref_cursor(csr);
     put_cursor(get_plat(win)->cursor);
-
     get_plat(win)->cursor = csr;
-
-    uint32_t xc = csr ? csr->xcursor : ctx.hidden_cursor;
-    xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_CURSOR, &xc);
+    if (!get_plat(win)->cursor_is_hidden)
+        xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_CURSOR, &csr->xcursor);
 }
 
 static void do_create_hidden_cursor(void) {
@@ -443,12 +459,18 @@ static void do_create_hidden_cursor(void) {
 
 static void x11_select_cursor(struct window *win, const char *name) {
     if (!ctx.cursor_ctx) return;
-    if (name) {
-        struct cursor *csr = get_cursor(name);
-        if (csr) do_select_cursor(win, csr);
-    } else {
-        do_select_cursor(win, NULL);
-    }
+
+    struct cursor *csr = get_cursor(name);
+    put_cursor(get_plat(win)->cursor_user);
+    get_plat(win)->cursor_user = csr;
+
+    if (!csr) csr = get_plat(win)->cursor_default;
+    select_cursor(win, csr);
+}
+
+static void x11_set_pointer_mode(struct window *win, enum hide_pointer_mode mode) {
+    get_plat(win)->cursor_mode = mode;
+    update_hide_cursor(win);
 }
 
 static void x11_set_title(struct window *win, const char *title, bool utf8) {
@@ -703,6 +725,8 @@ static bool x11_init_window(struct window *win) {
     if (!get_plat(win)->cursor_default)
         get_plat(win)->cursor_default = get_cursor("default");
 
+    select_cursor(win, get_plat(win)->cursor_default);
+    update_hide_cursor(win);
     return true;
 }
 
@@ -715,6 +739,7 @@ static void x11_free_window(struct window *win) {
     put_cursor(get_plat(win)->cursor);
     put_cursor(get_plat(win)->cursor_default);
     put_cursor(get_plat(win)->cursor_uri);
+    put_cursor(get_plat(win)->cursor_user);
 
     if (get_plat(win)->wid) {
         xcb_unmap_window(con, get_plat(win)->wid);
@@ -837,10 +862,17 @@ static void x11_flush(void) {
     xcb_flush(con);
 }
 
-static struct cursor *cursor_for_position(struct window *win) {
-    if (win->rcstate.active_uri != EMPTY_URI && !win->rcstate.uri_pressed)
-        return ref_cursor(get_plat(win)->cursor_uri);
-    return ref_cursor(get_plat(win)->cursor_default);
+static void update_cursor(struct window *win) {
+    struct cursor *new = NULL;
+    if (get_plat(win)->cursor_user)
+        new = get_plat(win)->cursor_user;
+    else if (win->rcstate.active_uri != EMPTY_URI && !win->rcstate.uri_pressed)
+        new = get_plat(win)->cursor_uri;
+    else
+        new = get_plat(win)->cursor_default;
+
+    if (new != get_plat(win)->cursor)
+        select_cursor(win, new);
 }
 
 static void x11_handle_events(void) {
@@ -920,11 +952,7 @@ static void x11_handle_events(void) {
                         ev->state, ev->detail, ev->event_x, ev->event_y);
             }
 
-            struct cursor *csr = cursor_for_position(win);
-            if (csr != get_plat(win)->cursor)
-                do_select_cursor(win, csr);
-            else
-                put_cursor(csr);
+            update_cursor(win);
 
             mouse_handle_input(win->term, (struct mouse_event) {
                 /* XCB_BUTTON_PRESS -> mouse_event_press
@@ -1117,6 +1145,7 @@ static struct platform_vtable x11_vtable = {
     .window_action = x11_window_action,
     .update_props = x11_update_window_props,
     .select_cursor = x11_select_cursor,
+    .set_pointer_mode = x11_set_pointer_mode,
     .fixup_geometry = x11_fixup_geometry,
     .free = x11_free,
 };

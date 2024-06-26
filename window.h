@@ -80,6 +80,12 @@ struct extent {
     int16_t width, height;
 };
 
+enum hide_pointer_mode {
+    hide_never,
+    hide_no_tracking,
+    hide_always,
+    hide_invalid = -1,
+};
 
 typedef uint32_t color_t;
 
@@ -127,6 +133,8 @@ void window_set_autorepeat(struct window *win, bool state);
 bool window_get_autorepeat(struct window *win);
 void window_set_alpha(struct window *win, double alpha);
 struct instance_config *window_cfg(struct window *win);
+void window_set_pointer_mode(struct window *win, enum hide_pointer_mode mode);
+void window_set_pointer_shape(struct window *win, const char *name);
 
 bool init_daemon(void);
 void free_daemon(void);

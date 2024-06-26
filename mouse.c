@@ -786,7 +786,7 @@ void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, 
     loc->filter = (struct rect) { xs, ys, xe - xs, ye - ys };
     loc->locator_filter = 1;
 
-    window_set_mouse(term_window(term), 1);
+    window_set_mouse(term_window(term), true);
 }
 
 #if USE_URI

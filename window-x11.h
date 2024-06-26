@@ -55,7 +55,10 @@ struct platform_window {
     xcb_event_mask_t ev_mask;
     struct cursor *cursor;
     struct cursor *cursor_default;
+    struct cursor *cursor_user;
     struct cursor *cursor_uri;
+    enum hide_pointer_mode cursor_mode;
+    bool cursor_is_hidden;
 
     /* Used to restore maximized window */
     struct rect saved;
