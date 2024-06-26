@@ -237,9 +237,9 @@ static void term_request_resize(struct term *term, int16_t w, int16_t h, bool in
 
     if (in_cells) {
         struct extent ce = window_get_cell_size(win);
-        struct extent bo = window_get_border(win);
-        if (w > 0) w = w * ce.width + bo.width * 2;
-        if (h > 0) h = h * ce.height + bo.height * 2;
+        struct border bo = window_get_border(win);
+        if (w > 0) w = w * ce.width + bo.left + bo.right;
+        if (h > 0) h = h * ce.height + bo.top + bo.bottom;
     }
 
     w = !w ? scr.width : w < 0 ? cur.width : w;
@@ -1887,8 +1887,8 @@ static void term_dispatch_window_op(struct term *term) {
     case 19: /* Report screen size (in cell units) */ {
         struct extent s = window_get_screen_size(win);
         struct extent c = window_get_cell_size(win);
-        struct extent b = window_get_border(win);
-        term_answerback(term, CSI"9;%u;%ut", (s.height - 2*b.height)/c.height, (s.width - 2*b.width)/c.width);
+        struct border b = window_get_border(win);
+        term_answerback(term, CSI"9;%u;%ut", (s.height - b.top - b.bottom)/c.height, (s.width - b.left - b.right)/c.width);
         break;
     }
     case 20: /* Report icon label */

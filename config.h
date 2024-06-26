@@ -163,8 +163,12 @@ struct instance_config {
     int16_t smooth_scroll_step;
     int16_t underline_width;
     int16_t cursor_width;
-    int16_t left_border;
-    int16_t top_border;
+    struct border {
+        int16_t left;
+        int16_t right;
+        int16_t top;
+        int16_t bottom;
+    } border;
     int16_t font_size;
     int16_t font_size_step;
     int16_t font_spacing;

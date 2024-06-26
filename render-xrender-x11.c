@@ -192,8 +192,8 @@ void x11_xrender_resize(struct window *win, int16_t new_w, int16_t new_h, int16_
     int16_t common_w = MIN(new_cw, new_cw - delta_x) * win->char_width;
     int16_t common_h = MIN(new_ch, new_ch - delta_y) * (win->char_height + win->char_depth);
     xcb_render_composite(con, XCB_RENDER_PICT_OP_SRC, get_plat(win)->pic2, 0, get_plat(win)->pic1,
-                         win->cfg.left_border, win->cfg.top_border, 0, 0,
-                         win->cfg.left_border, win->cfg.top_border, common_w, common_h);
+                         win->cfg.border.left, win->cfg.border.top, 0, 0,
+                         win->cfg.border.left, win->cfg.border.top, common_w, common_h);
 
     xcb_render_free_picture(con, get_plat(win)->pic2);
     xcb_free_pixmap(con, get_plat(win)->pid2);
@@ -578,8 +578,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
             color_t bg = describe_bg(&attr, &win->cfg, &win->rcstate, selected);
 
             push_element(&rctx.background_buf, &(struct element) {
-                .x = win->cfg.left_border + span.width * win->char_width,
-                .y = win->cfg.top_border + k * (win->char_height + win->char_depth),
+                .x = win->cfg.border.left + span.width * win->char_width,
+                .y = win->cfg.border.top + k * (win->char_height + win->char_depth),
                 .color = bg,
                 .width = (win->cw - span.width) * win->char_width,
                 .height = win->char_height + win->char_depth,
@@ -635,8 +635,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                 } else {
                     first_in_line = 0;
                     push_element(&rctx.background_buf, &(struct element) {
-                        .x = win->cfg.left_border + i * win->char_width,
-                        .y = win->cfg.top_border + y,
+                        .x = win->cfg.border.left + i * win->char_width,
+                        .y = win->cfg.border.top + y,
                         .color = spec.bg,
                         .width = win->char_width,
                         .height = win->char_height + win->char_depth,
@@ -648,8 +648,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                 if (spec.ch) {
                     if (glyph->pixmode == pixmode_bgra) {
                         push_element(&rctx.image_buf, &(struct element) {
-                            .x = win->cfg.left_border + i * win->char_width - glyph->x,
-                            .y = win->cfg.top_border + y + win->char_height - glyph->y,
+                            .x = win->cfg.border.left + i * win->char_width - glyph->x,
+                            .y = win->cfg.border.top + y + win->char_height - glyph->y,
                             .picture = glyph->id,
                             .width = glyph->width,
                             .height = glyph->height,
@@ -664,8 +664,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                         } else {
                             push_char(0);
                             push_element(&rctx.foreground_buf, &(struct element) {
-                                .x = win->cfg.left_border + i * win->char_width,
-                                .y = win->cfg.top_border + y + win->char_height,
+                                .x = win->cfg.border.left + i * win->char_width,
+                                .y = win->cfg.border.top + y + win->char_height,
                                 .color = spec.fg,
                                 .glyphs = push_char(g),
                             });
@@ -686,8 +686,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                             prev_dec->x -= win->char_width;
                         } else {
                             push_element(&rctx.decoration_buf2, &(struct element) {
-                                .x = win->cfg.left_border + i * win->char_width,
-                                .y = win->cfg.top_border + line_y,
+                                .x = win->cfg.border.left + i * win->char_width,
+                                .y = win->cfg.border.top + line_y,
                                 .color = spec.ul,
                                 .width = 1,
                             });
@@ -708,16 +708,16 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                             prev_dec[-2].width += win->char_width;
                         } else {
                             push_element(&rctx.decoration_buf, &(struct element) {
-                                .x = win->cfg.left_border + i * win->char_width,
-                                .y = win->cfg.top_border + line_y,
+                                .x = win->cfg.border.left + i * win->char_width,
+                                .y = win->cfg.border.top + line_y,
                                 .color = spec.ul,
                                 .width = win->char_width,
                                 .height = win->cfg.underline_width,
                             });
                             if (spec.underlined > 1) {
                                 push_element(&rctx.decoration_buf, &(struct element) {
-                                    .x = win->cfg.left_border + i * win->char_width,
-                                    .y = win->cfg.top_border + line_y + win->cfg.underline_width + 1,
+                                    .x = win->cfg.border.left + i * win->char_width,
+                                    .y = win->cfg.border.top + line_y + win->cfg.underline_width + 1,
                                     .color = spec.ul,
                                     .width = win->char_width,
                                     .height = win->cfg.underline_width,
@@ -744,8 +744,8 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                         prev_dec[-2].width += win->char_width;
                     } else {
                         push_element(&rctx.decoration_buf, &(struct element) {
-                            .x = win->cfg.left_border + i * win->char_width,
-                            .y = win->cfg.top_border + line_y,
+                            .x = win->cfg.border.left + i * win->char_width,
+                            .y = win->cfg.border.top + line_y,
                             .color = spec.ul,
                             .width = win->char_width,
                             .height = win->cfg.underline_width,

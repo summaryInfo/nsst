@@ -685,11 +685,11 @@ void selection_view_scrolled(struct selection_state *sel, struct screen *scr) {
 
 static inline void adj_coords(struct window *win, int16_t *x, int16_t *y, bool pixel) {
     struct extent c = window_get_cell_size(win);
-    struct extent b = window_get_border(win);
+    struct border b = window_get_border(win);
     struct extent g = window_get_grid_size(win);
 
-    *x = MAX(0, MIN(g.width - 1, (*x - b.width)));
-    *y = MAX(0, MIN(g.height - 1, (*y - b.height)));
+    *x = MAX(0, MIN(g.width - 1, (*x - b.left)));
+    *y = MAX(0, MIN(g.height - 1, (*y - b.top)));
 
     if (!pixel) {
          *x /= c.width;
@@ -699,12 +699,12 @@ static inline void adj_coords(struct window *win, int16_t *x, int16_t *y, bool p
 
 static void pending_scroll(struct selection_state *sel, struct screen *scr, int16_t y, enum mouse_event_type event) {
     struct extent c = window_get_cell_size(sel->win);
-    struct extent b = window_get_border(sel->win);
+    struct border b = window_get_border(sel->win);
     struct extent g = window_get_grid_size(sel->win);
 
     if (event == mouse_event_motion) {
-        if (y - b.height >= g.height) sel->pending_scroll = MIN(-1, (g.height + b.height - y - c.height + 1) / c.height / 2);
-        else if (y < b.height) sel->pending_scroll = MAX(1, (b.height - y + c.height - 1) / c.height / 2);
+        if (y - b.top>= g.height) sel->pending_scroll = MIN(-1, (g.height + b.top- y - c.height + 1) / c.height / 2);
+        else if (y < b.top) sel->pending_scroll = MAX(1, (b.top- y + c.height - 1) / c.height / 2);
         selection_pending_scroll(sel, scr);
     }
 }
@@ -748,10 +748,10 @@ void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, 
     if (mask & mask_button_4) lmask |= 8;
 
     struct window *win = term_window(term);
-    struct extent b = window_get_border(win);
+    struct border b = window_get_border(win);
     struct extent g = window_get_grid_size(win);
 
-    if (x < b.width || x >= g.width + b.width || y < b.height || y > g.height + b.height) {
+    if (x < b.left || x >= g.width + b.left || y < b.top || y > g.height + b.top) {
         if (evt == 1) term_answerback(term, CSI"0&w");
     } else {
         adj_coords(win, &x, &y, term_get_mstate(term)->locator_pixels);
@@ -768,20 +768,20 @@ void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, 
     struct mouse_state *loc = term_get_mstate(term);
     struct window *win = term_window(term);
     struct extent c = window_get_cell_size(win);
-    struct extent b = window_get_border(win);
+    struct border b = window_get_border(win);
     struct extent g = window_get_grid_size(win);
 
     if (!loc->locator_pixels) {
-        xs = xs * c.width + b.width;
-        xe = xe * c.width + b.width;
-        ys = ys * c.height + b.height;
-        ye = ye * c.height + b.height;
+        xs = xs * c.width + b.left;
+        xe = xe * c.width + b.left;
+        ys = ys * c.height + b.top;
+        ye = ye * c.height + b.top;
     }
 
-    xs = MIN(xs, b.width + g.width - 1);
-    xe = MIN(xe, b.width + g.width);
-    ys = MIN(ys, b.height + g.height - 1);
-    ye = MIN(ye, b.height + g.height);
+    xs = MIN(xs, b.left + g.width - 1);
+    xe = MIN(xe, b.left + g.width);
+    ys = MIN(ys, b.top + g.height - 1);
+    ye = MIN(ye, b.top + g.height);
 
     loc->filter = (struct rect) { xs, ys, xe - xs, ye - ys };
     loc->locator_filter = 1;
@@ -799,14 +799,13 @@ static void update_active_uri(struct screen *scr, struct window *win, struct mou
     if (window_cfg(win)->uri_mode == uri_mode_off) return;
 
     struct extent c = window_get_cell_size(win);
-    struct extent b = window_get_border(win);
+    struct border b = window_get_border(win);
     struct extent g = window_get_grid_size(win);
 
     uint32_t uri = EMPTY_URI;
-    if ((ev->x >= b.width && ev->x < g.width + b.width) && (ev->y >= b.height || ev->y < g.height + b.height)) {
-        int16_t x = (ev->x - b.width) / c.width;
-        int16_t y = (ev->y - b.height) / c.height;
-
+    if ((ev->x >= b.left && ev->x < g.width + b.left) && (ev->y >= b.top || ev->y < g.height + b.top)) {
+        int16_t x = (ev->x - b.left) / c.width;
+        int16_t y = (ev->y - b.top) / c.height;
 
         struct line_span pos = screen_view(scr);
         screen_span_shift_n(scr, &pos, y);

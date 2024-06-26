@@ -211,7 +211,7 @@ Initial
 .Qq handle meta/alt modifier
 mode state
 .It Fl \-horizontal-border Ns = Ns Ar pixels
-Top and bottom internal botder width
+Top and bottom internal botder width (deprecated)
 .It Fl \-italic-color Ns = Ns Ar color
 Special color of italic text.
 .Ar Color
@@ -462,7 +462,17 @@ This option is recognized only if URI support is compiled in.
 format is same as for
 .Fl \-colorN
 .It Fl \-vertical-border Ns = Ns Ar pixels
-Left and right internal border width
+Left and right internal border width (deprecated)
+.It Fl \-left-border Ns = Ns Ar pixels
+Left internal border width
+.It Fl \-right-border Ns = Ns Ar pixels
+Right internal border width
+.It Fl \-top-border Ns = Ns Ar pixels
+Top internal border width
+.It Fl \-bottom-border Ns = Ns Ar pixels
+Bottom internal border width
+.It Fl \-border Ns = Ns Ar pixels
+Internal border width. Sets top, left, right and bottom borders to the same value
 .It Fl \-visual-bell Ns = Ns Ar bool
 Enable/disable visual bell
 .It Fl \-visual-bell-time Ns = Ns Ar time

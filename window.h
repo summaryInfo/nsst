@@ -106,7 +106,7 @@ struct extent window_get_grid_position(struct window *win);
 struct extent window_get_grid_size(struct window *win);
 struct extent window_get_screen_size(struct window *win);
 struct extent window_get_cell_size(struct window *win);
-struct extent window_get_border(struct window *win);
+struct border window_get_border(struct window *win);
 struct extent window_get_size(struct window *win);
 
 void window_set_title(struct window *win, enum title_target which, const char *name, bool utf8);

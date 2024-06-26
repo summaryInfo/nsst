@@ -262,8 +262,8 @@ struct extent window_get_position(struct window *win) {
 
 struct extent window_get_grid_position(struct window *win) {
     struct extent res = pvtbl->get_position(win);
-    res.width += win->cfg.left_border;
-    res.height += win->cfg.top_border;
+    res.width += win->cfg.border.left;
+    res.height += win->cfg.border.top;
     return res;
 }
 
@@ -279,8 +279,8 @@ struct extent window_get_cell_size(struct window *win) {
     return (struct extent) { win->char_width, win->char_depth + win->char_height };
 }
 
-struct extent window_get_border(struct window *win) {
-    return (struct extent) { win->cfg.left_border, win->cfg.top_border };
+struct border window_get_border(struct window *win) {
+    return win->cfg.border;
 }
 
 struct extent window_get_size(struct window *win) {
@@ -523,11 +523,11 @@ void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height) {
     height = MIN(height, MIN(win->ch - ys, win->ch - yd));
     if (!height) return;
 
-    ys = ys*(win->char_height + win->char_depth) + win->cfg.top_border;
-    yd = yd*(win->char_height + win->char_depth) + win->cfg.top_border;
+    ys = ys*(win->char_height + win->char_depth) + win->cfg.border.top;
+    yd = yd*(win->char_height + win->char_depth) + win->cfg.border.top;
     height *= win->char_depth + win->char_height;
 
-    int16_t xs = win->cfg.left_border;
+    int16_t xs = win->cfg.border.left;
     int16_t width = win->cw*win->char_width;
 
     pvtbl->copy(win, (struct rect){xs, yd, width, height}, xs, ys);
@@ -539,8 +539,8 @@ static inline void window_wait_for_configure(struct window *win) {
 }
 
 void handle_resize(struct window *win, int16_t width, int16_t height, bool artificial) {
-    int16_t new_cw = MAX(2, (width - 2*win->cfg.left_border)/win->char_width);
-    int16_t new_ch = MAX(1, (height - 2*win->cfg.top_border)/(win->char_height + win->char_depth));
+    int16_t new_cw = MAX(2, (width - win->cfg.border.left - win->cfg.border.right)/win->char_width);
+    int16_t new_ch = MAX(1, (height - win->cfg.border.top - win->cfg.border.bottom)/(win->char_height + win->char_depth));
 
     if (new_cw != win->cw || new_ch != win->ch) {
         /* First try to read from tty to empty out input queue since this is input

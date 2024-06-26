@@ -296,8 +296,8 @@ void wayland_update_window_props(struct window *win) {
     xdg_toplevel_set_app_id(get_plat(win)->xdg_toplevel,
                             win->cfg.window_class ? win->cfg.window_class : NSST_CLASS);
     xdg_toplevel_set_min_size(get_plat(win)->xdg_toplevel,
-                              win->cfg.left_border * 2 + win->char_width,
-                              win->cfg.left_border * 2 + win->char_depth + win->char_height);
+                              win->cfg.border.left + win->cfg.border.right + 2*win->char_width,
+                              win->cfg.border.top + win->cfg.border.bottom + win->char_depth + win->char_height);
     wl_surface_commit(get_plat(win)->surface);
 }
 
@@ -310,14 +310,14 @@ void wayland_fixup_geometry(struct window *win) {
     if (win->cfg.geometry.char_geometry) {
         int16_t cw = MAX(win->cfg.geometry.r.width, 2);
         int16_t ch = MAX(win->cfg.geometry.r.height, 1);
-        win->cfg.geometry.r.width = win->char_width * cw + win->cfg.left_border * 2;
-        win->cfg.geometry.r.height = (win->char_height + win->char_depth) * ch + win->cfg.top_border * 2;
+        win->cfg.geometry.r.width = win->char_width * cw + win->cfg.border.left + win->cfg.border.right;
+        win->cfg.geometry.r.height = (win->char_height + win->char_depth) * ch + win->cfg.border.top + win->cfg.border.bottom;
         win->cfg.geometry.char_geometry = false;
         win->cw = cw;
         win->ch = ch;
     } else {
-        win->cw = MAX(2, (win->cfg.geometry.r.width - 2*win->cfg.left_border) / win->char_width);
-        win->ch = MAX(1, (win->cfg.geometry.r.height - 2*win->cfg.top_border) / (win->char_height + win->char_depth));
+        win->cw = MAX(2, (win->cfg.geometry.r.width - win->cfg.border.left - win->cfg.border.right) / win->char_width);
+        win->ch = MAX(1, (win->cfg.geometry.r.height - win->cfg.border.top - win->cfg.border.bottom) / (win->char_height + win->char_depth));
     }
 }
 
@@ -1414,10 +1414,10 @@ static bool try_handle_csd_button(struct window *win, struct seat *seat, int32_t
     if (code >= 3) return false;
     if (!pressed) return false;
 
-    bool left = x < win->cfg.left_border;
-    bool right = x > win->cw*win->char_width + win->cfg.left_border;
-    bool top = y < win->cfg.top_border;
-    bool bottom = y > win->ch*(win->char_height + win->char_depth) + win->cfg.top_border;
+    bool left = x < win->cfg.border.left;
+    bool right = x > win->cw*win->char_width + win->cfg.border.left;
+    bool top = y < win->cfg.border.top;
+    bool bottom = y > win->ch*(win->char_height + win->char_depth) + win->cfg.border.top;
     if (!left && !right && !top && !bottom) return false;
 
     if (code == 1) {
@@ -1448,7 +1448,7 @@ static bool try_handle_csd_axis(struct window *win, struct seat *seat, int step,
     if (get_plat(win)->use_ssd) return false;
     if (!seat->pointer.axes[0].discrete) return false;
 
-    bool top = y < win->cfg.top_border;
+    bool top = y < win->cfg.border.top;
     if (!top) return false;
 
     if (step > 0) {

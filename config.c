@@ -128,6 +128,9 @@ union opt_limits {
         bool in_char;
     } arg_geometry;
 #define arg_int16 arg_int64
+#define arg_border arg_int64
+#define arg_vertical_border arg_int64
+#define arg_horizontal_border arg_int64
 #define arg_uint8 arg_int64
 };
 
@@ -135,15 +138,18 @@ typedef bool (*parse_fn)(const char *, void *, union opt_limits *);
 
 enum option_type {
     option_type_boolean,
+    option_type_border,
     option_type_color,
     option_type_double,
     option_type_enum,
     option_type_geometry,
+    option_type_horizontal_border,
     option_type_int16,
     option_type_int64,
     option_type_nrcs,
     option_type_string,
     option_type_uint8,
+    option_type_vertical_border,
 };
 
 #define MAX_SHORT_OPT 2
@@ -170,6 +176,9 @@ static bool do_parse_int64(const char *, void *, union opt_limits *);
 static bool do_parse_nrcs(const char *, void *, union opt_limits *);
 static bool do_parse_string(const char *, void *, union opt_limits *);
 static bool do_parse_uint8(const char *, void *, union opt_limits *);
+static bool do_parse_border(const char *, void *, union opt_limits *);
+static bool do_parse_vertical_border(const char *, void *, union opt_limits *);
+static bool do_parse_horizontal_border(const char *, void *, union opt_limits *);
 
 /* type_size field is stored modulo 256 */
 #define T(type_, name_, size_) [option_type_##type_] = { \
@@ -195,6 +204,9 @@ struct option_type_desc {
     T(nrcs, "charset string", enum charset),
     T(string, "str", char *),
     T(uint8, "int", uint8_t),
+    T(border, "int", struct border),
+    T(vertical_border, "int", struct border),
+    T(horizontal_border, "int", struct border),
 };
 
 #undef T
@@ -288,7 +300,8 @@ static struct option options[] = {
     X(int64, fps, "fps", "Window refresh rate", 60, 2, 1000),
     X(int64, frame_finished_delay, "frame-wait-delay", "Maximal time since last application output before redraw", SEC/240000, 0, 10*SEC/1000),
     X(boolean, has_meta, "has-meta", "Handle meta/alt", true),
-    X(int16, left_border, "horizontal-border", "Top and bottom botders", 8, 0, 200),
+    X(int16, border.left, "left-border", "Left border size", 8, 0, 200),
+    X(int16, border.right, "right-border", "Right border size", 8, 0, 200),
     X(color, palette[SPECIAL_ITALIC], "italic-color", "Special color of italic text", COLOR_SPECIAL_ITALIC),
     X(boolean, keep_clipboard, "keep-clipboard", "Reuse copied clipboard content instead of current selection data", false),
     X(boolean, keep_selection, "keep-selection", "Don't clear X11 selection when unhighlighted", false),
@@ -378,7 +391,12 @@ static struct option options[] = {
     G(enum, backend, "backend", "Select renderer backend", renderer_auto, renderer_auto, (const char *[]){"auto", "x11", "wayland", "x11xrender", "x11shm", "waylandshm", NULL}),
     X(color, palette[SPECIAL_URI_UNDERLINE], "uri-underline-color", "Special color of URI underline", COLOR_SPECIAL_URI_UNDERLINE),
     X(boolean, utf8, "use-utf8", "Enable UTF-8 I/O", true),
-    X(int16, top_border, "vertical-border", "Left and right borders", 8, 0, 200),
+    X(int16, border.top, "top-border", "Top border size", 8, 0, 200),
+    X(int16, border.bottom, "bottom-border", "Bottom border size", 8, 0, 200),
+    X(border, border, "border", "Border size", -1, 0, 200),
+    X(vertical_border, border, "vertical-border", "Vertical border size (deprecated)", -1, 0, 200),
+    X(horizontal_border, border, "horizontal-border", "Horizontal border size (deprecated)", -1, 0, 200),
+    X(border, border, "border", "border size", -1, 0, 200),
     X(boolean, visual_bell, "visual-bell", "Whether bell should be visual or normal", false),
     X(int64, visual_bell_time, "visual-bell-time", "Length of visual bell", 200000, 0, 10*SEC/1000),
     X1(int16, vt_version, 'V', "vt-version", "Emulated VT version", 420, 0, 999),
@@ -630,6 +648,46 @@ static bool do_parse_uint8(const char *str, void *dst, union opt_limits *limits)
     uint8_t result = val64;
 
     memcpy(dst, &result, sizeof result);
+    return true;
+}
+
+static bool do_parse_border(const char *str, void *dst, union opt_limits *limits) {
+    struct border *border = dst;
+    int64_t val64;
+    if (!do_parse_int64(str, &val64, limits))
+        return false;
+
+    if (val64 != -1) {
+        border->left = border->right = val64;
+        border->top = border->bottom = val64;
+    }
+
+    return true;
+}
+
+static bool do_parse_vertical_border(const char *str, void *dst, union opt_limits *limits) {
+    struct border *border = dst;
+    int64_t val64;
+    if (!do_parse_int64(str, &val64, limits))
+        return false;
+
+    if (val64 != -1)
+        border->top = border->bottom = val64;
+    else
+        warn("--vertical-border is obsolete, use --top-border, --bottom-border or --border instead");
+    return true;
+}
+
+static bool do_parse_horizontal_border(const char *str, void *dst, union opt_limits *limits) {
+    struct border *border = dst;
+    int64_t val64;
+    if (!do_parse_int64(str, &val64, limits))
+        return false;
+
+    if (val64 != -1)
+        border->left = border->right = val64;
+    else
+        warn("--horizontal-border is obsolete, use --left-border, --right-border or --border instead");
     return true;
 }
 

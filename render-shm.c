@@ -72,7 +72,7 @@ bool shm_reload_font(struct window *win, bool need_free) {
         handle_resize(win, w, h, true);
 
         int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
-        int bw = win->cfg.left_border, bh = win->cfg.top_border;
+        int bw = win->cfg.border.left, bh = win->cfg.border.top;
         image_draw_rect(get_shm(win)->im, (struct rect) {win->cw*cw + bw, bh, w - win->cw*cw - bw, win->ch*(ch + cd)}, win->bg_premul);
         image_draw_rect(get_shm(win)->im, (struct rect) {0, win->ch*(ch + cd) + bh, w, h - win->ch*(ch + cd) - bh}, win->bg_premul);
     } else {
@@ -113,7 +113,7 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
 
     int cw = win->char_width, ch = win->char_height;
     int cd = win->char_depth, ul = win->cfg.underline_width;
-    int bw = win->cfg.left_border, bh = win->cfg.top_border;
+    int bw = win->cfg.border.left, bh = win->cfg.border.top;
 
     bool slow_path = win->cfg.special_bold || win->cfg.special_underline || win->cfg.special_blink || win->cfg.blend_fg ||
                      win->cfg.special_reverse || win->cfg.special_italic || win->cfg.blend_all_bg || selection_active(term_get_sstate(win->term));
@@ -262,8 +262,8 @@ void shm_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
 
     int16_t w = win->char_width, h = win->char_depth + win->char_height;
 
-    dst.y -= win->cfg.top_border;
-    dst.x -= win->cfg.left_border;
+    dst.y -= win->cfg.border.top;
+    dst.x -= win->cfg.border.left;
 
     dst.height = (dst.height + dst.y + h - 1) / h;
     dst.height -= dst.y /= h;
@@ -304,8 +304,8 @@ void shm_resize(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw
 
     resize_bounds(win, delta_y);
 
-    int16_t xw = win->cw * win->char_width + win->cfg.left_border;
-    int16_t xh = win->ch * (win->char_height + win->char_depth) + win->cfg.top_border;
+    int16_t xw = win->cw * win->char_width + win->cfg.border.left;
+    int16_t xh = win->ch * (win->char_height + win->char_depth) + win->cfg.border.top;
 
     if (delta_y > 0) {
         image_draw_rect(get_shm(win)->im, (struct rect) { 0, common_h, common_w, sz.height - common_h }, win->bg_premul);

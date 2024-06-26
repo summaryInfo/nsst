@@ -263,8 +263,8 @@ FORCEINLINE
 static inline struct cursor_rects describe_cursor(struct window *win, int16_t cur_x, int16_t cur_y,
                                                   bool on_margin, bool beyond_eol) {
     struct cursor_rects cr;
-    cur_x = cur_x * win->char_width + win->cfg.left_border;
-    cur_y = cur_y * (win->char_depth + win->char_height) + win->cfg.top_border;
+    cur_x = cur_x * win->char_width + win->cfg.border.left;
+    cur_y = cur_y * (win->char_depth + win->char_height) + win->cfg.border.top;
 
     cr.rects[0] = (struct rect) {cur_x, cur_y, 1, win->char_height + win->char_depth};
     cr.rects[1] = (struct rect) {cur_x, cur_y, win->char_width, 1};
@@ -306,10 +306,10 @@ static inline struct cursor_rects describe_cursor(struct window *win, int16_t cu
 FORCEINLINE
 static inline void describe_borders(struct window *win, struct rect rects[static 4]) {
     int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
-    int bw = win->cfg.left_border, bh = win->cfg.top_border;
+    int bw = win->cfg.border.left, bh = win->cfg.border.top;
     int w = win->cfg.geometry.r.width, h = win->cfg.geometry.r.height;
 
-    rects[0] = (struct rect) {0, 0, w, win->cfg.top_border};
+    rects[0] = (struct rect) {0, 0, w, bh};
     rects[1] = (struct rect) {0, bh, bw, win->ch*(ch + cd)};
     rects[2] = (struct rect) {win->cw*cw + bw, bh, w - win->cw*cw - bw, win->ch*(ch + cd)};
     rects[3] = (struct rect) {0, win->ch*(ch + cd) + bh, w, h - win->ch*(ch + cd) - bh};
@@ -323,8 +323,8 @@ static inline struct rect window_rect(struct window *win) {
 FORCEINLINE
 static inline struct extent win_image_size(struct window *win) {
     return (struct extent) {
-        .width = (win->cw + 1) * win->char_width + 2*win->cfg.left_border - 1,
-        .height = (win->ch + 1) * (win->char_height + win->char_depth) + 2*win->cfg.top_border - 1,
+        .width = (win->cw + 1) * win->char_width + win->cfg.border.left + win->cfg.border.right - 1,
+        .height = (win->ch + 1) * (win->char_height + win->char_depth) + win->cfg.border.top + win->cfg.border.bottom - 1,
     };
 }
 
