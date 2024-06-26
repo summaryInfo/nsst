@@ -250,7 +250,7 @@ fi
 
 if [ "$use_x11shm" = 1 ] || [ "$use_x11xrender" = 1 ]; then
     objs="$objs window-x11.o"
-    deps="$deps xcb xcb-xkb xkbcommon-x11"
+    deps="$deps xcb xcb-xkb xkbcommon-x11 xcb-cursor"
     use_x11=1
 fi
 

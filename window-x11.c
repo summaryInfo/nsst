@@ -16,24 +16,36 @@
 #include "window-x11.h"
 
 #include <errno.h>
-#include <poll.h>
 #include <inttypes.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <xcb/xcb_cursor.h>
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
 #define NSST_CLASS "Nsst"
 
+struct cursor {
+    ht_head_t link;
+    char *name;
+    int32_t refcount;
+    xcb_cursor_t xcursor;
+};
+
 struct context {
     xcb_screen_t *screen;
     xcb_colormap_t mid;
     xcb_visualtype_t *vis;
+    xcb_cursor_context_t *cursor_ctx;
+
+    hashtable_t cursors;
+    struct cursor *cursor_xterm;
 
     struct atom_ {
         xcb_atom_t _NET_WM_PID;
@@ -356,6 +368,67 @@ static void x11_bell(struct window *win, uint8_t vol) {
             XCB_XKB_ID_DFLT_XI_ID, vol, 1, 0, 0, 0, XCB_ATOM_ANY, get_plat(win)->wid);
 }
 
+static bool cursor_cmp(const ht_head_t *a, const ht_head_t *b) {
+    const struct cursor *ua = (const struct cursor *)a;
+    const struct cursor *ub = (const struct cursor *)b;
+    return !strcmp(ua->name, ub->name);
+}
+
+static struct cursor *get_cursor(const char *name) {
+    struct cursor dummy = {
+        .name = (char *)name,
+        .link.hash = hash64(name, strlen(name)),
+    };
+
+    ht_head_t **it = ht_lookup_ptr(&ctx.cursors, &dummy.link);
+    if (*it) {
+        struct cursor *found = (struct cursor *)*it;
+        found->refcount++;
+        return found;
+    }
+
+    xcb_cursor_t xc = xcb_cursor_load_cursor(ctx.cursor_ctx, name);
+    if (xc == XCB_NONE) {
+        warn("Unable to load cursor '%s'", name);
+        return NULL;
+    }
+
+    struct cursor *new = xalloc(sizeof *new);
+    *new = (struct cursor) {
+        .link.hash = dummy.link.hash,
+        .name = strdup(name),
+        .refcount = 1,
+        .xcursor = xc,
+    };
+
+    ht_insert_hint(&ctx.cursors, it, &new->link);
+    return new;
+}
+
+static void put_cursor(struct cursor *csr) {
+    if (!--csr->refcount) {
+        ht_erase(&ctx.cursors, &csr->link);
+        xcb_free_cursor(con, csr->xcursor);
+        free(csr->name);
+        free(csr);
+    }
+}
+
+static void do_select_cursor(struct window *win, struct cursor *csr) {
+    if (get_plat(win)->cursor)
+        put_cursor(get_plat(win)->cursor);
+
+    get_plat(win)->cursor = csr;
+
+    xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_CURSOR, &csr->xcursor);
+}
+
+static void x11_select_cursor(struct window *win, const char *name) {
+    if (!ctx.cursor_ctx) return;
+    struct cursor *csr = get_cursor(name);
+    if (csr) do_select_cursor(win, csr);
+}
+
 static void x11_set_title(struct window *win, const char *title, bool utf8) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid,
         utf8 ? ctx.atom._NET_WM_NAME : XCB_ATOM_WM_NAME,
@@ -600,6 +673,9 @@ static void x11_map_window(struct window *win) {
 }
 
 static void x11_free_window(struct window *win) {
+    if (get_plat(win)->cursor)
+        put_cursor(get_plat(win)->cursor);
+
     if (get_plat(win)->wid) {
         xcb_unmap_window(con, get_plat(win)->wid);
         ctx.renderer_free(win);
@@ -943,13 +1019,25 @@ static void x11_handle_events(void) {
 static void x11_free(void) {
     ctx.renderer_free_context();
 
-    xkb_state_unref(ctx.xkb_state);
-    xkb_keymap_unref(ctx.xkb_keymap);
-    xkb_context_unref(ctx.xkb_ctx);
+    if (ctx.cursors.data) {
+        if (ctx.cursor_xterm)
+            put_cursor(ctx.cursor_xterm);
+        ht_iter_t it = ht_begin(&ctx.cursors);
+        assert(!ht_current(&it));
+        ht_free(&ctx.cursors);
+    }
+
+    if (ctx.xkb_state)
+        xkb_state_unref(ctx.xkb_state);
+    if (ctx.xkb_keymap)
+        xkb_keymap_unref(ctx.xkb_keymap);
+    if (ctx.xkb_ctx)
+        xkb_context_unref(ctx.xkb_ctx);
+    if (ctx.cursor_ctx)
+        xcb_cursor_context_free(ctx.cursor_ctx);
 
     xcb_disconnect(con);
     con = NULL;
-
 }
 
 static struct platform_vtable x11_vtable = {
@@ -976,6 +1064,7 @@ static struct platform_vtable x11_vtable = {
     .update_colors = x11_update_colors,
     .window_action = x11_window_action,
     .update_props = x11_update_window_props,
+    .select_cursor = x11_select_cursor,
     .fixup_geometry = x11_fixup_geometry,
     .free = x11_free,
 };
@@ -1052,6 +1141,14 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
     if (!configure_xkb()) {
         xcb_disconnect(con);
         die("Can't configure XKB");
+    }
+
+    int result = xcb_cursor_context_new(con, ctx.screen, &ctx.cursor_ctx);
+    if (result) {
+        warn("Can't create cursor context: %d", result);
+        ctx.cursor_ctx = NULL;
+    } else {
+        ht_init(&ctx.cursors, HT_INIT_CAPS, cursor_cmp);
     }
 
     /* Intern all used atoms */

@@ -453,6 +453,9 @@ struct window *create_window(struct instance_config *cfg) {
 
     if (!pvtbl->reload_font(win, false)) goto error;
 
+    if (pvtbl->select_cursor)
+        pvtbl->select_cursor(win, win->cfg.pointer_shape);
+
     win->term = create_term(win, MAX(win->cw, 2), MAX(win->ch, 1));
     win->rcstate = (struct render_cell_state) {
         .palette = term_palette(win->term),

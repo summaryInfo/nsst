@@ -53,6 +53,7 @@ struct platform_window {
     xcb_window_t wid;
     xcb_gcontext_t gc;
     xcb_event_mask_t ev_mask;
+    struct cursor *cursor;
 
     /* Used to restore maximized window */
     struct rect saved;

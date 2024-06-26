@@ -182,7 +182,7 @@ Despite that terminal provides some mouse controls when SSD are not available:
 
     xbps-install libxkbcommon-devel fontconfig-devel freetype-devel
     # For X11
-    xbps-install libxcb-devel
+    xbps-install libxcb-devel xcb-util-cursor-devel
     # For Wayland
     xbps-install wayland-devel wayland-protocols
 
@@ -190,7 +190,7 @@ Despite that terminal provides some mouse controls when SSD are not available:
 
     pacman -S libxkbcommon fontconfig freetype2
     # For X11
-    pacman -S libxcb libxkbcommon-x11
+    pacman -S libxcb libxkbcommon-x11 xcb-util-cursor
     # For Wayland
     pacman -S wayland wayland-protocols
 
@@ -200,7 +200,7 @@ Despite that terminal provides some mouse controls when SSD are not available:
     apt install libxkbcommon-dev libfontconfig1-dev libfreetype-dev
     # For X11
     apt install libx11-xcb-dev libxcb-shm0-dev libxcb-render0-dev \
-        xkbcommon-x11-dev
+        xkbcommon-x11-dev libxcb-cursor0-dev
     # For Wayland
     apt install libwayland-dev wayland-protocols
 
