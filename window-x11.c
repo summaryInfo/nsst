@@ -45,6 +45,7 @@ struct context {
     xcb_cursor_context_t *cursor_ctx;
 
     hashtable_t cursors;
+    xcb_cursor_t hidden_cursor;
     struct cursor *cursor_xterm;
 
     struct atom_ {
@@ -420,13 +421,30 @@ static void do_select_cursor(struct window *win, struct cursor *csr) {
 
     get_plat(win)->cursor = csr;
 
-    xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_CURSOR, &csr->xcursor);
+    uint32_t xc = csr ? csr->xcursor : ctx.hidden_cursor;
+    xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_CURSOR, &xc);
+}
+
+static void do_create_hidden_cursor(void) {
+    ctx.hidden_cursor = xcb_generate_id(con);
+    /* This is is leaked, but it's fine, since we craete it only once */
+    xcb_pixmap_t pm = xcb_generate_id(con);
+    xcb_void_cookie_t c;
+    c = xcb_create_pixmap_checked(con, 1, pm, ctx.screen->root, 1, 1);
+    if (check_void_cookie(c)) return;
+    c = xcb_create_cursor_checked(con, ctx.hidden_cursor, pm, pm, 0, 0, 0, 0, 0, 0, 0, 0);
+    if (check_void_cookie(c)) return;
+    xcb_free_pixmap(con, pm);
 }
 
 static void x11_select_cursor(struct window *win, const char *name) {
     if (!ctx.cursor_ctx) return;
-    struct cursor *csr = get_cursor(name);
-    if (csr) do_select_cursor(win, csr);
+    if (name) {
+        struct cursor *csr = get_cursor(name);
+        if (csr) do_select_cursor(win, csr);
+    } else {
+        do_select_cursor(win, NULL);
+    }
 }
 
 static void x11_set_title(struct window *win, const char *title, bool utf8) {
@@ -1027,6 +1045,8 @@ static void x11_free(void) {
         ht_free(&ctx.cursors);
     }
 
+    if (ctx.hidden_cursor != XCB_NONE)
+        xcb_free_cursor(con, ctx.hidden_cursor);
     if (ctx.xkb_state)
         xkb_state_unref(ctx.xkb_state);
     if (ctx.xkb_keymap)
@@ -1150,6 +1170,7 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
     } else {
         ht_init(&ctx.cursors, HT_INIT_CAPS, cursor_cmp);
     }
+    do_create_hidden_cursor();
 
     /* Intern all used atoms */
     ctx.atom._NET_WM_PID = intern_atom("_NET_WM_PID");

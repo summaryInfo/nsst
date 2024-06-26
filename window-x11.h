@@ -68,7 +68,7 @@ static inline struct platform_window *get_plat(struct window *win) {
 static inline bool check_void_cookie(xcb_void_cookie_t ck) {
     xcb_generic_error_t *err = xcb_request_check(con, ck);
     if (err) {
-        warn("[X11 Error] major=%"PRIu8", minor=%"PRIu16", error=%"PRIu8,
+        warn("[X11 Error Checked] major=%"PRIu8", minor=%"PRIu16", error=%"PRIu8,
                 err->major_code, err->minor_code, err->error_code);
         return true;
     }
