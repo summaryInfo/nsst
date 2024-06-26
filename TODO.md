@@ -7,12 +7,8 @@ Roadmap
 
 _NOTE: These plans can change any time_
 
-* Wayland
-  * Support better CSD decorations
-      * Support separate border sizes
-      * Show special cursor surfaces on edges, use I-beam cursor on the main area
-      *    (in X11 also)
-      * Support rendering titlebar (title, close, maximize, minimize, double click, recolor on focus)
+ Wayland
+  * Support rendering titlebar (title, close, maximize, minimize, double click, recolor on focus)
   * Explicitly specify required versions of protocols
   * Log all events (optional: `WAYLAND_DEBUG` exists)
   * Dynamic output properties tracking:
@@ -22,8 +18,12 @@ _NOTE: These plans can change any time_
   * Support server side cursors
   * Support xdg-activation-v1
 
-* Cleanup poller
+* Refactor
+  * Cleanup fallback cursor loading: add get_cursor_any()
+  * Cleanup poller
     * Use callbacks and userspace timer queue?
+  * Move current window size outside of win->cfg.geometry
+  * Add helper to calulate cw/ch
 
 ### Until 2.7 (or later)
 
@@ -37,21 +37,14 @@ _NOTE: These plans can change any time_
 
 * (Maybe) show helper when hovering over URL.
 
+* Support named windows and allow changing options for a specific window using nsstc
+
 * IME support
 
 * OSC 50 ; Pt ST -- Set font
-* OSC 22 ; Pt ST -- Set pointer shape
-
 * `CSI ? 35 l` / `CSI ? 35 h` -- font shifting functions
 
 * Pointer (for X11)
-  * Change X cursor according to the situation.
-    Hand when pointing to the link and I-beam in other situations.
-  * `CSI > Ps p` -- `XTSMPOINTER`
-  * `OSC 13 Pt ST` -- Set mouse background color
-  * `OSC 14 Pt ST` -- Set mouse foreground color
-  * `OSC 113 Pt ST` -- Reset mouse foreground color
-  * `OSC 114 Pt ST` -- Reset mouse background color
 
 ## Planned/possible features
 
@@ -159,3 +152,7 @@ _NOTE: These plans can change any time_
   * `ESC # 3` / `ESC # 4` -- **DECDHL** (poorly interacts with mouse)
   * `ESC # 5` -- **DECSWL** (poorly interacts with mouse)
   * `ESC # 6` -- **DECDWL** (poorly interacts with mouse)
+  * `OSC 13 Pt ST` -- Set mouse background color (not supported for modern cursors)
+  * `OSC 14 Pt ST` -- Set mouse foreground color (not supported for modern cursors)
+  * `OSC 113 Pt ST` -- Reset mouse foreground color (not supported for modern cursors)
+  * `OSC 114 Pt ST` -- Reset mouse background color (not supported for modern cursors)
