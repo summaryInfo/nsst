@@ -375,7 +375,7 @@ static struct glyph *downsample_glyph(struct glyph *glyph, uint32_t targ_width, 
     else stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT*sizeof(color_t));
 
     ssize_t targ_height = nearbyint(glyph->height * scale);
-    struct glyph *nglyph = aligned_alloc(CACHE_LINE, ROUNDUP(sizeof(*glyph) + stride * targ_height, CACHE_LINE));
+    struct glyph *nglyph = aligned_alloc(_Alignof(struct glyph), ROUNDUP(sizeof(*glyph) + stride * targ_height, _Alignof(struct glyph)));
     nglyph->x = nearbyint(glyph->x * scale);
     nglyph->y = nearbyint(glyph->y * scale);
     nglyph->width = targ_width;
@@ -449,7 +449,7 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
         stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
     }
 
-    struct glyph *glyph = aligned_alloc(CACHE_LINE, ROUNDUP(sizeof(*glyph) + stride * face->glyph->bitmap.rows, CACHE_LINE));
+    struct glyph *glyph = aligned_alloc(_Alignof(struct glyph), ROUNDUP(sizeof(*glyph) + stride * face->glyph->bitmap.rows, _Alignof(struct glyph)));
     glyph->x = -face->glyph->bitmap_left;
     glyph->y = face->glyph->bitmap_top;
     glyph->width = face->glyph->bitmap.width;
@@ -668,8 +668,8 @@ static struct glyph *make_undercurl(int16_t width, int16_t depth, int16_t underl
         stride = lcd ? width * 4U : ROUNDUP(width, 4);
     }
 
-    struct glyph *glyph = aligned_alloc(CACHE_LINE, sizeof(struct glyph) +
-            ROUNDUP(stride * depth * sizeof(uint8_t), CACHE_LINE));
+    struct glyph *glyph = aligned_alloc(_Alignof(struct glyph), sizeof(struct glyph) +
+            ROUNDUP(stride * depth * sizeof(uint8_t), _Alignof(struct glyph)));
     if (!glyph) return NULL;
 
     glyph->y_off = 0;

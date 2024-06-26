@@ -109,7 +109,7 @@ struct image create_image(int16_t width, int16_t height) {
     };
 
     size_t size = STRIDE(width) * height * sizeof(color_t);
-    im.data = aligned_alloc(CACHE_LINE, (size + CACHE_LINE - 1) & ~(CACHE_LINE - 1));
+    im.data = aligned_alloc(_Alignof(struct glyph), ROUNDUP(size, _Alignof(struct glyph)));
     return im;
 }
 

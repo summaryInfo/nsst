@@ -31,6 +31,8 @@ enum pixel_mode {
     pixmode_bgra,
 };
 
+#define GLYPH_ALIGNMENT MAX(16, MALLOC_ALIGNMENT)
+
 struct glyph {
     ht_head_t head;
 
@@ -45,7 +47,7 @@ struct glyph {
     int16_t stride;
 
     int16_t pixmode;
-    _Alignas(CACHE_LINE) uint8_t data[];
+    _Alignas(GLYPH_ALIGNMENT) uint8_t data[];
 };
 
 #define GLYPH_UNDERCURL UINT32_MAX

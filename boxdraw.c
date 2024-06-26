@@ -49,8 +49,8 @@ struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t de
         stride = lcd ? width * 4U : ROUNDUP(width, 4);
     }
 
-    struct glyph *glyph = aligned_alloc(CACHE_LINE, sizeof(struct glyph) +
-            ROUNDUP(stride * (height + depth) * sizeof(uint8_t), CACHE_LINE));
+    struct glyph *glyph = aligned_alloc(_Alignof(struct glyph), sizeof(struct glyph) +
+            ROUNDUP(stride * (height + depth) * sizeof(uint8_t), _Alignof(struct glyph)));
     if (!glyph) return NULL;
 
     glyph->y_off = 0;
