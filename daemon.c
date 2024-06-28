@@ -9,14 +9,13 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <fcntl.h>
 #include <poll.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/un.h>
 
@@ -81,8 +80,7 @@ bool init_daemon(void) {
         return false;
     }
 
-    int fl = fcntl(fd, F_GETFD);
-    if (fl >= 0) fcntl(fd, F_SETFD, fl | FD_CLOEXEC);
+    set_cloexec(fd);
 
     if (bind(fd, (struct sockaddr*)&addr,
             offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path)) < 0) {
@@ -211,8 +209,7 @@ static void append_pending_launch(struct pending_launch *lnch) {
 static void accept_pending_launch(void) {
     int fd = accept(socket_fd, NULL, NULL);
 
-    int fl = fcntl(fd, F_GETFD);
-    if (fl >= 0) fcntl(fd, F_SETFD, fl | FD_CLOEXEC);
+    set_cloexec(fd);
 
     struct pending_launch *lnch = xzalloc(sizeof(struct pending_launch));
     if (fd < 0 || (lnch->poll_index = poller_alloc_index(fd, POLLIN | POLLHUP)) < 0) {
