@@ -330,7 +330,7 @@ static struct cursor *get_cursor(const char *name) {
     return new;
 }
 
-static void put_cursor(struct cursor *csr) {
+static void unref_cursor(struct cursor *csr) {
     if (!csr) return;
     if (!--csr->refcount) {
         ht_erase(&ctx.cursors, &csr->link);
@@ -362,7 +362,7 @@ static void activate_cursor(struct window *win) {
 
 static void select_cursor(struct window *win, struct cursor *csr) {
     ref_cursor(csr);
-    put_cursor(get_plat(win)->cursor);
+    unref_cursor(get_plat(win)->cursor);
     get_plat(win)->cursor = csr;
 
     activate_cursor(win);
@@ -389,7 +389,7 @@ static void wayland_enable_mouse_events(struct window *win, bool enabled) {
 
 static void wayland_select_cursor(struct window *win, const char *name) {
     struct cursor *csr = get_cursor(name);
-    put_cursor(get_plat(win)->cursor_user);
+    unref_cursor(get_plat(win)->cursor_user);
     get_plat(win)->cursor_user = csr;
 
     if (!csr) csr = get_plat(win)->cursor_default;
@@ -726,11 +726,11 @@ static void free_paste(struct active_paste *paste) {
 static void wayland_free_window(struct window *win) {
     ctx.renderer_free(win);
 
-    put_cursor(get_plat(win)->cursor);
-    put_cursor(get_plat(win)->cursor_uri);
-    put_cursor(get_plat(win)->cursor_resize);
-    put_cursor(get_plat(win)->cursor_default);
-    put_cursor(get_plat(win)->cursor_user);
+    unref_cursor(get_plat(win)->cursor);
+    unref_cursor(get_plat(win)->cursor_uri);
+    unref_cursor(get_plat(win)->cursor_resize);
+    unref_cursor(get_plat(win)->cursor_default);
+    unref_cursor(get_plat(win)->cursor_user);
 
     if (get_plat(win)->primary_selection_source)
         zwp_primary_selection_source_v1_destroy(get_plat(win)->primary_selection_source);

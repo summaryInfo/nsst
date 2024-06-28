@@ -399,7 +399,7 @@ static struct cursor *get_cursor(const char *name) {
     return new;
 }
 
-static void put_cursor(struct cursor *csr) {
+static void unref_cursor(struct cursor *csr) {
     if (!csr) return;
     if (!--csr->refcount) {
         ht_erase(&ctx.cursors, &csr->link);
@@ -439,7 +439,7 @@ static void x11_enable_mouse_events(struct window *win, bool enabled) {
 
 static void select_cursor(struct window *win, struct cursor *csr) {
     ref_cursor(csr);
-    put_cursor(get_plat(win)->cursor);
+    unref_cursor(get_plat(win)->cursor);
     get_plat(win)->cursor = csr;
     if (!get_plat(win)->cursor_is_hidden)
         xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_CURSOR, &csr->xcursor);
@@ -461,7 +461,7 @@ static void x11_select_cursor(struct window *win, const char *name) {
     if (!ctx.cursor_ctx) return;
 
     struct cursor *csr = get_cursor(name);
-    put_cursor(get_plat(win)->cursor_user);
+    unref_cursor(get_plat(win)->cursor_user);
     get_plat(win)->cursor_user = csr;
 
     if (!csr) csr = get_plat(win)->cursor_default;
@@ -736,10 +736,10 @@ static void x11_map_window(struct window *win) {
 }
 
 static void x11_free_window(struct window *win) {
-    put_cursor(get_plat(win)->cursor);
-    put_cursor(get_plat(win)->cursor_default);
-    put_cursor(get_plat(win)->cursor_uri);
-    put_cursor(get_plat(win)->cursor_user);
+    unref_cursor(get_plat(win)->cursor);
+    unref_cursor(get_plat(win)->cursor_default);
+    unref_cursor(get_plat(win)->cursor_uri);
+    unref_cursor(get_plat(win)->cursor_user);
 
     if (get_plat(win)->wid) {
         xcb_unmap_window(con, get_plat(win)->wid);
