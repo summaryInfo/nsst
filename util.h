@@ -21,8 +21,6 @@
 
 #define SEC 1000000000LL
 #define CACHE_LINE 64
-#define TIMEDIFF(t, d)  ((((d).tv_sec - (t).tv_sec) * SEC + ((d).tv_nsec - (t).tv_nsec)))
-#define TIMEINC(t, in) ((t).tv_sec += (in)/SEC), ((t).tv_nsec += (in)%SEC)
 
 #define IS_SAME_TYPE_(a, b) __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
 #define IS_ARRAY_(arr) (!IS_SAME_TYPE_((arr), &(arr)[0]))
@@ -129,6 +127,37 @@ static inline bool intersect_with(struct rect *src, struct rect *dst) {
             *src = inters;
             return 1;
         }
+}
+
+static inline bool ts_leq(struct timespec *a, struct timespec *b) {
+    return a->tv_sec < b->tv_sec || (a->tv_sec == b->tv_sec && a->tv_nsec <= b->tv_nsec);
+}
+
+static inline struct timespec ts_sub_sat(struct timespec *a, struct timespec *b) {
+    if (ts_leq(a, b))
+        return (struct timespec) {0};
+    struct timespec result = {
+        .tv_sec = a->tv_sec - b->tv_sec,
+        .tv_nsec = a->tv_nsec - b->tv_nsec,
+    };
+    if (result.tv_nsec < 0) {
+        result.tv_nsec += SEC;
+        result.tv_sec--;
+    }
+    return result;
+}
+
+static inline struct timespec ts_add(struct timespec *a, int64_t inc) {
+    long ns = a->tv_nsec + inc;
+    long sadj = (ns - (SEC + 1)*(inc < 0)) / SEC;
+    return (struct timespec) {
+        .tv_sec = a->tv_sec + sadj,
+        .tv_nsec = ns - sadj * SEC
+    };
+}
+
+static inline int64_t ts_diff(struct timespec *b, struct timespec *a) {
+    return (a->tv_sec - b->tv_sec)*SEC + (a->tv_nsec - b->tv_nsec);
 }
 
 /* Adjust buffer capacity if no space left (size > *caps) */

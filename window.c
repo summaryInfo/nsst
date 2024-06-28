@@ -543,7 +543,7 @@ void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height) {
 
 static inline void window_wait_for_configure(struct window *win) {
     clock_gettime(CLOCK_TYPE, &win->wait_for_configure);
-    TIMEINC(win->wait_for_configure, -2*win->cfg.wait_for_configure_delay*1000);
+    win->wait_for_configure = ts_add(&win->wait_for_configure, -2*win->cfg.wait_for_configure_delay*1000);
 }
 
 void handle_resize(struct window *win, int16_t width, int16_t height, bool artificial) {
@@ -707,8 +707,8 @@ void run(void) {
                  * we can enable it back and attempt to read from pty.
                  * If there is nothing to read it won't block since O_NONBLOCK is set for ptys */
                 if (!need_read && !poller_is_enabled(win->poll_index)) {
-                    int64_t diff_conf = win->cfg.wait_for_configure_delay*1000LL - TIMEDIFF(win->wait_for_configure, cur);
-                    int64_t diff_scroll = win->cfg.smooth_scroll_delay*1000LL - TIMEDIFF(win->last_scroll, cur);
+                    int64_t diff_conf = win->cfg.wait_for_configure_delay*1000LL - ts_diff(&win->wait_for_configure, &cur);
+                    int64_t diff_scroll = win->cfg.smooth_scroll_delay*1000LL - ts_diff(&win->last_scroll, &cur);
                     if (diff_conf < 0 && diff_scroll < 0) {
                         poller_enable(win->poll_index, 1);
                         need_read = true;
@@ -726,7 +726,7 @@ void run(void) {
                 if (win->wait_for_redraw) {
                     /* If we are waiting for the frame to finish, we need to
                      * reduce poll timeout */
-                    int64_t diff = (win->cfg.frame_finished_delay + 1)*1000LL - TIMEDIFF(win->last_read, cur);
+                    int64_t diff = (win->cfg.frame_finished_delay + 1)*1000LL - ts_diff(&win->last_read, &cur);
                     if (win->wait_for_redraw &= diff > 0 && win->active) next_timeout = MIN(next_timeout, diff);
                 }
             }
@@ -741,7 +741,7 @@ void run(void) {
 
             /* Change blink state if blinking interval is expired */
             if (win->active && win->cfg.allow_blinking &&
-                    TIMEDIFF(win->last_blink, cur) > win->cfg.blink_time*1000LL) {
+                    ts_diff(&win->last_blink, &cur) > win->cfg.blink_time*1000LL) {
                 win->rcstate.blink = !win->rcstate.blink;
                 win->blink_commited = 0;
                 win->last_blink = cur;
@@ -750,11 +750,11 @@ void run(void) {
             if (!win->any_event_happend && !pending_scroll && win->blink_commited) continue;
 
             /* Deactivate synchronous update mode if it has expired */
-            if (UNLIKELY(win->sync_active) && TIMEDIFF(win->last_sync, cur) > win->cfg.sync_time*1000LL)
+            if (UNLIKELY(win->sync_active) && ts_diff(&win->last_sync, &cur) > win->cfg.sync_time*1000LL)
                 win->sync_active = 0, win->wait_for_redraw = 0;
 
             /* Reset revert if visual blink duration finished */
-            if (UNLIKELY(win->in_blink) && TIMEDIFF(win->vbell_start, cur) > win->cfg.visual_bell_time*1000LL) {
+            if (UNLIKELY(win->in_blink) && ts_diff(&win->vbell_start, &cur) > win->cfg.visual_bell_time*1000LL) {
                 term_set_reverse(win->term, win->init_invert);
                 win->in_blink = 0;
                 ctx.vbell_count--;
@@ -766,13 +766,13 @@ void run(void) {
             if (!win->force_redraw && !pending_scroll) {
                 if (UNLIKELY(win->sync_active || !win->active)) continue;
                 if (win->wait_for_redraw) {
-                    if (TIMEDIFF(win->last_wait_start, cur) < win->cfg.max_frame_time*1000LL) continue;
+                    if (ts_diff(&win->last_wait_start, &cur) < win->cfg.max_frame_time*1000LL) continue;
                     else win->wait_for_redraw = 0;
                 }
             }
 
             int64_t frame_time = SEC / win->cfg.fps;
-            int64_t remains = frame_time - TIMEDIFF(win->last_draw, cur);
+            int64_t remains = frame_time - ts_diff(&win->last_draw, &cur);
 
             if (remains <= 10000LL || win->force_redraw || pending_scroll) {
                 remains = frame_time;
