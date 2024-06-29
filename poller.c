@@ -389,6 +389,8 @@ void poller_run(void) {
         if (poll(poller.pollfd_array, poller.pollfd_array_caps, timeout) < 0 && errno != EINTR)
             warn("Poll error: %s", strerror(errno));
 #endif
+        clock_gettime(CLOCK_TYPE, &poller.now);
+
         for (ssize_t i = 0; i < poller.pollfd_array_caps; i++) {
             if (poller.pollfd_array[i].fd >= 0 && poller.pollfd_array[i].revents) {
                 struct event *evt = poller.pollfd_array_events[i];
@@ -401,7 +403,6 @@ void poller_run(void) {
             }
         }
 
-        clock_gettime(CLOCK_TYPE, &poller.now);
         struct timespec now2 = ts_add(&poller.now, 10000);
 
         while (poller.timer_heap_size) {
