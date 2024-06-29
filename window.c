@@ -465,10 +465,6 @@ static void reload_window(struct window *win) {
     term_reload_config(win->term);
     screen_damage_lines(term_screen(win->term), 0, win->ch);
 
-    // FIXME Reset timers... (including mouse selection timer)
-    // FIXME Check that we are adjusting read/render inhibitors on timers removal
-    // asdf; Probably done???
-
     if (poller_unset(&win->smooth_scrooll_timer))
         dec_read_inhibit(win);
     if (poller_unset(&win->configure_delay_timer))
