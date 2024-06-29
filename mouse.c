@@ -10,6 +10,7 @@
 #include "time.h"
 #include "window.h"
 
+#include <limits.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -723,11 +724,12 @@ static void pending_scroll(struct selection_state *sel, struct screen *scr, int1
     struct extent g = window_get_grid_size(sel->win);
 
     if (event == mouse_event_motion) {
-        if (y - b.top>= g.height) sel->pending_scroll = MIN(-1, (g.height + b.top- y - c.height + 1) / c.height / 2);
-        else if (y < b.top) sel->pending_scroll = MAX(1, (b.top- y + c.height - 1) / c.height / 2);
-
+        if (y - b.top>= g.height) sel->pending_scroll = MIN(-1, (g.height + b.top - y - c.height + 1) / c.height / 2);
+        else if (y < b.top) sel->pending_scroll = MAX(1, (b.top - y + c.height - 1) / c.height / 2);
 
         if (!sel->scroll_timer && sel->pending_scroll) {
+            sel->pending_scroll *= CHAR_BIT*sizeof(sel->pending_scroll) - __builtin_clz(sel->pending_scroll);
+
             struct instance_config *cfg = window_cfg(sel->win);
             sel->scroll_timer = poller_add_timer(handle_pending_scroll, sel, cfg->select_scroll_time*1000LL);
             poller_set_autoreset(sel->scroll_timer, &sel->scroll_timer);
