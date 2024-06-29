@@ -58,31 +58,29 @@ struct window {
     struct list_head link;
 
     bool focused : 1;
-    bool active : 1;
     bool mouse_events : 1;
-    bool force_redraw : 1;
     bool blink_commited : 1;
     bool drawn_somthing : 1;
-    bool sync_active : 1;
-    bool slow_mode : 1;
-    bool in_blink : 1;
     bool init_invert : 1;
-    bool wait_for_redraw : 1;
     bool autorepeat : 1;
     bool any_event_happend : 1;
     bool redraw_borders : 1;
+    bool force_redraw : 1;
+    bool mapped : 1;
 
     int16_t damaged_y0;
     int16_t damaged_y1;
 
-    struct timespec last_scroll ALIGNED(MALLOC_ALIGNMENT);
-    struct timespec last_blink ALIGNED(MALLOC_ALIGNMENT);
-    struct timespec last_sync ALIGNED(MALLOC_ALIGNMENT);
-    struct timespec last_read ALIGNED(MALLOC_ALIGNMENT);
-    struct timespec last_wait_start ALIGNED(MALLOC_ALIGNMENT);
-    struct timespec last_draw ALIGNED(MALLOC_ALIGNMENT);
-    struct timespec vbell_start ALIGNED(MALLOC_ALIGNMENT);
-    struct timespec wait_for_configure ALIGNED(MALLOC_ALIGNMENT);
+    struct event *frame_timer;
+    struct event *smooth_scrooll_timer;
+    struct event *blink_timer;
+    struct event *sync_update_timeout_timer;
+    struct event *visual_bell_timer;
+    struct event *configure_delay_timer;
+    struct event *read_delay_timer;
+    struct event *redraw_delay_timer;
+    int inhibit_render_counter;
+    int inhibit_read_counter;
 
     color_t bg;
     color_t bg_premul;
@@ -103,7 +101,9 @@ struct window {
 
     struct term *term;
     struct render_cell_state rcstate;
-    int poll_index;
+
+    // FIXME Move this to term.c
+    struct event *tty_event;
 
     struct title_stack_item *title_stack;
 
@@ -345,7 +345,6 @@ struct platform_vtable {
     bool (*has_error)(void);
     ssize_t (*get_opaque_size)(void);
     void (*flush)(void);
-    void (*handle_events)(void);
 
     struct extent (*get_position)(struct window *win);
     bool (*init_window)(struct window *win);

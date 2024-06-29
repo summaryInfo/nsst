@@ -83,7 +83,7 @@ static inline bool need_fix_span_array(struct line *line, struct line_span *firs
 
 void free_line(struct screen_storage *screen, struct line *line) {
 
-	if (!line) return;
+    if (!line) return;
 
     /* If we are freeing line its selection should be reset */
     // TODO Make selection a set of regular handles

@@ -1616,9 +1616,11 @@ void screen_set_margin_bell_volume(struct screen *scr, uint8_t vol) {
 bool screen_load_config(struct screen *scr, bool reset) {
     struct instance_config *cfg = window_cfg(screen_window(scr));
 
+    selection_load_config(&scr->sstate);
+
     if (reset) {
         free_selection(&scr->sstate);
-        if (!init_selection(&scr->sstate, screen_window(scr))) return 0;
+        if (!init_selection(&scr->sstate, screen_window(scr), scr)) return 0;
 
         scr->mode = (struct screen_mode) {
             .disable_altscreen = !cfg->allow_altscreen,

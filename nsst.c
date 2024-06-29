@@ -5,6 +5,7 @@
 #include "config.h"
 #include "feature.h"
 #include "input.h"
+#include "poller.h"
 #include "tty.h"
 #include "util.h"
 #include "window.h"
@@ -179,6 +180,6 @@ int main(int argc, char **argv) {
 
     free_config(&cfg);
 
-    if (!result) run();
+    if (!result) poller_run();
     return result;
 }

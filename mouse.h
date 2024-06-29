@@ -66,6 +66,7 @@ void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, 
 
 struct selection_state {
     struct window *win;
+    struct screen *screen;
 
     size_t seg_caps;
     size_t seg_size;
@@ -91,7 +92,7 @@ struct selection_state {
 
     struct timespec click0;
     struct timespec click1;
-    struct timespec last_scroll;
+    struct event *scroll_timer;
 
     int32_t pending_scroll;
     int16_t pointer_x;
@@ -107,7 +108,7 @@ struct selection_state {
 
 
 void free_selection(struct selection_state *sel);
-bool init_selection(struct selection_state *sel, struct window *win);
+bool init_selection(struct selection_state *sel, struct window *win, struct screen *scr);
 
 void selection_view_scrolled(struct selection_state *sel, struct screen *scr);
 
@@ -120,10 +121,10 @@ void selection_damage(struct selection_state *sel, struct line *line);
 void selection_concat(struct selection_state *sel, struct line *dst, struct line *src);
 void selection_split(struct selection_state *sel, struct line *line, struct line *tail);
 void selection_relocated(struct selection_state *sel, struct line *line);
+void selection_load_config(struct selection_state *sel);
 void selection_free(struct selection_state *sel, struct line *line);
 void selection_scrolled(struct selection_state *sel, struct screen *scr, ssize_t top, ssize_t bottom, bool save);
 bool selection_intersects(struct selection_state *sel, struct line *line, int16_t x0, int16_t x1);
-bool selection_pending_scroll(struct selection_state *sel, struct screen *scr);
 
 static inline bool selection_active(struct selection_state *sel) {
     return sel->state != state_sel_none &&

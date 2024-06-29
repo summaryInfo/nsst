@@ -298,7 +298,7 @@ static struct option options[] = {
     X(color, palette[SPECIAL_FG], "foreground", "Default foreground color", COLOR_SPECIAL_FG),
     G(boolean, fork, "fork", "Fork in daemon mode", 1),
     X(int64, fps, "fps", "Window refresh rate", 60, 2, 1000),
-    X(int64, frame_finished_delay, "frame-wait-delay", "Maximal time since last application output before redraw", SEC/240000, 0, 10*SEC/1000),
+    X(int64, frame_finished_delay, "frame-wait-delay", "Maximal time since last application output before redraw", SEC/240000, 1, 10*SEC/1000),
     X(boolean, has_meta, "has-meta", "Handle meta/alt", true),
     X(int16, border.left, "left-border", "Left border size", 8, 0, 200),
     X(int16, border.right, "right-border", "Right border size", 8, 0, 200),

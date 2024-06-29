@@ -91,7 +91,6 @@ typedef uint32_t color_t;
 
 void init_context(struct instance_config *cfg);
 void free_context(void);
-void run(void);
 
 struct window *create_window(struct instance_config *cfg);
 void free_window(struct window *win);

@@ -5,6 +5,7 @@
 #include "config.h"
 #include "input.h"
 #include "mouse.h"
+#include "poller.h"
 #include "term.h"
 #include "time.h"
 #include "window.h"
@@ -515,9 +516,10 @@ static void decompose(struct selection_state *sel, struct screen *scr, struct li
     }
 }
 
-bool init_selection(struct selection_state *sel, struct window *win) {
+bool init_selection(struct selection_state *sel, struct window *win, struct screen *scr) {
     sel->seg_caps = 4;
     sel->win = win;
+    sel->screen = scr;
     sel->seg_size = 1;
     sel->seg = xzalloc(sel->seg_caps * sizeof *sel->seg);
     return sel->seg;
@@ -528,6 +530,8 @@ void free_selection(struct selection_state *sel) {
         sel->seg[i]->line->selection_index = SELECTION_EMPTY;
         free(sel->seg[i]);
     }
+
+    poller_unset(&sel->scroll_timer);
 
     free(sel->seg);
     sel->seg_caps = 0;
@@ -604,7 +608,7 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
     for (size_t i = 1; i < prev_size; i++)
         prev_heads[i]->line->selection_index = 0;
 
-    init_selection(sel, sel->win);
+    init_selection(sel, sel->win, scr);
     if (sel->state == state_sel_progress || sel->state == state_sel_released)
         decompose(sel, scr, nstart, nend);
 
@@ -697,6 +701,21 @@ static inline void adj_coords(struct window *win, int16_t *x, int16_t *y, bool p
     }
 }
 
+static bool handle_pending_scroll(void *sel_, const struct timespec *now_) {
+    struct selection_state *sel = sel_;
+    (void)now_;
+
+    if (!sel->pending_scroll || sel->state != state_sel_progress)
+        return false;
+
+    screen_scroll_view(sel->screen, sel->pending_scroll);
+    return true;
+}
+
+void selection_load_config(struct selection_state *sel) {
+    poller_unset(&sel->scroll_timer);
+}
+
 static void pending_scroll(struct selection_state *sel, struct screen *scr, int16_t y, enum mouse_event_type event) {
     struct extent c = window_get_cell_size(sel->win);
     struct border b = window_get_border(sel->win);
@@ -705,23 +724,18 @@ static void pending_scroll(struct selection_state *sel, struct screen *scr, int1
     if (event == mouse_event_motion) {
         if (y - b.top>= g.height) sel->pending_scroll = MIN(-1, (g.height + b.top- y - c.height + 1) / c.height / 2);
         else if (y < b.top) sel->pending_scroll = MAX(1, (b.top- y + c.height - 1) / c.height / 2);
-        selection_pending_scroll(sel, scr);
-    }
-}
 
-bool selection_pending_scroll(struct selection_state *sel, struct screen *scr) {
-    struct instance_config *cfg = window_cfg(sel->win);
+        // FIXME Reset timer on setting reload
 
-    if (sel->pending_scroll && sel->state == state_sel_progress) {
-        struct timespec now;
-        clock_gettime(CLOCK_TYPE, &now);
-        bool can_scroll = ts_diff(&sel->last_scroll, &now) > cfg->select_scroll_time*1000LL;
-        if (can_scroll) {
+        if (!sel->scroll_timer && sel->pending_scroll) {
+            struct instance_config *cfg = window_cfg(sel->win);
+            sel->scroll_timer = poller_add_timer(handle_pending_scroll, sel, cfg->select_scroll_time*1000LL);
+            poller_set_autoreset(sel->scroll_timer, &sel->scroll_timer);
             screen_scroll_view(scr, sel->pending_scroll);
-            sel->last_scroll = now;
+        } else if (sel->scroll_timer && !sel->pending_scroll) {
+            poller_unset(&sel->scroll_timer);
         }
     }
-    return sel->pending_scroll;
 }
 
 #define THRESHOLD (3*3)

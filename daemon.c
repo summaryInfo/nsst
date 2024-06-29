@@ -4,6 +4,7 @@
 
 
 #include "config.h"
+#include "poller.h"
 #include "util.h"
 #include "window.h"
 
@@ -24,11 +25,14 @@
 #define ARGN_STEP(x) (MAX(INIT_ARGN, 3*(x)/2))
 #define NUM_PENDING 8
 
+static void handle_launch(void *data_, uint32_t mask);
+static void handle_daemon(void *data_, uint32_t mask);
+
 struct pending_launch {
     struct list_head link;
+    struct event *evt;
     ssize_t argn;
     ssize_t argcap;
-    ssize_t poll_index;
     int fd;
     char **args;
     struct instance_config cfg;
@@ -36,9 +40,8 @@ struct pending_launch {
 
 static struct list_head pending_launches;
 
-static int socket_index = 1;
+static struct event *socket_event;
 static int socket_fd = -1;
-static bool need_exit = 0;
 
 static void daemonize(void) {
     pid_t pid = fork();
@@ -88,6 +91,7 @@ bool init_daemon(void) {
         close(fd);
         return false;
     }
+
     if (listen(fd, NUM_PENDING) < 0) {
         warn("Can't listen to daemon socket: %s", strerror(errno));
         close(fd);
@@ -96,38 +100,41 @@ bool init_daemon(void) {
     }
 
     socket_fd = fd;
-    socket_index = poller_alloc_index(fd, POLLIN | POLLHUP);
+    socket_event = poller_add_fd(handle_daemon, NULL, fd, POLLIN);
+    poller_set_autoreset(socket_event, &socket_event);
 
     if (gconfig.fork) daemonize();
     return true;
-}
-
-void free_daemon(void) {
-    if (!gconfig.daemon_mode)
-        return;
-    if (socket_index >= 0) {
-        poller_free_index(socket_index);
-        socket_index = -1;
-    }
-    if (socket_fd > 0) {
-        close(socket_fd);
-        socket_fd = -1;
-    }
-    unlink(gconfig.sockpath);
-    gconfig.daemon_mode = 0;
 }
 
 static void free_pending_launch(struct pending_launch *lnch) {
     list_remove(&lnch->link);
 
     close(lnch->fd);
-    poller_free_index(lnch->poll_index);
+    poller_remove(lnch->evt);
 
     for (ssize_t i = 0; i < lnch->argn; i++)
         free(lnch->args[i]);
     free(lnch->args);
     free_config(&lnch->cfg);
     free(lnch);
+}
+
+void free_daemon(void) {
+    if (!gconfig.daemon_mode)
+        return;
+
+    LIST_FOREACH_SAFE(it, &pending_launches)
+        free_pending_launch(CONTAINEROF(it, struct pending_launch, link));
+
+    poller_unset(&socket_event);
+
+    if (socket_fd > 0) {
+        close(socket_fd);
+        socket_fd = -1;
+    }
+    unlink(gconfig.sockpath);
+    gconfig.daemon_mode = false;
 }
 
 static bool send_pending_launch_resp(struct pending_launch *lnch, const char *str) {
@@ -201,7 +208,7 @@ static void append_pending_launch(struct pending_launch *lnch) {
 
         free_pending_launch(lnch);
     } else if (buffer[0] == '\031' /* EM */ && len == 1) /* Exit daemon*/ {
-        need_exit = 1;
+        poller_stop();
         free_pending_launch(lnch);
     }
 }
@@ -212,7 +219,7 @@ static void accept_pending_launch(void) {
     set_cloexec(fd);
 
     struct pending_launch *lnch = xzalloc(sizeof(struct pending_launch));
-    if (fd < 0 || (lnch->poll_index = poller_alloc_index(fd, POLLIN | POLLHUP)) < 0) {
+    if (fd < 0 || !(lnch->evt = poller_add_fd(handle_launch, lnch, fd, POLLIN))) {
         close(fd);
         free(lnch);
         warn("Can't create pending launch: %s", strerror(errno));
@@ -222,21 +229,22 @@ static void accept_pending_launch(void) {
     }
 }
 
-bool daemon_process_clients(void) {
-    if (socket_fd < 0) return 0;
-    /* Handle daemon requests */
+static void handle_launch(void *data_, uint32_t mask) {
+    struct pending_launch *holder = data_;
 
-    int rev = poller_index_events(socket_index);
-    if (rev & POLLIN) accept_pending_launch();
-    else if (rev & (POLLERR | POLLNVAL | POLLHUP)) free_daemon();
+    if (mask & POLLIN)
+        append_pending_launch(holder);
+    else if (mask & (POLLERR | POLLHUP | POLLNVAL))
+        free_pending_launch(holder);
+}
 
-    /* Handle pending launches */
-    LIST_FOREACH_SAFE(it, &pending_launches) {
-        struct pending_launch *holder = CONTAINEROF(it, struct pending_launch, link);
-        rev = poller_index_events(holder->poll_index);
-        if (rev & POLLIN) append_pending_launch(holder);
-        else if (rev & (POLLERR | POLLHUP | POLLNVAL)) free_pending_launch(holder);
-    }
+static void handle_daemon(void *data_, uint32_t mask) {
+    (void)data_;
 
-    return need_exit;
+    if (socket_fd < 0) return;
+
+    if (mask & POLLIN)
+        accept_pending_launch();
+    else if (mask & (POLLERR | POLLNVAL | POLLHUP))
+        free_daemon();
 }

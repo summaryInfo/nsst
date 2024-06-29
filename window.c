@@ -4,6 +4,7 @@
 
 #include "input.h"
 #include "mouse.h"
+#include "poller.h"
 #include "term.h"
 #include "tty.h"
 #include "window-impl.h"
@@ -21,7 +22,6 @@
 
 struct context {
     double font_size;
-    size_t vbell_count;
 };
 
 static struct context ctx;
@@ -52,10 +52,10 @@ static void handle_hup(int sig) {
         handle_term(sig);
 }
 
-
-const struct platform_vtable *platform_init_wayland(struct instance_config *cfg);
+static void tick(void *arg, const struct timespec *now);
 
 void init_context(struct instance_config *cfg) {
+    poller_add_tick(tick, NULL);
     list_init(&win_list_head);
 
     if (!pvtbl && USE_WAYLAND)
@@ -94,6 +94,10 @@ struct instance_config *window_cfg(struct window *win) {
     return &win->cfg;
 }
 
+static void queue_force_redraw(struct window *win) {
+    win->force_redraw = true;
+}
+
 void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
     color_t obg = win->bg_premul, ofg = win->cursor_fg;
 
@@ -118,7 +122,7 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
          * win->term can be NULL at this point. */
 
         if (win->term) screen_damage_lines(term_screen(win->term), 0, win->ch);
-        win->force_redraw = 1;
+        queue_force_redraw(win);
     }
 }
 
@@ -129,12 +133,69 @@ void window_set_mouse(struct window *win, bool enabled) {
     pvtbl->enable_mouse_events(win, enabled);
 }
 
+static void window_delay_redraw_after_read(struct window *win);
+
+static void handle_term_read(void *win_, uint32_t mask) {
+    struct window *win = win_;
+
+    if (mask & (POLLHUP | POLLERR | POLLNVAL)) {
+        free_window(win);
+        return;
+    }
+
+    if (!term_read(win->term)) return;
+
+    window_delay_redraw_after_read(win);
+    win->any_event_happend = true;
+    if (pvtbl->after_read)
+        pvtbl->after_read(win);
+}
+
+static inline void dec_read_inhibit(struct window *win) {
+    if (!--win->inhibit_read_counter) {
+        poller_toggle(win->tty_event, true);
+        handle_term_read(win, POLLIN);
+    }
+}
+
+static inline void inc_read_inhibit(struct window *win) {
+    if (!win->inhibit_read_counter++)
+        poller_toggle(win->tty_event, false);
+}
+
+static bool handle_read_delay_timeout(void *win_, const struct timespec *now_) {
+    struct window *win = win_;
+    (void)now_;
+    /* If we haven't read for a while, reset a redraw delay,
+     * which is used for redraw trottling. */
+    win->inhibit_render_counter -= poller_unset(&win->redraw_delay_timer);
+    return false;
+}
+
+static void window_delay_redraw_after_read(struct window *win) {
+    poller_set_timer(&win->read_delay_timer, handle_read_delay_timeout,
+                     win, win->cfg.frame_finished_delay*1000LL);
+}
+
+static bool handle_configure_timeout(void *win_, const struct timespec *now_) {
+    struct window *win = win_;
+    (void)now_;
+    win->configure_delay_timer = NULL;
+    dec_read_inhibit(win);
+    return false;
+}
+
+static inline void wait_for_configure(struct window *win, int mult) {
+   if (!poller_set_timer(&win->configure_delay_timer, handle_configure_timeout,
+                        win, mult*win->cfg.wait_for_configure_delay*1000L)) {
+        inc_read_inhibit(win);
+   }
+}
+
 bool window_action(struct window *win, enum window_action act) {
     bool success = pvtbl->window_action(win, act);
-    if (success) {
-        clock_gettime(CLOCK_TYPE, &win->wait_for_configure);
-        poller_enable(win->poll_index, 0);
-    }
+    if (success)
+        wait_for_configure(win, 1);
     return success;
 }
 
@@ -144,10 +205,8 @@ void window_move(struct window *win, int16_t x, int16_t y) {
 
 bool window_resize(struct window *win, int16_t width, int16_t height) {
     bool success = pvtbl->resize_window(win, width, height);
-    if (success) {
-        clock_gettime(CLOCK_TYPE, &win->wait_for_configure);
-        poller_enable(win->poll_index, 0);
-    }
+    if (success)
+        wait_for_configure(win, 1);
     return success;
 }
 
@@ -203,13 +262,23 @@ void window_set_active_uri(struct window *win, uint32_t uri, bool pressed) {
 }
 #endif
 
+static bool handle_sync_update_timeout(void *win_, const struct timespec *now_) {
+    struct window *win = win_;
+    (void)now_;
+    win->inhibit_render_counter -= 1 + poller_unset(&win->redraw_delay_timer);
+    return false;
+}
+
 void window_set_sync(struct window *win, bool state) {
-    if (state) clock_gettime(CLOCK_TYPE, &win->last_sync);
-    win->sync_active = state;
+    win->inhibit_render_counter -= poller_unset(&win->sync_update_timeout_timer);
+    if (state) {
+        poller_set_timer(&win->sync_update_timeout_timer, handle_sync_update_timeout, win, win->cfg.sync_time*1000L);
+        win->inhibit_render_counter++;
+    }
 }
 
 bool window_get_sync(struct window *win) {
-    return win->sync_active;
+    return win->sync_update_timeout_timer;
 }
 
 void window_set_autorepeat(struct window *win, bool state) {
@@ -222,18 +291,43 @@ bool window_get_autorepeat(struct window *win) {
     return win->autorepeat;
 }
 
+static bool handle_frame_timeout(void *win_, const struct timespec *now_) {
+    struct window *win = win_;
+    (void)now_;
+    win->inhibit_render_counter--;
+    return false;
+}
+
 void window_delay_redraw(struct window *win) {
-    if (!win->wait_for_redraw) {
-        clock_gettime(CLOCK_TYPE, &win->last_wait_start);
-        win->wait_for_redraw = 1;
+    if (!win->redraw_delay_timer) {
+        win->redraw_delay_timer = poller_add_timer(handle_frame_timeout, win, win->cfg.max_frame_time*1000LL);
+        poller_set_autoreset(win->redraw_delay_timer, &win->redraw_delay_timer);
+        win->inhibit_render_counter++;
     }
 }
 
+static bool handle_smooth_scroll(void *win_, const struct timespec *now_) {
+    struct window *win = win_;
+    (void)now_;
+    dec_read_inhibit(win);
+    win->inhibit_render_counter -= poller_unset(&win->redraw_delay_timer);
+    return false;
+}
+
 void window_request_scroll_flush(struct window *win) {
-    clock_gettime(CLOCK_TYPE, &win->last_scroll);
-    poller_enable(win->poll_index, 0);
-    win->force_redraw = 1;
-    win->wait_for_redraw = 0;
+    win->inhibit_render_counter -= poller_unset(&win->redraw_delay_timer);
+    queue_force_redraw(win);
+    if (!poller_set_timer(&win->smooth_scrooll_timer, handle_smooth_scroll,
+                          win, win->cfg.smooth_scroll_delay*1000L)) {
+        inc_read_inhibit(win);
+   }
+}
+
+static bool handle_visual_bell(void *win_, const struct timespec *now_) {
+    struct window *win = win_;
+    (void)now_;
+    term_set_reverse(win->term, win->init_invert);
+    return false;
 }
 
 void window_bell(struct window *win, uint8_t vol) {
@@ -244,11 +338,10 @@ void window_bell(struct window *win, uint8_t vol) {
             pvtbl->set_urgency(win, 1);
     }
     if (win->cfg.visual_bell) {
-        if (!win->in_blink) {
+        if (!win->visual_bell_timer) {
             win->init_invert = term_is_reverse(win->term);
-            win->in_blink = 1;
-            ctx.vbell_count++;
-            clock_gettime(CLOCK_TYPE, &win->vbell_start);
+            win->visual_bell_timer = poller_add_timer(handle_visual_bell, win, win->cfg.visual_bell_time*1000L);
+            poller_set_autoreset(win->visual_bell_timer, &win->visual_bell_timer);
             term_set_reverse(win->term, !win->init_invert);
         }
     } else if (vol) {
@@ -342,6 +435,15 @@ void window_pop_title(struct window *win, enum title_target which) {
     }
 }
 
+static bool handle_blink(void *win_, const struct timespec *now_) {
+    struct window *win = win_;
+    (void)now_;
+    win->rcstate.blink = !win->rcstate.blink;
+    win->blink_commited = false;
+    win->any_event_happend = true;
+    return true;
+}
+
 static void reload_window(struct window *win) {
     int16_t w = win->cfg.geometry.r.width, h = win->cfg.geometry.r.height;
 
@@ -357,8 +459,26 @@ static void reload_window(struct window *win) {
     term_reload_config(win->term);
     screen_damage_lines(term_screen(win->term), 0, win->ch);
 
+    // FIXME Reset timers... (including mouse selection timer)
+    // FIXME Check that we are adjusting read/render inhibitors on timers removal
+    // asdf; Probably done???
+
+    if (poller_unset(&win->smooth_scrooll_timer))
+        dec_read_inhibit(win);
+    if (poller_unset(&win->configure_delay_timer))
+        dec_read_inhibit(win);
+
+    win->inhibit_render_counter -= poller_unset(&win->sync_update_timeout_timer);
+    win->inhibit_render_counter -= poller_unset(&win->redraw_delay_timer);
+
+    poller_unset(&win->read_delay_timer);
+    poller_unset(&win->visual_bell_timer);
+    poller_unset(&win->blink_timer);
+    if (win->cfg.allow_blinking)
+         poller_set_timer(&win->blink_timer, handle_blink, win, win->cfg.blink_time*1000L);
+
     pvtbl->reload_font(win, true);
-    win->force_redraw = true;
+    queue_force_redraw(win);
 }
 
 static void do_reload_config(void) {
@@ -379,7 +499,7 @@ static void window_set_font(struct window *win, const char * name, int32_t size)
     if (reload) {
         pvtbl->reload_font(win, true);
         screen_damage_lines(term_screen(win->term), 0, win->ch);
-        win->force_redraw = true;
+        queue_force_redraw(win);
     }
 }
 
@@ -449,7 +569,7 @@ struct window *create_window(struct instance_config *cfg) {
     win->cursor_fg = win->cfg.palette[cfg->reverse_video ? SPECIAL_CURSOR_BG : SPECIAL_CURSOR_FG];
     win->bg_premul = color_apply_a(win->bg, win->cfg.alpha);
     win->autorepeat = win->cfg.autorepeat;
-    win->active = true;
+    win->mapped = true;
     win->focused = true;
 
     if (!win->cfg.font_name) {
@@ -462,18 +582,24 @@ struct window *create_window(struct instance_config *cfg) {
     if (!pvtbl->reload_font(win, false)) goto error;
 
     win->term = create_term(win, MAX(win->cw, 2), MAX(win->ch, 1));
+    if (!win->term) goto error;
+
     win->rcstate = (struct render_cell_state) {
         .palette = term_palette(win->term),
     };
-    if (!win->term) goto error;
+
+    if (win->cfg.allow_blinking) {
+        win->blink_timer = poller_add_timer(handle_blink, win, win->cfg.blink_time*1000L);
+        poller_set_autoreset(win->blink_timer, &win->blink_timer);
+    }
 
     window_set_title(win, target_title | target_icon_label, NULL,
                      win->cfg.utf8 || win->cfg.force_utf8_title);
 
     list_insert_after(&win_list_head, &win->link);
 
-    win->poll_index = poller_alloc_index(term_fd(win->term), POLLIN | POLLHUP);
-    if (win->poll_index < 0) goto error;
+    win->tty_event = poller_add_fd(handle_term_read, win, term_fd(win->term), POLLIN);
+    if (!win->tty_event) goto error;
 
     pvtbl->map_window(win);
     return win;
@@ -486,16 +612,20 @@ error:
 
 
 void free_window(struct window *win) {
-    pvtbl->free_window(win);
+    poller_unset(&win->tty_event);
+    poller_unset(&win->frame_timer);
+    poller_unset(&win->smooth_scrooll_timer);
+    poller_unset(&win->blink_timer);
+    poller_unset(&win->sync_update_timeout_timer);
+    poller_unset(&win->visual_bell_timer);
+    poller_unset(&win->configure_delay_timer);
+    poller_unset(&win->read_delay_timer);
+    poller_unset(&win->redraw_delay_timer);
 
-    /* Decrement count of currently blinking
-     * windows if window gets freed during blink. */
-    if (win->in_blink) ctx.vbell_count--;
+    pvtbl->free_window(win);
 
     list_remove(&win->link);
 
-    if (win->poll_index > 0)
-        poller_free_index(win->poll_index);
     if (win->term)
         free_term(win->term);
     if (win->font_cache)
@@ -541,11 +671,6 @@ void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height) {
     pvtbl->copy(win, (struct rect){xs, yd, width, height}, xs, ys);
 }
 
-static inline void window_wait_for_configure(struct window *win) {
-    clock_gettime(CLOCK_TYPE, &win->wait_for_configure);
-    win->wait_for_configure = ts_add(&win->wait_for_configure, -2*win->cfg.wait_for_configure_delay*1000);
-}
-
 void handle_resize(struct window *win, int16_t width, int16_t height, bool artificial) {
     int16_t new_cw = MAX(2, (width - win->cfg.border.left - win->cfg.border.right)/win->char_width);
     int16_t new_ch = MAX(1, (height - win->cfg.border.top - win->cfg.border.bottom)/(win->char_height + win->char_depth));
@@ -556,7 +681,7 @@ void handle_resize(struct window *win, int16_t width, int16_t height, bool artif
          * if it's a requested resize, since the application is already aware. */
         if (term_is_requested_resize(win->term)) {
             term_read(win->term);
-            window_wait_for_configure(win);
+            wait_for_configure(win, 2);
         }
 
         /* Notify application and delay window redraw expecting the application to redraw
@@ -565,7 +690,7 @@ void handle_resize(struct window *win, int16_t width, int16_t height, bool artif
         window_delay_redraw(win);
 
         term_resize(win->term, new_cw, new_ch);
-        clock_gettime(CLOCK_TYPE, &win->last_read);
+        window_delay_redraw_after_read(win);
 
         // FIXME: Hack! Need to move active size from geometry
         win->cfg.geometry.r.width = 0;
@@ -672,129 +797,46 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
 
 
 bool window_is_mapped(struct window *win) {
-    return win->active;
+    return win->mapped;
 }
 
-/* Start window logic, handling all windows in context */
-void run(void) {
-    for (int64_t next_timeout = SEC;;) {
-        poller_poll(next_timeout);
+static bool handle_frame(void *win_, const struct timespec *now_) {
+    struct window *win = win_;
+    (void)now_;
+    win->inhibit_render_counter--;
+    return false;
+}
 
-        /* First check window system events */
-        pvtbl->handle_events();
+static void tick(void *arg, const struct timespec *now) {
+    (void)arg, (void)now;
 
-        /* Reload config if requested */
-        if (reload_config) do_reload_config();
-
-        /* Process connecting clients
-         * If this functions returns true we need to exit. */
-        if (daemon_process_clients()) break;
-
-        next_timeout = 30*SEC;
-        struct timespec cur ALIGNED(16);
-        clock_gettime(CLOCK_TYPE, &cur);
-
-        /* Then read for PTYs */
-        LIST_FOREACH_SAFE(it, &win_list_head) {
-            struct window *win = CONTAINEROF(it, struct window, link);
-            int evt = poller_index_events(win->poll_index);
-            if (UNLIKELY(evt & (POLLERR | POLLNVAL | POLLHUP))) {
-                free_window(win);
-            } else {
-                bool need_read = evt & POLLIN;
-                /* If we requested flush scroll or window resize, pty fd got disabled for polling
-                 * to prevent active waiting loop. If smooth scroll timeout got expired
-                 * we can enable it back and attempt to read from pty.
-                 * If there is nothing to read it won't block since O_NONBLOCK is set for ptys */
-                if (!need_read && !poller_is_enabled(win->poll_index)) {
-                    int64_t diff_conf = win->cfg.wait_for_configure_delay*1000LL - ts_diff(&win->wait_for_configure, &cur);
-                    int64_t diff_scroll = win->cfg.smooth_scroll_delay*1000LL - ts_diff(&win->last_scroll, &cur);
-                    if (diff_conf < 0 && diff_scroll < 0) {
-                        poller_enable(win->poll_index, 1);
-                        need_read = true;
-                    } else {
-                        next_timeout = MIN(diff_conf, next_timeout);
-                        next_timeout = MIN(diff_scroll, next_timeout);
-                    }
-                }
-                if (need_read && term_read(win->term)) {
-                    win->last_read = cur;
-                    win->any_event_happend = true;
-                    if (pvtbl->after_read)
-                        pvtbl->after_read(win);
-                }
-                if (win->wait_for_redraw) {
-                    /* If we are waiting for the frame to finish, we need to
-                     * reduce poll timeout */
-                    int64_t diff = (win->cfg.frame_finished_delay + 1)*1000LL - ts_diff(&win->last_read, &cur);
-                    if (win->wait_for_redraw &= diff > 0 && win->active) next_timeout = MIN(next_timeout, diff);
-                }
-            }
-        }
-
-        LIST_FOREACH(it, &win_list_head) {
-            struct window *win = CONTAINEROF(it, struct window, link);
-            next_timeout = MIN(next_timeout, (win->in_blink ? win->cfg.visual_bell_time : win->cfg.blink_time)*1000LL);
-
-            /* Scroll down selection */
-            bool pending_scroll = selection_pending_scroll(term_get_sstate(win->term), term_screen(win->term));
-
-            /* Change blink state if blinking interval is expired */
-            if (win->active && win->cfg.allow_blinking &&
-                    ts_diff(&win->last_blink, &cur) > win->cfg.blink_time*1000LL) {
-                win->rcstate.blink = !win->rcstate.blink;
-                win->blink_commited = 0;
-                win->last_blink = cur;
-            }
-
-            if (!win->any_event_happend && !pending_scroll && win->blink_commited) continue;
-
-            /* Deactivate synchronous update mode if it has expired */
-            if (UNLIKELY(win->sync_active) && ts_diff(&win->last_sync, &cur) > win->cfg.sync_time*1000LL)
-                win->sync_active = 0, win->wait_for_redraw = 0;
-
-            /* Reset revert if visual blink duration finished */
-            if (UNLIKELY(win->in_blink) && ts_diff(&win->vbell_start, &cur) > win->cfg.visual_bell_time*1000LL) {
-                term_set_reverse(win->term, win->init_invert);
-                win->in_blink = 0;
-                ctx.vbell_count--;
-            }
-
-            /* We need to skip frame if redraw is not forced
-             * and ether synchronous update is active, window is not visible
-             * or we are waiting for frame to finish and maximal frame time is not expired. */
-            if (!win->force_redraw && !pending_scroll) {
-                if (UNLIKELY(win->sync_active || !win->active)) continue;
-                if (win->wait_for_redraw) {
-                    if (ts_diff(&win->last_wait_start, &cur) < win->cfg.max_frame_time*1000LL) continue;
-                    else win->wait_for_redraw = 0;
-                }
-            }
-
-            int64_t frame_time = SEC / win->cfg.fps;
-            int64_t remains = frame_time - ts_diff(&win->last_draw, &cur);
-
-            if (remains <= 10000LL || win->force_redraw || pending_scroll) {
-                remains = frame_time;
-                if ((win->drawn_somthing = screen_redraw(term_screen(win->term), win->blink_commited))) win->last_draw = cur;
-
-                if (gconfig.trace_misc && win->drawn_somthing) info("Redraw");
-
-                /* If we haven't been drawn anything, increase poll timeout. */
-                win->slow_mode = !win->drawn_somthing;
-
-                win->force_redraw = 0;
-                win->any_event_happend = 0;
-                win->blink_commited = 1;
-            }
-
-            if (!win->slow_mode) next_timeout = MIN(next_timeout,  remains);
-            if (pending_scroll) next_timeout = MIN(next_timeout, win->cfg.select_scroll_time*1000LL);
-        }
-
-        next_timeout = MAX(0, next_timeout);
-        pvtbl->flush();
-
-        if ((!gconfig.daemon_mode && list_empty(&win_list_head)) || pvtbl->has_error()) break;
+    // FIXME Move pvtbl->has_error() into handle events
+    if ((!gconfig.daemon_mode && list_empty(&win_list_head)) || pvtbl->has_error()) {
+        poller_stop();
+        return;
     }
+
+    if (reload_config)
+        do_reload_config();
+
+    /* Perform redraw here so that it happens after the read from the terminal */
+
+    LIST_FOREACH(it, &win_list_head) {
+        struct window *win = CONTAINEROF(it, struct window, link);
+
+        if ((win->any_event_happend && !win->inhibit_render_counter) || win->force_redraw) {
+            if ((win->drawn_somthing = screen_redraw(term_screen(win->term), win->blink_commited))) {
+                win->inhibit_render_counter += !poller_set_timer(&win->frame_timer, handle_frame, win, SEC/win->cfg.fps);
+                win->inhibit_render_counter -= poller_unset(&win->redraw_delay_timer);
+                if (gconfig.trace_misc) info("Redraw");
+            }
+
+            win->force_redraw = false;
+            win->any_event_happend = false;
+            win->blink_commited = true;
+        }
+    }
+
+    pvtbl->flush();
+
 }

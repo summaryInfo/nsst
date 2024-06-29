@@ -10,6 +10,7 @@
 #include "config.h"
 #include "list.h"
 #include "mouse.h"
+#include "poller.h"
 #include "term.h"
 #include "uri.h"
 #include "util.h"
@@ -20,8 +21,6 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <linux/input-event-codes.h>
-// NOTE: This is Linux specific, so is most of wayland interfaces, so we don't really care for now
-#include <sys/timerfd.h>
 #include <poll.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -64,10 +63,10 @@ struct cursor {
 struct active_paste {
     struct list_head link;
     struct window_ptr wptr;
+    struct event *event;
     bool utf8;
     bool tail;
     int fd;
-    int index;
 };
 
 struct output {
@@ -144,16 +143,16 @@ struct seat {
         struct xkb_state *xkb_state;
         uint32_t mask;
 
-        int autorepeat_timerfd;
-        int autorepeat_index;
-        struct itimerspec autorepeat;
+        struct event *autorepeat_timer;
+        int64_t autorepeat_initial;
+        int64_t autorepeat_repeat;
     } keyboard;
 
     // FIXME Touch?
 };
 
 struct context {
-    int dpl_index;
+    struct event *dpl_event;
 
     struct wl_registry *registry;
     struct wl_compositor *compositor;
@@ -493,10 +492,10 @@ static void handle_surface_preferred_buffer_transform(void *data, struct wl_surf
 }
 
 struct wl_surface_listener surface_listener = {
-	.enter = handle_surface_enter,
-	.leave = handle_surface_leave,
-	.preferred_buffer_scale = handle_surface_preferred_buffer_scale,
-	.preferred_buffer_transform = handle_surface_preferred_buffer_transform,
+    .enter = handle_surface_enter,
+    .leave = handle_surface_leave,
+    .preferred_buffer_scale = handle_surface_preferred_buffer_scale,
+    .preferred_buffer_transform = handle_surface_preferred_buffer_transform,
 };
 
 void handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
@@ -535,7 +534,7 @@ void handle_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel
     if (height) get_plat(win)->pending_configure.height = height;
     if (width) get_plat(win)->pending_configure.width = width;
     win->any_event_happend = true;
-    win->active = true;
+    win->mapped = true;
 
     uint32_t states_mask = 0;
     enum xdg_toplevel_state *it;
@@ -552,7 +551,7 @@ void handle_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel
             // FIXME Should we treat is as win->focused? Probably not
             break;
         case XDG_TOPLEVEL_STATE_SUSPENDED:
-            win->active = false;
+            win->mapped = false;
             break;
         case XDG_TOPLEVEL_STATE_RESIZING:
             get_plat(win)->is_resizing = true;
@@ -718,7 +717,7 @@ static void wayland_map_window(struct window *win) {
 static void free_paste(struct active_paste *paste) {
     list_remove(&paste->link);
     win_ptr_clear(&paste->wptr);
-    poller_free_index(paste->index);
+    poller_remove(paste->event);
     close(paste->fd);
     free(paste);
 }
@@ -1144,6 +1143,13 @@ static bool do_paste_chunk(struct active_paste *paste) {
     return done;
 }
 
+static void handle_paste(void *paste_, uint32_t mask) {
+    struct active_paste *paste = paste_;
+    (void)mask;
+    if (do_paste_chunk(paste))
+        free_paste(paste);
+}
+
 static inline int do_start_paste(struct window *win, bool utf8) {
     int fds[2];
     if (pipe(fds) < 0)
@@ -1157,7 +1163,7 @@ static inline int do_start_paste(struct window *win, bool utf8) {
 
     struct active_paste *paste = xzalloc(sizeof *paste);
     paste->fd = fds[0];
-    paste->index = poller_alloc_index(fds[0], POLLIN);
+    paste->event = poller_add_fd(handle_paste, paste, fds[0], POLLIN);
     paste->utf8 = utf8;
     win_ptr_set(&paste->wptr, win, win_ptr_paste);
     list_insert_after(&ctx.paste_fds, &paste->link);
@@ -1299,14 +1305,38 @@ static void handle_keyboard_enter(void *data, struct wl_keyboard *wl_keyboard, u
 }
 
 static inline void seat_stop_autorepeat(struct seat *seat, uint32_t key) {
-    if (seat->keyboard.last_key == key || !key) {
-        timerfd_settime(seat->keyboard.autorepeat_timerfd, 0, &(struct itimerspec){ 0 }, NULL);
-        seat->keyboard.last_key = 0;
+    if (seat->keyboard.last_key != key && key) return;
+    if (!seat->keyboard.autorepeat_timer) return;
+
+    poller_remove(seat->keyboard.autorepeat_timer);
+    seat->keyboard.autorepeat_timer = NULL;
+}
+
+static bool handle_autorepeat2(void *seat_, const struct timespec *now_) {
+    struct seat *seat = seat_;
+    (void)now_;
+    struct window *win = seat->keyboard.wptr.win;
+    if (!win) return false;
+
+    handle_keydown(win, seat->keyboard.xkb_state, seat->keyboard.last_key);
+    return true;
+}
+
+static bool handle_autorepeat(void *seat_, const struct timespec *now_) {
+    struct seat *seat = seat_;
+    (void)now_;
+    struct window *win = seat->keyboard.wptr.win;
+    if (win) {
+        seat->keyboard.autorepeat_timer = poller_add_timer(handle_autorepeat2, seat, seat->keyboard.autorepeat_repeat);
+        handle_keydown(win, seat->keyboard.xkb_state, seat->keyboard.last_key);
     }
+    return false;
 }
 
 static inline void seat_start_autorepeat(struct seat *seat, uint32_t key) {
-    timerfd_settime(seat->keyboard.autorepeat_timerfd, 0, &seat->keyboard.autorepeat, NULL);
+    if (seat->keyboard.autorepeat_timer)
+        poller_remove(seat->keyboard.autorepeat_timer);
+    seat->keyboard.autorepeat_timer = poller_add_timer(handle_autorepeat, seat, seat->keyboard.autorepeat_initial);
     seat->keyboard.last_key = key;
 }
 
@@ -1329,7 +1359,7 @@ static void handle_keyboard_leave(void *data, struct wl_keyboard *wl_keyboard, u
     if (gconfig.trace_events)
         info("Event[%p,%p]: keyboard.leave(serial=%x)", data, (void *)win, serial);
 
-    if (seat->keyboard.autorepeat_timerfd >= 0)
+    if (seat->keyboard.autorepeat_timer)
         seat_stop_autorepeat(seat, 0);
 
     if (seat->keyboard.wptr.win) {
@@ -1359,11 +1389,11 @@ static void handle_keyboard_key(void *data, struct wl_keyboard *wl_keyboard, uin
     key += 8;
 
     if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-        if (win->autorepeat && seat->keyboard.autorepeat_timerfd >= 0)
+        if (win->autorepeat)
             seat_start_autorepeat(seat, key);
         handle_keydown(win, seat->keyboard.xkb_state, key);
     } else {
-        if (win->autorepeat && seat->keyboard.autorepeat_timerfd >= 0)
+        if (win->autorepeat)
             seat_stop_autorepeat(seat, key);
     }
 }
@@ -1387,11 +1417,8 @@ static void handle_keyboard_repeat_info(void *data, struct wl_keyboard *wl_keybo
     struct seat *seat = data;
     (void)wl_keyboard;
 
-    seat->keyboard.autorepeat = (struct itimerspec) {
-        .it_interval.tv_nsec = SEC / rate,
-        .it_value.tv_sec = delay/1000,
-        .it_value.tv_nsec = (delay%1000)*1000000LL,
-    };
+    seat->keyboard.autorepeat_initial = delay*(SEC/1000);
+    seat->keyboard.autorepeat_repeat = SEC / rate;
 
     if (gconfig.trace_events)
         info("Event[%p]: keyboard.repeat_info(rate=%d, delay=%d)", data, rate, delay);
@@ -1755,15 +1782,8 @@ static void handle_seat_capabilities(void *data, struct wl_seat *wl_seat, uint32
         seat->keyboard.keyboard = NULL;
     } else if (!(seat->capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && (capabilities & WL_SEAT_CAPABILITY_KEYBOARD)) {
         seat->keyboard.keyboard = wl_seat_get_keyboard(wl_seat);
-        if (seat->keyboard.keyboard) {
-            /* Wayland implements autorepeat on client side */
-            int fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
-            seat->keyboard.autorepeat_timerfd = fd;
-            if (fd >= 0)
-                seat->keyboard.autorepeat_index = poller_alloc_index(fd, POLLIN);
-
+        if (seat->keyboard.keyboard)
             wl_keyboard_add_listener(seat->keyboard.keyboard, &keyboard_listener, seat);
-        }
     }
 
     if ((seat->capabilities & WL_SEAT_CAPABILITY_POINTER) && !(capabilities & WL_SEAT_CAPABILITY_POINTER)) {
@@ -1876,12 +1896,12 @@ static void handle_output_description(void *data, struct wl_output *wl_output, c
 }
 
 static struct wl_output_listener output_listener = {
-	.geometry = handle_output_geometry,
-	.mode = handle_output_mode,
-	.done = handle_output_done,
-	.scale = handle_output_scale,
-	.name = handle_output_name,
-	.description = handle_output_description,
+    .geometry = handle_output_geometry,
+    .mode = handle_output_mode,
+    .done = handle_output_done,
+    .scale = handle_output_scale,
+    .name = handle_output_name,
+    .description = handle_output_description,
 };
 
 static void handle_xdg_output_logical_position(void *data, struct zxdg_output_v1 *zxdg_output_v1, int32_t x, int32_t y) {
@@ -1917,11 +1937,11 @@ static void handle_xdg_output_description(void *data, struct zxdg_output_v1 *zxd
 }
 
 static struct zxdg_output_v1_listener xdg_output_listener = {
-	.logical_position = handle_xdg_output_logical_position,
-	.logical_size = handle_xdg_output_logical_size,
-	.done = handle_xdg_output_done,
-	.name = handle_xdg_output_name,
-	.description = handle_xdg_output_description,
+    .logical_position = handle_xdg_output_logical_position,
+    .logical_size = handle_xdg_output_logical_size,
+    .done = handle_xdg_output_done,
+    .name = handle_xdg_output_name,
+    .description = handle_xdg_output_description,
 };
 
 static void handle_registry_global(void *data, struct wl_registry *wl_registry, uint32_t name, const char *interface, uint32_t version) {
@@ -2037,10 +2057,8 @@ static void free_seat(struct seat *seat) {
     if (seat->primary_selection.primary_selection_device)
         zwp_primary_selection_device_v1_destroy(seat->primary_selection.primary_selection_device);
 
-    if (seat->keyboard.autorepeat_timerfd) {
-        poller_free_index(seat->keyboard.autorepeat_index);
-        close(seat->keyboard.autorepeat_timerfd);
-    }
+    if (seat->keyboard.autorepeat_timer)
+        poller_remove(seat->keyboard.autorepeat_timer);
 
     if (seat->name)
         free(seat->name);
@@ -2080,6 +2098,8 @@ static struct wl_registry_listener registry_listener = {
 };
 
 static void wayland_free(void) {
+    poller_remove(ctx.dpl_event);
+
     ctx.renderer_free_context();
 
     LIST_FOREACH_SAFE(it, &ctx.seats) {
@@ -2125,37 +2145,16 @@ static void wayland_free(void) {
     memset(&ctx, 0, sizeof ctx);
 }
 
-static void wayland_handle_events(void) {
-    if (poller_index_events(ctx.dpl_index) & (POLLIN | POLLERR | POLLHUP))
+static void wayland_handle_events(void *data_, uint32_t mask) {
+    (void)data_;
+    if (mask & (POLLIN | POLLERR | POLLHUP))
         wl_display_dispatch(dpl);
-
-    LIST_FOREACH(it, &ctx.seats) {
-        struct seat *seat = CONTAINEROF(it, struct seat, link);
-        if (seat->keyboard.autorepeat_timerfd >= 0 &&
-                poller_index_events(seat->keyboard.autorepeat_index) & POLLIN) {
-            struct window *win = seat->keyboard.wptr.win;
-            if (win) {
-                /* This will almost always return 1 */
-                uint64_t count = 0;
-                read(seat->keyboard.autorepeat_timerfd, &count, sizeof count);
-                while (count--)
-                    handle_keydown(seat->keyboard.wptr.win, seat->keyboard.xkb_state, seat->keyboard.last_key);
-            }
-        }
-    }
-
-    LIST_FOREACH_SAFE(it, &ctx.paste_fds) {
-        struct active_paste *paste = CONTAINEROF(it, struct active_paste, link);
-        bool done = (poller_index_events(paste->index) & POLLIN) && do_paste_chunk(paste);
-        if (done || poller_index_events(paste->index) & (POLLERR | POLLHUP))
-            free_paste(paste);
-    }
 }
 
 static void handle_callback_done(void *data, struct wl_callback *wl_callback, uint32_t callback_data) {
     struct window *win = data;
     (void)callback_data;
-    win->active = true;
+    win->inhibit_render_counter--;
     wl_callback_destroy(wl_callback);
     get_plat(win)->frame_callback = NULL;
 }
@@ -2169,8 +2168,9 @@ static void wayland_draw_done(struct window *win) {
 
     struct wl_callback *cb = wl_surface_frame(get_plat(win)->surface);
     wl_callback_add_listener(cb, &frame_callback_listener, win);
+    if (!get_plat(win)->frame_callback)
+        win->inhibit_render_counter++;
     get_plat(win)->frame_callback = cb;
-    win->active = false;
 
     wl_surface_commit(get_plat(win)->surface);
 }
@@ -2180,7 +2180,6 @@ static struct platform_vtable wayland_vtable = {
     .has_error = wayland_has_error,
     .get_opaque_size = wayland_get_opaque_size,
     .flush = wayland_flush,
-    .handle_events = wayland_handle_events,
     .get_position = wayland_get_position,
     .init_window = wayland_init_window,
     .free_window = wayland_free_window,
@@ -2252,7 +2251,7 @@ const struct platform_vtable *platform_init_wayland(struct instance_config *cfg)
         die("Can't connect to Wayland server");
     }
 
-    ctx.dpl_index = poller_alloc_index(wl_display_get_fd(dpl), POLLIN | POLLHUP);
+    ctx.dpl_event = poller_add_fd(wayland_handle_events, NULL, wl_display_get_fd(dpl), POLLIN);
     list_init(&ctx.paste_fds);
     list_init(&ctx.seats);
     list_init(&ctx.outputs);

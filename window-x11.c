@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include "mouse.h"
+#include "poller.h"
 #include "term.h"
 #include "uri.h"
 #include "util.h"
@@ -39,6 +40,7 @@ struct cursor {
 };
 
 struct context {
+    struct event *con_evt;
     xcb_screen_t *screen;
     xcb_colormap_t mid;
     xcb_visualtype_t *vis;
@@ -875,7 +877,8 @@ static void update_cursor(struct window *win) {
         select_cursor(win, new);
 }
 
-static void x11_handle_events(void) {
+static void x11_handle_events(void *data_, uint32_t mask_) {
+    (void)data_, (void)mask_;
     for (xcb_generic_event_t *event, *nextev = NULL; nextev || (event = xcb_poll_for_event(con)); free(event)) {
         if (nextev) event = nextev, nextev = NULL;
         switch (event->response_type &= 0x7F) {
@@ -1026,7 +1029,7 @@ static void x11_handle_events(void) {
             if (gconfig.trace_events) {
                 info("Event: event=UnmapNotify window=0x%x", ev->window);
             }
-            win->active = false;
+            win->mapped = false;
             break;
         }
         case XCB_MAP_NOTIFY: {
@@ -1035,7 +1038,7 @@ static void x11_handle_events(void) {
             if (gconfig.trace_events) {
                 info("Event: event=MapNotify window=0x%x", ev->window);
             }
-            win->active = true;
+            win->mapped = true;
             break;
         }
         case XCB_VISIBILITY_NOTIFY: {
@@ -1044,7 +1047,7 @@ static void x11_handle_events(void) {
             if (gconfig.trace_events) {
                 info("Event: event=VisibilityNotify window=0x%x state=%d", ev->window, ev->state);
             }
-            win->active = ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
+            win->mapped &= ev->state != XCB_VISIBILITY_FULLY_OBSCURED;
             break;
         }
         case XCB_DESTROY_NOTIFY:
@@ -1097,6 +1100,8 @@ static void x11_handle_events(void) {
 }
 
 static void x11_free(void) {
+    poller_remove(ctx.con_evt);
+
     ctx.renderer_free_context();
 
     if (ctx.cursors.data) {
@@ -1125,7 +1130,6 @@ static struct platform_vtable x11_vtable = {
     .has_error = x11_has_error,
     .get_opaque_size = x11_get_opaque_size,
     .flush = x11_flush,
-    .handle_events = x11_handle_events,
     .get_position = x11_get_position,
     .init_window = x11_init_window,
     .free_window = x11_free_window,
@@ -1181,7 +1185,7 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
         die("Can't connect to X server");
     }
 
-    poller_alloc_index(xcb_get_file_descriptor(con), POLLIN | POLLHUP);
+    ctx.con_evt = poller_add_fd(x11_handle_events, NULL, xcb_get_file_descriptor(con), POLLIN);
 
     xcb_screen_iterator_t sit = xcb_setup_roots_iterator(xcb_get_setup(con));
     for (; sit.rem; xcb_screen_next(&sit))
