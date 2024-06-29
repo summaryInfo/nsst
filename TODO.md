@@ -7,7 +7,9 @@ Roadmap
 
 _NOTE: These plans can change any time_
 
- Wayland
+* Add Nsst.desktop, nsst.terminfo, {zsh, yash, bash, fish} completions
+
+* Wayland
   * Support rendering titlebar (title, close, maximize, minimize, double click, recolor on focus)
   * Explicitly specify required versions of protocols
   * Log all events (optional: `WAYLAND_DEBUG` exists)
@@ -20,8 +22,6 @@ _NOTE: These plans can change any time_
 
 * Refactor
   * Cleanup fallback cursor loading: add get_cursor_any()
-  * Cleanup poller
-    * Use callbacks and userspace timer queue?
   * Move current window size outside of win->cfg.geometry
   * Add helper to calulate cw/ch
 
