@@ -76,6 +76,7 @@ struct poller {
 
     bool should_stop;
     poller_tick_cb_t tick_cb;
+    struct timespec now;
     void *tick_arg;
 };
 
@@ -275,8 +276,8 @@ static void heap_remove(struct event *evt) {
     evt->timer.index = -1;
 }
 
-static void heap_insert_(struct event *evt, struct timespec *now) {
-    evt->timer.current = ts_add(now, evt->timer.period);
+static void heap_insert(struct event *evt) {
+    evt->timer.current = ts_add(&poller.now, evt->timer.period);
 
     int index = poller.timer_heap_size++;
     if (poller.timer_heap_size > poller.timer_heap_caps)
@@ -287,12 +288,6 @@ static void heap_insert_(struct event *evt, struct timespec *now) {
 
     index = heap_sift_up(index);
     poller.timer_heap[index]->timer.index = index;
-}
-
-static inline void heap_insert(struct event *evt) {
-    struct timespec now;
-    clock_gettime(CLOCK_TYPE, &now);
-    heap_insert_(evt, &now);
 }
 
 struct event *poller_add_timer(poller_timer_cb_t cb, void *arg, int64_t periodns) {
@@ -379,13 +374,12 @@ void poller_toggle(struct event *evt, bool enable) {
 
 void poller_run(void) {
     while (!poller.should_stop) {
-        struct timespec now;
-        clock_gettime(CLOCK_TYPE, &now);
+        clock_gettime(CLOCK_TYPE, &poller.now);
 
 #if USE_PPOLL
         struct timespec top, *timeout = NULL;
         if (poller.timer_heap_size)
-            timeout = &top, top = ts_sub_sat(&poller.timer_heap[0]->timer.current, &now);
+            timeout = &top, top = ts_sub_sat(&poller.timer_heap[0]->timer.current, &poller.now);
         if (ppoll(poller.pollfd_array, poller.pollfd_array_caps, timeout, NULL) < 0 && errno != EINTR)
             warn("Poll error: %s", strerror(errno));
 #else
@@ -407,28 +401,28 @@ void poller_run(void) {
             }
         }
 
-        clock_gettime(CLOCK_TYPE, &now);
-        struct timespec now2 = ts_add(&now, 10000);
+        clock_gettime(CLOCK_TYPE, &poller.now);
+        struct timespec now2 = ts_add(&poller.now, 10000);
 
         while (poller.timer_heap_size) {
             struct event *evt = poller.timer_heap[0];
             if (ts_leq(&now2, &evt->timer.current)) break;
 
             if (gconfig.trace_misc) {
-                info("Timer[%p, %f] %p(%p)", (void *)evt, now.tv_sec + now.tv_nsec*1e-9,
+                info("Timer[%p, %f] %p(%p)", (void *)evt, poller.now.tv_sec + poller.now.tv_nsec*1e-9,
                      (void *)(uintptr_t)evt->timer.cb, evt->timer.arg);
             }
 
             assert(evt->state == evt_state_timer);
             heap_remove(evt);
 
-            if (evt->timer.cb(evt->timer.arg, &now))
-                heap_insert_(evt, &now);
+            if (evt->timer.cb(evt->timer.arg, &poller.now))
+                heap_insert(evt);
             else
                 free_event(evt);
         }
 
-        poller.tick_cb(poller.tick_arg, &now);
+        poller.tick_cb(poller.tick_arg, &poller.now);
         if (gconfig.trace_misc)
             info("Tick");
     }
