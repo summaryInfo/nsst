@@ -709,6 +709,7 @@ static bool handle_pending_scroll(void *sel_, const struct timespec *now_) {
         return false;
 
     screen_scroll_view(sel->screen, sel->pending_scroll);
+    window_reset_delayed_redraw(sel->win);
     return true;
 }
 
@@ -725,11 +726,13 @@ static void pending_scroll(struct selection_state *sel, struct screen *scr, int1
         if (y - b.top>= g.height) sel->pending_scroll = MIN(-1, (g.height + b.top- y - c.height + 1) / c.height / 2);
         else if (y < b.top) sel->pending_scroll = MAX(1, (b.top- y + c.height - 1) / c.height / 2);
 
+
         if (!sel->scroll_timer && sel->pending_scroll) {
             struct instance_config *cfg = window_cfg(sel->win);
             sel->scroll_timer = poller_add_timer(handle_pending_scroll, sel, cfg->select_scroll_time*1000LL);
             poller_set_autoreset(sel->scroll_timer, &sel->scroll_timer);
             screen_scroll_view(scr, sel->pending_scroll);
+            window_reset_delayed_redraw(sel->win);
         } else if (sel->scroll_timer && !sel->pending_scroll) {
             poller_unset(&sel->scroll_timer);
         }

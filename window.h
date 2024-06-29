@@ -105,6 +105,7 @@ void window_move(struct window *win, int16_t x, int16_t y);
 bool window_action(struct window *win, enum window_action act);
 bool window_is_mapped(struct window *win);
 void window_bell(struct window *win, uint8_t vol);
+void window_reset_delayed_redraw(struct window *win);
 
 struct extent window_get_position(struct window *win);
 struct extent window_get_grid_position(struct window *win);

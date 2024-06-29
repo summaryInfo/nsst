@@ -163,12 +163,17 @@ static inline void inc_read_inhibit(struct window *win) {
         poller_toggle(win->tty_event, false);
 }
 
+void window_reset_delayed_redraw(struct window *win) {
+    win->inhibit_render_counter -= poller_unset(&win->redraw_delay_timer);
+    win->any_event_happend = true;
+}
+
 static bool handle_read_delay_timeout(void *win_, const struct timespec *now_) {
     struct window *win = win_;
     (void)now_;
     /* If we haven't read for a while, reset a redraw delay,
      * which is used for redraw trottling. */
-    win->inhibit_render_counter -= poller_unset(&win->redraw_delay_timer);
+    window_reset_delayed_redraw(win);
     return false;
 }
 
@@ -265,7 +270,8 @@ void window_set_active_uri(struct window *win, uint32_t uri, bool pressed) {
 static bool handle_sync_update_timeout(void *win_, const struct timespec *now_) {
     struct window *win = win_;
     (void)now_;
-    win->inhibit_render_counter -= 1 + poller_unset(&win->redraw_delay_timer);
+    win->inhibit_render_counter--;
+    window_reset_delayed_redraw(win);
     return false;
 }
 
@@ -310,12 +316,12 @@ static bool handle_smooth_scroll(void *win_, const struct timespec *now_) {
     struct window *win = win_;
     (void)now_;
     dec_read_inhibit(win);
-    win->inhibit_render_counter -= poller_unset(&win->redraw_delay_timer);
+    window_reset_delayed_redraw(win);
     return false;
 }
 
 void window_request_scroll_flush(struct window *win) {
-    win->inhibit_render_counter -= poller_unset(&win->redraw_delay_timer);
+    window_reset_delayed_redraw(win);
     queue_force_redraw(win);
     if (!poller_set_timer(&win->smooth_scrooll_timer, handle_smooth_scroll,
                           win, win->cfg.smooth_scroll_delay*1000L)) {
@@ -469,7 +475,7 @@ static void reload_window(struct window *win) {
         dec_read_inhibit(win);
 
     win->inhibit_render_counter -= poller_unset(&win->sync_update_timeout_timer);
-    win->inhibit_render_counter -= poller_unset(&win->redraw_delay_timer);
+    window_reset_delayed_redraw(win);
 
     poller_unset(&win->read_delay_timer);
     poller_unset(&win->visual_bell_timer);
@@ -827,7 +833,7 @@ static void tick(void *arg, const struct timespec *now) {
         if ((win->any_event_happend && !win->inhibit_render_counter) || win->force_redraw) {
             if ((win->drawn_somthing = screen_redraw(term_screen(win->term), win->blink_commited))) {
                 win->inhibit_render_counter += !poller_set_timer(&win->frame_timer, handle_frame, win, SEC/win->cfg.fps);
-                win->inhibit_render_counter -= poller_unset(&win->redraw_delay_timer);
+                window_reset_delayed_redraw(win);
                 if (gconfig.trace_misc) info("Redraw");
             }
 
