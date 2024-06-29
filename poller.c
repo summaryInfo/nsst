@@ -82,8 +82,8 @@ struct poller {
 
 struct poller poller;
 
-static void empty_tick(void *arg, const struct timespec *now) {
-    (void)arg, (void)now;
+static void empty_tick(void *arg) {
+    (void)arg;
 }
 
 void init_poller(void) {
@@ -417,13 +417,13 @@ void poller_run(void) {
             assert(evt->state == evt_state_timer);
             heap_remove(evt);
 
-            if (evt->timer.cb(evt->timer.arg, &poller.now))
+            if (evt->timer.cb(evt->timer.arg))
                 heap_insert(evt);
             else
                 free_event(evt);
         }
 
-        poller.tick_cb(poller.tick_arg, &poller.now);
+        poller.tick_cb(poller.tick_arg);
         if (gconfig.trace_misc)
             info("Tick");
     }

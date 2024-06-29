@@ -12,9 +12,9 @@
 
 struct event;
 
-typedef bool (*poller_timer_cb_t)(void *arg, const struct timespec *now);
+typedef bool (*poller_timer_cb_t)(void *arg);
 typedef void (*poller_fd_cb_t)(void *arg, uint32_t mask);
-typedef void (*poller_tick_cb_t)(void *arg, const struct timespec *now);
+typedef void (*poller_tick_cb_t)(void *arg);
 
 struct event *poller_add_fd(poller_fd_cb_t cb, void *arg, int fd, uint32_t mask);
 struct event *poller_add_timer(poller_timer_cb_t cb, void *arg, int64_t periodns);

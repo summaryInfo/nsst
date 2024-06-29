@@ -702,10 +702,8 @@ static inline void adj_coords(struct window *win, int16_t *x, int16_t *y, bool p
     }
 }
 
-static bool handle_pending_scroll(void *sel_, const struct timespec *now_) {
+static bool handle_pending_scroll(void *sel_) {
     struct selection_state *sel = sel_;
-    (void)now_;
-
     if (!sel->pending_scroll || sel->state != state_sel_progress)
         return false;
 

@@ -1312,9 +1312,8 @@ static inline void seat_stop_autorepeat(struct seat *seat, uint32_t key) {
     seat->keyboard.autorepeat_timer = NULL;
 }
 
-static bool handle_autorepeat2(void *seat_, const struct timespec *now_) {
+static bool handle_autorepeat2(void *seat_) {
     struct seat *seat = seat_;
-    (void)now_;
     struct window *win = seat->keyboard.wptr.win;
     if (!win) return false;
 
@@ -1322,9 +1321,8 @@ static bool handle_autorepeat2(void *seat_, const struct timespec *now_) {
     return true;
 }
 
-static bool handle_autorepeat(void *seat_, const struct timespec *now_) {
+static bool handle_autorepeat(void *seat_) {
     struct seat *seat = seat_;
-    (void)now_;
     struct window *win = seat->keyboard.wptr.win;
     if (win) {
         seat->keyboard.autorepeat_timer = poller_add_timer(handle_autorepeat2, seat, seat->keyboard.autorepeat_repeat);

@@ -52,7 +52,7 @@ static void handle_hup(int sig) {
         handle_term(sig);
 }
 
-static void tick(void *arg, const struct timespec *now);
+static void tick(void *arg);
 
 void init_context(struct instance_config *cfg) {
     poller_add_tick(tick, NULL);
@@ -168,9 +168,8 @@ void window_reset_delayed_redraw(struct window *win) {
     win->any_event_happend = true;
 }
 
-static bool handle_read_delay_timeout(void *win_, const struct timespec *now_) {
+static bool handle_read_delay_timeout(void *win_) {
     struct window *win = win_;
-    (void)now_;
     /* If we haven't read for a while, reset a redraw delay,
      * which is used for redraw trottling. */
     window_reset_delayed_redraw(win);
@@ -182,9 +181,8 @@ static void window_delay_redraw_after_read(struct window *win) {
                      win, win->cfg.frame_finished_delay*1000LL);
 }
 
-static bool handle_configure_timeout(void *win_, const struct timespec *now_) {
+static bool handle_configure_timeout(void *win_) {
     struct window *win = win_;
-    (void)now_;
     win->configure_delay_timer = NULL;
     dec_read_inhibit(win);
     return false;
@@ -267,9 +265,8 @@ void window_set_active_uri(struct window *win, uint32_t uri, bool pressed) {
 }
 #endif
 
-static bool handle_sync_update_timeout(void *win_, const struct timespec *now_) {
+static bool handle_sync_update_timeout(void *win_) {
     struct window *win = win_;
-    (void)now_;
     win->inhibit_render_counter--;
     window_reset_delayed_redraw(win);
     return false;
@@ -297,9 +294,8 @@ bool window_get_autorepeat(struct window *win) {
     return win->autorepeat;
 }
 
-static bool handle_frame_timeout(void *win_, const struct timespec *now_) {
+static bool handle_frame_timeout(void *win_) {
     struct window *win = win_;
-    (void)now_;
     win->inhibit_render_counter--;
     return false;
 }
@@ -312,9 +308,8 @@ void window_delay_redraw(struct window *win) {
     }
 }
 
-static bool handle_smooth_scroll(void *win_, const struct timespec *now_) {
+static bool handle_smooth_scroll(void *win_) {
     struct window *win = win_;
-    (void)now_;
     dec_read_inhibit(win);
     window_reset_delayed_redraw(win);
     return false;
@@ -329,9 +324,8 @@ void window_request_scroll_flush(struct window *win) {
    }
 }
 
-static bool handle_visual_bell(void *win_, const struct timespec *now_) {
+static bool handle_visual_bell(void *win_) {
     struct window *win = win_;
-    (void)now_;
     term_set_reverse(win->term, win->init_invert);
     return false;
 }
@@ -441,9 +435,8 @@ void window_pop_title(struct window *win, enum title_target which) {
     }
 }
 
-static bool handle_blink(void *win_, const struct timespec *now_) {
+static bool handle_blink(void *win_) {
     struct window *win = win_;
-    (void)now_;
     win->rcstate.blink = !win->rcstate.blink;
     win->blink_commited = false;
     win->any_event_happend = true;
@@ -802,15 +795,14 @@ bool window_is_mapped(struct window *win) {
     return win->mapped;
 }
 
-static bool handle_frame(void *win_, const struct timespec *now_) {
+static bool handle_frame(void *win_) {
     struct window *win = win_;
-    (void)now_;
     win->inhibit_render_counter--;
     return false;
 }
 
-static void tick(void *arg, const struct timespec *now) {
-    (void)arg, (void)now;
+static void tick(void *arg) {
+    (void)arg;
 
     // FIXME Move pvtbl->has_error() into handle events
     if ((!gconfig.daemon_mode && list_empty(&win_list_head)) || pvtbl->has_error()) {
