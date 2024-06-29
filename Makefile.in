@@ -76,10 +76,10 @@ nsstc.o: feature.h
 nsst.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h tty.h window.h hashtable.h multipool.h
 util.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h precompose-table.h hashtable.h width-table.h multipool.h
 config.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h window.h hashtable.h multipool.h
-poller.o: feature.h config.h util.h iswide.h
-daemon.o: feature.h config.h util.h iswide.h window.h font.h
+poller.o: feature.h config.h util.h iswide.h poller.h
+daemon.o: feature.h config.h util.h iswide.h window.h font.h poller.h
 input.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h term.h window.h hashtable.h multipool.h
-mouse.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h mouse.h term.h uri.h window.h hashtable.h multipool.h
+mouse.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h mouse.h term.h uri.h window.h hashtable.h multipool.h poller.h
 nrcs.o: feature.h nrcs.h util.h iswide.h
 multipool.o: feature.h multipool.h
 line.o: feature.h line.h uri.h util.h iswide.h multipool.h
@@ -90,9 +90,9 @@ term.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h mouse.h 
 boxdraw.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h boxdraw.h term.h window.h hashtable.h multipool.h
 font.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h window.h hashtable.h multipool.h
 image.o: feature.h util.h iswide.h image.h font.h hashtable.h
-window.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h mouse.h term.h window.h window-impl.h uri.h multipool.h
-window-x11.o: feature.h config.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h uri.h multipool.h
-window-wayland.o: feature.h config.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-wayland.h uri.h multipool.h
+window.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h input.h mouse.h term.h window.h window-impl.h uri.h multipool.h poller.h
+window-x11.o: feature.h config.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h uri.h multipool.h poller.h
+window-wayland.o: feature.h config.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-wayland.h uri.h multipool.h poller.h
 render-shm.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h hashtable.h multipool.h
 render-shm-wayland.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-wayland.h hashtable.h multipool.h
 render-shm-x11.o: feature.h config.h font.h line.h util.h iswide.h nrcs.h mouse.h term.h window.h window-impl.h window-x11.h hashtable.h multipool.h
