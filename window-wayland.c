@@ -2154,7 +2154,8 @@ static void wayland_handle_events(void *data_, uint32_t mask) {
 static void handle_callback_done(void *data, struct wl_callback *wl_callback, uint32_t callback_data) {
     struct window *win = data;
     (void)callback_data;
-    win->inhibit_render_counter--;
+    if (get_plat(win)->frame_callback)
+        win->inhibit_render_counter--;
     wl_callback_destroy(wl_callback);
     get_plat(win)->frame_callback = NULL;
 }
