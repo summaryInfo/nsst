@@ -672,10 +672,10 @@ static bool do_parse_vertical_border(const char *str, void *dst, union opt_limit
     if (!do_parse_int64(str, &val64, limits))
         return false;
 
-    if (val64 != -1)
-        border->top = border->bottom = val64;
-    else
+    if (val64 != -1) {
         warn("--vertical-border is obsolete, use --top-border, --bottom-border or --border instead");
+        border->top = border->bottom = val64;
+    }
     return true;
 }
 
@@ -685,10 +685,10 @@ static bool do_parse_horizontal_border(const char *str, void *dst, union opt_lim
     if (!do_parse_int64(str, &val64, limits))
         return false;
 
-    if (val64 != -1)
-        border->left = border->right = val64;
-    else
+    if (val64 != -1) {
         warn("--horizontal-border is obsolete, use --left-border, --right-border or --border instead");
+        border->left = border->right = val64;
+    }
     return true;
 }
 
