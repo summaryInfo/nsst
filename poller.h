@@ -25,6 +25,7 @@ bool poller_is_enabled(struct event *evt);
 void poller_stop(void);
 void poller_run(void);
 void poller_set_autoreset(struct event *evt, struct event **pevt);
+void poller_skip_wait(void);
 
 static inline bool poller_unset(struct event **evt) {
     if (!*evt) return false;

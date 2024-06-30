@@ -74,6 +74,7 @@ struct poller {
     ssize_t event_free_max;
 
     bool should_stop;
+    bool skip_wait;
     poller_tick_cb_t tick_cb;
     struct timespec now;
     void *tick_arg;
@@ -175,6 +176,10 @@ static void free_event(struct event *evt) {
     }
 }
 
+void poller_skip_wait(void) {
+    poller.skip_wait = true;
+}
+
 static void grow_pollfd_array(void) {
     ssize_t old_size2 = poller.pollfd_array_caps*sizeof(*poller.pollfd_array_events);
     ssize_t new_size2 = (poller.pollfd_array_caps + INIT_PFD_NUM)*sizeof(*poller.pollfd_array_events);
@@ -274,6 +279,7 @@ static void heap_remove(struct event *evt) {
 }
 
 static void heap_insert(struct event *evt) {
+    assert(evt->timer.index == -1);
     evt->timer.current = ts_add(&poller.now, evt->timer.period);
 
     int index = poller.timer_heap_size++;
@@ -298,6 +304,7 @@ struct event *poller_add_timer(poller_timer_cb_t cb, void *arg, int64_t periodns
             .cb = cb,
             .arg = arg,
             .period = periodns,
+            .index = -1,
         }
     };
 
@@ -375,14 +382,24 @@ void poller_run(void) {
 
 #if USE_PPOLL
         struct timespec top, *timeout = NULL;
-        if (poller.timer_heap_size)
-            timeout = &top, top = ts_sub_sat(&poller.timer_heap[0]->timer.current, &poller.now);
+        if (poller.skip_wait) {
+            poller.skip_wait = false;
+            timeout = &top;
+            top = (struct timespec) {0};
+        } else if (poller.timer_heap_size) {
+            timeout = &top;
+            top = ts_sub_sat(&poller.timer_heap[0]->timer.current, &poller.now);
+        }
         if (ppoll(poller.pollfd_array, poller.pollfd_array_caps, timeout, NULL) < 0 && errno != EINTR)
             warn("Poll error: %s", strerror(errno));
 #else
         int timeout = -1;
-        if (poller.timer_heap_size)
+        if (poller.skip_wait) {
+            poller.skip_wait = false;
+            timeout = 0;
+        } else if (poller.timer_heap_size) {
             timeout = MAX(0, ts_diff(&now, &poller.timer_heap[0]->timer.current)/(SEC/1000));
+        }
         if (poll(poller.pollfd_array, poller.pollfd_array_caps, timeout) < 0 && errno != EINTR)
             warn("Poll error: %s", strerror(errno));
 #endif

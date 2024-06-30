@@ -90,7 +90,7 @@ static struct window *window_for_xid(xcb_window_t xid) {
     LIST_FOREACH(it, &win_list_head) {
         struct window *win = CONTAINEROF(it, struct window, link);
         if (get_plat(win)->wid == xid) {
-            win->any_event_happend = 1;
+            win->any_event_happend = true;
             return win;
         }
     }
@@ -860,10 +860,6 @@ static ssize_t x11_get_opaque_size(void) {
     return sizeof(struct platform_window);
 }
 
-static void x11_flush(void) {
-    xcb_flush(con);
-}
-
 static void update_cursor(struct window *win) {
     struct cursor *new = NULL;
     if (get_plat(win)->cursor_user)
@@ -877,9 +873,10 @@ static void update_cursor(struct window *win) {
         select_cursor(win, new);
 }
 
-static void x11_handle_events(void *data_, uint32_t mask_) {
-    (void)data_, (void)mask_;
-    for (xcb_generic_event_t *event, *nextev = NULL; nextev || (event = xcb_poll_for_event(con)); free(event)) {
+static bool do_handle_events(bool can_read) {
+    bool any = false;
+    for (xcb_generic_event_t *event, *nextev = NULL; nextev || (event = can_read ? xcb_poll_for_event(con) : xcb_poll_for_queued_event(con)); free(event)) {
+        any = true;
         if (nextev) event = nextev, nextev = NULL;
         switch (event->response_type &= 0x7F) {
             struct window *win;
@@ -1097,6 +1094,18 @@ static void x11_handle_events(void *data_, uint32_t mask_) {
             }
         }
     }
+    return any;
+}
+
+static void x11_flush(void) {
+    xcb_flush(con);
+    if (do_handle_events(false))
+        poller_skip_wait();
+}
+
+static void x11_handle_events(void *data_, uint32_t mask_) {
+    (void)data_, (void)mask_;
+    do_handle_events(true);
 }
 
 static void x11_free(void) {

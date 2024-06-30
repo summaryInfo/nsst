@@ -1221,6 +1221,8 @@ static ssize_t wayland_get_opaque_size(void) {
 
 static void wayland_flush(void) {
     wl_display_flush(dpl);
+    if (wl_display_dispatch_pending(dpl))
+        poller_skip_wait();
 }
 
 static void handle_keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard, uint32_t format, int32_t fd, uint32_t size) {
