@@ -343,24 +343,23 @@ void poller_remove(struct event *evt) {
 }
 
 bool poller_is_enabled(struct event *evt) {
-    return !(evt->flags & evt_flag_disabled);
+    return evt && !(evt->flags & evt_flag_disabled);
 }
 
 static void toggle_timer(struct event *evt, bool enable) {
-    if (poller_is_enabled(evt) == enable) return;
-
     if (enable) heap_insert(evt);
     else heap_remove(evt);
 }
 
 static void toggle_fd(struct event *evt, bool enable) {
-    if (poller_is_enabled(evt) == enable) return;
-
-    evt->flags ^= evt_flag_disabled;
+    (void)enable;
     poller.pollfd_array[evt->fd.index].fd *= -1;
 }
 
 void poller_toggle(struct event *evt, bool enable) {
+    if (poller_is_enabled(evt) == enable) return;
+    evt->flags ^= evt_flag_disabled;
+
     switch (evt->state) {
     case evt_state_fd:
         toggle_fd(evt, enable);

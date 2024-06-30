@@ -839,7 +839,6 @@ static void tick(void *arg) {
 
             win->force_redraw = false;
             win->any_event_happend = false;
-            win->blink_commited = true;
         }
     }
 

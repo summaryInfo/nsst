@@ -5,6 +5,7 @@
 #include "config.h"
 #include "font.h"
 #include "mouse.h"
+#include "poller.h"
 #include "window-impl.h"
 #include "window-x11.h"
 
@@ -553,7 +554,7 @@ static inline void sort_by_color(struct element_buffer *buf) {
     buf->sorted = src;
 }
 
-static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool reverse_cursor, bool *beyond_eol) {
+static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool reverse_cursor, bool *beyond_eol) {
     rctx.foreground_buf.size = 0;
     rctx.background_buf.size = 0;
     rctx.decoration_buf.size = 0;
@@ -563,6 +564,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
 
     bool slow_path = win->cfg.special_bold || win->cfg.special_underline || win->cfg.special_blink || win->cfg.blend_fg ||
                      win->cfg.special_reverse || win->cfg.special_italic || win->cfg.blend_all_bg || selection_active(term_get_sstate(win->term));
+    bool has_blinking = false;
 
     struct screen *scr = term_screen(win->term);
     struct line_span span = screen_view(scr);
@@ -599,6 +601,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
 
             struct attr attr = *view_attr(&span, cel.attrid);
             bool dirty = span.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
+            has_blinking |= attr.blink;
 
             struct cellspec spec;
             struct glyph *glyph = NULL;
@@ -759,6 +762,7 @@ static void prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
         if (!view_wrapped(&span))
             span.line->force_damage = 0;
     }
+    return has_blinking;
 }
 
 static void reset_clip(struct window *win) {
@@ -815,7 +819,8 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
     bool beyond_eol = false;
     if (cond_cblink) cursor &= win->rcstate.blink;
 
-    prepare_multidraw(win, cur_x, cur_y, reverse_cursor, &beyond_eol);
+    bool has_blinking = (win->cfg.cursor_shape & 1);
+    has_blinking |= prepare_multidraw(win, cur_x, cur_y, reverse_cursor, &beyond_eol);
 
     sort_by_color(&rctx.background_buf);
     set_clip(win, &rctx.background_buf);
@@ -841,13 +846,19 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
         do_draw_rects(win, cr.rects + cr.offset, cr.count, win->cursor_fg);
     }
 
-    bool drawn = 0;
+    bool drawn = false;
 
     if (rctx.background_buf.size || win->redraw_borders) {
         x11_xrender_update(win, window_rect(win));
         win->redraw_borders = 0;
-        drawn = 1;
+        drawn = true;
     }
+
+    bool blink_enabled = poller_is_enabled(win->blink_timer);
+    if (blink_enabled)
+        win->blink_commited = true;
+    if (has_blinking ^ poller_is_enabled(win->blink_timer))
+        poller_toggle(win->blink_timer, has_blinking);
 
     return drawn;
 }

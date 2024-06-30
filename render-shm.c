@@ -14,6 +14,7 @@
 #include "mouse.h"
 #include "window-impl.h"
 #include "image.h"
+#include "poller.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -117,6 +118,7 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
 
     bool slow_path = win->cfg.special_bold || win->cfg.special_underline || win->cfg.special_blink || win->cfg.blend_fg ||
                      win->cfg.special_reverse || win->cfg.special_italic || win->cfg.blend_all_bg || selection_active(term_get_sstate(win->term));
+    bool has_blinking = (win->cfg.cursor_shape & 1);
 
     struct screen *scr = term_screen(win->term);
     struct line_span span = screen_view(scr);
@@ -138,6 +140,7 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
 
             struct attr attr = *view_attr(&span, cel.attrid);
             bool dirty = span.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
+            has_blinking |= attr.blink;
 
             struct cellspec spec;
             struct glyph *glyph = NULL;
@@ -250,6 +253,12 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
             pvtbl->update(win, rect_shift(rect_scale_up(get_shm(win)->bounds[k], cw, cd + ch), bw, bh));
         get_shm(win)->boundc = 0;
     }
+
+    bool blink_enabled = poller_is_enabled(win->blink_timer);
+    if (blink_enabled)
+        win->blink_commited = true;
+    if (has_blinking ^ poller_is_enabled(win->blink_timer))
+        poller_toggle(win->blink_timer, has_blinking);
 
     if (drawn_any && pvtbl->draw_end)
         pvtbl->draw_end(win);
