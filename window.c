@@ -163,9 +163,17 @@ static inline void inc_read_inhibit(struct window *win) {
         poller_toggle(win->tty_event, false);
 }
 
+static inline void dec_render_inhibit(struct window *win) {
+    win->inhibit_render_counter--;
+}
+
+static inline void inc_render_inhibit(struct window *win) {
+    win->inhibit_render_counter++;
+}
+
 void window_reset_delayed_redraw(struct window *win) {
-    win->inhibit_render_counter -= poller_unset(&win->redraw_delay_timer);
-    win->any_event_happend = true;
+    if (poller_unset(&win->redraw_delay_timer))
+        dec_render_inhibit(win);
 }
 
 static bool handle_read_delay_timeout(void *win_) {
@@ -267,16 +275,17 @@ void window_set_active_uri(struct window *win, uint32_t uri, bool pressed) {
 
 static bool handle_sync_update_timeout(void *win_) {
     struct window *win = win_;
-    win->inhibit_render_counter--;
+    dec_render_inhibit(win);
     window_reset_delayed_redraw(win);
     return false;
 }
 
 void window_set_sync(struct window *win, bool state) {
-    win->inhibit_render_counter -= poller_unset(&win->sync_update_timeout_timer);
+    if (poller_unset(&win->sync_update_timeout_timer))
+        dec_render_inhibit(win);
     if (state) {
         poller_set_timer(&win->sync_update_timeout_timer, handle_sync_update_timeout, win, win->cfg.sync_time*1000L);
-        win->inhibit_render_counter++;
+        inc_render_inhibit(win);
     }
 }
 
@@ -296,7 +305,7 @@ bool window_get_autorepeat(struct window *win) {
 
 static bool handle_frame_timeout(void *win_) {
     struct window *win = win_;
-    win->inhibit_render_counter--;
+    dec_render_inhibit(win);
     return false;
 }
 
@@ -304,7 +313,7 @@ void window_delay_redraw(struct window *win) {
     if (!win->redraw_delay_timer) {
         win->redraw_delay_timer = poller_add_timer(handle_frame_timeout, win, win->cfg.max_frame_time*1000LL);
         poller_set_autoreset(win->redraw_delay_timer, &win->redraw_delay_timer);
-        win->inhibit_render_counter++;
+        inc_render_inhibit(win);
     }
 }
 
@@ -463,7 +472,8 @@ static void reload_window(struct window *win) {
     if (poller_unset(&win->configure_delay_timer))
         dec_read_inhibit(win);
 
-    win->inhibit_render_counter -= poller_unset(&win->sync_update_timeout_timer);
+    if (poller_unset(&win->sync_update_timeout_timer))
+        dec_render_inhibit(win);
     window_reset_delayed_redraw(win);
 
     poller_unset(&win->read_delay_timer);
@@ -797,7 +807,7 @@ bool window_is_mapped(struct window *win) {
 
 static bool handle_frame(void *win_) {
     struct window *win = win_;
-    win->inhibit_render_counter--;
+    dec_render_inhibit(win);
     return false;
 }
 
@@ -820,7 +830,8 @@ static void tick(void *arg) {
 
         if ((win->any_event_happend && !win->inhibit_render_counter) || win->force_redraw) {
             if ((win->drawn_somthing = screen_redraw(term_screen(win->term), win->blink_commited))) {
-                win->inhibit_render_counter += !poller_set_timer(&win->frame_timer, handle_frame, win, SEC/win->cfg.fps);
+                if (!poller_set_timer(&win->frame_timer, handle_frame, win, SEC/win->cfg.fps))
+                    inc_render_inhibit(win);
                 window_reset_delayed_redraw(win);
                 if (gconfig.trace_misc) info("Redraw");
             }
