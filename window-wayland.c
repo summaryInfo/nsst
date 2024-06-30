@@ -1465,9 +1465,6 @@ static void handle_pointer_leave(void *data, struct wl_pointer *wl_pointer, uint
 
     assert(win == seat->pointer.wptr.win);
 
-    if (win) win->any_event_happend = true;
-    win_ptr_clear(&seat->pointer.wptr);
-
     seat->pointer.serial = serial;
     seat->pointer.event_mask |= POINTER_EVENT_LEAVE;
 }
@@ -1749,6 +1746,11 @@ static void handle_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
     get_plat(win)->mouse.x = x;
     get_plat(win)->mouse.y = y;
     get_plat(win)->mouse.mask = seat->pointer.mask | seat->keyboard.mask;
+
+    if (seat->pointer.event_mask & POINTER_EVENT_LEAVE) {
+        if (win) win->any_event_happend = true;
+        win_ptr_clear(&seat->pointer.wptr);
+    }
 
     seat->pointer.event_mask = 0;
 }
