@@ -43,6 +43,7 @@ struct render_cell_state {
     uint32_t dummy_ : 7;
     bool blink : 1;
     bool uri_pressed : 1;
+    bool cursor_blink_inhibit : 1;
 };
 
 /* This structure is common to both X11 and Wayland */
@@ -74,6 +75,7 @@ struct window {
     struct event *frame_timer;
     struct event *smooth_scrooll_timer;
     struct event *blink_timer;
+    struct event *blink_inhibit_timer;
     struct event *sync_update_timeout_timer;
     struct event *visual_bell_timer;
     struct event *configure_delay_timer;

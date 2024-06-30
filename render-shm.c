@@ -107,9 +107,9 @@ void shm_recolor_border(struct window *win) {
 
 bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor_visible, bool on_margin) {
     bool scrolled = get_shm(win)->boundc;
-    bool has_blinking = (win->cfg.cursor_shape & 1) && cursor_visible;
+    bool has_blinking = (win->cfg.cursor_shape & 1) && cursor_visible && !win->rcstate.cursor_blink_inhibit;
     bool beyond_eol = false;
-    cursor_visible &= !has_blinking || (!win->blink_commited && win->rcstate.blink);
+    cursor_visible &= !has_blinking || (!win->blink_commited && !win->rcstate.blink && !win->rcstate.cursor_blink_inhibit);
 
     int cw = win->char_width, ch = win->char_height;
     int cd = win->char_depth, ul = win->cfg.underline_width;
@@ -156,7 +156,7 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
                 if (k == cur_y && i == cur_x && reverse_cursor) {
                     attr.fg = win->rcstate.palette[SPECIAL_CURSOR_FG];
                     attr.bg = win->rcstate.palette[SPECIAL_CURSOR_BG];
-                    attr.reverse ^= true;
+                    attr.reverse ^= !win->rcstate.cursor_blink_inhibit;
                 }
 
                 bool selected = is_selected_prev(&sel_it, &span, i);

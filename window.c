@@ -446,7 +446,7 @@ void window_pop_title(struct window *win, enum title_target which) {
 
 static bool handle_blink(void *win_) {
     struct window *win = win_;
-    win->rcstate.blink = !win->rcstate.blink;
+    win->rcstate.blink ^= true;
     win->blink_commited = false;
     win->any_event_happend = true;
     return true;
@@ -479,6 +479,7 @@ static void reload_window(struct window *win) {
     poller_unset(&win->read_delay_timer);
     poller_unset(&win->visual_bell_timer);
     poller_unset(&win->blink_timer);
+    poller_unset(&win->blink_inhibit_timer);
     if (win->cfg.allow_blinking)
          poller_set_timer(&win->blink_timer, handle_blink, win, win->cfg.blink_time*1000L);
 
@@ -621,6 +622,7 @@ void free_window(struct window *win) {
     poller_unset(&win->frame_timer);
     poller_unset(&win->smooth_scrooll_timer);
     poller_unset(&win->blink_timer);
+    poller_unset(&win->blink_inhibit_timer);
     poller_unset(&win->sync_update_timeout_timer);
     poller_unset(&win->visual_bell_timer);
     poller_unset(&win->configure_delay_timer);
@@ -656,7 +658,20 @@ void free_window(struct window *win) {
     free(win);
 }
 
-bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor_visible, bool marg) {
+static bool handle_blink_inhibit_timeout(void *win_) {
+    struct window *win = win_;
+    win->rcstate.cursor_blink_inhibit = false;
+    if (win->blink_timer)
+        poller_toggle(win->blink_timer, true);
+    return false;
+}
+
+bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor_visible, bool marg, bool cmoved) {
+    /* When cursor is actively moving, don't blink to improve visiblility */
+    if (cmoved) {
+        poller_set_timer(&win->blink_inhibit_timer, handle_blink_inhibit_timeout, win, win->cfg.blink_time*333L);
+        win->rcstate.cursor_blink_inhibit = true;
+    }
     return pvtbl->submit_screen(win, cur_x, cur_y, cursor_visible, marg);
 }
 

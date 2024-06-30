@@ -848,13 +848,13 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
 bool screen_redraw(struct screen *scr, bool blink_commited) {
     bool c_hidden = scr->mode.hide_cursor || !screen_at_bottom(scr);
+    bool c_moved = scr->c.x != scr->prev_c_x || scr->c.y != scr->prev_c_y;
 
-    if (scr->c.x != scr->prev_c_x || scr->c.y != scr->prev_c_y ||
-            scr->prev_c_hidden != c_hidden || scr->prev_c_view_changed || !blink_commited) {
+    if (c_moved || scr->prev_c_hidden != c_hidden || scr->prev_c_view_changed || !blink_commited) {
         if (!c_hidden) screen_damage_cursor(scr);
         if ((!scr->prev_c_hidden || scr->prev_c_view_changed) && scr->prev_c_y < scr->height) {
             if (scr->prev_c_x < scr->screen[scr->prev_c_y].width)
-                view_cell(&scr->screen[scr->prev_c_y],scr->prev_c_x)->drawn = 0;
+                view_cell(&scr->screen[scr->prev_c_y],scr->prev_c_x)->drawn = false;
             else if (scr->prev_c_x == scr->screen[scr->prev_c_y].width)
                 scr->screen[scr->prev_c_y].line->force_damage = true;
         }
@@ -863,14 +863,14 @@ bool screen_redraw(struct screen *scr, bool blink_commited) {
     scr->prev_c_x = scr->c.x;
     scr->prev_c_y = scr->c.y;
     scr->prev_c_hidden = c_hidden;
-    scr->prev_c_view_changed = 0;
+    scr->prev_c_view_changed = false;
 
     if (scr->scroll_damage) {
         screen_damage_lines(scr, 0, scr->height);
-        scr->scroll_damage = 0;
+        scr->scroll_damage = false;
     }
 
-    return window_submit_screen(scr->win, scr->c.x, scr->c.y, !c_hidden, scr->c.pending);
+    return window_submit_screen(scr->win, scr->c.x, scr->c.y, !c_hidden, scr->c.pending, c_moved);
 }
 
 void screen_set_tb_margins(struct screen *scr, int16_t top, int16_t bottom) {

@@ -619,7 +619,7 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                 if (k == cur_y && i == cur_x && reverse_cursor) {
                     attr.fg = win->rcstate.palette[SPECIAL_CURSOR_FG];
                     attr.bg = win->rcstate.palette[SPECIAL_CURSOR_BG];
-                    attr.reverse ^= 1;
+                    attr.reverse ^= true;
                 }
 
                 bool selected = is_selected_prev(&sel_it, &span, i);
@@ -822,9 +822,9 @@ static void draw_images(struct window *win, struct element_buffer *buf) {
 }
 
 bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor_visible, bool on_margin) {
-    bool has_blinking = (win->cfg.cursor_shape & 1) && cursor_visible;
+    bool has_blinking = (win->cfg.cursor_shape & 1) && cursor_visible && !win->rcstate.cursor_blink_inhibit;
     bool beyond_eol = false;
-    cursor_visible &= !has_blinking || (!win->blink_commited && win->rcstate.blink);
+    cursor_visible &= !has_blinking || (!win->blink_commited && !win->rcstate.blink && !win->rcstate.cursor_blink_inhibit);
     bool reverse_cursor = cursor_visible && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
 
     has_blinking |= prepare_multidraw(win, cur_x, cur_y, reverse_cursor, &beyond_eol, &cursor_visible);
