@@ -58,7 +58,7 @@ static void handle_chld(int arg) {
         if (WIFEXITED(status) && WEXITSTATUS(status))
             info("Child exited with status: %d", WEXITSTATUS(status));
         else if (WIFSIGNALED(status))
-            info("Child terminated due to the signal: %d\n", WTERMSIG(status));
+            info("Child terminated due to the signal: %d", WTERMSIG(status));
 
         LIST_FOREACH(it, &children) {
             struct watcher *w = CONTAINEROF(it, struct watcher, link);
