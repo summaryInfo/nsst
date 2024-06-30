@@ -63,7 +63,6 @@ struct poller {
     struct pollfd *pollfd_array;
     struct event **pollfd_array_events;
     ssize_t pollfd_array_caps;
-    ssize_t pollfd_array_size;
     ssize_t pollfd_first_free;
 
     struct event **timer_heap;
@@ -92,7 +91,6 @@ void init_poller(void) {
     poller.pollfd_array = xzalloc(INIT_PFD_NUM * sizeof(*poller.pollfd_array));
     poller.pollfd_array_events = xzalloc(INIT_PFD_NUM * sizeof(*poller.pollfd_array_events));
     poller.pollfd_array_caps = INIT_PFD_NUM;
-    poller.pollfd_array_size = 0;
     poller.pollfd_first_free = 0;
     poller.pollfd_array[0].fd = FREE_SLOT;
     for (ssize_t i = 1; i < INIT_PFD_NUM; i++) {
@@ -123,7 +121,6 @@ void poller_add_tick(poller_tick_cb_t tick, void *arg) {
 }
 
 void free_poller(void) {
-    assert(!poller.pollfd_array_size);
     assert(!poller.timer_heap_size);
 
     free(poller.pollfd_array);
@@ -192,7 +189,7 @@ static void grow_pollfd_array(void) {
             .fd = FREE_SLOT,
             .events = poller.pollfd_first_free
         };
-        poller.pollfd_first_free = i;
+        poller.pollfd_first_free = i + poller.pollfd_array_caps;
     }
 
     poller.pollfd_array_caps += INIT_PFD_NUM;
@@ -204,11 +201,11 @@ void poller_set_autoreset(struct event *evt, struct event **pevt) {
 }
 
 struct event *poller_add_fd(poller_fd_cb_t cb, void *arg, int fd, uint32_t mask) {
-    if (poller.pollfd_array_size + 1 > poller.pollfd_array_caps)
+    if (poller.pollfd_first_free == -1)
         grow_pollfd_array();
 
     int index = poller.pollfd_first_free;
-    assert(poller.pollfd_first_free != -1);
+    assert(index != -1);
 
     struct pollfd *pfd = &poller.pollfd_array[index];
     poller.pollfd_first_free = pfd->events;
