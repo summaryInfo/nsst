@@ -21,8 +21,9 @@ _NOTE: These plans can change any time_
   * Support xdg-activation-v1
 
 * Refactor
+  * Add asynchronous pty writes for situations when input queue is full
   * Cleanup fallback cursor loading: add get_cursor_any()
-  * Move current window size outside of win->cfg.geometry
+  * Move current window size from win->cfg.geometry
   * Add helper to calulate cw/ch
 
 ### Until 2.7 (or later)
