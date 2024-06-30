@@ -345,7 +345,6 @@ static struct option options[] = {
     X(border, border, "border", "Border size", -1, 0, 200),
     X(vertical_border, border, "vertical-border", "Vertical border size (deprecated)", -1, 0, 200),
     X(horizontal_border, border, "horizontal-border", "Horizontal border size (deprecated)", -1, 0, 200),
-    X(border, border, "border", "border size", -1, 0, 200),
     X(boolean, visual_bell, "visual-bell", "Whether bell should be visual or normal", false),
     X(int64, visual_bell_time, "visual-bell-time", "Length of visual bell", 200000, 0, 10*SEC/1000),
     X1(int16, vt_version, 'V', "vt-version", "Emulated VT version", 420, 0, 999),
