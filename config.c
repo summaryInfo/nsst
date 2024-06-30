@@ -96,63 +96,40 @@ static struct option *dpi_option_entry;
 #define COLOR_GRAY(n) (0xFF000000 | \
         (MIN(0x08 + 0x0A * (n), 0xFF) * 0x10101))
 
+#define MAX_SHORT_OPT 2
+
+#define OPTION_TYPES \
+    T(boolean,           "bool",           bool,            bool dflt;                               ) \
+    T(color,             "color",          color_t,         color_t dflt;                            ) \
+    T(double,            "real",           double,          double dflt; double min; double max;     ) \
+    T(enum,              "enum",           int,             int dflt; int start; const char **values;) \
+    T(geometry,          "geometry",       struct geometry, bool in_char;                            ) \
+    T(int16,             "int",            int16_t,         int64_t dflt; int64_t min; int64_t max;  ) \
+    T(int64,             "int",            int64_t,         int64_t dflt; int64_t min; int64_t max;  ) \
+    T(nrcs,              "charset string", enum charset,    enum charset dflt;                       ) \
+    T(string,            "str",            char *,          const char *dflt;                        ) \
+    T(uint8,             "int",            uint8_t,         int64_t dflt; int64_t min; int64_t max;  ) \
+    T(border,            "int",            struct border,   int64_t dflt; int64_t min; int64_t max;  ) \
+    T(vertical_border,   "int",            struct border,   int64_t dflt; int64_t min; int64_t max;  ) \
+    T(horizontal_border, "int",            struct border,   int64_t dflt; int64_t min; int64_t max;  ) \
+
+#define T(name, y, z, ...) struct name##_arg { __VA_ARGS__ } arg_##name;
 union opt_limits {
-    struct double_arg {
-        double dflt;
-        double min;
-        double max;
-    } arg_double;
-    struct int64_arg {
-        int64_t dflt;
-        int64_t min;
-        int64_t max;
-    } arg_int64;
-    struct enum_arg {
-        int dflt;
-        int start;
-        const char **values;
-    } arg_enum;
-    struct string_arg {
-        const char *dflt;
-    } arg_string;
-    struct boolean_arg {
-        bool dflt;
-    } arg_boolean;
-    struct color_arg {
-        color_t dflt;
-    } arg_color;
-    struct nrcs_arg {
-        enum charset dflt;
-    } arg_nrcs;
-    struct geometry_arg {
-        bool in_char;
-    } arg_geometry;
-#define arg_int16 arg_int64
-#define arg_border arg_int64
-#define arg_vertical_border arg_int64
-#define arg_horizontal_border arg_int64
-#define arg_uint8 arg_int64
+    OPTION_TYPES
+};
+#undef T
+
+enum option_type {
+#define T(x, ...) option_type_##x,
+    OPTION_TYPES
+#undef T
 };
 
 typedef bool (*parse_fn)(const char *, void *, union opt_limits *);
 
-enum option_type {
-    option_type_boolean,
-    option_type_border,
-    option_type_color,
-    option_type_double,
-    option_type_enum,
-    option_type_geometry,
-    option_type_horizontal_border,
-    option_type_int16,
-    option_type_int64,
-    option_type_nrcs,
-    option_type_string,
-    option_type_uint8,
-    option_type_vertical_border,
-};
-
-#define MAX_SHORT_OPT 2
+#define T(x, ...) static bool do_parse_##x(const char *, void *, union opt_limits *);
+OPTION_TYPES
+#undef T
 
 struct option {
     ht_head_t head;
@@ -166,50 +143,22 @@ struct option {
     union opt_limits limits;
 };
 
-static bool do_parse_boolean(const char *, void *, union opt_limits *);
-static bool do_parse_color(const char *, void *, union opt_limits *);
-static bool do_parse_double(const char *, void *, union opt_limits *);
-static bool do_parse_enum(const char *, void *, union opt_limits *);
-static bool do_parse_geometry(const char *, void *, union opt_limits *);
-static bool do_parse_int16(const char *, void *, union opt_limits *);
-static bool do_parse_int64(const char *, void *, union opt_limits *);
-static bool do_parse_nrcs(const char *, void *, union opt_limits *);
-static bool do_parse_string(const char *, void *, union opt_limits *);
-static bool do_parse_uint8(const char *, void *, union opt_limits *);
-static bool do_parse_border(const char *, void *, union opt_limits *);
-static bool do_parse_vertical_border(const char *, void *, union opt_limits *);
-static bool do_parse_horizontal_border(const char *, void *, union opt_limits *);
-
-/* type_size field is stored modulo 256 */
-#define T(type_, name_, size_) [option_type_##type_] = { \
+struct option_type_desc {
+    const char *name;
+    parse_fn parse;
+    /* type_size field is stored modulo 256 */
+    uint8_t type_size;
+    uint8_t name_len;
+} option_types[] = {
+#define T(type_, name_, size_, ...) [option_type_##type_] = { \
         .name = name_, \
         .parse = do_parse_##type_, \
         .type_size = (uint8_t)sizeof(size_), \
         .name_len = sizeof name_ - 1\
-    }
-
-struct option_type_desc {
-    const char *name;
-    parse_fn parse;
-    uint8_t type_size;
-    uint8_t name_len;
-} option_types[] = {
-    T(boolean, "bool", bool),
-    T(color, "color", color_t),
-    T(double, "real", double),
-    T(enum, "enum", int),
-    T(geometry, "geometry", struct geometry),
-    T(int16, "int", int16_t),
-    T(int64, "int", int64_t),
-    T(nrcs, "charset string", enum charset),
-    T(string, "str", char *),
-    T(uint8, "int", uint8_t),
-    T(border, "int", struct border),
-    T(vertical_border, "int", struct border),
-    T(horizontal_border, "int", struct border),
-};
-
+    },
+    OPTION_TYPES
 #undef T
+};
 
 /* Instance option */
 #define X2(type_, field_, l1_, l2_, name_, desc_, ...) { \
@@ -572,7 +521,7 @@ void set_default_dpi(double dpi, struct instance_config *cfg) {
 }
 
 static bool do_parse_double(const char *str, void *dst, union opt_limits *limits) {
-    double result = 0;
+    double result = 0, *pdst = dst;
 
     if (!strcasecmp(str, "default")) {
         result = limits->arg_double.dflt;
@@ -583,12 +532,12 @@ static bool do_parse_double(const char *str, void *dst, union opt_limits *limits
             result = limits->arg_double.min;
     } else return false;
 
-    memcpy(dst, &result, sizeof result);
+    *pdst = result;
     return true;
 }
 
 static bool do_parse_nrcs(const char *str, void *dst, union opt_limits *limits) {
-    enum charset result;
+    enum charset result, *pdst = dst;
     if (!strcasecmp(str, "default")) result = limits->arg_nrcs.dflt;
     else if (!str[1] && str[0] > 0x2F && str[0] < 0x7F) {
         uint32_t sel = E(str[0]);
@@ -602,12 +551,12 @@ static bool do_parse_nrcs(const char *str, void *dst, union opt_limits *limits) 
         if (result == nrcs_invalid) return false;
     } else return false;
 
-    memcpy(dst, &result, sizeof result);
+    *pdst = result;
     return true;
 }
 
 static bool do_parse_boolean(const char *str, void *dst, union opt_limits *limits) {
-    bool result;
+    bool result, *pdst = dst;
     if (!strcasecmp(str, "default")) {
         result = limits->arg_boolean.dflt;
     } else if (!strcasecmp(str, "true") || !strcasecmp(str, "yes") ||
@@ -617,12 +566,12 @@ static bool do_parse_boolean(const char *str, void *dst, union opt_limits *limit
                !strcasecmp(str, "n") || !strcmp(str, "0")) {
         result = false;
     } else return false;
-    memcpy(dst, &result, sizeof result);
+    *pdst = result;
     return true;
 }
 
 static bool do_parse_int64(const char *str, void *dst, union opt_limits *limits) {
-    int64_t result = 0;
+    int64_t result = 0, *pdst = dst;
 
     if (!strcasecmp(str, "default")) {
         result = limits->arg_int64.dflt;
@@ -638,17 +587,16 @@ static bool do_parse_int64(const char *str, void *dst, union opt_limits *limits)
             result = limits->arg_int64.min;
     }
 
-    memcpy(dst, &result, sizeof result);
+    *pdst = result;
     return true;
 }
 
 static bool do_parse_uint8(const char *str, void *dst, union opt_limits *limits) {
-    int64_t val64;
+    int64_t val64 = 0;
+    uint8_t *pdst = dst;
     if (!do_parse_int64(str, &val64, limits))
         return false;
-    uint8_t result = val64;
-
-    memcpy(dst, &result, sizeof result);
+    *pdst = val64;
     return true;
 }
 
@@ -676,6 +624,7 @@ static bool do_parse_vertical_border(const char *str, void *dst, union opt_limit
         warn("--vertical-border is obsolete, use --top-border, --bottom-border or --border instead");
         border->top = border->bottom = val64;
     }
+
     return true;
 }
 
@@ -689,21 +638,21 @@ static bool do_parse_horizontal_border(const char *str, void *dst, union opt_lim
         warn("--horizontal-border is obsolete, use --left-border, --right-border or --border instead");
         border->left = border->right = val64;
     }
+
     return true;
 }
 
 static bool do_parse_int16(const char *str, void *dst, union opt_limits *limits) {
-    int64_t val64;
+    int64_t val64 = 0;
+    uint8_t *pdst = dst;
     if (!do_parse_int64(str, &val64, limits))
         return false;
-    int16_t result = val64;
-
-    memcpy(dst, &result, sizeof result);
+    *pdst = val64;
     return true;
 }
 
 static bool do_parse_enum(const char *str, void *dst, union opt_limits *limits) {
-    int result;
+    int result, *pdst = dst;
     if (!strcasecmp(str, "default")) {
         result = limits->arg_enum.dflt;
     } else {
@@ -718,27 +667,24 @@ static bool do_parse_enum(const char *str, void *dst, union opt_limits *limits) 
         if (!has_value) return false;
     }
 
-    memcpy(dst, &result, sizeof result);
+    *pdst = result;
     return true;
 }
 
 static bool do_parse_string(const char *str, void *dst, union opt_limits *limits) {
-    const char *result;
+    char *result = NULL, **pdst = dst;
     if (!strcasecmp(str, "default")) {
-        result = limits->arg_string.dflt;
-        if (result) result = strdup(result);
+        const char *r = limits->arg_string.dflt;
+        if (r) result = strdup(r);
     } else result = strdup(str);
 
-    char *tmp;
-    memcpy(&tmp, dst, sizeof tmp);
-    if (tmp) free(tmp);
-
-    memcpy(dst, &result, sizeof result);
+    if (*pdst) free(*pdst);
+    *pdst = result;
     return true;
 }
 
 static bool do_parse_color(const char *str, void *dst, union opt_limits *limits) {
-    color_t result;
+    color_t result, *pdst = dst;
     if (!strcasecmp(str, "default")) {
         result = limits->arg_color.dflt;
     } else {
@@ -747,7 +693,7 @@ static bool do_parse_color(const char *str, void *dst, union opt_limits *limits)
         if (!result) return false;
     }
 
-    memcpy(dst, &result, sizeof result);
+    *pdst = result;
     return true;
 }
 
