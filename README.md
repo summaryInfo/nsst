@@ -172,11 +172,19 @@ Despite that terminal provides some mouse controls when SSD are not available:
 * C11 compatible compiler
 
 ### Runtime
-* `libxcb`
-* `fontconfig`
-* `freetype2`
-* `xkbcommon`
-* `xkbcommon-x11`
+
+* Common:
+    * `fontconfig`
+    * `freetype2`
+    * `xkbcommon`
+* X11:
+    * `libxcb`
+    * `xcb-util-cursor`
+    * `xkbcommon-x11`
+* Wayland:
+    * `libwayland-client`
+    * `libwayland-cursor`
+    * `wayland-protocols`
 
 #### Void Linux
 
