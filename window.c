@@ -172,6 +172,7 @@ static inline void inc_render_inhibit(struct window *win) {
 }
 
 void window_reset_delayed_redraw(struct window *win) {
+    win->any_event_happend = true;
     if (poller_unset(&win->redraw_delay_timer))
         dec_render_inhibit(win);
 }
