@@ -686,7 +686,8 @@ void handle_resize(struct window *win, int16_t width, int16_t height, bool artif
          * if it's a requested resize, since the application is already aware. */
         if (term_is_requested_resize(win->term)) {
             term_read(win->term);
-            wait_for_configure(win, 2);
+            if (poller_unset(&win->configure_delay_timer))
+                dec_read_inhibit(win);
         }
 
         /* Notify application and delay window redraw expecting the application to redraw
