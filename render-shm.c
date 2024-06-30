@@ -105,12 +105,11 @@ void shm_recolor_border(struct window *win) {
         image_draw_rect(get_shm(win)->im, rects[i], win->bg_premul);
 }
 
-bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool on_margin) {
+bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor_visible, bool on_margin) {
     bool scrolled = get_shm(win)->boundc;
-    bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
-    bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1);
+    bool has_blinking = (win->cfg.cursor_shape & 1) && cursor_visible;
     bool beyond_eol = false;
-    if (cond_cblink) cursor &= win->rcstate.blink;
+    cursor_visible &= !has_blinking || (!win->blink_commited && win->rcstate.blink);
 
     int cw = win->char_width, ch = win->char_height;
     int cd = win->char_depth, ul = win->cfg.underline_width;
@@ -118,25 +117,32 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
 
     bool slow_path = win->cfg.special_bold || win->cfg.special_underline || win->cfg.special_blink || win->cfg.blend_fg ||
                      win->cfg.special_reverse || win->cfg.special_italic || win->cfg.blend_all_bg || selection_active(term_get_sstate(win->term));
-    bool has_blinking = (win->cfg.cursor_shape & 1);
+    bool reverse_cursor = cursor_visible && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
 
     struct screen *scr = term_screen(win->term);
     struct line_span span = screen_view(scr);
     for (ssize_t k = 0; k < win->ch; k++, screen_span_shift(scr, &span)) {
         screen_span_width(scr, &span);
-        bool next_dirty = 0;
+        bool next_dirty = false;
         struct rect l_bound = {-1, k, 0, 1};
 
         struct mouse_selection_iterator sel_it = selection_begin_iteration(term_get_sstate(win->term), &span);
         bool last_selected = is_selected_prev(&sel_it, &span, win->cw - 1);
 
-        if (k == cur_y)
+        if (k == cur_y) {
             beyond_eol = cur_x >= span.width;
+            bool dirty = span.line->force_damage;
+            if (cur_x < span.width) {
+                struct cell *pcell = view_cell(&span, cur_x);
+                dirty |= !pcell->drawn || (!win->blink_commited && view_attr(&span, pcell->attrid)->blink);
+            }
+            cursor_visible &= dirty;
+        }
 
         for (int16_t i = MIN(win->cw, span.width) - 1; i >= 0; i--) {
             struct cell *pcell = view_cell(&span, i);
             struct cell cel = *pcell;
-            pcell->drawn = 1;
+            pcell->drawn = true;
 
             struct attr attr = *view_attr(&span, cel.attrid);
             bool dirty = span.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
@@ -144,13 +150,13 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
 
             struct cellspec spec;
             struct glyph *glyph = NULL;
-            bool g_wide = 0;
+            bool g_wide = false;
             if (dirty || next_dirty) {
 
                 if (k == cur_y && i == cur_x && reverse_cursor) {
                     attr.fg = win->rcstate.palette[SPECIAL_CURSOR_FG];
                     attr.bg = win->rcstate.palette[SPECIAL_CURSOR_BG];
-                    attr.reverse ^= 1;
+                    attr.reverse ^= true;
                 }
 
                 bool selected = is_selected_prev(&sel_it, &span, i);
@@ -223,10 +229,11 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
         }
 
         /* Only reset force flag for last part of the line */
-        if (!view_wrapped(&span)) span.line->force_damage = 0;
+        if (!view_wrapped(&span))
+            span.line->force_damage = false;
     }
 
-    if (cursor) {
+    if (cursor_visible) {
         struct cursor_rects cr = describe_cursor(win, cur_x, cur_y, on_margin, beyond_eol);
         for (size_t i = 0; i < cr.count; i++)
             image_draw_rect(get_shm(win)->im, cr.rects[i + cr.offset], win->cursor_fg);

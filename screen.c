@@ -870,10 +870,7 @@ bool screen_redraw(struct screen *scr, bool blink_commited) {
         scr->scroll_damage = 0;
     }
 
-    struct line_span *cl = &scr->screen[scr->c.y];
-    bool cursor = !c_hidden && (scr->c.x >= cl->width || !view_cell(cl, scr->c.x)->drawn || cl->line->force_damage);
-
-    return window_submit_screen(scr->win, scr->c.x, scr->c.y, cursor, scr->c.pending);
+    return window_submit_screen(scr->win, scr->c.x, scr->c.y, !c_hidden, scr->c.pending);
 }
 
 void screen_set_tb_margins(struct screen *scr, int16_t top, int16_t bottom) {

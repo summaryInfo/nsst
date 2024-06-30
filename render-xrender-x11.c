@@ -554,7 +554,7 @@ static inline void sort_by_color(struct element_buffer *buf) {
     buf->sorted = src;
 }
 
-static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool reverse_cursor, bool *beyond_eol) {
+static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, bool reverse_cursor, bool *beyond_eol, bool *cursor) {
     rctx.foreground_buf.size = 0;
     rctx.background_buf.size = 0;
     rctx.decoration_buf.size = 0;
@@ -570,11 +570,11 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
     struct line_span span = screen_view(scr);
     for (ssize_t k = 0; k < win->ch; k++, screen_span_shift(scr, &span)) {
         screen_span_width(scr, &span);
-        bool next_dirty = 0, first_in_line = 1;
+        bool next_dirty = false, first_in_line = true;
 
         struct mouse_selection_iterator sel_it = selection_begin_iteration(term_get_sstate(win->term), &span);
 
-        if (win->cw > span.width) {
+        if (win->cw > span.width && span.line->force_damage) {
             bool selected = is_selected_prev(&sel_it, &span, win->cw - 1);
             struct attr attr = *attr_pad(span.line);
             color_t bg = describe_bg(&attr, &win->cfg, &win->rcstate, selected);
@@ -587,17 +587,25 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                 .height = win->char_height + win->char_depth,
             });
 
-            if (cur_y == k && cur_x >= span.width)
-                *beyond_eol = true;
+            next_dirty = true;
+            first_in_line = false;
+        }
 
-            next_dirty = 1;
-            first_in_line = 0;
+        if (cur_y == k) {
+            if (cur_x >= span.width)
+                *beyond_eol = true;
+            bool dirty = span.line->force_damage;
+            if (cur_x < span.width) {
+                struct cell *pcell = view_cell(&span, cur_x);
+                dirty |= !pcell->drawn || (!win->blink_commited && view_attr(&span, pcell->attrid)->blink);
+            }
+            *cursor &= dirty;
         }
 
         for (int16_t i = MIN(win->cw, span.width) - 1; i >= 0; i--) {
             struct cell *pcell = view_cell(&span, i);
             struct cell cel = *pcell;
-            pcell->drawn = 1;
+            pcell->drawn = true;
 
             struct attr attr = *view_attr(&span, cel.attrid);
             bool dirty = span.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
@@ -605,7 +613,7 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
 
             struct cellspec spec;
             struct glyph *glyph = NULL;
-            bool g_wide = 0;
+            bool g_wide = false;
             uint32_t g = 0;
             if (dirty || next_dirty) {
                 if (k == cur_y && i == cur_x && reverse_cursor) {
@@ -618,7 +626,7 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                 spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected, slow_path);
                 g =  spec.ch | (spec.face << 24);
 
-                bool is_new = 0;
+                bool is_new = false;
                 if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face, &is_new);
 
                 if (UNLIKELY(is_new) && glyph) register_glyph(win, g, glyph);
@@ -636,7 +644,7 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                     prev_bg->x -= win->char_width;
                     prev_bg->width += win->char_width;
                 } else {
-                    first_in_line = 0;
+                    first_in_line = false;
                     push_element(&rctx.background_buf, &(struct element) {
                         .x = win->cfg.border.left + i * win->char_width,
                         .y = win->cfg.border.top + y,
@@ -760,7 +768,7 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
         }
         /* Only reset force flag for last part of the line */
         if (!view_wrapped(&span))
-            span.line->force_damage = 0;
+            span.line->force_damage = false;
     }
     return has_blinking;
 }
@@ -813,14 +821,13 @@ static void draw_images(struct window *win, struct element_buffer *buf) {
     }
 }
 
-bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool on_margin) {
-    bool reverse_cursor = cursor && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
-    bool cond_cblink = !win->blink_commited && (win->cfg.cursor_shape & 1);
+bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor_visible, bool on_margin) {
+    bool has_blinking = (win->cfg.cursor_shape & 1) && cursor_visible;
     bool beyond_eol = false;
-    if (cond_cblink) cursor &= win->rcstate.blink;
+    cursor_visible &= !has_blinking || (!win->blink_commited && win->rcstate.blink);
+    bool reverse_cursor = cursor_visible && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
 
-    bool has_blinking = (win->cfg.cursor_shape & 1);
-    has_blinking |= prepare_multidraw(win, cur_x, cur_y, reverse_cursor, &beyond_eol);
+    has_blinking |= prepare_multidraw(win, cur_x, cur_y, reverse_cursor, &beyond_eol, &cursor_visible);
 
     sort_by_color(&rctx.background_buf);
     set_clip(win, &rctx.background_buf);
@@ -841,7 +848,7 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
     sort_by_color(&rctx.decoration_buf2);
     draw_undercurls(win, &rctx.decoration_buf2);
 
-    if (cursor) {
+    if (cursor_visible) {
         struct cursor_rects cr = describe_cursor(win, cur_x, cur_y, on_margin, beyond_eol);
         do_draw_rects(win, cr.rects + cr.offset, cr.count, win->cursor_fg);
     }
@@ -850,7 +857,7 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
 
     if (rctx.background_buf.size || win->redraw_borders) {
         x11_xrender_update(win, window_rect(win));
-        win->redraw_borders = 0;
+        win->redraw_borders = false;
         drawn = true;
     }
 
