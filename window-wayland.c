@@ -77,7 +77,7 @@ struct output {
     struct rect physical;
     struct extent mm;
     char *name;
-    char *descr;
+    char *description;
     uint32_t id;
     int32_t refresh;
     enum wl_output_subpixel subpixel;
@@ -460,7 +460,11 @@ static void handle_surface_enter(void *data, struct wl_surface *wl_surface, stru
     struct window *win = data;
     (void)wl_surface;
 
-    struct output *output = wl_output_get_user_data(wl_output);
+    struct output *output = wl_output ? wl_output_get_user_data(wl_output) : NULL;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: surface.enter(output=%p)", data, (void *)output);
+
     if (output) {
         if (ctx.output_manager) {
             get_plat(win)->output_size.height = output->logical.height;
@@ -474,21 +478,32 @@ static void handle_surface_enter(void *data, struct wl_surface *wl_surface, stru
     // FIXME Adjust fonts and scale to the new output
 }
 
-static void handle_surface_leave(void *data, struct wl_surface *wl_surface, struct wl_output *output) {
-    struct window *win = data;
+static void handle_surface_leave(void *data, struct wl_surface *wl_surface, struct wl_output *wl_output) {
     (void)wl_surface;
 
+    struct output *output = wl_output ? wl_output_get_user_data(wl_output) : NULL;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: surface.leave(output=%p)", data, (void *)output);
+
     // FIXME Adjust fonts and scale to the new output
-    (void)output, (void)win;
 }
 
 static void handle_surface_preferred_buffer_scale(void *data, struct wl_surface *wl_surface, int32_t factor) {
-    (void)data, (void)wl_surface, (void)factor;
+    (void)wl_surface;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: surface.preferred_buffer_scale(factor=%d)", data, factor);
+
     // FIXME HiDPI
 }
 
 static void handle_surface_preferred_buffer_transform(void *data, struct wl_surface *wl_surface, uint32_t transform) {
-    (void)data, (void)wl_surface, (void)transform;
+    (void)wl_surface;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: surface.preferred_buffer_transform(transform=%d)", data, transform);
+
     // FIXME HiDPI
 }
 
@@ -525,7 +540,6 @@ struct xdg_surface_listener xdg_surface_listener = {
 
 void handle_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height, struct wl_array *states) {
     struct window *win = data;
-
     (void)xdg_toplevel;
 
     get_plat(win)->is_maximized = false;
@@ -635,6 +649,9 @@ static struct xdg_toplevel_listener xdg_toplevel_listener = {
 static void handle_xdg_toplevel_decoration_configure(void *data, struct zxdg_toplevel_decoration_v1 *zxdg_toplevel_decoration_v1, uint32_t mode) {
     struct window *win = data;
     (void)zxdg_toplevel_decoration_v1;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: xdg_toplevel_decoration.configure(mode=%x)", data, mode);
 
     if (mode != ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE) {
         if (!win->cfg.force_wayland_csd)
@@ -936,23 +953,39 @@ static void handle_data_source_cancelled(void *data, struct wl_data_source *wl_d
 }
 
 static void handle_data_source_target(void *data, struct wl_data_source *wl_data_source, const char *mime_type) {
+    (void)wl_data_source;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: data_source.target(mime_type=%s)", data, mime_type);
+
     // NOTE: DnD is not implemented
-    (void)data, (void)wl_data_source, (void)mime_type;
 }
 
 static void handle_data_source_dnd_drop_performed(void *data, struct wl_data_source *wl_data_source) {
+    (void)wl_data_source;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: data_source.dnd_drop_performed", data);
+
     // NOTE: DnD is not implemented
-    (void)data, (void)wl_data_source;
 }
 
 static void handle_data_source_dnd_finished(void *data, struct wl_data_source *wl_data_source) {
+    (void)wl_data_source;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: data_source.dnd_finished", data);
+
     // NOTE: DnD is not implemented
-    (void)data, (void)wl_data_source;
 }
 
 static void handle_data_source_action(void *data, struct wl_data_source *wl_data_source, uint32_t dnd_action) {
+    (void)wl_data_source;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: data_source.action(dnd_action=%d)", data, dnd_action);
+
     // NOTE: DnD is not implemented
-    (void)data, (void)wl_data_source, (void)dnd_action;
 }
 
 struct wl_data_source_listener data_source_listener = {
@@ -985,13 +1018,21 @@ static void handle_data_offer_offer(void *data, struct wl_data_offer *wl_data_of
 }
 
 static void handle_data_offer_source_actions(void *data, struct wl_data_offer *wl_data_offer, uint32_t source_actions) {
+    (void)wl_data_offer;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: data_offer.source_actions(source_actions=%d)", data, source_actions);
+
     // NOTE: DnD is not implemented
-    (void)data, (void)wl_data_offer, (void)source_actions;
 }
 
 static void handle_data_offer_action(void *data, struct wl_data_offer *wl_data_offer, uint32_t dnd_action) {
+    (void)wl_data_offer;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: data_offer.action(dnd_action=%d)", data, dnd_action);
+
     // NOTE: DnD is not implemented
-    (void)data, (void)wl_data_offer, (void)dnd_action;
 }
 
 struct wl_data_offer_listener data_offer_listener = {
@@ -1036,23 +1077,44 @@ static void handle_data_device_selection(void *data, struct wl_data_device *wl_d
 }
 
 static void handle_data_device_enter(void *data, struct wl_data_device *wl_data_device, uint32_t serial, struct wl_surface *surface, wl_fixed_t x, wl_fixed_t y, struct wl_data_offer *id) {
+    struct window *win = wl_surface_get_user_data(surface);
+    (void)wl_data_device;
+
+    if (gconfig.trace_events) {
+        info("Event[%p]: data_device.enter(serial=%x, win=%p, x=%f, y=%f, id=%p)",
+             data, serial, (void *)win, wl_fixed_to_double(x), wl_fixed_to_double(y), (void *)id);
+    }
+
     // NOTE: DnD is not implemented
-    (void)data, (void)wl_data_device, (void)serial, (void)surface, (void)x, (void)y, (void)id;
 }
 
 static void handle_data_device_leave(void *data, struct wl_data_device *wl_data_device) {
+    (void)wl_data_device;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: data_device.leave", data);
+
     // NOTE: DnD is not implemented
-    (void)data, (void)wl_data_device;
 }
 
 static void handle_data_device_motion(void *data, struct wl_data_device *wl_data_device, uint32_t time, wl_fixed_t x, wl_fixed_t y) {
+    (void)wl_data_device;
+
+    if (gconfig.trace_events) {
+        info("Event[%p]: data_device.motion(time=%d, x=%f, y=%f)",
+             data, time, wl_fixed_to_double(x), wl_fixed_to_double(y));
+    }
+
     // NOTE: DnD is not implemented
-    (void)data, (void)wl_data_device, (void)time, (void)x, (void)y;
 }
 
 static void handle_data_device_drop(void *data, struct wl_data_device *wl_data_device) {
+    (void)wl_data_device;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: data_device.drop", data);
+
     // NOTE: DnD is not implemented
-    (void)data, (void)wl_data_device;
 }
 
 struct wl_data_device_listener data_device_listener = {
@@ -1403,26 +1465,26 @@ static void handle_keyboard_modifiers(void *data, struct wl_keyboard *wl_keyboar
     struct seat *seat = data;
     (void)wl_keyboard;
 
-    win_ptr_ping(&seat->keyboard.wptr);
-
-    xkb_state_update_mask(seat->keyboard.xkb_state, mods_depressed, mods_latched, mods_locked, 0, 0, group);
-    seat->keyboard.mask = xkb_state_serialize_mods(seat->keyboard.xkb_state, XKB_STATE_MODS_EFFECTIVE) & mask_mod_mask;
-
     if (gconfig.trace_events) {
         info("Event[%p]: keyboard.modifiers(serial=%x, mods_depressed=%x, mods_latched=%x, mods_locked=%x, group=%x)",
              data, serial, mods_depressed, mods_latched, mods_locked, group);
     }
+
+    win_ptr_ping(&seat->keyboard.wptr);
+
+    xkb_state_update_mask(seat->keyboard.xkb_state, mods_depressed, mods_latched, mods_locked, 0, 0, group);
+    seat->keyboard.mask = xkb_state_serialize_mods(seat->keyboard.xkb_state, XKB_STATE_MODS_EFFECTIVE) & mask_mod_mask;
 }
 
 static void handle_keyboard_repeat_info(void *data, struct wl_keyboard *wl_keyboard, int32_t rate, int32_t delay) {
     struct seat *seat = data;
     (void)wl_keyboard;
 
-    seat->keyboard.autorepeat_initial = delay*(SEC/1000);
-    seat->keyboard.autorepeat_repeat = SEC / rate;
-
     if (gconfig.trace_events)
         info("Event[%p]: keyboard.repeat_info(rate=%d, delay=%d)", data, rate, delay);
+
+    seat->keyboard.autorepeat_initial = delay*(SEC/1000);
+    seat->keyboard.autorepeat_repeat = SEC / rate;
 }
 
 struct wl_keyboard_listener keyboard_listener = {
@@ -1854,7 +1916,13 @@ static void handle_output_geometry(void *data, struct wl_output *wl_output, int3
                                    int32_t physical_width, int32_t physical_height, int32_t subpixel,
                                    const char *make, const char *model, int32_t transform) {
     struct output *output = data;
-    (void)wl_output, (void)make, (void)model;
+    (void)wl_output;
+
+    if (gconfig.trace_events) {
+        info("Event[%p]: output.geometry(x=%d, y=%d, physical_width=%d, physical_height=%d, subpixel=%d, make=%s, model=%s, transform=%d)",
+             data, x, y, physical_width, physical_width, subpixel, make, model, transform);
+    }
+
     output->physical.x = x;
     output->physical.y = y;
     output->mm.height = physical_height;
@@ -1866,6 +1934,12 @@ static void handle_output_geometry(void *data, struct wl_output *wl_output, int3
 static void handle_output_mode(void *data, struct wl_output *wl_output, uint32_t flags, int32_t width, int32_t height, int32_t refresh) {
     struct output *output = data;
     (void)wl_output;
+
+    if (gconfig.trace_events) {
+        info("Event[%p]: output.mode(flags=%x, width=%d, height=%d, refresh=%d)",
+             data, flags, width, height, refresh);
+    }
+
     if (flags & WL_OUTPUT_MODE_CURRENT) {
         output->refresh = refresh;
         output->physical.height = height;
@@ -1876,6 +1950,10 @@ static void handle_output_mode(void *data, struct wl_output *wl_output, uint32_t
 static void handle_output_done(void *data, struct wl_output *wl_output) {
     struct output *output = data;
     (void)wl_output;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: output.done", data);
+
     output_compute_dpi(output);
     output->output_done = true;
 }
@@ -1883,19 +1961,31 @@ static void handle_output_done(void *data, struct wl_output *wl_output) {
 static void handle_output_scale(void *data, struct wl_output *wl_output, int32_t factor) {
     struct output *output = data;
     (void)wl_output;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: output.scale(factor=%d)", data, factor);
+
     output->scale = factor;
 }
 
 static void handle_output_name(void *data, struct wl_output *wl_output, const char *name) {
     struct output *output = data;
     (void)wl_output;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: output.name(name=%s)", data, name);
+
     output->name= strdup(name);
 }
 
 static void handle_output_description(void *data, struct wl_output *wl_output, const char *description) {
     struct output *output = data;
     (void)wl_output;
-    output->descr = strdup(description);
+
+    if (gconfig.trace_events)
+        info("Event[%p]: output.description(description=%s)", data, description);
+
+    output->description = strdup(description);
 }
 
 static struct wl_output_listener output_listener = {
@@ -1910,6 +2000,10 @@ static struct wl_output_listener output_listener = {
 static void handle_xdg_output_logical_position(void *data, struct zxdg_output_v1 *zxdg_output_v1, int32_t x, int32_t y) {
     struct output *output = data;
     (void)zxdg_output_v1;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: output.logical_position(x=%d, y=%d)", data, x, y);
+
     output->logical.x = x;
     output->logical.y = y;
 }
@@ -1917,26 +2011,48 @@ static void handle_xdg_output_logical_position(void *data, struct zxdg_output_v1
 static void handle_xdg_output_logical_size(void *data, struct zxdg_output_v1 *zxdg_output_v1, int32_t width, int32_t height) {
     struct output *output = data;
     (void)zxdg_output_v1;
+
+    if (gconfig.trace_events)
+        info("Event[%p]: output.logical_size(x=%d, y=%d)", data, width, height);
+
     output->logical.width = width;
     output->logical.height = height;
 }
 
 static void handle_xdg_output_done(void *data, struct zxdg_output_v1 *zxdg_output_v1) {
-    // NOTE: Deprecated
     struct output *output = data;
     (void)zxdg_output_v1;
+
+    // NOTE: Deprecated
+    if (gconfig.trace_events)
+        info("Event[%p]: output.done", data);
+
     output_compute_dpi(output);
     output->output_done = true;
 }
 
 static void handle_xdg_output_name(void *data, struct zxdg_output_v1 *zxdg_output_v1, const char *name) {
+    struct output *output = data;
+    (void)zxdg_output_v1;
+
     // NOTE: Deprecated
-    (void)data, (void)zxdg_output_v1, (void)name;
+    if (gconfig.trace_events)
+        info("Event[%p]: output.name(name=%s)", data, name);
+
+    if (!output->name)
+        output->name = strdup(name);
 }
 
 static void handle_xdg_output_description(void *data, struct zxdg_output_v1 *zxdg_output_v1, const char *description) {
+    struct output *output = data;
+    (void)zxdg_output_v1;
+
     // NOTE: Deprecated
-    (void)data, (void)zxdg_output_v1, (void)description;
+    if (gconfig.trace_events)
+        info("Event[%p]: output.description(description=%s)", data, description);
+
+    if (!output->description)
+        output->description= strdup(description);
 }
 
 static struct zxdg_output_v1_listener xdg_output_listener = {
@@ -1948,8 +2064,6 @@ static struct zxdg_output_v1_listener xdg_output_listener = {
 };
 
 static void handle_registry_global(void *data, struct wl_registry *wl_registry, uint32_t name, const char *interface, uint32_t version) {
-    (void)data;
-
     if (gconfig.trace_events)
         info("Event[%p]: registry.global(name=%x, interface=%s, version=%d)", data, name, interface, version);
 
@@ -2016,8 +2130,8 @@ static void free_output(struct output *output) {
         wl_output_destroy(output->output);
     if (output->name)
         free(output->name);
-    if (output->descr)
-        free(output->descr);
+    if (output->description)
+        free(output->description);
     free(output);
 }
 
