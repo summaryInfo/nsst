@@ -74,7 +74,7 @@ struct output {
     struct wl_output *output;
     struct zxdg_output_v1 *xdg_output;
     struct rect logical;
-    struct rect physical;
+    struct rect real;
     struct extent mm;
     char *name;
     char *description;
@@ -470,8 +470,8 @@ static void handle_surface_enter(void *data, struct wl_surface *wl_surface, stru
             get_plat(win)->output_size.height = output->logical.height;
             get_plat(win)->output_size.width = output->logical.width;
         } else {
-            get_plat(win)->output_size.height = output->physical.height / output->scale;
-            get_plat(win)->output_size.width = output->physical.width / output->scale;
+            get_plat(win)->output_size.height = output->real.height / output->scale;
+            get_plat(win)->output_size.width = output->real.width / output->scale;
         }
     }
 
@@ -1894,13 +1894,12 @@ static struct xdg_wm_base_listener xdg_wm_base_listener = {
 
 static void output_compute_dpi(struct output *output) {
     double dpi;
+    if (output->scale == 0)
+        output->scale = 1;
     if (ctx.output_manager)
         dpi = output->logical.width;
-    else {
-        if (output->scale == 0)
-            output->scale = 1;
-        dpi = output->physical.width / (double)output->scale;
-    }
+    else
+        dpi = output->real.width / (double)output->scale;
 
     if (!output->mm.width) {
         dpi = 96;
@@ -1920,11 +1919,11 @@ static void handle_output_geometry(void *data, struct wl_output *wl_output, int3
 
     if (gconfig.trace_events) {
         info("Event[%p]: output.geometry(x=%d, y=%d, physical_width=%d, physical_height=%d, subpixel=%d, make=%s, model=%s, transform=%d)",
-             data, x, y, physical_width, physical_width, subpixel, make, model, transform);
+             data, x, y, physical_width, physical_height, subpixel, make, model, transform);
     }
 
-    output->physical.x = x;
-    output->physical.y = y;
+    output->real.x = x;
+    output->real.y = y;
     output->mm.height = physical_height;
     output->mm.width = physical_width;
     output->subpixel = subpixel;
@@ -1941,9 +1940,10 @@ static void handle_output_mode(void *data, struct wl_output *wl_output, uint32_t
     }
 
     if (flags & WL_OUTPUT_MODE_CURRENT) {
+        // NOTE Refresh is scaled by 1000
         output->refresh = refresh;
-        output->physical.height = height;
-        output->physical.width = width;
+        output->real.height = height;
+        output->real.width = width;
     }
 }
 
@@ -1975,6 +1975,8 @@ static void handle_output_name(void *data, struct wl_output *wl_output, const ch
     if (gconfig.trace_events)
         info("Event[%p]: output.name(name=%s)", data, name);
 
+    if (output->name)
+        free(output->name);
     output->name= strdup(name);
 }
 
@@ -1985,6 +1987,8 @@ static void handle_output_description(void *data, struct wl_output *wl_output, c
     if (gconfig.trace_events)
         info("Event[%p]: output.description(description=%s)", data, description);
 
+    if (output->description)
+        free(output->description);
     output->description = strdup(description);
 }
 
