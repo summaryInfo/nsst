@@ -698,7 +698,7 @@ static bool wayland_init_window(struct window *win) {
                 ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE :
                 ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE;
         zxdg_toplevel_decoration_v1_set_mode(ww->decoration, mode);
-    } else {
+    } else if (!win->cfg.force_wayland_csd) {
         warn("Wayland compositor does not support server side decorations");
     }
 
