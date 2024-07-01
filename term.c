@@ -375,8 +375,8 @@ static void term_load_config(struct term *term, bool reset) {
 }
 
 void term_reload_config(struct term *term) {
-    screen_load_config(&term->scr, 0);
-    term_load_config(term, 0);
+    screen_load_config(&term->scr, false);
+    term_load_config(term, false);
 }
 
 static void term_do_reset(struct term *term, bool hard) {
@@ -385,7 +385,7 @@ static void term_do_reset(struct term *term, bool hard) {
 
     if (term->mode.columns_132)
         term_set_132(term, false);
-    screen_set_altscreen(scr, 0, 0, 0);
+    screen_set_altscreen(scr, false, false, false);
 
     ssize_t cx, cy;
     bool cpending;
@@ -401,7 +401,8 @@ static void term_do_reset(struct term *term, bool hard) {
     uri_match_reset(&term->uri_match, false);
 #endif
 
-    // TODO Reset cursor shape to default
+    window_set_pointer_shape(win, "");
+    window_set_pointer_mode(win, hide_never);
     window_set_mouse(win, USE_URI);
     window_set_colors(win, term->palette[SPECIAL_BG], term->palette[SPECIAL_CURSOR_FG]);
     window_set_autorepeat(win, window_cfg(win)->autorepeat);
