@@ -1,7 +1,7 @@
 /* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
 
-#ifndef WINDOW_X11_H_
-#define WINDOW_X11_H_ 1
+#ifndef WINDOW_IMPL_H_
+#define WINDOW_IMPL_H_ 1
 
 #include "feature.h"
 
@@ -15,7 +15,7 @@
 #include <stdbool.h>
 #include <xkbcommon/xkbcommon.h>
 
-/* The code below is X11-independent */
+#define NSST_CLASS "Nsst"
 
 struct cellspec {
     color_t fg;
@@ -121,9 +121,6 @@ extern const struct platform_vtable *pvtbl;
 FORCEINLINE
 static inline struct cellspec describe_cell(struct cell cell, struct attr *attr, struct instance_config *cfg, struct render_cell_state *rcs, bool selected, bool slow_path) {
     struct cellspec res = {0};
-    // TODO Better URI rendering
-    //      -- underline colors
-    //      -- dotted underlines
 #if USE_URI
     bool has_uri = attr->uri && cfg->uri_mode != uri_mode_off;
     bool active_uri = attr->uri == rcs->active_uri;

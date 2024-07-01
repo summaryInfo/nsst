@@ -30,8 +30,6 @@
 #include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
-#define NSST_CLASS "Nsst"
-
 struct cursor {
     ht_head_t link;
     char *name;

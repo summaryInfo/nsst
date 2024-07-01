@@ -37,8 +37,6 @@
 #include "xdg-output-protocol.h"
 #include "primary-selection-protocol.h"
 
-#define NSST_CLASS "Nsst"
-
 enum pointer_event_mask {
     POINTER_EVENT_ENTER = 1 << 0,
     POINTER_EVENT_LEAVE = 1 << 1,
