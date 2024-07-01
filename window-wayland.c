@@ -295,7 +295,8 @@ static struct cursor *get_cursor(const char *name) {
 
     struct wl_cursor *cursor = wl_cursor_theme_get_cursor(ctx.cursor_theme, name);
     if (!cursor) {
-        warn("Unable to load cursor '%s'", name);
+        if (name && *name)
+            warn("Unable to load cursor '%s'", name);
         return NULL;
     }
 

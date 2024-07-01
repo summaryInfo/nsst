@@ -385,7 +385,8 @@ static struct cursor *get_cursor(const char *name) {
 
     xcb_cursor_t xc = xcb_cursor_load_cursor(ctx.cursor_ctx, name);
     if (xc == XCB_NONE) {
-        warn("Unable to load cursor '%s'", name);
+        if (name && *name)
+            warn("Unable to load cursor '%s'", name);
         return NULL;
     }
 
