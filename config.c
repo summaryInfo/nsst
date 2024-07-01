@@ -277,7 +277,7 @@ static struct option options[] = {
     G1(enum, log_level, 'L', "log-level", "Filering level of logged information", 3, 0, (const char *[]){"quiet", "fatal", "warn", "info", NULL}),
     X(boolean, allow_luit, "luit", "Run luit if terminal doesn't support encoding by itself", true),
     X(string, luit, "luit-path", "Path to luit executable", "/usr/bin/luit"),
-    X(enum, margin_bell_volume, "bell", "Margin bell setting", 2, 0, (const char *[]){"off", "low", "high", NULL}),
+    X(enum, margin_bell_volume, "magrin-bell", "Margin bell setting", 2, 0, (const char *[]){"off", "low", "high", NULL}),
     X(int16, margin_bell_column, "margin-bell-column", "Columnt at which margin bell rings when armed", 10, 0, 200),
     X(uint8, margin_bell_high_volume, "margin-bell-high-volume", "High volume value for DECSWBV", 100, 0, 100),
     X(uint8, margin_bell_low_volume, "margin-bell-low-volume", "Low volume value for DECSWBV", 50, 0, 100),
