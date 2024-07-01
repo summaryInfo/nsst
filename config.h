@@ -73,6 +73,7 @@ struct global_config {
     char hostname[MAX_DOMAIN_NAME];
 
     char *open_command;
+    char *notify_command;
     bool unique_uris;
 
     enum renderer_backend backend;

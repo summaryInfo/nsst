@@ -930,6 +930,20 @@ static inline bool is_osc_state(uint32_t state) {
     return state == esc_osc_string || state == esc_osc_1 || state == esc_osc_2;
 }
 
+void send_notification(const char *title, const char *msg) {
+    if (gconfig.trace_misc) {
+        info("Notify cmd='%s' title='%s' text='%s'",
+                gconfig.notify_command, title, msg);
+    }
+    if (!fork()) {
+        execlp(gconfig.notify_command,
+               gconfig.notify_command,
+               title ? title : "",
+               msg, NULL);
+        _exit(127);
+    }
+}
+
 static void term_dispatch_osc(struct term *term) {
     if (!is_osc_state(term->esc.state)) {
         term->esc.state = term->esc.old_state;
@@ -1113,6 +1127,14 @@ static void term_dispatch_osc(struct term *term) {
         break;
     }
 #endif
+    case 9: /* Send desktop notification */ {
+        if (!cfg->allow_window_ops) break;
+        char *body = strchr((char *)dstr, ';');
+        if (body)
+            *body++ = '\0';
+        send_notification((char *)dstr, body);
+        break;
+    }
     case 10: /* Set VT100 foreground color */ {
         /* OSC 10 can also have second argument that works as OSC 11 */
         uint8_t *str2;
