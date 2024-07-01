@@ -233,7 +233,7 @@ static struct option options[] = {
     G1(boolean, daemon_mode, 'd', "daemon", "Start terminal as daemon", false),
     X(boolean, delete_is_delete, "delete-is-del", "Delete sends DEL symbol instead of escape sequence", false),
     X(time, double_click_time, "double-click-time", "Maximum time between button presses of the double click", 300000, 0, 10*SEC/1000),
-    X(double, dpi, "dpi", "DPI value for fonts", 0, 1000, 96),
+    X(double, dpi, "dpi", "DPI value for fonts", 96, 0, 1000),
     X(boolean, allow_erase_scrollback, "erase-scrollback", "Allow ED 3 to clear scrollback buffer", true),
     X(boolean, extended_cir, "extended-cir", "Report all SGR attributes in DECCIR", true),
     X(boolean, fixed, "fixed", "Don't allow to change window size, if supported", false),
