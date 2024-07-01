@@ -222,7 +222,7 @@ static struct option options[] = {
     X(boolean, blend_all_bg, "blend-all-background", "Apply opacity to all background colors, not just default one", false),
     X(boolean, blend_fg, "blend-foreground", "Apply opacity to foreground colors", false),
     X(color, palette[SPECIAL_BLINK], "blink-color", "Special color of blinking text", COLOR_SPECIAL_BLINK),
-    X(time, blink_time, "blink-time", "Text blink interval", 800000, 0, 10*SEC/1000),
+    X(time, blink_time, "blink-time", "Text blink interval", 800000000, 0, 10*SEC),
     X(color, palette[SPECIAL_BOLD], "bold-color", "Special color of bold text", COLOR_SPECIAL_BOLD),
     X1(string, config_path, 'C', "config", "Configuration file path", NULL),
     X(color, palette[SPECIAL_CURSOR_BG], "cursor-background", "Default cursor background color", COLOR_SPECIAL_CURSOR_BG),
@@ -232,7 +232,7 @@ static struct option options[] = {
     X(string, cwd, "cwd", "Current working directory for an application", NULL),
     G1(boolean, daemon_mode, 'd', "daemon", "Start terminal as daemon", false),
     X(boolean, delete_is_delete, "delete-is-del", "Delete sends DEL symbol instead of escape sequence", false),
-    X(time, double_click_time, "double-click-time", "Maximum time between button presses of the double click", 300000, 0, 10*SEC/1000),
+    X(time, double_click_time, "double-click-time", "Maximum time between button presses of the double click", 300000000, 0, 10*SEC),
     X(double, dpi, "dpi", "DPI value for fonts", 96, 0, 1000),
     X(boolean, allow_erase_scrollback, "erase-scrollback", "Allow ED 3 to clear scrollback buffer", true),
     X(boolean, extended_cir, "extended-cir", "Report all SGR attributes in DECCIR", true),
@@ -250,7 +250,7 @@ static struct option options[] = {
     X(color, palette[SPECIAL_FG], "foreground", "Default foreground color", COLOR_SPECIAL_FG),
     G(boolean, fork, "fork", "Fork in daemon mode", 1),
     X(int64, fps, "fps", "Window refresh rate", 60, 2, 1000),
-    X(time, frame_finished_delay, "frame-wait-delay", "Maximum time since last application output before redraw", SEC/240000, 1, 10*SEC/1000),
+    X(time, frame_finished_delay, "frame-wait-delay", "Maximum time since last application output before redraw", SEC/240, 1000, 10*SEC),
     X(boolean, has_meta, "has-meta", "Handle meta/alt", true),
     X(int16, border.left, "left-border", "Left border size", 8, 0, 200),
     X(int16, border.right, "right-border", "Right border size", 8, 0, 200),
@@ -284,7 +284,7 @@ static struct option options[] = {
     X(int16, margin_bell_column, "margin-bell-column", "Column at which margin bell rings when armed", 10, 0, 200),
     X(uint8, margin_bell_high_volume, "margin-bell-high-volume", "High volume value for DECSWBV", 100, 0, 100),
     X(uint8, margin_bell_low_volume, "margin-bell-low-volume", "Low volume value for DECSWBV", 50, 0, 100),
-    X(time, max_frame_time, "max-frame-time", "Maximum time between frames in microseconds", -1, 0, 10*SEC/1000),
+    X(time, max_frame_time, "max-frame-time", "Maximum time between frames in microseconds", -1, 0, 10*SEC),
     X(boolean, meta_is_esc, "meta-sends-escape", "Alt/Meta sends escape prefix instead of setting 8-th bit", true),
     X(uint8, modify_cursor, "modify-cursor", "Enable encoding modifiers for cursor keys", 3, 0, 3),
     X(uint8, modify_function, "modify-function", "Enable encoding modifiers for function keys", 3, 0, 3),
@@ -309,13 +309,13 @@ static struct option options[] = {
     X(boolean, scroll_on_input, "scroll-on-input", "Scroll view to bottom on key press", true),
     X(boolean, scroll_on_output, "scroll-on-output", "Scroll view to bottom when character in printed", false),
     X1(int64, scrollback_size, 'H', "scrollback-size", "Number of saved lines", 10000, 0, 1000000000),
-    X(time, select_scroll_time, "select-scroll-time", "Delay between scrolls of window while selecting with mouse", 10000, 0, 10*SEC/1000),
+    X(time, select_scroll_time, "select-scroll-time", "Delay between scrolls of window while selecting with mouse", 10000000, 0, 10*SEC),
     X(boolean, select_to_clipboard, "select-to-clipboard", "Use CLIPBOARD selection to store highlighted data", false),
     X(color, palette[SPECIAL_SELECTED_BG],"selected-background", "Color of selected background", COLOR_SPECIAL_SELECTED_BG),
     X(color, palette[SPECIAL_SELECTED_FG],"selected-foreground", "Color of selected text", COLOR_SPECIAL_SELECTED_FG),
     X(string, shell, "shell", "Shell to start in new instance", "/bin/sh"),
     X(boolean, smooth_scroll, "smooth-scroll", "Initial value of DECSCLM mode", false),
-    X(time, smooth_scroll_delay, "smooth-scroll-delay", "Delay between scrolls when DECSCLM is enabled", 500, 0, 10*SEC/1000),
+    X(time, smooth_scroll_delay, "smooth-scroll-delay", "Delay between scrolls when DECSCLM is enabled", 500000, 0, 10*SEC),
     X(int16, smooth_scroll_step, "smooth-scroll-step", "Amount of lines per scroll when DECSCLM is enabled", 1, 1, 100000),
     G1(string, sockpath, 's', "socket", "Daemon socket path", "/tmp/nsst-sock0"),
     X(boolean, special_blink, "special-blink", "Replace blinking attribute with the corresponding special", false),
@@ -324,7 +324,7 @@ static struct option options[] = {
     X(boolean, special_reverse, "special-reverse", "Replace reverse attribute with the corresponding special", false),
     X(boolean, special_underline, "special-underlined", "Replace underlined attribute with the corresponding special", false),
     X(boolean, allow_subst_font, "substitute-fonts", "Enable substitute font support", true),
-    X(time, sync_time, "sync-timeout", "Synchronous update timeout", SEC/2000, 0, 10*SEC/1000),
+    X(time, sync_time, "sync-timeout", "Synchronous update timeout", SEC/2, 0, 10*SEC),
     X(int16, tab_width, "tab-width", "Initial width of tab character", 8, 1, 1000),
     X(string, term_mod, "term-mod", "Meaning of 'T' modifier", "SC"),
     X1(string, terminfo, 'D', "term-name", "TERM value", "xterm"),
@@ -335,7 +335,7 @@ static struct option options[] = {
     G(boolean, trace_fonts, "trace-fonts", "Log font related information", false),
     G(boolean, trace_input, "trace-input", "Trace user input", false),
     G(boolean, trace_misc, "trace-misc", "Trace miscellaneous information", false),
-    X(time, triple_click_time, "triple-click-time", "Maximum time between second and third button presses of the triple click", 600000, 0, 10*SEC/1000),
+    X(time, triple_click_time, "triple-click-time", "Maximum time between second and third button presses of the triple click", 600000000, 0, 10*SEC),
     X(color, palette[SPECIAL_UNDERLINE], "underlined-color", "Special color of underlined text", COLOR_SPECIAL_UNDERLINE),
     X(int16, underline_width, "underline-width", "Text underline width", 1, 0, 16),
     X(boolean, urgency_on_bell, "urgent-on-bell", "Set window urgency on bell", false),
@@ -350,11 +350,11 @@ static struct option options[] = {
     X(vertical_border, border, "vertical-border", "Vertical border size (deprecated)", -1, 0, 200),
     X(horizontal_border, border, "horizontal-border", "Horizontal border size (deprecated)", -1, 0, 200),
     X(boolean, visual_bell, "visual-bell", "Whether bell should be visual or normal", false),
-    X(time, visual_bell_time, "visual-bell-time", "Duration of the visual bell", 200000, 0, 10*SEC/1000),
+    X(time, visual_bell_time, "visual-bell-time", "Duration of the visual bell", 200000000, 0, 10*SEC),
     X1(int16, vt_version, 'V', "vt-version", "Emulated VT version", 420, 0, 999),
     X1(string, window_class, 'c', "window-class", "X11 Window class", NULL),
     X(boolean, allow_window_ops, "window-ops", "Allow window manipulation with escape sequences", true),
-    X(time, wait_for_configure_delay, "wait-for-configure-delay", "Duration terminal waits for application output before redraw after window resize", 2000, 0, 10*SEC/1000),
+    X(time, wait_for_configure_delay, "wait-for-configure-delay", "Duration terminal waits for application output before redraw after window resize", 2000000, 0, 10*SEC),
     X(string, word_separators, "word-break", "Symbols treated as word separators when snapping mouse selection", " \t!$^*()+={}[]\\\"'|,;<>~`"),
     X(boolean, smooth_resize, "smooth-resize", "Don't force window size to be aligned on character size", false),
     X(string, pointer_shape, "pointer-shape", "Default mouse pointer shape for the window", "xterm"),
@@ -614,26 +614,23 @@ static bool do_parse_time(const char *str, void *dst, union opt_limits *limits) 
             frac *= fscale;
         }
 
-        // FIXME Store time in ns
-
+        int64_t unit = SEC/1000000;
         if (*end) {
-            int64_t unit = 1;
             if (!strcmp(end, "s"))
-                unit = SEC/1000L;
+                unit = SEC;
             else if (!strcmp(end, "ms"))
-                unit = SEC/1000000L;
-            //else if (!strcmp(end, "ns"))
-            //    unit = SEC/1000L;
+                unit = SEC/1000;
             else if (!strcmp(end, "us"))
-                unit = SEC/1000000000L;
+                unit = SEC/1000000;
+            else if (!strcmp(end, "ns"))
+                unit = SEC/1000000000;
             else
                 return false;
-
-            if (__builtin_mul_overflow(result, unit, &result))
-                result = limits->arg_time.max;
         }
 
-        result += frac/1000L;
+        if (__builtin_mul_overflow(result, unit, &result))
+            result = limits->arg_time.max;
+        result += frac * unit / SEC;
         result = MIN(result, limits->arg_int64.max);
         result = MAX(result, limits->arg_int64.min);
     }
@@ -944,7 +941,7 @@ void init_instance_config(struct instance_config *cfg, const char *config_path, 
 
     /* Initialize max frame time depending on FPS */
     if (cfg->max_frame_time == -1)
-        cfg->max_frame_time = 2*SEC/(1000*cfg->fps);
+        cfg->max_frame_time = 2*SEC/cfg->fps;
 
     /* Parse all shortcuts */
     keyboard_parse_config(cfg);
@@ -984,7 +981,7 @@ const char *usage_string(ssize_t idx) {
                 "\t--no-<X>, --<X>=no, --<X>=n, --<X>=false\n"
             "are equivalent to --<X>=0,\n"
             "where 'yes', 'y', 'true', 'no', 'n' and 'false' are case independent.\n"
-            "Time options accept units 's', 'us', 'ms'. If unit is not specified 'us' is implied\n"
+            "Time options accept units 's', 'ms', 'us' and 'ns'. If unit is not specified 'us' is implied\n"
             "All options are also accept special value 'default' to reset to built-in default.\n";
     } else return NULL;
 #undef APPEND

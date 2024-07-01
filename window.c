@@ -187,7 +187,7 @@ static bool handle_read_delay_timeout(void *win_) {
 
 static void window_delay_redraw_after_read(struct window *win) {
     poller_set_timer(&win->read_delay_timer, handle_read_delay_timeout,
-                     win, win->cfg.frame_finished_delay*1000LL);
+                     win, win->cfg.frame_finished_delay);
 }
 
 static bool handle_configure_timeout(void *win_) {
@@ -199,7 +199,7 @@ static bool handle_configure_timeout(void *win_) {
 
 static inline void wait_for_configure(struct window *win, int mult) {
    if (!poller_set_timer(&win->configure_delay_timer, handle_configure_timeout,
-                        win, mult*win->cfg.wait_for_configure_delay*1000L)) {
+                        win, mult*win->cfg.wait_for_configure_delay)) {
         inc_read_inhibit(win);
    }
 }
@@ -285,7 +285,7 @@ void window_set_sync(struct window *win, bool state) {
     if (poller_unset(&win->sync_update_timeout_timer))
         dec_render_inhibit(win);
     if (state) {
-        poller_set_timer(&win->sync_update_timeout_timer, handle_sync_update_timeout, win, win->cfg.sync_time*1000L);
+        poller_set_timer(&win->sync_update_timeout_timer, handle_sync_update_timeout, win, win->cfg.sync_time);
         inc_render_inhibit(win);
     }
 }
@@ -312,7 +312,7 @@ static bool handle_frame_timeout(void *win_) {
 
 void window_delay_redraw(struct window *win) {
     if (!win->redraw_delay_timer) {
-        win->redraw_delay_timer = poller_add_timer(handle_frame_timeout, win, win->cfg.max_frame_time*1000LL);
+        win->redraw_delay_timer = poller_add_timer(handle_frame_timeout, win, win->cfg.max_frame_time);
         poller_set_autoreset(win->redraw_delay_timer, &win->redraw_delay_timer);
         inc_render_inhibit(win);
     }
@@ -329,7 +329,7 @@ void window_request_scroll_flush(struct window *win) {
     window_reset_delayed_redraw(win);
     queue_force_redraw(win);
     if (!poller_set_timer(&win->smooth_scrooll_timer, handle_smooth_scroll,
-                          win, win->cfg.smooth_scroll_delay*1000L)) {
+                          win, win->cfg.smooth_scroll_delay)) {
         inc_read_inhibit(win);
    }
 }
@@ -350,7 +350,7 @@ void window_bell(struct window *win, uint8_t vol) {
     if (win->cfg.visual_bell) {
         if (!win->visual_bell_timer) {
             win->init_invert = term_is_reverse(win->term);
-            win->visual_bell_timer = poller_add_timer(handle_visual_bell, win, win->cfg.visual_bell_time*1000L);
+            win->visual_bell_timer = poller_add_timer(handle_visual_bell, win, win->cfg.visual_bell_time);
             poller_set_autoreset(win->visual_bell_timer, &win->visual_bell_timer);
             term_set_reverse(win->term, !win->init_invert);
         }
@@ -482,7 +482,7 @@ static void reload_window(struct window *win) {
     poller_unset(&win->blink_timer);
     poller_unset(&win->blink_inhibit_timer);
     if (win->cfg.allow_blinking)
-         poller_set_timer(&win->blink_timer, handle_blink, win, win->cfg.blink_time*1000L);
+         poller_set_timer(&win->blink_timer, handle_blink, win, win->cfg.blink_time);
 
     pvtbl->reload_font(win, true);
     queue_force_redraw(win);
@@ -596,7 +596,7 @@ struct window *create_window(struct instance_config *cfg) {
     };
 
     if (win->cfg.allow_blinking) {
-        win->blink_timer = poller_add_timer(handle_blink, win, win->cfg.blink_time*1000L);
+        win->blink_timer = poller_add_timer(handle_blink, win, win->cfg.blink_time);
         poller_set_autoreset(win->blink_timer, &win->blink_timer);
     }
 
@@ -670,7 +670,7 @@ static bool handle_blink_inhibit_timeout(void *win_) {
 bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor_visible, bool marg, bool cmoved) {
     /* When cursor is actively moving, don't blink to improve visiblility */
     if (cmoved) {
-        poller_set_timer(&win->blink_inhibit_timer, handle_blink_inhibit_timeout, win, win->cfg.blink_time*333L);
+        poller_set_timer(&win->blink_inhibit_timer, handle_blink_inhibit_timeout, win, win->cfg.blink_time/3);
         win->rcstate.cursor_blink_inhibit = true;
     }
     return pvtbl->submit_screen(win, cur_x, cur_y, cursor_visible, marg);

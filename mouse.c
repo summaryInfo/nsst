@@ -576,9 +576,9 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
         struct timespec now;
         clock_gettime(CLOCK_TYPE, &now);
 
-        if (ts_diff(&sel->click1, &now) < cfg->triple_click_time*1000LL)
+        if (ts_diff(&sel->click1, &now) < cfg->triple_click_time)
             sel->snap = rectangular ? snap_command : snap_line;
-        else if (ts_diff(&sel->click0, &now) < cfg->double_click_time*1000LL)
+        else if (ts_diff(&sel->click0, &now) < cfg->double_click_time)
             sel->snap = snap_word;
         else
             sel->snap = snap_none;
@@ -729,7 +729,7 @@ static void pending_scroll(struct selection_state *sel, struct screen *scr, int1
             sel->pending_scroll *= CHAR_BIT*sizeof(sel->pending_scroll) - __builtin_clz(sel->pending_scroll);
 
             struct instance_config *cfg = window_cfg(sel->win);
-            sel->scroll_timer = poller_add_timer(handle_pending_scroll, sel, cfg->select_scroll_time*1000LL);
+            sel->scroll_timer = poller_add_timer(handle_pending_scroll, sel, cfg->select_scroll_time);
             poller_set_autoreset(sel->scroll_timer, &sel->scroll_timer);
             screen_scroll_view(scr, sel->pending_scroll);
             window_reset_delayed_redraw(sel->win);
