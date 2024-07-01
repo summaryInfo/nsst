@@ -42,6 +42,11 @@ is equivalent to
 .Ar \&No , Ar n , Ar false
 (case independent) can be used to disable it.
 .Pp
+All options with type
+.Ar time
+support 's', 'ms' and 'us' units and decimal point for values.
+If unit is not specified, 'us' is implied.
+.Pp
 Every option also accepts special value
 .Ar default
 that resets option to builtin default.
@@ -165,7 +170,7 @@ Enable daemon mode
 Delete sends DEL symbol instead of escape sequence
 .It Fl \-double-click-time Ns = Ns Ar time
 Time gap in microseconds in witch two mouse presses will be considered double click
-.It Fl \-select-scroll-time Ns = Ns Ar
+.It Fl \-select-scroll-time Ns = Ns Ar time
 Time between subsequent scrolls during mouse selection in microseconds
 .It Fl \-erase-scrollback Ns = Ns Ar bool
 Allow ED 3 to clear scrollback buffer
@@ -354,7 +359,7 @@ format is same as for
 .Fl \-colorN
 .It Fl \-smooth-resize Ns = Ns Ar bool
 Don't force window size to be aligned on character size.
-.It Fl \-smooth-scroll-delay Ns = Ns Ar teme
+.It Fl \-smooth-scroll-delay Ns = Ns Ar time
 Delay in microseconds between subsequent scrolls when smooth scroll mode is enabled
 .It Fl \-smooth-scroll-step Ns = Ns Ar lines
 Maximal amount of lines to be scrolled without delay when smooth scroll mode is enabled
@@ -386,6 +391,7 @@ Shell to start in new instance. It differs from
 in aspect that
 .Fl e
 can also contain arguments and it applies only to first terminal window.
+It gets overrided by the SHELL environment variable.
 .It Fl \-socket Ns = Ns Ar path , Fl s Ar path
 Path for daemon socket to be created
 .It Fl \-special-blink Ns = Ns Ar bool
