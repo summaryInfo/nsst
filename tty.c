@@ -507,7 +507,7 @@ ssize_t tty_refill(struct tty *tty) {
     }
 
     if (UNLIKELY(gconfig.trace_misc))
-        info("Read TTY (size=%zd)", inctotal);
+        info("Read TTY (size=%zd)", inc);
 
     inctotal = (sizeof tty->fd_buf - sz) - space;
 
