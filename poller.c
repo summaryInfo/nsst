@@ -356,6 +356,16 @@ static void toggle_fd(struct event *evt, bool enable) {
     poller.pollfd_array[evt->fd.index].fd *= -1;
 }
 
+void poller_fd_set_mask(struct event *evt, uint32_t mask) {
+    assert(evt->state == evt_state_fd);
+    poller.pollfd_array[evt->fd.index].events = mask;
+}
+
+uint32_t poller_fd_get_mask(struct event *evt) {
+    assert(evt->state == evt_state_fd);
+    return poller.pollfd_array[evt->fd.index].events;
+}
+
 void poller_toggle(struct event *evt, bool enable) {
     if (poller_is_enabled(evt) == enable) return;
     evt->flags ^= evt_flag_disabled;

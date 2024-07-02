@@ -104,9 +104,6 @@ struct window {
     struct term *term;
     struct render_cell_state rcstate;
 
-    // FIXME Move this to term.c
-    struct event *tty_event;
-
     struct title_stack_item *title_stack;
 
     /* Window configuration */

@@ -3779,7 +3779,7 @@ void term_resize(struct term *term, int16_t width, int16_t height) {
 struct term *create_term(struct window *win, int16_t width, int16_t height) {
     struct term *term = xzalloc(sizeof(struct term));
 
-    if (tty_open(&term->tty, window_cfg(win)) < 0) {
+    if (tty_open(&term->tty, window_cfg(win), win) < 0) {
         warn("Can't create tty");
         free_term(term);
         return NULL;
@@ -3805,6 +3805,10 @@ struct term *create_term(struct window *win, int16_t width, int16_t height) {
     term_resize(term, width, height);
 
     return term;
+}
+
+void term_toggle_read(struct term *term, bool enable) {
+    tty_toggle_read(&term->tty, enable);
 }
 
 void term_hang(struct term *term) {

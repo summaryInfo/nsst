@@ -6,6 +6,7 @@
 #define _BSD_SOURCE
 
 #include "config.h"
+#include "poller.h"
 #include "tty.h"
 #include "util.h"
 
@@ -341,9 +342,10 @@ void hang_watched_children(void) {
         remove_watcher(CONTAINEROF(it, struct watcher, link));
 }
 
-int tty_open(struct tty *tty, struct instance_config *cfg) {
-    /* Configure PTY */
+int tty_open(struct tty *tty, struct instance_config *cfg, struct window *win) {
+    list_init(&tty->deferred);
 
+    /* Configure PTY */
     struct termios tio = dtio;
 
     tio.c_cc[VERASE] = cfg->backspace_is_delete ? '\177' : '\010';
@@ -401,11 +403,85 @@ int tty_open(struct tty *tty, struct instance_config *cfg) {
     if (tty->w.child > 0)
         add_watcher(&tty->w);
 
+    tty->evt = poller_add_fd(handle_term_read, win, tty->w.fd, POLLIN);
+    if (!tty->evt) {
+        tty_hang(tty);
+        return -1;
+    }
+
+    poller_set_autoreset(tty->evt, &tty->evt);
+
     return tty->w.fd;
+}
+
+void tty_toggle_read(struct tty *tty, bool enable) {
+    uint32_t old = poller_fd_get_mask(tty->evt);
+    uint32_t new = (old & ~POLLIN) | POLLIN*enable;
+    poller_fd_set_mask(tty->evt, new);
+    if (!new ^ !old)
+        poller_toggle(tty->evt, !!new);
+}
+
+static void tty_toggle_write(struct tty *tty, bool enable) {
+    uint32_t old = poller_fd_get_mask(tty->evt);
+    uint32_t new = (old & ~POLLOUT) | POLLOUT*enable;
+    poller_fd_set_mask(tty->evt, new);
+    if (!new ^ !old)
+        poller_toggle(tty->evt, !!new);
 }
 
 void tty_hang(struct tty *tty) {
     remove_watcher(&tty->w);
+    poller_unset(&tty->evt);
+
+    LIST_FOREACH_SAFE(it, &tty->deferred)
+        free(CONTAINEROF(it, struct deferred_write, link));
+}
+
+static void defer_write(struct tty *tty, const uint8_t *buf, ssize_t len) {
+    if (tty->w.fd < 0) return;
+
+    warn("TTY buffer is full, deferring write of %ld bytes (%ld in queue)", len, tty->deferred_count);
+    tty->deferred_count++;
+
+    if (list_empty(&tty->deferred))
+        tty_toggle_write(tty, true);
+
+    struct deferred_write *wr = xalloc(sizeof *wr + len);
+    list_insert_before(&tty->deferred, &wr->link);
+    wr->size = len;
+    wr->offset = 0;
+    memcpy(wr->data, buf, len);
+}
+
+static bool flush_deferred(struct tty *tty) {
+    if (!tty->deferred_count) return true;
+
+    errno = 0;
+
+    LIST_FOREACH_SAFE(it, &tty->deferred) {
+        struct deferred_write *wr = CONTAINEROF(it, struct deferred_write, link);
+        do {
+            ssize_t result = write(tty->w.fd, wr->data + wr->offset, MIN(wr->size - wr->offset, TTY_MAX_WRITE));
+            if (result <= 0) {
+                if (result == 0 || errno == EAGAIN)
+                    return false;
+
+                warn("TTY write failed: %s", strerror(errno));
+                tty_hang(tty);
+                return false;
+            }
+
+            wr->offset += result;
+        } while (wr->size != wr->offset);
+        tty->deferred_count--;
+        list_remove(it);
+        free(wr);
+    }
+
+    if (list_empty(&tty->deferred))
+        tty_toggle_write(tty, false);
+    return true;
 }
 
 ssize_t tty_refill(struct tty *tty) {
@@ -423,24 +499,15 @@ ssize_t tty_refill(struct tty *tty) {
     }
 
     ssize_t space = (tty->fd_buf + sizeof tty->fd_buf) - tty->end;
-    ssize_t n_read = 0;
+    errno = 0;
 
-#if 0
-    while (space > 0 && (inc = read(tty->w.fd, tty->end, space)) > 0) {
-        space -= inc;
-        tty->end += inc;
-        n_read++;
-    }
-#else
     if (space > 0 && (inc = read(tty->w.fd, tty->end, space)) > 0) {
         space -= inc;
         tty->end += inc;
-        n_read++;
     }
-#endif
 
     if (UNLIKELY(gconfig.trace_misc))
-        info("Read TTY (size=%zd n_read=%zd)", inctotal, n_read);
+        info("Read TTY (size=%zd)", inctotal);
 
     inctotal = (sizeof tty->fd_buf - sz) - space;
 
@@ -450,50 +517,34 @@ ssize_t tty_refill(struct tty *tty) {
         return -1;
     }
 
+    /* After reading from tty flush deferred writes, since
+     * we emptied some space inside the kernel buffer. */
+    flush_deferred(tty);
+
     return inctotal;
 }
 
-
 static inline void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t len) {
-    ssize_t res, lim = TTY_MAX_WRITE;
-    struct pollfd pfd = {
-        .events = POLLIN | POLLOUT,
-        .fd = tty->w.fd
-    };
-    while (len) {
-        if (poll(&pfd, 1, -1) < 0 && errno != EINTR) {
-            warn("Can't poll tty");
+    if (!flush_deferred(tty))
+        return;
+
+    errno = 0;
+    do {
+        ssize_t result = write(tty->w.fd, buf, MIN(len, TTY_MAX_WRITE));
+        if (result <= 0) {
+            if (result == 0 || errno == EAGAIN) {
+                defer_write(tty, buf, len);
+                return;
+            }
+
+            warn("TTY write failed: %s", strerror(errno));
             tty_hang(tty);
             return;
         }
-        if (pfd.revents & POLLOUT) {
-            if ((res = write(tty->w.fd, buf, MIN(lim, len))) < 0) {
-                warn("Can't write to from tty");
-                tty_hang(tty);
-                return;
-            }
 
-            if (res < (ssize_t)len) {
-                len -= res;
-                buf += res;
-            } else break;
-        }
-
-        if (pfd.revents & POLLIN) {
-            if (tty->end - tty->start >= (ssize_t)sizeof tty->fd_buf - MAX_PROTOCOL_LEN) {
-                /* Since the parser cannot be called recursively
-                 * called recursively we cannot empty the input buffer
-                 * and tty input queue, so we cannot write the data.
-                 * This situation is really rare,
-                 * so we can just not write the output for now. */
-                // FIXME: Add option to defer answerback messages to be written outside the parser.
-                warn("TTY buffer is overfilled, current output buffer is discarded");
-                return;
-            }
-
-            lim = tty_refill(tty);
-        }
-    }
+        len -= result;
+        buf += result;
+    } while (len);
 }
 
 void tty_write(struct tty *tty, const uint8_t *buf, size_t len, bool crlf) {

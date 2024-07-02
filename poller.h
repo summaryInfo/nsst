@@ -26,6 +26,8 @@ void poller_stop(void);
 void poller_run(void);
 void poller_set_autoreset(struct event *evt, struct event **pevt);
 void poller_skip_wait(void);
+void poller_fd_set_mask(struct event *evt, uint32_t mask);
+uint32_t poller_fd_get_mask(struct event *evt);
 
 static inline bool poller_unset(struct event **evt) {
     if (!*evt) return false;

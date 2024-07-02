@@ -135,7 +135,8 @@ void window_set_mouse(struct window *win, bool enabled) {
 
 static void window_delay_redraw_after_read(struct window *win);
 
-static void handle_term_read(void *win_, uint32_t mask) {
+// FIXME Move this to tty.c
+void handle_term_read(void *win_, uint32_t mask) {
     struct window *win = win_;
 
     if (mask & (POLLHUP | POLLERR | POLLNVAL)) {
@@ -153,14 +154,14 @@ static void handle_term_read(void *win_, uint32_t mask) {
 
 static inline void dec_read_inhibit(struct window *win) {
     if (!--win->inhibit_read_counter) {
-        poller_toggle(win->tty_event, true);
+        term_toggle_read(win->term, true);
         handle_term_read(win, POLLIN);
     }
 }
 
 static inline void inc_read_inhibit(struct window *win) {
     if (!win->inhibit_read_counter++)
-        poller_toggle(win->tty_event, false);
+        term_toggle_read(win->term, false);
 }
 
 static inline void dec_render_inhibit(struct window *win) {
@@ -605,9 +606,6 @@ struct window *create_window(struct instance_config *cfg) {
 
     list_insert_after(&win_list_head, &win->link);
 
-    win->tty_event = poller_add_fd(handle_term_read, win, term_fd(win->term), POLLIN);
-    if (!win->tty_event) goto error;
-
     pvtbl->map_window(win);
     return win;
 
@@ -619,7 +617,6 @@ error:
 
 
 void free_window(struct window *win) {
-    poller_unset(&win->tty_event);
     poller_unset(&win->frame_timer);
     poller_unset(&win->smooth_scrooll_timer);
     poller_unset(&win->blink_timer);

@@ -70,6 +70,7 @@ void term_reset(struct term *term);
 void term_set_reverse(struct term *term, bool set);
 void term_break(struct term *term);
 void term_hang(struct term *term);
+void term_toggle_read(struct term *term, bool enable);
 
 struct screen *term_screen(struct term *term);
 
