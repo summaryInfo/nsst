@@ -357,7 +357,9 @@ static struct option options[] = {
     X(time, wait_for_configure_delay, "wait-for-configure-delay", "Duration terminal waits for application output before redraw after window resize", 2000000, 0, 10*SEC),
     X(string, word_separators, "word-break", "Symbols treated as word separators when snapping mouse selection", " \t!$^*()+={}[]\\\"'|,;<>~`"),
     X(boolean, smooth_resize, "smooth-resize", "Don't force window size to be aligned on character size", false),
-    X(string, pointer_shape, "pointer-shape", "Default mouse pointer shape for the window", "xterm"),
+    X(string, normal_pointer, "pointer-shape", "Default mouse pointer shape", NULL),
+    X(string, resize_pointer, "resize-pointer-shape", "Mouse pointer shape for window resizing", NULL),
+    X(string, uri_pointer, "uri-pointer-shape", "Mouse pointer shape for hovering over URI", NULL),
 };
 
 static inline color_t default_color(uint32_t n) {

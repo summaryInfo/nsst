@@ -485,6 +485,7 @@ static void reload_window(struct window *win) {
     if (win->cfg.allow_blinking)
          poller_set_timer(&win->blink_timer, handle_blink, win, win->cfg.blink_time);
 
+    pvtbl->reload_cursors(win);
     pvtbl->reload_font(win, true);
     queue_force_redraw(win);
 }

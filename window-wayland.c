@@ -328,6 +328,19 @@ static struct cursor *get_cursor(const char *name) {
     return new;
 }
 
+static inline struct cursor *get_any_cursor(ssize_t count, const char **names) {
+    struct cursor *csr = NULL;
+    for (ssize_t i = 0; i < count; i++)
+        if (names[i] && (csr = get_cursor(names[i]))) break;
+
+    if (!csr) {
+        csr = get_cursor("default");
+        assert(csr);
+    }
+
+    return csr;
+}
+
 static void unref_cursor(struct cursor *csr) {
     if (!csr) return;
     if (!--csr->refcount) {
@@ -663,6 +676,25 @@ static struct zxdg_toplevel_decoration_v1_listener xdg_toplevel_decoration_liste
     .configure = handle_xdg_toplevel_decoration_configure,
 };
 
+static void wayland_reload_cursors(struct window *win) {
+    if (get_plat(win)->cursor_resize)
+        unref_cursor(get_plat(win)->cursor_resize);
+    get_plat(win)->cursor_resize = get_any_cursor(2, (const char *[]){win->cfg.resize_pointer, "size_string"});
+
+    if (get_plat(win)->cursor_uri)
+        unref_cursor(get_plat(win)->cursor_uri);
+    get_plat(win)->cursor_uri = get_any_cursor(3, (const char *[]){win->cfg.uri_pointer, "hand1", "grab", "pointing_hand"});
+
+    if (get_plat(win)->cursor_default)
+        unref_cursor(get_plat(win)->cursor_default);
+    get_plat(win)->cursor_default = get_any_cursor(4, (const char *[]){win->cfg.normal_pointer, "xterm", "text", "ibeam"});
+
+    if (get_plat(win)->cursor_user != get_plat(win)->cursor)
+        select_cursor(win, get_plat(win)->cursor_default);
+
+    update_hide_cursor(win);
+}
+
 static bool wayland_init_window(struct window *win) {
     struct wayland_window *ww = get_plat(win);
 
@@ -700,28 +732,8 @@ static bool wayland_init_window(struct window *win) {
         warn("Wayland compositor does not support server side decorations");
     }
 
-    // FIXME Reload cursor upon setting reloading (pointer_shape can change)
-    // FIXME Try more cursor shapes, not just fall back to default one
-    // FIXME Cleanup
+    wayland_reload_cursors(win);
 
-    get_plat(win)->cursor_resize = get_cursor("size_all");
-    if (!get_plat(win)->cursor_resize)
-        get_plat(win)->cursor_resize = get_cursor("default");
-    get_plat(win)->cursor_uri = get_cursor("hand1");
-    if (!get_plat(win)->cursor_uri)
-        get_plat(win)->cursor_uri = get_cursor("pointing_hand");
-    if (!get_plat(win)->cursor_uri)
-        get_plat(win)->cursor_uri = get_cursor("default");
-    get_plat(win)->cursor_default = get_cursor(win->cfg.pointer_shape);
-    if (!get_plat(win)->cursor_default)
-        get_plat(win)->cursor_default = get_cursor("xterm");
-    if (!get_plat(win)->cursor_default)
-        get_plat(win)->cursor_default = get_cursor("ibeam");
-    if (!get_plat(win)->cursor_default)
-        get_plat(win)->cursor_default = get_cursor("default");
-
-    select_cursor(win, get_plat(win)->cursor_default);
-    update_hide_cursor(win);
     return true;
 }
 
@@ -2324,6 +2336,7 @@ static struct platform_vtable wayland_vtable = {
     .set_pointer_mode = wayland_set_pointer_mode,
     .draw_end = wayland_draw_done,
     .after_read = wayland_after_read,
+    .reload_cursors = wayland_reload_cursors,
     .free = wayland_free,
 };
 

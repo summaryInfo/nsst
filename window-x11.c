@@ -400,6 +400,19 @@ static struct cursor *get_cursor(const char *name) {
     return new;
 }
 
+static inline struct cursor *get_any_cursor(ssize_t count, const char **names) {
+    struct cursor *csr = NULL;
+    for (ssize_t i = 0; i < count; i++)
+        if (names[i] && (csr = get_cursor(names[i]))) break;
+
+    if (!csr) {
+        csr = get_cursor("default");
+        assert(csr);
+    }
+
+    return csr;
+}
+
 static void unref_cursor(struct cursor *csr) {
     if (!csr) return;
     if (!--csr->refcount) {
@@ -672,6 +685,21 @@ void x11_fixup_geometry(struct window *win) {
     }
 }
 
+static void x11_reload_cursors(struct window *win) {
+    if (get_plat(win)->cursor_uri)
+        unref_cursor(get_plat(win)->cursor_uri);
+    get_plat(win)->cursor_uri = get_any_cursor(3, (const char *[]){win->cfg.uri_pointer, "hand1", "grab", "pointing_hand"});
+
+    if (get_plat(win)->cursor_default)
+        unref_cursor(get_plat(win)->cursor_default);
+    get_plat(win)->cursor_default = get_any_cursor(4, (const char *[]){win->cfg.normal_pointer, "xterm", "text", "ibeam"});
+
+    if (get_plat(win)->cursor_user != get_plat(win)->cursor)
+        select_cursor(win, get_plat(win)->cursor_default);
+
+    update_hide_cursor(win);
+}
+
 static bool x11_init_window(struct window *win) {
     xcb_void_cookie_t c;
 
@@ -709,25 +737,7 @@ static bool x11_init_window(struct window *win) {
     c = xcb_create_gc_checked(con, get_plat(win)->gc, get_plat(win)->wid, mask2, values2);
     if (check_void_cookie(c)) return false;
 
-    // FIXME Reload cursor upon setting reloading (pointer_shape can change)
-    // FIXME Try more cursor shapes, not just fall back to default one
-    // FIXME Cleanup
-
-    get_plat(win)->cursor_uri = get_cursor("hand1");
-    if (!get_plat(win)->cursor_uri)
-        get_plat(win)->cursor_uri = get_cursor("pointing_hand");
-    if (!get_plat(win)->cursor_uri)
-        get_plat(win)->cursor_uri = get_cursor("default");
-    get_plat(win)->cursor_default = get_cursor(win->cfg.pointer_shape);
-    if (!get_plat(win)->cursor_default)
-        get_plat(win)->cursor_default = get_cursor("xterm");
-    if (!get_plat(win)->cursor_default)
-        get_plat(win)->cursor_default = get_cursor("ibeam");
-    if (!get_plat(win)->cursor_default)
-        get_plat(win)->cursor_default = get_cursor("default");
-
-    select_cursor(win, get_plat(win)->cursor_default);
-    update_hide_cursor(win);
+    x11_reload_cursors(win);
     return true;
 }
 
@@ -1159,6 +1169,7 @@ static struct platform_vtable x11_vtable = {
     .select_cursor = x11_select_cursor,
     .set_pointer_mode = x11_set_pointer_mode,
     .fixup_geometry = x11_fixup_geometry,
+    .reload_cursors = x11_reload_cursors,
     .free = x11_free,
 };
 

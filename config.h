@@ -143,7 +143,9 @@ struct instance_config {
     char *force_mouse_mod;
     char *shell;
     char *uri_click_mod;
-    char *pointer_shape;
+    char *normal_pointer;
+    char *resize_pointer;
+    char *uri_pointer;
 
     enum keyboad_mapping mapping;
     enum cursor_type cursor_shape;
