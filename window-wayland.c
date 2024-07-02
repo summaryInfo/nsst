@@ -356,6 +356,7 @@ static void activate_cursor_for_seat(struct window *win, struct seat *seat) {
     if (get_plat(win)->cursor_is_hidden) {
         wl_pointer_set_cursor(seat->pointer.pointer, seat->pointer.serial, NULL, 0, 0);
     } else {
+        if (!get_plat(win)->cursor) return;
         wl_pointer_set_cursor(seat->pointer.pointer, seat->pointer.serial,
                               get_plat(win)->cursor->cursor_surface,
                               get_plat(win)->cursor->cursor->images[0]->hotspot_x,
