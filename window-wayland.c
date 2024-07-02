@@ -679,7 +679,7 @@ static struct zxdg_toplevel_decoration_v1_listener xdg_toplevel_decoration_liste
 static void wayland_reload_cursors(struct window *win) {
     if (get_plat(win)->cursor_resize)
         unref_cursor(get_plat(win)->cursor_resize);
-    get_plat(win)->cursor_resize = get_any_cursor(2, (const char *[]){win->cfg.resize_pointer, "size_string"});
+    get_plat(win)->cursor_resize = get_any_cursor(2, (const char *[]){win->cfg.resize_pointer, "size_all"});
 
     if (get_plat(win)->cursor_uri)
         unref_cursor(get_plat(win)->cursor_uri);
