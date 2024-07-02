@@ -112,10 +112,12 @@ function completion/nsst {
 		"o: --printer-file:;File where CSI MC output to"
 		"--override-boxdrawing::;Use built-in box drawing characters"
 		"--pixel-mode:;Sub-pixel rendering mode"
+		"--pointer-shape:;Default mouse pointer shape"
 		"--pointer-shape:;Default mouse pointer shape for the window"
 		"--print-attributes::;Print cell attributes when printing is enabled"
 		"--print-command:;Program to pipe CSI MC output into"
 		"--raise-on-bell::;Raise terminal window on bell"
+		"--resize-pointer-shape:;Mouse pointer shape for window resizing"
 		"--reversed-color:;Special color of reversed text"
 		"--reverse-video::;Initial reverse video setting"
 		"--right-border:;Right border size"
@@ -150,6 +152,7 @@ function completion/nsst {
 		"--trace-misc::;Trace miscellaneous information"
 		"--triple-click-time:;Time gap in microseconds in witch tree mouse presses will be considered triple"
 		"T: --title:;Initial window title"
+		"t: --vt-version:;Emulated VT version"
 		"--underlined-color:;Special color of underlined text"
 		"--underline-width:;Text underline width"
 		"--unique-uris::;Make distinction between URIs with the same location"
@@ -157,13 +160,13 @@ function completion/nsst {
 		"--uri-click-mod:;keyboard modifier used to click-open URIs"
 		"--uri-color:;Special color of URI text"
 		"--uri-mode:;Allow URI parsing/clicking"
+		"--uri-pointer-shape:;Mouse pointer shape for hovering over URI"
 		"--uri-underline-color:;Special color of URI underline"
 		"--use-utf8::;Enable UTF-8 I/O"
 		"--vertical-border:;Vertical border size (deprecated)"
 		"--visual-bell-time:;Length of visual bell"
 		"--visual-bell::;Whether bell should be visual or normal"
 		"v --version;Print version and exit"
-		"t: --vt-version:;Emulated VT version"
 		"V: --window-class:;X11 Window class"
 		"--wait-for-configure-delay:;Time gap in microseconds waiting for configure after resize request"
 		"--window-ops::;Allow window manipulation with escape sequences"
@@ -174,6 +177,9 @@ function completion/nsst {
 	case $ARGOPT in
 	(-)
 		command -f completion//completeoptions -e
+		;;
+	(--pointer-shape|--resize-pointer-shape|--uri-pointer-shape)
+		complete -P "$PREFIX" -- $(ls /usr/share/icons/*/cursors | grep -v cursors: | sort -u | xargs echo)
 		;;
 	(--bell|--margin-bell)
 		complete -P "$PREFIX" -- off low high default
@@ -200,8 +206,8 @@ function completion/nsst {
 		complete -P "$PREFIX" -- auto x11 wayland x11xrender x11shm waylandshm default
 		;;
 	(f|--font)
-        eval array _FONTS $(fc-list -f '\\"%{family}\\"\n' | sed -e 's/,/\\"\n\\"/' -e 's/ /\\ /g' | sort -u | sed 's/\n/ /' | xargs echo -n)
-        complete -P "$PREFIX" -- "$_FONTS" default
+		eval array _FONTS $(fc-list -f '\\"%{family}\\"\n' | sed -e 's/,/\\"\n\\"/' -e 's/ /\\ /g' | sort -u | sed 's/\n/ /' | xargs echo -n)
+		complete -P "$PREFIX" -- "$_FONTS" default
 		;;
 	(--cwd)
 		complete -P "$PREFIX" --directory -- default
@@ -238,10 +244,6 @@ function completion/nsst {
 		;;
 	esac
 
-}
-
-function completion/nsstc {
-	command -f completion//reexecute nsst
 }
 
 # vim: set ft=sh ts=8 sts=8 sw=8 noet:
