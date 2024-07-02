@@ -105,13 +105,14 @@ static struct option *dpi_option_entry;
     T(enum,              "enum",           int,             int dflt; int start; const char **values;) \
     T(geometry,          "geometry",       struct geometry, bool in_char;                            ) \
     T(int16,             "int",            int16_t,         int64_t dflt; int64_t min; int64_t max;  ) \
+    T(dim,               "dim",            int16_t,         int64_t dflt; int64_t min; int64_t max;  ) \
     T(int64,             "int",            int64_t,         int64_t dflt; int64_t min; int64_t max;  ) \
     T(nrcs,              "charset string", enum charset,    enum charset dflt;                       ) \
     T(string,            "str",            char *,          const char *dflt;                        ) \
     T(uint8,             "int",            uint8_t,         int64_t dflt; int64_t min; int64_t max;  ) \
-    T(border,            "int",            struct border,   int64_t dflt; int64_t min; int64_t max;  ) \
-    T(vertical_border,   "int",            struct border,   int64_t dflt; int64_t min; int64_t max;  ) \
-    T(horizontal_border, "int",            struct border,   int64_t dflt; int64_t min; int64_t max;  ) \
+    T(border,            "dim",            struct border,   int64_t dflt; int64_t min; int64_t max;  ) \
+    T(vertical_border,   "dim",            struct border,   int64_t dflt; int64_t min; int64_t max;  ) \
+    T(horizontal_border, "dim",            struct border,   int64_t dflt; int64_t min; int64_t max;  ) \
     T(time,              "time",           int64_t,         int64_t dflt; int64_t min; int64_t max;  ) \
 
 #define T(name, y, z, ...) struct name##_arg { __VA_ARGS__ } arg_##name;
@@ -227,7 +228,7 @@ static struct option options[] = {
     X1(string, config_path, 'C', "config", "Configuration file path", NULL),
     X(color, palette[SPECIAL_CURSOR_BG], "cursor-background", "Default cursor background color", COLOR_SPECIAL_CURSOR_BG),
     X(color, palette[SPECIAL_CURSOR_FG], "cursor-foreground", "Default cursor foreground color", COLOR_SPECIAL_CURSOR_FG),
-    X(int16, cursor_width, "cursor-width", "Width of lines that forms cursor", 2, 1, 16),
+    X(dim, cursor_width, "cursor-width", "Width of lines that forms cursor", 2, 1, 16),
     X(enum, cursor_shape, "cursor-shape", "Shape of cursor", 2, 1, (const char *[]){"blinking-block", "block", "blinking-underline", "underline", "blinking-bar", "bar", NULL}),
     X(string, cwd, "cwd", "Current working directory for an application", NULL),
     G1(boolean, daemon_mode, 'd', "daemon", "Start terminal as daemon", false),
@@ -240,9 +241,9 @@ static struct option options[] = {
     X(uint8, fkey_increment, "fkey-increment", "Step in numbering function keys", 10, 0, 48),
     X1(string, font_name, 'f', "font", "Comma-separated list of fontconfig font patterns", "mono"),
     X(double, gamma, "font-gamma", "Factor of font sharpening", 1, 0.2, 2),
-    X(int16, font_size, "font-size", "Font size in points", 0, 1, 1000),
-    X(int16, font_size_step, "font-size-step", "Font size step in points", 1, 0, 250),
-    X(int16, font_spacing, "font-spacing", "Additional spacing for individual symbols", 0, -100, 100),
+    X(dim, font_size, "font-size", "Font size in points", 0, 1, 1000),
+    X(dim, font_size_step, "font-size-step", "Font size step in points", 1, 0, 250),
+    X(dim, font_spacing, "font-spacing", "Additional spacing for individual symbols", 0, -100, 100),
     X(boolean, force_wayland_csd, "force-wayland-csd", "Don't request SSD", false),
     X(string, force_mouse_mod, "force-mouse-mod", "Modifier to force mouse action", "T"),
     X(boolean, force_utf8_nrcs, "force-nrcs", "Enable NRCS translation when UTF-8 mode is enabled", false),
@@ -252,8 +253,8 @@ static struct option options[] = {
     X(int64, fps, "fps", "Window refresh rate", 60, 2, 1000),
     X(time, frame_finished_delay, "frame-wait-delay", "Maximum time since last application output before redraw", SEC/240, 1000, 10*SEC),
     X(boolean, has_meta, "has-meta", "Handle meta/alt", true),
-    X(int16, border.left, "left-border", "Left border size", 8, 0, 200),
-    X(int16, border.right, "right-border", "Right border size", 8, 0, 200),
+    X(dim, border.left, "left-border", "Left border size", 8, 0, 200),
+    X(dim, border.right, "right-border", "Right border size", 8, 0, 200),
     X(color, palette[SPECIAL_ITALIC], "italic-color", "Special color of italic text", COLOR_SPECIAL_ITALIC),
     X(boolean, keep_clipboard, "keep-clipboard", "Reuse copied clipboard content instead of current selection data", false),
     X(boolean, keep_selection, "keep-selection", "Don't clear X11 selection when unhighlighted", false),
@@ -275,7 +276,7 @@ static struct option options[] = {
     X(string, key[shortcut_view_prev_cmd], "key-jump-prev-cmd", "Jump to previous command beginning hotkey", "T-B"),
     X(nrcs, keyboard_nrcs, "keyboard-dialect", "National replacement character set to be used in non-UTF-8 mode", cs94_ascii),
     X(enum, mapping, "keyboard-mapping", "Initial keyboard mapping", keymap_default, keymap_legacy, (const char *[]){"legacy", "vt220", "hp", "sun", "sco", NULL}),
-    X(int16, line_spacing, "line-spacing", "Additional lines vertical spacing", 0, -100, 100),
+    X(dim, line_spacing, "line-spacing", "Additional lines vertical spacing", 0, -100, 100),
     X(boolean, lock, "lock-keyboard", "Disable keyboard input", false),
     G1(enum, log_level, 'L', "log-level", "Filtering level of logged information", 3, 0, (const char *[]){"quiet", "fatal", "warn", "info", NULL}),
     X(boolean, allow_luit, "luit", "Run luit if terminal doesn't support encoding by itself", true),
@@ -337,15 +338,15 @@ static struct option options[] = {
     G(boolean, trace_misc, "trace-misc", "Trace miscellaneous information", false),
     X(time, triple_click_time, "triple-click-time", "Maximum time between second and third button presses of the triple click", 600000000, 0, 10*SEC),
     X(color, palette[SPECIAL_UNDERLINE], "underlined-color", "Special color of underlined text", COLOR_SPECIAL_UNDERLINE),
-    X(int16, underline_width, "underline-width", "Text underline width", 1, 0, 16),
+    X(dim, underline_width, "underline-width", "Text underline width", 1, 0, 16),
     X(boolean, urgency_on_bell, "urgent-on-bell", "Set window urgency on bell", false),
     X(color, palette[SPECIAL_URI_TEXT], "uri-color", "Special color of URI text", COLOR_SPECIAL_URI_TEXT),
     X(enum, uri_mode, "uri-mode", "Allow URI parsing/clicking", uri_mode_auto, uri_mode_off, (const char *[]){"off", "manual", "auto", NULL}),
     G(enum, backend, "backend", "Select rendering backend", renderer_auto, renderer_auto, (const char *[]){"auto", "x11", "wayland", "x11xrender", "x11shm", "waylandshm", NULL}),
     X(color, palette[SPECIAL_URI_UNDERLINE], "uri-underline-color", "Special color of URI underline", COLOR_SPECIAL_URI_UNDERLINE),
     X(boolean, utf8, "use-utf8", "Enable UTF-8 I/O", true),
-    X(int16, border.top, "top-border", "Top border size", 8, 0, 200),
-    X(int16, border.bottom, "bottom-border", "Bottom border size", 8, 0, 200),
+    X(dim, border.top, "top-border", "Top border size", 8, 0, 200),
+    X(dim, border.bottom, "bottom-border", "Bottom border size", 8, 0, 200),
     X(border, border, "border", "Border size", -1, 0, 200),
     X(vertical_border, border, "vertical-border", "Vertical border size (deprecated)", -1, 0, 200),
     X(horizontal_border, border, "horizontal-border", "Horizontal border size (deprecated)", -1, 0, 200),
@@ -693,6 +694,15 @@ static bool do_parse_horizontal_border(const char *str, void *dst, union opt_lim
 }
 
 static bool do_parse_int16(const char *str, void *dst, union opt_limits *limits) {
+    int64_t val64 = 0;
+    uint8_t *pdst = dst;
+    if (!do_parse_int64(str, &val64, limits))
+        return false;
+    *pdst = val64;
+    return true;
+}
+
+static bool do_parse_dim(const char *str, void *dst, union opt_limits *limits) {
     int64_t val64 = 0;
     uint8_t *pdst = dst;
     if (!do_parse_int64(str, &val64, limits))
