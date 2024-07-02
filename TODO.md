@@ -7,12 +7,9 @@ Roadmap
 
 _NOTE: These plans can change any time_
 
-* Add Nsst.desktop, nsst.terminfo, {zsh, yash, bash, fish} completions
-
 * Wayland
   * Support rendering titlebar (title, close, maximize, minimize, double click, recolor on focus)
   * Explicitly specify required versions of protocols
-  * Log all events (optional: `WAYLAND_DEBUG` exists)
   * Dynamic output properties tracking:
       * Dynamically change window DPI/subpixel mode depending on the output
       * Support HiDPI. Scale surface content
@@ -20,11 +17,17 @@ _NOTE: These plans can change any time_
   * Support server side cursors
   * Support xdg-activation-v1
 
+* Add nsst terminfo (although xterm terminfo is perfectly fine in our case)
+* Add yash, zsh, bash, fish shell integration scripts
+* Add zsh, bash, fish completions
+* Expand documentation
+
 * Refactor
-  * Add asynchronous pty writes for situations when input queue is full
-  * Cleanup fallback cursor loading: add get_cursor_any()
   * Move current window size from win->cfg.geometry
   * Add helper to calulate cw/ch
+  * Allow specifying sizes in pt/mm/etc
+    * This is a prerequisite for automatic scaling on wayland
+  * Add command patterns like "xdg-open {url}" for command spawning
 
 ### Until 2.7 (or later)
 
@@ -148,7 +151,7 @@ _NOTE: These plans can change any time_
   * `CSI ? 38 l` / `CSI ? 38 h` -- **DECTEK** (this is complex, obscure and unused)
   * `OSC 3 ; Pt ST` -- Set X property (insecure)
   * `DCS + Q Pt ST` -> `DCS Ps + R Pt ST` -- **XTGETXRES** (too X11/xterm specific)
-  * `CSI ? 1001 l` / `CSI ? 1001 h` -- Hightlight mouse tracking (can hang the terminal)
+  * `CSI ? 1001 l` / `CSI ? 1001 h` -- Highlight mouse tracking (can hang the terminal)
   * `CSI Ps ; Ps ; Ps ; Ps ; Ps T` -- **XTHIMOUSE** (can hang the terminal)
   * `ESC # 3` / `ESC # 4` -- **DECDHL** (poorly interacts with mouse)
   * `ESC # 5` -- **DECSWL** (poorly interacts with mouse)
