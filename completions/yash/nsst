@@ -206,7 +206,7 @@ function completion/nsst {
 		complete -P "$PREFIX" -- auto x11 wayland x11xrender x11shm waylandshm default
 		;;
 	(f|--font)
-		eval array _FONTS $(fc-list -f '\\"%{family}\\"\n' | sed -e 's/,/\\"\n\\"/' -e 's/ /\\ /g' | sort -u | sed 's/\n/ /' | xargs echo -n)
+		eval array _FONTS $(fc-list -f '\\"%{family}\\"\n' :spacing=mono | sed -e 's/,/\\"\n\\"/' -e 's/ /\\ /g' | sort -u | sed 's/\n/ /' | xargs echo -n)
 		complete -P "$PREFIX" -- "$_FONTS" default
 		;;
 	(--cwd)
