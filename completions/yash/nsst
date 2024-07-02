@@ -178,6 +178,9 @@ function completion/nsst {
 	(-)
 		command -f completion//completeoptions -e
 		;;
+	(D|--term-name)
+		complete -P "$PREFIX" -- $(toe | cut -f1 | grep -v + | sort -u)
+		;;
 	(--pointer-shape|--resize-pointer-shape|--uri-pointer-shape)
 		complete -P "$PREFIX" -- $(ls /usr/share/icons/*/cursors | grep -v cursors: | sort -u | xargs echo)
 		;;
