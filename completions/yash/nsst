@@ -190,7 +190,7 @@ function completion/nsst {
 	(--cursor-shape)
 		complete -P "$PREFIX" -- blinking-block block blinking-underline underline blinking-bar bar default
 		;;
-	(j--keyboard-mapping)
+	(--keyboard-mapping)
 		complete -P "$PREFIX" -- legacy vt220 hp sun sco default
 		;;
 	(L|--log-level)
