@@ -241,7 +241,7 @@ function completion/nsst {
 }
 
 function completion/nsstc {
-	completion/nsst
+	command -f completion//reexecute nsst
 }
 
 # vim: set ft=sh ts=8 sts=8 sw=8 noet:

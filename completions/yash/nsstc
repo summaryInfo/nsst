@@ -1,0 +1,9 @@
+# Copyright (c) 2024, Evgeniy Baskov. All rights reserved
+
+# Completion script for nsst terminal emulator client.
+
+function completion/nsstc {
+	command -f completion//reexecute nsst
+}
+
+# vim: set ft=sh ts=8 sts=8 sw=8 noet:
