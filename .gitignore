@@ -18,5 +18,5 @@ tools/EastAsianWidth.txt
 tools/UnicodeData.txt
 
 # Binaries (with default names)
-nsst
-nsstc
+./nsst
+./nsstc
