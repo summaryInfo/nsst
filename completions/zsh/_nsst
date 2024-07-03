@@ -152,18 +152,18 @@ _arguments \
 	"--visual-bell-time=[Length of visual bell]:time:()" \
 	"--wait-for-configure-delay=[Time gap in microseconds waiting for configure after resize request]:time:()" \
 	"--word-break=[Symbols treated as word separators when snapping mouse selection]:characters:()" \
-	"(-C --config=)"{-C,--config}"[Configuration file path]:config:_files" \
-	"(-D --term-name=)"{-D,--term-name}"[TERM value]:name:->term" \
-	"(-f --font=)"{-f,--font}"[Comma-separated list of fontconfig font patterns]:font:->fonts" \
-	"(-G --char-geometry=)"{-G,--char-geometry}"[Window geometry in characters]:geometry:()" \
-	"(-g --geometry=)"{-g,--geometry}"[Window geometry in pixels]:geometry:()" \
-	"(-H --scrollback-size=)"{-H,--scrollback-size}"[Number of saved lines]:int:()" \
-	"(-L --log-level=)"{-L,--log-level}"[Filtering level of logged information]:level:(quiet fatal warn info default)" \
-	"(-o --printer-file=)"{-o,--printer-file}"[File where CSI MC output to]:file:_files" \
-	"(-s --socket=)"{-s,--socket}"[Daemon socket path]:socket:_files" \
-	"(-T --title=)"{-T,--title}"[Initial window title]:text:()" \
-	"(-t --vt-version=)"{-t,--vt-version}"[Emulated VT version]:int:()" \
-	"(-V --window-class=)"{-V,--window-class}"[X11 Window class]:text:()" \
+	"(-C --config=)"{-C,--config=}"[Configuration file path]:config:_files" \
+	"(-D --term-name=)"{-D,--term-name=}"[TERM value]:name:->term" \
+	"(-f --font=)"{-f,--font=}"[Comma-separated list of fontconfig font patterns]:font:->fonts" \
+	"(-G --char-geometry=)"{-G,--char-geometry=}"[Window geometry in characters]:geometry:()" \
+	"(-g --geometry=)"{-g,--geometry=}"[Window geometry in pixels]:geometry:()" \
+	"(-H --scrollback-size=)"{-H,--scrollback-size=}"[Number of saved lines]:int:()" \
+	"(-L --log-level=)"{-L,--log-level=}"[Filtering level of logged information]:level:(quiet fatal warn info default)" \
+	"(-o --printer-file=)"{-o,--printer-file=}"[File where CSI MC output to]:file:_files" \
+	"(-s --socket=)"{-s,--socket=}"[Daemon socket path]:socket:_files" \
+	"(-T --title=)"{-T,--title=}"[Initial window title]:text:()" \
+	"(-t --vt-version=)"{-t,--vt-version=}"[Emulated VT version]:int:()" \
+	"(-V --window-class=)"{-V,--window-class=}"[X11 Window class]:text:()" \
 	"(-h --help)"{-h,--help}"[Print this message and exit]" \
 	"(-v --version)"{-v,--version}"[Print version and exit]" \
 	':command: _command_names -e' \
@@ -176,10 +176,10 @@ case ${state} in
 		unset IFS
 		;;
 	(term)
-		_values 'terminfo definitions' $(toe | cut -f1 | grep -v + | sort -u)
+		_values 'terminfo definitions' $(toe | sed -e 's/\([^\t]*\)\t.*/\1/' -e 's/ //'g  -e '/+/d'| sort -u)
 		;;
 	(shape)
-		_values 'cursors shapes' $(ls /usr/share/icons/*/cursors | grep -v cursors: | sort -u | xargs echo)
+		_values 'cursors shapes' $(ls /usr/share/icons/*/cursors | grep -v cursors: | sort -u)
 		;;
 esac
 
