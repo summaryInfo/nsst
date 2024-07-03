@@ -151,7 +151,15 @@ The most basic way to enable it is to put `\033]133;A\a` at the beginning of you
 To make T-N open window in current directory make sure to wrap `cd` to output `\033]7;$PWD\a` after directory change to notify the terminal.
 To enable selecting whole command output (with Alt+triple click) additionally put `\033]133;D\a` at the end of the right prompt or before the beginning of the command output.
 
-_FIXME: write terminal integration snippets for most shells._
+This repository includes shell integration scripts for *yash* and *zsh* in `integration` directory. Source them at the bottom of your `.yashrc`/`.zshrc` file to enable it.
+Other shells (bash, fish) will be added in the future. Contributions are welcome.
+
+**NOTE**: Some zsh themes, like [powerlevel10k](https://github.com/romkatv/powerlevel10k) override hooks, which causes native shell integration scripts
+to stop working. You need to fix that depending on the theme. E.g. for powerlevel10k you need to set `POWERLEVEL9K_TERM_SHELL_INTEGRATION=true` in your
+`.p10k.zsh` file.
+
+This repository also includes zsh/yash/fish completion scripts in `completions` directory, although they are not installed by default.
+Proper bash completion is tricky due to its complexity, so it is not complete yet, but will also be supported soon.
 
 ### Wayland CSD
 
