@@ -831,15 +831,26 @@ static void term_dispatch_dcs(struct term *term) {
     }
     case C('q') | I0('+'): /* XTGETTCAP */ {
         // TODO Termcap: Support proper tcap db
-        //      for now, just implement Co/colors
-        bool valid = 0;
+        //      for now, just implement select few of them
+        bool valid = true;
         if (!strcmp((char *)dstr, "436F") || /* "Co" */
                 !strcmp((char *)dstr, "636F6C6F7266")) { /* "colors" */
             uint8_t tmp[16];
             int len = snprintf((char *)tmp, sizeof tmp, "%u", PALETTE_SIZE - SPECIAL_PALETTE_SIZE);
             *dend = '=';
             hex_encode(dend + 1, tmp, tmp + len);
-            valid = 1;
+        } else if (!strcmp((char *)dstr, "544E") || /* "TN" */
+                !strcmp((char *)dstr, "6E6A6D65")) { /* "name" */
+            const uint8_t tmp[5] = "nsst";
+            *dend = '=';
+            hex_encode(dend + 1, tmp, tmp + sizeof tmp - 1);
+
+        } else if (!strcmp((char *)dstr, "524742")) /* "RGB" == 8 */ {
+            const uint8_t tmp[2] = "8";
+            *dend = '=';
+            hex_encode(dend + 1, tmp, tmp + sizeof tmp - 1);
+        } else {
+            valid = false;
         }
         term_answerback(term, DCS"%u+r%s"ST, valid, dstr);
         break;
