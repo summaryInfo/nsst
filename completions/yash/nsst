@@ -112,7 +112,6 @@ function completion/nsst {
 		"o: --printer-file:;File where CSI MC output to"
 		"--override-boxdrawing::;Use built-in box drawing characters"
 		"--pixel-mode:;Sub-pixel rendering mode"
-		"--pointer-shape:;Default mouse pointer shape"
 		"--pointer-shape:;Default mouse pointer shape for the window"
 		"--print-attributes::;Print cell attributes when printing is enabled"
 		"--print-command:;Program to pipe CSI MC output into"
