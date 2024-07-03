@@ -7,9 +7,14 @@ Roadmap
 
 _NOTE: These plans can change any time_
 
+
 * Wayland
-  * Support rendering titlebar (title, close, maximize, minimize, double click, recolor on focus)
   * Explicitly specify required versions of protocols
+  * Support optional rendering of titlebar
+     * Title text
+     * Close, Maximize, Minimize buttons
+     * Double click to change state
+     * Recolor on focus
   * Dynamic output properties tracking:
       * Dynamically change window DPI/subpixel mode depending on the output
       * Support HiDPI. Scale surface content
@@ -17,10 +22,13 @@ _NOTE: These plans can change any time_
   * Support server side cursors
   * Support xdg-activation-v1
 
-* Add nsst terminfo (although xterm terminfo is perfectly fine in our case)
-* Add yash, zsh, bash, fish shell integration scripts
-* Add zsh, bash, fish completions
-* Expand documentation
+* Packaging
+  * Add nsst specific terminfo (although xterm terminfo is perfectly fine in our case)
+  * Add bash completions
+    * This is apparently really hard to do, since we have to parse everything ourselves...
+  * Install all completions
+  * Add yash, zsh, bash, fish shell integration scripts
+  * Expand documentation
 
 * Refactor
   * Move current window size from win->cfg.geometry
