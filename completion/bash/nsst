@@ -1,0 +1,230 @@
+# Copyright (c) 2024, Evgeniy Baskov. All rights reserved
+
+# Bash completion script for nsst terminal emulator.
+
+_nsst() {
+    local IFS=$' \t\n'
+    COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"
+	COMPREPLY=()
+
+    echo; for i in "${COMP_WORDS[@]}"; do echo "'$i'"; done; echo
+
+	# First we need to parse the command to find out whether we
+	# are need to complete our option or an option of some other program
+
+	local i opt cmdopt fullopt optvalue optname prefix
+	for (( i=1; i <= COMP_CWORD; i++ )); do
+		if [[ -n "$opt" ]]; then
+			if [[ "${COMP_WORDS[i-1]}" = '--' ]]; then
+				cmdopt="$i"
+				break
+			fi
+			prefix=
+			optvalue="${COMP_WORDS[i]}"
+			opt=
+			continue
+		fi
+		case "${COMP_WORDS[i]}" in
+		(-e)
+			# Last option, command starts next, we should complete it instead
+			cmdopt=$((i+1))
+			break
+			;;
+		# Boolean options without arguments (need to specify them explicitly)
+		(--allow-alternate|--allow-blinking|--allow-modify-edit-keypad|--allow-modify-function|\
+		--allow-modify-keypad|--allow-modify-misc|--alternate-scroll|--appcursor|--appkey|\
+		--autorepeat|--autowrap|--backspace-is-del|--blend-all-background|--blend-foreground|\
+		--daemon|--delete-is-del|--erase-scrollback|--extended-cir|--fixed|--force-nrcs|\
+		--force-scalable|--force-wayland-csd|--fork|--has-meta|--keep-clipboard|--keep-selection|\
+		--lock-keyboard|--luit|--meta-sends-escape|--nrcs|--numlock|--override-boxdrawing|\
+		--print-attributes|--raise-on-bell|--reverse-video|--scroll-on-input|--scroll-on-output|\
+		--select-to-clipboard|--smooth-resize|--smooth-scroll|--special-blink|--special-bold|\
+		--special-italic|--special-reverse|--special-underlined|--substitute-fonts|--trace-characters|\
+		--trace-controls|--trace-events|--trace-fonts|--trace-input|--trace-misc|--unique-uris|\
+		--urgent-on-bell|--use-utf8|--visual-bell|--window-ops|--version|--help|\
+		--no-allow-alternate|--no-allow-blinking|--no-allow-modify-edit-keypad|--no-allow-modify-function|\
+		--no-allow-modify-keypad|--no-allow-modify-misc|--no-alternate-scroll|--no-appcursor|--no-appkey|\
+		--no-autorepeat|--no-autowrap|--no-backspace-is-del|--no-blend-all-background|--no-blend-foreground|\
+		--no-daemon|--no-delete-is-del|--no-erase-scrollback|--no-extended-cir|--no-fixed|--no-force-nrcs|\
+		--no-force-scalable|--no-force-wayland-csd|--no-fork|--no-has-meta|--no-keep-clipboard|--no-keep-selection|\
+		--no-lock-keyboard|--no-luit|--no-meta-sends-escape|--no-nrcs|--no-numlock|--no-override-boxdrawing|\
+		--no-print-attributes|--no-raise-on-bell|--no-reverse-video|--no-scroll-on-input|--no-scroll-on-output|\
+		--no-select-to-clipboard|--no-smooth-resize|--no-smooth-scroll|--no-special-blink|--no-special-bold|\
+		--no-special-italic|--no-special-reverse|--no-special-underlined|--no-substitute-fonts|--no-trace-characters|\
+		--no-trace-controls|--no-trace-events|--no-trace-fonts|--no-trace-input|--no-trace-misc|--no-unique-uris|\
+		--no-urgent-on-bell|--no-use-utf8|--no-visual-bell|--no-window-ops)
+			prefix=
+			optname="${COMP_WORDS[i]}"
+			optvalue=
+			;;
+		(--*)
+    		# Options with explicit arguments
+			if [[ "${COMP_WORDS[i]}" =~ ^(--[a-z-]+=)$ ]]; then
+				# Long option with parameter on the different word
+				prefix="${BASH_REMATCH[1]}"
+				optname="${BASH_REMATCH[1]}"
+				optvalue=
+				opt=1
+			elif [[ "${COMP_WORDS[i]}" =~ ^(--[a-z-]+=)(.+)$ ]]; then
+				# Long option with parameter on the same word
+				prefix="${BASH_REMATCH[1]}"
+				optname="${BASH_REMATCH[1]}"
+				optvalue="${BASH_REMATCH[2]}"
+            else
+    			# Long option with parameter on the different word
+    			prefix=
+    			optname="${COMP_WORDS[i]}"
+    			optvalue=
+    			opt=1
+                [[ "$i" = "$COMP_CWORD" ]] || optname+="="
+			fi
+			;;
+		(-*)
+			if [[ "${COMP_WORDS[i]}" =~ ^(-[vdh]*([CDefGgHLosTtV]))$ ]]; then
+				# Short option with parameter the different word
+				prefix="${BASH_REMATCH[1]}"
+				optname="-${BASH_REMATCH[2]}"
+				optvalue=
+				opt=1
+                [[ "$i" = "$COMP_CWORD" ]] || optname+="="
+			elif [[ "${COMP_WORDS[i]}" =~ ^(-[vdh]*([CDefGgHLosTtV]))(.*)$ ]]; then
+				# Short option with parameter in the same word
+				prefix="${BASH_REMATCH[1]}"
+				optname="-${BASH_REMATCH[2]}="
+				optvalue="${BASH_REMATCH[3]}"
+			elif [[ "${COMP_WORDS[i]}" =~ ^-[vdh]*[vdh]$ ]]; then
+				# Short option without parameter
+				prefix="${COMP_WORDS[i]}"
+				optname="${COMP_WORDS[i]}"
+				optvalue=
+            else
+    			prefix=
+    			optname="${COMP_WORDS[i]}"
+    			optvalue=
+			fi
+			;;
+		(*)
+			cmdopt=$i
+			break
+			;;
+		esac
+	done
+
+    # FIXME cmdopt should complete one after the thing
+
+	local fullopt="${COMP_WORDS[COMP_CWORD]}"
+	local shortopts=( "-C" "-d" "-D" "-e" "-f" "-g" "-G" "-h" "-H" "-L" "-o" "-s" "-t" "-T" "-v" "-V" )
+	local longopts=(
+		"--allow-alternate" "--allow-blinking" "--allow-modify-edit-keypad" "--allow-modify-function"
+		"--allow-modify-keypad" "--allow-modify-misc" "--alpha" "--alternate-scroll" "--answerback-string"
+		"--appcursor" "--appkey" "--autorepeat" "--autowrap" "--backend" "--background" "--backspace-is-del"
+		"--bell" "--bell" "--bell-high-volume" "--bell-low-volume" "--blend-all-background"
+		"--blend-foreground" "--blink-color" "--blink-time" "--bold-color" "--border" "--bottom-border"
+		"--char-geometry" "--config" "--cursor-background" "--cursor-foreground" "--cursor-shape"
+		"--cursor-width" "--cwd" "--daemon" "--delete-is-del" "--double-click-time" "--dpi"
+		"--erase-scrollback" "--extended-cir" "--fixed" "--fkey-increment" "--font" "--font-gamma"
+		"--font-size" "--font-size-step" "--font-spacing" "--force-mouse-mod" "--force-nrcs"
+		"--force-scalable" "--force-wayland-csd" "--foreground" "--fork" "--fps" "--frame-wait-delay"
+		"--geometry" "--has-meta" "--help" "--horizontal-border" "--italic-color" "--keep-clipboard"
+		"--keep-selection" "--keyboard-dialect" "--keyboard-mapping" "--key-break" "--key-copy"
+		"--key-copy-uri" "--key-dec-font" "--key-inc-font" "--key-jump-next-cmd" "--key-jump-prev-cmd"
+		"--key-new-window" "--key-numlock" "--key-paste" "--key-reload-config" "--key-reset"
+		"--key-reset-font" "--key-reverse-video" "--key-scroll-down" "--key-scroll-up" "--left-border"
+		"--line-spacing" "--lock-keyboard" "--log-level" "--luit" "--luit" "--luit-path"
+		"--margin-bell-column" "--margin-bell-high-volume" "--margin-bell-low-volume" "--max-frame-time"
+		"--meta-sends-escape" "--modify-cursor" "--modify-function" "--modify-keypad" "--modify-other"
+		"--modify-other-fmt" "--nrcs" "--numlock" "--open-cmd" "--override-boxdrawing" "--pixel-mode"
+		"--pointer-shape" "--print-attributes" "--print-command" "--printer-file" "--raise-on-bell"
+		"--reversed-color" "--reverse-video" "--right-border" "--scroll-amount" "--scrollback-size"
+		"--scroll-on-input" "--scroll-on-output" "--selected-background" "--selected-foreground"
+		"--select-scroll-time" "--select-to-clipboard" "--shell" "--smooth-resize" "--smooth-scroll"
+		"--smooth-scroll-delay" "--smooth-scroll-step" "--socket" "--special-blink" "--special-bold"
+		"--special-italic" "--special-reverse" "--special-underlined" "--substitute-fonts" "--sync-timeout"
+		"--tab-width" "--term-mod" "--term-name" "--title" "--top-border" "--trace-characters"
+		"--trace-controls" "--trace-events" "--trace-fonts" "--trace-input" "--trace-misc"
+		"--triple-click-time" "--underlined-color" "--underline-width" "--unique-uris" "--urgent-on-bell"
+		"--uri-click-mod" "--uri-color" "--uri-mode" "--uri-underline-color" "--use-utf8"
+		"--version" "--vertical-border" "--visual-bell" "--visual-bell-time" "--vt-version"
+		"--wait-for-configure-delay" "--window-class" "--window-ops" "--word-break"
+	)
+
+    [[ "${COMP_WORDS[0]}" == nsstc ]] && longopts+=("--quit")
+
+	if [[ -n "$cmdopt" && "$cmdopt" < "${#COMP_WORDS[@]}" ]]; then
+		declare -F _command_offset >/dev/null || return 1
+		_command_offset $cmdopt
+		return 0
+	fi
+
+	case "$optname" in
+	(-D=|--term-name=)
+		COMPREPLY=( $(compgen -P "${prefix}" -W "$(toe | cut -f1 | grep -v + | sort -u)" -- "${optvalue}") )
+		;;
+	(--bell=|--margin-bell=)
+		COMPREPLY=( $(compgen -P "${prefix}" -W "off low high default" -- "${optvalue}") )
+		;;
+	(--cursor-shape=)
+		COMPREPLY=( $(compgen -P "${prefix}" -W "blinking-block block blinking-underline underline blinking-bar bar default" -- "${optvalue}") )
+		;;
+	(--keyboard-mapping=)
+		COMPREPLY=( $(compgen -P "${prefix}" -W "legacy vt220 hp sun sco default" -- "${optvalue}") )
+		;;
+	(-L=|--log-level=)
+		COMPREPLY=( $(compgen -P "${prefix}" -W "quiet fatal warn info default" -- "${optvalue}") )
+		;;
+	(--modify-other-fmt)
+		COMPREPLY=( $(compgen -P "${prefix}" -W "xterm csi-u default" -- "${optvalue}") )
+		;;
+	(--pixel-mode=)
+		COMPREPLY=( $(compgen -P "${prefix}" -W "mono bgr rgb bgrv rgbv default" -- "${optvalue}") )
+		;;
+	(--uri-mode=)
+		COMPREPLY=( $(compgen -P "${prefix}" -W "off manual auto default" -- "${optvalue}") )
+		;;
+	(--backend=)
+		COMPREPLY=( $(compgen -P "${prefix}" -W "auto x11 wayland x11xrender x11shm waylandshm default" -- "${optvalue}") )
+		;;
+	(-f=|--font=)
+		COMPREPLY=( $(compgen -P "${prefix}" -W "$(fc-list :spacing=mono family | sed 's/,/\n/g' | sort -u | tr -d ' ')" -- "${optvalue}") )
+		;;
+	(--cwd=)
+		COMPREPLY=( $(compgen -P "${prefix}" -A directory -- "${optvalue}") )
+		;;
+	(-[Cos]=|--config=|--printer-file=|--socket=)
+		COMPREPLY=( $(compgen -P "${prefix}" -A file -- "${optvalue}") )
+		;;
+	(--luit-path=|--open-cmd=|--print-command=|--shell=)
+		COMPREPLY=( $(compgen -P "${prefix}" -A command -- "${optvalue}") )
+		;;
+	(--autorepeat=|--allow-alternate=|--allow-blinking=|--allow-modify-edit-keypad=|\
+	 --allow-modify-function=|--allow-modify-keypad=|--allow-modify-misc=|--alternate-scroll=|\
+	 --appcursor=|--appkey=|--autowrap=|--backspace-is-del=|--blend-all-background=|\
+	 --blend-foreground=|d\--daemon=|--delete-is-del=|--erase-scrollback=|--extended-cir=|--fixed=|\
+	 --force-wayland-csd=|--force-nrcs=|--force-scalable=|--fork=|--has-meta=|--keep-clipboard=|\
+	 --keep-selection=|--lock-keyboard=|--luit=|--meta-sends-escape=|--nrcs=|--numlock=|\
+	 --override-boxdrawing=|--unique-uris=|--print-attributes=|--raise-on-bell=|--reverse-video=|\
+	 --scroll-on-input=|--scroll-on-output=|--select-to-clipboard=|--smooth-scroll=|--special-blink=|\
+	 --special-bold=|--special-italic=|--special-reverse=|--special-underlined=|--substitute-fonts=|\
+	 --trace-characters=|--trace-controls=|--trace-events=|--trace-fonts=|--trace-input=|\
+	 --trace-misc=|--urgent-on-bell=|--use-utf8=|--visual-bell=|--window-ops=|--smooth-resize=)
+		COMPREPLY=( $(compgen -P "${prefix}" -W "true false default" -- "${optvalue}") )
+		;;
+	(--*)
+		COMPREPLY=( $(compgen -W "${longopts[*]}" -- "${optname}") )
+		;;
+	(-*)
+		COMPREPLY=( $(compgen -W "${shortopts[*]} ${longopts[*]}" -- "${optname}") )
+		;;
+	(*)
+		local commands=$(compgen -c | grep -vFx "$(compgen -k)" | grep -vE '^([.:[]|nsst)$')
+		COMPREPLY=( $(compgen -W "${commands[*]}" -- "${optname}") )
+		;;
+	esac
+
+    return 0
+}
+
+complete -F _nsst nsst
+complete -F _nsst nsstc
+
+# vim: set ft=sh ts=8 sts=8 sw=8 noet:

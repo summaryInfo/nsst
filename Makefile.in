@@ -40,6 +40,8 @@ install: all
 	install -Dm 644 completion/fish/nsst.fish $(DESTDIR)$(SHAREDIR)/fish/vendor_completions.d/nsst.fish
 	install -Dm 644 completion/yash/nsst $(DESTDIR)/usr/share/yash/completion/nsst
 	install -Dm 644 completion/yash/nsstc $(DESTDIR)/usr/share/yash/completion/nsstc
+	install -Dm 644 completion/bash/nsst $(DESTDIR)/usr/share/bash-completion/completions/nsst
+	ln -s nsst $(DESTDIR)/usr/share/bash-completion/completions/nsstc
 	install -Dm 644 integration/nsst_yash_integration.sh $(DESTDIR)$(SHAREDIR)/$(NAME)/integration/nsst_yash_integration.sh
 	install -Dm 644 integration/nsst_fish_integration.fish $(DESTDIR)$(SHAREDIR)/$(NAME)/integration/nsst_fish_integration.fish
 	install -Dm 644 integration/nsst_zsh_integration.sh $(DESTDIR)$(SHAREDIR)/$(NAME)/integration/nsst_zsh_integration.sh
@@ -55,6 +57,8 @@ uninstall:
 	rm -f $(DESTDIR)$(SHAREDIR)/fish/vendor_completions.d/nsst.fish
 	rm -f $(DESTDIR)/usr/share/yash/completion/nsst
 	rm -f $(DESTDIR)/usr/share/yash/completion/nsstc
+	rm -f $(DESTDIR)/usr/share/bash-completion/completions/nsst
+	rm -f $(DESTDIR)/usr/share/bash-completion/completions/nsstc
 	rm -f $(DESTDIR)/usr/share/terminfo/nsst
 	rm -f $(DESTDIR)/usr/share/terminfo/nsst-direct
 

@@ -159,10 +159,7 @@ Other shells (bash) will be added in the future. Contributions are welcome.
 to stop working. You need to fix that depending on the theme. E.g. for powerlevel10k you need to set `POWERLEVEL9K_TERM_SHELL_INTEGRATION=true` in your
 `.p10k.zsh` file, instead of using provided integration script.
 
-This repository also includes *zsh*/*yash*/*fish* completion scripts in `completion` directory. They are installed by default into appropriate paths.
-Proper bash completion is tricky due to its complexity, so it is not complete yet, but will also be supported soon.
-For *yash* you might need to add `/usr/local/share/yash` to `$YASH_LOADPATH` for completions to work or change installation
-path to `/usr` instead of `/usr/local`.
+This repository also includes *zsh*/*yash*/*fish*/*bash* completion scripts in `completion` directory. They are installed by default into appropriate paths.
 
 ### Wayland CSD
 
