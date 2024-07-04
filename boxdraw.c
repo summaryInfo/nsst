@@ -113,7 +113,7 @@ struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t de
         H|7,                 V|6,                 V|5,                 V|4,
         V|3,                 V|2,                 V|1,                 V,
         TRQ|BRQ,             BLK|DT1,             BLK|DT2,             DT1|H|7,
-        HR,                  VR,                  BLQ,                 BRQ,
+        HR|1,                VR|1,                BLQ,                 BRQ,
         TLQ,                 TLQ|BRQ|BLQ,         TLQ|BRQ,             TLQ|TRQ|BLQ,
         TLQ|TRQ|BRQ,         TRQ,                 TRQ|BLQ,             TRQ|BLQ|BRQ,
     }[c - 0x2500];
