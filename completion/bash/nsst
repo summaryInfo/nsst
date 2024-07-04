@@ -3,11 +3,11 @@
 # Bash completion script for nsst terminal emulator.
 
 _nsst() {
-    local IFS=$' \t\n'
-    COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"
+	local IFS=$' \t\n'
+	COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"
 	COMPREPLY=()
 
-    echo; for i in "${COMP_WORDS[@]}"; do echo "'$i'"; done; echo
+	echo; for i in "${COMP_WORDS[@]}"; do echo "'$i'"; done; echo
 
 	# First we need to parse the command to find out whether we
 	# are need to complete our option or an option of some other program
@@ -58,7 +58,7 @@ _nsst() {
 			optvalue=
 			;;
 		(--*)
-    		# Options with explicit arguments
+			# Options with explicit arguments
 			if [[ "${COMP_WORDS[i]}" =~ ^(--[a-z-]+=)$ ]]; then
 				# Long option with parameter on the different word
 				prefix="${BASH_REMATCH[1]}"
@@ -70,13 +70,13 @@ _nsst() {
 				prefix="${BASH_REMATCH[1]}"
 				optname="${BASH_REMATCH[1]}"
 				optvalue="${BASH_REMATCH[2]}"
-            else
-    			# Long option with parameter on the different word
-    			prefix=
-    			optname="${COMP_WORDS[i]}"
-    			optvalue=
-    			opt=1
-                [[ "$i" = "$COMP_CWORD" ]] || optname+="="
+			else
+				# Long option with parameter on the different word
+				prefix=
+				optname="${COMP_WORDS[i]}"
+				optvalue=
+				opt=1
+				[[ "$i" = "$COMP_CWORD" ]] || optname+="="
 			fi
 			;;
 		(-*)
@@ -86,7 +86,7 @@ _nsst() {
 				optname="-${BASH_REMATCH[2]}"
 				optvalue=
 				opt=1
-                [[ "$i" = "$COMP_CWORD" ]] || optname+="="
+				[[ "$i" = "$COMP_CWORD" ]] || optname+="="
 			elif [[ "${COMP_WORDS[i]}" =~ ^(-[vdh]*([CDefGgHLosTtV]))(.*)$ ]]; then
 				# Short option with parameter in the same word
 				prefix="${BASH_REMATCH[1]}"
@@ -97,10 +97,10 @@ _nsst() {
 				prefix="${COMP_WORDS[i]}"
 				optname="${COMP_WORDS[i]}"
 				optvalue=
-            else
-    			prefix=
-    			optname="${COMP_WORDS[i]}"
-    			optvalue=
+			else
+				prefix=
+				optname="${COMP_WORDS[i]}"
+				optvalue=
 			fi
 			;;
 		(*)
@@ -110,7 +110,7 @@ _nsst() {
 		esac
 	done
 
-    # FIXME cmdopt should complete one after the thing
+	# FIXME cmdopt should complete one after the thing
 
 	local fullopt="${COMP_WORDS[COMP_CWORD]}"
 	local shortopts=( "-C" "-d" "-D" "-e" "-f" "-g" "-G" "-h" "-H" "-L" "-o" "-s" "-t" "-T" "-v" "-V" )
@@ -148,7 +148,7 @@ _nsst() {
 		"--wait-for-configure-delay" "--window-class" "--window-ops" "--word-break"
 	)
 
-    [[ "${COMP_WORDS[0]}" == nsstc ]] && longopts+=("--quit")
+	[[ "${COMP_WORDS[0]}" == nsstc ]] && longopts+=("--quit")
 
 	if [[ -n "$cmdopt" && "$cmdopt" < "${#COMP_WORDS[@]}" ]]; then
 		declare -F _command_offset >/dev/null || return 1
@@ -221,7 +221,7 @@ _nsst() {
 		;;
 	esac
 
-    return 0
+	return 0
 }
 
 complete -F _nsst nsst
