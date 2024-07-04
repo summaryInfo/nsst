@@ -38,11 +38,12 @@ install: all
 	@ # FIXME Custom $(NAME) currently do not work, need to modify names
 	install -Dm 644 completion/zsh/_nsst $(DESTDIR)$(SHAREDIR)/zsh/site-functions/_nsst
 	install -Dm 644 completion/fish/nsst.fish $(DESTDIR)$(SHAREDIR)/fish/vendor_completions.d/nsst.fish
-	install -Dm 644 completion/yash/nsst $(DESTDIR)$(SHAREDIR)/yash/completion/nsst
-	install -Dm 644 completion/yash/nsstc $(DESTDIR)$(SHAREDIR)/yash/completion/nsstc
+	install -Dm 644 completion/yash/nsst $(DESTDIR)/usr/share/yash/completion/nsst
+	install -Dm 644 completion/yash/nsstc $(DESTDIR)/usr/share/yash/completion/nsstc
 	install -Dm 644 integration/nsst_yash_integration.sh $(DESTDIR)$(SHAREDIR)/$(NAME)/integration/nsst_yash_integration.sh
 	install -Dm 644 integration/nsst_fish_integration.fish $(DESTDIR)$(SHAREDIR)/$(NAME)/integration/nsst_fish_integration.fish
 	install -Dm 644 integration/nsst_zsh_integration.sh $(DESTDIR)$(SHAREDIR)/$(NAME)/integration/nsst_zsh_integration.sh
+	tic -x -o $(DESTDIR)/usr/share/terminfo/ -e 'nsst,nsst-direct' nsst.info
 
 uninstall:
 	rm -rf $(DESTDIR)$(SHAREDIR)/$(NAME)
@@ -52,8 +53,10 @@ uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/$(NAME)-open
 	rm -f $(DESTDIR)$(SHAREDIR)/zsh/site-functions/_nsst
 	rm -f $(DESTDIR)$(SHAREDIR)/fish/vendor_completions.d/nsst.fish
-	rm -f $(DESTDIR)$(SHAREDIR)/yash/completion/nsst
-	rm -f $(DESTDIR)$(SHAREDIR)/yash/completion/nsstc
+	rm -f $(DESTDIR)/usr/share/yash/completion/nsst
+	rm -f $(DESTDIR)/usr/share/yash/completion/nsstc
+	rm -f $(DESTDIR)/usr/share/terminfo/nsst
+	rm -f $(DESTDIR)/usr/share/terminfo/nsst-direct
 
 $(NAME): $(OBJ)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ) $(LDLIBS) -o $@

@@ -60,8 +60,9 @@ See TODO file for things that are to be implemented.
 
 ## Notes
 
-Use `TERM=xterm` for now (via `term-name` option). Almost every escape sequence from [ctlseqs.ms](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html) is implemented.
-See Emulation section of TODO for not yet implemented escape sequences.
+Nsst uses `TERM=xterm` by default for higher compatibility. This is fine since almost every escape sequence from [ctlseqs.ms](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html) is supported.
+See Emulation section of TODO for not yet implemented escape sequences. This repository contains native terminfo (`nsst.info`), which contains several extensions, like curly
+underlines and synchronous updates. It is installed by default and can be selected if desired by setting `term-name=nsst` or `term-name=nsst-direct` in the config file. The latter uses 24-bit colors.
 
 Works well with [Iosevka](https://github.com/be5invis/Iosevka) font. (Set font spacing to -1 it it feels to wide.)
 Multiple fonts could be loaded by enumerating them in parameter like:
