@@ -35,12 +35,25 @@ install: all
 	install -D nsst-open $(DESTDIR)$(BINDIR)/$(NAME)-open
 	install -Dm 644 docs/nsst.conf $(DESTDIR)$(SHAREDIR)/$(NAME)/nsst.conf
 	install -Dm 644 docs/nsst.1 $(DESTDIR)$(MANDIR)/man1/$(NAME).1
+	@ # FIXME Custom $(NAME) currently do not work, need to modify names
+	install -Dm 644 completion/zsh/_nsst $(DESTDIR)$(SHAREDIR)/zsh/site-functions/_nsst
+	install -Dm 644 completion/fish/nsst.fish $(DESTDIR)$(SHAREDIR)/fish/vendor_completions.d/nsst.fish
+	install -Dm 644 completion/yash/nsst $(DESTDIR)$(SHAREDIR)/yash/completion/nsst
+	install -Dm 644 completion/yash/nsstc $(DESTDIR)$(SHAREDIR)/yash/completion/nsstc
+	install -Dm 644 integration/nsst_yash_integration.sh $(DESTDIR)$(SHAREDIR)/$(NAME)/integration/nsst_yash_integration.sh
+	install -Dm 644 integration/nsst_fish_integration.fish $(DESTDIR)$(SHAREDIR)/$(NAME)/integration/nsst_fish_integration.fish
+	install -Dm 644 integration/nsst_zsh_integration.sh $(DESTDIR)$(SHAREDIR)/$(NAME)/integration/nsst_zsh_integration.sh
 
 uninstall:
-	rm -rf $(DESTDIR)$(SHAREDIR)/nsst
-	rm -f $(DESTDIR)$(MANDIR)/man1/nsst.1
+	rm -rf $(DESTDIR)$(SHAREDIR)/$(NAME)
+	rm -f $(DESTDIR)$(MANDIR)/man1/$(NAME).1
 	rm -f $(DESTDIR)$(BINDIR)/$(NAME)
 	rm -f $(DESTDIR)$(BINDIR)/$(NAME)c
+	rm -f $(DESTDIR)$(BINDIR)/$(NAME)-open
+	rm -f $(DESTDIR)$(SHAREDIR)/zsh/site-functions/_nsst
+	rm -f $(DESTDIR)$(SHAREDIR)/fish/vendor_completions.d/nsst.fish
+	rm -f $(DESTDIR)$(SHAREDIR)/yash/completion/nsst
+	rm -f $(DESTDIR)$(SHAREDIR)/yash/completion/nsstc
 
 $(NAME): $(OBJ)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ) $(LDLIBS) -o $@
