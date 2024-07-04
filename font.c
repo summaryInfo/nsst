@@ -422,7 +422,7 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
     FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT | FT_LOAD_COLOR);
 
     bool ordv = ord == pixmode_bgrv || ord == pixmode_rgbv;
-    bool ordrev = ord == pixmode_bgr || ord == pixmode_bgrv;
+    bool ordrev = ord == pixmode_rgb || ord == pixmode_rgbv;
     bool lcd = ord != pixmode_mono;
 
     FT_Render_Glyph(face->glyph, lcd ? (ordv ? FT_RENDER_MODE_LCD_V : FT_RENDER_MODE_LCD) : FT_RENDER_MODE_NORMAL);
