@@ -23,9 +23,7 @@ _NOTE: These plans can change any time_
   * Support xdg-activation-v1
 
 * Packaging
-  * Add nsst specific terminfo (although xterm terminfo is perfectly fine in our case)
-  * Add bash completion and shell integration
-    * This is apparently really hard to do, since we have to parse everything ourselves...
+  * Add bash shell integration
   * Expand documentation
 
 * Refactor
