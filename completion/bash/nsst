@@ -1,13 +1,11 @@
 # Copyright (c) 2024, Evgeniy Baskov. All rights reserved
 
-# Bash completion script for nsst terminal emulator.
+# Bash completion script for the nsst terminal emulator.
 
 _nsst() {
 	local IFS=$' \t\n'
 	COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"
 	COMPREPLY=()
-
-	echo; for i in "${COMP_WORDS[@]}"; do echo "'$i'"; done; echo
 
 	# First we need to parse the command to find out whether we
 	# are need to complete our option or an option of some other program
@@ -60,18 +58,18 @@ _nsst() {
 		(--*)
 			# Options with explicit arguments
 			if [[ "${COMP_WORDS[i]}" =~ ^(--[a-z-]+=)$ ]]; then
-				# Long option with parameter on the different word
+				# Long option with parameter on the next word with =
 				prefix="${BASH_REMATCH[1]}"
 				optname="${BASH_REMATCH[1]}"
 				optvalue=
 				opt=1
 			elif [[ "${COMP_WORDS[i]}" =~ ^(--[a-z-]+=)(.+)$ ]]; then
-				# Long option with parameter on the same word
+				# Long option with parameter on the same word with =
 				prefix="${BASH_REMATCH[1]}"
 				optname="${BASH_REMATCH[1]}"
 				optvalue="${BASH_REMATCH[2]}"
 			else
-				# Long option with parameter on the different word
+				# Long option with parameter on the next word
 				prefix=
 				optname="${COMP_WORDS[i]}"
 				optvalue=
@@ -81,14 +79,14 @@ _nsst() {
 			;;
 		(-*)
 			if [[ "${COMP_WORDS[i]}" =~ ^(-[vdh]*([CDefGgHLosTtV]))$ ]]; then
-				# Short option with parameter the different word
+				# Short option with parameter on the next word
 				prefix="${BASH_REMATCH[1]}"
 				optname="-${BASH_REMATCH[2]}"
 				optvalue=
 				opt=1
 				[[ "$i" = "$COMP_CWORD" ]] || optname+="="
 			elif [[ "${COMP_WORDS[i]}" =~ ^(-[vdh]*([CDefGgHLosTtV]))(.*)$ ]]; then
-				# Short option with parameter in the same word
+				# Short option with parameter on the same word
 				prefix="${BASH_REMATCH[1]}"
 				optname="-${BASH_REMATCH[2]}="
 				optvalue="${BASH_REMATCH[3]}"
@@ -109,8 +107,6 @@ _nsst() {
 			;;
 		esac
 	done
-
-	# FIXME cmdopt should complete one after the thing
 
 	local fullopt="${COMP_WORDS[COMP_CWORD]}"
 	local shortopts=( "-C" "-d" "-D" "-e" "-f" "-g" "-G" "-h" "-H" "-L" "-o" "-s" "-t" "-T" "-v" "-V" )
