@@ -41,7 +41,7 @@ install: all
 	install -Dm 644 completion/yash/nsst $(DESTDIR)/usr/share/yash/completion/nsst
 	install -Dm 644 completion/yash/nsstc $(DESTDIR)/usr/share/yash/completion/nsstc
 	install -Dm 644 completion/bash/nsst $(DESTDIR)/usr/share/bash-completion/completions/nsst
-	ln -s nsst $(DESTDIR)/usr/share/bash-completion/completions/nsstc
+	ln -sf nsst $(DESTDIR)/usr/share/bash-completion/completions/nsstc
 	install -Dm 644 integration/nsst_yash_integration.sh $(DESTDIR)$(SHAREDIR)/$(NAME)/integration/nsst_yash_integration.sh
 	install -Dm 644 integration/nsst_fish_integration.fish $(DESTDIR)$(SHAREDIR)/$(NAME)/integration/nsst_fish_integration.fish
 	install -Dm 644 integration/nsst_zsh_integration.sh $(DESTDIR)$(SHAREDIR)/$(NAME)/integration/nsst_zsh_integration.sh
