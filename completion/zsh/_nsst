@@ -170,17 +170,17 @@ _arguments \
 	'*::command arguments: _dispatch ${words[1]} ${words[1]}'
 
 case ${state} in
-	(fonts)
-		IFS=$'\n'
-		_values -s , 'monospace font families' $(fc-list :spacing=mono family | sed 's/,/\n/g' | sort -u)
-		unset IFS
-		;;
-	(term)
-		_values 'terminfo definitions' $(toe | sed -e 's/\([^\t]*\)\t.*/\1/' -e 's/ //'g  -e '/+/d'| sort -u)
-		;;
-	(shape)
-		_values 'cursors shapes' $(ls /usr/share/icons/*/cursors | grep -v cursors: | sort -u)
-		;;
+(fonts)
+	IFS=$'\n'
+	_values -s , 'monospace font families' $(fc-list :spacing=mono family | sed 's/,/\n/g' | sort -u)
+	unset IFS
+	;;
+(term)
+	_values 'terminfo definitions' $(toe | sed -e 's/\([^\t]*\)\t.*/\1/' -e 's/ //'g  -e '/+/d'| sort -u)
+	;;
+(shape)
+	_values 'cursors shapes' $(ls /usr/share/icons/*/cursors | grep -v cursors: | sort -u)
+	;;
 esac
 
 # vim: set ft=sh ts=8 sts=8 sw=8 noet:
