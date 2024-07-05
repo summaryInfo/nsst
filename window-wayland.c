@@ -684,7 +684,7 @@ static void wayland_reload_cursors(struct window *win) {
 
     if (get_plat(win)->cursor_uri)
         unref_cursor(get_plat(win)->cursor_uri);
-    get_plat(win)->cursor_uri = get_any_cursor(3, (const char *[]){win->cfg.uri_pointer, "hand1", "grab", "pointing_hand"});
+    get_plat(win)->cursor_uri = get_any_cursor(4, (const char *[]){win->cfg.uri_pointer, "hand1", "grab", "pointing_hand"});
 
     if (get_plat(win)->cursor_default)
         unref_cursor(get_plat(win)->cursor_default);
