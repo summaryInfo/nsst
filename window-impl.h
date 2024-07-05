@@ -91,8 +91,8 @@ struct window {
     uint8_t *clipped[clip_MAX];
     uint8_t *clipboard;
 
-    int16_t cw;
-    int16_t ch;
+    struct extent c; /* Grid size */
+    struct extent w; /* Window size */
     int16_t char_width;
     int16_t char_depth;
     int16_t char_height;
@@ -303,24 +303,40 @@ FORCEINLINE
 static inline void describe_borders(struct window *win, struct rect rects[static 4]) {
     int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
     int bw = win->cfg.border.left, bh = win->cfg.border.top;
-    int w = win->cfg.geometry.r.width, h = win->cfg.geometry.r.height;
+    int w = win->w.width, h = win->w.height;
 
     rects[0] = (struct rect) {0, 0, w, bh};
-    rects[1] = (struct rect) {0, bh, bw, win->ch*(ch + cd)};
-    rects[2] = (struct rect) {win->cw*cw + bw, bh, w - win->cw*cw - bw, win->ch*(ch + cd)};
-    rects[3] = (struct rect) {0, win->ch*(ch + cd) + bh, w, h - win->ch*(ch + cd) - bh};
+    rects[1] = (struct rect) {0, bh, bw, win->c.height*(ch + cd)};
+    rects[2] = (struct rect) {win->c.width*cw + bw, bh, w - win->c.width*cw - bw, win->c.height*(ch + cd)};
+    rects[3] = (struct rect) {0, win->c.height*(ch + cd) + bh, w, h - win->c.height*(ch + cd) - bh};
 }
 
 FORCEINLINE
 static inline struct rect window_rect(struct window *win) {
-    return (struct rect) {0, 0, win->cfg.geometry.r.width, win->cfg.geometry.r.height};
+    return (struct rect) {0, 0, win->w.width, win->w.height};
 }
 
 FORCEINLINE
 static inline struct extent win_image_size(struct window *win) {
     return (struct extent) {
-        .width = (win->cw + 1) * win->char_width + win->cfg.border.left + win->cfg.border.right - 1,
-        .height = (win->ch + 1) * (win->char_height + win->char_depth) + win->cfg.border.top + win->cfg.border.bottom - 1,
+        .width = (win->c.width + 1) * win->char_width + win->cfg.border.left + win->cfg.border.right - 1,
+        .height = (win->c.height + 1) * (win->char_height + win->char_depth) + win->cfg.border.top + win->cfg.border.bottom - 1,
+    };
+}
+
+FORCEINLINE
+static inline struct extent win_derive_grid_size(struct window *win, int16_t width, int16_t height) {
+    return (struct extent) {
+        .width = MAX(2, (width - win->cfg.border.left - win->cfg.border.right)/win->char_width),
+        .height = MAX(1, (height - win->cfg.border.top - win->cfg.border.bottom)/(win->char_height + win->char_depth)),
+    };
+}
+
+FORCEINLINE
+static inline struct extent win_derive_window_size(struct window *win, int16_t cw, int16_t ch) {
+    return (struct extent) {
+        .width = cw * win->char_width + win->cfg.border.left + win->cfg.border.right,
+        .height = ch * (win->char_height + win->char_depth) + win->cfg.border.top + win->cfg.border.bottom,
     };
 }
 
@@ -362,7 +378,7 @@ struct platform_vtable {
     void (*update_colors)(struct window *win);
     bool (*window_action)(struct window *win, enum window_action action);
     void (*update_props)(struct window *win);
-    void (*fixup_geometry)(struct window *win);
+    void (*apply_geometry)(struct window *win, struct geometry *geometry);
     void (*set_autorepeat)(struct window *win, bool set);
     void (*select_cursor)(struct window *win, const char *name);
     void (*set_pointer_mode)(struct window *win, enum hide_pointer_mode mode);

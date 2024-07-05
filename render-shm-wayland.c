@@ -24,8 +24,8 @@ extern bool has_fast_damage;
 static bool resize_buffer(struct window *win, struct wl_shm_pool *pool) {
     /* We create buffer width width smaller than the image by (ab-)using stride to avoid extra copies.
      * Who needs wp-viewporter when we have dirty hacks */
-    struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, 0, win->cfg.geometry.r.width, win->cfg.geometry.r.height,
-                                                         STRIDE(get_plat(win)->shm.im.width)*sizeof(color_t), WL_SHM_FORMAT_ARGB8888);
+    ssize_t stride = STRIDE(get_plat(win)->shm.im.width)*sizeof(color_t);
+    struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, 0, win->w.width, win->w.height, stride, WL_SHM_FORMAT_ARGB8888);
     if (!buffer)
         return false;
 

@@ -121,7 +121,7 @@ void window_set_colors(struct window *win, color_t bg, color_t cursor_fg) {
         /* If reverse video is set via option during initialization
          * win->term can be NULL at this point. */
 
-        if (win->term) screen_damage_lines(term_screen(win->term), 0, win->ch);
+        if (win->term) screen_damage_lines(term_screen(win->term), 0, win->c.height);
         queue_force_redraw(win);
     }
 }
@@ -380,7 +380,7 @@ struct extent window_get_grid_position(struct window *win) {
 }
 
 struct extent window_get_grid_size(struct window *win) {
-    return (struct extent) { win->char_width * win->cw, (win->char_height + win->char_depth) * win->ch };
+    return (struct extent) { win->char_width * win->c.width, (win->char_height + win->char_depth) * win->c.height };
 }
 
 struct extent window_get_screen_size(struct window *win) {
@@ -396,7 +396,7 @@ struct border window_get_border(struct window *win) {
 }
 
 struct extent window_get_size(struct window *win) {
-    return (struct extent) { win->cfg.geometry.r.width, win->cfg.geometry.r.height };
+    return (struct extent) { win->w.width, win->w.height };
 }
 
 void window_get_title(struct window *win, enum title_target which, char **name, bool *utf8) {
@@ -455,19 +455,14 @@ static bool handle_blink(void *win_) {
 }
 
 static void reload_window(struct window *win) {
-    int16_t w = win->cfg.geometry.r.width, h = win->cfg.geometry.r.height;
-
     char *cpath = win->cfg.config_path;
     win->cfg.config_path = NULL;
 
     init_instance_config(&win->cfg, cpath, false);
 
-    win->cfg.geometry.r.width = w;
-    win->cfg.geometry.r.height = h;
-
     window_set_alpha(win, win->cfg.alpha);
     term_reload_config(win->term);
-    screen_damage_lines(term_screen(win->term), 0, win->ch);
+    screen_damage_lines(term_screen(win->term), 0, win->c.height);
 
     if (poller_unset(&win->smooth_scrooll_timer))
         dec_read_inhibit(win);
@@ -507,7 +502,7 @@ static void window_set_font(struct window *win, const char * name, int32_t size)
 
     if (reload) {
         pvtbl->reload_font(win, true);
-        screen_damage_lines(term_screen(win->term), 0, win->ch);
+        screen_damage_lines(term_screen(win->term), 0, win->c.height);
         queue_force_redraw(win);
     }
 }
@@ -590,7 +585,7 @@ struct window *create_window(struct instance_config *cfg) {
 
     if (!pvtbl->reload_font(win, false)) goto error;
 
-    win->term = create_term(win, MAX(win->cw, 2), MAX(win->ch, 1));
+    win->term = create_term(win, MAX(win->c.width, 2), MAX(win->c.height, 1));
     if (!win->term) goto error;
 
     win->rcstate = (struct render_cell_state) {
@@ -630,8 +625,8 @@ void free_window(struct window *win) {
 
     pvtbl->free_window(win);
 
-    list_remove(&win->link);
-
+    if (win->link.next)
+        list_remove(&win->link);
     if (win->term)
         free_term(win->term);
     if (win->font_cache)
@@ -675,9 +670,9 @@ bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool
 }
 
 void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height) {
-    ys = MAX(0, MIN(ys, win->ch));
-    yd = MAX(0, MIN(yd, win->ch));
-    height = MIN(height, MIN(win->ch - ys, win->ch - yd));
+    ys = MAX(0, MIN(ys, win->c.height));
+    yd = MAX(0, MIN(yd, win->c.height));
+    height = MIN(height, MIN(win->c.height - ys, win->c.height - yd));
     if (!height) return;
 
     ys = ys*(win->char_height + win->char_depth) + win->cfg.border.top;
@@ -685,16 +680,16 @@ void window_shift(struct window *win, int16_t ys, int16_t yd, int16_t height) {
     height *= win->char_depth + win->char_height;
 
     int16_t xs = win->cfg.border.left;
-    int16_t width = win->cw*win->char_width;
+    int16_t width = win->c.width*win->char_width;
 
     pvtbl->copy(win, (struct rect){xs, yd, width, height}, xs, ys);
 }
 
 void handle_resize(struct window *win, int16_t width, int16_t height, bool artificial) {
-    int16_t new_cw = MAX(2, (width - win->cfg.border.left - win->cfg.border.right)/win->char_width);
-    int16_t new_ch = MAX(1, (height - win->cfg.border.top - win->cfg.border.bottom)/(win->char_height + win->char_depth));
+    struct extent new = win_derive_grid_size(win, width, height);
+    bool grid_changed = new.width != win->c.width || new.height != win->c.height;
 
-    if (new_cw != win->cw || new_ch != win->ch) {
+    if (grid_changed) {
         /* First try to read from tty to empty out input queue since this is input
          * from an application that is not yet aware about the resize. Don't try reading
          * if it's a requested resize, since the application is already aware. */
@@ -706,18 +701,15 @@ void handle_resize(struct window *win, int16_t width, int16_t height, bool artif
 
         /* Notify application and delay window redraw expecting the application to redraw
          * itself to reduce visual artifacts. */
-        term_notify_resize(win->term, width, height, new_cw, new_ch);
+        term_notify_resize(win->term, width, height, new.width, new.height);
         window_delay_redraw(win);
 
-        term_resize(win->term, new_cw, new_ch);
+        term_resize(win->term, new.width, new.height);
         window_delay_redraw_after_read(win);
-
-        // FIXME: Hack! Need to move active size from geometry
-        win->cfg.geometry.r.width = 0;
     }
 
-    if (width != win->cfg.geometry.r.width || height != win->cfg.geometry.r.height)
-        pvtbl->resize(win, width, height, new_cw, new_ch, artificial);
+    if (width != win->w.width || height != win->w.height || grid_changed)
+        pvtbl->resize(win, width, height, new.width, new.height, artificial);
 
 }
 

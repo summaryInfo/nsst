@@ -166,17 +166,17 @@ void x11_xrender_recolor_border(struct window *win) {
 }
 
 void x11_xrender_resize(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw, int16_t new_ch, bool artificial) {
-    win->cfg.geometry.r.width = new_w;
-    win->cfg.geometry.r.height = new_h;
+    win->w.width = new_w;
+    win->w.height = new_h;
 
-    if (win->cw == new_cw && win->ch == new_ch) return;
+    if (win->c.width == new_cw && win->c.height == new_ch) return;
     (void)artificial;
 
-    int16_t delta_x = new_cw - win->cw;
-    int16_t delta_y = new_ch - win->ch;
+    int16_t delta_x = new_cw - win->c.width;
+    int16_t delta_y = new_ch - win->c.height;
 
-    win->cw = new_cw;
-    win->ch = new_ch;
+    win->c.width = new_cw;
+    win->c.height = new_ch;
 
     struct extent bx = win_image_size(win);
 
@@ -238,10 +238,10 @@ bool x11_xrender_reload_font(struct window *win, bool need_free) {
     }
 
     if (need_free) {
-        handle_resize(win, win->cfg.geometry.r.width, win->cfg.geometry.r.height, true);
+        handle_resize(win, win->w.width, win->w.height, true);
     } else {
         /* We need to resize window here if it's size is specified in chracters */
-        x11_fixup_geometry(win);
+        x11_apply_geometry(win, &win->cfg.geometry);
         struct extent bx = win_image_size(win);
 
         get_plat(win)->pid1 = xcb_generate_id(con);
@@ -250,7 +250,7 @@ bool x11_xrender_reload_font(struct window *win, bool need_free) {
         c = xcb_create_pixmap_checked(con, TRUE_COLOR_ALPHA_DEPTH, get_plat(win)->pid1, get_plat(win)->wid, bx.width, bx.height );
         if (check_void_cookie(c)) {
             warn("Can't create pixmap");
-            return 0;
+            return false;
         }
 
         uint32_t mask3 = XCB_RENDER_CP_GRAPHICS_EXPOSURE | XCB_RENDER_CP_POLY_EDGE | XCB_RENDER_CP_POLY_MODE;
@@ -262,7 +262,7 @@ bool x11_xrender_reload_font(struct window *win, bool need_free) {
         c = xcb_render_create_picture_checked(con, get_plat(win)->pic1, get_plat(win)->pid1, rctx.pfargb, mask3, values3);
         if (check_void_cookie(c)) {
             warn("Can't create XRender picture");
-            return 0;
+            return false;
         }
 
         do_draw_rects(win, &(struct rect) { 0, 0, bx.width, bx.height }, 1, win->bg_premul);
@@ -272,7 +272,7 @@ bool x11_xrender_reload_font(struct window *win, bool need_free) {
         if (check_void_cookie(c)) {
             warn("Can't create pixmap");
             free_window(win);
-            return NULL;
+            return false;
         }
 
         get_plat(win)->pen = xcb_generate_id(con);
@@ -281,16 +281,16 @@ bool x11_xrender_reload_font(struct window *win, bool need_free) {
         if (check_void_cookie(c)) {
             warn("Can't create picture");
             free_window(win);
-            return NULL;
+            return false;
         }
         xcb_free_pixmap(con, pid);
     }
 
     x11_update_window_props(win);
 
-    win->redraw_borders = 1;
+    win->redraw_borders = true;
 
-    return 1;
+    return true;
 }
 
 void x11_xrender_free(struct window *win) {
@@ -568,14 +568,14 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
 
     struct screen *scr = term_screen(win->term);
     struct line_span span = screen_view(scr);
-    for (ssize_t k = 0; k < win->ch; k++, screen_span_shift(scr, &span)) {
+    for (ssize_t k = 0; k < win->c.height; k++, screen_span_shift(scr, &span)) {
         screen_span_width(scr, &span);
         bool next_dirty = false, first_in_line = true;
 
         struct mouse_selection_iterator sel_it = selection_begin_iteration(term_get_sstate(win->term), &span);
 
-        if (win->cw > span.width && span.line->force_damage) {
-            bool selected = is_selected_prev(&sel_it, &span, win->cw - 1);
+        if (win->c.width > span.width && span.line->force_damage) {
+            bool selected = is_selected_prev(&sel_it, &span, win->c.width - 1);
             struct attr attr = *attr_pad(span.line);
             color_t bg = describe_bg(&attr, &win->cfg, &win->rcstate, selected);
 
@@ -583,7 +583,7 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                 .x = win->cfg.border.left + span.width * win->char_width,
                 .y = win->cfg.border.top + k * (win->char_height + win->char_depth),
                 .color = bg,
-                .width = (win->cw - span.width) * win->char_width,
+                .width = (win->c.width - span.width) * win->char_width,
                 .height = win->char_height + win->char_depth,
             });
 
@@ -602,7 +602,7 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
             *cursor &= dirty;
         }
 
-        for (int16_t i = MIN(win->cw, span.width) - 1; i >= 0; i--) {
+        for (int16_t i = MIN(win->c.width, span.width) - 1; i >= 0; i--) {
             struct cell *pcell = view_cell(&span, i);
             struct cell cel = *pcell;
             pcell->drawn = true;

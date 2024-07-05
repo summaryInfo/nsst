@@ -29,9 +29,9 @@ static void resize_bounds(struct window *win, bool h_changed) {
     if (get_shm(win)->bounds) {
         size_t j = 0;
         struct rect *r_dst = get_shm(win)->bounds;
-        if (h_changed) r_dst = xalloc(sizeof(struct rect) * 2 * win->ch);
+        if (h_changed) r_dst = xalloc(sizeof(struct rect) * 2 * win->c.height);
         for (size_t i = 0; i < get_shm(win)->boundc; i++)
-            if (intersect_with(&get_shm(win)->bounds[i], &(struct rect){0, 0, win->cw, win->ch}))
+            if (intersect_with(&get_shm(win)->bounds[i], &(struct rect){0, 0, win->c.width, win->c.height}))
                 r_dst[j++] = get_shm(win)->bounds[i];
         get_shm(win)->boundc = j;
         if (h_changed) {
@@ -40,7 +40,7 @@ static void resize_bounds(struct window *win, bool h_changed) {
         }
     } else {
         get_shm(win)->boundc = 0;
-        get_shm(win)->bounds = xalloc(sizeof(struct rect) * 2 * win->ch);
+        get_shm(win)->bounds = xalloc(sizeof(struct rect) * 2 * win->c.height);
     }
 }
 
@@ -66,28 +66,28 @@ static void optimize_bounds(struct rect *bounds, size_t *boundc, bool fine_grain
 
 bool shm_reload_font(struct window *win, bool need_free) {
     window_find_shared_font(win, need_free, true);
-    win->redraw_borders = 1;
+    win->redraw_borders = true;
 
-    int w = win->cfg.geometry.r.width, h = win->cfg.geometry.r.height;
+    int w = win->w.width, h = win->w.height;
     if (need_free) {
         handle_resize(win, w, h, true);
 
         int cw = win->char_width, ch = win->char_height, cd = win->char_depth;
         int bw = win->cfg.border.left, bh = win->cfg.border.top;
-        image_draw_rect(get_shm(win)->im, (struct rect) {win->cw*cw + bw, bh, w - win->cw*cw - bw, win->ch*(ch + cd)}, win->bg_premul);
-        image_draw_rect(get_shm(win)->im, (struct rect) {0, win->ch*(ch + cd) + bh, w, h - win->ch*(ch + cd) - bh}, win->bg_premul);
+        image_draw_rect(get_shm(win)->im, (struct rect) {win->c.width*cw + bw, bh, w - win->c.width*cw - bw, win->c.height*(ch + cd)}, win->bg_premul);
+        image_draw_rect(get_shm(win)->im, (struct rect) {0, win->c.height*(ch + cd) + bh, w, h - win->c.height*(ch + cd) - bh}, win->bg_premul);
     } else {
         /* We need to resize window here if
          * it's size is specified in chracters */
-        pvtbl->fixup_geometry(win);
+        pvtbl->apply_geometry(win, &win->cfg.geometry);
         struct extent bx = win_image_size(win);
 
-        resize_bounds(win, 1);
+        resize_bounds(win, true);
 
         pvtbl->shm_create_image(win, bx.width, bx.height);
         if (!get_shm(win)->im.data) {
             warn("Can't allocate image");
-            return 0;
+            return false;
         }
 
         image_draw_rect(get_shm(win)->im, (struct rect){0, 0, get_shm(win)->im.width, get_shm(win)->im.height}, win->bg_premul);
@@ -95,7 +95,7 @@ bool shm_reload_font(struct window *win, bool need_free) {
 
     pvtbl->update_props(win);
 
-    return 1;
+    return true;
 }
 
 void shm_recolor_border(struct window *win) {
@@ -121,13 +121,13 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
 
     struct screen *scr = term_screen(win->term);
     struct line_span span = screen_view(scr);
-    for (ssize_t k = 0; k < win->ch; k++, screen_span_shift(scr, &span)) {
+    for (ssize_t k = 0; k < win->c.height; k++, screen_span_shift(scr, &span)) {
         screen_span_width(scr, &span);
         bool next_dirty = false;
         struct rect l_bound = {-1, k, 0, 1};
 
         struct mouse_selection_iterator sel_it = selection_begin_iteration(term_get_sstate(win->term), &span);
-        bool last_selected = is_selected_prev(&sel_it, &span, win->cw - 1);
+        bool last_selected = is_selected_prev(&sel_it, &span, win->c.width - 1);
 
         if (k == cur_y) {
             beyond_eol = cur_x >= span.width;
@@ -139,7 +139,7 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
             cursor_visible &= dirty;
         }
 
-        for (int16_t i = MIN(win->cw, span.width) - 1; i >= 0; i--) {
+        for (int16_t i = MIN(win->c.width, span.width) - 1; i >= 0; i--) {
             struct cell *pcell = view_cell(&span, i);
             struct cell cel = *pcell;
             pcell->drawn = true;
@@ -209,22 +209,22 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
             next_dirty = dirty;
         }
 
-        if (l_bound.x >= 0 || span.line->force_damage || (scrolled && win->cw > span.width)) {
-            if (win->cw > span.width) {
+        if (l_bound.x >= 0 || span.line->force_damage || (scrolled && win->c.width > span.width)) {
+            if (win->c.width > span.width) {
                 struct attr attr = *attr_pad(span.line);
                 color_t bg = describe_bg(&attr, &win->cfg, &win->rcstate, last_selected);
 
                 image_draw_rect(get_shm(win)->im, (struct rect){
                     .x = bw + span.width * win->char_width,
                     .y = bh + k * (win->char_height + win->char_depth),
-                    .width = (win->cw - span.width) * win->char_width,
+                    .width = (win->c.width - span.width) * win->char_width,
                     .height = win->char_height + win->char_depth
                 }, bg);
-                l_bound.width = win->cw - 1;
+                l_bound.width = win->c.width - 1;
                 if (l_bound.x < 0) l_bound.x = span.width;
             }
 
-            l_bound.width = MIN(l_bound.width - l_bound.x + 1, win->cw);
+            l_bound.width = MIN(l_bound.width - l_bound.x + 1, win->c.width);
             get_shm(win)->bounds[get_shm(win)->boundc++] = l_bound;
         }
 
@@ -286,29 +286,29 @@ void shm_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy) {
     dst.width = (dst.width + dst.x + w - 1) / w;
     dst.width -= dst.x /= w;
 
-    if (get_shm(win)->boundc + 1 > (size_t)win->ch)
+    if (get_shm(win)->boundc + 1 > (size_t)win->c.height)
         optimize_bounds(get_shm(win)->bounds, &get_shm(win)->boundc, 0);
     get_shm(win)->bounds[get_shm(win)->boundc++] = dst;
 }
 
 void shm_resize(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw, int16_t new_ch, bool artificial) {
-    int16_t old_w = win->cfg.geometry.r.width;
-    int16_t old_h = win->cfg.geometry.r.height;
+    int16_t old_w = win->w.width;
+    int16_t old_h = win->w.height;
 
-    win->cfg.geometry.r.width = new_w;
-    win->cfg.geometry.r.height = new_h;
+    win->w.width = new_w;
+    win->w.height = new_h;
 
-    if (win->cw == new_cw && win->ch == new_ch) {
+    if (win->c.width == new_cw && win->c.height == new_ch) {
         if (artificial && pvtbl->resize_exact)
             pvtbl->resize_exact(win, new_w, new_h, old_w, old_h);
         return;
     }
 
-    int16_t delta_x = new_cw - win->cw;
-    int16_t delta_y = new_ch - win->ch;
+    int16_t delta_x = new_cw - win->c.width;
+    int16_t delta_y = new_ch - win->c.height;
 
-    win->cw = new_cw;
-    win->ch = new_ch;
+    win->c.width = new_cw;
+    win->c.height = new_ch;
 
     struct extent sz = win_image_size(win);
     int16_t common_w = MIN(sz.width, sz.width  - delta_x * win->char_width);
@@ -320,8 +320,8 @@ void shm_resize(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw
 
     resize_bounds(win, delta_y);
 
-    int16_t xw = win->cw * win->char_width + win->cfg.border.left;
-    int16_t xh = win->ch * (win->char_height + win->char_depth) + win->cfg.border.top;
+    int16_t xw = win->c.width * win->char_width + win->cfg.border.left;
+    int16_t xh = win->c.height * (win->char_height + win->char_depth) + win->cfg.border.top;
 
     if (delta_y > 0) {
         image_draw_rect(get_shm(win)->im, (struct rect) { 0, common_h, common_w, sz.height - common_h }, win->bg_premul);

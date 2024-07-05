@@ -448,23 +448,17 @@ void wayland_update_window_props(struct window *win) {
     wl_surface_commit(get_plat(win)->surface);
 }
 
-void wayland_fixup_geometry(struct window *win) {
-    win->cfg.geometry.r.x = 0;
-    win->cfg.geometry.r.y = 0;
-    win->cfg.geometry.stick_to_bottom = false;
-    win->cfg.geometry.stick_to_right = false;
-
-    if (win->cfg.geometry.char_geometry) {
-        int16_t cw = MAX(win->cfg.geometry.r.width, 2);
-        int16_t ch = MAX(win->cfg.geometry.r.height, 1);
-        win->cfg.geometry.r.width = win->char_width * cw + win->cfg.border.left + win->cfg.border.right;
-        win->cfg.geometry.r.height = (win->char_height + win->char_depth) * ch + win->cfg.border.top + win->cfg.border.bottom;
-        win->cfg.geometry.char_geometry = false;
-        win->cw = cw;
-        win->ch = ch;
+void wayland_apply_geometry(struct window *win, struct geometry *geometry) {
+    if (geometry->char_geometry) {
+        int16_t cw = MAX(geometry->r.width, 2);
+        int16_t ch = MAX(geometry->r.height, 1);
+        win->w = win_derive_window_size(win, cw, ch);
+        win->c.width = cw;
+        win->c.height = ch;
     } else {
-        win->cw = MAX(2, (win->cfg.geometry.r.width - win->cfg.border.left - win->cfg.border.right) / win->char_width);
-        win->ch = MAX(1, (win->cfg.geometry.r.height - win->cfg.border.top - win->cfg.border.bottom) / (win->char_height + win->char_depth));
+        win->w.width = geometry->r.width;
+        win->w.height = geometry->r.height;
+        win->c = win_derive_grid_size(win, win->w.width, win->w.height);
     }
 }
 
@@ -536,8 +530,8 @@ void handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, u
 
     xdg_surface_ack_configure(xdg_surface, serial);
 
-    uint32_t width = get_plat(win)->pending_configure.width ? get_plat(win)->pending_configure.width : win->cfg.geometry.r.width;
-    uint32_t height = get_plat(win)->pending_configure.height ? get_plat(win)->pending_configure.height : win->cfg.geometry.r.height;
+    uint32_t width = get_plat(win)->pending_configure.width ? get_plat(win)->pending_configure.width : win->w.width;
+    uint32_t height = get_plat(win)->pending_configure.height ? get_plat(win)->pending_configure.height : win->w.height;
     bool exact = get_plat(win)->is_maximized || get_plat(win)->is_fullscreen || get_plat(win)->is_tiled || win->cfg.smooth_resize;
 
     handle_resize(win, width, height, exact);
@@ -1673,9 +1667,9 @@ static bool try_handle_csd_button(struct window *win, struct seat *seat, int32_t
     if (!pressed) return false;
 
     bool left = x < win->cfg.border.left;
-    bool right = x > win->cw*win->char_width + win->cfg.border.left;
+    bool right = x > win->c.width*win->char_width + win->cfg.border.left;
     bool top = y < win->cfg.border.top;
-    bool bottom = y > win->ch*(win->char_height + win->char_depth) + win->cfg.border.top;
+    bool bottom = y > win->c.height*(win->char_height + win->char_depth) + win->cfg.border.top;
     if (!left && !right && !top && !bottom) return false;
 
     if (code == 1) {
@@ -1731,9 +1725,9 @@ static bool try_handle_csd_axis(struct window *win, struct seat *seat, int step,
 static void update_cursor(struct window *win, int32_t x, int32_t y) {
     struct cursor *new = NULL;
     bool left = x < win->cfg.border.left;
-    bool right = x > win->cw*win->char_width + win->cfg.border.left;
+    bool right = x > win->c.width*win->char_width + win->cfg.border.left;
     bool top = y < win->cfg.border.top;
-    bool bottom = y > win->ch*(win->char_height + win->char_depth) + win->cfg.border.top;
+    bool bottom = y > win->c.height*(win->char_height + win->char_depth) + win->cfg.border.top;
 
     if ((left || right || top || bottom) && !get_plat(win)->use_ssd) {
         new = get_plat(win)->cursor_resize;
@@ -2331,7 +2325,7 @@ static struct platform_vtable wayland_vtable = {
     .update_colors = wayland_update_colors,
     .window_action = wayland_window_action,
     .update_props = wayland_update_window_props,
-    .fixup_geometry = wayland_fixup_geometry,
+    .apply_geometry = wayland_apply_geometry,
     .set_autorepeat = wayland_set_autorepeat,
     .select_cursor = wayland_select_cursor,
     .set_pointer_mode = wayland_set_pointer_mode,

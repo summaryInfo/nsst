@@ -201,7 +201,7 @@ static void x11_update_colors(struct window *win) {
 }
 
 static bool x11_resize_window(struct window *win, int16_t width, int16_t height) {
-    if (win->cfg.geometry.r.height != height || win->cfg.geometry.r.width != width) {
+    if (win->w.height != height || win->w.width != width) {
         uint32_t vals[] = {width, height};
         xcb_void_cookie_t c = xcb_configure_window_checked(con, get_plat(win)->wid,
                 XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
@@ -337,8 +337,8 @@ static void x11_get_pointer(struct window *win, struct extent *p, int32_t *pmask
     xcb_query_pointer_cookie_t c = xcb_query_pointer(con, get_plat(win)->wid);
     xcb_query_pointer_reply_t *qre = xcb_query_pointer_reply(con, c, NULL);
     if (qre) {
-        p->width = MIN(MAX(0, qre->win_x), win->cfg.geometry.r.width);
-        p->height = MIN(MAX(0, qre->win_y), win->cfg.geometry.r.height);
+        p->width = MIN(MAX(0, qre->win_x), win->w.width);
+        p->height = MIN(MAX(0, qre->win_y), win->w.height);
         *pmask = qre->mask;
         free(qre);
     }
@@ -618,10 +618,10 @@ void x11_update_window_props(struct window *win) {
     struct normal_hints nhints = {
         .flags = HINT_PMINSIZE | HINT_PBASESIZE,
         .x = win->cfg.geometry.r.x, .y = win->cfg.geometry.r.y,
-        .width = win->cfg.geometry.r.width, .height = win->cfg.geometry.r.height,
+        .width = win->w.width, .height = win->w.height,
         .min_width = win->cfg.border.left + win->cfg.border.right + 2 * win->char_width,
         .min_height = win->cfg.border.top + win->cfg.border.bottom + win->char_depth + win->char_height,
-        .base_width = win->cfg.geometry.r.width, .base_height = win->cfg.geometry.r.height,
+        .base_width = win->w.width, .base_height = win->w.height,
         .gravity = get_win_gravity_from_config(win->cfg.geometry.stick_to_right, win->cfg.geometry.stick_to_bottom),
     };
 
@@ -657,31 +657,30 @@ void x11_update_window_props(struct window *win) {
             XCB_ATOM_WM_HINTS, 8*sizeof(uint32_t), sizeof(wmhints)/sizeof(uint32_t), &wmhints);
 }
 
-static void x11_move_resize(struct window *win, struct rect r) {
-    uint32_t vals[] = { r.x, r.y, r.width, r.height };
-    xcb_configure_window(con, get_plat(win)->wid,
-        XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
-        XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
+static struct extent apply_gravity(struct window *win, struct geometry *geometry) {
+    struct extent ssize = x11_get_screen_size(win);
+    struct extent position = { geometry->r.x, geometry->r.y };
+    if (geometry->stick_to_right)
+        position.width += ssize.width - win->w.width - 2;
+    if (geometry->stick_to_bottom)
+        position.height += ssize.height - win->w.height - 2;
+    return position;
 }
 
-void x11_fixup_geometry(struct window *win) {
-    if (win->cfg.geometry.char_geometry) {
-        win->cw = MAX(win->cfg.geometry.r.width, 2);
-        win->ch = MAX(win->cfg.geometry.r.height, 1);
-        win->cfg.geometry.r.width = win->char_width * win->cw + win->cfg.border.left + win->cfg.border.right;
-        win->cfg.geometry.r.height = (win->char_height + win->char_depth) * win->ch + win->cfg.border.top + win->cfg.border.bottom;
-        win->cfg.geometry.char_geometry = false;
-
-        struct extent ssize = x11_get_screen_size(win);
-        if (win->cfg.geometry.stick_to_right)
-            win->cfg.geometry.r.x += ssize.width - win->cfg.geometry.r.width - 2;
-        if (win->cfg.geometry.stick_to_bottom)
-            win->cfg.geometry.r.y += ssize.height - win->cfg.geometry.r.height - 2;
-
-        x11_move_resize(win, win->cfg.geometry.r);
+void x11_apply_geometry(struct window *win, struct geometry *geometry) {
+    if (geometry->char_geometry) {
+        win->c.width = MAX(geometry->r.width, 2);
+        win->c.height = MAX(geometry->r.height, 1);
+        win->w = win_derive_window_size(win, win->c.width, win->c.height);
+        struct extent position = apply_gravity(win, geometry);
+        uint32_t vals[] = { position.width, position.height, win->w.width, win->w.height };
+        xcb_configure_window(con, get_plat(win)->wid,
+            XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
+            XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, vals);
     } else {
-        win->cw = MAX(2, (win->cfg.geometry.r.width - win->cfg.border.left - win->cfg.border.right) / win->char_width);
-        win->ch = MAX(1, (win->cfg.geometry.r.height - win->cfg.border.top - win->cfg.border.bottom) / (win->char_height + win->char_depth));
+        win->w.width = geometry->r.width;
+        win->w.height = geometry->r.height;
+        win->c = win_derive_grid_size(win, win->w.width, win->w.height);
     }
 }
 
@@ -711,21 +710,17 @@ static bool x11_init_window(struct window *win) {
     uint32_t values1[5] = { win->bg_premul, win->bg_premul, XCB_GRAVITY_NORTH_WEST, get_plat(win)->ev_mask, ctx.mid };
 
     /* Adjust geometry. It will be incorrect if specified in characters. */
-    struct rect r;
+    struct extent position = {0};
     if (!win->cfg.geometry.char_geometry) {
-        if (win->cfg.geometry.stick_to_right)
-            win->cfg.geometry.r.x += ctx.screen->width_in_pixels - win->cfg.geometry.r.width - 2;
-        if (win->cfg.geometry.stick_to_bottom)
-            win->cfg.geometry.r.y += ctx.screen->height_in_pixels - win->cfg.geometry.r.height - 2;
-        r = win->cfg.geometry.r;
-    } else {
-        /* Dummy size */
-        r = (struct rect) {0, 0, 640, 480};
-    }
+        position = apply_gravity(win, &win->cfg.geometry);
+        win->w.width =  win->cfg.geometry.r.width;
+        win->w.height =  win->cfg.geometry.r.height;
+    } else /* Dummy size */
+        win->w.width = 640, win->w.height = 480;
 
     get_plat(win)->wid = xcb_generate_id(con);
     c = xcb_create_window_checked(con, TRUE_COLOR_ALPHA_DEPTH, get_plat(win)->wid, ctx.screen->root,
-                                  r.x, r.y, r.width, r.height, 0,
+                                  position.width, position.height, win->w.width, win->w.height, 0,
                                   XCB_WINDOW_CLASS_INPUT_OUTPUT,
                                   ctx.vis->visual_id, mask1, values1);
     if (check_void_cookie(c)) return false;
@@ -910,7 +905,7 @@ static bool do_handle_events(bool can_read) {
                         ev->window, ev->x, ev->y, ev->width, ev->height, ev->border_width,
                         ev->override_redirect, ev->above_sibling, ev->event);
             }
-            if (ev->width != win->cfg.geometry.r.width || ev->height != win->cfg.geometry.r.height)
+            if (ev->width != win->w.width || ev->height != win->w.height)
                 handle_resize(win, ev->width, ev->height, false);
             break;
         }
@@ -1168,7 +1163,7 @@ static struct platform_vtable x11_vtable = {
     .update_props = x11_update_window_props,
     .select_cursor = x11_select_cursor,
     .set_pointer_mode = x11_set_pointer_mode,
-    .fixup_geometry = x11_fixup_geometry,
+    .apply_geometry = x11_apply_geometry,
     .reload_cursors = x11_reload_cursors,
     .free = x11_free,
 };
