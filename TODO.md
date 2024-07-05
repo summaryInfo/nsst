@@ -7,7 +7,6 @@ Roadmap
 
 _NOTE: These plans can change any time_
 
-
 * Wayland
   * Explicitly specify required versions of protocols
   * Support optional rendering of titlebar
@@ -16,24 +15,20 @@ _NOTE: These plans can change any time_
      * Double click to change state
      * Recolor on focus
   * Dynamic output properties tracking:
+      * Allow specifying sizes in pt/mm/etc
       * Dynamically change window DPI/subpixel mode depending on the output
       * Support HiDPI. Scale surface content
       * Fractional scale
-  * Support server side cursors
-  * Support xdg-activation-v1
 
 * Packaging
   * Add bash shell integration
   * Expand documentation
 
-* Refactor
-  * Move current window size from win->cfg.geometry
-  * Add helper to calulate cw/ch
-  * Allow specifying sizes in pt/mm/etc
-    * This is a prerequisite for automatic scaling on wayland
-  * Add command patterns like "xdg-open {url}" for command spawning
-
 ### Until 2.7 (or later)
+
+* Wayland
+  * Support server side cursors
+  * Support xdg-activation-v1
 
 * Refactor screen arrays
   * Lazy resizing?
@@ -45,14 +40,14 @@ _NOTE: These plans can change any time_
 
 * (Maybe) show helper when hovering over URL.
 
+* Add command patterns like "xdg-open {url}" for command spawning
+
 * Support named windows and allow changing options for a specific window using nsstc
 
 * IME support
 
 * OSC 50 ; Pt ST -- Set font
 * `CSI ? 35 l` / `CSI ? 35 h` -- font shifting functions
-
-* Pointer (for X11)
 
 ## Planned/possible features
 
