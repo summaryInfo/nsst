@@ -134,7 +134,7 @@ Default keybindings:
 Copy URI key copies highlighted URI address. Highlighted URI is underlined by default.
 For `key-jump-next-cmd`/`key-jump-prev-cmd` see shell integration section.
 
-### Mouse support
+## Mouse support
 
 If you are not using an application that enables mouse reporting, you can use built-in mouse interactions.
 If application enables mouse reporting, built-in interactions can be forces with mouse pressing Ctrl+Shift (Can be configured with `force-mouse-mod` option).
@@ -146,7 +146,18 @@ Built-in mouse interactions:
 * Select rectangular area with Alt+left click (double click will snap to words).
 * Select whole command output with Alt+triple click (requires shell integration).
 
-### Shell integration
+### Wayland CSD
+
+This implementation does not have first class support of CSD decorations, trying to rely on SSD instead.
+Despite that terminal provides some mouse controls when SSD are not available:
+
+* Use **Right** mouse button on the border to resize
+* Use **Left** mouse button on the border to move
+* Use **Middle** mouse button on the **top** border to close the window
+* Scroll **up** on the top border to set maximized or fullscreen (in order)
+* Scroll **down** on the top border to set maximized, normal or minimized (in order)
+
+## Shell integration
 
 The most basic way to enable it is to put `\033]133;A\a` at the beginning of your shell prompt and `\e]133;B\a` at the end to enable jumping between commands with `T-F`/`T-B`.
 To make T-N open window in current directory make sure to wrap `cd` to output `\033]7;$PWD\a` after directory change to notify the terminal.
@@ -160,17 +171,6 @@ to stop working. You need to fix that depending on the theme. E.g. for powerleve
 `.p10k.zsh` file, instead of using provided integration script.
 
 This repository also includes *zsh*/*yash*/*fish*/*bash* completion scripts in `completion` directory. They are installed by default into appropriate paths.
-
-### Wayland CSD
-
-This implementation does not have first class support of CSD decorations, trying to rely on SSD instead.
-Despite that terminal provides some mouse controls when SSD are not available:
-
-* Use **Right** mouse button on the border to resize
-* Use **Left** mouse button on the border to move
-* Use **Middle** mouse button on the **top** border to close the window
-* Scroll **up** on the top border to set maximized or fullscreen (in order)
-* Scroll **down** on the top border to set maximized, normal or minimized (in order)
 
 ## Dependencies
 ### Build
@@ -220,7 +220,7 @@ Despite that terminal provides some mouse controls when SSD are not available:
     # For Wayland
     apt install libwayland-dev wayland-protocols
 
-## How to get it
+## Building and installing
 
 You need all dependencies installed before getting started.
 
