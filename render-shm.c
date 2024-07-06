@@ -295,8 +295,10 @@ void shm_resize(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw
     int16_t old_w = win->w.width;
     int16_t old_h = win->w.height;
 
-    win->w.width = new_w;
-    win->w.height = new_h;
+    if (!artificial)
+        win->w = win_derive_window_size(win, new_cw, new_ch);
+    else
+        win->w = (struct extent) { new_w, new_h };
 
     if (win->c.width == new_cw && win->c.height == new_ch) {
         if (artificial && pvtbl->resize_exact)
