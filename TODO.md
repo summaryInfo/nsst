@@ -9,66 +9,63 @@ _NOTE: These plans can change any time_
 
 * Wayland
   * Explicitly specify required versions of protocols
-  * Support optional rendering of titlebar
-     * Title text
-     * Close, Maximize, Minimize buttons
-     * Double click to change state
-     * Recolor on focus
-  * Dynamic output properties tracking:
-      * Allow specifying sizes in pt/mm/etc
-      * Dynamically change window DPI/subpixel mode depending on the output
-      * Support HiDPI. Scale surface content
-      * Fractional scale
 
 * Packaging
-  * Add bash shell integration
   * Expand documentation
 
-### Until 2.7 (or later)
+## Planned/possible features
 
-* Wayland
-  * Support server side cursors
-  * Support xdg-activation-v1
+### Wayland
 
-* Refactor screen arrays
-  * Lazy resizing?
+* Support optional rendering of title bar
+   * Title text
+   * Close, Maximize, Minimize buttons
+   * Double click to change state
+   * Recolor on focus
 
-* Make config format more sophisticated. Support arrays and quoted strings.
+* Dynamic output properties tracking:
+    * Allow specifying sizes in pt/mm/etc
+    * Dynamically change window DPI/sub-pixel mode depending on the output
+    * Support HiDPI. Scale surface content
+    * Fractional scale
+
+* Support server side cursors
+* Support xdg-activation-v1
+
+### General
+
+* Add bash shell integration
+
+### Internal
+
+* Some alternative to `XParseColor()`
+
+  This is really hard since `XParseColor()` has some weird built-in color-space conversions
+  and implementing this in the way matching *XTerm* behavior means implementing whole
+  colorspace and colors handling from *xlib*.
 
 * Re-implement mouse selection via line_handle's to (mostly) remove special case.
   * "Mostly", because we still would need to notify mouse code upon relocation.
 
-* (Maybe) show helper when hovering over URL.
+* Refactor screen arrays
+  * Lazy resizing?
 
-* Add command patterns like "xdg-open {url}" for command spawning
-
-* Support named windows and allow changing options for a specific window using nsstc
-
-* IME support
-
-* OSC 50 ; Pt ST -- Set font
-* `CSI ? 35 l` / `CSI ? 35 h` -- font shifting functions
-
-## Planned/possible features
-
-### General
+### Configuration
 
 * Add `always` value to some options to prevent overriding
 
   User might want to keep some settings in the certain way, not allowing an application
   to override it.
 
-* Do something with multi-line shell prompt eating history lines
+* Make config format more sophisticated. Support arrays and quoted strings.
 
-  This can possibly be done using shell integration.
+* Add command patterns like "xdg-open {url}" for command spawning
 
-* Some alternative to `XParseColor()`
-
-  This is really hard since `XParseColor()` has some weird built-in colorspace conversions
-  and implementing this in the way matching *XTerm* behavior means implementing whole
-  colorspace and colors handling from *xlib*.
+* Support named windows and allow changing options for a specific window using nsstc
 
 ### Rendering
+
+* (Maybe) show helper when hovering over URL.
 
 * Font rendering
 
@@ -81,11 +78,13 @@ _NOTE: These plans can change any time_
       parse fonts to determine relative glyphs positions and render glyphs
       one atop another to create new glyph and associate it with private rune in glyph cache.
 
-* MIT-SHM (software)
+* Software rendering
 
   * Threaded rendering?
 
 ### Input
+
+* IME support
 
 * Implement terminal-wg protocol proposed in [!5](https://gitlab.freedesktop.org/terminal-wg/specifications/-/merge_requests/5) (or not to?..)
 
@@ -97,10 +96,6 @@ _NOTE: These plans can change any time_
    * Option to report modifiers presses as `\e[0;<mods>u` or `\e[0;<mods>;1u`
    * Report `Super` (`mod4`) and `Hyper` (`mod5`) modifiers (as 16/32)
 
-### Shell integration
-
-* Mouse interaction with shell line editing (?)
-
 ### VTxxx/XTerm compatibility and emulation
 
 * Encode NRCSs for printer autoprint mode
@@ -110,6 +105,11 @@ _NOTE: These plans can change any time_
 * VT220
 
   * `DCS Pf ; Pc ; Pe ; Pw ; Ps ; Pt; Ph ; Px f Pt ST` -- **DECDLD**
+
+* Fonts
+
+  * OSC 50 ; Pt ST -- Set font
+  * `CSI ? 35 l` / `CSI ? 35 h` -- font shifting functions
 
 * SIXEL
 
@@ -136,7 +136,8 @@ _NOTE: These plans can change any time_
 
   * `CSI 4:4 m` -- dotted underline
   * `CSI 4:5 m` -- dashed underline
-  * `CSI ? 1039 l` / `CSI ? 1039 h` -- Alt sends escape (There's no plans to differentiate `Alt` and `Meta`)
+  * `CSI ? 1039 l` / `CSI ? 1039 h` -- Alt sends escape
+    * (There are no plans to differentiate `Alt` and `Meta`)
   * `CSI ? 14 l` / `CSI ? 14 h` -- Cursor blinking XORing
   * `CSI Pm # p, CSI Pm # {` -- **XTPUSHSGR**
   * `CSI # q, CSI # }` -- **XTPOPSGR**
