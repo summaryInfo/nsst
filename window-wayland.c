@@ -276,7 +276,7 @@ static inline struct cursor *ref_cursor(struct cursor *csr) {
     return csr;
 }
 
-static struct cursor *get_cursor(const char *name) {
+static struct cursor *get_cursor(const char *name, bool complain) {
     if (!ctx.cursor_theme) return NULL;
 
     struct cursor dummy = {
@@ -293,8 +293,12 @@ static struct cursor *get_cursor(const char *name) {
 
     struct wl_cursor *cursor = wl_cursor_theme_get_cursor(ctx.cursor_theme, name);
     if (!cursor) {
-        if (name && *name)
-            warn("Unable to load cursor '%s'", name);
+        if (name && *name) {
+            if (complain)
+                warn("Unable to load cursor '%s'", name);
+            else if (gconfig.trace_misc)
+                info("Unable to load cursor '%s'", name);
+        }
         return NULL;
     }
 
@@ -331,10 +335,10 @@ static struct cursor *get_cursor(const char *name) {
 static inline struct cursor *get_any_cursor(ssize_t count, const char **names) {
     struct cursor *csr = NULL;
     for (ssize_t i = 0; i < count; i++)
-        if (names[i] && (csr = get_cursor(names[i]))) break;
+        if (names[i] && (csr = get_cursor(names[i], i == 0))) break;
 
     if (!csr) {
-        csr = get_cursor("default");
+        csr = get_cursor("default", false);
         assert(csr);
     }
 
@@ -400,7 +404,7 @@ static void wayland_enable_mouse_events(struct window *win, bool enabled) {
 }
 
 static void wayland_select_cursor(struct window *win, const char *name) {
-    struct cursor *csr = get_cursor(name);
+    struct cursor *csr = get_cursor(name, true);
     unref_cursor(get_plat(win)->cursor_user);
     get_plat(win)->cursor_user = csr;
 
