@@ -941,6 +941,14 @@ static bool do_handle_events(bool can_read) {
                 info("Event: event=%s win=0x%x", ev->response_type == XCB_FOCUS_IN ?
                         "FocusIn" : "FocusOut", ev->event);
             }
+            if (event->response_type == XCB_FOCUS_IN) {
+                xcb_query_pointer_cookie_t c = xcb_query_pointer(con, get_plat(win)->wid);
+                xcb_query_pointer_reply_t *qre = xcb_query_pointer_reply(con, c, NULL);
+                if (qre && (unsigned)qre->win_x < (unsigned)win->w.width &&
+                        (unsigned)qre->win_y < (unsigned)win->w.height)
+                    update_cursor(win);
+                free(qre);
+            }
             handle_focus(win, event->response_type == XCB_FOCUS_IN);
             break;
         }
