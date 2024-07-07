@@ -347,6 +347,7 @@ struct platform_vtable {
     /* Renderer dependent functions */
     void (*update)(struct window *win, struct rect rect);
     bool (*reload_font)(struct window *win, bool need_free);
+    void (*reload_config)(struct window *win);
     void (*reload_cursors)(struct window *win);
     void (*resize)(struct window *win, int16_t new_w, int16_t new_h, int16_t new_cw, int16_t new_ch, bool artificial);
     void (*resize_exact)(struct window *win, int16_t new_w, int16_t new_h, int16_t old_w, int16_t old_h);

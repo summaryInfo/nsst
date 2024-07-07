@@ -694,12 +694,15 @@ static void wayland_reload_cursors(struct window *win) {
     update_hide_cursor(win);
 }
 
+static void wayland_reload_config(struct window *win) {
+    win->cfg.fps = 0;
+    win->cfg.force_utf8_title = true;
+}
+
 static bool wayland_init_window(struct window *win) {
     struct wayland_window *ww = get_plat(win);
 
-    // FIXME Remove manual FPS tracking at all
-    win->cfg.fps = 1000;
-    win->cfg.force_utf8_title = true;
+    wayland_reload_config(win);
 
     list_init(&get_plat(win)->pointers);
 
@@ -2445,6 +2448,7 @@ const struct platform_vtable *platform_init_wayland(struct instance_config *cfg)
             info("Selected Wayland SHM backend");
         wayland_vtable.update = wayland_shm_update;
         wayland_vtable.reload_font = shm_reload_font;
+        wayland_vtable.reload_config = wayland_reload_config;
         wayland_vtable.resize = shm_resize;
         wayland_vtable.resize_exact = wayland_shm_resize_exact;
         wayland_vtable.copy = shm_copy;

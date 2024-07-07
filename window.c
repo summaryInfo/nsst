@@ -460,6 +460,9 @@ static void reload_window(struct window *win) {
 
     init_instance_config(&win->cfg, cpath, false);
 
+    if (pvtbl->reload_config)
+        pvtbl->reload_config(win);
+
     window_set_alpha(win, win->cfg.alpha);
     term_reload_config(win->term);
     screen_damage_lines(term_screen(win->term), 0, win->c.height);
@@ -837,7 +840,7 @@ static void tick(void *arg) {
 
         if ((win->any_event_happend && !win->inhibit_render_counter) || win->force_redraw) {
             if ((win->drawn_somthing = screen_redraw(term_screen(win->term), win->blink_commited))) {
-                if (!poller_set_timer(&win->frame_timer, handle_frame, win, SEC/win->cfg.fps))
+                if (win->cfg.fps && !poller_set_timer(&win->frame_timer, handle_frame, win, SEC/win->cfg.fps))
                     inc_render_inhibit(win);
                 window_reset_delayed_redraw(win);
                 if (gconfig.trace_misc) info("Redraw");
