@@ -674,11 +674,11 @@ static struct zxdg_toplevel_decoration_v1_listener xdg_toplevel_decoration_liste
 static void wayland_reload_cursors(struct window *win) {
     if (get_plat(win)->cursor_resize)
         unref_cursor(get_plat(win)->cursor_resize);
-    get_plat(win)->cursor_resize = get_any_cursor(2, (const char *[]){win->cfg.resize_pointer, "size_all"});
+    get_plat(win)->cursor_resize = get_any_cursor(5, (const char *[]){win->cfg.resize_pointer, "size_all", "fleur", "grab", "hand1"});
 
     if (get_plat(win)->cursor_uri)
         unref_cursor(get_plat(win)->cursor_uri);
-    get_plat(win)->cursor_uri = get_any_cursor(4, (const char *[]){win->cfg.uri_pointer, "hand1", "grab", "pointing_hand"});
+    get_plat(win)->cursor_uri = get_any_cursor(4, (const char *[]){win->cfg.uri_pointer, "hand2", "pointer", "pointing_hand"});
 
     if (get_plat(win)->cursor_default)
         unref_cursor(get_plat(win)->cursor_default);

@@ -687,7 +687,7 @@ void x11_apply_geometry(struct window *win, struct geometry *geometry) {
 static void x11_reload_cursors(struct window *win) {
     if (get_plat(win)->cursor_uri)
         unref_cursor(get_plat(win)->cursor_uri);
-    get_plat(win)->cursor_uri = get_any_cursor(4, (const char *[]){win->cfg.uri_pointer, "hand1", "grab", "pointing_hand"});
+    get_plat(win)->cursor_uri = get_any_cursor(4, (const char *[]){win->cfg.uri_pointer, "hand2", "pointer", "pointing_hand"});
 
     if (get_plat(win)->cursor_default)
         unref_cursor(get_plat(win)->cursor_default);
