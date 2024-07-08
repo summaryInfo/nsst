@@ -959,11 +959,8 @@ void init_instance_config(struct instance_config *cfg, const char *config_path, 
     keyboard_parse_config(cfg);
 }
 
-
-const char *usage_string(ssize_t idx) {
-#define MAX_OPTION_DESC 512
+const char *usage_string(char buffer[static MAX_OPTION_DESC + 1], ssize_t idx) {
 #define APPEND(...) pbuf += snprintf(pbuf, MAX_OPTION_DESC - (pbuf - buffer), __VA_ARGS__)
-    static char buffer[MAX_OPTION_DESC + 1];
     char *pbuf = buffer;
 
     if (!idx) {

@@ -21,10 +21,11 @@
 #include <unistd.h>
 
 static _Noreturn void usage(const char *argv0, int code) {
+    char buffer[MAX_OPTION_DESC+1];
     if (gconfig.log_level > 0 || code == EXIT_SUCCESS) {
         ssize_t i = 0;
         do fputs(argv0, stdout);
-        while ((argv0 = usage_string(i++)));
+        while ((argv0 = usage_string(buffer, i++)));
     }
     exit(code);
 }

@@ -164,9 +164,10 @@ static inline int64_t ts_diff(struct timespec *b, struct timespec *a) {
 void adjust_buffer(void **buf, size_t *caps, size_t size, size_t elem);
 
 /* Version information helper functions */
+#define MAX_OPTION_DESC 512
 const char *version_string(void);
 const char *features_string(void);
-const char *usage_string(ssize_t idx);
+const char *usage_string(char buffer[static MAX_OPTION_DESC + 1], ssize_t idx);
 
 #define UTF8_MAX_LEN 4
 #define UTF_INVAL 0xFFFD

@@ -147,7 +147,7 @@ static bool send_pending_launch_resp(struct pending_launch *lnch, const char *st
 }
 
 static void append_pending_launch(struct pending_launch *lnch) {
-    char buffer[MAX_ARG_LEN + 1];
+    char buffer[MAX(MAX_ARG_LEN, MAX_OPTION_DESC) + 1];
 
     ssize_t len = recv(lnch->fd, buffer, MAX_ARG_LEN, 0);
     if (len < 0) {
@@ -202,8 +202,7 @@ static void append_pending_launch(struct pending_launch *lnch) {
         free_pending_launch(lnch);
     } else if (buffer[0] == '\025' /* NAK */ && len == 1) /* Usage text request */ {
         ssize_t i = 0;
-
-        for (const char *part = usage_string(i++); part; part = usage_string(i++))
+        for (const char *part; (part = usage_string(buffer, i++));)
             if (!send_pending_launch_resp(lnch, part)) return; /* Don't free pending_launch twice */
 
         free_pending_launch(lnch);
