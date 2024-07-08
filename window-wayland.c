@@ -517,7 +517,7 @@ static void handle_surface_preferred_buffer_transform(void *data, struct wl_surf
     // FIXME HiDPI
 }
 
-struct wl_surface_listener surface_listener = {
+static struct wl_surface_listener surface_listener = {
     .enter = handle_surface_enter,
     .leave = handle_surface_leave,
     .preferred_buffer_scale = handle_surface_preferred_buffer_scale,
@@ -544,7 +544,7 @@ void handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, u
     wl_surface_commit(get_plat(win)->surface);
 }
 
-struct xdg_surface_listener xdg_surface_listener = {
+static struct xdg_surface_listener xdg_surface_listener = {
     .configure = handle_xdg_surface_configure,
 };
 
@@ -854,7 +854,7 @@ static void handle_primary_selection_source_cancelled(void *data, struct zwp_pri
     selection_clear(term_get_sstate(win->term));
 }
 
-struct zwp_primary_selection_source_v1_listener primary_selection_source_listener = {
+static struct zwp_primary_selection_source_v1_listener primary_selection_source_listener = {
     .send = handle_primary_selection_source_send,
     .cancelled = handle_primary_selection_source_cancelled,
 };
@@ -879,7 +879,7 @@ static void handle_primary_selection_offer_offer(void *data, struct zwp_primary_
     }
 }
 
-struct zwp_primary_selection_offer_v1_listener primary_selection_offer_listener = {
+static struct zwp_primary_selection_offer_v1_listener primary_selection_offer_listener = {
     .offer = handle_primary_selection_offer_offer,
 };
 
@@ -918,7 +918,7 @@ static void handle_primary_selection_device_selection(void *data, struct zwp_pri
     }
 }
 
-struct zwp_primary_selection_device_v1_listener primary_selection_device_listener = {
+static struct zwp_primary_selection_device_v1_listener primary_selection_device_listener = {
     .data_offer = handle_primary_selection_device_data_offer,
     .selection = handle_primary_selection_device_selection,
 };
@@ -1000,7 +1000,7 @@ static void handle_data_source_action(void *data, struct wl_data_source *wl_data
     // NOTE: DnD is not implemented
 }
 
-struct wl_data_source_listener data_source_listener = {
+static struct wl_data_source_listener data_source_listener = {
     .target = handle_data_source_target,
     .send = handle_data_source_send,
     .cancelled = handle_data_source_cancelled,
@@ -1047,7 +1047,7 @@ static void handle_data_offer_action(void *data, struct wl_data_offer *wl_data_o
     // NOTE: DnD is not implemented
 }
 
-struct wl_data_offer_listener data_offer_listener = {
+static struct wl_data_offer_listener data_offer_listener = {
     .offer = handle_data_offer_offer,
     .source_actions = handle_data_offer_source_actions,
     .action = handle_data_offer_action,
@@ -1129,7 +1129,7 @@ static void handle_data_device_drop(void *data, struct wl_data_device *wl_data_d
     // NOTE: DnD is not implemented
 }
 
-struct wl_data_device_listener data_device_listener = {
+static struct wl_data_device_listener data_device_listener = {
     .data_offer = handle_data_device_data_offer,
     .enter = handle_data_device_enter,
     .leave = handle_data_device_leave,
@@ -1499,7 +1499,7 @@ static void handle_keyboard_repeat_info(void *data, struct wl_keyboard *wl_keybo
     seat->keyboard.autorepeat_repeat = SEC / rate;
 }
 
-struct wl_keyboard_listener keyboard_listener = {
+static struct wl_keyboard_listener keyboard_listener = {
     .enter = handle_keyboard_enter,
     .leave = handle_keyboard_leave,
     .key = handle_keyboard_key,
@@ -1830,7 +1830,7 @@ static void handle_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
     seat->pointer.event_mask = 0;
 }
 
-struct wl_pointer_listener pointer_listener = {
+static struct wl_pointer_listener pointer_listener = {
     .enter = handle_pointer_enter,
     .leave = handle_pointer_leave,
     .motion = handle_pointer_motion,
@@ -2293,7 +2293,7 @@ static void handle_callback_done(void *data, struct wl_callback *wl_callback, ui
     get_plat(win)->frame_callback = NULL;
 }
 
-struct wl_callback_listener frame_callback_listener = {
+static struct wl_callback_listener frame_callback_listener = {
     .done = handle_callback_done,
 };
 
