@@ -38,10 +38,13 @@ struct pending_launch {
     struct instance_config cfg;
 };
 
-static struct list_head pending_launches;
+struct daemon_context {
+    struct list_head pending_launches;
+    struct event *socket_event;
+    int socket_fd;
+};
 
-static struct event *socket_event;
-static int socket_fd = -1;
+static struct daemon_context ctx;
 
 static void daemonize(void) {
     pid_t pid = fork();
@@ -70,7 +73,8 @@ static void daemonize(void) {
 
 
 bool init_daemon(void) {
-    list_init(&pending_launches);
+    list_init(&ctx.pending_launches);
+    ctx.socket_fd = -1;
 
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof addr);
@@ -99,9 +103,9 @@ bool init_daemon(void) {
         return false;
     }
 
-    socket_fd = fd;
-    socket_event = poller_add_fd(handle_daemon, NULL, fd, POLLIN);
-    poller_set_autoreset(socket_event, &socket_event);
+    ctx.socket_fd = fd;
+    ctx.socket_event = poller_add_fd(handle_daemon, NULL, fd, POLLIN);
+    poller_set_autoreset(ctx.socket_event, &ctx.socket_event);
 
     if (gconfig.fork) daemonize();
     return true;
@@ -124,14 +128,14 @@ void free_daemon(void) {
     if (!gconfig.daemon_mode)
         return;
 
-    LIST_FOREACH_SAFE(it, &pending_launches)
+    LIST_FOREACH_SAFE(it, &ctx.pending_launches)
         free_pending_launch(CONTAINEROF(it, struct pending_launch, link));
 
-    poller_unset(&socket_event);
+    poller_unset(&ctx.socket_event);
 
-    if (socket_fd > 0) {
-        close(socket_fd);
-        socket_fd = -1;
+    if (ctx.socket_fd > 0) {
+        close(ctx.socket_fd);
+        ctx.socket_fd = -1;
     }
     unlink(gconfig.sockpath);
     gconfig.daemon_mode = false;
@@ -213,7 +217,7 @@ static void append_pending_launch(struct pending_launch *lnch) {
 }
 
 static void accept_pending_launch(void) {
-    int fd = accept(socket_fd, NULL, NULL);
+    int fd = accept(ctx.socket_fd, NULL, NULL);
 
     set_cloexec(fd);
 
@@ -224,7 +228,7 @@ static void accept_pending_launch(void) {
         warn("Can't create pending launch: %s", strerror(errno));
     } else {
         lnch->fd = fd;
-        list_insert_after(&pending_launches, &lnch->link);
+        list_insert_after(&ctx.pending_launches, &lnch->link);
     }
 }
 
@@ -240,7 +244,7 @@ static void handle_launch(void *data_, uint32_t mask) {
 static void handle_daemon(void *data_, uint32_t mask) {
     (void)data_;
 
-    if (socket_fd < 0) return;
+    if (ctx.socket_fd < 0) return;
 
     if (mask & POLLIN)
         accept_pending_launch();
