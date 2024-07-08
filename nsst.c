@@ -141,7 +141,6 @@ static inline char *parse_config_path(int argc, char **argv) {
     return config_path;
 }
 
-static struct instance_config cfg;
 
 int main(int argc, char **argv) {
     int result = EXIT_SUCCESS;
@@ -155,6 +154,7 @@ int main(int argc, char **argv) {
     /* Parse config path argument before
      * parsing config file to use correct one */
     char *cpath = parse_config_path(argc, argv);
+    struct instance_config cfg = {0};
     init_instance_config(&cfg, cpath, true);
 
     parse_options(&cfg, argv);
