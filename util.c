@@ -20,11 +20,11 @@
 
 #define LOG_BUFFER_SIZE 1024
 
-static char log_buffer[LOG_BUFFER_SIZE + 1];
-
 static void do_log(int level, const char *fmt, va_list args)  __attribute__((format(printf, 2, 0)));
 
 static void do_log(int level, const char *fmt, va_list args) {
+    char log_buffer[LOG_BUFFER_SIZE + 1];
+
     static struct log_prefix {
         const char *msg;
         int len;
@@ -38,7 +38,7 @@ static void do_log(int level, const char *fmt, va_list args) {
 
     if (gconfig.log_level < level) return;
 
-    size_t len = log_prefix[level].len;
+    size_t len = 0;
     if (gconfig.log_color) {
         len += snprintf(log_buffer + len, LOG_BUFFER_SIZE - len,
                         "[\033[%d;1m%s\033[m] ", log_prefix[level].color, log_prefix[level].msg);
