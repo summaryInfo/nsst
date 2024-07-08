@@ -240,7 +240,7 @@ enum uri_match_result uri_match_next_from_colon(struct uri_match_state *stt, uin
     /* For real world purposes don't treat following characters as a part of URL: ()'
      * This makes parenthesized and quoted URLs match correctly. */
     // static uint32_t c_ext[] = {0xAFFFFFD2, 0x87FFFFFF, 0x47FFFFFE}; /* [\w\d\-._~!$&'()*+,;=:@/?] */
-    static uint32_t c_ext[] = {0xAFFFFC42, 0x87FFFFFF, 0x47FFFFFE}; /* [\w\d\-._~!$&*+,;=:@/?] */
+    static const uint32_t c_ext[] = {0xAFFFFC42, 0x87FFFFFF, 0x47FFFFFE}; /* [\w\d\-._~!$&*+,;=:@/?] */
 
     /* This code does not handle fancy unicode URIs that
      * can be displayed by browsers, but only strictly complying
