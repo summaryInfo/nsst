@@ -2031,6 +2031,7 @@ static void term_report_cursor(struct term *term) {
     if (nrcs_is_96(c->gn[2])) cg96 |= 4;
     if (nrcs_is_96(c->gn[3])) cg96 |= 8;
 
+    char buf0[3], buf1[3], buf2[3], buf3[3];
     term_answerback(term, DCS"1$u%zu;%zu;1;%s;%c;%c;%u;%u;%c;%s%s%s%s"ST,
         /* line */ c->y + 1,
         /* column */ c->x + 1,
@@ -2040,10 +2041,10 @@ static void term_report_cursor(struct term *term) {
         /* gl */ c->gl,
         /* gr */ c->gr,
         /* cs size */ cg96,
-        /* g0 */ nrcs_unparse(c->gn[0]),
-        /* g1 */ nrcs_unparse(c->gn[1]),
-        /* g2 */ nrcs_unparse(c->gn[2]),
-        /* g3 */ nrcs_unparse(c->gn[3]));
+        /* g0 */ nrcs_unparse(buf0, c->gn[0]),
+        /* g1 */ nrcs_unparse(buf1, c->gn[1]),
+        /* g2 */ nrcs_unparse(buf2, c->gn[2]),
+        /* g3 */ nrcs_unparse(buf3, c->gn[3]));
 }
 
 static void term_report_tabs(struct term *term) {
@@ -2707,7 +2708,8 @@ static void term_dispatch_csi(struct term *term) {
         break;
     case C('u') | I0('&'): /* DECRQUPSS */;
         enum charset upcs = screen_get_upcs(scr);
-        term_answerback(term, DCS"%u!u%s"ST, nrcs_is_96(upcs), nrcs_unparse(upcs));
+        char buffer[3];
+        term_answerback(term, DCS"%u!u%s"ST, nrcs_is_96(upcs), nrcs_unparse(buffer, upcs));
         break;
     case C('t') | I0(' '): /* DECSWBV */
         switch (PARAM(0, 1)) {

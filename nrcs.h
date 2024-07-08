@@ -107,6 +107,6 @@ bool nrcs_encode(enum charset set, uint32_t *ch, bool nrcs);
 uint32_t nrcs_decode(enum charset gl, enum charset gr, enum charset ups, uint32_t ch, bool nrcs);
 uint32_t nrcs_decode_fast(enum charset gl, uint32_t ch);
 enum charset nrcs_parse(uint32_t selector, bool is96, uint16_t vt_level, bool nrcs);
-const char *nrcs_unparse(enum charset cs);
+char *nrcs_unparse(char selstring[static 3], enum charset cs);
 
 #endif
