@@ -136,7 +136,7 @@ static inline int32_t round_size(int32_t size) {
     return ROUNDUP(size + sizeof(struct header), MPA_ALIGNMENT);
 }
 
-void mpa_set_seal_max_pad(struct multipool *mp, ssize_t max_pad, ssize_t max_unsealed)  {
+void mpa_set_seal_max_pad(struct multipool *mp, ssize_t max_pad, ssize_t max_unsealed) {
     mp->max_pad = max_pad = round_size(max_pad);
     mp->max_unsealed = max_unsealed;
 
