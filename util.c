@@ -389,41 +389,6 @@ void adjust_buffer(void **buf, size_t *caps, size_t size, size_t elem) {
     }
 }
 
-const char *version_string(void) {
-    static char str[32];
-    if (!str[0]) {
-        snprintf(str, sizeof str, "nsst v%d.%d.%d\n",
-            (NSST_VERSION / 10000) % 100, (NSST_VERSION / 100) % 100, NSST_VERSION % 100);
-    }
-    return str;
-}
-
-const char *features_string(void) {
-    return "nsst"
-#if USE_PPOLL
-            "+ppoll"
-#endif
-#if USE_BOXDRAWING
-            "+boxdrawing"
-#endif
-#if USE_X11SHM
-            "+mitshm"
-#endif
-#if USE_XRENDER
-            "+xrender"
-#endif
-#if USE_WAYLANDSHM
-            "+waylandshm"
-#endif
-#if USE_POSIX_SHM
-            "+posixshm"
-#endif
-#if USE_PRECOMPOSE
-            "+precompose"
-#endif
-            "\n";
-}
-
 #define HT_LOAD_FACTOR(x) (15*(x)/16)
 #define HT_CAPS_STEP(x) (2*(x))
 

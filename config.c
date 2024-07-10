@@ -35,6 +35,7 @@ static hashtable_t options_hashtable;
 static struct option *short_opts[26*2];
 static ssize_t max_help_line_len;
 static struct option *dpi_option_entry;
+static char version_string_buffer[32];
 
 #define COLOR_SPECIAL_SELECTED_BG 0
 #define COLOR_SPECIAL_SELECTED_FG 0
@@ -397,6 +398,9 @@ void free_options(void) {
 }
 
 void init_options(void) {
+
+    snprintf(version_string_buffer, sizeof version_string_buffer, "nsst v%d.%d.%d\n",
+        (NSST_VERSION / 10000) % 100, (NSST_VERSION / 100) % 100, NSST_VERSION % 100);
 
     /* This is needed to get error messages from option parsing code */
     gconfig.log_level = 3;
@@ -994,4 +998,34 @@ const char *usage_string(char buffer[static MAX_OPTION_DESC + 1], ssize_t idx) {
             "All options are also accept special value 'default' to reset to built-in default.\n";
     } else return NULL;
 #undef APPEND
+}
+
+const char *version_string(void) {
+    return version_string_buffer;
+}
+
+const char *features_string(void) {
+    return "nsst"
+#if USE_PPOLL
+            "+ppoll"
+#endif
+#if USE_BOXDRAWING
+            "+boxdrawing"
+#endif
+#if USE_X11SHM
+            "+mitshm"
+#endif
+#if USE_XRENDER
+            "+xrender"
+#endif
+#if USE_WAYLANDSHM
+            "+waylandshm"
+#endif
+#if USE_POSIX_SHM
+            "+posixshm"
+#endif
+#if USE_PRECOMPOSE
+            "+precompose"
+#endif
+            "\n";
 }
