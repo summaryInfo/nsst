@@ -129,6 +129,8 @@ struct term {
     /* OSC 52 character description
      * of selection being pasted from */
     uint8_t paste_from;
+    uint8_t paste_leftover[3];
+    uint8_t paste_leftover_len;
 
     /* Mouse state */
     struct mouse_state mstate;
@@ -3518,9 +3520,8 @@ static inline bool is_osc52_reply(struct term *term) {
 }
 
 void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool is_first, bool is_last) {
-    static uint8_t leftover[3], leftover_len;
-    static uint8_t buf1[2*PASTE_BLOCK_SIZE];
-    static uint8_t buf2[4*PASTE_BLOCK_SIZE];
+    uint8_t buf1[2*PASTE_BLOCK_SIZE];
+    uint8_t buf2[4*PASTE_BLOCK_SIZE];
 
     assert(size <= PASTE_BLOCK_SIZE);
 
@@ -3541,7 +3542,7 @@ void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool 
     if (!size) return;
 
     if (is_first) {
-        leftover_len = 0;
+        term->paste_leftover_len = 0;
         if (is_osc52_reply(term)) {
             term_answerback(term, OSC"52;%c;", term->paste_from);
         } else if (term->mode.bracketed_paste) {
@@ -3569,14 +3570,14 @@ void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool 
     }
 
     if (is_osc52_reply(term)) {
-        while (leftover_len < 3 && size) leftover[leftover_len++] = *data++, size--;
-        size_t pre = base64_encode(buf2, leftover, leftover + leftover_len) - buf2;
+        while (term->paste_leftover_len < 3 && size) term->paste_leftover[term->paste_leftover_len++] = *data++, size--;
+        size_t pre = base64_encode(buf2, term->paste_leftover, term->paste_leftover + term->paste_leftover_len) - buf2;
 
         if (size) {
             if (!is_last) {
-                leftover_len = size % 3;
-                if (leftover_len > 0) leftover[0] = data[size - leftover_len], size--;
-                if (leftover_len > 1) leftover[1] = data[size - 1], size--;
+                term->paste_leftover_len = size % 3;
+                if (term->paste_leftover_len > 0) term->paste_leftover[0] = data[size - term->paste_leftover_len], size--;
+                if (term->paste_leftover_len > 1) term->paste_leftover[1] = data[size - 1], size--;
             }
 
             size = base64_encode(buf2 + pre, data, data + size) - buf2;
