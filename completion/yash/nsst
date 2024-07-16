@@ -223,7 +223,7 @@ function completion/nsst {
 	(--autorepeat|--allow-alternate|--allow-blinking|--allow-modify-edit-keypad|\
 	 --allow-modify-function|--allow-modify-keypad|--allow-modify-misc|--alternate-scroll|\
 	 --appcursor|--appkey|--autowrap|--backspace-is-del|--blend-all-background|\
-	 --blend-foreground|d\--daemon|--delete-is-del|--erase-scrollback|--extended-cir|--fixed|\
+	 --blend-foreground|--daemon|--delete-is-del|--erase-scrollback|--extended-cir|--fixed|\
 	 --force-wayland-csd|--force-nrcs|--force-scalable|--fork|--has-meta|--keep-clipboard|\
 	 --keep-selection|--lock-keyboard|--luit|--meta-sends-escape|--nrcs|--numlock|\
 	 --override-boxdrawing|--unique-uris|--print-attributes|--raise-on-bell|--reverse-video|\
