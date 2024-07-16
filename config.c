@@ -846,7 +846,9 @@ static void parse_config(struct instance_config *cfg, bool allow_global) {
     /* Config file is search in following places:
      * 1. Path set with --config=
      * 2. $XDG_CONFIG_HOME/nsst.conf
-     * 3. $HOME/.config/nsst.conf
+     * 3. $XDG_CONFIG_HOME/nsst/nsst.conf
+     * 4. $HOME/.config/nsst.conf
+     * 5. $HOME/.config/nsst/nsst.conf
      * If file is not found in those places, just give up */
 
     if (path) fd = open(path, O_RDONLY);
