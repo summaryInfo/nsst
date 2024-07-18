@@ -186,7 +186,6 @@ void screen_move_to(struct screen *scr, int16_t x, int16_t y);
 void screen_bounded_move_to(struct screen *scr, int16_t x, int16_t y);
 void screen_move_left(struct screen *scr, int16_t amount);
 void screen_save_cursor(struct screen *scr, bool mode);
-void screen_swap_screen(struct screen *scr, bool damage);
 void screen_set_altscreen(struct screen *scr, bool set, bool clear, bool save);
 void screen_scroll_horizontal(struct screen *scr, int16_t left, int16_t amount);
 void screen_scroll(struct screen *scr, int16_t top, int16_t amount, bool save);

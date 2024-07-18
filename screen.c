@@ -1265,7 +1265,7 @@ void screen_save_cursor(struct screen *scr, bool mode) {
     }
 }
 
-void screen_swap_screen(struct screen *scr, bool damage) {
+static void screen_swap_screen(struct screen *scr) {
     selection_clear(&scr->sstate);
     if (!scr->mode.altscreen)
         scr->last_scr_c = scr->c;
@@ -1273,14 +1273,14 @@ void screen_swap_screen(struct screen *scr, bool damage) {
     SWAP(scr->back_saved_c, scr->saved_c);
     SWAP(scr->back_saved_sgr, scr->saved_sgr);
     scr->screen = get_current_screen(scr)->begin;
-    screen_reset_view(scr, damage);
+    screen_reset_view(scr, true);
 }
 
 void screen_set_altscreen(struct screen *scr, bool set, bool clear, bool save) {
     if (scr->mode.disable_altscreen) return;
     if (set != scr->mode.altscreen) {
         if (set && save) screen_save_cursor(scr, true);
-        screen_swap_screen(scr, !set || !clear);
+        screen_swap_screen(scr);
         if (!set && save) screen_save_cursor(scr, false);
     }
     if (set && clear) {
