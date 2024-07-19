@@ -160,8 +160,8 @@ struct term {
      * XTSAVE/XTRESTORE
      * [0-96] : 12 bytes;
      * [1000-1063] : 8 bytes;
-     * [2000-2007] : 1 byte */
-    uint8_t saved_modbits[21];
+     * [2000-2063] : 8 bytes */
+    uint8_t saved_modbits[28];
     /* Other parts of saved state for XTSAVE/XTRESTORE */
     enum mouse_mode saved_mouse_mode;
     enum mouse_format saved_mouse_format;
@@ -2187,7 +2187,7 @@ static void term_decode_sgr(struct term *term, size_t i, struct attr *mask, stru
 static inline void store_mode(uint8_t modbits[], uparam_t mode, bool val) {
     if (mode < 96) modbits += mode / 8;
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
-    else if (2000 <= mode && mode < 2007) modbits += 20;
+    else if (2000 <= mode && mode < 2064 && mode != 2026) modbits += mode / 8 - 230;
     else {
         /* Don't save synchronized update state */
         if (mode != 2026)
@@ -2201,7 +2201,7 @@ static inline void store_mode(uint8_t modbits[], uparam_t mode, bool val) {
 static inline bool load_mode(uint8_t modbits[], uparam_t mode) {
     if (mode < 96) modbits += mode / 8;
     else if (1000 <= mode && mode < 1064) modbits += mode / 8 - 113;
-    else if (2000 <= mode && mode < 2007) modbits += 20;
+    else if (2000 <= mode && mode < 2064 && mode != 2026) modbits += mode / 8 - 230;
     else {
         /* Don't restore synchronized update state */
         if (mode != 2026)
