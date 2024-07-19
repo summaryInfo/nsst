@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Nsst
+Comment=Not So Simple Terminal Emulator
+Encoding=UTF-8
+Categories=System;TerminalEmulator;
+
+TryExec=nsst
+Exec=nsst
+Terminal=false
+StartupWMClass=Nsst

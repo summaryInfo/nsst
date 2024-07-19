@@ -35,6 +35,8 @@ install: all
 	install -D nsst-open $(DESTDIR)$(BINDIR)/$(NAME)-open
 	install -Dm 644 docs/nsst.conf $(DESTDIR)$(SHAREDIR)/$(NAME)/nsst.conf
 	install -Dm 644 docs/nsst.1 $(DESTDIR)$(MANDIR)/man1/$(NAME).1
+	install -Dm 644 docs/nsst.desktop $(DESTDIR)/usr/share/applications/$(NAME).desktop
+	install -Dm 644 docs/nsstc.desktop $(DESTDIR)/usr/share/applications/$(NAME)c.desktop
 	@ # FIXME Custom $(NAME) currently do not work, need to modify names
 	install -Dm 644 completion/zsh/_nsst $(DESTDIR)$(SHAREDIR)/zsh/site-functions/_nsst
 	install -Dm 644 completion/fish/nsst.fish $(DESTDIR)$(SHAREDIR)/fish/vendor_completions.d/nsst.fish
@@ -61,6 +63,8 @@ uninstall:
 	rm -f $(DESTDIR)/usr/share/bash-completion/completions/nsstc
 	rm -f $(DESTDIR)/usr/share/terminfo/nsst
 	rm -f $(DESTDIR)/usr/share/terminfo/nsst-direct
+	rm -f $(DESTDIR)/usr/share/applications/$(NAME).desktop
+	rm -f $(DESTDIR)/usr/share/applications/$(NAME)c.desktop
 
 $(NAME): $(OBJ)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ) $(LDLIBS) -o $@
