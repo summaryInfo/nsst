@@ -92,6 +92,7 @@ struct term_mode {
     bool bell_raise : 1;
     bool bell_urgent : 1;
     bool altscreen_scroll : 1;
+    bool inband_resize : 1;
     bool utf8 : 1;
 };
 
@@ -1472,6 +1473,14 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
         case 2026: /* Synchronized updates */
             window_set_sync(screen_window(scr), set);
             break;
+        case 2048: /* In-band resize notifications */
+            term->mode.inband_resize = set;
+            if (set) {
+                struct extent grid_size = window_get_size(term_window(term));
+                term_answerback(term, CSI"48;%zu;%zu;%u;%ut", screen_width(&term->scr),
+                                screen_height(&term->scr), grid_size.width, grid_size.height);
+            }
+            break;
         default:
             return 0;
         }
@@ -1694,6 +1703,9 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             break;
         case 2026: /* Synchronized update */
             val = MODSTATE(window_get_sync(screen_window(scr)));
+            break;
+        case 2048: /* In-band resize notifications */
+            val = MODSTATE(term->mode.inband_resize);
             break;
         default:
             term_esc_dump(term, 0);
@@ -3782,6 +3794,8 @@ bool term_is_requested_resize(struct term *term) {
 }
 
 void term_notify_resize(struct term *term, int16_t width, int16_t height, int16_t cw, int16_t ch) {
+    if (term->mode.inband_resize)
+        term_answerback(term, CSI"48;%u;%u;%u;%ut", cw, ch, width, height);
     tty_set_winsz(&term->tty, cw, ch, width, height);
 }
 
