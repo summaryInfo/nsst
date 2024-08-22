@@ -19,7 +19,7 @@
 .Oc
 .Sh DESCRIPTION
 .Pp
-Nsst is X11 terminal emulator, built to be fast and small without sacrificing features.
+Nsst is X11 and Wayland terminal emulator, built to be fast and small without sacrificing features.
 .Sh OPTIONS
 .Pp
 Options can be specified either as command line arguments or in config file (without leading dashes) located at $XDG_CONFIG_HOME/nsst.conf or ~/.config/nsst.conf by default.
@@ -492,7 +492,7 @@ Duration of visual bell, in microseconds
 .It Fl \-vt-version Ns = Ns Ar version , Fl V Ar version
 Emulated DEC VT version, e.g. 520
 .It Fl \-window-class Ns = Ns Ar class , Fl c Ar class
-X11 Window class
+X11 Window class (or wayland app-id)
 .It Fl \-window-ops Ns = Ns Ar bool
 Allow window manipulation with escape sequences
 .It Fl \-word-break Ns = Ns Ar separators
