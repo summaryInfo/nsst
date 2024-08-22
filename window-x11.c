@@ -850,8 +850,10 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, bool pno
         }
 
         ssize_t size = rep->format * rep->value_len / 8;
-        term_paste(win->term, xcb_get_property_value(rep), size,
-                   rep->type == ctx.atom.UTF8_STRING, !offset, !left);
+        if (size || offset || left) {
+            term_paste(win->term, xcb_get_property_value(rep), size,
+                       rep->type == ctx.atom.UTF8_STRING, !offset, !left);
+        }
 
         free(rep);
         offset += size / 4;

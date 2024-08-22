@@ -129,9 +129,15 @@ struct term {
 
     /* OSC 52 character description
      * of selection being pasted from */
-    uint8_t paste_from;
-    uint8_t paste_leftover[3];
-    uint8_t paste_leftover_len;
+    struct {
+        uint8_t from;
+        uint8_t leftover[3];
+        uint8_t leftover_len;
+        bool bracketed : 1;
+        bool quote : 1;
+        bool literal_nl : 1;
+        bool utf8 : 1;
+    } paste;
 
     /* Mouse state */
     struct mouse_state mstate;
@@ -1189,7 +1195,7 @@ static void term_dispatch_osc(struct term *term) {
         if (parg++ < dend) {
             if (!letter) ts[decode_target((letter = 's'), toclip)] = 1;
             if (!strcmp("?", (char*)parg)) {
-                term->paste_from = letter;
+                term->paste.from = letter;
                 window_paste_clip(screen_window(scr), decode_target(letter, toclip));
             } else {
                 if (base64_decode(parg, parg, dend) != dend) parg = NULL;
@@ -3528,7 +3534,7 @@ finish:
 }
 
 static inline bool is_osc52_reply(struct term *term) {
-    return term->paste_from;
+    return term->paste.from;
 }
 
 void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool is_first, bool is_last) {
@@ -3551,71 +3557,75 @@ void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool 
 
     uint8_t *pos = data, *end = data + size;
 
-    if (!size) return;
-
     if (is_first) {
-        term->paste_leftover_len = 0;
+        term->paste.quote = term->mode.paste_quote;
+        term->paste.bracketed = term->mode.bracketed_paste;
+        term->paste.utf8 = term->mode.utf8;
+        term->paste.literal_nl = term->mode.paste_literal_nl;
+        term->paste.leftover_len = 0;
         if (is_osc52_reply(term)) {
-            term_answerback(term, OSC"52;%c;", term->paste_from);
-        } else if (term->mode.bracketed_paste) {
+            term_answerback(term, OSC"52;%c;", term->paste.from);
+        } else if (term->paste.bracketed) {
             term_answerback(term, CSI"200~");
         }
     }
 
-    if (!term->mode.paste_literal_nl)
-        while ((pos = memchr(pos, '\n', end - pos))) *pos++ = '\r';
+    if (size) {
+        if (!term->paste.literal_nl)
+            while ((pos = memchr(pos, '\n', end - pos))) *pos++ = '\r';
 
-    if (utf8 ^ term->mode.utf8) {
-        pos = data;
-        size = 0;
-        if (utf8) {
-            uint32_t ch;
-            while (pos < end)
-                if (utf8_decode(&ch, (const uint8_t **)&pos, end))
-                    buf1[size++] = ch;
-        } else {
-            while (pos < end)
-                size += utf8_encode(*pos++, buf1 + size, buf1 + LEN(buf1));
-        }
-
-        data = buf1;
-    }
-
-    if (is_osc52_reply(term)) {
-        while (term->paste_leftover_len < 3 && size) term->paste_leftover[term->paste_leftover_len++] = *data++, size--;
-        size_t pre = base64_encode(buf2, term->paste_leftover, term->paste_leftover + term->paste_leftover_len) - buf2;
-
-        if (size) {
-            if (!is_last) {
-                term->paste_leftover_len = size % 3;
-                if (term->paste_leftover_len > 0) term->paste_leftover[0] = data[size - term->paste_leftover_len], size--;
-                if (term->paste_leftover_len > 1) term->paste_leftover[1] = data[size - 1], size--;
+        if (utf8 ^ term->paste.utf8) {
+            pos = data;
+            size = 0;
+            if (utf8) {
+                uint32_t ch;
+                while (pos < end)
+                    if (utf8_decode(&ch, (const uint8_t **)&pos, end))
+                        buf1[size++] = ch;
+            } else {
+                while (pos < end)
+                    size += utf8_encode(*pos++, buf1 + size, buf1 + LEN(buf1));
             }
 
-            size = base64_encode(buf2 + pre, data, data + size) - buf2;
+            data = buf1;
         }
-        data = buf2;
-    } else if (term->mode.paste_quote) {
-        bool quote_c1 = !term_is_utf8_enabled(term);
-        ssize_t i = 0, j = 0;
-        while (i < size) {
-            /* Prefix control symbols with Ctrl-V */
-            if (buf1[i] < 0x20 || buf1[i] == 0x7F ||
-                    (quote_c1 && buf1[i] > 0x7F && buf1[i] < 0xA0))
-                buf2[j++] = 0x16;
-            buf2[j++] = buf1[i++];
-        }
-        size = j;
-        data = buf2;
-    }
 
-    term_sendkey(term, data, size);
+        if (is_osc52_reply(term)) {
+            while (term->paste.leftover_len < 3 && size) term->paste.leftover[term->paste.leftover_len++] = *data++, size--;
+            size_t pre = base64_encode(buf2, term->paste.leftover, term->paste.leftover + term->paste.leftover_len) - buf2;
+
+            if (size) {
+                if (!is_last) {
+                    term->paste.leftover_len = size % 3;
+                    if (term->paste.leftover_len > 0) term->paste.leftover[0] = data[size - term->paste.leftover_len], size--;
+                    if (term->paste.leftover_len > 1) term->paste.leftover[1] = data[size - 1], size--;
+                }
+
+                size = base64_encode(buf2 + pre, data, data + size) - buf2;
+            }
+            data = buf2;
+        } else if (term->paste.quote) {
+            bool quote_c1 = !term_is_utf8_enabled(term);
+            ssize_t i = 0, j = 0;
+            while (i < size) {
+                /* Prefix control symbols with Ctrl-V */
+                if (buf1[i] < 0x20 || buf1[i] == 0x7F ||
+                        (quote_c1 && buf1[i] > 0x7F && buf1[i] < 0xA0))
+                    buf2[j++] = 0x16;
+                buf2[j++] = buf1[i++];
+            }
+            size = j;
+            data = buf2;
+        }
+
+        term_sendkey(term, data, size);
+    }
 
     if (is_last) {
         if (is_osc52_reply(term)) {
             term_answerback(term, ST);
-            term->paste_from = 0;
-        } else if (term->mode.bracketed_paste) {
+            term->paste.from = 0;
+        } else if (term->paste.bracketed) {
             term_answerback(term, CSI"201~");
         }
     }
