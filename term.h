@@ -22,10 +22,6 @@ typedef int32_t iparam_t;
 
 #define SCNparam SCNu32
 
-static inline bool view_wrapped(struct line_span *view) {
-    return view->line->size > view->offset + view->width;
-}
-
 static inline struct cell *view_cell(struct line_span *view, ssize_t x) {
     return view->line->cell + view->offset + x;
 }

@@ -121,6 +121,7 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
 
     struct screen *scr = term_screen(win->term);
     struct line_span span = screen_view(scr);
+    struct line *prev_line = NULL;
     for (ssize_t k = 0; k < win->c.height; k++, screen_span_shift(scr, &span)) {
         screen_span_width(scr, &span);
         bool next_dirty = false;
@@ -229,9 +230,13 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
         }
 
         /* Only reset force flag for last part of the line */
-        if (!view_wrapped(&span))
-            span.line->force_damage = false;
+        if (prev_line != span.line && prev_line) {
+            prev_line->force_damage = false;
+            prev_line = span.line;
+        }
     }
+    if (prev_line)
+        prev_line->force_damage = false;
 
     if (cursor_visible) {
         struct cursor_rects cr = describe_cursor(win, cur_x, cur_y, on_margin, beyond_eol);
