@@ -23,6 +23,7 @@ Nsst is X11 and Wayland terminal emulator, built to be fast and small without sa
 .Sh OPTIONS
 .Pp
 Options can be specified either as command line arguments or in config file (without leading dashes) located at $XDG_CONFIG_HOME/nsst.conf or ~/.config/nsst.conf by default.
+Config file can be reloaded for already running terminal by sending SIGUSR1 to it.
 Config file path can be specified with
 .Fl \-config Ns = Ns Ar path
 option.

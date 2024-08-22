@@ -92,6 +92,7 @@ giving sufficient number of possible custom glyphs. DECDLD is also easy to imple
 For command line arguments see `nsst --help`.
 Config file uses same option names, just without leading `--`.
 Default config file location is `$XDG_CONFIG_HOME/nsst.conf` or `$XDG_CONFIG_HOME/nsst/nsst.conf`.
+Config file can be reloaded for already running terminal by sending `SIGUSR1` to it: `pkill -USR1 nsst`.
 Config file path can be set via `--config`/`-C` argument.
 For boolean arguments `--no-X`, `--without-X`, `--disable-X` are interpreted as `--X=0` and
 `--X`, `--with-X`, `--enable-X` are interpreted as `--X=1`.
