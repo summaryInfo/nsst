@@ -258,4 +258,3 @@ Finally install:
     make install
 
 Default binary location is `/usr/local/bin/$name`
-Sadly there is no man page yet.
