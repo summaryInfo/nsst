@@ -525,8 +525,10 @@ ssize_t tty_refill(struct tty *tty) {
 }
 
 static inline void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t len) {
-    if (!flush_deferred(tty))
+    if (!flush_deferred(tty)) {
+        defer_write(tty, buf, len);
         return;
+    }
 
     errno = 0;
     do {
