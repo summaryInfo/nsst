@@ -3572,7 +3572,7 @@ void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool 
 
     if (size) {
         if (!term->paste.literal_nl)
-            while ((pos = memchr(pos, '\n', end - pos))) *pos++ = '\r';
+            while ((pos = memchr(pos, '\n', end - pos))) *pos = '\r';
 
         if (utf8 ^ term->paste.utf8) {
             pos = data;
