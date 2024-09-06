@@ -22,7 +22,7 @@
 #include <unistd.h>
 
 #define MAX_OPTION_DESC 1024
-#define MAX_WAIT_LOOP 8
+#define MAX_WAIT_LOOP 32
 #define STARTUP_DELAY 10000000LL
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 #define WARN_PREFIX "[\033[33;1mWARN\033[m] "
