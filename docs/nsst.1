@@ -22,8 +22,8 @@
 Nsst is X11 and Wayland terminal emulator, built to be fast and small without sacrificing features.
 .Sh OPTIONS
 .Pp
-Options can be specified either as command line arguments or in config file (without leading dashes) located at $XDG_CONFIG_HOME/nsst.conf or ~/.config/nsst.conf by default.
-Config file can be reloaded for already running terminal by sending SIGUSR1 to it.
+Options can be specified either as command line arguments or in config file (without leading dashes) located at $XDG_CONFIG_HOME/nsst.conf, $XDG_CONFIG_HOME/nsst/nsst.conf, ~/.config/nsst.conf or ~/.config/nsst/nsst.conf by default.
+Config file can be reloaded for all windows of already running terminal by sending SIGUSR1 to it or for a specific window using the appropriate shortcut.
 Config file path can be specified with
 .Fl \-config Ns = Ns Ar path
 option.
@@ -51,6 +51,8 @@ If unit is not specified, 'us' is implied.
 Every option also accepts special value
 .Ar default
 that resets option to builtin default.
+.Pp
+The following are common options like terminal window appearance configuration:
 .Bl -tag -width Ds
 .It Fl Fl help , Fl h
 Print help message and exit
@@ -92,39 +94,16 @@ is in format
 Set color number N from 256 color palette.
 .Ar Color
 should be in format #RGB or rgb:R/G/B, where R, G and B are one to four hex digits.
-.It Fl \-allow-alternate Ns = Ns Ar bool
-Enable alternate screen
 .It Fl \-allow-blinking Ns = Ns Ar bool
 Allow blinking text and cursor
-.It Fl \-allow-modify-edit-keypad Ns = Ns Ar bool
- Allow modifying edit keypad keys in legacy keyboard layout
-.It Fl \-allow-modify-function Ns = Ns Ar bool
-Allow modifying function keys in legacy keyboard layout
-.It Fl \-allow-modify-keypad Ns = Ns Ar bool
-Allow modifying keypad keys in legacy keyboard layout
-.It Fl \-allow-modify-misc Ns = Ns Ar bool
-Allow modifying miscellaneous keys in legacy keyboard layout
 .It Fl \-alpha Ns = Ns Ar opacity
-Background opacity, requires compositor to be running
-.It Fl \-alternate-scroll Ns = Ns Ar bool
-Scrolling sends arrow keys escapes in alternate screen
-.It Fl \-answerback-string Ns = Ns Ar string
-<ENQ> report, default is <ACK>
-.It Fl \-autorepeat Ns = Ns Ar bool
-Enable keys autorepeat (DECARM)
-.It Fl \-appcursor Ns = Ns Ar bool
-Initial application cursor mode value
-.It Fl \-appkey Ns = Ns Ar bool
-Initial application keypad mode value
-.It Fl \-autowrap Ns = Ns Ar bool
-Initial autowrap setting
+Background opacity, requires compositor to be running when used on X11.
+Floating point value between 0 and 1.
 .It Fl \-background Ns = Ns Ar color
 Default background color
 .Fl \-colorN
 .It Fl \-backend Ns = Ns Ar backend
 Select rendering backend. Supported backends: auto, x11, x11shm, x11xrender, wayland and waylandshm
-.It Fl \-backspace-is-del Ns = Ns Ar bool
-Backspace sends DEL instead of BS
 .It Fl \-bell Ns = Ns Ar value
 Bell volume index.
 Value is one of off, low or high
@@ -138,7 +117,7 @@ Special color of blinking text
 format is same as for
 .Fl \-colorN
 .It Fl \-blink-time Ns = Ns Ar time
-Text and cursor blink interval in microseconds.
+Text and cursor blink interval.
 .It Fl \-bold-color Ns = Ns Ar color
 Special color of bold text
 .Ar Color
@@ -155,7 +134,7 @@ Default cursor foreground color.
 format is same as for
 .Fl \-colorN
 .It Fl \-cursor-shape Ns = Ns Ar shape
-Shape of cursor.
+Shape of terminal cursor.
 .Ar Shape
 is one of block, blinking-block, bar, blinking-bar, underline, blinking-underline.
 Default is block.
@@ -167,20 +146,12 @@ to prevent config loading
 Width of lines that forms cursor
 .It Fl \-daemon Ns = Ns Ar bool , Fl d
 Enable daemon mode
-.It Fl \-delete-is-del Ns = Ns Ar bool
-Delete sends DEL symbol instead of escape sequence
 .It Fl \-double-click-time Ns = Ns Ar time
-Time gap in microseconds in witch two mouse presses will be considered double click
+Time between two consecutive mouse presses in which they will be considered a double click.
 .It Fl \-select-scroll-time Ns = Ns Ar time
-Time between subsequent scrolls during mouse selection in microseconds
-.It Fl \-erase-scrollback Ns = Ns Ar bool
-Allow ED 3 to clear scrollback buffer
-.It Fl \-extended-cir Ns = Ns Ar bool
-Report all SGR attributes in DECCIR
+Time between subsequent scrolls during mouse selection.
 .It Fl \-fixed Ns = Ns Ar bool
 Don't allow to change window size, if supported
-.It Fl \-fkey-increment Ns = Ns Ar number
-Step in numbering function keys
 .It Fl \-font Ns = Ns Ar name , Fl f name
 Comma-separated list of fontconfig font patterns
 .It Fl \-font-gamma Ns = Ns Ar gamma
@@ -192,11 +163,9 @@ Font size step in points
 .It Fl \-font-spacing Ns = Ns Ar pixels
 Additional horizontal spacing for individual cells
 .It Fl \-force-dpi Ns = Ns Ar dpi
-DPI value for fonts
+DPI value for fonts. Will be determined automatically if not specified explicitly.
 .It Fl \-force-mouse-mod Ns = Ns Ar mods
 Modifier to force mouse action
-.It Fl \-force-nrcs Ns = Ns Ar bool
-Enable NRCS translation even when UTF-8 mode is enabled
 .It Fl \-force-scalable Ns = Ns Ar bool
 Do not search for pixmap fonts
 .It Fl \-force-wayland-csd Ns = Ns Ar bool
@@ -209,13 +178,8 @@ format is same as for
 .It Fl \-fork Ns = Ns Ar bool
 Fork in daemon mode, default is true
 .It Fl \-fps Ns = Ns Ar fps
-Window refresh rate
-.It Fl \-frame-wait-delay Ns = Ns Ar time
-Maximal time since last application output before redraw is scheduled.
-.It Fl \-has-meta Ns = Ns Ar bool
-Initial
-.Qq handle meta/alt modifier
-mode state
+Window refresh rate. This setting is ignored on Wayland,
+nsst relies on compositor callbacks to throttle rendering instead.
 .It Fl \-horizontal-border Ns = Ns Ar pixels
 Top and bottom internal botder width (deprecated)
 .It Fl \-italic-color Ns = Ns Ar color
@@ -260,74 +224,19 @@ Scroll up hotkey, initial value is T-Up
 Scroll view to next command start, inital value is T-F
 .It Fl \-key-jump-prev-cmd Ns = Ns Ar key
 Scroll view to previous command start, initial value is T-B
-.It Fl \-keyboard-dialect Ns = Ns Ar cs
-National replacement character set to be used in non-UTF-8 mode for keyboard input
-.Ar cs
-is in format accepted by corresponding escape sequences
-.It Fl \-keyboard-mapping Ns = Ns Ar mapping
-Initial keyboard mapping.
-.Ar Mapping
-is one of default, legacy, vt220, hp, sun and sco.
-More information about keyboard mappings can be found in XTerm's ctlseqs.ms
 .It Fl \-line-spacing Ns = Ns Ar pixels
 Additional vertical line spacing
-.It Fl \-lock-keyboard Ns = Ns Ar bool
-Initial value of KAM
-.Qq disable keyboard input
-mode state
 .It Fl \-log-level Ns = Ns Ar level
 Filtering level of logged information.
 .Ar level
 is one of quiet, fatal, warn or info
-.It Fl \-luit Ns = Ns Ar bool
-Launch luit if locale encoding is not supported by terminal
-.It Fl \-luit-path Ns = Ns Ar path
-Path to luit executable
 .It Fl \-margin-bell Ns = Ns Ar value
 Margin bell volume index.
 Value is one of off, low or high
-.It Fl \-margin-bell-column Ns = Ns Ar column
-Column at which margin bell rings when armed
 .It Fl \-margin-bell-high-volume Ns = Ns Ar volume
  High volume value for DECSMBV, from 0 to 100
 .It Fl \-margin-bell-low-volume Ns = Ns Ar volume
 Low volume value for DECSMBV, from 0 to 100
-.It Fl \-max-frame-time Ns = Ns Ar time
-Maximal time between redraws in microseconds. It is used to reduce flickering.
-.It Fl \-meta-sends-escape Ns = Ns Ar bool
-Alt/Meta sends escape prefix instead of setting 8-th bit
-.It Fl \-modify-cursor Ns = Ns Ar fmt
-Enable encoding modifiers for cursor keys.
-.Ar fmt
-0 disables reporting keys with modifiers, 1 sends \fBSS3 ...\fP sequences
-2 sends \fBCSI ...\fP sequences, 3 sends \fBCSI 1; ...\fP sequences, with dummy first argument 1,
-3 sends private \fBCSI > 1; ...\fP sequences.
-.It Fl \-modify-function Ns = Ns Ar fmt
-Enable encoding modifiers for function keys
-.Ar Fmt
-is same as for
-.Fl \-modify-cursor
-.It Fl \-modify-keypad Ns = Ns Ar fmt
-Enable encoding modifiers keypad keys.
-.Ar Fmt
-is same as for
-.Fl \-modify-cursor
-.It Fl \-modify-other Ns = Ns Ar value
-Enable encoding modifiers for other (non-function) keys.
-0 is disable, 1 is all, excluding commonly known values, 2 is all.
-.It Fl \-modify-other-fmt Ns = Ns Ar value
-Format of encoding modifiers when modify other keys is enabled.
-.Ar Value
-is one of xterm, csi-u. xterm sends \fBCSI 27 ; M ; K ~\fP sequences.
-csu-u sends \fBCSI K ; M u\fP sequences. M is decimal modifier mask. K is pressed key code.
-.It Fl \-nrcs Ns = Ns Ar bool
-Initial value of
-.Qq enable NRCSs support
-mode state
-.It Fl \-numlock Ns = Ns Ar bool
-Initial value of
-.Qq allow numlock
-mode state
 .It Fl \-override-boxdrawing Ns = Ns Ar bool
 Use built-in box drawing characters.
 Use this if font line drawing characters does not align or are missing
@@ -355,8 +264,6 @@ Print cell attributes when auto print mode (CSI ? 5 i) is enabled
 Quit daemon (only for nsstc)
 .It Fl \-raise-on-bell Ns = Ns Ar bool
 Raise terminal window on bell
-.It Fl \-reverse-video Ns = Ns Ar bool
-Initial reverse video setting
 .It Fl \-reversed-color Ns = Ns Ar color
 Special color of reversed text.
 .Ar Color
@@ -364,12 +271,6 @@ format is same as for
 .Fl \-colorN
 .It Fl \-smooth-resize Ns = Ns Ar bool
 Don't force window size to be aligned on character size.
-.It Fl \-smooth-scroll-delay Ns = Ns Ar time
-Delay in microseconds between subsequent scrolls when smooth scroll mode is enabled
-.It Fl \-smooth-scroll-step Ns = Ns Ar lines
-Maximal amount of lines to be scrolled without delay when smooth scroll mode is enabled
-.It Fl \-smooth-scroll Ns = Ns Ar bool
-Initial smooth scroll setting
 .It Fl \-scroll-amount Ns = Ns Ar lines
 Number of lines scrolled in a time
 .It Fl \-scroll-on-input Ns = Ns Ar bool
@@ -411,10 +312,6 @@ Enable/disable reverse text special color
 Enable/disable underlined text special color
 .It Fl \-substitute-fonts Ns = Ns Ar bool
 Enable/disable substitute font support
-.It Fl \-sync-timeout Ns = Ns Ar time
-Synchronous update timeout in microseconds
-.It Fl \-tab-width Ns = Ns Ar width
-Initial width of tab character, default is 8
 .It Fl \-term-mod Ns = Ns Ar mods
 Modifiers to which T modifier expands. If
 .Ar mods
@@ -436,7 +333,7 @@ Trace user input
 .It Fl \-trace-misc Ns = Ns Ar bool
 Trace miscellaneous information
 .It Fl \-triple-click-time Ns = Ns Ar time
-Time gap in microseconds in witch tree mouse presses will be considered triple click
+Time between second and third mouse pressed in which all three clicks are considered a triple click.
 .It Fl \-underline-width Ns = Ns Ar pixels
 Text underline width
 .It Fl \-underlined-color Ns = Ns Ar color
@@ -453,8 +350,6 @@ Set ICCCM window urgency on bell
 .It Fl \-uri-click-mod Ns = Ns Ar mods
 Modifiers required to click to URIs, empty by default.
 This option is recognized only if URI support is compiled in
-.It Fl \-use-utf8 Ns = Ns Ar bool
-Enable UTF-8 mode. Enabled by default if current locale encoding is UTF-8
 .It Fl \-uri-mode Ns = Ns Ar mode
 Set URI support mode.
 .Ar mode
@@ -489,17 +384,132 @@ Internal border width. Sets top, left, right and bottom borders to the same valu
 .It Fl \-visual-bell Ns = Ns Ar bool
 Enable/disable visual bell
 .It Fl \-visual-bell-time Ns = Ns Ar time
-Duration of visual bell, in microseconds
-.It Fl \-vt-version Ns = Ns Ar version , Fl V Ar version
-Emulated DEC VT version, e.g. 520
+Duration of visual bell.
 .It Fl \-window-class Ns = Ns Ar class , Fl c Ar class
 X11 Window class (or wayland app-id)
 .It Fl \-window-ops Ns = Ns Ar bool
 Allow window manipulation with escape sequences
 .It Fl \-word-break Ns = Ns Ar separators
 Symbols treated as word separators when snapping mouse selection
-.It Fl \-wait-for-configure-delay Ns = Ns Ar time
-Maximum delay to wait for configure delay after window resize in microseconds
 .El
+.Pp
+The following are advanced options that are used to alter terminal emulation behaviour.
+Changing these options can break applications. Use with caution.
+.Bl -tag -width Ds
+.It Fl \-allow-alternate Ns = Ns Ar bool
+Enable alternate screen
+.It Fl \-allow-modify-edit-keypad Ns = Ns Ar bool
+ Allow modifying edit keypad keys in legacy keyboard layout
+.It Fl \-allow-modify-function Ns = Ns Ar bool
+Allow modifying function keys in legacy keyboard layout
+.It Fl \-allow-modify-keypad Ns = Ns Ar bool
+Allow modifying keypad keys in legacy keyboard layout
+.It Fl \-allow-modify-misc Ns = Ns Ar bool
+Allow modifying miscellaneous keys in legacy keyboard layout
+.It Fl \-alternate-scroll Ns = Ns Ar bool
+Scrolling sends arrow keys escapes in alternate screen
+.It Fl \-answerback-string Ns = Ns Ar string
+<ENQ> report, default is <ACK>
+.It Fl \-autorepeat Ns = Ns Ar bool
+Enable keys autorepeat (DECARM)
+.It Fl \-appcursor Ns = Ns Ar bool
+Initial application cursor mode value.
+.It Fl \-appkey Ns = Ns Ar bool
+Initial application keypad mode value
+.It Fl \-autowrap Ns = Ns Ar bool
+Initial autowrap setting
+.It Fl \-backspace-is-del Ns = Ns Ar bool
+Backspace sends DEL instead of BS
+.It Fl \-delete-is-del Ns = Ns Ar bool
+Delete sends DEL symbol instead of escape sequence
+.It Fl \-erase-scrollback Ns = Ns Ar bool
+Allow ED 3 to clear scrollback buffer. This will allow applications to erase you termianl history.
+.It Fl \-extended-cir Ns = Ns Ar bool
+Report all SGR attributes in DECCIR. This is an extension of nsst and no applications can parse this format.
+.It Fl \-fkey-increment Ns = Ns Ar number
+Step in numbering function keys
+.It Fl \-force-nrcs Ns = Ns Ar bool
+Enable NRCS translation even when UTF-8 mode is enabled
+.It Fl \-frame-wait-delay Ns = Ns Ar time
+Maximal time since last application output before redraw is scheduled.
+.It Fl \-has-meta Ns = Ns Ar bool
+Initial
+.Qq handle meta/alt modifier
+mode state
+.It Fl \-keyboard-dialect Ns = Ns Ar cs
+National replacement character set to be used in non-UTF-8 mode for keyboard input
+.Ar cs
+is in format accepted by corresponding escape sequences
+.It Fl \-keyboard-mapping Ns = Ns Ar mapping
+Initial keyboard mapping.
+.Ar Mapping
+is one of default, legacy, vt220, hp, sun and sco.
+More information about keyboard mappings can be found in XTerm's ctlseqs.ms
+.It Fl \-lock-keyboard Ns = Ns Ar bool
+Initial value of KAM
+.Qq disable keyboard input
+mode state
+.It Fl \-luit Ns = Ns Ar bool
+Launch luit if locale encoding is not supported by terminal
+.It Fl \-luit-path Ns = Ns Ar path
+Path to luit executable
+.It Fl \-margin-bell-column Ns = Ns Ar column
+Column at which margin bell rings when armed
+.It Fl \-max-frame-time Ns = Ns Ar time
+Maximum time between redraws. It is used to reduce flickering.
+.It Fl \-meta-sends-escape Ns = Ns Ar bool
+Alt/Meta sends escape prefix instead of setting 8-th bit
+.It Fl \-modify-cursor Ns = Ns Ar fmt
+Enable encoding modifiers for cursor keys.
+.Ar fmt
+0 disables reporting keys with modifiers, 1 sends \fBSS3 ...\fP sequences
+2 sends \fBCSI ...\fP sequences, 3 sends \fBCSI 1; ...\fP sequences, with dummy first argument 1,
+3 sends private \fBCSI > 1; ...\fP sequences.
+.It Fl \-modify-function Ns = Ns Ar fmt
+Enable encoding modifiers for function keys
+.Ar Fmt
+is same as for
+.Fl \-modify-cursor
+.It Fl \-modify-keypad Ns = Ns Ar fmt
+Enable encoding modifiers keypad keys.
+.Ar Fmt
+is same as for
+.Fl \-modify-cursor
+.It Fl \-modify-other Ns = Ns Ar value
+Enable encoding modifiers for other (non-function) keys.
+0 is disable, 1 is all, excluding commonly known values, 2 is all.
+.It Fl \-modify-other-fmt Ns = Ns Ar value
+Format of encoding modifiers when modify other keys is enabled.
+.Ar Value
+is one of xterm, csi-u. xterm sends \fBCSI 27 ; M ; K ~\fP sequences.
+csu-u sends \fBCSI K ; M u\fP sequences. M is decimal modifier mask. K is pressed key code.
+.It Fl \-nrcs Ns = Ns Ar bool
+Initial value of
+.Qq enable NRCSs support
+mode state
+.It Fl \-numlock Ns = Ns Ar bool
+Initial value of
+.Qq allow numlock
+mode state
+.It Fl \-reverse-video Ns = Ns Ar bool
+Initial reverse video setting
+.It Fl \-smooth-scroll-delay Ns = Ns Ar time
+Delay between subsequent scrolls when smooth scroll mode is enabled
+.It Fl \-smooth-scroll-step Ns = Ns Ar lines
+Maximal amount of lines to be scrolled without delay when smooth scroll mode is enabled
+.It Fl \-smooth-scroll Ns = Ns Ar bool
+Initial smooth scroll setting
+.It Fl \-sync-timeout Ns = Ns Ar time
+Synchronous update timeout
+.It Fl \-tab-width Ns = Ns Ar width
+Initial width of tab character, default is 8
+.It Fl \-use-utf8 Ns = Ns Ar bool
+Enable UTF-8 mode. Enabled by default if current locale encoding is UTF-8
+.It Fl \-vt-version Ns = Ns Ar version , Fl V Ar version
+Emulated DEC VT version, e.g. 520
+.It Fl \-wait-for-configure-delay Ns = Ns Ar time
+Maximum delay to wait for configure delay after window resize
+.El
+
 .Sh AUTHORS
 Evgeniy Baskov <j-basevgser@yandex.ru>
