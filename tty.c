@@ -49,6 +49,7 @@ static struct termios dtio;
 static void handle_chld(int arg) {
     int status;
     pid_t pid;
+    int saved_errno = errno;
 
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         if (pid < 0) {
@@ -71,6 +72,7 @@ static void handle_chld(int arg) {
         }
     }
 
+    errno = saved_errno;
     (void)arg;
 }
 

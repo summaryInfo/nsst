@@ -9,6 +9,7 @@
 #include "tty.h"
 #include "window-impl.h"
 
+#include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
@@ -47,9 +48,11 @@ _Noreturn static void handle_term(int sig) {
 }
 
 static void handle_hup(int sig) {
+    int saved_errno = errno;
     /* We need to ignore SIGHUPs sent by our children */
     if (fcntl(STDOUT_FILENO, F_GETFD) < 0)
         handle_term(sig);
+    errno = saved_errno;
 }
 
 static void tick(void *arg);
