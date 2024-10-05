@@ -73,7 +73,7 @@ struct window {
     int16_t damaged_y1;
 
     struct event *frame_timer;
-    struct event *smooth_scrooll_timer;
+    struct event *smooth_scroll_timer;
     struct event *blink_timer;
     struct event *blink_inhibit_timer;
     struct event *sync_update_timeout_timer;

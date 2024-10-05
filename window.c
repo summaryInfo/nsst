@@ -332,7 +332,7 @@ static bool handle_smooth_scroll(void *win_) {
 void window_request_scroll_flush(struct window *win) {
     window_reset_delayed_redraw(win);
     queue_force_redraw(win);
-    if (!poller_set_timer(&win->smooth_scrooll_timer, handle_smooth_scroll,
+    if (!poller_set_timer(&win->smooth_scroll_timer, handle_smooth_scroll,
                           win, win->cfg.smooth_scroll_delay)) {
         inc_read_inhibit(win);
    }
@@ -470,7 +470,7 @@ static void reload_window(struct window *win) {
     term_reload_config(win->term);
     screen_damage_lines(term_screen(win->term), 0, win->c.height);
 
-    if (poller_unset(&win->smooth_scrooll_timer))
+    if (poller_unset(&win->smooth_scroll_timer))
         dec_read_inhibit(win);
     if (poller_unset(&win->configure_delay_timer))
         dec_read_inhibit(win);
@@ -620,7 +620,7 @@ error:
 
 void free_window(struct window *win) {
     poller_unset(&win->frame_timer);
-    poller_unset(&win->smooth_scrooll_timer);
+    poller_unset(&win->smooth_scroll_timer);
     poller_unset(&win->blink_timer);
     poller_unset(&win->blink_inhibit_timer);
     poller_unset(&win->sync_update_timeout_timer);
