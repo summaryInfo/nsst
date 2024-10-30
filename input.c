@@ -47,7 +47,7 @@ static inline bool is_edit_function(uint32_t ks, bool deldel) {
 }
 
 static inline bool is_cursor(uint32_t ks) {
-    return XKB_KEY_Home <= ks && ks <= XKB_KEY_Select;
+    return XKB_KEY_Home <= ks && ks < XKB_KEY_Select;
 }
 
 static inline bool is_keypad(uint32_t ks) {
