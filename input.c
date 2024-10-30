@@ -414,7 +414,7 @@ static void translate_adjust(struct key *k, struct keyboard_state *mode) {
             k->sym = translate_keypad(k->sym);
     }
 
-    mode->appkey &= (k->utf8len == 1 && mode->allow_numlock && (k->mask & mask_mod_2));
+    mode->appkey &= !(k->utf8len == 1 && mode->allow_numlock && (k->mask & mask_mod_2));
 
     if (k->sym == XKB_KEY_Tab || k->sym == XKB_KEY_ISO_Left_Tab) {
         if (mode->modkey_other > 1) {
