@@ -458,7 +458,9 @@ static bool handle_blink(void *win_) {
 }
 
 static void reload_window(struct window *win) {
-    if (!win->cfg.config_path) {
+    if ((!win->cfg.config_path && !default_config_path) ||
+            (win->cfg.config_path && default_config_path &&
+             !strcmp(win->cfg.config_path, default_config_path))) {
         copy_config(&win->cfg, &global_instance_config);
     } else {
         char *cpath = win->cfg.config_path;
@@ -805,8 +807,11 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
         window_paste_clip(win, clip_clipboard);
         return;
     case shortcut_reload_config:
-        if (!win->cfg.config_path)
+        if ((!win->cfg.config_path && !default_config_path) ||
+                (win->cfg.config_path && default_config_path &&
+                 !strcmp(win->cfg.config_path, default_config_path))) {
             init_instance_config(&global_instance_config, global_instance_config.config_path, false);
+        }
         reload_window(win);
         return;
     case shortcut_reset:

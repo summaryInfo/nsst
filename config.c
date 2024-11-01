@@ -36,6 +36,7 @@ static struct option *short_opts[26*2];
 static ssize_t max_help_line_len;
 static struct option *dpi_option_entry;
 static char version_string_buffer[32];
+char *default_config_path;
 
 #define COLOR_SPECIAL_SELECTED_BG 0
 #define COLOR_SPECIAL_SELECTED_FG 0
@@ -398,9 +399,12 @@ void free_options(void) {
     while (ht_current(&it))
         ht_erase_current(&it);
     ht_free(&options_hashtable);
+    free(default_config_path);
 }
 
-void init_options(void) {
+void init_options(const char *config_path) {
+    if (config_path)
+        default_config_path = strdup(config_path);
 
     snprintf(version_string_buffer, sizeof version_string_buffer, "nsst v%d.%d.%d\n",
         (NSST_VERSION / 10000) % 100, (NSST_VERSION / 100) % 100, NSST_VERSION % 100);

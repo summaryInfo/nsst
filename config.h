@@ -242,10 +242,11 @@ struct instance_config {
 };
 
 extern struct global_config gconfig;
+extern char *default_config_path;
 
 struct option;
 
-void init_options(void);
+void init_options(const char *config_path);
 void free_options(void);
 
 struct option *find_option_entry(const char *name, bool need_warn);

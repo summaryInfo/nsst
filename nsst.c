@@ -154,12 +154,13 @@ int main(int argc, char **argv) {
     /* Load locale from environment variable */
     setlocale(LC_CTYPE, "");
 
-    init_options();
+    /* Parse config path argument before parsing config file
+     * to use correct one. This path is used as a default one later. */
+    char *cpath = parse_config_path(argc, argv);
+
+    init_options(cpath);
     atexit(free_options);
 
-    /* Parse config path argument before
-     * parsing config file to use correct one */
-    char *cpath = parse_config_path(argc, argv);
     init_instance_config(&global_instance_config, cpath, true);
     atexit(free_instance_config_at_exit);
 
