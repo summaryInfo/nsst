@@ -75,9 +75,10 @@ void free_font(struct font *font) {
     }
 }
 
-static void load_append_fonts(struct font *font, struct face_list *faces, struct patern_holder pats) {
+static bool load_append_fonts(struct font *font, struct face_list *faces, struct patern_holder pats) {
     size_t new_size = faces->length + pats.length;
     adjust_buffer((void **)&faces->faces, &faces->caps, new_size, sizeof(FT_Face));
+    bool has_svg = false;
 
     for (size_t i = 0; i < pats.length; i++) {
         FcValue file, index, matrix, pixsize;
@@ -100,6 +101,8 @@ static void load_append_fonts(struct font *font, struct face_list *faces, struct
             else warn("Some error happend loading file: %u", err);
             continue;
         }
+
+        has_svg |= FT_HAS_SVG(faces->faces[faces->length]);
 
         if (!faces->faces[faces->length]) {
             warn("Empty font face");
@@ -131,9 +134,11 @@ static void load_append_fonts(struct font *font, struct face_list *faces, struct
 
         faces->length++;
     }
+
+    return has_svg;
 }
 
-static void load_face_list(struct font *font, struct face_list* faces, const char *str, enum face_name attr, double size) {
+static bool load_face_list(struct font *font, struct face_list* faces, const char *str, enum face_name attr, double size) {
     char *tmp = strdup(str);
     struct patern_holder pats = {
         .length = 0,
@@ -221,12 +226,14 @@ static void load_face_list(struct font *font, struct face_list* faces, const cha
         pats.pats[pats.length++] = final_pat;
     }
 
-    load_append_fonts(font, faces, pats);
+    bool has_svg = load_append_fonts(font, faces, pats);
 
     for (size_t i = 0; i < pats.length; i++)
         FcPatternDestroy(pats.pats[i]);
     free(pats.pats);
     free(tmp);
+
+    return has_svg;
 }
 
 struct font *create_font(const char* descr, double size, double dpi, double gamma, bool force_scalable, bool allow_subst) {
@@ -249,9 +256,12 @@ struct font *create_font(const char* descr, double size, double dpi, double gamm
     font->force_scalable = force_scalable;
     font->allow_subst_font = allow_subst;
 
-
+    bool has_svg = false;
     for (size_t i = 0; i < face_MAX; i++)
-        load_face_list(font, &font->face_types[i], descr, i, size);
+        has_svg |= load_face_list(font, &font->face_types[i], descr, i, size);
+
+    if (has_svg)
+        warn("Font '%s' contains SVG glyphs and might rendered incorrectly", descr);
 
     /* If can't find suitable, use 13 by default */
     if (font->pixel_size == 0)
@@ -316,7 +326,10 @@ static void add_font_substitute(struct font *font, struct face_list *faces, enum
         return;
     }
 
-    load_append_fonts(font, faces, (struct patern_holder){ .length = 1, .pats = &final_pat });
+    bool has_svg = load_append_fonts(font, faces, (struct patern_holder){ .length = 1, .pats = &final_pat });
+    if (has_svg)
+        warn("Substitute font for character U+%04x (%lc) contains SVG glyphs and might rendered incorrectly", ch, ch);
+
     FcPatternDestroy(final_pat);
 }
 
