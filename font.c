@@ -541,8 +541,10 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
         } else {
             memcpy(glyph->data, src, glyph->height * glyph->width * 4);
         }
-        if (glyph->width > targ_width)
+        if (glyph->width > targ_width) {
             glyph = downsample_glyph(glyph, targ_width, force_aligned, gamma);
+            stride = glyph->stride;
+        }
     }
 
     if (gconfig.log_level == 3 && gconfig.trace_fonts) {
