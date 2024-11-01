@@ -424,11 +424,18 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
     bool ordrev = ord == pixmode_rgb || ord == pixmode_rgbv;
     bool lcd = ord != pixmode_mono;
 
-    FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT | FT_LOAD_COLOR | FT_LOAD_NO_SVG |
-                  (lcd ? (ordv ? FT_LOAD_TARGET_LCD_V : FT_LOAD_TARGET_LCD) : FT_LOAD_TARGET_NORMAL));
+    FT_Int32 load_flags = FT_LOAD_DEFAULT | FT_LOAD_NO_SVG;
+    FT_Int32 render_mode = FT_RENDER_MODE_NORMAL;
+    if (FT_HAS_COLOR(face))
+        load_flags |= FT_LOAD_COLOR;
+    else if (lcd) {
+        load_flags |= ordv ? FT_LOAD_TARGET_LCD_V : FT_LOAD_TARGET_LCD;
+        render_mode = ordv ? FT_RENDER_MODE_LCD_V : FT_RENDER_MODE_LCD;
+    }
 
+    FT_Load_Glyph(face, glyph_index, load_flags);
     if (face->glyph->format != FT_GLYPH_FORMAT_BITMAP)
-        FT_Render_Glyph(face->glyph, lcd ? (ordv ? FT_RENDER_MODE_LCD_V : FT_RENDER_MODE_LCD) : FT_RENDER_MODE_NORMAL);
+        FT_Render_Glyph(face->glyph, render_mode);
 
     size_t stride = face->glyph->bitmap.width;
 
