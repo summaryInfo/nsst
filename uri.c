@@ -521,15 +521,11 @@ void uri_unref(uint32_t id) {
     }
 }
 
-void uri_open(uint32_t id) {
-    if (gconfig.trace_misc) {
-        info("URI open cmd='%s' id=%d path='%s'",
-                gconfig.open_command, id, uri_get(id));
-    }
+void uri_open(const char *open_cmd, uint32_t id) {
+    if (gconfig.trace_misc)
+        info("URI open cmd='%s' id=%d path='%s'", open_cmd, id, uri_get(id));
     if (id && !fork()) {
-        execlp(gconfig.open_command,
-               gconfig.open_command,
-               uri_get(id), NULL);
+        execlp(open_cmd, open_cmd, uri_get(id), NULL);
         _exit(127);
     }
 }

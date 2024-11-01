@@ -72,14 +72,11 @@ struct global_config {
     char *sockpath;
     char hostname[MAX_DOMAIN_NAME];
 
-    char *open_command;
-    char *notify_command;
-    bool unique_uris;
-
     enum renderer_backend backend;
 
     int log_level;
 
+    bool unique_uris;
     bool daemon_mode;
     bool clone_config;
     bool trace_characters;
@@ -147,6 +144,8 @@ struct instance_config {
     char *normal_pointer;
     char *resize_pointer;
     char *uri_pointer;
+    char *open_command;
+    char *notify_command;
 
     enum keyboad_mapping mapping;
     enum cursor_type cursor_shape;

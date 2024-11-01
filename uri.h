@@ -48,7 +48,7 @@ struct uri_match_state {
 uint32_t uri_add(const char *uri, const char *id);
 void uri_ref(uint32_t uri);
 void uri_unref(uint32_t uri);
-void uri_open(uint32_t uri);
+void uri_open(const char *opencmd, uint32_t uri);
 const char *uri_get(uint32_t uri);
 
 const uint8_t *match_reverse_proto_tree(struct uri_match_state *stt, const uint8_t *str, ssize_t len);

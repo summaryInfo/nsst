@@ -832,7 +832,8 @@ static void update_active_uri(struct screen *scr, struct window *win, struct mou
 
     uint32_t uri_mask = window_cfg(win)->uri_click_mask;
     if (uri && ev->event == mouse_event_release && ev->button == 0 &&
-        (ev->mask & mask_mod_mask) == uri_mask) uri_open(uri);
+            (ev->mask & mask_mod_mask) == uri_mask)
+        uri_open(window_cfg(win)->open_command, uri);
 }
 #endif
 
