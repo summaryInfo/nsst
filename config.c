@@ -821,8 +821,13 @@ static bool do_parse_geometry(const char *value, void *dst, union opt_limits *li
 }
 
 void copy_config(struct instance_config *dst, struct instance_config *src) {
+    if (dst == src) return;
+
+    free_config(dst);
+
     *dst = *src;
     src->argv = NULL;
+
     for (size_t i = 0; i < LEN(options); i++) {
         if (options[i].global || options[i].type != option_type_string) continue;
         char *dst1 = (char *)dst + options[i].offset, *value;
