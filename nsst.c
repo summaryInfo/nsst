@@ -130,11 +130,17 @@ static inline char *parse_config_path(int argc, char **argv) {
     char *config_path = NULL;
 
     for (int opt_i = 1; opt_i < argc; opt_i++) {
-        if (strncmp(argv[opt_i], "--config=", sizeof "--config=" - 1) &&
-                strncmp(argv[opt_i], "-C", sizeof "-C" - 1)) continue;
+        char *arg;
+        if (!strcmp(argv[opt_i], "--config")) {
+            arg = argv[++opt_i];
+        } else if (!strncmp(argv[opt_i], "--config=", sizeof "--config=" - 1)) {
+            arg = argv[opt_i] + (sizeof "--config=" - 1);
+            if (!*arg) arg = argv[++opt_i];
+        } else if (!strncmp(argv[opt_i], "-C", sizeof "-C" - 1)) {
+            arg = argv[opt_i] + (sizeof "-C" - 1);
+            if (!*arg) arg = argv[++opt_i];
+        } else continue;
 
-        char *arg = argv[opt_i] + (argv[opt_i][1] == '-' ? sizeof "--config=" : sizeof "-C") - 1;
-        if (!*arg) arg = argv[++opt_i];
         if (!arg) usage(argv[0], EXIT_FAILURE);
         config_path = arg;
     }
