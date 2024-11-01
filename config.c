@@ -336,7 +336,7 @@ static struct option options[] = {
     X(time, sync_time, "sync-timeout", "Synchronous update timeout", SEC/2, 0, 10*SEC),
     X(int16, tab_width, "tab-width", "Initial width of tab character", 8, 1, 1000),
     X(string, term_mod, "term-mod", "Meaning of 'T' modifier", "SC"),
-    X1(string, terminfo, 'D', "term-name", "TERM value", "xterm"),
+    X1(string, terminfo, 'D', "term-name", "TERM value", "xterm-256color"),
     X2(string, title, 'T', 't', "title", "Initial window title", "Not So Simple Terminal"),
     X(dim, border.top, "top-border", "Top border size", 8, 0, 200),
     G(boolean, trace_characters, "trace-characters", "Trace interpreted characters", false),
