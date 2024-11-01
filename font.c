@@ -368,20 +368,21 @@ static inline color_t image_sample(struct glyph *glyph, double x0, double x1, do
 
 HOT
 static struct glyph *downsample_glyph(struct glyph *glyph, uint32_t targ_width, bool force_aligned, double gamma) {
-    double scale = targ_width/(double)glyph->width;
+    double x_scale = targ_width/(double)glyph->width;
+    double y_scale = x_scale;
 
     ssize_t stride = targ_width*sizeof(color_t);
     if (!force_aligned) stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
     else stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT*sizeof(color_t));
 
-    ssize_t targ_height = nearbyint(glyph->height * scale);
+    ssize_t targ_height = nearbyint(glyph->height * y_scale);
     struct glyph *nglyph = aligned_alloc(_Alignof(struct glyph), ROUNDUP(sizeof(*glyph) + stride * targ_height, _Alignof(struct glyph)));
-    nglyph->x = nearbyint(glyph->x * scale);
-    nglyph->y = nearbyint(glyph->y * scale);
+    nglyph->x = nearbyint(glyph->x * x_scale);
+    nglyph->y = nearbyint(glyph->y * y_scale);
     nglyph->width = targ_width;
     nglyph->height = targ_height;
-    nglyph->x_off = nearbyint(glyph->x_off * scale);
-    nglyph->y_off = nearbyint(glyph->y_off * scale);
+    nglyph->y_off = nearbyint(glyph->y_off * y_scale);
+    nglyph->x_off = nearbyint(glyph->x_off * x_scale);
     nglyph->stride = stride;
     nglyph->pixmode = glyph->pixmode;
     nglyph->g = glyph->g;
@@ -541,10 +542,8 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
         } else {
             memcpy(glyph->data, src, glyph->height * glyph->width * 4);
         }
-        if (glyph->width > targ_width) {
+        if (glyph->width > targ_width)
             glyph = downsample_glyph(glyph, targ_width, force_aligned, gamma);
-            stride = glyph->stride;
-        }
     }
 
     if (gconfig.log_level == 3 && gconfig.trace_fonts) {
@@ -555,7 +554,7 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
         for (size_t k = 0; k < glyph->height; k++) {
             fputs("\t", stderr);
             for (size_t m = 0; m < glyph->width; m++)
-                fprintf(stderr, "%02x", glyph->data[stride*k+m]);
+                fprintf(stderr, "%02x", glyph->data[glyph->stride*k+m]);
             putc('\n', stderr);
         }
     }
