@@ -34,6 +34,7 @@ function completion/nsst {
 		"--border:;Border size"
 		"--bottom-border:;Bottom border size"
 		"C: --config:;Configuration file path"
+		"--clone-config:;Copy config from previous window instead of loading it from file"
 		"--cursor-background:;Default cursor background color"
 		"--cursor-foreground:;Default cursor foreground color"
 		"--cursor-shape:;Shape of cursor"
@@ -230,7 +231,7 @@ function completion/nsst {
 	 --scroll-on-input|--scroll-on-output|--select-to-clipboard|--smooth-scroll|--special-blink|\
 	 --special-bold|--special-italic|--special-reverse|--special-underlined|--substitute-fonts|\
 	 --trace-characters|--trace-controls|--trace-events|--trace-fonts|--trace-input|\
-	 --trace-misc|--urgent-on-bell|--use-utf8|--visual-bell|--window-ops|--smooth-resize)
+	 --trace-misc|--urgent-on-bell|--use-utf8|--visual-bell|--window-ops|--smooth-resize|--clone-config)
 		complete -P "$PREFIX" -- true false default
 		;;
 	(''|e)

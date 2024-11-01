@@ -130,7 +130,7 @@ static bool is_boolean_option(const char *opt) {
         "allow-alternate", "allow-blinking", "allow-modify-edit-keypad", "allow-modify-function",
         "allow-modify-keypad", "allow-modify-misc", "allow-uris", "alternate-scroll", "appcursor",
         "appkey", "autorepeat", "autowrap", "backspace-is-del", "blend-all-background",
-        "blend-foreground", "daemon", "delete-is-del", "erase-scrollback", "extended-cir",
+        "blend-foreground", "clone-config", "daemon", "delete-is-del", "erase-scrollback", "extended-cir",
         "fixed", "force-nrcs", "force-scalable", "force-wayland-csd", "fork", "has-meta",
         "keep-clipboard", "keep-selection", "lock-keyboard", "luit", "meta-sends-escape", "nrcs",
         "numlock", "override-boxdrawing", "print-attributes", "raise-on-bell", "reverse-video",

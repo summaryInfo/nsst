@@ -779,9 +779,17 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
             size = ctx.font_size;
         window_set_font(win, NULL, size);
         return;
-    case shortcut_new_window:
-        create_window(&win->cfg);
+    case shortcut_new_window: {
+        if (gconfig.clone_config) {
+            create_window(&win->cfg);
+        } else {
+            struct instance_config cfg = {0};
+            init_instance_config(&cfg, win->cfg.config_path, false);
+            create_window(&cfg);
+            free_config(&cfg);
+        }
         return;
+    }
     case shortcut_copy:
         clip_copy(win, 0);
         return;
@@ -816,6 +824,12 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
 
 bool window_is_mapped(struct window *win) {
     return win->mapped;
+}
+
+struct instance_config *get_config_template(void) {
+    if (list_empty(&win_list_head))
+        return NULL;
+    return &CONTAINEROF(win_list_head.prev, struct window, link)->cfg;
 }
 
 static bool handle_frame(void *win_) {

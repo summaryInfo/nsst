@@ -81,6 +81,7 @@ struct global_config {
     int log_level;
 
     bool daemon_mode;
+    bool clone_config;
     bool trace_characters;
     bool trace_controls;
     bool trace_events;

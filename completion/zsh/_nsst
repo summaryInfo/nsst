@@ -18,6 +18,7 @@ _arguments \
 	"--backspace-is-del=[Backspace sends DEL instead of BS]:bool:(true false default)" \
 	"--blend-all-background=[Apply opacity to all background colors, not just default one]:bool:(true false default)" \
 	"--blend-foreground=[Apply opacity to foreground colors]:bool:(true false default)" \
+	"--clone-config=[Copy config from previous window instead of loading it from file]:bool:(true false default)" \
 	"--delete-is-del=[Delete sends DEL symbol instead of escape sequence]:bool:(true false default)" \
 	"--erase-scrollback=[Allow ED 3 to clear scrollback buffer]:bool:(true false default)" \
 	"--extended-cir=[Report all SGR attributes in DECCIR]:bool:(true false default)" \
