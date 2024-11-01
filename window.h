@@ -139,7 +139,8 @@ void window_set_pointer_shape(struct window *win, const char *name);
 bool init_daemon(void);
 void free_daemon(void);
 bool daemon_process_clients(void);
-struct instance_config *get_config_template(void);
+
+extern struct instance_config global_instance_config;
 
 void x11_xrender_release_glyph(struct glyph *);
 

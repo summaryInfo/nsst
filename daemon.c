@@ -164,9 +164,8 @@ static void append_pending_launch(struct pending_launch *lnch) {
 
     if (buffer[0] == '\001' /* SOH */) /* Header */ {
         char *cpath = len > 1 ? buffer + 1 : NULL;
-        struct instance_config *cfg;
-        if (!cpath && gconfig.clone_config && (cfg = get_config_template()))
-            copy_config(&lnch->cfg, cfg);
+        if (!cpath && gconfig.clone_config)
+            copy_config(&lnch->cfg, &global_instance_config);
         else
             init_instance_config(&lnch->cfg, cpath, 0);
     } else if (buffer[0] == '\003' /* ETX */ && len == 1) /* End of configuration */ {

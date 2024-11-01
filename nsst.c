@@ -142,6 +142,11 @@ static inline char *parse_config_path(int argc, char **argv) {
     return config_path;
 }
 
+struct instance_config global_instance_config;
+
+static void free_instance_config_at_exit(void) {
+    free_config(&global_instance_config);
+}
 
 int main(int argc, char **argv) {
     int result = EXIT_SUCCESS;
@@ -155,10 +160,10 @@ int main(int argc, char **argv) {
     /* Parse config path argument before
      * parsing config file to use correct one */
     char *cpath = parse_config_path(argc, argv);
-    struct instance_config cfg = {0};
-    init_instance_config(&cfg, cpath, true);
+    init_instance_config(&global_instance_config, cpath, true);
+    atexit(free_instance_config_at_exit);
 
-    parse_options(&cfg, argv);
+    parse_options(&global_instance_config, argv);
 
 #if USE_URI
     init_proto_tree();
@@ -167,7 +172,7 @@ int main(int argc, char **argv) {
     init_poller();
     atexit(free_poller);
 
-    init_context(&cfg);
+    init_context(&global_instance_config);
     atexit(free_context);
 
     init_default_termios();
@@ -176,10 +181,8 @@ int main(int argc, char **argv) {
         atexit(free_daemon);
         result = !init_daemon();
     } else {
-        result = !create_window(&cfg);
+        result = !create_window(&global_instance_config);
     }
-
-    free_config(&cfg);
 
     if (!result) poller_run();
     return result;

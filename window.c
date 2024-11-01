@@ -458,10 +458,14 @@ static bool handle_blink(void *win_) {
 }
 
 static void reload_window(struct window *win) {
-    char *cpath = win->cfg.config_path;
-    win->cfg.config_path = NULL;
-
-    init_instance_config(&win->cfg, cpath, false);
+    if (!win->cfg.config_path) {
+        copy_config(&win->cfg, &global_instance_config);
+    } else {
+        char *cpath = win->cfg.config_path;
+        win->cfg.config_path = NULL;
+        init_instance_config(&win->cfg, cpath, false);
+        free(cpath);
+    }
 
     if (pvtbl->reload_config)
         pvtbl->reload_config(win);
@@ -492,6 +496,7 @@ static void reload_window(struct window *win) {
 }
 
 static void do_reload_config(void) {
+    init_instance_config(&global_instance_config, global_instance_config.config_path, false);
     LIST_FOREACH_SAFE(it, &win_list_head)
         reload_window(CONTAINEROF(it, struct window, link));
     reload_config = false;
@@ -800,6 +805,8 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
         window_paste_clip(win, clip_clipboard);
         return;
     case shortcut_reload_config:
+        if (!win->cfg.config_path)
+            init_instance_config(&global_instance_config, global_instance_config.config_path, false);
         reload_window(win);
         return;
     case shortcut_reset:
@@ -824,12 +831,6 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
 
 bool window_is_mapped(struct window *win) {
     return win->mapped;
-}
-
-struct instance_config *get_config_template(void) {
-    if (list_empty(&win_list_head))
-        return NULL;
-    return &CONTAINEROF(win_list_head.prev, struct window, link)->cfg;
 }
 
 static bool handle_frame(void *win_) {
