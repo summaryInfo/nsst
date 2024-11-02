@@ -248,7 +248,7 @@ static struct option options[] = {
     X(dim, border.bottom, "bottom-border", "Bottom border size", 8, 0, 200),
     X1(geometry, geometry, 'G', "char-geometry", "Window geometry in characters, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]", true),
     X1(string, config_path, 'C', "config", "Configuration file path", NULL),
-    G(boolean, clone_config, "clone-config", "Clone configuration from existing windows instead of loading from files", false),
+    G(boolean, clone_config, "clone-config", "Clone configuration from existing windows instead of loading from files", true),
     X(color, palette[SPECIAL_CURSOR_BG], "cursor-background", "Default cursor background color", COLOR_SPECIAL_CURSOR_BG),
     X(color, palette[SPECIAL_CURSOR_FG], "cursor-foreground", "Default cursor foreground color", COLOR_SPECIAL_CURSOR_FG),
     X(enum, cursor_shape, "cursor-shape", "Shape of cursor", 2, 1, XENUM("blinking-block", "block", "blinking-underline", "underline", "blinking-bar", "bar")),
