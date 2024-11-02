@@ -252,10 +252,10 @@ struct option *find_option_entry(const char *name, bool need_warn);
 struct option *find_short_option_entry(char name);
 bool is_boolean_option(struct option *opt);
 
-bool set_option_entry(struct instance_config *c, struct option *, const char *value, bool allow_global);
+bool set_option_entry(struct instance_config *c, struct option *, const char *value, int allow_global);
 void set_default_dpi(double dpi, struct instance_config *cfg);
 void copy_config(struct instance_config *dst, struct instance_config *src);
 void free_config(struct instance_config *src);
-void init_instance_config(struct instance_config *cfg, const char *config_path, bool allow_global);
+void init_instance_config(struct instance_config *cfg, const char *config_path, int allow_global);
 
 #endif

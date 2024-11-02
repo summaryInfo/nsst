@@ -181,7 +181,7 @@ static void append_pending_launch(struct pending_launch *lnch) {
         }
 
         struct option *opt = find_short_option_entry(*name);
-        if (opt) set_option_entry(&lnch->cfg, opt, value, true);
+        if (opt) set_option_entry(&lnch->cfg, opt, value, 0);
     } else if (buffer[0] == '\035' /* GS */ && len > 1) /* Option */ {
         char *name = buffer + 1, *value = memchr(buffer + 1, '=', len);
         if (!value) {
@@ -191,7 +191,7 @@ static void append_pending_launch(struct pending_launch *lnch) {
 
         *value++ = '\0';
         struct option *opt = find_option_entry(name, true);
-        if (opt) set_option_entry(&lnch->cfg, opt, value, true);
+        if (opt) set_option_entry(&lnch->cfg, opt, value, 0);
     } else if (buffer[0] == '\036' /* RS */ && len > 1) /* Argument */ {
         if (lnch->argn + 2 > lnch->argcap) {
             ssize_t newsz = ARGN_STEP(lnch->argcap);

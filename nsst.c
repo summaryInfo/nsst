@@ -73,7 +73,7 @@ static void parse_options(struct instance_config *cfg, char **argv) {
                     arg = argv[++arg_i];
             }
 
-            if (!arg || (opt != config_path_entry && !set_option_entry(cfg, opt, arg, 1)))
+            if (!arg || (opt != config_path_entry && !set_option_entry(cfg, opt, arg, 2)))
                 usage(argv[0], EXIT_FAILURE);
             continue;
         }
@@ -106,7 +106,7 @@ static void parse_options(struct instance_config *cfg, char **argv) {
 
                 /* Config path option should be ignored, since it is set before */
                 if (opt != config_path_entry)
-                    if (!set_option_entry(cfg, opt, arg, 1))
+                    if (!set_option_entry(cfg, opt, arg, 2))
                         usage(argv[0], EXIT_FAILURE);
 
                 if (is_boolean_option(opt)) continue;
@@ -167,7 +167,7 @@ int main(int argc, char **argv) {
     init_options(cpath);
     atexit(free_options);
 
-    init_instance_config(&global_instance_config, cpath, true);
+    init_instance_config(&global_instance_config, cpath, 2);
     atexit(free_instance_config_at_exit);
 
     parse_options(&global_instance_config, argv);

@@ -465,7 +465,7 @@ static void reload_window(struct window *win) {
     } else {
         char *cpath = win->cfg.config_path;
         win->cfg.config_path = NULL;
-        init_instance_config(&win->cfg, cpath, false);
+        init_instance_config(&win->cfg, cpath, 0);
         free(cpath);
     }
 
@@ -498,7 +498,7 @@ static void reload_window(struct window *win) {
 }
 
 static void do_reload_config(void) {
-    init_instance_config(&global_instance_config, global_instance_config.config_path, false);
+    init_instance_config(&global_instance_config, global_instance_config.config_path, 1);
     LIST_FOREACH_SAFE(it, &win_list_head)
         reload_window(CONTAINEROF(it, struct window, link));
     reload_config = false;
@@ -791,7 +791,7 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
             create_window(&win->cfg);
         } else {
             struct instance_config cfg = {0};
-            init_instance_config(&cfg, win->cfg.config_path, false);
+            init_instance_config(&cfg, win->cfg.config_path, 0);
             create_window(&cfg);
             free_config(&cfg);
         }
@@ -810,7 +810,7 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
         if ((!win->cfg.config_path && !default_config_path) ||
                 (win->cfg.config_path && default_config_path &&
                  !strcmp(win->cfg.config_path, default_config_path))) {
-            init_instance_config(&global_instance_config, global_instance_config.config_path, false);
+            init_instance_config(&global_instance_config, global_instance_config.config_path, 0);
         }
         reload_window(win);
         return;

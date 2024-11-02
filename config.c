@@ -141,7 +141,7 @@ struct option {
     const char *description;
     enum option_type type;
     char short_opt[MAX_SHORT_OPT];
-    bool global;
+    char global;
     uint8_t field_size;
     ptrdiff_t offset;
     union opt_limits limits;
@@ -189,7 +189,7 @@ struct option_type_desc {
         .name = name_, \
         .description =  desc_, \
         .type = option_type_##type_, \
-        .global = true, \
+        .global = 1, \
         .short_opt = { l1_, 0 }, \
         .field_size = (uint8_t)sizeof(((struct global_config *)NULL)->field_), \
         .offset = offsetof(struct global_config, field_), \
@@ -198,6 +198,22 @@ struct option_type_desc {
 
 #define G(type_, field_, name_, desc_, ...) \
     G1(type_, field_, 0, name_, desc_, __VA_ARGS__)
+
+/* Non-reloadable (fixed) global option */
+#define GF1(type_, field_, l1_, name_, desc_, ...) { \
+        .head = { 0 }, \
+        .name = name_, \
+        .description =  desc_, \
+        .type = option_type_##type_, \
+        .global = 2, \
+        .short_opt = { l1_, 0 }, \
+        .field_size = (uint8_t)sizeof(((struct global_config *)NULL)->field_), \
+        .offset = offsetof(struct global_config, field_), \
+        .limits.arg_##type_ = { __VA_ARGS__ } \
+    }
+
+#define GF(type_, field_, name_, desc_, ...) \
+    GF1(type_, field_, 0, name_, desc_, __VA_ARGS__)
 
 #define XENUM(...) ((const char *[]){__VA_ARGS__, NULL})
 
@@ -217,7 +233,7 @@ static struct option options[] = {
     X(boolean, appkey, "appkey", "Initial application keypad mode value", false),
     X(boolean, autorepeat, "autorepeat", "Enable key autorepeat", true),
     X(boolean, wrap, "autowrap", "Initial autowrap setting", true),
-    G(enum, backend, "backend", "Select rendering backend", renderer_auto, renderer_auto, XENUM("auto", "x11", "wayland", "x11xrender", "x11shm", "waylandshm")),
+    GF(enum, backend, "backend", "Select rendering backend", renderer_auto, renderer_auto, XENUM("auto", "x11", "wayland", "x11xrender", "x11shm", "waylandshm")),
     X(color, palette[SPECIAL_BG], "background", "Default background color", COLOR_SPECIAL_BG),
     X(boolean, backspace_is_delete, "backspace-is-del", "Backspace sends DEL instead of BS", true),
     X(uint8, bell_high_volume, "bell-high-volume", "High volume value for DECSWBV", 100, 0, 100),
@@ -238,7 +254,7 @@ static struct option options[] = {
     X(enum, cursor_shape, "cursor-shape", "Shape of cursor", 2, 1, XENUM("blinking-block", "block", "blinking-underline", "underline", "blinking-bar", "bar")),
     X(dim, cursor_width, "cursor-width", "Width of lines that forms cursor", 2, 1, 16),
     X(string, cwd, "cwd", "Current working directory for an application", NULL),
-    G1(boolean, daemon_mode, 'd', "daemon", "Start terminal as daemon", false),
+    GF1(boolean, daemon_mode, 'd', "daemon", "Start terminal as daemon", false),
     X(boolean, delete_is_delete, "delete-is-del", "Delete sends DEL symbol instead of escape sequence", false),
     X(time, double_click_time, "double-click-time", "Maximum time between button presses of the double click", 300000000, 0, 10*SEC),
     X(double, dpi, "dpi", "DPI value for fonts", 96, 0, 1000),
@@ -256,7 +272,7 @@ static struct option options[] = {
     X(boolean, force_scalable, "force-scalable", "Do not search for pixmap fonts", false),
     X(boolean, force_wayland_csd, "force-wayland-csd", "Don't request SSD", false),
     X(color, palette[SPECIAL_FG], "foreground", "Default foreground color", COLOR_SPECIAL_FG),
-    G(boolean, fork, "fork", "Fork in daemon mode", 1),
+    GF(boolean, fork, "fork", "Fork in daemon mode", 1),
     X(int64, fps, "fps", "Window refresh rate", 60, 2, 1000),
     X(time, frame_finished_delay, "frame-wait-delay", "Maximum time since last application output before redraw", SEC/240, 1000, 10*SEC),
     X1(geometry, geometry, 'g', "geometry", "Window geometry, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]", false),
@@ -328,7 +344,7 @@ static struct option options[] = {
     X(time, smooth_scroll_delay, "smooth-scroll-delay", "Delay between scrolls when DECSCLM is enabled", 500000, 0, 10*SEC),
     X(int16, smooth_scroll_step, "smooth-scroll-step", "Amount of lines per scroll when DECSCLM is enabled", 1, 1, 100000),
     X(boolean, smooth_scroll, "smooth-scroll", "Initial value of DECSCLM mode", false),
-    G1(string, sockpath, 's', "socket", "Daemon socket path", "/tmp/nsst-sock0"),
+    GF1(string, sockpath, 's', "socket", "Daemon socket path", "/tmp/nsst-sock0"),
     X(boolean, special_blink, "special-blink", "Replace blinking attribute with the corresponding special", false),
     X(boolean, special_bold, "special-bold", "Replace bold attribute with the corresponding special", false),
     X(boolean, special_italic, "special-italic", "Replace italic attribute with the corresponding special", false),
@@ -350,7 +366,7 @@ static struct option options[] = {
     X(time, triple_click_time, "triple-click-time", "Maximum time between second and third button presses of the triple click", 600000000, 0, 10*SEC),
     X(color, palette[SPECIAL_UNDERLINE], "underlined-color", "Special color of underlined text", COLOR_SPECIAL_UNDERLINE),
     X(dim, underline_width, "underline-width", "Text underline width", 1, 0, 16),
-    G(boolean, unique_uris, "unique-uris", "Make distinction between URIs with the same location", false),
+    GF(boolean, unique_uris, "unique-uris", "Make distinction between URIs with the same location", false),
     X(boolean, urgency_on_bell, "urgent-on-bell", "Set window urgency on bell", false),
     X(string, uri_click_mod, "uri-click-mod", "keyboard modifier used to click-open URIs", ""),
     X(color, palette[SPECIAL_URI_TEXT], "uri-color", "Special color of URI text", COLOR_SPECIAL_URI_TEXT),
@@ -517,8 +533,8 @@ struct option *find_option_entry(const char *name, bool need_warn) {
     return result;
 }
 
-bool set_option_entry(struct instance_config *c, struct option *opt, const char *value, bool allow_global) {
-    if (opt->global && !allow_global)
+bool set_option_entry(struct instance_config *c, struct option *opt, const char *value, int allow_global) {
+    if (opt->global > allow_global)
         return false;
 
     void *dest = opt->offset + (opt->global ? (char *)&gconfig : (char *)c);
@@ -850,7 +866,7 @@ void free_config(struct instance_config *src) {
     }
 }
 
-static void parse_config(struct instance_config *cfg, bool allow_global) {
+static void parse_config(struct instance_config *cfg, int allow_global) {
     char pathbuf[PATH_MAX];
     const char *path = cfg->config_path;
     int fd = -1;
@@ -954,7 +970,7 @@ e_open:
 
 }
 
-void init_instance_config(struct instance_config *cfg, const char *config_path, bool allow_global) {
+void init_instance_config(struct instance_config *cfg, const char *config_path, int allow_global) {
     struct option *cpath = find_short_option_entry('C');
     assert(cpath);
 
