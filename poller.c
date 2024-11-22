@@ -417,10 +417,11 @@ void poller_run(void) {
         for (ssize_t i = 0; i < poller.pollfd_array_caps; i++) {
             if (poller.pollfd_array[i].fd >= 0 && poller.pollfd_array[i].revents) {
                 struct event *evt = poller.pollfd_array_events[i];
-                if (gconfig.trace_misc) {
-                    info("File[%p, %d] %p(%p, %x)", (void *)evt, poller.pollfd_array[evt->fd.index].fd,
+                if (gconfig.trace_misc || evt->state != evt_state_fd) {
+                    info("File[%p, %d, %d] %p(%p, %x)", (void *)evt, evt->state, poller.pollfd_array[evt->fd.index].fd,
                          (void *)(uintptr_t)evt->fd.cb, evt->fd.arg, poller.pollfd_array[i].revents);
                 }
+                assert(evt->state == evt_state_fd);
                 evt->fd.cb(evt->fd.arg, poller.pollfd_array[i].revents);
                 poller.pollfd_array[i].revents = 0;
             }
@@ -432,8 +433,8 @@ void poller_run(void) {
             struct event *evt = poller.timer_heap[0];
             if (ts_leq(&now2, &evt->timer.current)) break;
 
-            if (gconfig.trace_misc) {
-                info("Timer[%p, %f] %p(%p)", (void *)evt, poller.now.tv_sec + poller.now.tv_nsec*1e-9,
+            if (gconfig.trace_misc || evt->state != evt_state_timer) {
+                info("Timer[%p, %d, %f] %p(%p)", (void *)evt, evt->state, poller.now.tv_sec + poller.now.tv_nsec*1e-9,
                      (void *)(uintptr_t)evt->timer.cb, evt->timer.arg);
             }
 
