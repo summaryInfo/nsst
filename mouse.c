@@ -729,8 +729,7 @@ static void pending_scroll(struct selection_state *sel, struct screen *scr, int1
             sel->pending_scroll *= CHAR_BIT*sizeof(sel->pending_scroll) - __builtin_clz(sel->pending_scroll);
 
             struct instance_config *cfg = window_cfg(sel->win);
-            sel->scroll_timer = poller_add_timer(handle_pending_scroll, sel, cfg->select_scroll_time);
-            poller_set_autoreset(sel->scroll_timer, &sel->scroll_timer);
+            poller_set_timer(&sel->scroll_timer, handle_pending_scroll, sel, cfg->select_scroll_time);
             screen_scroll_view(scr, sel->pending_scroll);
             window_reset_delayed_redraw(sel->win);
         } else if (sel->scroll_timer && !sel->pending_scroll) {
