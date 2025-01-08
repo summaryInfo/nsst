@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2024, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2025, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -240,7 +240,7 @@ static inline bool heap_leq(int a, int b) {
 }
 
 static int heap_sift_down(int index) {
-    for (int len = poller.timer_heap_size, next; (next = 2*index) < len; ) {
+    for (int len = poller.timer_heap_size, next; (next = 2*index + 1) < len; ) {
         next += next + 1 < len && !heap_leq(next, next + 1);
         if (heap_leq(index, next)) break;
 
@@ -253,7 +253,7 @@ static int heap_sift_down(int index) {
 
 static int heap_sift_up(int index) {
     while (index) {
-        int parent = index/2;
+        int parent = (index - 1)/2;
         if (heap_leq(parent, index)) break;
 
         poller.timer_heap[parent]->timer.index = index;
@@ -269,9 +269,9 @@ static void heap_remove(struct event *evt) {
 
     assert(poller.timer_heap_size);
     int last = --poller.timer_heap_size;
-
     SWAP(poller.timer_heap[last], poller.timer_heap[index]);
-    heap_sift_up(index);
+
+    index = heap_sift_up(index);
     index = heap_sift_down(index);
     poller.timer_heap[index]->timer.index = index;
 
