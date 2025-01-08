@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #ifndef UTIL_H_
 #define UTIL_H_ 1
@@ -50,7 +50,7 @@
         clock_gettime(CLOCK_TYPE, &start__);
 #define PROFILE_END(label) \
         clock_gettime(CLOCK_TYPE, &end__); \
-        warn(label " took %lfms", TIMEDIFF(start__, end__)/1000000.); \
+        warn(label " took %lfms", ts_diff(&start__, &end__)/1000000.); \
     } while (0)
 
 #define PROFILE_FUNC(f) \
