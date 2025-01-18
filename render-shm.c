@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 
 #include "feature.h"
@@ -230,10 +230,9 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
         }
 
         /* Only reset force flag for last part of the line */
-        if (prev_line != span.line && prev_line) {
+        if (prev_line != span.line && prev_line)
             prev_line->force_damage = false;
-            prev_line = span.line;
-        }
+        prev_line = span.line;
     }
     if (prev_line)
         prev_line->force_damage = false;
