@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -351,7 +351,6 @@ void optimize_line(struct screen_storage *screen, struct line *line) {
         assert(new == line);
 #endif
         line->caps = line->size;
-        line->force_damage = true;
     } else
         mpa_pin(&screen->pool, line);
 
@@ -379,7 +378,6 @@ struct line *concat_line(struct screen_storage *screen, struct line *src1, struc
          * not need to merge attributes */
         memcpy(src1->cell + src1->size, src2->cell,
                (len - src1->size) * sizeof *src1->cell);
-        src1->force_damage = 1;
         src1->size = len;
         src1->pad_attrid = src2->pad_attrid;
         if (src2->attrs) {
