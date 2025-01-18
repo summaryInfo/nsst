@@ -909,6 +909,7 @@ FORCEINLINE
 static inline void prep_lines(struct screen *scr, ssize_t xs, ssize_t ys, ssize_t xe, ssize_t ye, bool erase) {
     if (erase) {
         ssize_t xs_val = xs, xe_val = xe;
+        if (!xs_val && ys < ye) screen_split_line_before(scr, ys);
         for (ssize_t i = ys; i < ye; i++) {
             screen_split_line_after(scr, i);
             struct line_span *view = &scr->screen[i];
@@ -1512,8 +1513,10 @@ void screen_delete_cells(struct screen *scr, int16_t n) {
             }
 
             if (max_x >= line->width) {
-                screen_realloc_line(scr, line->line, line->offset + scr->c.x + MAX(0, tail_len), get_current_screen(scr));
-                line->width = scr->c.x + MAX(0, tail_len);
+                ssize_t new_width = scr->c.x + MAX(0, tail_len);
+                if (!new_width) screen_split_line_before(scr, scr->c.y);
+                screen_realloc_line(scr, line->line, line->offset + new_width, get_current_screen(scr));
+                line->width = new_width;
             }
         }
 
