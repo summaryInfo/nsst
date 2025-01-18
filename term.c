@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -3476,7 +3476,7 @@ bool term_read(struct term *term) {
     printer_intercept(screen_printer(&term->scr), (const uint8_t **)&term->tty.start, term->tty.end);
 
     if (term->mode.scroll_on_output)
-        screen_reset_view(&term->scr, 1);
+        screen_reset_view(&term->scr, true);
 
 #if USE_URI
     if (window_cfg(screen_window(term_screen(term)))->uri_mode == uri_mode_auto) {
@@ -3769,7 +3769,7 @@ void term_sendkey(struct term *term, const uint8_t *str, size_t len) {
     if (!len) len = strlen((const char *)str);
 
     if (!term->mode.no_scroll_on_input)
-        screen_reset_view(&term->scr, 1);
+        screen_reset_view(&term->scr, true);
 
     uint8_t rep[MAX_REPORT];
     if (encode) len = encode_c1(rep, str, has_8bit(term));

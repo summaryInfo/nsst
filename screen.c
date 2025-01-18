@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #define _DEFAULT_SOURCE
 
@@ -139,10 +139,10 @@ void screen_reset_view(struct screen *scr, bool damage) {
         scr->prev_c_view_changed = true;
         replace_handle(&scr->view_pos, scr->screen);
         selection_view_scrolled(&scr->sstate, scr);
-    }
 
-    if (damage)
-        screen_damage_lines(scr, 0, scr->height);
+        if (damage)
+            screen_damage_lines(scr, 0, scr->height);
+    }
 }
 
 FORCEINLINE
@@ -284,7 +284,7 @@ void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
     if (screen_top) {
 
         if (screen_top->line->prev)
-            screen_reset_view(scr, 0);
+            screen_reset_view(scr, false);
 
         free_line_list_until(scr, &scr->main_screen, scr->top_line.s.line, screen_top->line);
 
@@ -337,7 +337,7 @@ void screen_scroll_view(struct screen *scr, int16_t amount) {
     line_handle_add(&scr->view_pos);
     int new_viewr = line_span_cmp(&scr->view_pos.s, scr->screen);
     if (new_viewr > 0) {
-        screen_reset_view(scr, 1);
+        screen_reset_view(scr, true);
     } else {
         if (delta > 0) /* View down, image up */ {
             window_shift(scr->win, 0, delta, scr->height - delta);
