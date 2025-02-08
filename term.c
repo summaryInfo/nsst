@@ -3200,6 +3200,9 @@ static inline bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
     do {
         ssize_t len = 1;
 
+        /* C0 should be pass-through for DCS but we ignore them in the same way as with OSC,
+         * since they have no semantic meaning in any of supported DCS commands. */
+
         if (ch >= 0xC0 && ch < 0xF8 && utf8) {
             len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
         } else if ((term->esc.state == esc_dcs_string && IS_DEL(ch)) || IS_C0(ch)) {
@@ -3404,10 +3407,6 @@ static inline bool term_dispatch(struct term *term, const uint8_t **start, const
             term_dispatch_c0(term, ch);
         break;
     case esc_osc_string:
-        if (IS_C0(ch) && !IS_STREND(ch))
-            /* ignore */;
-        else
-        /* fallthrough */
     case esc_dcs_string:
         if (IS_STREND(ch))
             term_dispatch_c0(term, ch);
