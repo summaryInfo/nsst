@@ -3213,9 +3213,13 @@ static inline bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
 
         if (UNLIKELY(term->esc.str_len + len + 1 >= term->esc.str_cap)) {
             size_t new_cap = STR_CAP_STEP(term->esc.str_cap);
-            if (new_cap > ESC_MAX_LONG_STR) break;
+            if (new_cap > ESC_MAX_LONG_STR) {
+                while (*start < end && !IS_STREND(ch) && !IS_C1(ch))
+                    ch = *++*start;
+                goto out;
+            }
 
-            uint8_t *new = xrealloc(term->esc.str_ptr, term->esc.str_cap, new_cap + 1);
+            uint8_t *new = xrealloc(term->esc.str_ptr, term->esc.str_len, new_cap + 1);
 
             if (!term->esc.str_ptr)
                 memcpy(new, term->esc.str_data, term->esc.str_len);
@@ -3233,6 +3237,7 @@ static inline bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
 
     } while (*start < end && !IS_STREND(ch) && !IS_C1(ch));
 
+out:
     term_esc_str(term)[term->esc.str_len] = '\0';
 
     return true;
