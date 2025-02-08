@@ -4,6 +4,7 @@ use_boxdrawing=1
 use_precompose=1
 debug_lines=0
 use_clang=0
+use_static=
 use_uri=1
 prefix=/usr/local
 name=nsst
@@ -93,6 +94,7 @@ Usage: configure [options]
     --enable-wayland        Enable all Wayland rendering backends (shm)
     --disable-wayland       Disable all Wayland rendering backends (shm)
     --use-clang             Configure to compile with clang/lld
+    --static                Link nsst/nsstc statically
     --debug-lines           Enable heavy interal data structures checks
 END
 }
@@ -156,6 +158,8 @@ for i; do
         use_posix_shm=0 ;;
     --use-clang)
         use_clang=1 ;;
+    --static)
+        use_static=--static ;;
     --debug-lines)
         debug_lines=1 ;;
     --name=*)
@@ -250,7 +254,7 @@ fi
 
 if [ "$use_x11shm" = 1 ] || [ "$use_x11xrender" = 1 ]; then
     objs="$objs window-x11.o"
-    deps="$deps xcb xcb-xkb xkbcommon-x11 xcb-cursor"
+    deps="$deps xcb xcb-util xcb-xkb xkbcommon-x11 xcb-cursor"
     use_x11=1
 fi
 
@@ -315,6 +319,7 @@ sed < "./Makefile.in" > "./Makefile" \
     -e "s:@MANDIR@:$mandir:" \
     -e "s:@SHAREDIR@:$sharedir:" \
     -e "s:@DEPS@:$deps:" \
+    -e "s:@STATIC@:$use_static:" \
     -e "s:@EXTRAWARNINGS@:$outwarns:" \
     -e "s:@LIBRT@:$linkrt:" \
     -e "s:@OBJECTS@:$objs:" \

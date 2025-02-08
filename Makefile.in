@@ -11,10 +11,11 @@ CFLAGS += -std=c11 -Wall -Wextra -Wpedantic @EXTRAWARNINGS@
 
 OBJ := @OBJECTS@
 
-LIBS != $(PKGCONFIG) @DEPS@ --libs
+LIBS != $(PKGCONFIG) @DEPS@ --libs @STATIC@
 INCLUES != $(PKGCONFIG) @DEPS@ --cflags
 
 LDLIBS += @LIBRT@ -lm -lutil $(LIBS)
+LDFLAGS += @STATIC@
 CFLAGS += $(INCLUES)
 
 all: $(NAME) $(NAME)c
