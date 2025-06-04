@@ -61,7 +61,7 @@ static inline void pool_seal(struct multipool *mp, struct pool *pool) {
 }
 
 static inline void pool_unseal(struct multipool *mp, struct pool *pool) {
-    list_insert_before(&mp->unsealed, &pool->link);
+    list_insert_after(&mp->unsealed, &pool->link);
     mp->unsealed_count++;
     pool->sealed = false;
 }
@@ -82,7 +82,6 @@ static struct pool *get_fitting_pool(struct multipool *mp, ssize_t size) {
     }
 
     ssize_t pool_size = MAX(mp->pool_size, size + INIT_OFFSET);
-
     struct pool *pool = DO_ALLOC(sizeof *pool + pool_size);
     if (pool == ALLOC_ERROR) return NULL;
 
@@ -182,6 +181,11 @@ ssize_t mpa_allocated_size(void *ptr) {
     return header->size - sizeof *header;
 }
 
+static void check_unseal(struct multipool *mp, struct pool *pool) {
+    if (pool->sealed && pool->size - pool->offset >= mp->max_pad)
+        pool_unseal(mp, pool);
+}
+
 void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size, bool pin) {
     struct header *header = GET_PTR_HEADER(ptr);
     struct pool *pool = GET_HEADER_POOL(header);
@@ -194,18 +198,17 @@ void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size, bool pin) {
     if (is_last && size - header->size <= pool->size - pool->offset) {
         pool->offset += size - header->size;
         header->size = size;
-
     } else if (header->size < size) {
         void *new = mpa_alloc(mp, size - sizeof *header);
         if (!new) return NULL;
 
         memcpy(new, ptr, MIN(header->size, size) - sizeof *header);
         mpa_free(mp, ptr);
-        ptr = new;
+        return new;
     }
 
-    if (pin && pool->sealed && pool->size - pool->offset >= mp->max_pad)
-        pool_unseal(mp, pool);
+    if (pin)
+        check_unseal(mp, pool);
 
     return ptr;
 }
@@ -213,7 +216,5 @@ void *mpa_realloc(struct multipool *mp, void *ptr, ssize_t size, bool pin) {
 void mpa_pin(struct multipool *mp, void *ptr) {
     struct header *header = GET_PTR_HEADER(ptr);
     struct pool *pool = GET_HEADER_POOL(header);
-
-    if (pool->sealed && pool->size - pool->offset >= mp->max_pad)
-        pool_unseal(mp, pool);
+    check_unseal(mp, pool);
 }
