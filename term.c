@@ -2938,6 +2938,7 @@ static void term_dispatch_esc(struct term *term) {
         term_do_reset(term, 1);
         break;
     case E('k'): /* Old style title */
+        term_esc_start_string(term);
         term->esc.state = esc_osc_string;
         term->esc.selector = 2;
         term->esc.old_state = 0;
