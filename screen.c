@@ -308,8 +308,8 @@ void screen_scroll_view_to_cmd(struct screen *scr, int16_t amount) {
         do line = line->next;
         while (line && !line->sh_ps1_start && line != scr->screen->line);
     } else {
-        do line = line->prev;
-        while (line && !line->sh_ps1_start);
+        while (line->prev && !line->sh_ps1_start)
+            line = line->prev;
     }
 
     if (!line) return;
