@@ -121,8 +121,11 @@ void mpa_free(struct multipool *mp, void *ptr) {
 
     assert(pool->n_alloc);
 
-    if (header->offset + header->size == pool->offset)
+    if (header->offset + header->size == pool->offset) {
         pool->offset -= header->size;
+        if (pool->sealed)
+            pool_unseal(mp, pool);
+    }
 
     if (!--pool->n_alloc) {
         pool->offset = INIT_OFFSET;
