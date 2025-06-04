@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2023,2025, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -61,9 +61,17 @@ static inline void pool_seal(struct multipool *mp, struct pool *pool) {
 }
 
 static inline void pool_unseal(struct multipool *mp, struct pool *pool) {
-    list_insert_after(&mp->unsealed, &pool->link);
+    list_insert_before(&mp->unsealed, &pool->link);
     mp->unsealed_count++;
     pool->sealed = false;
+}
+
+static void pool_free(struct multipool *mp, struct pool *pool) {
+    if (!pool->sealed)
+        pool_seal(mp, pool);
+
+    DO_FREE(pool, pool->size + sizeof *pool);
+    mp->pool_count--;
 }
 
 static struct pool *get_fitting_pool(struct multipool *mp, ssize_t size) {
@@ -119,11 +127,7 @@ void mpa_free(struct multipool *mp, void *ptr) {
     if (!--pool->n_alloc) {
         pool->offset = INIT_OFFSET;
         if (mp->unsealed_count + 1 > mp->max_unsealed) {
-            if (!pool->sealed)
-                pool_seal(mp, pool);
-
-            DO_FREE(pool, pool->size + sizeof *pool);
-            mp->pool_count--;
+            pool_free(mp, pool);
         } else if (pool->sealed) {
             pool_unseal(mp, pool);
         }
