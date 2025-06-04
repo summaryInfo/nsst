@@ -79,6 +79,7 @@ void *xalloc(size_t size);
 void *xzalloc(size_t size);
 void *xrealloc(void *src, size_t old_size, size_t size);
 void *xrezalloc(void *src, size_t old_size, size_t size);
+void xtrim_heap(void);
 
 static inline struct rect rect_scale_up(struct rect rect, int16_t x_factor, int16_t y_factor) {
     rect.x *= x_factor;

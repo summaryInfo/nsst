@@ -19,10 +19,6 @@
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 
-#ifdef __GLIBC__
-#include <malloc.h>
-#endif
-
 #define NUM_BORDERS 4
 
 struct context {
@@ -667,9 +663,7 @@ void free_window(struct window *win) {
 
     free_config(&win->cfg);
     free(win);
-#ifdef __GLIBC__
-    malloc_trim(0);
-#endif
+    xtrim_heap();
 }
 
 static bool handle_blink_inhibit_timeout(void *win_) {

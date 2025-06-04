@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -17,6 +17,10 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
+
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
 
 #define LOG_BUFFER_SIZE 1024
 
@@ -84,6 +88,12 @@ void *xrealloc(void *src, size_t old_size, size_t size) {
     if (!res)
         die("Failed to allocate %zd bytes of memory", size);
     return res;
+}
+
+void xtrim_heap(void) {
+#ifdef __GLIBC__
+    malloc_trim(0);
+#endif
 }
 
 void *xzalloc(size_t size) {
