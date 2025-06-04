@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #ifndef FONT_H_
 #define FONT_H_ 1
@@ -6,6 +6,7 @@
 #include "feature.h"
 
 #include "hashtable.h"
+#include "list.h"
 #include "util.h"
 
 #include <stdbool.h>
@@ -35,6 +36,7 @@ enum pixel_mode {
 
 struct glyph {
     ht_head_t head;
+    struct list_head lru;
 
 #ifdef USE_XRENDER
     uint32_t id;

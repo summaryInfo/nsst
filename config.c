@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -266,6 +266,7 @@ static struct option options[] = {
     X(dim, font_size_step, "font-size-step", "Font size step in points", 1, 0, 250),
     X(dim, font_size, "font-size", "Font size in points", 0, 1, 1000),
     X(dim, font_spacing, "font-spacing", "Additional spacing for individual symbols", 0, -100, 100),
+    G(int64, font_cache_size, "font-cache-size", "Number of cached glyphs", 5000, 200, 10000000),
     X1(string, font_name, 'f', "font", "Comma-separated list of fontconfig font patterns", "mono"),
     X(string, force_mouse_mod, "force-mouse-mod", "Modifier to force mouse action", "T"),
     X(boolean, force_utf8_nrcs, "force-nrcs", "Enable NRCS translation when UTF-8 mode is enabled", false),

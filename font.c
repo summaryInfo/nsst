@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -588,6 +588,8 @@ int16_t font_get_size(struct font *font) {
 
 struct glyph_cache {
     struct font *font;
+    struct list_head lru_list;
+    size_t lru_size;
     int16_t char_width;
     int16_t char_height;
     int16_t char_depth;
@@ -622,6 +624,7 @@ struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmod
     cache->force_aligned = force_aligned;
     cache->pixmode = pixmode;
     ht_init(&cache->glyphs, HASH_INIT_CAP, glyph_cmp);
+    list_init(&cache->lru_list);
 
     int16_t total = 0, maxd = 0, maxh = 0;
     for (uint32_t i = ' '; i <= '~'; i++) {
@@ -726,15 +729,23 @@ static struct glyph *make_undercurl(int16_t width, int16_t depth, int16_t underl
     return glyph;
 }
 
+/* We don't cache ASCII characters */
+#define LRU_MIN_CACHED 128
+
 struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face, bool *is_new) {
     struct glyph dummy = mkglyphkey(ch | (face << 24));
     ht_head_t **h = ht_lookup_ptr(&cache->glyphs, (ht_head_t *)&dummy);
     if (*h) {
-        if (is_new) *is_new = 0;
-        return (struct glyph *)*h;
+        if (is_new) *is_new = false;
+        struct glyph *g = CONTAINEROF(*h, struct glyph, head);
+        if (g->g >= LRU_MIN_CACHED) {
+            list_remove(&g->lru);
+            list_insert_after(&cache->lru_list, &g->lru);
+        }
+        return g;
     }
 
-    if (is_new) *is_new = 1;
+    if (is_new) *is_new = true;
 
     struct glyph *new;
 #if USE_BOXDRAWING
@@ -753,6 +764,23 @@ struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum fac
     new->g = dummy.g;
     new->head = dummy.head;
 
-    ht_insert_hint(&cache->glyphs, h, (ht_head_t *)new);
+    ht_insert_hint(&cache->glyphs, h, &new->head);
+
+    if (dummy.g >= LRU_MIN_CACHED) {
+        if (cache->lru_size >= gconfig.font_cache_size) {
+            struct glyph *old = CONTAINEROF(cache->lru_list.prev, struct glyph, lru);
+            assert(old != new);
+            list_remove(&old->lru);
+#if USE_XRENDER
+            x11_xrender_release_glyph(old);
+#endif
+            ht_erase(&cache->glyphs, &old->head);
+            free(old);
+        } else {
+            cache->lru_size++;
+        }
+        list_insert_after(&cache->lru_list, &new->lru);
+    }
+
     return new;
 }

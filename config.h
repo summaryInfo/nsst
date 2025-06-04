@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #ifndef CONFIG_H_
 #define CONFIG_H_ 1
@@ -69,6 +69,8 @@ enum uri_mode {
 #define MAX_DOMAIN_NAME 254
 
 struct global_config {
+    uint64_t font_cache_size;
+
     char *sockpath;
     char hostname[MAX_DOMAIN_NAME];
 
