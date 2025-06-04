@@ -799,7 +799,7 @@ void screen_drain_scrolled(struct screen *scr) {
 
 void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 
-    mpa_set_seal_max_pad(&scr->main_screen.pool, width * sizeof(struct cell) + sizeof(struct line), INT32_MAX);
+    mpa_set_seal_max_pad(&scr->main_screen.pool, width * sizeof(struct cell) + sizeof(struct line), 4*height);
     mpa_set_seal_max_pad(&scr->alt_screen.pool, width * sizeof(struct cell) + sizeof(struct line), 1);
 
     screen_drain_scrolled(scr);
