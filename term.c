@@ -440,8 +440,6 @@ static void term_esc_dump(struct term *term, bool use_info) {
 
     const char *pref = use_info ? "Seq: " : "Unrecognized ";
 
-    term_esc_str(term)[term->esc.str_len] = 0;
-
     char buf[ESC_DUMP_MAX] = "^[";
     size_t pos = 2;
     switch (term->esc.state) {
@@ -473,10 +471,14 @@ static void term_esc_dump(struct term *term, bool use_info) {
             if (term->esc.state != esc_dcs_string) break;
 
             buf[pos] = 0;
-            (use_info ? info : warn)("%s%s%s^[\\", pref, buf, term_esc_str(term));
+            assert(term->esc.str_len <= term->esc.str_cap);
+            term_esc_str(term)[term->esc.str_len] = 0;
+            (use_info ? info : warn)("%s%s%.512s^[\\", pref, buf, term_esc_str(term));
             return;
         case esc_osc_string:
-            (use_info ? info : warn)("%s^[]%u;%s^[\\", pref, term->esc.selector, term_esc_str(term));
+            assert(term->esc.str_len <= term->esc.str_cap);
+            term_esc_str(term)[term->esc.str_len] = 0;
+            (use_info ? info : warn)("%s^[]%u;%.512s^[\\", pref, term->esc.selector, term_esc_str(term));
         default:
             return;
     }
