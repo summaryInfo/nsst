@@ -3213,6 +3213,7 @@ static inline bool term_dispatch_dcs_string(struct term *term, uint8_t ch, const
             len += (uint8_t[7]){ 1, 1, 1, 1, 2, 2, 3 }[(ch >> 3U) - 24];
         } else if ((term->esc.state == esc_dcs_string && IS_DEL(ch)) || IS_C0(ch)) {
             ++*start, len = 0;
+            continue;
         }
 
         if (len + *start >= end) return false;
@@ -3419,8 +3420,10 @@ static inline bool term_dispatch(struct term *term, const uint8_t **start, const
         break;
     case esc_osc_string:
     case esc_dcs_string:
-        if (IS_STREND(ch))
+        if (IS_STREND(ch)) {
             term_dispatch_c0(term, ch);
+            break;
+        }
         return term_dispatch_dcs_string(term, ch, start, end);
     case esc_vt52_entry:
         if (IS_C0(ch))
