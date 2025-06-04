@@ -2083,6 +2083,7 @@ static void term_report_tabs(struct term *term) {
     }
 
     term_answerback(term, DCS"2$u%s"ST, tabs ? tabs : "");
+    free(tabs);
 }
 
 static size_t term_decode_color(struct term *term, size_t arg, color_t *rc, color_t *valid) {
