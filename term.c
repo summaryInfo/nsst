@@ -420,6 +420,8 @@ static void term_do_reset(struct term *term, bool hard) {
         screen_erase(scr, 0, 0, screen_width(scr), screen_height(scr), false);
         screen_free_scrollback(scr, window_cfg(win)->scrollback_size);
 
+        xtrim_heap();
+
         term->vt_version = window_cfg(win)->vt_version;
         term->vt_level = term->vt_version / 100;
         if (!term->vt_level) term_set_vt52(term, 1);
