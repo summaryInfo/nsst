@@ -119,7 +119,7 @@ _nsst() {
 		"--char-geometry" "--config" "--cursor-background" "--cursor-foreground" "--cursor-shape"
 		"--cursor-width" "--cwd" "--daemon" "--delete-is-del" "--double-click-time" "--dpi"
 		"--erase-scrollback" "--extended-cir" "--fixed" "--fkey-increment" "--font" "--font-gamma"
-		"--font-size" "--font-size-step" "--font-spacing" "--force-mouse-mod" "--force-nrcs"
+		"--font-size" "--font-size-step" "--font-spacing" "--font-cache-size" "--force-mouse-mod" "--force-nrcs"
 		"--force-scalable" "--force-wayland-csd" "--foreground" "--fork" "--fps" "--frame-wait-delay"
 		"--geometry" "--has-meta" "--help" "--horizontal-border" "--italic-color" "--keep-clipboard"
 		"--keep-selection" "--keyboard-dialect" "--keyboard-mapping" "--key-break" "--key-copy"

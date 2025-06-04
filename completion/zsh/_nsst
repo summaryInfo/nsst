@@ -87,6 +87,7 @@ _arguments \
 	"--font-size=[Font size in points]:dim:()" \
 	"--font-size-step=[Font size step in points]:dim:()" \
 	"--font-spacing=[Additional spacing for individual symbols]:dim:()" \
+	"--font-cache-size=[Number of cached glyphs per font]:dim:()" \
 	"--force-mouse-mod=[Modifier to force mouse action]:binding:()" \
 	"--foreground=[Default foreground color]:color:()" \
 	"--fps=[Window refresh rate]:int:()" \

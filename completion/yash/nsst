@@ -55,6 +55,7 @@ function completion/nsst {
 		"--font-size:;Font size in points"
 		"--font-size-step:;Font size step in points"
 		"--font-spacing:;Additional spacing for individual symbols"
+		"--font-cache-size:;Number of cached glyphs per font"
 		"--force-mouse-mod:;Modifier to force mouse action"
 		"--force-nrcs::;Enable NRCS translation when UTF-8 mode is enabled"
 		"--force-scalable::;Do not search for pixmap fonts"
