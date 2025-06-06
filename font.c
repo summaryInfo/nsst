@@ -32,10 +32,22 @@ struct font_context {
     FT_Library library;
 };
 
+struct face {
+    ht_head_t head;
+    FT_Face face;
+    size_t len;
+    int index;
+    uint16_t size;
+    bool has_transform;
+    FT_Matrix transform;
+    char file[];
+};
+
 struct face_list {
     size_t length;
     size_t caps;
-    FT_Face *faces;
+    hashtable_t face_ht;
+    struct face **faces;
 };
 
 struct font {
@@ -46,7 +58,6 @@ struct font {
     double gamma;
     bool allow_subst_font;
     bool force_scalable;
-    FcCharSet *subst_chars;
     struct face_list face_types[face_MAX];
 };
 
@@ -61,13 +72,16 @@ static struct font_context global;
 void free_font(struct font *font) {
     if (--font->refs == 0) {
         for (size_t i = 0; i < face_MAX; i++) {
-            for (size_t j = 0; j < font->face_types[i].length; j++)
-                FT_Done_Face(font->face_types[i].faces[j]);
+            for (size_t j = 0; j < font->face_types[i].length; j++) {
+                struct face *face = font->face_types[i].faces[j];
+                ht_erase(&font->face_types[i].face_ht, &face->head);
+                FT_Done_Face(face->face);
+                free(face);
+            }
             free(font->face_types[i].faces);
+            ht_free(&font->face_types[i].face_ht);
         }
         if (--global.fonts == 0) {
-            if (font->subst_chars)
-                FcCharSetDestroy(font->subst_chars);
             FcFini();
             FT_Done_FreeType(global.library);
         }
@@ -77,7 +91,7 @@ void free_font(struct font *font) {
 
 static bool load_append_fonts(struct font *font, struct face_list *faces, struct patern_holder pats) {
     size_t new_size = faces->length + pats.length;
-    adjust_buffer((void **)&faces->faces, &faces->caps, new_size, sizeof(FT_Face));
+    adjust_buffer((void **)&faces->faces, &faces->caps, new_size, sizeof(faces->faces[0]));
     bool has_svg = false;
 
     for (size_t i = 0; i < pats.length; i++) {
@@ -92,32 +106,6 @@ static bool load_append_fonts(struct font *font, struct face_list *faces, struct
             index.u.i = 0;
         }
 
-        if (gconfig.trace_fonts)
-            info("Font file: %s:%d", file.u.s, index.u.i);
-        FT_Error err = FT_New_Face(global.library, (const char*)file.u.s, index.u.i, &faces->faces[faces->length]);
-        if (err != FT_Err_Ok) {
-            if (err == FT_Err_Unknown_File_Format) warn("Wrong font file format");
-            else if (err == FT_Err_Cannot_Open_Resource) warn("Can't open resource");
-            else warn("Some error happend loading file: %u", err);
-            continue;
-        }
-
-        has_svg |= FT_HAS_SVG(faces->faces[faces->length]);
-
-        if (!faces->faces[faces->length]) {
-            warn("Empty font face");
-            continue;
-        }
-
-        if (FcPatternGet(pats.pats[i], FC_MATRIX, 0, &matrix) == FcResultMatch) {
-            FT_Matrix ftmat;
-            ftmat.xx = (FT_Fixed)(matrix.u.m->xx * 0x10000L);
-            ftmat.xy = (FT_Fixed)(matrix.u.m->xy * 0x10000L);
-            ftmat.yx = (FT_Fixed)(matrix.u.m->yx * 0x10000L);
-            ftmat.yy = (FT_Fixed)(matrix.u.m->yy * 0x10000L);
-            FT_Set_Transform(faces->faces[faces->length], &ftmat, NULL);
-        }
-
         FcResult res = FcPatternGet(pats.pats[i], FC_PIXEL_SIZE, 0, &pixsize);
         if (res != FcResultMatch || pixsize.u.d == 0) {
             warn("Font has no pixel size, selecting default");
@@ -125,14 +113,60 @@ static bool load_append_fonts(struct font *font, struct face_list *faces, struct
             pixsize.u.d = font->pixel_size;
         }
 
-        uint16_t sz = (pixsize.u.d/font->dpi*72.0)*64;
-        if (FT_Set_Char_Size(faces->faces[faces->length], 0, sz, font->dpi, font->dpi) != FT_Err_Ok) {
+        size_t len = (sizeof(struct face)) + strlen((const char *)file.u.s) + 1;
+        struct face *newface = xalloc(len);
+        *newface = (struct face) {
+            .len = len - offsetof(struct face, len),
+            .index = index.u.i,
+            .size = (pixsize.u.d/font->dpi*72.0)*64,
+        };
+
+        strcpy(newface->file, (const char *)file.u.s);
+
+        if (FcPatternGet(pats.pats[i], FC_MATRIX, 0, &matrix) == FcResultMatch) {
+            newface->has_transform = true;
+            newface->transform.xx = (FT_Fixed)(matrix.u.m->xx * 0x10000L);
+            newface->transform.xy = (FT_Fixed)(matrix.u.m->xy * 0x10000L);
+            newface->transform.yx = (FT_Fixed)(matrix.u.m->yx * 0x10000L);
+            newface->transform.yy = (FT_Fixed)(matrix.u.m->yy * 0x10000L);
+        }
+
+        newface->head.hash = hash64((char *)&newface->len, newface->len);
+        ht_head_t **pfound = ht_lookup_ptr(&faces->face_ht, &newface->head);
+        if (gconfig.trace_fonts)
+            info("Font file: %s:%d found=%d total=%zd", file.u.s, index.u.i, !!*pfound, faces->length);
+
+        if (*pfound)
+            goto err_free_face;
+
+        FT_Error err = FT_New_Face(global.library, newface->file, newface->index, &newface->face);
+        if (err != FT_Err_Ok) {
+            if (err == FT_Err_Unknown_File_Format) warn("Wrong font file format");
+            else if (err == FT_Err_Cannot_Open_Resource) warn("Can't open resource");
+            else warn("Some error happend loading file: %u", err);
+            goto err_free_face;
+        }
+
+        if (!newface->face) {
+            warn("Empty font face");
+            goto err_free_face;
+        }
+
+        if (newface->has_transform)
+            FT_Set_Transform(newface->face, &newface->transform, NULL);
+
+        if (FT_Set_Char_Size(newface->face, 0, newface->size, font->dpi, font->dpi) != FT_Err_Ok) {
             warn("Error: %s", strerror(errno));
             warn("Can't set char size");
+            FT_Done_Face(newface->face);
+err_free_face:
+            free(newface);
             continue;
         }
 
-        faces->length++;
+        has_svg |= FT_HAS_SVG(newface->face);
+        ht_insert_hint(&faces->face_ht, pfound, &newface->head);
+        faces->faces[faces->length++] = newface;
     }
 
     return has_svg;
@@ -236,13 +270,26 @@ static bool load_face_list(struct font *font, struct face_list* faces, const cha
     return has_svg;
 }
 
+static bool face_cmp(const ht_head_t *a, const ht_head_t *b) {
+    const struct face *af = CONTAINEROF(a, const struct face, head);
+    const struct face *bf = CONTAINEROF(b, const struct face, head);
+    if (af->len != bf->len) return false;
+    if (af->index != bf->index) return false;
+    if (af->size != bf->size) return false;
+    if (af->has_transform != bf->has_transform) return false;
+    if (af->transform.xx != bf->transform.xx) return false;
+    if (af->transform.xy != bf->transform.xy) return false;
+    if (af->transform.yx != bf->transform.yx) return false;
+    if (af->transform.yy != bf->transform.yy) return false;
+    return !strcmp(af->file, bf->file);
+}
+
 struct font *create_font(const char* descr, double size, double dpi, double gamma, bool force_scalable, bool allow_subst) {
     if (global.fonts++ == 0) {
         if (FcInit() == FcFalse)
             die("Can't initialize fontconfig");
-        if (FT_Init_FreeType(&global.library) != FT_Err_Ok) {
+        if (FT_Init_FreeType(&global.library) != FT_Err_Ok)
             die("Can't initialize freetype2, error: %s", strerror(errno));
-        }
         FT_Library_SetLcdFilter(global.library, FT_LCD_FILTER_DEFAULT);
     }
 
@@ -257,8 +304,10 @@ struct font *create_font(const char* descr, double size, double dpi, double gamm
     font->allow_subst_font = allow_subst;
 
     bool has_svg = false;
-    for (size_t i = 0; i < face_MAX; i++)
+    for (size_t i = 0; i < face_MAX; i++) {
+        ht_init(&font->face_types[i].face_ht, HT_INIT_CAPS, face_cmp);
         has_svg |= load_face_list(font, &font->face_types[i], descr, i, size);
+    }
 
     if (has_svg)
         warn("Font '%s' contains SVG glyphs and might rendered incorrectly", descr);
@@ -276,13 +325,16 @@ struct font *font_ref(struct font *font) {
 }
 
 static void add_font_substitute(struct font *font, struct face_list *faces, enum face_name attr, uint32_t ch){
-    if (!font->subst_chars) font->subst_chars = FcCharSetCreate();
-    FcCharSetAddChar(font->subst_chars, ch);
+    FcCharSet *subst_chars = FcCharSetCreate();
+    FcCharSetAddChar(subst_chars, ch);
 
     FcPattern *chset_pat = FcPatternCreate();
     FcPatternAddDouble(chset_pat, FC_DPI, font->dpi);
-    FcPatternAddCharSet(chset_pat, FC_CHARSET, font->subst_chars);
-    if (font->force_scalable || FT_IS_SCALABLE(faces->faces[0]))
+    FcPatternAddInteger(chset_pat, FC_PIXEL_SIZE, faces->faces[0]->face->size->metrics.x_ppem);
+    FcPatternAddCharSet(chset_pat, FC_CHARSET, subst_chars);
+    FcCharSetDestroy(subst_chars);
+
+    if (font->force_scalable || FT_IS_SCALABLE(faces->faces[0]->face))
         FcPatternAddBool(chset_pat, FC_SCALABLE, FcTrue);
 
     switch (attr) {
@@ -313,6 +365,7 @@ static void add_font_substitute(struct font *font, struct face_list *faces, enum
 
     FcDefaultSubstitute(chset_pat);
     if (FcConfigSubstitute(NULL, chset_pat, FcMatchPattern) == FcFalse) {
+        FcPatternDestroy(chset_pat);
         warn("Can't find substitute font");
         return;
     }
@@ -420,17 +473,16 @@ static struct glyph *downsample_glyph(struct glyph *glyph, uint32_t targ_width, 
 static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t ch, enum face_name attr, bool force_aligned, uint32_t targ_width) {
     struct face_list *faces = &font->face_types[attr];
     int glyph_index = 0;
-    FT_Face face = faces->faces[0];
+    FT_Face face = faces->faces[0]->face;
     for (size_t i = 0; !glyph_index && i < faces->length; i++)
-        if ((glyph_index = FT_Get_Char_Index(faces->faces[i], ch)))
-            face = faces->faces[i];
+        if ((glyph_index = FT_Get_Char_Index(faces->faces[i]->face, ch)))
+            face = faces->faces[i]->face;
     if (!glyph_index && font->allow_subst_font) {
-        size_t oldlen = faces->length, sz = faces->faces[0]->size->metrics.x_ppem*72.0/font->dpi*64;
+        size_t oldlen = faces->length;
         add_font_substitute(font, faces, attr, ch);
-        for (size_t i = oldlen; !glyph_index && i < faces->length; i++) {
-            FT_Set_Char_Size(faces->faces[i], 0, sz, font->dpi, font->dpi);
-            if ((glyph_index = FT_Get_Char_Index(faces->faces[i],ch))) face = faces->faces[i];
-        }
+        for (size_t i = oldlen; !glyph_index && i < faces->length; i++)
+            if ((glyph_index = FT_Get_Char_Index(faces->faces[i]->face, ch)))
+                face = faces->faces[i]->face;
     }
 
     bool ordv = ord == pixmode_bgrv || ord == pixmode_rgbv;
