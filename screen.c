@@ -153,7 +153,9 @@ FORCEINLINE
 static inline void screen_split_line_after_ex(struct screen *scr, struct screen_storage *screen, ssize_t y) {
     struct line_span *src = screen->begin + y;
     ssize_t offset = src->offset + src->width;
-    if (LIKELY(offset >= src->line->size)) return;
+    if (LIKELY(src + 1 >= screen->end || src[1].line != src->line)) return;
+
+    assert(offset <= src->line->size);
 
     split_line(screen, src->line, offset);
     if (UNLIKELY(src->line->selection_index))
