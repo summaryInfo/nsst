@@ -89,7 +89,7 @@ void free_font(struct font *font) {
     }
 }
 
-static bool load_append_fonts(struct font *font, struct face_list *faces, struct patern_holder pats) {
+static bool load_append_fonts(struct font *font, struct face_list *faces, struct patern_holder pats, double override_pixsize) {
     size_t new_size = faces->length + pats.length;
     adjust_buffer((void **)&faces->faces, &faces->caps, new_size, sizeof(faces->faces[0]));
     bool has_svg = false;
@@ -106,11 +106,16 @@ static bool load_append_fonts(struct font *font, struct face_list *faces, struct
             index.u.i = 0;
         }
 
-        FcResult res = FcPatternGet(pats.pats[i], FC_PIXEL_SIZE, 0, &pixsize);
-        if (res != FcResultMatch || pixsize.u.d == 0) {
-            warn("Font has no pixel size, selecting default");
+        if (!override_pixsize) {
+            FcResult res = FcPatternGet(pats.pats[i], FC_PIXEL_SIZE, 0, &pixsize);
+            if (res != FcResultMatch || pixsize.u.d == 0) {
+                warn("Font has no pixel size, selecting default");
+                pixsize.type = FcTypeDouble;
+                pixsize.u.d = font->pixel_size;
+            }
+        } else {
             pixsize.type = FcTypeDouble;
-            pixsize.u.d = font->pixel_size;
+            pixsize.u.d = override_pixsize;
         }
 
         size_t len = (sizeof(struct face)) + strlen((const char *)file.u.s) + 1;
@@ -260,7 +265,7 @@ static bool load_face_list(struct font *font, struct face_list* faces, const cha
         pats.pats[pats.length++] = final_pat;
     }
 
-    bool has_svg = load_append_fonts(font, faces, pats);
+    bool has_svg = load_append_fonts(font, faces, pats, 0);
 
     for (size_t i = 0; i < pats.length; i++)
         FcPatternDestroy(pats.pats[i]);
@@ -330,7 +335,8 @@ static void add_font_substitute(struct font *font, struct face_list *faces, enum
 
     FcPattern *chset_pat = FcPatternCreate();
     FcPatternAddDouble(chset_pat, FC_DPI, font->dpi);
-    FcPatternAddInteger(chset_pat, FC_PIXEL_SIZE, faces->faces[0]->face->size->metrics.x_ppem);
+    int pixsize = faces->faces[0]->face->size->metrics.x_ppem;
+    FcPatternAddInteger(chset_pat, FC_PIXEL_SIZE, pixsize);
     FcPatternAddCharSet(chset_pat, FC_CHARSET, subst_chars);
     FcCharSetDestroy(subst_chars);
 
@@ -379,7 +385,7 @@ static void add_font_substitute(struct font *font, struct face_list *faces, enum
         return;
     }
 
-    bool has_svg = load_append_fonts(font, faces, (struct patern_holder){ .length = 1, .pats = &final_pat });
+    bool has_svg = load_append_fonts(font, faces, (struct patern_holder){ .length = 1, .pats = &final_pat }, pixsize);
     if (has_svg)
         warn("Substitute font for character U+%04x (%lc) contains SVG glyphs and might rendered incorrectly", ch, ch);
 
