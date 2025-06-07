@@ -16,7 +16,9 @@
 
 #define MAX_EXTRA_PALETTE (ATTRID_MAX - 1)
 #define INIT_CAP 4
-#define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE, MAX(2*(sz), INIT_CAP))
+#define CAPS_INC_STEP(sz) MIN(MAX_EXTRA_PALETTE + 1, MAX(2*(sz), INIT_CAP))
+
+static_assert(!(CAPS_INC_STEP(UINT32_MAX) & (CAPS_INC_STEP(UINT32_MAX) - 1)), "Must be power of two");
 
 const struct attr default_attr__ = {
         .fg = SPECIAL_FG + 1,
@@ -165,6 +167,9 @@ uint32_t alloc_attr(struct line *line, const struct attr *attr) {
     if (id) return id;
 
     size_t new_caps = CAPS_INC_STEP(line->attrs->caps);
+#if DEBUG_LINES
+    assert(!(new_caps & (new_caps - 1)));
+#endif
     struct line_attr *new = xzalloc(sizeof *new + new_caps * sizeof *new->data);
 
     new->caps = new_caps;
@@ -262,6 +267,7 @@ static void optimize_attributes(struct line *line) {
         cnt += __builtin_popcountll(used[i]);
 
     if (cnt) {
+        cnt = ceil_power_of_2(cnt);
         struct line_attr *new = xzalloc(sizeof *new + cnt*sizeof *new->data);
         new->caps = cnt;
 
