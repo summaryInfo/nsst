@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -405,6 +405,8 @@ static inline struct slot *alloc_slot(void) {
         idtab.first_free = slot->next;
         return slot;
     } else {
+        if (idtab.size + 1 >= URI_MAX)
+            return NULL;
         if (idtab.size + 1 > idtab.caps) {
             size_t new_caps = URI_CAPS_STEP(idtab.caps);
             struct slot *tmp = xrealloc(idtab.slots, idtab.caps*sizeof(*tmp), new_caps*sizeof(*tmp));
@@ -472,6 +474,10 @@ uint32_t uri_add(const char *uri, const char *id) {
 
     /* Allocate id table slot */
     struct slot *slot = alloc_slot();
+    if (!slot) {
+        free(new);
+        return EMPTY_URI;
+    }
 
     slot->uri = new;
     *new = (struct uri) {
@@ -498,6 +504,7 @@ uint32_t uri_add(const char *uri, const char *id) {
 
 void uri_ref(uint32_t id) {
     if (id) {
+        assert(id < URI_MAX);
         struct uri *uri = idtab.slots[id - 1].uri;
         assert(uri->refc > 0);
         uri->refc++;
@@ -506,6 +513,7 @@ void uri_ref(uint32_t id) {
 
 void uri_unref(uint32_t id) {
     if (!id) return;
+    assert(id < URI_MAX);
     struct slot *slot = &idtab.slots[id - 1];
     struct uri *uri = slot->uri;
     assert(uri->refc > 0);

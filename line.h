@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 #ifndef LINE_H_
 #define LINE_H_ 1
 
@@ -40,6 +40,8 @@ extern const struct attr default_attr__;
 #define MKCELL(c, a) ((struct cell) {.ch = (c), .attrid = (a)})
 #define ATTRID_MAX 4096
 #define ATTRID_DEFAULT 0
+#define URI_BITS 22
+#define URI_MAX (1 << URI_BITS)
 
 struct cell {
     uint32_t ch : 19;
@@ -68,7 +70,7 @@ struct attr {
                      * associated with attribute.
                      * This field is only used when
                      * USE_URI option is active */
-                    uint32_t uri : 22;
+                    uint32_t uri : URI_BITS;
 
                     /* Attributes */
                     bool bold : 1;
