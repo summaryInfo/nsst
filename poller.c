@@ -65,6 +65,8 @@ struct poller {
     ssize_t pollfd_array_caps;
     ssize_t pollfd_first_free;
 
+    struct event *current_event;
+    bool delete_current;
     struct event **timer_heap;
     ssize_t timer_heap_caps;
     ssize_t timer_heap_size;
@@ -320,6 +322,8 @@ static void remove_timer(struct event *evt) {
 
 static void remove_fd(struct event *evt) {
     struct pollfd *pfd = &poller.pollfd_array[evt->fd.index];
+    assert(poller.current_event != evt);
+    assert(poller.pollfd_array_events[evt->fd.index] == evt);
     poller.pollfd_array_events[evt->fd.index] = NULL;
     pfd->fd = FREE_SLOT;
     pfd->events = poller.pollfd_first_free;
@@ -328,6 +332,19 @@ static void remove_fd(struct event *evt) {
 }
 
 void poller_remove(struct event *evt) {
+    /* If we are currently handling `evt' we must
+     * delay freeing it until we return from the callback. */
+    if (evt == poller.current_event) {
+        if (gconfig.trace_misc)
+            info("Removing event[%p] from its callback", (void *)evt);
+        if (evt->pptr) {
+            *evt->pptr = NULL;
+            evt->pptr = NULL;
+        }
+        poller.delete_current = true;
+        return;
+    }
+
     switch (evt->state) {
     case evt_state_fd:
         remove_fd(evt);
@@ -422,8 +439,15 @@ void poller_run(void) {
                          (void *)(uintptr_t)evt->fd.cb, evt->fd.arg, poller.pollfd_array[i].revents);
                 }
                 assert(evt->state == evt_state_fd);
+                poller.current_event = evt;
                 evt->fd.cb(evt->fd.arg, poller.pollfd_array[i].revents);
                 poller.pollfd_array[i].revents = 0;
+
+                poller.current_event = NULL;
+                if (poller.delete_current) {
+                    poller.delete_current = false;
+                    poller_remove(evt);
+                }
             }
         }
 
@@ -439,9 +463,19 @@ void poller_run(void) {
             }
 
             assert(evt->state == evt_state_timer);
+            poller.current_event = evt;
             heap_remove(evt);
 
-            if (evt->timer.cb(evt->timer.arg))
+            bool requeue = evt->timer.cb(evt->timer.arg);
+
+            poller.current_event = NULL;
+            if (poller.delete_current) {
+                poller.delete_current = false;
+                poller_remove(evt);
+                continue;
+            }
+
+            if (requeue)
                 heap_insert(evt);
             else
                 free_event(evt);
