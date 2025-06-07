@@ -278,7 +278,7 @@ static inline void adjust_wide_left(struct line *line, ssize_t x) {
 }
 
 static inline void adjust_wide_right(struct line *line, ssize_t x) {
-    if (x >= line->size - 1) return;
+    if (x && x >= line->size - 1) return;
     struct cell *cell = &line->cell[x + 1];
     if (cell_wide(cell - 1)) cell->drawn = 0;
 }
