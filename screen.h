@@ -394,6 +394,7 @@ static inline struct cursor *screen_cursor(struct screen *scr) {
 }
 
 static inline void screen_rep(struct screen *scr, ssize_t rep) {
+    if (scr->prev_ch == -1U) return;
     while (rep > 0)
         rep = screen_dispatch_rep(scr, scr->prev_ch, rep);
 }
