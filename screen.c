@@ -446,10 +446,14 @@ static inline struct line *create_lines_range(struct screen_storage *screen, str
     prev = line;
 
     if (UNLIKELY(count > 1)) {
-        memset(dst + 1, 0, (count - 1)*sizeof *dst);
+        ssize_t onscreen = MIN(count, screen->end - dst);
+        if (onscreen > 1)
+            memset(dst + 1, 0, (onscreen - 1)*sizeof *dst);
         ssize_t i = 1;
         do {
-            dst[i].line = line = create_line(screen, attr, width);
+            line = create_line(screen, attr, width);
+            if (i < onscreen)
+                dst[i].line = line;
             attach_prev_line(line, prev);
             prev = line;
         } while (++i < count);
@@ -478,12 +482,12 @@ static void resize_altscreen(struct screen *scr, ssize_t width, ssize_t height) 
         screen[i].width = MIN(screen[i].width, width);
     }
 
+    scr->alt_screen.end = screen + height;
+
     if (scr->height < height) {
         create_lines_range(&scr->alt_screen, scr->height ? screen[scr->height - 1].line : NULL, NULL,
                            scr->height, width, &ATTR_DEFAULT, height - scr->height, NULL);
     }
-
-    scr->alt_screen.end = screen + height;
 
     /* Adjust altscreen saved cursor position */
 
