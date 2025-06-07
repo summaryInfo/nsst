@@ -324,7 +324,7 @@ struct font *font_ref(struct font *font) {
     return font;
 }
 
-static void add_font_substitute(struct font *font, struct face_list *faces, enum face_name attr, uint32_t ch){
+static void add_font_substitute(struct font *font, struct face_list *faces, enum face_name attr, uint32_t ch) {
     FcCharSet *subst_chars = FcCharSetCreate();
     FcCharSetAddChar(subst_chars, ch);
 
