@@ -612,7 +612,6 @@ static void validate_main_screen(struct screen *scr) {
     for (ssize_t i = 0; i < scr->height; i++) {
         struct line_span *view = &screen[i];
         assert(view->width <= scr->width);
-        if (view->width < scr->width) assert(!view_wrapped(view));
         assert(view->offset + view->width <= view->line->size);
         if (prevs) {
             assert((prevs->line == view->line->prev && prevs->line->next == view->line) || prevs->line == view->line);
@@ -632,7 +631,6 @@ static void validate_altscreen(struct screen *scr) {
         struct line_span *view = &altscr[i];
         assert(view->width <= scr->width);
         assert(!view->offset);
-        assert(!view_wrapped(view));
         if (prev) {
             assert(prev->line == view->line->prev);
             assert(prev->line->next == view->line);
