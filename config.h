@@ -209,6 +209,7 @@ struct instance_config {
     bool backspace_is_delete;
     bool blend_all_bg;
     bool blend_fg;
+    bool cursor_hide_on_input;
     bool delete_is_delete;
     bool extended_cir;
     bool fixed;

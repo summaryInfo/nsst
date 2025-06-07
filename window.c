@@ -669,6 +669,7 @@ void free_window(struct window *win) {
 static bool handle_blink_inhibit_timeout(void *win_) {
     struct window *win = win_;
     win->rcstate.cursor_blink_inhibit = false;
+    win->rcstate.blink = win->cfg.cursor_hide_on_input;
     if (win->blink_timer)
         poller_toggle(win->blink_timer, true);
     return false;

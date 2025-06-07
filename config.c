@@ -253,6 +253,7 @@ static struct option options[] = {
     X(color, palette[SPECIAL_CURSOR_FG], "cursor-foreground", "Default cursor foreground color", COLOR_SPECIAL_CURSOR_FG),
     X(enum, cursor_shape, "cursor-shape", "Shape of cursor", 2, 1, XENUM("blinking-block", "block", "blinking-underline", "underline", "blinking-bar", "bar")),
     X(dim, cursor_width, "cursor-width", "Width of lines that forms cursor", 2, 1, 16),
+    X(boolean, cursor_hide_on_input, "cursor-hide-on-input", "Hide cursor during typing", false),
     X(string, cwd, "cwd", "Current working directory for an application", NULL),
     GF1(boolean, daemon_mode, 'd', "daemon", "Start terminal as daemon", false),
     X(boolean, delete_is_delete, "delete-is-del", "Delete sends DEL symbol instead of escape sequence", false),
