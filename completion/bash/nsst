@@ -39,7 +39,7 @@ _nsst() {
 		--select-to-clipboard|--smooth-resize|--smooth-scroll|--special-blink|--special-bold|\
 		--special-italic|--special-reverse|--special-underlined|--substitute-fonts|--trace-characters|\
 		--trace-controls|--trace-events|--trace-fonts|--trace-input|--trace-misc|--unique-uris|\
-		--urgent-on-bell|--use-utf8|--visual-bell|--window-ops|--version|--help|\
+		--urgent-on-bell|--use-utf8|--visual-bell|--window-ops|--version|--help|--cursor-hide-on-input\
 		--no-allow-alternate|--no-allow-blinking|--no-allow-modify-edit-keypad|--no-allow-modify-function|\
 		--no-allow-modify-keypad|--no-allow-modify-misc|--no-alternate-scroll|--no-appcursor|--no-appkey|\
 		--no-autorepeat|--no-autowrap|--no-backspace-is-del|--no-blend-all-background|--no-blend-foreground|\
@@ -117,7 +117,7 @@ _nsst() {
 		"--bell" "--bell-high-volume" "--bell-low-volume" "--blend-all-background"
 		"--blend-foreground" "--blink-color" "--blink-time" "--bold-color" "--border" "--bottom-border"
 		"--char-geometry" "--config" "--cursor-background" "--cursor-foreground" "--cursor-shape"
-		"--cursor-width" "--cwd" "--daemon" "--delete-is-del" "--double-click-time" "--dpi"
+		"--cursor-width" "--cwd" "--cursor-hide-on-input" "--daemon" "--delete-is-del" "--double-click-time" "--dpi"
 		"--erase-scrollback" "--extended-cir" "--fixed" "--fkey-increment" "--font" "--font-gamma"
 		"--font-size" "--font-size-step" "--font-spacing" "--font-cache-size" "--force-mouse-mod" "--force-nrcs"
 		"--force-scalable" "--force-wayland-csd" "--foreground" "--fork" "--fps" "--frame-wait-delay"

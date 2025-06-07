@@ -39,6 +39,7 @@ function completion/nsst {
 		"--cursor-foreground:;Default cursor foreground color"
 		"--cursor-shape:;Shape of cursor"
 		"--cursor-width:;Width of lines that forms cursor"
+		"--cursor-hide-on-input:;Hide cursor during keyboard input"
 		"--cwd:;Current working directory for an application"
 		"d --daemon::;Start terminal as daemon"
 		"--delete-is-del::;Delete sends DEL symbol instead of escape sequence"
