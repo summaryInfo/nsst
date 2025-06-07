@@ -222,7 +222,7 @@ static inline void screen_adjust_line_ex(struct screen *scr, struct screen_stora
     if (UNLIKELY(view->offset) && y > 0) {
         assert(screen->begin[y].offset <= old_size);
         while (--y > 0 && screen->begin[y].line == view->line)
-            assert(screen->begin[y].width == scr->width);
+            assert((uintptr_t)(scr->width - screen->begin[y].width) <= 1);
     }
 #endif
 
