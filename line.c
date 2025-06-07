@@ -121,29 +121,25 @@ void free_line(struct screen_storage *screen, struct line *line) {
     mpa_free(&screen->pool, line);
 }
 
+static uint32_t move_one_attr(struct line_attr *dst, struct line *src, uint32_t id) {
+    struct attr *at = &src->attrs->data[id - 1];
+    if (UNLIKELY(!attr_empty(at))) {
+        at->bg = insert_attr(dst, at, attr_hash(at));
+        at->fg = 0;
+        at->uri = EMPTY_URI;
+    }
+    return at->bg;
+}
 
 static void move_attrtab(struct line_attr *dst, struct line *src) {
     for (ssize_t i = 0; i < src->size; i++) {
         uint32_t old_id = src->cell[i].attrid;
         if (old_id == ATTRID_DEFAULT) continue;
-
-        struct attr *at = &src->attrs->data[old_id - 1];
-
-        if (LIKELY(!attr_empty(at))) {
-            at->bg = insert_attr(dst, at, attr_hash(at));
-            at->fg = 0;
-            at->uri = EMPTY_URI;
-        }
-
-        src->cell[i].attrid = at->bg;
+        src->cell[i].attrid = move_one_attr(dst, src, old_id);
     }
 
-    if (src->pad_attrid != ATTRID_DEFAULT) {
-        struct attr *pad = &src->attrs->data[src->pad_attrid - 1];
-        if (!attr_empty(pad))
-            pad->bg = insert_attr(dst, pad, attr_hash(pad));
-        src->pad_attrid = pad->bg;
-    }
+    if (src->pad_attrid != ATTRID_DEFAULT)
+        src->pad_attrid = move_one_attr(dst, src, src->pad_attrid);
 
     free_attrs(src->attrs);
     src->attrs = dst;
