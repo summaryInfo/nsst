@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -881,21 +881,27 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
         if (md == mouse_mode_x10 && ev.button > 2) return;
 
         if (ev.event == mouse_event_motion) {
-            if (md != mouse_mode_motion && md != mouse_mode_drag) return;
-            if (md == mouse_mode_drag && loc->reported_button == 3) return;
-            if (md != mouse_mode_motion && !(ev.mask & ~mask_mod_mask)) return;
             if (ev.x == loc->reported_x && ev.y == loc->reported_y) return;
-            ev.button = loc->reported_button + 32;
+            if (md != mouse_mode_motion && md != mouse_mode_drag) return;
+            if (!(ev.mask & ~mask_mod_mask)) {
+                if (md == mouse_mode_drag) return;
+                ev.button = 32 + 3;
+            } else {
+                ev.button = 32 + loc->reported_button;
+            }
         } else {
             if (ev.button > 6) ev.button += 128 - 7;
             else if (ev.button > 2) ev.button += 64 - 3;
+
             if (ev.event == mouse_event_release) {
                 if (md == mouse_mode_x10) return;
                 /* Don't report wheel release events */
                 if (ev.button == 64 || ev.button == 65) return;
+                /* 3 is `release` for every mode except SGR */
                 if (loc->mouse_format != mouse_format_sgr) ev.button = 3;
+            } else {
+                loc->reported_button = ev.button;
             }
-            loc->reported_button = ev.button;
         }
 
         if (md != mouse_mode_x10) {
