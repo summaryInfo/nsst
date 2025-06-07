@@ -272,6 +272,8 @@ static inline bool is_separator(uint32_t ch, char *seps) {
 static struct line_span snap_backward(struct selection_state *sel, struct line_span pos) {
     char *seps = window_cfg(sel->win)->word_separators;
 
+    assert(pos.line);
+
     if (sel->snap == snap_command) {
         pos.offset = 0;
         struct line *prev_line;
@@ -585,6 +587,10 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
 
         sel->click1 = sel->click0;
         sel->click0 = now;
+    } else if (!sel->start.s.line) {
+        /* If top line has been reset due to the */
+        struct line_span top = screen_top(scr);
+        replace_handle(&sel->start, &top);
     }
 
     sel->state = state;

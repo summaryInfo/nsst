@@ -126,6 +126,10 @@ struct line_span screen_view(struct screen *scr) {
     return scr->view_pos.s;
 }
 
+struct line_span screen_top(struct screen *scr) {
+    return scr->top_line.s;
+}
+
 struct line_span screen_span(struct screen *scr, ssize_t y) {
 #if DEBUG_LINES
     assert(y >= 0);

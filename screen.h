@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #ifndef SCREEN_H_
 #define SCREEN_H_ 1
@@ -158,6 +158,7 @@ struct screen {
 bool init_screen(struct screen *scr, struct window *win);
 void free_screen(struct screen *scr);
 struct line_span screen_view(struct screen *scr);
+struct line_span screen_top(struct screen *scr);
 void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd);
 void screen_damage_selection(struct screen *scr);
 void screen_damage_uri(struct screen *scr, uint32_t uri);

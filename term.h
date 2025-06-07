@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #ifndef TERM_H_
 #define TERM_H_ 1
@@ -75,6 +75,7 @@ bool screen_redraw(struct screen *scr, bool blink_commited);
 void screen_damage_lines(struct screen *scr, ssize_t ys, ssize_t yd);
 void screen_scroll_view(struct screen *scr, int16_t amount);
 struct line_span screen_view(struct screen *scr);
+struct line_span screen_top(struct screen *scr);
 struct line_span screen_span(struct screen *scr, ssize_t y);
 ssize_t screen_span_shift_n(struct screen *scr, struct line_span *pos, ssize_t amount);
 ssize_t screen_span_shift(struct screen *scr, struct line_span *pos);
