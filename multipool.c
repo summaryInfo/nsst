@@ -85,6 +85,9 @@ static struct pool *get_fitting_pool(struct multipool *mp, ssize_t size) {
     struct pool *pool = DO_ALLOC(sizeof *pool + pool_size);
     if (pool == ALLOC_ERROR) return NULL;
 
+#if DEBUG_LINES
+    memset(pool->data, 0xAA, pool_size);
+#endif
     memset(pool, 0, sizeof *pool);
 
     mp->pool_count++;
@@ -125,6 +128,10 @@ void mpa_free(struct multipool *mp, void *ptr) {
         if (pool->sealed)
             pool_unseal(mp, pool);
     }
+
+#if DEBUG_LINES
+    memset(header, 0xAA, header->size);
+#endif
 
     if (!--pool->n_alloc) {
         pool->offset = INIT_OFFSET;

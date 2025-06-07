@@ -135,9 +135,15 @@ static void move_attrtab(struct line_attr *dst, struct line *src) {
     for (ssize_t i = 0; i < src->size; i++) {
         uint32_t old_id = src->cell[i].attrid;
         if (old_id == ATTRID_DEFAULT) continue;
+#if DEBUG_LINES
+        assert(old_id <= src->attrs->caps);
+#endif
         src->cell[i].attrid = move_one_attr(dst, src, old_id);
     }
 
+#if DEBUG_LINES
+    assert(src->pad_attrid <= src->attrs->caps);
+#endif
     if (src->pad_attrid != ATTRID_DEFAULT)
         src->pad_attrid = move_one_attr(dst, src, src->pad_attrid);
 
@@ -252,10 +258,16 @@ static void optimize_attributes(struct line *line) {
     memset(used, 0, max_elem*sizeof *used);
 
     used[line->pad_attrid / LONG_BITS] |= 1ULL << (line->pad_attrid % LONG_BITS);
+#if DEBUG_LINES
+    assert(line->pad_attrid == ATTRID_DEFAULT || line->pad_attrid <= line->attrs->caps);
+#endif
 
     for (ssize_t i = 0; i < line->size; i++) {
         uint64_t id = line->cell[i].attrid;
         used[id / LONG_BITS] |= 1ULL << (id % LONG_BITS);
+#if DEBUG_LINES
+        assert(id == ATTRID_DEFAULT || (int64_t)id <= line->attrs->caps);
+#endif
     }
 
     ssize_t cnt = -(used[0] & 1);
