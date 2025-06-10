@@ -1,7 +1,14 @@
-/* Copyright (c) 2024, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2024-2025, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
+/* Make linting always work for this
+ * file (force choosing the right renderer
+ * structure variant in window-impl.h)*/
+#undef USE_WAYLAND
+#define USE_WAYLAND 1
+#undef USE_WAYLANDSHM
+#define USE_WAYLANDSHM 1
 
 #if USE_PPOLL
 #   define _GNU_SOURCE
