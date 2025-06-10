@@ -363,8 +363,20 @@ void window_bell(struct window *win, uint8_t vol) {
     }
 }
 
+void window_update_pointer_mode(struct window *win) {
+    bool hide = ((win->pointer_inhibit && win->cfg.pointer_hide_on_input) ||
+                 win->pointer_mode == hide_always ||
+                 (win->pointer_mode == hide_no_tracking &&
+                     term_get_mstate(win->term)->mouse_mode == mouse_mode_none));
+    if (hide != win->pointer_is_hidden) {
+        win->pointer_is_hidden = hide;
+        pvtbl->update_pointer_mode(win, hide);
+    }
+}
+
 void window_set_pointer_mode(struct window *win, enum hide_pointer_mode mode) {
-    pvtbl->set_pointer_mode(win, mode);
+    win->pointer_mode = mode;
+    window_update_pointer_mode(win);
 }
 
 void window_set_pointer_shape(struct window *win, const char *shape) {
@@ -489,6 +501,7 @@ static void reload_window(struct window *win) {
     poller_unset(&win->visual_bell_timer);
     poller_unset(&win->blink_timer);
     poller_unset(&win->blink_inhibit_timer);
+    poller_unset(&win->pointer_inhibit_timer);
     if (win->cfg.allow_blinking)
          poller_set_timer(&win->blink_timer, handle_blink, win, win->cfg.blink_time);
 
@@ -630,6 +643,7 @@ void free_window(struct window *win) {
     poller_unset(&win->smooth_scroll_timer);
     poller_unset(&win->blink_timer);
     poller_unset(&win->blink_inhibit_timer);
+    poller_unset(&win->pointer_inhibit_timer);
     poller_unset(&win->sync_update_timeout_timer);
     poller_unset(&win->visual_bell_timer);
     poller_unset(&win->configure_delay_timer);
@@ -672,8 +686,10 @@ static bool handle_blink_inhibit_timeout(void *win_) {
     win->rcstate.blink = win->cfg.cursor_hide_on_input;
     if (win->blink_timer)
         poller_toggle(win->blink_timer, true);
+    window_update_pointer_mode(win);
     return false;
 }
+
 
 bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor_visible, bool marg, bool cmoved) {
     /* When cursor is actively moving, don't blink to improve visiblility */
@@ -756,10 +772,29 @@ static void clip_copy(struct window *win, bool uri) {
     }
 }
 
+void window_reset_pointer_inhibit_timer(struct window *win) {
+    poller_unset(&win->pointer_inhibit_timer);
+    win->pointer_inhibit = false;
+    window_update_pointer_mode(win);
+}
+
+static bool handle_pointer_inhibit_timeout(void *win_) {
+    struct window *win = win_;
+    win->pointer_inhibit = false;
+    window_update_pointer_mode(win);
+    return false;
+}
+
 void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t keycode) {
     struct key key = keyboard_describe_key(state, keycode);
 
     if (key.sym == XKB_KEY_NoSymbol) return;
+
+    if (win->cfg.pointer_hide_on_input && key.utf8len) {
+        poller_set_timer(&win->pointer_inhibit_timer, handle_pointer_inhibit_timeout, win, win->cfg.pointer_inhibit_time);
+        win->pointer_inhibit = true;
+        window_update_pointer_mode(win);
+    }
 
     enum shortcut_action action = keyboard_find_shortcut(&win->cfg, key);
 

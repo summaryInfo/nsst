@@ -325,6 +325,8 @@ static struct option options[] = {
     X(boolean, override_boxdraw, "override-boxdrawing", "Use built-in box drawing characters", false),
     X(enum, pixel_mode, "pixel-mode", "Subpixel rendering config; mono, bgr, rgb, bgrv, or rgbv", pixmode_mono, pixmode_mono, XENUM("mono", "bgr", "rgb", "bgrv", "rgbv")),
     X(string, normal_pointer, "pointer-shape", "Default mouse pointer shape", NULL),
+    X(boolean, pointer_hide_on_input, "pointer-hide-on-input", "Hide mouse pointer during typing", false),
+    X(time, pointer_inhibit_time, "pointer-hide-time", "Mouse pointer hiding duration", SEC/2, 500000, 10*SEC),
     X(boolean, print_attr, "print-attributes", "Print cell attributes when printing is enabled", true),
     X(string, printer_cmd, "print-command", "Program to pipe CSI MC output into", NULL),
     X1(string, printer_file, 'o', "printer-file", "File where CSI MC output to", NULL),

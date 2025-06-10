@@ -117,6 +117,7 @@ struct instance_config {
     int64_t sync_time;
     int64_t double_click_time;
     int64_t triple_click_time;
+    int64_t pointer_inhibit_time;
     int64_t select_scroll_time;
     int64_t scrollback_size;
     int64_t wait_for_configure_delay;
@@ -224,6 +225,7 @@ struct instance_config {
     bool meta_is_esc;
     bool numlock;
     bool override_boxdraw;
+    bool pointer_hide_on_input;
     bool print_attr;
     bool raise_on_bell;
     bool reverse_video;

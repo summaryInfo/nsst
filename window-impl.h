@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #ifndef WINDOW_IMPL_H_
 #define WINDOW_IMPL_H_ 1
@@ -68,6 +68,8 @@ struct window {
     bool redraw_borders : 1;
     bool force_redraw : 1;
     bool mapped : 1;
+    bool pointer_is_hidden : 1;
+    bool pointer_inhibit : 1;
 
     int16_t damaged_y0;
     int16_t damaged_y1;
@@ -76,6 +78,7 @@ struct window {
     struct event *smooth_scroll_timer;
     struct event *blink_timer;
     struct event *blink_inhibit_timer;
+    struct event *pointer_inhibit_timer;
     struct event *sync_update_timeout_timer;
     struct event *visual_bell_timer;
     struct event *configure_delay_timer;
@@ -100,6 +103,7 @@ struct window {
     struct glyph_cache *font_cache;
     struct glyph *undercurl_glyph;
     enum pixel_mode font_pixmode;
+    enum hide_pointer_mode pointer_mode;
 
     struct term *term;
     struct render_cell_state rcstate;
@@ -382,7 +386,7 @@ struct platform_vtable {
     void (*apply_geometry)(struct window *win, struct geometry *geometry);
     void (*set_autorepeat)(struct window *win, bool set);
     void (*select_cursor)(struct window *win, const char *name);
-    void (*set_pointer_mode)(struct window *win, enum hide_pointer_mode mode);
+    void (*update_pointer_mode)(struct window *win, bool hide);
     struct image (*shm_create_image)(struct window *win, int16_t width, int16_t height);
     void (*draw_end)(struct window *win);
 
@@ -395,6 +399,8 @@ void handle_focus(struct window *win, bool focused);
 void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t keycode);
 /* mouse event handler is defined elsewhere */
 
+void window_update_pointer_mode(struct window *win);
+void window_reset_pointer_inhibit_timer(struct window *win);
 struct window *window_find_shared_font(struct window *win, bool need_free, bool force_aligned);
 
 #endif

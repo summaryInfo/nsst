@@ -50,8 +50,6 @@ struct wayland_window {
     struct cursor *cursor_resize;
     struct cursor *cursor_default;
     struct cursor *cursor_user;
-    enum hide_pointer_mode cursor_mode;
-    bool cursor_is_hidden;
 
     /* We cannot query the title so we need to store them */
     char *title;
