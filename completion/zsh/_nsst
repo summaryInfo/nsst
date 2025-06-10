@@ -128,6 +128,8 @@ _arguments \
 	"--open-cmd=[A command used to open URIs when clicked]:executable:_files" \
 	"--pixel-mode=[Sub-pixel rendering mode]:mode:(mono bgr rgb bgrv rgbv default)" \
 	"--pointer-shape=[Default mouse pointer shape for the window]:shape:->shape" \
+	"--pointer-hide-on-input=[Hide mouse pointer during typing]:bool:(true false default)" \
+	"--pointer-hide-time=[Mouse pointer hiding duration]:time:()" \
 	"--print-command=[Program to pipe CSI MC output into]:executable:_files" \
 	"--resize-pointer-shape=[Mouse pointer shape for window resizing]:shape:->shape" \
 	"--reversed-color=[Special color of reversed text]:color:()" \

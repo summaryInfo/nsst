@@ -50,7 +50,8 @@ _nsst() {
 		--no-select-to-clipboard|--no-smooth-resize|--no-smooth-scroll|--no-special-blink|--no-special-bold|\
 		--no-special-italic|--no-special-reverse|--no-special-underlined|--no-substitute-fonts|--no-trace-characters|\
 		--no-trace-controls|--no-trace-events|--no-trace-fonts|--no-trace-input|--no-trace-misc|--no-unique-uris|\
-		--no-urgent-on-bell|--no-use-utf8|--no-visual-bell|--no-window-ops|--clone-config|--no-clone-config)
+		--no-urgent-on-bell|--no-use-utf8|--no-visual-bell|--no-window-ops|--clone-config|--no-clone-config|\
+		--pointer-hide-on-input|--no-pointer-hide-on-input|--no-cursor-hide-on-input)
 			prefix=
 			optname="${COMP_WORDS[i]}"
 			optvalue=
@@ -142,6 +143,7 @@ _nsst() {
 		"--uri-click-mod" "--uri-color" "--uri-mode" "--uri-underline-color" "--use-utf8"
 		"--version" "--vertical-border" "--visual-bell" "--visual-bell-time" "--vt-version"
 		"--wait-for-configure-delay" "--window-class" "--window-ops" "--word-break"
+		"--pointer-hide-on-input" "--pointer-hide-time"
 	)
 
 	[[ "${COMP_WORDS[0]}" == nsstc ]] && longopts+=("--quit")
@@ -202,7 +204,8 @@ _nsst() {
 	 --scroll-on-input=|--scroll-on-output=|--select-to-clipboard=|--smooth-scroll=|--special-blink=|\
 	 --special-bold=|--special-italic=|--special-reverse=|--special-underlined=|--substitute-fonts=|\
 	 --trace-characters=|--trace-controls=|--trace-events=|--trace-fonts=|--trace-input=|\
-	 --trace-misc=|--urgent-on-bell=|--use-utf8=|--visual-bell=|--window-ops=|--smooth-resize=|--clone-config=)
+	 --trace-misc=|--urgent-on-bell=|--use-utf8=|--visual-bell=|--window-ops=|--smooth-resize=|\
+	 --clone-config=|--pointer-hide-on-input=|--cursor-hide-on-input=|--pointer-hide-time=)
 		COMPREPLY=( $(compgen -P "${prefix}" -W "true false default" -- "${optvalue}") )
 		;;
 	(--*)
