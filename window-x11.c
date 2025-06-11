@@ -432,15 +432,17 @@ static inline struct cursor *ref_cursor(struct cursor *csr) {
     return csr;
 }
 
-static void x11_update_pointer_mode(struct window *win, bool hide) {
+static bool x11_update_pointer_mode(struct window *win, bool hide) {
     uint32_t xc;
     if (hide) {
         xc = ctx.hidden_cursor;
     } else {
-        assert(get_plat(win)->cursor);
+        if (!get_plat(win)->cursor)
+            return false;
         xc = get_plat(win)->cursor->xcursor;
     }
     xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_CURSOR, &xc);
+    return true;
 }
 
 static void x11_enable_mouse_events(struct window *win, bool enabled) {
@@ -1167,7 +1169,7 @@ static struct platform_vtable x11_vtable = {
     .window_action = x11_window_action,
     .update_props = x11_update_window_props,
     .select_cursor = x11_select_cursor,
-    .update_pointer_mode = x11_update_pointer_mode,
+    .try_update_pointer_mode = x11_update_pointer_mode,
     .apply_geometry = x11_apply_geometry,
     .reload_cursors = x11_reload_cursors,
     .free = x11_free,

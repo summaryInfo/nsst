@@ -368,10 +368,8 @@ void window_update_pointer_mode(struct window *win) {
                  win->pointer_mode == hide_always ||
                  (win->pointer_mode == hide_no_tracking &&
                      term_get_mstate(win->term)->mouse_mode == mouse_mode_none));
-    if (hide != win->pointer_is_hidden) {
+    if (hide != win->pointer_is_hidden && pvtbl->try_update_pointer_mode(win, hide))
         win->pointer_is_hidden = hide;
-        pvtbl->update_pointer_mode(win, hide);
-    }
 }
 
 void window_set_pointer_mode(struct window *win, enum hide_pointer_mode mode) {

@@ -391,9 +391,11 @@ static void select_cursor(struct window *win, struct cursor *csr) {
     activate_cursor(win);
 }
 
-static void wayland_update_pointer_mode(struct window *win, bool hide) {
-    (void)hide;
+static bool wayland_update_pointer_mode(struct window *win, bool hide) {
+    if (!hide && !get_plat(win)->cursor)
+        return false;
     activate_cursor(win);
+    return true;
 }
 
 static void wayland_enable_mouse_events(struct window *win, bool enabled) {
@@ -2329,7 +2331,7 @@ static struct platform_vtable wayland_vtable = {
     .apply_geometry = wayland_apply_geometry,
     .set_autorepeat = wayland_set_autorepeat,
     .select_cursor = wayland_select_cursor,
-    .update_pointer_mode = wayland_update_pointer_mode,
+    .try_update_pointer_mode = wayland_update_pointer_mode,
     .draw_end = wayland_draw_done,
     .after_read = wayland_after_read,
     .reload_cursors = wayland_reload_cursors,
