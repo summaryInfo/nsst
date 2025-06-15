@@ -297,8 +297,6 @@ static void heap_insert(struct event *evt) {
 
 struct event *poller_add_timer(poller_timer_cb_t cb, void *arg, int64_t periodns) {
     struct event *evt = alloc_event();
-    struct timespec now;
-    clock_gettime(CLOCK_TYPE, &now);
 
     *evt = (struct event) {
         .state = evt_state_timer,
