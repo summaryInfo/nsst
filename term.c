@@ -3764,6 +3764,7 @@ void term_answerback(struct term *term, const char *str, ...) {
 
     if (gconfig.trace_input) {
         ssize_t j = MAX_REPORT;
+        csi[--j] = 0;
         for (size_t i = res; i; i--) {
             if (IS_C0(csi[i - 1]) || IS_DEL(csi[i - 1]))
                 csi[--j] = csi[i - 1] ^ 0x40, csi[--j] = '^';
