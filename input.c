@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -395,7 +395,7 @@ static void dump_reply(struct term *term, struct reply *reply) {
 }
 
 
-static void translate_adjust(struct key *k, struct keyboard_state *mode) {
+static bool translate_adjust(struct key *k, struct keyboard_state *mode) {
     if (k->utf8len <= 1 && !is_special(k->sym) && mode->modkey_other > 1 && !is_ctrl_letter(k->sym))
         k->utf8len = 1, k->utf8data[0] = (uint8_t)k->sym;
 
@@ -414,7 +414,8 @@ static void translate_adjust(struct key *k, struct keyboard_state *mode) {
             k->sym = translate_keypad(k->sym);
     }
 
-    mode->appkey &= !(k->utf8len == 1 && mode->allow_numlock && (k->mask & mask_mod_2));
+    bool effective_appkey = mode->appkey &&
+            !(k->utf8len == 1 && mode->allow_numlock && (k->mask & mask_mod_2));
 
     if (k->sym == XKB_KEY_Tab || k->sym == XKB_KEY_ISO_Left_Tab) {
         if (mode->modkey_other > 1) {
@@ -449,6 +450,8 @@ static void translate_adjust(struct key *k, struct keyboard_state *mode) {
             k->mask &= ~(mask_control | mask_shift);
         }
     }
+
+    return effective_appkey;
 }
 
 void keyboard_reset_udk(struct term *term) {
@@ -496,10 +499,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
 
     if (mode->keylock) return;
 
-    /* Appkey can be modified during adjustment */
-    bool saved_appkey = mode->appkey;
-
-    translate_adjust(&k, mode);
+    bool effective_appkey = translate_adjust(&k, mode);
 
     struct reply reply = {0};
     uint32_t param = k.mask && is_modify_allowed(&k, mode) ? mask_to_param(k.mask) : 0;
@@ -548,7 +548,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
         modify_cursor(param, mode->modkey_keypad, &reply);
         dump_reply(term, &reply);
     } else if (is_keypad(k.sym)) {
-        if (mode->appkey) {
+        if (effective_appkey) {
             reply.init = mode->keyboad_vt52 ? '\033' : '\217';
             reply.final = " ABCDEFGHIJKLMNOPQRSTUVWXYZ??????"
                     "abcdefghijklmnopqrstuvwxyzXXX" [k.sym - XKB_KEY_KP_Space];
@@ -592,10 +592,8 @@ void keyboard_handle_input(struct key k, struct term *term) {
                 if (term_is_nrcs_enabled(term))
                     nrcs_encode(window_cfg(term_window(term))->keyboard_nrcs, &k.utf32, 1);
 
-                if (k.utf32 > 0xFF) {
-                    mode->appkey = saved_appkey;
+                if (k.utf32 > 0xFF)
                     return;
-                }
 
                 k.utf8len = 1;
                 k.utf8data[0] = k.utf32;
@@ -614,8 +612,6 @@ void keyboard_handle_input(struct key k, struct term *term) {
             term_sendkey(term, k.utf8data, k.utf8len);
         }
     }
-
-    mode->appkey = saved_appkey;
 }
 
 /* And now I should duplicate some code of xkbcommon
