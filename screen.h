@@ -151,7 +151,6 @@ struct screen {
      * Used for REP */
     uint32_t prev_ch;
 
-    const uint8_t *save_handle_at_print;
     struct line_handle saved_handle;
 };
 
@@ -217,10 +216,6 @@ void screen_print_all(struct screen *scr);
 void screen_drain_scrolled(struct screen *scr);
 
 char *encode_sgr(char *dst, char *end, const struct attr *attr);
-
-static inline void screen_set_bookmark(struct screen *scr, const uint8_t *pin) {
-    scr->save_handle_at_print = pin;
-}
 
 static inline struct line_span *screen_get_bookmark(struct screen *scr) {
     return &scr->saved_handle.s;

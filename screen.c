@@ -2020,25 +2020,15 @@ bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint
         *start = xstart + maxw;
         scr->prev_ch = xstart[maxw - 1];
         print_buffer(scr, NULL, xstart, maxw);
-
-        if (xstart <= scr->save_handle_at_print && scr->save_handle_at_print < xstart + maxw) {
-            replace_handle(&scr->saved_handle, &scr->screen[scr->c.y]);
-            scr->saved_handle.s.offset += scr->c.x - (xstart + maxw - scr->c.pending - scr->save_handle_at_print);
-        }
-
         return true;
     }
 
     register uint32_t *pbuf = scr->predec_buf;
     uint32_t *pbuf_end = pbuf + maxw;
-    uint32_t *save_offset = NULL;
 
     if (fast_nrcs && skip_del && utf8) {
         do {
             const uint8_t *char_start = xstart;
-            if (char_start == scr->save_handle_at_print)
-                save_offset = pbuf;
-
             register uint32_t ch = *xstart++;
 
             if (LIKELY(ch < 0xC0)) {
@@ -2112,9 +2102,6 @@ partial:
         /* This is the most generic printing loop */
         do {
             const uint8_t *char_start = xstart;
-            if (char_start == scr->save_handle_at_print)
-                save_offset = pbuf;
-
             register uint32_t ch = *xstart++;
 
             /* Use fast path for the ASCII characters */
@@ -2217,11 +2204,6 @@ partial2:          /* If we have encountered a partial UTF-8, print all we have 
     *start = xstart;
 
     print_buffer(scr, scr->predec_buf, NULL, pbuf - scr->predec_buf);
-
-    if (save_offset) {
-        replace_handle(&scr->saved_handle, &scr->screen[scr->c.y]);
-        scr->saved_handle.s.offset += scr->c.x - (pbuf - save_offset - scr->c.pending);
-    }
 
     return complete;
 }

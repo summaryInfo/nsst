@@ -156,7 +156,6 @@ struct term {
 #if USE_URI
     /* URI match state for URI autodetection */
     struct uri_match_state uri_match;
-    ssize_t shift_bookmark;
 #endif
 
     /* Bell volume */
@@ -3453,23 +3452,23 @@ static inline bool term_dispatch(struct term *term, const uint8_t **start, const
 
 #if USE_URI
 static inline void apply_matched_uri(struct term *term) {
-    struct line_span uri_end = screen_span(&term->scr, screen_cursor_y(&term->scr));
     struct line_span *uri_start = screen_get_bookmark(&term->scr);
-    uri_end.offset += screen_cursor_x(&term->scr);
-    uri_start->offset -= term->shift_bookmark;
-
     if (!uri_start->line) return;
+
+    struct line_span uri_end = screen_span(&term->scr, screen_cursor_y(&term->scr));
+    uri_end.offset += screen_cursor_x(&term->scr);
 
     /* URI is located on single line, contiguous and has
      * common SGR, since control characters reset URI match. */
     struct line *line = uri_end.line;
 
+    assert(term->esc.state == esc_ground);
     assert(uri_end.offset <= line->size);
     assert(uri_start->offset <= line->size);
     assert(uri_start->offset >= 0);
     assert(line == uri_start->line);
 
-    struct attr attr = *view_attr_at(&uri_end, 0);
+    struct attr attr = *view_attr_at(uri_start, 0);
     attr.uri = uri_add(uri_match_get(&term->uri_match), NULL);
     uint32_t attrid = alloc_attr(line, &attr);
 
@@ -3505,14 +3504,26 @@ bool term_read(struct term *term) {
                 proto_start = match_reverse_proto_tree(&term->uri_match, cur, MAX_PROTOCOL_LEN - 1);
                 if (!proto_start) continue;
 
+                struct screen *scr = &term->scr;
+                ssize_t offset = -1;
+
                 if (proto_start < term->tty.start) {
-                    term->shift_bookmark = term->tty.start - proto_start;
-                    screen_set_bookmark(&term->scr, term->tty.start);
+                    if (scr->screen[scr->c.y].offset + scr->c.x >= proto_start - term->tty.start)
+                        offset = proto_start - term->tty.start;
                 } else {
-                    term->shift_bookmark = 0;
-                    screen_set_bookmark(&term->scr, proto_start);
+                    /* Skip until protocol to ensure that we are in the ground state */
+                    while (term->tty.start < proto_start)
+                        if (!term_dispatch(term, (const uint8_t **)&term->tty.start, proto_start)) break;
+                    if (term->requested_resize) goto finish;
+                    offset = 0;
                 }
 
+                if (offset >= 0 && term->esc.state == esc_ground && !screen_altscreen(&term->scr) && !screen_sgr(&term->scr)->uri) {
+                    replace_handle(&scr->saved_handle, &scr->screen[screen_cursor_y(scr)]);
+                    scr->saved_handle.s.offset += screen_cursor_x(scr) - offset;
+                } else {
+                    continue;
+                }
             }
 
             for (; cur < term->tty.end; cur++) {
@@ -3523,9 +3534,7 @@ bool term_read(struct term *term) {
                         if (!term_dispatch(term, (const uint8_t **)&term->tty.start, cur)) break;
                     if (term->requested_resize) goto finish;
 
-                    if (term->esc.state == esc_ground  &&
-                        !screen_altscreen(&term->scr) &&
-                        !screen_sgr(&term->scr)->uri) apply_matched_uri(term);
+                    apply_matched_uri(term);
                     uri_match_reset(&term->uri_match, true);
                     break;
                 }
@@ -3539,7 +3548,6 @@ bool term_read(struct term *term) {
     if (term->requested_resize) goto finish;
 
 finish:
-    screen_set_bookmark(&term->scr, NULL);
     screen_drain_scrolled(&term->scr);
 
     return true;
