@@ -153,7 +153,6 @@ FORCEINLINE
 static inline void screen_split_line_after_ex(struct screen *scr, struct screen_storage *screen, ssize_t y) {
     struct line_span *src = screen->begin + y;
     ssize_t offset = src->offset + src->width;
-    if (LIKELY(src + 1 >= screen->end || src[1].line != src->line)) return;
 
     assert(offset <= src->line->size);
 
@@ -174,7 +173,10 @@ static inline void screen_split_line_before(struct screen *scr, ssize_t y) {
 
 FORCEINLINE
 static inline void screen_split_line_after(struct screen *scr, ssize_t y) {
-    screen_split_line_after_ex(scr, get_current_screen(scr), y);
+    struct screen_storage *screen = get_current_screen(scr);
+    struct line_span *src = screen->begin + y;
+    if (LIKELY(src + 1 >= screen->end || src[1].line != src->line)) return;
+    screen_split_line_after_ex(scr, screen, y);
 }
 
 static inline struct line *screen_realloc_line(struct screen *scr, struct line *line, ssize_t width, struct screen_storage *screen) {
