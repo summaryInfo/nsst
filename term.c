@@ -405,9 +405,6 @@ static void term_do_reset(struct term *term, bool hard) {
 
     term_load_config(term, true);
     keyboard_reset_udk(term);
-#if USE_URI
-    uri_match_reset(&term->uri_match, false);
-#endif
 
     window_set_pointer_shape(win, "");
     window_set_pointer_mode(win, hide_never);
