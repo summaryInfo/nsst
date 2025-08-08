@@ -771,7 +771,9 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
 
         /* Truncate lines that are below the last line of the screen */
         if (y >= height) {
-            screen_split_line_after_ex(scr, &scr->main_screen, height -  1);
+            struct line_span *src = &scr->main_screen.begin[height - 1];
+            if (src->line->size != src->offset + src->width)
+                screen_split_line_after_ex(scr, &scr->main_screen, height -  1);
             free_line_list_until(scr, &scr->main_screen, screen[height - 1].line->next, NULL);
             y = height;
         }
