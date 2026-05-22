@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -3453,6 +3453,10 @@ static inline void apply_matched_uri(struct term *term) {
     if (!uri_start->line) return;
 
     struct line_span uri_end = screen_span(&term->scr, screen_cursor_y(&term->scr));
+
+    /* Skip applying URI if line was force-wrapped in the middle of it */
+    if (uri_start->line != uri_end.line) return;
+
     uri_end.offset += screen_cursor_x(&term->scr);
 
     /* URI is located on single line, contiguous and has
