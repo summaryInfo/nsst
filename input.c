@@ -719,8 +719,13 @@ void keyboard_parse_config(struct instance_config *cfg) {
 
         if ((sym = xkb_keysym_from_name(c, 0)) == XKB_KEY_NoSymbol)
             sym = xkb_keysym_from_name(c, XKB_KEYSYM_CASE_INSENSITIVE);
-        if (sym == XKB_KEY_NoSymbol) warn("Wrong key name: '%s'", dash);
 
+        if (sym == XKB_KEY_NoSymbol)
+            warn("Wrong key name: '%s'", dash);
+        else if (mask & mask_shift)
+            sym = xkb_keysym_to_upper(sym);
+        else
+            sym = xkb_keysym_to_lower(sym);
 
         cfg->cshorts[i] = (struct shortcut) { sym, mask };
     }
