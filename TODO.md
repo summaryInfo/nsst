@@ -3,7 +3,7 @@ Roadmap
 
 ## Future versions
 
-### Until 2.6
+### Until 2.7
 
 _NOTE: These plans can change any time_
 
