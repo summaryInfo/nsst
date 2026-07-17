@@ -21,7 +21,7 @@ struct list_head {
          (it__) != (head__); \
          (it__) = next__, next__ = (it__)->next)
 
-#define LIST_FOREACH_CONTINUTE_SAFE(it__, continue__, head__) \
+#define LIST_FOREACH_CONTINUE_SAFE(it__, continue__, head__) \
     for (struct list_head *it__ = (continue__), *next__ = (continue__)->next; \
          (it__) != (head__); \
          (it__) = next__, next__ = (it__)->next)
@@ -38,16 +38,16 @@ static inline void list_init(struct list_head *head) {
 }
 
 static inline bool list_empty(struct list_head *head) {
-    return !head || head->next == head;
+    return head->next == head;
 }
 
-static inline struct list_head *list_add(struct list_head *head, struct list_head *prev, struct list_head *next) {
-    prev->next = head;
-    next->prev = head;
+static inline struct list_head *list_add(struct list_head *elem, struct list_head *prev, struct list_head *next) {
+    prev->next = elem;
+    next->prev = elem;
 
-    head->next = next;
-    head->prev = prev;
-    return head;
+    elem->next = next;
+    elem->prev = prev;
+    return elem;
 }
 
 static inline struct list_head *list_insert_after(struct list_head *head, struct list_head *elem) {

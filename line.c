@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -87,7 +87,7 @@ void free_line(struct screen_storage *screen, struct line *line) {
 
     if (!line) return;
 
-    /* If we are freeing line its selection should be reset */
+    /* If we are freeing line, its selection should be reset */
     // TODO Make selection a set of regular handles
 #if DEBUG_LINES
     assert(!line->selection_index);
@@ -97,7 +97,7 @@ void free_line(struct screen_storage *screen, struct line *line) {
     detach_next_line(line);
 
     /* Handles are effectively weak pointers in
-     * a sence that they can become NULL after the
+     * a sense that they can become NULL after the
      * line is freed. This is useful to avoid explicitly
      * updating e.g. selection data. */
     while (line->first_handle) {
@@ -388,7 +388,7 @@ struct line *concat_line(struct screen_storage *screen, struct line *src1, struc
         src1->pad_attrid = alloc_attr(src1, attr_pad(src2));
         copy_line(src1, src1->size, src2, 0, len - src1->size);
     } else {
-        /* Faster line content copying in we do
+        /* Faster line content copying if we do
          * not need to merge attributes */
         memcpy(src1->cell + src1->size, src2->cell,
                (len - src1->size) * sizeof *src1->cell);
@@ -466,7 +466,7 @@ void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, s
 HOT
 void fill_cells(struct cell *dst, struct cell c, ssize_t width) {
 #if defined(__SSE2__)
-    /* Well... this looks ugly but its fast */
+    /* Well... this looks ugly but it's fast */
 
     static_assert(sizeof(struct cell) == sizeof(uint32_t), "Wrong size of cell");
     int32_t pref = MIN((4 - (intptr_t)(((uintptr_t)dst/sizeof(uint32_t)) & 3)) & 3, width);
@@ -535,10 +535,10 @@ void copy_utf32_to_cells(struct cell *dst, const uint32_t *src, const uint32_t *
     register ssize_t blocks = (end - src)/4;
 
     if ((uintptr_t)src & (4 * sizeof(uint32_t) - 1)) {
-        for (ssize_t i = 0; i < blocks; i++)
-            _mm_store_si128((__m128i *)(dstp + i*4),
-                             _mm_or_si128(four_attrs,
-                                          _mm_loadu_si128((__m128i *)(src + i*4))));
+       for (ssize_t i = 0; i < blocks; i++)
+           _mm_store_si128((__m128i *)(dstp + i*4),
+                           _mm_or_si128(four_attrs,
+                                        _mm_loadu_si128((__m128i *)(src + i*4))));
     } else {
         for (ssize_t i = 0; i < blocks; i++)
             _mm_store_si128((__m128i *)(dstp + i*4),
@@ -571,7 +571,7 @@ void copy_utf32_to_cells(struct cell *dst, const uint32_t *src, const uint32_t *
     dstp += blocks*4;
 
 short_copy:
-    switch ((end - src)) {
+    switch (end - src) {
         case 3: dstp[2] = src[2] | attrid; /* fallthrough */
         case 2: dstp[1] = src[1] | attrid; /* fallthrough */
         case 1: dstp[0] = src[0] | attrid; /* fallthrough */
@@ -643,7 +643,7 @@ void copy_ascii_to_cells(struct cell *dst, const uint8_t *src, const uint8_t *en
     dstp += blocks*4;
 
 short_copy:
-    switch ((end - src)) {
+    switch (end - src) {
         case 3: dstp[2] = src[2] | attrid; /* fallthrough */
         case 2: dstp[1] = src[1] | attrid; /* fallthrough */
         case 1: dstp[0] = src[0] | attrid; /* fallthrough */

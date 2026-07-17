@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -89,7 +89,7 @@ static inline bool is_xkb_ctrl(struct key *k) {
 }
 
 static inline bool is_modify_allowed(struct key *k, struct keyboard_state *mode) {
-    if (mode->keyboad_vt52) return 0;
+    if (mode->keyboard_vt52) return 0;
     bool legacy = mode->keyboard_mapping > 0;
     if (is_cursor(k->sym) || is_edit_function(k->sym, mode->delete_is_del))
         return !legacy || mode->modkey_legacy_allow_edit_keypad;
@@ -145,7 +145,7 @@ static bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode)
         case XKB_KEY_Delete:
             break;
         case XKB_KEY_ISO_Left_Tab:
-            res =  k->mask & (mask_mod_1 | mask_control);
+            res = k->mask & (mask_mod_1 | mask_control);
             break;
         case XKB_KEY_Return:
         case XKB_KEY_Tab:
@@ -164,7 +164,7 @@ static bool is_modify_others_allowed(struct key *k, struct keyboard_state *mode)
             else return 0;
         }
         return res;
-    } else {
+    } else /*if (mode->modkey_other == 2) */ {
         switch (k->sym) {
         case XKB_KEY_BackSpace:
             return k->mask & (mask_mod_1 | mask_shift);
@@ -526,7 +526,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
                 term_sendkey(term, udk.val, udk.len);
             }
         } else if (mode->keyboard_mapping != keymap_legacy && deccode - 11 <= 3) {
-            reply.init = mode->keyboad_vt52 ? '\033' : '\217';
+            reply.init = mode->keyboard_vt52 ? '\033' : '\217';
             reply.final = deccode - 11 + 'P';
             reply.idx = 0;
             modify_cursor(param, mode->modkey_cursor, &reply);
@@ -543,17 +543,17 @@ void keyboard_handle_input(struct key k, struct term *term) {
             dump_reply(term, &reply);
         }
     } else if (is_keypad_function(k.sym)) {
-        reply.init = mode->keyboad_vt52 ? '\033' : '\217';
+        reply.init = mode->keyboard_vt52 ? '\033' : '\217';
         reply.final = k.sym - XKB_KEY_KP_F1 + 'P';
         modify_cursor(param, mode->modkey_keypad, &reply);
         dump_reply(term, &reply);
     } else if (is_keypad(k.sym)) {
         if (effective_appkey) {
-            reply.init = mode->keyboad_vt52 ? '\033' : '\217';
+            reply.init = mode->keyboard_vt52 ? '\033' : '\217';
             reply.final = " ABCDEFGHIJKLMNOPQRSTUVWXYZ??????"
                     "abcdefghijklmnopqrstuvwxyzXXX" [k.sym - XKB_KEY_KP_Space];
             modify_cursor(param, mode->modkey_keypad, &reply);
-            if (mode->keyboad_vt52) reply.priv = '?';
+            if (mode->keyboard_vt52) reply.priv = '?';
             dump_reply(term, &reply);
         } else {
             uint8_t ch = " XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXX"
@@ -563,7 +563,7 @@ void keyboard_handle_input(struct key k, struct term *term) {
             term_sendkey(term, &ch, 1);
         }
     } else if (is_cursor(k.sym)) {
-        reply.init = mode->keyboad_vt52 ? '\033' : mode->appcursor ? '\217' : '\233';
+        reply.init = mode->keyboard_vt52 ? '\033' : mode->appcursor ? '\217' : '\233';
         reply.final = "HDACB  FE"[k.sym - XKB_KEY_Home];
         modify_cursor(param, mode->modkey_cursor, &reply);
         dump_reply(term, &reply);
@@ -728,7 +728,7 @@ void keyboard_parse_config(struct instance_config *cfg) {
     cfg->force_mouse_mask = decode_mask(cfg->force_mouse_mod,
             cfg->force_mouse_mod + strlen(cfg->force_mouse_mod), cfg->term_mod);
     cfg->uri_click_mask = decode_mask(cfg->uri_click_mod,
-            cfg->uri_click_mod + strlen(cfg->force_mouse_mod), cfg->term_mod);
+            cfg->uri_click_mod + strlen(cfg->uri_click_mod), cfg->term_mod);
 }
 
 enum shortcut_action keyboard_find_shortcut(struct instance_config *cfg, struct key k) {

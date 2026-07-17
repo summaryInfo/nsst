@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -15,7 +15,6 @@
 #include <locale.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>

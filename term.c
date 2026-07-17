@@ -272,7 +272,7 @@ static void term_set_vt52(struct term *term, bool set) {
     struct screen *scr = &term->scr;
     struct screen_mode *smode = &scr->mode;
     if (set) {
-        term->kstate.keyboad_vt52 = 1;
+        term->kstate.keyboard_vt52 = 1;
         term->vt_level = 0;
         term->vt52_saved_c = *screen_cursor(scr);
         term->vt52_saved_mode = term->mode;
@@ -297,7 +297,7 @@ static void term_set_vt52(struct term *term, bool set) {
         screen_set_altscreen(&term->scr, 0, 0, 0);
         term_esc_start_seq(term);
     } else {
-        term->kstate.keyboad_vt52 = 0;
+        term->kstate.keyboard_vt52 = 0;
         term->vt_level = 1;
         struct cursor *c = screen_cursor(scr);
         term->vt52_saved_c.x = c->x;
@@ -2226,6 +2226,7 @@ static inline bool load_mode(uint8_t modbits[], uparam_t mode) {
             warn("Can't restore mode %u", mode);
         return 0;
     }
+
     return (*modbits >> (mode % 8)) & 1;
 }
 

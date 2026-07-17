@@ -143,7 +143,7 @@ void free_daemon(void) {
 
 static bool send_pending_launch_resp(struct pending_launch *lnch, const char *str) {
     if (send(lnch->fd, str, strlen(str), 0) < 0) {
-        warn("Can't send responce to client, dropping");
+        warn("Can't send response to client, dropping");
         free_pending_launch(lnch);
         return 0;
     }

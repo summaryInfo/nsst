@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 #ifndef LINE_H_
 #define LINE_H_ 1
 
@@ -66,7 +66,7 @@ struct attr {
                 uint32_t mask;
                 struct {
                     /* URI index in terminal URI table
-                     * if this field is 0, theres no URI
+                     * if this field is 0, there's no URI
                      * associated with attribute.
                      * This field is only used when
                      * USE_URI option is active */

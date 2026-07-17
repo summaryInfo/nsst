@@ -12,12 +12,12 @@
 #include "nrcs.h"
 
 enum cursor_type {
-    cusor_type_block_blink = 1,
-    cusor_type_block = 2,
-    cusor_type_underline_blink = 3,
-    cusor_type_underline = 4,
-    cusor_type_bar_blink = 5,
-    cusor_type_bar = 6,
+    cursor_type_block_blink = 1,
+    cursor_type_block = 2,
+    cursor_type_underline_blink = 3,
+    cursor_type_underline = 4,
+    cursor_type_bar_blink = 5,
+    cursor_type_bar = 6,
 };
 
 enum shortcut_action {
@@ -50,7 +50,7 @@ enum renderer_backend {
     renderer_wayland_shm,
 };
 
-enum keyboad_mapping {
+enum keyboard_mapping {
     keymap_default,
     keymap_legacy,
     keymap_vt220,
@@ -150,7 +150,7 @@ struct instance_config {
     char *open_command;
     char *notify_command;
 
-    enum keyboad_mapping mapping;
+    enum keyboard_mapping mapping;
     enum cursor_type cursor_shape;
     enum pixel_mode pixel_mode;
     enum charset keyboard_nrcs;

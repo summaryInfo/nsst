@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -168,7 +168,7 @@ struct option_type_desc {
 #define X2(type_, field_, l1_, l2_, name_, desc_, ...) { \
         .head = { 0 }, \
         .name = name_, \
-        .description =  desc_, \
+        .description = desc_, \
         .type = option_type_##type_, \
         .global = false, \
         .short_opt = { l1_, l2_ }, \
@@ -187,7 +187,7 @@ struct option_type_desc {
 #define G1(type_, field_, l1_, name_, desc_, ...) { \
         .head = { 0 }, \
         .name = name_, \
-        .description =  desc_, \
+        .description = desc_, \
         .type = option_type_##type_, \
         .global = 1, \
         .short_opt = { l1_, 0 }, \
@@ -203,7 +203,7 @@ struct option_type_desc {
 #define GF1(type_, field_, l1_, name_, desc_, ...) { \
         .head = { 0 }, \
         .name = name_, \
-        .description =  desc_, \
+        .description = desc_, \
         .type = option_type_##type_, \
         .global = 2, \
         .short_opt = { l1_, 0 }, \
@@ -217,7 +217,7 @@ struct option_type_desc {
 
 #define XENUM(...) ((const char *[]){__VA_ARGS__, NULL})
 
-// FIXME Select better option names in 2.0
+// FIXME: Select better option names in 2.0
 
 static struct option options[] = {
     X(boolean, allow_altscreen, "allow-alternate", "Enable alternate screen", true),
@@ -252,7 +252,7 @@ static struct option options[] = {
     X(color, palette[SPECIAL_CURSOR_BG], "cursor-background", "Default cursor background color", COLOR_SPECIAL_CURSOR_BG),
     X(color, palette[SPECIAL_CURSOR_FG], "cursor-foreground", "Default cursor foreground color", COLOR_SPECIAL_CURSOR_FG),
     X(enum, cursor_shape, "cursor-shape", "Shape of cursor", 2, 1, XENUM("blinking-block", "block", "blinking-underline", "underline", "blinking-bar", "bar")),
-    X(dim, cursor_width, "cursor-width", "Width of lines that forms cursor", 2, 1, 16),
+    X(dim, cursor_width, "cursor-width", "Width of lines that form cursor", 2, 1, 16),
     X(boolean, cursor_hide_on_input, "cursor-hide-on-input", "Hide cursor during typing", false),
     X(string, cwd, "cwd", "Current working directory for an application", NULL),
     GF1(boolean, daemon_mode, 'd', "daemon", "Start terminal as daemon", false),
@@ -329,7 +329,7 @@ static struct option options[] = {
     X(time, pointer_inhibit_time, "pointer-hide-time", "Mouse pointer hiding duration", SEC/2, 500000, 10*SEC),
     X(boolean, print_attr, "print-attributes", "Print cell attributes when printing is enabled", true),
     X(string, printer_cmd, "print-command", "Program to pipe CSI MC output into", NULL),
-    X1(string, printer_file, 'o', "printer-file", "File where CSI MC output to", NULL),
+    X1(string, printer_file, 'o', "printer-file", "File to which CSI MC output goes", NULL),
     X(boolean, raise_on_bell, "raise-on-bell", "Raise terminal window on bell", false),
     X(string, resize_pointer, "resize-pointer-shape", "Mouse pointer shape for window resizing", NULL),
     X(color, palette[SPECIAL_REVERSE], "reversed-color", "Special color of reversed text", COLOR_SPECIAL_REVERSE),
@@ -338,7 +338,7 @@ static struct option options[] = {
     X(int16, scroll_amount, "scroll-amount", "Number of lines scrolled in a time", 2, 0, 1000),
     X1(int64, scrollback_size, 'H', "scrollback-size", "Number of saved lines", 10000, 0, 1000000000),
     X(boolean, scroll_on_input, "scroll-on-input", "Scroll view to bottom on key press", true),
-    X(boolean, scroll_on_output, "scroll-on-output", "Scroll view to bottom when character in printed", false),
+    X(boolean, scroll_on_output, "scroll-on-output", "Scroll view to bottom when character is printed", false),
     X(color, palette[SPECIAL_SELECTED_BG],"selected-background", "Color of selected background", COLOR_SPECIAL_SELECTED_BG),
     X(color, palette[SPECIAL_SELECTED_FG],"selected-foreground", "Color of selected text", COLOR_SPECIAL_SELECTED_FG),
     X(time, select_scroll_time, "select-scroll-time", "Delay between scrolls of window while selecting with mouse", 10000000, 0, 10*SEC),
@@ -372,7 +372,7 @@ static struct option options[] = {
     X(dim, underline_width, "underline-width", "Text underline width", 1, 0, 16),
     GF(boolean, unique_uris, "unique-uris", "Make distinction between URIs with the same location", false),
     X(boolean, urgency_on_bell, "urgent-on-bell", "Set window urgency on bell", false),
-    X(string, uri_click_mod, "uri-click-mod", "keyboard modifier used to click-open URIs", ""),
+    X(string, uri_click_mod, "uri-click-mod", "A keyboard modifier used to click-open URIs", ""),
     X(color, palette[SPECIAL_URI_TEXT], "uri-color", "Special color of URI text", COLOR_SPECIAL_URI_TEXT),
     X(enum, uri_mode, "uri-mode", "Allow URI parsing/clicking", uri_mode_auto, uri_mode_off, XENUM("off", "manual", "auto")),
     X(string, uri_pointer, "uri-pointer-shape", "Mouse pointer shape for hovering over URI", NULL),
@@ -476,8 +476,8 @@ void init_options(const char *config_path) {
 
     char *charset = nl_langinfo(CODESET);
     if (charset) {
-        /* Builtin support for locales only include UTF-8, Latin-1 and ASCII */
-        // TODO: Check for supported NRCSs and prefer them to luit
+        /* Built-in support for locales only includes UTF-8, Latin-1 and ASCII */
+        // TODO: Check for supported NRCSs and prefer them over luit
         bool utf8 = !strncasecmp(charset, "UTF", 3) && (charset[3] == '8' || charset[4] == '8');
         bool supported = 0;
         const char *lc_supported[] = {
@@ -726,7 +726,7 @@ static bool do_parse_horizontal_border(const char *str, void *dst, union opt_lim
 
 static bool do_parse_int16(const char *str, void *dst, union opt_limits *limits) {
     int64_t val64 = 0;
-    uint8_t *pdst = dst;
+    int16_t *pdst = dst;
     if (!do_parse_int64(str, &val64, limits))
         return false;
     *pdst = val64;
@@ -735,7 +735,7 @@ static bool do_parse_int16(const char *str, void *dst, union opt_limits *limits)
 
 static bool do_parse_dim(const char *str, void *dst, union opt_limits *limits) {
     int64_t val64 = 0;
-    uint8_t *pdst = dst;
+    int16_t *pdst = dst;
     if (!do_parse_int64(str, &val64, limits))
         return false;
     *pdst = val64;
@@ -875,7 +875,7 @@ static void parse_config(struct instance_config *cfg, int allow_global) {
     const char *path = cfg->config_path;
     int fd = -1;
 
-    /* Config file is search in following places:
+    /* Config file is searched in the following places:
      * 1. Path set with --config=
      * 2. $XDG_CONFIG_HOME/nsst.conf
      * 3. $XDG_CONFIG_HOME/nsst/nsst.conf
@@ -1029,7 +1029,7 @@ const char *usage_string(char buffer[static MAX_OPTION_DESC + 1], ssize_t idx) {
             "are equivalent to --<X>=0,\n"
             "where 'yes', 'y', 'true', 'no', 'n' and 'false' are case independent.\n"
             "Time options accept units 's', 'ms', 'us' and 'ns'. If unit is not specified 'us' is implied\n"
-            "All options are also accept special value 'default' to reset to built-in default.\n";
+            "All options also accept special value 'default' to reset to built-in default.\n";
     } else return NULL;
 #undef APPEND
 }

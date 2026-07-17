@@ -69,7 +69,7 @@ struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t de
         TD = 1 << 8, BD = 1 << 9, LD = 1 << 10, RD = 1 << 11, /* Double lines */
         /* These are considered blocks */
         BLK = 1 << 3, /* Block */
-        TLQ = BLK | 1 << 4, TRQ = BLK | 1 << 5, BLQ = BLK | 1 << 6, BRQ = BLK | 1 << 7, /* Quoters */
+        TLQ = BLK | 1 << 4, TRQ = BLK | 1 << 5, BLQ = BLK | 1 << 6, BRQ = BLK | 1 << 7, /* Quotes */
         V = BLK | 1 << 8, VR = BLK | 1 << 9, /* Vertical blocks */
         H = BLK | 1 << 10, HR = BLK | 1 << 11, /* Horizontal blocks */
         LX = BLK | 1 << 12, RX = BLK | 1 << 13, /* Diagonal lines */

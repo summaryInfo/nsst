@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -61,7 +61,7 @@ struct font {
     struct face_list face_types[face_MAX];
 };
 
-struct patern_holder {
+struct pattern_holder {
     size_t length;
     size_t caps;
     FcPattern **pats;
@@ -89,7 +89,7 @@ void free_font(struct font *font) {
     }
 }
 
-static bool load_append_fonts(struct font *font, struct face_list *faces, struct patern_holder pats, double override_pixsize) {
+static bool load_append_fonts(struct font *font, struct face_list *faces, struct pattern_holder pats, double override_pixsize) {
     size_t new_size = faces->length + pats.length;
     adjust_buffer((void **)&faces->faces, &faces->caps, new_size, sizeof(faces->faces[0]));
     bool has_svg = false;
@@ -148,7 +148,7 @@ static bool load_append_fonts(struct font *font, struct face_list *faces, struct
         if (err != FT_Err_Ok) {
             if (err == FT_Err_Unknown_File_Format) warn("Wrong font file format");
             else if (err == FT_Err_Cannot_Open_Resource) warn("Can't open resource");
-            else warn("Some error happend loading file: %u", err);
+            else warn("Some error happened loading file: %u", err);
             goto err_free_face;
         }
 
@@ -179,7 +179,7 @@ err_free_face:
 
 static bool load_face_list(struct font *font, struct face_list* faces, const char *str, enum face_name attr, double size) {
     char *tmp = strdup(str);
-    struct patern_holder pats = {
+    struct pattern_holder pats = {
         .length = 0,
         .caps = CAPS_STEP,
         .pats = xzalloc(CAPS_STEP * sizeof *pats.pats)
@@ -315,7 +315,7 @@ struct font *create_font(const char* descr, double size, double dpi, double gamm
     }
 
     if (has_svg)
-        warn("Font '%s' contains SVG glyphs and might rendered incorrectly", descr);
+        warn("Font '%s' contains SVG glyphs and might be rendered incorrectly", descr);
 
     /* If can't find suitable, use 13 by default */
     if (font->pixel_size == 0)
@@ -385,9 +385,9 @@ static void add_font_substitute(struct font *font, struct face_list *faces, enum
         return;
     }
 
-    bool has_svg = load_append_fonts(font, faces, (struct patern_holder){ .length = 1, .pats = &final_pat }, pixsize);
+    bool has_svg = load_append_fonts(font, faces, (struct pattern_holder){ .length = 1, .pats = &final_pat }, pixsize);
     if (has_svg)
-        warn("Substitute font for character U+%04x (%lc) contains SVG glyphs and might rendered incorrectly", ch, ch);
+        warn("Substitute font for character U+%04x (%lc) contains SVG glyphs and might be rendered incorrectly", ch, ch);
 
     FcPatternDestroy(final_pat);
 }
@@ -522,7 +522,7 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
         stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
         if (lcd) stride *= 4;
     } else {
-        /* XRender required stride to be aligned exactly to 4,
+        /* XRender requires stride to be aligned exactly to 4,
          * software renderer wants stride to be aligned to 4/16
          * depending on whether subpixel rendering is off or on.
          */

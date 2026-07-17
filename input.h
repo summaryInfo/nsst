@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2026, Evgeniy Baskov. All rights reserved */
 
 #ifndef INPUT_H_
 #define INPUT_H_ 1
@@ -12,7 +12,7 @@
 #define UDK_MAX 37
 
 struct keyboard_state {
-    bool keyboad_vt52 : 1;
+    bool keyboard_vt52 : 1;
 
     bool modkey_legacy_allow_keypad : 1;
     bool modkey_legacy_allow_edit_keypad : 1;
@@ -55,7 +55,7 @@ struct keyboard_state {
 
     uint16_t fkey_inc_step : 5;
 
-    enum keyboad_mapping keyboard_mapping;
+    enum keyboard_mapping keyboard_mapping;
 
     struct udk {
         uint8_t *val;

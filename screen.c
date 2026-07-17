@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #define _DEFAULT_SOURCE
 
@@ -735,7 +735,7 @@ enum stick_view resize_main_screen(struct screen *scr, ssize_t width, ssize_t he
         translate_screen_position(&it, &cursor_handle.s, c, width);
 
         /* If cursor will be shifted off-screen, some lines needs to be pushed
-         * to scrollback to keep cusor on screen.. */
+         * to scrollback to keep cursor on screen.. */
         if (c->y >= height) {
             ssize_t delta = c->y - (height - 1);
             c->y -= delta;

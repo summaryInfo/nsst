@@ -44,7 +44,7 @@
 #define NSST_VERSION @VERSION@
 
 /* Enable internal data structures validation.
- * NOTE: It is really slows down terminal */
+ * NOTE: It really slows down the terminal */
 #define DEBUG_LINES @DEBUG_LINES@
 
 #endif

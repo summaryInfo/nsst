@@ -99,7 +99,7 @@ static inline ht_head_t *ht_erase_current(ht_iter_t *it) {
 }
 
 static inline void ht_free(hashtable_t *ht) {
-    /* This function assumes, that all elements was freed before */
+    /* This function assumes, that all elements were freed before */
     assert(!ht->size);
 
     free(ht->data);

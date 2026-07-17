@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 
 #include "feature.h"
@@ -118,7 +118,7 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
 
     bool slow_path = win->cfg.special_bold || win->cfg.special_underline || win->cfg.special_blink || win->cfg.blend_fg ||
                      win->cfg.special_reverse || win->cfg.special_italic || win->cfg.blend_all_bg || selection_active(term_get_sstate(win->term));
-    bool reverse_cursor = cursor_visible && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
+    bool reverse_cursor = cursor_visible && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cursor_type_block;
 
     struct screen *scr = term_screen(win->term);
     struct line_span span = screen_view(scr);

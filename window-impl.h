@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #ifndef WINDOW_IMPL_H_
 #define WINDOW_IMPL_H_ 1
@@ -272,7 +272,7 @@ static inline struct cursor_rects describe_cursor(struct window *win, int16_t cu
     cr.rects[3] = (struct rect) {cur_x, cur_y + (win->char_depth + win->char_height - 1), win->char_width, 1};
 
     if (win->focused) {
-        if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_bar) {
+        if (((win->cfg.cursor_shape + 1) & ~1) == cursor_type_bar) {
             if (on_margin) {
                 cr.offset = 2;
                 cr.rects[2].width = win->cfg.cursor_width;
@@ -282,12 +282,12 @@ static inline struct cursor_rects describe_cursor(struct window *win, int16_t cu
                 cr.rects[0].width = win->cfg.cursor_width;
             }
             cr.count = 1;
-        } else if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_underline) {
+        } else if (((win->cfg.cursor_shape + 1) & ~1) == cursor_type_underline) {
             cr.offset = 3;
             cr.count = 1;
             cr.rects[3].height = win->cfg.cursor_shape;
             cr.rects[3].y -= win->cfg.cursor_shape - 1;
-        } else if (((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block && beyond_eol) {
+        } else if (((win->cfg.cursor_shape + 1) & ~1) == cursor_type_block && beyond_eol) {
             cr.offset = 0;
             cr.count = 1;
             cr.rects[0].width = win->char_width;

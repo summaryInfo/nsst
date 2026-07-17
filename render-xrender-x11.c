@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -830,7 +830,7 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
     bool beyond_eol = false;
     cursor_visible &= !has_blinking || (!win->blink_commited && !win->rcstate.blink && !win->rcstate.cursor_blink_inhibit);
     cursor_visible &= !win->rcstate.cursor_blink_inhibit || !win->cfg.cursor_hide_on_input;
-    bool reverse_cursor = cursor_visible && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cusor_type_block;
+    bool reverse_cursor = cursor_visible && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cursor_type_block;
 
     has_blinking |= prepare_multidraw(win, cur_x, cur_y, reverse_cursor, &beyond_eol, &cursor_visible);
 

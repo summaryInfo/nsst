@@ -854,7 +854,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
 
     /* Report mouse */
     if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & mask_mod_mask) != force_mask &&
-            !term_get_kstate(term)->keyboad_vt52) {
+            !term_get_kstate(term)->keyboard_vt52) {
         if (loc->locator_filter) {
             if (ev.x < loc->filter.x || ev.x >= loc->filter.x + loc->filter.width ||
                     ev.y < loc->filter.y || ev.y >= loc->filter.y + loc->filter.height) {
@@ -879,7 +879,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
             }
         }
     } else if (loc->mouse_mode != mouse_mode_none &&
-            (ev.mask & mask_mod_mask) != force_mask && !term_get_kstate(term)->keyboad_vt52) {
+            (ev.mask & mask_mod_mask) != force_mask && !term_get_kstate(term)->keyboard_vt52) {
         enum mouse_mode md = loc->mouse_mode;
 
         adj_coords(term_window(term), &ev.x, &ev.y, loc->mouse_format == mouse_format_pixel);
