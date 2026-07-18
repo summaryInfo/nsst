@@ -322,10 +322,20 @@ void init_default_termios(void) {
             .sa_handler = handle_chld, .sa_flags = SA_RESTART}, NULL);
 }
 
+static void block_sigchld(bool block) {
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, SIGCHLD);
+    sigprocmask(block ? SIG_BLOCK : SIG_UNBLOCK, &sset, NULL);
+}
+
 static void add_watcher(struct watcher *w, bool autoclose) {
     assert(w->fd >= 0);
-    list_insert_after(&children, &w->link);
     w->autoclose = autoclose;
+    block_sigchld(true);
+    list_insert_after(&children, &w->link);
+    w->inlist = true;
+    block_sigchld(false);
 }
 
 static void remove_watcher(struct watcher *w) {
@@ -334,8 +344,14 @@ static void remove_watcher(struct watcher *w) {
         w->fd = -1;
     }
 
-    if (w->child > 0) {
+    if (w->inlist) {
+        block_sigchld(true);
         list_remove(&w->link);
+        block_sigchld(false);
+        w->inlist = false;
+    }
+
+    if (w->child > 0) {
         kill(w->child, SIGHUP);
         w->child = -1;
     }

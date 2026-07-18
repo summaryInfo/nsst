@@ -17,6 +17,7 @@ struct watcher {
     volatile pid_t child;
     int fd;
     bool autoclose;
+    bool inlist;
 };
 
 /* Printer controller mode
