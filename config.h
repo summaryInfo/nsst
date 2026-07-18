@@ -39,6 +39,7 @@ enum shortcut_action {
     shortcut_view_next_cmd,
     shortcut_view_prev_cmd,
     shortcut_view_top,
+    shortcut_view_bottom,
     shortcut_select_all,
     shortcut_MAX
 };

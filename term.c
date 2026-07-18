@@ -3732,6 +3732,10 @@ void term_scroll_view_top(struct term *term) {
     screen_scroll_view_top(&term->scr);
 }
 
+void term_scroll_view_bottom(struct term *term) {
+    screen_reset_view(&term->scr, true);
+}
+
 void term_select_all(struct term *term) {
     screen_select_all(term_screen(term));
 }

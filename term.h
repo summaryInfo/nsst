@@ -52,6 +52,7 @@ bool term_read(struct term *term);
 void term_scroll_view(struct term *term, int16_t amount);
 void term_scroll_view_to_cmd(struct term *term, int16_t amount);
 void term_scroll_view_top(struct term *term);
+void term_scroll_view_bottom(struct term *term);
 void term_select_all(struct term *term);
 void term_reload_config(struct term *term);
 void term_toggle_numlock(struct term *term);
