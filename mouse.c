@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -588,7 +588,10 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
         sel->click1 = sel->click0;
         sel->click0 = now;
     } else if (!sel->start.s.line) {
-        /* If top line has been reset due to the */
+        /* If top line has been reset due to
+         * the limited size of scrollback, we
+         * have to reset it to the current top
+         * line of the buffer */
         struct line_span top = screen_top(scr);
         replace_handle(&sel->start, &top);
     }
