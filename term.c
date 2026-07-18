@@ -1314,7 +1314,7 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             *shp = ((*shp + 1) & ~1) - set;
             break;
         case 13: /* Start blinking cursor (menu item) */
-        case 14: /* Enable XOR of controll sequence and menu for blinking */
+        case 14: /* Enable XOR of control sequence and menu for blinking */
             /* IGNORE */
             break;
         case 18: /* DECPFF */
