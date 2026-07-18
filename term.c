@@ -3728,6 +3728,10 @@ void term_scroll_view_to_cmd(struct term *term, int16_t amount) {
     screen_scroll_view_to_cmd(&term->scr, amount);
 }
 
+void term_scroll_view_top(struct term *term) {
+    screen_scroll_view_top(&term->scr);
+}
+
 void term_select_all(struct term *term) {
     screen_select_all(term_screen(term));
 }

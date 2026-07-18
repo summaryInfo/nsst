@@ -299,6 +299,7 @@ static struct option options[] = {
     X(string, key[shortcut_font_up], "key-inc-font", "Increment font size hotkey", "T-Page_Up"),
     X(string, key[shortcut_view_next_cmd], "key-jump-next-cmd", "Jump to next command beginning hotkey", "T-F"),
     X(string, key[shortcut_view_prev_cmd], "key-jump-prev-cmd", "Jump to previous command beginning hotkey", "T-B"),
+    X(string, key[shortcut_view_top], "key-jump-top", "Jump to top of the scrollback buffer", "T-T"),
     X(string, key[shortcut_new_window], "key-new-window", "Create new window hotkey", "T-N"),
     X(string, key[shortcut_numlock], "key-numlock", "'appkey' mode allow toggle hotkey", "T-Num_Lock"),
     X(string, key[shortcut_paste], "key-paste", "Paste from clipboard hotkey", "T-V"),

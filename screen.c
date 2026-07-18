@@ -307,6 +307,18 @@ void screen_select_all(struct screen *scr) {
     selection_select_all(&scr->sstate, scr);
 }
 
+void screen_scroll_view_top(struct screen *scr) {
+    bool old_viewr = line_span_cmpeq(&scr->view_pos.s, scr->screen);
+
+    replace_handle(&scr->view_pos, &(struct line_span) { .line = scr->top_line.s.line });
+    scr->scroll_damage = true;
+
+    selection_view_scrolled(&scr->sstate, scr);
+
+    bool new_viewr = line_span_cmpeq(&scr->view_pos.s, scr->screen);
+    scr->prev_c_view_changed |= old_viewr != new_viewr;
+}
+
 void screen_scroll_view_to_cmd(struct screen *scr, int16_t amount) {
 
     amount = -amount;

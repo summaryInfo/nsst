@@ -168,6 +168,7 @@ void screen_reset_view(struct screen *scr, bool damage);
 void screen_free_scrollback(struct screen *scr, ssize_t max_size);
 void screen_scroll_view(struct screen *scr, int16_t amount);
 void screen_scroll_view_to_cmd(struct screen *scr, int16_t amount);
+void screen_scroll_view_top(struct screen *scr);
 void screen_select_all(struct screen *scr);
 void screen_resize(struct screen *scr, int16_t width, int16_t height);
 bool screen_redraw(struct screen *scr, bool blink_committed);

@@ -863,6 +863,9 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
     case shortcut_view_prev_cmd:
         term_scroll_view_to_cmd(win->term, 1);
         return;
+    case shortcut_view_top:
+        term_scroll_view_top(win->term);
+        return;
     case shortcut_select_all:
         term_select_all(win->term);
         return;
