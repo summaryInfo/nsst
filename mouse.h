@@ -112,6 +112,7 @@ void free_selection(struct selection_state *sel);
 bool init_selection(struct selection_state *sel, struct window *win, struct screen *scr);
 
 void selection_view_scrolled(struct selection_state *sel, struct screen *scr);
+void selection_select_all(struct selection_state *sel, struct screen *scr);
 
 /* Starts from the last character */
 struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_span *view);

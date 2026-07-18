@@ -710,6 +710,19 @@ static uint8_t *selection_data(struct selection_state *sel) {
     } else return NULL;
 }
 
+void selection_select_all(struct selection_state *sel, struct screen *scr) {
+    struct line_span start = screen_view(scr);
+    replace_handle(&sel->start, &start);
+    replace_handle(&sel->end, &start);
+    sel->snap = snap_all;
+    sel->rectangular = false;
+    sel->state = state_sel_released;
+    apply_selection_change(sel, scr);
+
+    sel->targ = sel->select_to_clipboard ? clip_clipboard : clip_primary;
+    window_set_clip(sel->win, selection_data(sel), sel->targ);
+}
+
 void selection_view_scrolled(struct selection_state *sel, struct screen *scr) {
     if (sel->state == state_sel_progress || sel->state == state_sel_pressed)
         selection_changed(sel, scr, state_sel_progress, sel->rectangular);

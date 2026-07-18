@@ -303,6 +303,10 @@ void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
     scr->sb_limit = 0;
 }
 
+void screen_select_all(struct screen *scr) {
+    selection_select_all(&scr->sstate, scr);
+}
+
 void screen_scroll_view_to_cmd(struct screen *scr, int16_t amount) {
 
     amount = -amount;

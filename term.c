@@ -3728,6 +3728,10 @@ void term_scroll_view_to_cmd(struct term *term, int16_t amount) {
     screen_scroll_view_to_cmd(&term->scr, amount);
 }
 
+void term_select_all(struct term *term) {
+    screen_select_all(term_screen(term));
+}
+
 void term_scroll_view(struct term *term, int16_t amount) {
     if (screen_altscreen(&term->scr)) {
         if (term->mode.altscreen_scroll)

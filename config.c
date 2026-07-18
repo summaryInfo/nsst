@@ -308,6 +308,7 @@ static struct option options[] = {
     X(string, key[shortcut_reverse_video], "key-reverse-video", "Toggle reverse video mode hotkey", "T-I"),
     X(string, key[shortcut_scroll_down], "key-scroll-down", "Scroll down hotkey", "T-Down"),
     X(string, key[shortcut_scroll_up], "key-scroll-up", "Scroll up hotkey", "T-Up"),
+    X(string, key[shortcut_select_all], "key-select-all", "Select whole scrollback buffer", "T-A"),
     X(dim, border.left, "left-border", "Left border size", 8, 0, 200),
     X(dim, line_spacing, "line-spacing", "Additional lines vertical spacing", 0, -100, 100),
     X(boolean, lock, "lock-keyboard", "Disable keyboard input", false),
