@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2026, Evgeniy Baskov. All rights reserved */
 
 #ifndef HASHTABLE_H_
 #define HASHTABLE_H_ 1
@@ -184,14 +184,15 @@ static inline uint64_t hash64(const void *vdata, size_t len) {
     const uint64_t m = 0xC6A4A7935BD1E995LLU;
 
 
-    const uint64_t *data = (const uint64_t *)vdata;
-    const uint64_t *end = data + (len >> 3);
+    const uint8_t *data = vdata;
+    const uint8_t *end = data + (len & ~(size_t)7);
 
     uint64_t k = 0, h = 123 ^ (len * m);
     while (data < end) {
-        memcpy(&k, data++, sizeof(k));
+        memcpy(&k, data, sizeof k);
         k *= m, k ^= k >> 47, k *= m;
         h ^= k, h *= m;
+        data += sizeof k;
     }
 
     const uint8_t *tail = (const uint8_t *)data;
