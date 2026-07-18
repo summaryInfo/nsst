@@ -142,8 +142,9 @@ _nsst() {
 		"--triple-click-time" "--underlined-color" "--underline-width" "--unique-uris" "--urgent-on-bell"
 		"--uri-click-mod" "--uri-color" "--uri-mode" "--uri-underline-color" "--use-utf8"
 		"--version" "--vertical-border" "--visual-bell" "--visual-bell-time" "--vt-version"
-		"--wait-for-configure-delay" "--window-class" "--window-ops" "--word-break"
-		"--pointer-hide-on-input" "--pointer-hide-time"
+		"--wait-for-configure-delay" "--window-class" "--window-ops" "--word-break" "--workspace"
+		"--pointer-hide-on-input" "--pointer-hide-time" "--icon-path" "--keep-on-exit" "--key-jump-top"
+		"--key-jump-bottom" "--key-select-all"
 	)
 
 	[[ "${COMP_WORDS[0]}" == nsstc ]] && longopts+=("--quit")
@@ -167,6 +168,9 @@ _nsst() {
 	(--keyboard-mapping=)
 		COMPREPLY=( $(compgen -P "${prefix}" -W "legacy vt220 hp sun sco default" -- "${optvalue}") )
 		;;
+	(--keep-on-exit=)
+		COMPREPLY=( $(compgen -P "${prefix}" -W "never key always default" -- "${optvalue}") )
+		;;
 	(-L=|--log-level=)
 		COMPREPLY=( $(compgen -P "${prefix}" -W "quiet fatal warn info default" -- "${optvalue}") )
 		;;
@@ -188,7 +192,7 @@ _nsst() {
 	(--cwd=)
 		COMPREPLY=( $(compgen -P "${prefix}" -A directory -- "${optvalue}") )
 		;;
-	(-[Cos]=|--config=|--printer-file=|--socket=)
+	(-[Cos]=|--config=|--printer-file=|--socket=|--icon-path=)
 		COMPREPLY=( $(compgen -P "${prefix}" -A file -- "${optvalue}") )
 		;;
 	(--luit-path=|--open-cmd=|--print-command=|--shell=)

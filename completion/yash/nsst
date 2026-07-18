@@ -37,9 +37,9 @@ function completion/nsst {
 		"--clone-config:;Copy config from previous window instead of loading it from file"
 		"--cursor-background:;Default cursor background color"
 		"--cursor-foreground:;Default cursor foreground color"
+		"--cursor-hide-on-input:;Hide cursor during keyboard input"
 		"--cursor-shape:;Shape of cursor"
 		"--cursor-width:;Width of lines that forms cursor"
-		"--cursor-hide-on-input:;Hide cursor during keyboard input"
 		"--cwd:;Current working directory for an application"
 		"d --daemon::;Start terminal as daemon"
 		"--delete-is-del::;Delete sends DEL symbol instead of escape sequence"
@@ -52,11 +52,11 @@ function completion/nsst {
 		"f: --font:;Comma-separated list of fontconfig font patterns"
 		"--fixed::;Don't allow to change window size, if supported"
 		"--fkey-increment:;Step in numbering function keys"
+		"--font-cache-size:;Number of cached glyphs per font"
 		"--font-gamma:;Factor of font sharpening"
 		"--font-size:;Font size in points"
 		"--font-size-step:;Font size step in points"
 		"--font-spacing:;Additional spacing for individual symbols"
-		"--font-cache-size:;Number of cached glyphs per font"
 		"--force-mouse-mod:;Modifier to force mouse action"
 		"--force-nrcs::;Enable NRCS translation when UTF-8 mode is enabled"
 		"--force-scalable::;Do not search for pixmap fonts"
@@ -71,8 +71,10 @@ function completion/nsst {
 		"h --help;Print this message and exit"
 		"--horizontal-border:;Horizontal border size (deprecated)"
 		"H: --scrollback-size:;Number of saved lines"
+		"--icon-path:;Window icon file path"
 		"--italic-color:;Special color of italic text"
 		"--keep-clipboard::;Reuse copied clipboard content instead of current selection data"
+		"--keep-on-exit:;Don't close the window when application terminates"
 		"--keep-selection::;Don't clear X11 selection when not highlighted"
 		"--keyboard-dialect:;National replacement character set to be used in non-UTF-8 mode"
 		"--keyboard-mapping:;Initial keyboard mapping"
@@ -81,8 +83,10 @@ function completion/nsst {
 		"--key-copy-uri:;Copy selected URI to clipboard hotkey"
 		"--key-dec-font:;Decrement font size hotkey"
 		"--key-inc-font:;Increment font size hotkey"
+		"--key-jump-bottom:;Jump to the bottom of the scrollback buffer"
 		"--key-jump-next-cmd:;Jump to next command beginning hotkey"
 		"--key-jump-prev-cmd:;Jump to previous command beginning hotkey"
+		"--key-jump-top:;Jump to the top of the scrollback buffer"
 		"--key-new-window:;Create new window hotkey"
 		"--key-numlock:;'appkey' mode allow toggle hotkey"
 		"--key-paste:;Paste from clipboard hotkey"
@@ -92,6 +96,7 @@ function completion/nsst {
 		"--key-reverse-video:;Toggle reverse video mode hotkey"
 		"--key-scroll-down:;Scroll down hotkey"
 		"--key-scroll-up:;Scroll up hotkey"
+		"--key-select-all:;Select whole scrollback buffer"
 		"--left-border:;Left border size"
 		"--line-spacing:;Additional lines vertical spacing"
 		"L: --log-level:;Filtering level of logged information"
@@ -115,9 +120,9 @@ function completion/nsst {
 		"o: --printer-file:;File where CSI MC output to"
 		"--override-boxdrawing::;Use built-in box drawing characters"
 		"--pixel-mode:;Sub-pixel rendering mode"
-		"--pointer-shape:;Default mouse pointer shape for the window"
 		"--pointer-hide-on-input:;Hide mouse pointer during typing"
 		"--pointer-hide-time:;Mouse pointer hiding duration"
+		"--pointer-shape:;Default mouse pointer shape for the window"
 		"--print-attributes::;Print cell attributes when printing is enabled"
 		"--print-command:;Program to pipe CSI MC output into"
 		"--raise-on-bell::;Raise terminal window on bell"
@@ -175,6 +180,7 @@ function completion/nsst {
 		"--wait-for-configure-delay:;Time gap in microseconds waiting for configure after resize request"
 		"--window-ops::;Allow window manipulation with escape sequences"
 		"--word-break:;Symbols treated as word separators when snapping mouse selection"
+		"--workspace:;Workspace to spawn window on (X11-only)"
 	) #<#
 
 	command -f completion//parseoptions
@@ -196,6 +202,9 @@ function completion/nsst {
 		;;
 	(--keyboard-mapping)
 		complete -P "$PREFIX" -- legacy vt220 hp sun sco default
+		;;
+	(--keep-on-exit)
+		complete -P "$PREFIX" -- never key always default
 		;;
 	(L|--log-level)
 		complete -P "$PREFIX" -- quiet fatal warn info default
@@ -219,7 +228,7 @@ function completion/nsst {
 	(--cwd)
 		complete -P "$PREFIX" --directory -- default
 		;;
-	(C|--config|o|--printer-file|s|--socket)
+	(C|--config|o|--printer-file|s|--socket|--icon-path)
 		complete -P "$PREFIX" --file -- default
 		;;
 	(--luit-path|--open-cmd|--print-command|--shell)
