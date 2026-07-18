@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2026, Evgeniy Baskov. All rights reserved */
 
 #ifndef TTY_H_
 #define TTY_H_ 1
@@ -56,6 +56,10 @@ struct tty {
 
 static inline bool tty_has_data(struct tty *tty) {
     return tty->start < tty->end;
+}
+
+static inline bool tty_exited(struct tty *tty) {
+    return tty->w.fd == -1;
 }
 
 void init_default_termios(void);

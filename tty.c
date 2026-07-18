@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -441,7 +441,7 @@ void tty_hang(struct tty *tty) {
 }
 
 static void defer_write(struct tty *tty, const uint8_t *buf, ssize_t len) {
-    if (tty->w.fd < 0) return;
+    if (tty_exited(tty)) return;
 
     warn("TTY buffer is full, deferring write of %ld bytes (%ld in queue)", len, tty->deferred_count);
     tty->deferred_count++;
@@ -487,7 +487,7 @@ static bool flush_deferred(struct tty *tty) {
 }
 
 ssize_t tty_refill(struct tty *tty) {
-    if (UNLIKELY(tty->w.fd == -1)) return -1;
+    if (UNLIKELY(tty_exited(tty))) return -1;
 
     ssize_t inc = 0, sz = tty->end - tty->start, inctotal = 0;
 
