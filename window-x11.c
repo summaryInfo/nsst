@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -51,6 +51,7 @@ struct context {
         xcb_atom_t _NET_WM_PID;
         xcb_atom_t _NET_WM_NAME;
         xcb_atom_t _NET_WM_ICON_NAME;
+        xcb_atom_t _NET_WM_DESKTOP;
         xcb_atom_t _NET_WM_STATE;
         xcb_atom_t _NET_WM_STATE_FULLSCREEN;
         xcb_atom_t _NET_WM_STATE_MAXIMIZED_VERT;
@@ -610,6 +611,11 @@ void x11_update_window_props(struct window *win) {
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(NSST_CLASS), NSST_CLASS);
     if ((extra = win->cfg.window_class))
         xcb_change_property(con, XCB_PROP_MODE_APPEND, get_plat(win)->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, strlen(extra), extra);
+
+    if (win->cfg.workspace >= 0) {
+        uint32_t desktop = win->cfg.workspace;
+        xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, ctx.atom._NET_WM_DESKTOP, XCB_ATOM_CARDINAL, 32, 1, &desktop);
+    }
 
     struct normal_hints nhints = {
         .flags = HINT_PMINSIZE | HINT_PBASESIZE,
@@ -1262,6 +1268,7 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
     ctx.atom._NET_WM_PID = intern_atom("_NET_WM_PID");
     ctx.atom._NET_WM_NAME = intern_atom("_NET_WM_NAME");
     ctx.atom._NET_WM_ICON_NAME = intern_atom("_NET_WM_ICON_NAME");
+    ctx.atom._NET_WM_DESKTOP = intern_atom("_NET_WM_DESKTOP");
     ctx.atom._NET_WM_STATE = intern_atom("_NET_WM_STATE");
     ctx.atom._NET_WM_STATE_FULLSCREEN = intern_atom("_NET_WM_STATE_FULLSCREEN");
     ctx.atom._NET_WM_STATE_MAXIMIZED_VERT = intern_atom("_NET_WM_STATE_MAXIMIZED_VERT");

@@ -392,6 +392,7 @@ static struct option options[] = {
     X1(string, window_class, 'c', "window-class", "X11 Window class", NULL),
     X(boolean, allow_window_ops, "window-ops", "Allow window manipulation with escape sequences", true),
     X(string, word_separators, "word-break", "Symbols treated as word separators when snapping mouse selection", " \t!$^*()+={}[]\\\"'|,;<>~`"),
+    X(int16, workspace, "workspace", "Workspace to spawn window on (X11-only)", -1, 0, 1000),
 };
 
 static inline color_t default_color(uint32_t n) {

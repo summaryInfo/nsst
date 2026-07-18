@@ -172,6 +172,7 @@ struct instance_config {
     struct geometry geometry;
 
     int16_t tab_width;
+    int16_t workspace;
     int16_t vt_version;
     int16_t margin_bell_column;
     int16_t smooth_scroll_step;
