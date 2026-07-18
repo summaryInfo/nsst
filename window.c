@@ -693,7 +693,7 @@ static bool handle_blink_inhibit_timeout(void *win_) {
 
 
 bool window_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor_visible, bool marg, bool cmoved) {
-    /* When cursor is actively moving, don't blink to improve visiblility */
+    /* When cursor is actively moving, don't blink to improve visibility */
     if (cmoved) {
         poller_set_timer(&win->blink_inhibit_timer, handle_blink_inhibit_timeout, win, win->cfg.blink_time/3);
         win->rcstate.cursor_blink_inhibit = true;
