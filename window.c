@@ -142,12 +142,11 @@ static void window_delay_redraw_after_read(struct window *win);
 void handle_term_read(void *win_, uint32_t mask) {
     struct window *win = win_;
 
-    if (mask & (POLLHUP | POLLERR | POLLNVAL)) {
-        term_poll_error(win->term);
-        return;
+    if (UNLIKELY(mask & (POLLHUP | POLLERR | POLLNVAL))) {
+        if (term_hang(win->term)) return;
+    } else {
+        if (!term_read(win->term)) return;
     }
-
-    if (!term_read(win->term)) return;
 
     window_delay_redraw_after_read(win);
     win->any_event_happened = true;
@@ -184,7 +183,7 @@ void window_reset_delayed_redraw(struct window *win) {
 static bool handle_read_delay_timeout(void *win_) {
     struct window *win = win_;
     /* If we haven't read for a while, reset a redraw delay,
-     * which is used for redraw trottling. */
+     * which is used for redraw throttling. */
     window_reset_delayed_redraw(win);
     return false;
 }

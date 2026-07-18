@@ -65,10 +65,9 @@ void term_answerback(struct term *term, const char *str, ...) __attribute__ ((fo
 void term_reset(struct term *term);
 void term_set_reverse(struct term *term, bool set);
 void term_break(struct term *term);
-void term_hang(struct term *term);
 void term_toggle_read(struct term *term, bool enable);
 bool term_should_exit_on_input(struct term *term);
-void term_poll_error(struct term *term);
+bool term_hang(struct term *term);
 
 struct screen *term_screen(struct term *term);
 

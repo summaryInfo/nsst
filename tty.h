@@ -14,8 +14,9 @@
 
 struct watcher {
     struct list_head link;
-    pid_t child;
+    volatile pid_t child;
     int fd;
+    bool autoclose;
 };
 
 /* Printer controller mode
@@ -59,7 +60,7 @@ static inline bool tty_has_data(struct tty *tty) {
 }
 
 static inline bool tty_exited(struct tty *tty) {
-    return tty->w.fd == -1;
+    return tty->w.child < 0;
 }
 
 void init_default_termios(void);

@@ -65,8 +65,9 @@ static void handle_chld(int arg) {
         LIST_FOREACH(it, &children) {
             struct watcher *w = CONTAINEROF(it, struct watcher, link);
             if (w->child == pid) {
-                close(w->fd);
-                w->fd = -1;
+                w->child = -1;
+                if (w->autoclose)
+                    close(w->fd);
                 break;
             }
         }
@@ -321,9 +322,10 @@ void init_default_termios(void) {
             .sa_handler = handle_chld, .sa_flags = SA_RESTART}, NULL);
 }
 
-static void add_watcher(struct watcher *w) {
+static void add_watcher(struct watcher *w, bool autoclose) {
     assert(w->fd >= 0);
     list_insert_after(&children, &w->link);
+    w->autoclose = autoclose;
 }
 
 static void remove_watcher(struct watcher *w) {
@@ -403,7 +405,7 @@ int tty_open(struct tty *tty, struct instance_config *cfg, struct window *win) {
     tty->start = tty->end = tty->fd_buf + MAX_PROTOCOL_LEN;
 
     if (tty->w.child > 0)
-        add_watcher(&tty->w);
+        add_watcher(&tty->w, false);
 
     tty->evt = poller_add_fd(handle_term_read, win, tty->w.fd, POLLIN);
     if (!tty->evt) {
@@ -487,7 +489,7 @@ static bool flush_deferred(struct tty *tty) {
 }
 
 ssize_t tty_refill(struct tty *tty) {
-    if (UNLIKELY(tty_exited(tty))) return -1;
+    if (UNLIKELY(tty->w.fd < 0)) return -1;
 
     ssize_t inc = 0, sz = tty->end - tty->start, inctotal = 0;
 
@@ -513,8 +515,7 @@ ssize_t tty_refill(struct tty *tty) {
 
     inctotal = (sizeof tty->fd_buf - sz) - space;
 
-    if (inc < 0 && errno != EAGAIN) {
-        warn("Can't read from tty");
+    if (UNLIKELY((!inctotal && tty->w.child < 0) || (inc < 0 && errno != EAGAIN))) {
         tty_hang(tty);
         return -1;
     }
@@ -552,7 +553,7 @@ static inline void tty_write_raw(struct tty *tty, const uint8_t *buf, ssize_t le
 }
 
 void tty_write(struct tty *tty, const uint8_t *buf, size_t len, bool crlf) {
-    if (tty->w.fd == -1) return;
+    if (tty_exited(tty)) return;
 
     const uint8_t *next;
 
@@ -577,6 +578,8 @@ void tty_break(struct tty *tty) {
 }
 
 void tty_set_winsz(struct tty *tty, int16_t width, int16_t height, int16_t wwidth, int16_t wheight) {
+    if (tty_exited(tty)) return;
+
     struct winsize wsz = {
         .ws_col = width,
         .ws_row = height,
@@ -652,7 +655,7 @@ void init_printer(struct printer *pr, struct instance_config *cfg) {
     }
 
     if (pr->w.child > 0)
-        add_watcher(&pr->w);
+        add_watcher(&pr->w, true);
 }
 
 void printer_intercept(struct printer *pr, const uint8_t **start, const uint8_t *end) {
