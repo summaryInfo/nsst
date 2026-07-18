@@ -596,7 +596,11 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
         replace_handle(&sel->start, &top);
     }
 
-    sel->state = state;
+    /* If we have not moved a mouse but have double/tripple clicked,
+     * change the state of selection to state_sel_progress anyways,
+     * since we have selected something. */
+    sel->state = sel->snap != snap_none && state == state_sel_pressed ? state_sel_progress : state;
+
     sel->rectangular = rectangular;
     replace_handle(&sel->end, &pos);
 
@@ -608,9 +612,6 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
 
     nstart = snap_backward(sel, nstart);
     nend = snap_forward(sel, nend);
-
-    if (sel->snap != snap_none && sel->state == state_sel_pressed)
-        sel->state = state_sel_progress;
 
     struct segments **prev_heads = sel->seg;
     size_t prev_size = sel->seg_size;
