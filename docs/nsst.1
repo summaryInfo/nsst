@@ -187,7 +187,7 @@ Fork in daemon mode, default is true
 Window refresh rate. This setting is ignored on Wayland,
 nsst relies on compositor callbacks to throttle rendering instead.
 .It Fl \-horizontal-border Ns = Ns Ar pixels
-Top and bottom internal botder width (deprecated)
+Top and bottom internal border width (deprecated)
 .It Fl \-italic-color Ns = Ns Ar color
 Special color of italic text.
 .Ar Color
@@ -195,6 +195,12 @@ format is same as for
 .Fl \-colorN
 .It Fl \-keep-clipboard Ns = Ns Ar bool
 Reuse copied clipboard content instead of current selection data
+.It Fl \-keep-on-exit Ns = Ns Ar behavior
+Don't close the window when application terminates.
+.Ar behavior
+is never (default) for auto-closing, key for keeping until
+a key press, or always for keeping the window open until
+explicitly closed.
 .It Fl \-keep-selection Ns = Ns Ar bool
 Don't clear X11 selection when unhighlighted
 .It Fl \-key-break Ns = Ns Ar key
