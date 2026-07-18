@@ -525,7 +525,7 @@ void handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, u
     if (gconfig.trace_events)
         info("Event[%p]: xdg_surface.configure(serial=%x)", data, serial);
 
-    win->any_event_happend = true;
+    win->any_event_happened = true;
 
     xdg_surface_ack_configure(xdg_surface, serial);
 
@@ -553,7 +553,7 @@ void handle_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel
     get_plat(win)->is_tiled = false;
     if (height) get_plat(win)->pending_configure.height = height;
     if (width) get_plat(win)->pending_configure.width = width;
-    win->any_event_happend = true;
+    win->any_event_happened = true;
     win->mapped = true;
 
     uint32_t states_mask = 0;
@@ -806,7 +806,7 @@ static void handle_primary_selection_source_send(void *data, struct zwp_primary_
     if (gconfig.trace_events)
         info("Event[%p]: primary_selection_source.send(mime_type=%s, fd=%d)", data, mime_type, fd);
 
-    win->any_event_happend = true;
+    win->any_event_happened = true;
 
     uint8_t *source = win->clipped[clip_primary];
     if (!source) goto empty;
@@ -838,7 +838,7 @@ static void handle_primary_selection_source_cancelled(void *data, struct zwp_pri
     if (gconfig.trace_events)
         info("Event[%p]: primary_selection_source.cancelled", data);
 
-    win->any_event_happend = true;
+    win->any_event_happened = true;
 
     assert(primary_selection_source == get_plat(win)->primary_selection_source);
 
@@ -925,7 +925,7 @@ static void handle_data_source_send(void *data, struct wl_data_source *wl_data_s
     if (gconfig.trace_events)
         info("Event[%p]: data_source.send(mime_type=%s, fd=%d)", data, mime_type, fd);
 
-    win->any_event_happend = true;
+    win->any_event_happened = true;
 
     uint8_t *source = term_is_keep_clipboard_enabled(win->term) ? win->clipboard : win->clipped[clip_clipboard];
     if (!source) goto empty;
@@ -948,7 +948,7 @@ static void handle_data_source_cancelled(void *data, struct wl_data_source *wl_d
     if (gconfig.trace_events)
         info("Event[%p]: data_source.cancelled", data);
 
-    win->any_event_happend = true;
+    win->any_event_happened = true;
 
     assert(wl_data_source == get_plat(win)->data_source);
 
@@ -1357,7 +1357,7 @@ static void handle_keyboard_enter(void *data, struct wl_keyboard *wl_keyboard, u
     if (gconfig.trace_events)
         info("Event[%p,%p]: keyboard.enter(serial=%x)", data, (void *)win, serial);
 
-    win->any_event_happend = true;
+    win->any_event_happened = true;
     win_ptr_set(&seat->keyboard.wptr, win, win_ptr_keyboard);
 
     seat->keyboard.serial = serial;
@@ -1433,7 +1433,7 @@ static void handle_keyboard_leave(void *data, struct wl_keyboard *wl_keyboard, u
         seat_stop_autorepeat(seat, 0);
 
     if (seat->keyboard.wptr.win) {
-        seat->keyboard.wptr.win->any_event_happend = true;
+        seat->keyboard.wptr.win->any_event_happened = true;
         handle_focus(seat->keyboard.wptr.win, false);
     }
 
@@ -1451,7 +1451,7 @@ static void handle_keyboard_key(void *data, struct wl_keyboard *wl_keyboard, uin
     if (gconfig.trace_events)
         info("Event[%p]: keyboard.key(serial=%x, time=%x, key=%x, state=%x)", data, serial, time, key, state);
 
-    win->any_event_happend = true;
+    win->any_event_happened = true;
     win_ptr_ping(&seat->keyboard.wptr);
 
     /* We need to fixup linux keycode and convert it to XKB keycode
@@ -1515,7 +1515,7 @@ static void handle_pointer_enter(void *data, struct wl_pointer *wl_pointer, uint
 
     activate_cursor_for_seat(win, seat);
 
-    win->any_event_happend = true;
+    win->any_event_happened = true;
     win_ptr_set(&seat->pointer.wptr, win, win_ptr_other);
 
     seat->pointer.event_mask |= POINTER_EVENT_ENTER;
@@ -1757,7 +1757,7 @@ static void handle_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
 
     if (!win) return;
 
-    win->any_event_happend = true;
+    win->any_event_happened = true;
     win_ptr_ping(&seat->keyboard.wptr);
     window_reset_pointer_inhibit_timer(win);
 
@@ -1819,7 +1819,7 @@ static void handle_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
     get_plat(win)->mouse.mask = seat->pointer.mask | seat->keyboard.mask;
 
     if (seat->pointer.event_mask & POINTER_EVENT_LEAVE) {
-        if (win) win->any_event_happend = true;
+        if (win) win->any_event_happened = true;
         win_ptr_clear(&seat->pointer.wptr);
     }
 

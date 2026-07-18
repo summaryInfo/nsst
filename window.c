@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -150,7 +150,7 @@ void handle_term_read(void *win_, uint32_t mask) {
     if (!term_read(win->term)) return;
 
     window_delay_redraw_after_read(win);
-    win->any_event_happend = true;
+    win->any_event_happened = true;
     if (pvtbl->after_read)
         pvtbl->after_read(win);
 }
@@ -176,7 +176,7 @@ static inline void inc_render_inhibit(struct window *win) {
 }
 
 void window_reset_delayed_redraw(struct window *win) {
-    win->any_event_happend = true;
+    win->any_event_happened = true;
     if (poller_unset(&win->redraw_delay_timer))
         dec_render_inhibit(win);
 }
@@ -465,8 +465,8 @@ void window_pop_title(struct window *win, enum title_target which) {
 static bool handle_blink(void *win_) {
     struct window *win = win_;
     win->rcstate.blink ^= true;
-    win->blink_commited = false;
-    win->any_event_happend = true;
+    win->blink_committed = false;
+    win->any_event_happened = true;
     return true;
 }
 
@@ -899,8 +899,8 @@ static void tick(void *arg) {
     LIST_FOREACH(it, &win_list_head) {
         struct window *win = CONTAINEROF(it, struct window, link);
 
-        if ((win->any_event_happend && !win->inhibit_render_counter) || win->force_redraw) {
-            if ((win->drawn_somthing = screen_redraw(term_screen(win->term), win->blink_commited))) {
+        if ((win->any_event_happened && !win->inhibit_render_counter) || win->force_redraw) {
+            if ((win->drawn_something = screen_redraw(term_screen(win->term), win->blink_committed))) {
                 if (win->cfg.fps && !poller_set_timer(&win->frame_timer, handle_frame, win, SEC/win->cfg.fps))
                     inc_render_inhibit(win);
                 window_reset_delayed_redraw(win);
@@ -908,7 +908,7 @@ static void tick(void *arg) {
             }
 
             win->force_redraw = false;
-            win->any_event_happend = false;
+            win->any_event_happened = false;
         }
     }
 

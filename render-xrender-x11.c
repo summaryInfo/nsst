@@ -598,7 +598,7 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
             bool dirty = span.line->force_damage;
             if (cur_x < span.width) {
                 struct cell *pcell = view_cell(&span, cur_x);
-                dirty |= !pcell->drawn || (!win->blink_commited && view_attr(&span, pcell->attrid)->blink);
+                dirty |= !pcell->drawn || (!win->blink_committed && view_attr(&span, pcell->attrid)->blink);
             }
             *cursor &= dirty;
         }
@@ -609,7 +609,7 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
             pcell->drawn = true;
 
             struct attr attr = *view_attr(&span, cel.attrid);
-            bool dirty = span.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
+            bool dirty = span.line->force_damage || !cel.drawn || (!win->blink_committed && attr.blink);
             has_blinking |= attr.blink;
 
             struct cellspec spec;
@@ -828,7 +828,7 @@ static void draw_images(struct window *win, struct element_buffer *buf) {
 bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor_visible, bool on_margin) {
     bool has_blinking = (win->cfg.cursor_shape & 1) && cursor_visible && !win->rcstate.cursor_blink_inhibit;
     bool beyond_eol = false;
-    cursor_visible &= !has_blinking || (!win->blink_commited && !win->rcstate.blink && !win->rcstate.cursor_blink_inhibit);
+    cursor_visible &= !has_blinking || (!win->blink_committed && !win->rcstate.blink && !win->rcstate.cursor_blink_inhibit);
     cursor_visible &= !win->rcstate.cursor_blink_inhibit || !win->cfg.cursor_hide_on_input;
     bool reverse_cursor = cursor_visible && win->focused && ((win->cfg.cursor_shape + 1) & ~1) == cursor_type_block;
 
@@ -868,7 +868,7 @@ bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y,
 
     bool blink_enabled = poller_is_enabled(win->blink_timer);
     if (blink_enabled)
-        win->blink_commited = true;
+        win->blink_committed = true;
     if (has_blinking ^ poller_is_enabled(win->blink_timer))
         poller_toggle(win->blink_timer, has_blinking);
 

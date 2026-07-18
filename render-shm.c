@@ -109,7 +109,7 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
     bool scrolled = get_shm(win)->boundc;
     bool has_blinking = (win->cfg.cursor_shape & 1) && cursor_visible && !win->rcstate.cursor_blink_inhibit;
     bool beyond_eol = false;
-    cursor_visible &= !has_blinking || (!win->blink_commited && !win->rcstate.blink && !win->rcstate.cursor_blink_inhibit);
+    cursor_visible &= !has_blinking || (!win->blink_committed && !win->rcstate.blink && !win->rcstate.cursor_blink_inhibit);
     cursor_visible &= !win->rcstate.cursor_blink_inhibit || !win->cfg.cursor_hide_on_input;
 
     int cw = win->char_width, ch = win->char_height;
@@ -136,7 +136,7 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
             bool dirty = span.line->force_damage;
             if (cur_x < span.width) {
                 struct cell *pcell = view_cell(&span, cur_x);
-                dirty |= !pcell->drawn || (!win->blink_commited && view_attr(&span, pcell->attrid)->blink);
+                dirty |= !pcell->drawn || (!win->blink_committed && view_attr(&span, pcell->attrid)->blink);
             }
             cursor_visible &= dirty;
         }
@@ -147,7 +147,7 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
             pcell->drawn = true;
 
             struct attr attr = *view_attr(&span, cel.attrid);
-            bool dirty = span.line->force_damage || !cel.drawn || (!win->blink_commited && attr.blink);
+            bool dirty = span.line->force_damage || !cel.drawn || (!win->blink_committed && attr.blink);
             has_blinking |= attr.blink;
 
             struct cellspec spec;
@@ -268,7 +268,7 @@ bool shm_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cu
 
     bool blink_enabled = poller_is_enabled(win->blink_timer);
     if (blink_enabled)
-        win->blink_commited = true;
+        win->blink_committed = true;
     if (has_blinking ^ poller_is_enabled(win->blink_timer))
         poller_toggle(win->blink_timer, has_blinking);
 

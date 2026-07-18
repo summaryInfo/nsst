@@ -60,11 +60,11 @@ struct window {
 
     bool focused : 1;
     bool mouse_events : 1;
-    bool blink_commited : 1;
-    bool drawn_somthing : 1;
+    bool blink_committed : 1;
+    bool drawn_something : 1;
     bool init_invert : 1;
     bool autorepeat : 1;
-    bool any_event_happend : 1;
+    bool any_event_happened : 1;
     bool redraw_borders : 1;
     bool force_redraw : 1;
     bool mapped : 1;

@@ -88,7 +88,7 @@ static struct window *window_for_xid(xcb_window_t xid) {
     LIST_FOREACH(it, &win_list_head) {
         struct window *win = CONTAINEROF(it, struct window, link);
         if (get_plat(win)->wid == xid) {
-            win->any_event_happend = true;
+            win->any_event_happened = true;
             return win;
         }
     }
