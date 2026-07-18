@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2026, Evgeniy Baskov. All rights reserved */
 
 #ifndef MOUSE_H_
 #define MOUSE_H_ 1
@@ -81,6 +81,7 @@ struct selection_state {
         snap_word,
         snap_line,
         snap_command,
+        snap_all,
     } snap;
 
     enum {

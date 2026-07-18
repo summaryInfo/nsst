@@ -274,7 +274,15 @@ static struct line_span snap_backward(struct selection_state *sel, struct line_s
 
     assert(pos.line);
 
-    if (sel->snap == snap_command) {
+    if (sel->snap == snap_all) {
+        pos.offset = 0;
+        struct line *prev_line;
+        for (;;) {
+            prev_line = pos.line->prev;
+            if (!prev_line) break;
+            pos.line = prev_line;
+        }
+    } else if (sel->snap == snap_command) {
         pos.offset = 0;
         struct line *prev_line;
         for (;;) {
@@ -341,7 +349,13 @@ out:
 static struct line_span snap_forward(struct selection_state *sel, struct line_span pos) {
     char *seps = window_cfg(sel->win)->word_separators;
 
-    if (sel->snap == snap_command) {
+    if (sel->snap == snap_all) {
+        struct line *next = pos.line, *line;
+        do line = next, next = line->next;
+        while (next);
+        pos.line = line;
+        pos.offset = SNAP_RIGHT;
+    } else if (sel->snap == snap_command) {
         struct line *next = pos.line, *line;
         do line = next, next = line->next;
         while (next &&
