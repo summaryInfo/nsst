@@ -284,6 +284,7 @@ static struct option options[] = {
     X(time, frame_finished_delay, "frame-wait-delay", "Maximum time since last application output before redraw", SEC/240, 1000, 10*SEC),
     X1(geometry, geometry, 'g', "geometry", "Window geometry, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]", false),
     X(boolean, has_meta, "has-meta", "Handle meta/alt", true),
+    X(string, icon_path, "icon-path", "Window icon file path", NULL),
     X(horizontal_border, border, "horizontal-border", "Horizontal border size (deprecated)", -1, 0, 200),
     X(color, palette[SPECIAL_ITALIC], "italic-color", "Special color of italic text", COLOR_SPECIAL_ITALIC),
     X(boolean, keep_clipboard, "keep-clipboard", "Reuse copied clipboard content instead of current selection data", false),

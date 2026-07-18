@@ -155,6 +155,7 @@ struct instance_config {
     char *uri_pointer;
     char *open_command;
     char *notify_command;
+    char *icon_path;
 
     enum keyboard_mapping mapping;
     enum cursor_type cursor_shape;

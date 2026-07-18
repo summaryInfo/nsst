@@ -51,6 +51,7 @@ struct context {
         xcb_atom_t _NET_WM_PID;
         xcb_atom_t _NET_WM_NAME;
         xcb_atom_t _NET_WM_ICON_NAME;
+        xcb_atom_t _NET_WM_ICON;
         xcb_atom_t _NET_WM_DESKTOP;
         xcb_atom_t _NET_WM_STATE;
         xcb_atom_t _NET_WM_STATE_FULLSCREEN;
@@ -615,6 +616,16 @@ void x11_update_window_props(struct window *win) {
     if (win->cfg.workspace >= 0) {
         uint32_t desktop = win->cfg.workspace;
         xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, ctx.atom._NET_WM_DESKTOP, XCB_ATOM_CARDINAL, 32, 1, &desktop);
+    }
+
+    if (win->cfg.icon_path) {
+        uint32_t *prop = load_png_card(win->cfg.icon_path);
+        if (prop) {
+            xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, ctx.atom._NET_WM_ICON, XCB_ATOM_CARDINAL, 32, prop[0]*prop[1] + 2, prop);
+            free(prop);
+        } else {
+            warn("Failed to load icon '%s'", win->cfg.icon_path);
+        }
     }
 
     struct normal_hints nhints = {
@@ -1268,6 +1279,7 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
     ctx.atom._NET_WM_PID = intern_atom("_NET_WM_PID");
     ctx.atom._NET_WM_NAME = intern_atom("_NET_WM_NAME");
     ctx.atom._NET_WM_ICON_NAME = intern_atom("_NET_WM_ICON_NAME");
+    ctx.atom._NET_WM_ICON = intern_atom("_NET_WM_ICON");
     ctx.atom._NET_WM_DESKTOP = intern_atom("_NET_WM_DESKTOP");
     ctx.atom._NET_WM_STATE = intern_atom("_NET_WM_STATE");
     ctx.atom._NET_WM_STATE_FULLSCREEN = intern_atom("_NET_WM_STATE_FULLSCREEN");
