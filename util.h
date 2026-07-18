@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #ifndef UTIL_H_
 #define UTIL_H_ 1
@@ -195,6 +195,7 @@ uint8_t *base64_encode(uint8_t *dst, const uint8_t *buf, const uint8_t *end);
 const uint8_t *base64_decode(uint8_t *dst, const uint8_t *buf, const uint8_t *end);
 
 color_t parse_color(const uint8_t *str, const uint8_t *end);
+uint32_t *load_png_card(const char *path);
 
 /* Unicode precomposition */
 uint32_t try_precompose(uint32_t ch, uint32_t comb);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -17,6 +17,10 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
+
+#if USE_PNG
+#include <png.h>
+#endif
 
 #ifdef __GLIBC__
 #include <malloc.h>
@@ -388,6 +392,117 @@ uint8_t *base64_encode(uint8_t *dst, const uint8_t *buf, const uint8_t *end) {
     while (pad--)  *dst++ = '=';
 
     return dst;
+}
+
+uint32_t *load_png_card(const char *path) {
+#if USE_PNG
+    FILE *fp = fopen(path, "rb");
+    if (!fp)
+        return NULL;
+
+    unsigned char header[8];
+    uint32_t *prop = NULL;
+    if (fread(header, 1, 8, fp) != 8)
+        goto error;
+    if (png_sig_cmp(header, 0, 8))
+        goto error;
+
+    png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (!png)
+        goto error;
+
+    png_infop info = png_create_info_struct(png);
+    if (!info)
+        goto error_read;
+
+    if (setjmp(png_jmpbuf(png)))
+        goto error_read;
+
+    png_init_io(png, fp);
+    png_set_sig_bytes(png, 8);
+    png_read_info(png, info);
+
+    int w = png_get_image_width(png, info);
+    int h = png_get_image_height(png, info);
+    int color_type = png_get_color_type(png, info);
+    int bit_depth = png_get_bit_depth(png, info);
+
+    if (bit_depth == 16)
+        png_set_strip_16(png);
+    if (color_type == PNG_COLOR_TYPE_PALETTE)
+        png_set_palette_to_rgb(png);
+    else if (color_type == PNG_COLOR_TYPE_GRAY || color_type == PNG_COLOR_TYPE_GRAY_ALPHA) {
+        if (bit_depth < 8)
+            png_set_expand_gray_1_2_4_to_8(png);
+        png_set_gray_to_rgb(png);
+    }
+
+    png_read_update_info(png, info);
+
+    w = png_get_image_width(png, info);
+    h = png_get_image_height(png, info);
+    color_type = png_get_color_type(png, info);
+
+    prop = malloc((2 + w * h) * sizeof(uint32_t));
+    if (!prop)
+        goto error_read;
+
+    png_bytep *rows = calloc(sizeof(png_bytep), h);
+    for (int y = 0; y < h; y++) {
+        rows[y] = malloc(png_get_rowbytes(png, info));
+        if (!rows[y]) {
+            for (int yy = 0; yy < y; yy++)
+                free(rows[yy]);
+            free(rows);
+            goto error_read;
+        }
+    }
+
+    png_read_image(png, rows);
+
+    prop[0] = w;
+    prop[1] = h;
+
+    assert(color_type == PNG_COLOR_TYPE_RGBA || color_type == PNG_COLOR_TYPE_RGB);
+    for (int y = 0; y < h; y++) {
+        if (color_type == PNG_COLOR_TYPE_RGBA) {
+            for (int x = 0; x < w; x++) {
+                int idx = y * w + x + 2;
+                prop[idx] = ((uint32_t)rows[y][x * 4] << 16) |
+                            ((uint32_t)rows[y][x * 4 + 1] << 8) |
+                            ((uint32_t)rows[y][x * 4 + 2] << 0) |
+                            ((uint32_t)rows[y][x * 4 + 3] << 24);
+            }
+        } else {
+            for (int x = 0; x < w; x++) {
+                int idx = y * w + x + 2;
+                prop[idx] = ((uint32_t)rows[y][x * 3] << 16) |
+                            ((uint32_t)rows[y][x * 3 + 1] << 8) |
+                            ((uint32_t)rows[y][x * 3 + 2] << 0) |
+                            ((uint32_t)0xFF << 24);
+            }
+        }
+        free(rows[y]);
+    }
+    free(rows);
+
+    if (0) {
+error_read:
+        png_destroy_read_struct(&png, &info, NULL);
+error:
+        fclose(fp);
+        free(prop);
+        prop = NULL;
+    } else {
+        png_destroy_read_struct(&png, &info, NULL);
+        fclose(fp);
+    }
+
+    return prop;
+#else
+    (void)path;
+    return NULL;
+#endif
 }
 
 #define CAPS_STEP(x) ((x)?4*(x)/3:8)
