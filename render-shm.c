@@ -78,7 +78,7 @@ bool shm_reload_font(struct window *win, bool need_free) {
         image_draw_rect(get_shm(win)->im, (struct rect) {0, win->c.height*(ch + cd) + bh, w, h - win->c.height*(ch + cd) - bh}, win->bg_premul);
     } else {
         /* We need to resize window here if
-         * it's size is specified in chracters */
+         * it's size is specified in characters */
         pvtbl->apply_geometry(win, &win->cfg.geometry);
         struct extent bx = win_image_size(win);
 
