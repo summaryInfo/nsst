@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #ifndef CONFIG_H_
 #define CONFIG_H_ 1
@@ -101,6 +101,12 @@ struct geometry {
     bool has_extent : 1;
 };
 
+enum keep_on_exit {
+    keep_close,
+    keep_until_input,
+    keep_keep,
+};
+
 struct instance_config {
     color_t palette[PALETTE_SIZE];
 
@@ -155,6 +161,7 @@ struct instance_config {
     enum pixel_mode pixel_mode;
     enum charset keyboard_nrcs;
     enum uri_mode uri_mode;
+    enum keep_on_exit on_exit;
     int modify_other_fmt;
     int margin_bell_volume;
     int bell_volume;

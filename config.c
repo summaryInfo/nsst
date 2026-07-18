@@ -283,6 +283,7 @@ static struct option options[] = {
     X(color, palette[SPECIAL_ITALIC], "italic-color", "Special color of italic text", COLOR_SPECIAL_ITALIC),
     X(boolean, keep_clipboard, "keep-clipboard", "Reuse copied clipboard content instead of current selection data", false),
     X(boolean, keep_selection, "keep-selection", "Don't clear X11 selection when unhighlighted", false),
+    X(enum, on_exit, "keep-on-exit", "Don't close the window when application terminates", keep_close, keep_close, XENUM("never", "key", "always")),
     X(nrcs, keyboard_nrcs, "keyboard-dialect", "National replacement character set to be used in non-UTF-8 mode", cs94_ascii),
     X(enum, mapping, "keyboard-mapping", "Initial keyboard mapping", keymap_default, keymap_legacy, XENUM("legacy", "vt220", "hp", "sun", "sco")),
     X(string, key[shortcut_break], "key-break", "Send break hotkey", "Break"),

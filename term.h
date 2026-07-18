@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #ifndef TERM_H_
 #define TERM_H_ 1
@@ -67,6 +67,8 @@ void term_set_reverse(struct term *term, bool set);
 void term_break(struct term *term);
 void term_hang(struct term *term);
 void term_toggle_read(struct term *term, bool enable);
+bool term_should_exit_on_input(struct term *term);
+void term_poll_error(struct term *term);
 
 struct screen *term_screen(struct term *term);
 

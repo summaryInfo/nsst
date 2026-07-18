@@ -3872,6 +3872,22 @@ void term_toggle_read(struct term *term, bool enable) {
     tty_toggle_read(&term->tty, enable);
 }
 
+void term_poll_error(struct term *term) {
+    struct window *win = term_window(term);
+    if (window_cfg(win)->on_exit != keep_close) {
+        term_hang(term);
+        /* Don't show cursor after exit */
+        screen_damage_cursor(term_screen(term));
+        term->scr.mode.hide_cursor = true;
+    } else {
+        free_window(win);
+    }
+}
+
+bool term_should_exit_on_input(struct term *term) {
+    return tty_exited(&term->tty) && window_cfg(term_window(term))->on_exit == keep_until_input;
+}
+
 void term_hang(struct term *term) {
     tty_hang(&term->tty);
 }

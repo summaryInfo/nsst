@@ -143,7 +143,7 @@ void handle_term_read(void *win_, uint32_t mask) {
     struct window *win = win_;
 
     if (mask & (POLLHUP | POLLERR | POLLNVAL)) {
-        free_window(win);
+        term_poll_error(win->term);
         return;
     }
 
@@ -866,6 +866,11 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
         return;
     case shortcut_MAX:
     case shortcut_none:;
+    }
+
+    if (UNLIKELY(term_should_exit_on_input(win->term))) {
+        free_window(win);
+        return;
     }
 
     keyboard_handle_input(key, win->term);
