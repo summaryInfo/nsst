@@ -858,11 +858,11 @@ void screen_resize(struct screen *scr, int16_t width, int16_t height) {
 #endif
 }
 
-bool screen_redraw(struct screen *scr, bool blink_commited) {
+bool screen_redraw(struct screen *scr, bool blink_committed) {
     bool c_hidden = scr->mode.hide_cursor || !screen_at_bottom(scr);
     bool c_moved = scr->c.x != scr->prev_c_x || scr->c.y != scr->prev_c_y;
 
-    if (c_moved || scr->prev_c_hidden != c_hidden || scr->prev_c_view_changed || !blink_commited) {
+    if (c_moved || scr->prev_c_hidden != c_hidden || scr->prev_c_view_changed || !blink_committed) {
         if (!c_hidden) screen_damage_cursor(scr);
         if ((!scr->prev_c_hidden || scr->prev_c_view_changed) && scr->prev_c_y < scr->height) {
             if (scr->prev_c_x < scr->screen[scr->prev_c_y].width)
