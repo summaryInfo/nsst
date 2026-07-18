@@ -197,7 +197,7 @@ This repository also includes *zsh*/*yash*/*fish*/*bash* completion scripts in `
 
 #### Void Linux
 
-    xbps-install libxkbcommon-devel fontconfig-devel freetype-devel
+    xbps-install libxkbcommon-devel fontconfig-devel freetype-devel libpng-devel
     # For X11
     xbps-install libxcb-devel xcb-util-cursor-devel
     # For Wayland
@@ -205,7 +205,7 @@ This repository also includes *zsh*/*yash*/*fish*/*bash* completion scripts in `
 
 #### Arch Linux and derivatives
 
-    pacman -S libxkbcommon fontconfig freetype2
+    pacman -S libxkbcommon fontconfig freetype2 libpng
     # For X11
     pacman -S libxcb libxkbcommon-x11 xcb-util-cursor
     # For Wayland
@@ -214,7 +214,7 @@ This repository also includes *zsh*/*yash*/*fish*/*bash* completion scripts in `
 #### Debian and derivatives
 
     apt update
-    apt install libxkbcommon-dev libfontconfig1-dev libfreetype-dev
+    apt install libxkbcommon-dev libfontconfig1-dev libfreetype-dev libpng-dev
     # For X11
     apt install libx11-xcb-dev libxcb-shm0-dev libxcb-render0-dev \
         xkbcommon-x11-dev libxcb-cursor0-dev
