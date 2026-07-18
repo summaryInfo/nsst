@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2026, Evgeniy Baskov. All rights reserved */
 
 #ifndef NRCS_H_
 #define NRCS_H_ 1
@@ -39,7 +39,7 @@ enum charset {
     cs94_dec_altchars,
     cs94_dec_altgraph,
     cs94_british, /* Same as latin-1 */
-    cs94_dec_sup, /* User prefered */
+    cs94_dec_sup, /* User preferred */
     cs94_dec_sup_graph,
     cs94_dec_graph,
     cs94_dec_tech,
