@@ -875,15 +875,21 @@ static int do_print_default_geometry(char *buf, int sz, union opt_limits *limits
 }
 
 static int do_print_default_int16(char *buf, int sz, union opt_limits *limits) {
-    return snprintf(buf, sz, "; %"PRId64, limits->arg_int16.dflt);
+    if (limits->arg_int16.dflt >= limits->arg_int16.min)
+        return snprintf(buf, sz, "; %"PRId64, limits->arg_int16.dflt);
+    return 0;
 }
 
 static int do_print_default_dim(char *buf, int sz, union opt_limits *limits) {
-    return snprintf(buf, sz, "; %"PRId64, limits->arg_dim.dflt);
+    if (limits->arg_dim.dflt >= limits->arg_dim.min)
+        return snprintf(buf, sz, "; %"PRId64, limits->arg_dim.dflt);
+    return 0;
 }
 
 static int do_print_default_int64(char *buf, int sz, union opt_limits *limits) {
-    return snprintf(buf, sz, "; %"PRId64, limits->arg_int64.dflt);
+    if (limits->arg_int64.dflt >= limits->arg_int64.min)
+        return snprintf(buf, sz, "; %"PRId64, limits->arg_int64.dflt);
+    return 0;
 }
 
 static int do_print_default_nrcs(char *buf, int sz, union opt_limits *limits) {
@@ -898,28 +904,39 @@ static int do_print_default_string(char *buf, int sz, union opt_limits *limits) 
 }
 
 static int do_print_default_uint8(char *buf, int sz, union opt_limits *limits) {
-    return snprintf(buf, sz, "; %"PRId64, limits->arg_uint8.dflt);
+    if (limits->arg_uint8.dflt >= limits->arg_uint8.min)
+        return snprintf(buf, sz, "; %"PRId64, limits->arg_uint8.dflt);
+    return 0;
 }
 
 static int do_print_default_border(char *buf, int sz, union opt_limits *limits) {
-    return snprintf(buf, sz, "; %"PRId64, limits->arg_border.dflt);
+    if (limits->arg_border.dflt >= limits->arg_border.min)
+        return snprintf(buf, sz, "; %"PRId64, limits->arg_border.dflt);
+    return 0;
 }
 
 static int do_print_default_vertical_border(char *buf, int sz, union opt_limits *limits) {
-    return snprintf(buf, sz, "; %"PRId64, limits->arg_vertical_border.dflt);
+    if (limits->arg_vertical_border.dflt >= limits->arg_vertical_border.min)
+        return snprintf(buf, sz, "; %"PRId64, limits->arg_vertical_border.dflt);
+    return 0;
 }
 
 static int do_print_default_horizontal_border(char *buf, int sz, union opt_limits *limits) {
-    return snprintf(buf, sz, "; %"PRId64, limits->arg_horizontal_border.dflt);
+    if (limits->arg_horizontal_border.dflt >= limits->arg_horizontal_border.min)
+        return snprintf(buf, sz, "; %"PRId64, limits->arg_horizontal_border.dflt);
+    return 0;
 }
 
 static int do_print_default_time(char *buf, int sz, union opt_limits *limits) {
-    const char *suffix[] = {"ns", "us", "ms", "s"};
-    size_t index = 0;
-    uint64_t value = limits->arg_time.dflt;
-    while (index < LEN(suffix) - 1 && value % 1000 == 0)
-        value /= 1000, index++;
-    return snprintf(buf, sz, "; %"PRId64"%s", value, suffix[index]);
+    if (limits->arg_time.dflt >= limits->arg_time.min) {
+        const char *suffix[] = {"ns", "us", "ms", "s"};
+        size_t index = 0;
+        uint64_t value = limits->arg_time.dflt;
+        while (index < LEN(suffix) - 1 && value % 1000 == 0)
+            value /= 1000, index++;
+        return snprintf(buf, sz, "; %"PRId64"%s", value, suffix[index]);
+    }
+    return 0;
 }
 
 void copy_config(struct instance_config *dst, struct instance_config *src) {
