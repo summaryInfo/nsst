@@ -130,8 +130,11 @@ enum option_type {
 };
 
 typedef bool (*parse_fn)(const char *, void *, union opt_limits *);
+typedef int (*print_default_fn)(char *buf, int sz, union opt_limits *limits);
 
-#define T(x, ...) static bool do_parse_##x(const char *, void *, union opt_limits *);
+#define T(x, ...) \
+    static bool do_parse_##x(const char *, void *, union opt_limits *); \
+    static int do_print_default_##x(char *buf, int sz, union opt_limits *limits);
 OPTION_TYPES
 #undef T
 
@@ -150,6 +153,7 @@ struct option {
 struct option_type_desc {
     const char *name;
     parse_fn parse;
+    print_default_fn print_default;
     /* type_size field is stored modulo 256 */
     uint8_t type_size;
     uint8_t name_len;
@@ -157,6 +161,7 @@ struct option_type_desc {
 #define T(type_, name_, size_, ...) [option_type_##type_] = { \
         .name = name_, \
         .parse = do_parse_##type_, \
+        .print_default = do_print_default_##type_, \
         .type_size = (uint8_t)sizeof(size_), \
         .name_len = sizeof name_ - 1\
     },
@@ -285,7 +290,7 @@ static struct option options[] = {
     X(boolean, keep_selection, "keep-selection", "Don't clear X11 selection when unhighlighted", false),
     X(enum, on_exit, "keep-on-exit", "Don't close the window when application terminates", keep_close, keep_close, XENUM("never", "key", "always")),
     X(nrcs, keyboard_nrcs, "keyboard-dialect", "National replacement character set to be used in non-UTF-8 mode", cs94_ascii),
-    X(enum, mapping, "keyboard-mapping", "Initial keyboard mapping", keymap_default, keymap_legacy, XENUM("legacy", "vt220", "hp", "sun", "sco")),
+    X(enum, mapping, "keyboard-mapping", "Initial keyboard mapping", keymap_default, keymap_default, XENUM("default", "legacy", "vt220", "hp", "sun", "sco")),
     X(string, key[shortcut_break], "key-break", "Send break hotkey", "Break"),
     X(string, key[shortcut_copy_uri], "key-copy-uri", "Copy selected URI to clipboard hotkey", "T-U"),
     X(string, key[shortcut_copy], "key-copy", "Copy to clipboard hotkey", "T-C"),
@@ -845,6 +850,78 @@ static bool do_parse_geometry(const char *value, void *dst, union opt_limits *li
     return true;
 }
 
+static int do_print_default_boolean(char *buf, int sz, union opt_limits *limits) {
+    return snprintf(buf, sz, "; %s", limits->arg_boolean.dflt ? "true" : "false");
+}
+
+static int do_print_default_color(char *buf, int sz, union opt_limits *limits) {
+    if (limits->arg_color.dflt)
+        return snprintf(buf, sz, "; #%06x", limits->arg_color.dflt);
+    return 0;
+}
+
+static int do_print_default_double(char *buf, int sz, union opt_limits *limits) {
+    return snprintf(buf, sz, "; %g", limits->arg_double.dflt);
+}
+
+static int do_print_default_enum(char *buf, int sz, union opt_limits *limits) {
+    return snprintf(buf, sz, "; '%s'", limits->arg_enum.values[limits->arg_enum.dflt - limits->arg_enum.start]);
+}
+
+static int do_print_default_geometry(char *buf, int sz, union opt_limits *limits) {
+    if (limits->arg_geometry.in_char)
+        return snprintf(buf, sz, "; 24x80");
+    return 0;
+}
+
+static int do_print_default_int16(char *buf, int sz, union opt_limits *limits) {
+    return snprintf(buf, sz, "; %"PRId64, limits->arg_int16.dflt);
+}
+
+static int do_print_default_dim(char *buf, int sz, union opt_limits *limits) {
+    return snprintf(buf, sz, "; %"PRId64, limits->arg_dim.dflt);
+}
+
+static int do_print_default_int64(char *buf, int sz, union opt_limits *limits) {
+    return snprintf(buf, sz, "; %"PRId64, limits->arg_int64.dflt);
+}
+
+static int do_print_default_nrcs(char *buf, int sz, union opt_limits *limits) {
+    char tmp[3];
+    return snprintf(buf, sz, "; '%s'", nrcs_unparse(tmp, limits->arg_nrcs.dflt));
+}
+
+static int do_print_default_string(char *buf, int sz, union opt_limits *limits) {
+    if (limits->arg_string.dflt)
+        return snprintf(buf, sz, "; '%s'", limits->arg_string.dflt);
+    return 0;
+}
+
+static int do_print_default_uint8(char *buf, int sz, union opt_limits *limits) {
+    return snprintf(buf, sz, "; %"PRId64, limits->arg_uint8.dflt);
+}
+
+static int do_print_default_border(char *buf, int sz, union opt_limits *limits) {
+    return snprintf(buf, sz, "; %"PRId64, limits->arg_border.dflt);
+}
+
+static int do_print_default_vertical_border(char *buf, int sz, union opt_limits *limits) {
+    return snprintf(buf, sz, "; %"PRId64, limits->arg_vertical_border.dflt);
+}
+
+static int do_print_default_horizontal_border(char *buf, int sz, union opt_limits *limits) {
+    return snprintf(buf, sz, "; %"PRId64, limits->arg_horizontal_border.dflt);
+}
+
+static int do_print_default_time(char *buf, int sz, union opt_limits *limits) {
+    const char *suffix[] = {"ns", "us", "ms", "s"};
+    size_t index = 0;
+    uint64_t value = limits->arg_time.dflt;
+    while (index < LEN(suffix) - 1 && value % 1000 == 0)
+        value /= 1000, index++;
+    return snprintf(buf, sz, "; %"PRId64"%s", value, suffix[index]);
+}
+
 void copy_config(struct instance_config *dst, struct instance_config *src) {
     if (dst == src) return;
 
@@ -1020,7 +1097,9 @@ const char *usage_string(char buffer[static MAX_OPTION_DESC + 1], ssize_t idx) {
         /* Pad current buffer with spaces to make everything nicely aligned */
         while (pbuf - buffer < max_help_line_len) *pbuf++ = ' ';
 
-        APPEND("(%s)\n", opt->description);
+        APPEND("(%s", opt->description);
+        pbuf += type->print_default(pbuf, MAX_OPTION_DESC - (pbuf - buffer), &opt->limits);
+        APPEND(")\n");
         return buffer;
     } else if (idx == LEN(options) + 1) {
         return  "For every boolean option --<X>=<Y>\n"
