@@ -40,6 +40,9 @@
 /* URI opening/parsing/highlighting */
 #define USE_URI @USE_URI@
 
+/* libpng icon loading support */
+#define USE_PNG @USE_PNG@
+
 /* NSST Version number */
 #define NSST_VERSION @VERSION@
 

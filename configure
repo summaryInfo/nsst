@@ -12,6 +12,7 @@ use_x11=0
 use_wayland=0
 use_x11shm=unset
 use_x11xrender=1
+use_png=1
 use_waylandshm=unset
 cflags='-O2 -flto=auto'
 vars=
@@ -118,6 +119,10 @@ for i; do
         use_boxdrawing=1 ;;
     --disable-boxdrawing)
         use_boxdrawing=0 ;;
+    --enable-png)
+        use_png=1 ;;
+    --disable-png)
+        use_png=0 ;;
     --enable-uri)
         use_uri=1 ;;
     --disable-uri)
@@ -230,6 +235,10 @@ deps="fontconfig freetype2 xkbcommon"
 objs="nsst.o util.o font.o term.o screen.o tty.o line.o config.o"
 objs="$objs mouse.o input.o nrcs.o daemon.o poller.o window.o multipool.o"
 
+if [ "$use_png" = 1 ]; then
+    deps="$deps libpng"
+fi
+
 if [ "$use_x11shm" = unset ]; then
     if [ "$use_x11xrender" != 1 ]; then
         use_x11shm=1
@@ -308,6 +317,7 @@ sed < "./feature.h.in" > "./feature.h" \
     -e "s:@USE_WAYLANDSHM@:$use_waylandshm:g" \
     -e "s:@USE_POSIX_SHM@:$use_posix_shm:g" \
     -e "s:@USE_MEMFD@:$use_memfd:g" \
+    -e "s:@USE_PNG@:$use_png:g" \
     -e "s:@USE_URI@:$use_uri:g" \
     -e "s:@DEBUG_LINES@:$debug_lines:g" \
     -e "s:@VERSION@:$version:g"
@@ -344,6 +354,7 @@ Configure results:
     clock_nanosleep()........ $use_nanosleep
     POSIX shm................ $use_posix_shm
     force clang+lld.......... $use_clang
+    libpng................... $use_png
     debug lines.............. $debug_lines
 
     Do "make && make install" to compile and install nsst
