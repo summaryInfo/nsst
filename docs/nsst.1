@@ -525,6 +525,10 @@ Enable UTF-8 mode. Enabled by default if current locale encoding is UTF-8
 Emulated DEC VT version, e.g. 520
 .It Fl \-wait-for-configure-delay Ns = Ns Ar time
 Maximum delay to wait for configure delay after window resize
+.It Fl \-workspace Ns = Ns Ar int
+Zero-based index of desktop to place new window at.
+Needs support for the EWMH _NET_WM_DESKTOP property from a window manager.
+Currently only works on X11.
 .El
 
 .Sh AUTHORS
