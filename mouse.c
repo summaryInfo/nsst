@@ -581,6 +581,30 @@ clear:
     selection_clear(sel);
 }
 
+static void apply_selection_change(struct selection_state *sel, struct screen *scr) {
+    struct line_span nstart = sel->start.s;
+    struct line_span nend = sel->end.s;
+
+    if (line_span_cmp(&nstart, &nend) > 0)
+        SWAP(nstart, nend);
+
+    nstart = snap_backward(sel, nstart);
+    nend = snap_forward(sel, nend);
+
+    struct segments **prev_heads = sel->seg;
+    size_t prev_size = sel->seg_size;
+
+    for (size_t i = 1; i < prev_size; i++)
+        prev_heads[i]->line->selection_index = 0;
+
+    init_selection(sel, sel->win, scr);
+    if (sel->state == state_sel_progress || sel->state == state_sel_released)
+        decompose(sel, scr, nstart, nend);
+
+    /* Make changed cells dirty */
+    damage_changed(sel, prev_heads, prev_size);
+}
+
 static void selection_changed(struct selection_state *sel, struct screen *scr, uint8_t state, bool rectangular) {
     struct instance_config *cfg = window_cfg(sel->win);
     struct line_span pos = absolute_pos(scr, sel->pointer_x, sel->pointer_y);
@@ -614,31 +638,10 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
      * change the state of selection to state_sel_progress anyways,
      * since we have selected something. */
     sel->state = sel->snap != snap_none && state == state_sel_pressed ? state_sel_progress : state;
-
     sel->rectangular = rectangular;
     replace_handle(&sel->end, &pos);
 
-    struct line_span nstart = sel->start.s;
-    struct line_span nend = sel->end.s;
-
-    if (line_span_cmp(&nstart, &nend) > 0)
-        SWAP(nstart, nend);
-
-    nstart = snap_backward(sel, nstart);
-    nend = snap_forward(sel, nend);
-
-    struct segments **prev_heads = sel->seg;
-    size_t prev_size = sel->seg_size;
-
-    for (size_t i = 1; i < prev_size; i++)
-        prev_heads[i]->line->selection_index = 0;
-
-    init_selection(sel, sel->win, scr);
-    if (sel->state == state_sel_progress || sel->state == state_sel_released)
-        decompose(sel, scr, nstart, nend);
-
-    /* Make changed cells dirty */
-    damage_changed(sel, prev_heads, prev_size);
+    apply_selection_change(sel, scr);
 }
 
 struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_span *view) {
