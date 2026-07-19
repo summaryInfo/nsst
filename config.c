@@ -984,9 +984,11 @@ void free_config(struct instance_config *src) {
     }
 }
 
-static void parse_config(struct instance_config *cfg, int allow_global) {
-    char pathbuf[PATH_MAX];
+static int open_config(struct instance_config *cfg, char pathbuf[static PATH_MAX]) {
     const char *path = cfg->config_path;
+    const char *xdg_cfg = getenv("XDG_CONFIG_HOME");
+    const char *home = getenv("HOME");
+
     int fd = -1;
 
     /* Config file is searched in the following places:
@@ -997,43 +999,44 @@ static void parse_config(struct instance_config *cfg, int allow_global) {
      * 5. $HOME/.config/nsst/nsst.conf
      * If file is not found in those places, just give up */
 
-    if (path) fd = open(path, O_RDONLY);
-
-    const char *xdg_cfg = getenv("XDG_CONFIG_HOME");
-    const char *home = getenv("HOME");
+    if (path)
+        fd = open(path, O_RDONLY);
 
     if (fd < 0 && xdg_cfg) {
-        snprintf(pathbuf, sizeof pathbuf, "%s/nsst.conf", xdg_cfg);
+        snprintf(pathbuf, PATH_MAX, "%s/nsst.conf", xdg_cfg);
         fd = open(pathbuf, O_RDONLY);
     }
 
     if (fd < 0 && xdg_cfg) {
-        snprintf(pathbuf, sizeof pathbuf, "%s/nsst/nsst.conf", xdg_cfg);
+        snprintf(pathbuf, PATH_MAX, "%s/nsst/nsst.conf", xdg_cfg);
         fd = open(pathbuf, O_RDONLY);
     }
 
     if (fd < 0 && home) {
-        snprintf(pathbuf, sizeof pathbuf, "%s/.config/nsst.conf", home);
+        snprintf(pathbuf, PATH_MAX, "%s/.config/nsst.conf", home);
         fd = open(pathbuf, O_RDONLY);
     }
 
     if (fd < 0 && home) {
-        snprintf(pathbuf, sizeof pathbuf, "%s/.config/nsst/nsst.conf", home);
+        snprintf(pathbuf, PATH_MAX, "%s/.config/nsst/nsst.conf", home);
         fd = open(pathbuf, O_RDONLY);
     }
 
-    if (fd < 0) {
-        if (path) goto e_open;
-        return;
-    }
+    return fd;
+}
 
+static int do_parse_config(struct instance_config *cfg, int fd, int allow_global) {
     struct stat stt;
-    if (fstat(fd, &stt) < 0) goto e_open;
+    if (fstat(fd, &stt) < 0) {
+        close(fd);
+        return -1;
+    }
 
     char *addr = mmap(NULL, stt.st_size + 1, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-    if (addr == MAP_FAILED) goto e_open;
-
     close(fd);
+
+    if (addr == MAP_FAILED)
+        return -1;
 
     char *ptr = addr, *end = addr + stt.st_size;
     char saved1 = '\0', saved2 = '\0';
@@ -1082,10 +1085,22 @@ e_wrong_line:
     }
 
     munmap(addr, stt.st_size + 1);
+    return 0;
 
+}
+
+static void parse_config(struct instance_config *cfg, int allow_global) {
+    char pathbuf[PATH_MAX];
+
+    int fd = open_config(cfg, pathbuf);
+    if (fd < 0) {
+        if (cfg->config_path) goto e_open;
+        return;
+    }
+
+    if (do_parse_config(cfg, fd, allow_global) < 0)
 e_open:
-    if (fd < 0) warn("Can't read config file: %s", path ? path : pathbuf);
-
+        warn("Can't read config file: %s", cfg->config_path ? cfg->config_path : pathbuf);
 }
 
 void init_instance_config(struct instance_config *cfg, const char *config_path, int allow_global) {
