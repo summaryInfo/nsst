@@ -728,6 +728,17 @@ void keyboard_parse_config(struct instance_config *cfg) {
             sym = xkb_keysym_to_lower(sym);
 
         cfg->cshorts[i] = (struct shortcut) { sym, mask };
+
+        /* This is quadratic, but N is small and
+         * this function is only executed once, so it's fine. */
+        for (ssize_t k = shortcut_none + 1; k < i; k++) {
+            if (cfg->cshorts[k].ksym == sym && cfg->cshorts[k].mask == mask) {
+                const char *opt_i = shortcut_option_name(i);
+                const char *opt_k = shortcut_option_name(k);
+                warn("Keybinding '%s' collides for '%s' and '%s', the former will be triggered", cfg->key[i], opt_i, opt_k);
+                break;
+            }
+        }
     }
 
     cfg->force_mouse_mask = decode_mask(cfg->force_mouse_mod,

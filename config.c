@@ -1,6 +1,7 @@
 /* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
+#include <stddef.h>
 
 #define _GNU_SOURCE
 
@@ -420,6 +421,15 @@ static inline size_t short_opt_i(char ch) {
     if ('A' <= ch && ch <= 'Z')
         return ch - 'A' + ('z' - 'a');
     return NO_INDEX;
+}
+
+const char *shortcut_option_name(enum shortcut_action shortcut) {
+    if (shortcut <= shortcut_none || shortcut >= shortcut_MAX)
+        return NULL;
+    for (size_t i = 0; i < LEN(options); i++)
+        if (!options[i].global && offsetof(struct instance_config, key[shortcut]) == (size_t)options[i].offset)
+            return options[i].name;
+    return NULL;
 }
 
 static bool option_eq(const ht_head_t *a, const ht_head_t *b) {

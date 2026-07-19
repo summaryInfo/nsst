@@ -277,5 +277,6 @@ void set_default_dpi(double dpi, struct instance_config *cfg);
 void copy_config(struct instance_config *dst, struct instance_config *src);
 void free_config(struct instance_config *src);
 void init_instance_config(struct instance_config *cfg, const char *config_path, int allow_global);
+const char *shortcut_option_name(enum shortcut_action shortcut);
 
 #endif
