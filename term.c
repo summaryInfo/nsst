@@ -10,6 +10,7 @@
 #include "line.h"
 #include "mouse.h"
 #include "nrcs.h"
+#include "poller.h"
 #include "screen.h"
 #include "term.h"
 #include "tty.h"
@@ -3884,6 +3885,11 @@ void term_toggle_read(struct term *term, bool enable) {
     tty_toggle_read(&term->tty, enable);
 }
 
+static bool free_window_cb(void *arg) {
+    free_window(arg);
+    return false;
+}
+
 bool term_hang(struct term *term) {
     struct window *win = term_window(term);
     if (window_cfg(win)->on_exit != keep_close) {
@@ -3899,7 +3905,12 @@ bool term_hang(struct term *term) {
         term->scr.mode.hide_cursor = true;
         return false;
     } else {
-        free_window(win);
+        /* We cannot free window from here, so add a timer callback,
+         * which will call immediately after, but in a safe context.
+         * Use term->tty.evt to avoid double frees, which works,
+         * since term->tty.evt is reset in free_term(). */
+        tty_hang(&term->tty);
+        term->tty.evt = poller_add_timer(free_window_cb, win, 0);
         return true;
     }
 }
