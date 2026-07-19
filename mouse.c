@@ -848,9 +848,10 @@ void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, 
 }
 
 #if USE_URI
-static inline bool is_button1_down(struct mouse_event *ev) {
-    return (ev->event == mouse_event_press && ev->button == 0) ||
-           (ev->mask & mask_button_1 && (ev->event != mouse_event_release || ev->button != 0));
+static inline bool is_button1_down(struct mouse_event *ev, uint32_t uri_mask) {
+    return (ev->mask & mask_mod_mask) == uri_mask &&
+           ((ev->event == mouse_event_press && ev->button == 0) ||
+            (ev->mask & mask_button_1 && (ev->event != mouse_event_release || ev->button != 0)));
 }
 
 static void update_active_uri(struct screen *scr, struct window *win, struct mouse_event *ev) {
@@ -871,9 +872,10 @@ static void update_active_uri(struct screen *scr, struct window *win, struct mou
         if (pos.offset + x < pos.line->size)
             uri = attr_at(pos.line, pos.offset + x)->uri;
     }
-    window_set_active_uri(win, uri, is_button1_down(ev));
 
     uint32_t uri_mask = window_cfg(win)->uri_click_mask;
+    window_set_active_uri(win, uri, is_button1_down(ev, uri_mask));
+
     if (uri && ev->event == mouse_event_release && ev->button == 0 &&
             (ev->mask & mask_mod_mask) == uri_mask)
         uri_open(window_cfg(win)->open_command, uri);
