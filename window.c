@@ -935,6 +935,20 @@ static bool handle_frame(void *win_) {
     return false;
 }
 
+static void window_check_sigchld(void) {
+
+    block_sigchld(true);
+    had_sigchld = false;
+
+    LIST_FOREACH_SAFE(it, &win_list_head) {
+        struct window *win = CONTAINEROF(it, struct window, link);
+        if (UNLIKELY(term_exited(win->term)))
+            term_hang(win->term);
+    }
+
+    block_sigchld(false);
+}
+
 static void tick(void *arg) {
     (void)arg;
 
@@ -964,6 +978,9 @@ static void tick(void *arg) {
             win->any_event_happened = false;
         }
     }
+
+    if (UNLIKELY(had_sigchld))
+        window_check_sigchld();
 
     pvtbl->flush();
 

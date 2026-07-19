@@ -8,6 +8,7 @@
 #include "config.h"
 #include "list.h"
 
+#include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -69,6 +70,8 @@ void hang_watched_children(void);
 
 struct window;
 
+extern volatile sig_atomic_t had_sigchld;
+
 int tty_open(struct tty *tty, struct instance_config *cfg, struct window *win);
 void tty_break(struct tty *tty);
 void tty_set_winsz(struct tty *tty, int16_t width, int16_t height, int16_t wwidth, int16_t wheight);
@@ -76,6 +79,7 @@ ssize_t tty_refill(struct tty *tty);
 void tty_write(struct tty *tty, const uint8_t *buf, size_t len, bool crlf);
 void tty_hang(struct tty *tty);
 void tty_toggle_read(struct tty *tty, bool enable);
+void block_sigchld(bool block);
 
 void printer_intercept(struct printer *pr, const uint8_t **start, const uint8_t *end);
 void printer_print_string(struct printer *pr, const uint8_t *str, ssize_t size);

@@ -46,6 +46,8 @@ static struct list_head children;
 /* Default termios, initialized from main */
 static struct termios dtio;
 
+volatile sig_atomic_t had_sigchld;
+
 static void handle_chld(int arg) {
     int status;
     pid_t pid;
@@ -73,6 +75,7 @@ static void handle_chld(int arg) {
         }
     }
 
+    had_sigchld = true;
     errno = saved_errno;
     (void)arg;
 }
@@ -322,7 +325,7 @@ void init_default_termios(void) {
             .sa_handler = handle_chld, .sa_flags = SA_RESTART}, NULL);
 }
 
-static void block_sigchld(bool block) {
+void block_sigchld(bool block) {
     sigset_t sset;
     sigemptyset(&sset);
     sigaddset(&sset, SIGCHLD);

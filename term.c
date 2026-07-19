@@ -3890,6 +3890,10 @@ static bool free_window_cb(void *arg) {
     return false;
 }
 
+bool term_exited(struct term *term) {
+    return tty_exited(&term->tty);
+}
+
 bool term_hang(struct term *term) {
     struct window *win = term_window(term);
     if (window_cfg(win)->on_exit != keep_close) {

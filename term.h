@@ -71,6 +71,7 @@ void term_break(struct term *term);
 void term_toggle_read(struct term *term, bool enable);
 bool term_should_exit_on_input(struct term *term);
 bool term_hang(struct term *term);
+bool term_exited(struct term *term);
 
 struct screen *term_screen(struct term *term);
 
