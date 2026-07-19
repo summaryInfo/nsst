@@ -144,7 +144,7 @@ _nsst() {
 		"--version" "--vertical-border" "--visual-bell" "--visual-bell-time" "--vt-version"
 		"--wait-for-configure-delay" "--window-class" "--window-ops" "--word-break" "--workspace"
 		"--pointer-hide-on-input" "--pointer-hide-time" "--icon-path" "--keep-on-exit" "--key-jump-top"
-		"--key-jump-bottom" "--key-select-all"
+		"--key-jump-bottom" "--key-select-all" "--key-page-up" "--key-page-down" "--page-amount"
 	)
 
 	[[ "${COMP_WORDS[0]}" == nsstc ]] && longopts+=("--quit")
