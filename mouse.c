@@ -350,10 +350,14 @@ static struct line_span snap_forward(struct selection_state *sel, struct line_sp
     char *seps = window_cfg(sel->win)->word_separators;
 
     if (sel->snap == snap_all) {
-        struct line *next = pos.line, *line;
-        do line = next, next = line->next;
-        while (next);
-        pos.line = line;
+        struct line *next = pos.line, *line, *nonemptyline = pos.line;
+        do {
+            line = next;
+            next = line->next;
+            if (line->size)
+                nonemptyline = line;
+        } while (next);
+        pos.line = nonemptyline;
         pos.offset = SNAP_RIGHT;
     } else if (sel->snap == snap_command) {
         struct line *next = pos.line, *line;
