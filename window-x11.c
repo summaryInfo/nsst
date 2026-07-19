@@ -139,7 +139,7 @@ static bool configure_xkb(void) {
                                           &xkb_maj, &xkb_min, &ctx.xkb_base_event, &ctx.xkb_base_err);
 
     if (!res || xkb_maj < XKB_X11_MIN_MAJOR_XKB_VERSION) {
-        warn("Can't get suitable XKB verion");
+        warn("Can't get suitable XKB version");
         return 0;
     }
     ctx.xkb_core_kbd = xkb_x11_get_core_keyboard_device_id(con);
