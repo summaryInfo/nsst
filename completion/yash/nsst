@@ -133,6 +133,7 @@ function completion/nsst {
 		"--reversed-color:;Special color of reversed text"
 		"--reverse-video::;Initial reverse video setting"
 		"--right-border:;Right border size"
+		"--save-geometry-path:;A file to write current window geometry on exit"
 		"--scroll-amount:;Number of lines scrolled in a time"
 		"--scroll-on-input::;Scroll view to bottom on key press"
 		"--scroll-on-output::;Scroll view to bottom when character in printed"
@@ -231,7 +232,7 @@ function completion/nsst {
 	(--cwd)
 		complete -P "$PREFIX" --directory -- default
 		;;
-	(C|--config|o|--printer-file|s|--socket|--icon-path)
+	(C|--config|o|--printer-file|s|--socket|--icon-path|--save-geometry-path)
 		complete -P "$PREFIX" --file -- default
 		;;
 	(--luit-path|--open-cmd|--print-command|--shell)

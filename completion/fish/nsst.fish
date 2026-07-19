@@ -123,6 +123,7 @@ complete -c nsst -l "resize-pointer-shape" -r -a "(ls /usr/share/icons/*/cursors
 complete -c nsst -l "reversed-color" -r -d "Special color of reversed text"
 complete -c nsst -l "reverse-video" -x -a "true false default" -d "Initial reverse video setting"
 complete -c nsst -l "right-border" -r -d "Right border size"
+complete -c nsst -l "save-geometry-path" -r -d "A file to write current window geometry on exit"
 complete -c nsst -l "scroll-amount" -r -d "Number of lines scrolled in a time"
 complete -c nsst -l "scrollback-size" -x -s H -d "Number of saved lines"
 complete -c nsst -l "scroll-on-input" -x -a "true false default" -d "Scroll view to bottom on key press"

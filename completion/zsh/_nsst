@@ -129,6 +129,7 @@ _arguments \
 	"--reversed-color=[Special color of reversed text]:color:()" \
 	"--reverse-video=[Initial reverse video setting]:bool:(true false default)" \
 	"--right-border=[Right border size]:dim:()" \
+	"--save-geometry-path=[A file to write current window geometry on exit]:file:_files" \
 	"--scroll-amount=[Number of lines scrolled at a time]:int:()" \
 	"--scroll-on-input=[Scroll view to bottom on key press]:bool:(true false default)" \
 	"--scroll-on-output=[Scroll view to bottom when character in printed]:bool:(true false default)" \
