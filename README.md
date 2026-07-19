@@ -119,9 +119,11 @@ Default keybindings:
     key-numlock=T-Num_Lock
     key-scroll-up=T-Up
     key-scroll-down=T-Down
-    key-inc-font=T-Page_Up
-    key-dec-font=T-Page_Down
-    key-reset-font=T-Home
+    key-page-up=T-Page_Up
+    key-page-down=T-Page_Down
+    key-inc-font=T->
+    key-dec-font=T-<
+    key-reset-font=T-M
     key-new-window=T-N
     key-reset=T-R
     key-reload-config=T-X
@@ -131,6 +133,8 @@ Default keybindings:
     key-paste=T-V
     key-jump-next-cmd=T-F
     key-jump-prev-cmd=T-B
+    key-jump-top=T-T
+    key-jump-bottom=T-G
 
 Copy URI key copies highlighted URI address. Highlighted URI is underlined by default.
 For `key-jump-next-cmd`/`key-jump-prev-cmd` see shell integration section.
