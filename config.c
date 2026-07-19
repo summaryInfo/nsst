@@ -112,6 +112,7 @@ char *default_config_path;
     T(int64,             "int",            int64_t,         int64_t dflt; int64_t min; int64_t max;  ) \
     T(nrcs,              "charset string", enum charset,    enum charset dflt;                       ) \
     T(string,            "str",            char *,          const char *dflt;                        ) \
+    T(include,           "path",           struct instance_config, int dummy;                        ) \
     T(uint8,             "int",            uint8_t,         int64_t dflt; int64_t min; int64_t max;  ) \
     T(border,            "dim",            struct border,   int64_t dflt; int64_t min; int64_t max;  ) \
     T(vertical_border,   "dim",            struct border,   int64_t dflt; int64_t min; int64_t max;  ) \
@@ -180,6 +181,19 @@ struct option_type_desc {
         .short_opt = { l1_, l2_ }, \
         .field_size = (uint8_t)sizeof(((struct instance_config *)NULL)->field_), \
         .offset = offsetof(struct instance_config, field_), \
+        .limits.arg_##type_ = { __VA_ARGS__ } \
+    }
+
+/* Option, which requires whole instance config */
+#define Xwhole(type_, l1_, name_, desc_, ...) { \
+        .head = { 0 }, \
+        .name = name_, \
+        .description = desc_, \
+        .type = option_type_##type_, \
+        .global = false, \
+        .short_opt = { l1_, 0 }, \
+        .field_size = (uint8_t)sizeof(struct instance_config), \
+        .offset = 0, \
         .limits.arg_##type_ = { __VA_ARGS__ } \
     }
 
@@ -402,6 +416,7 @@ static struct option options[] = {
     X(boolean, allow_window_ops, "window-ops", "Allow window manipulation with escape sequences", true),
     X(string, word_separators, "word-break", "Symbols treated as word separators when snapping mouse selection", " \t!$^*()+={}[]\\\"'|,;<>~`"),
     X(int16, workspace, "workspace", "Workspace to spawn window on (X11-only)", -1, 0, 1000),
+    Xwhole(include, 'I', "include", "Add instance config file, may be specified multiple times", 0),
 };
 
 static inline color_t default_color(uint32_t n) {
@@ -873,6 +888,11 @@ static int do_print_default_boolean(char *buf, int sz, union opt_limits *limits)
     return snprintf(buf, sz, "; %s", limits->arg_boolean.dflt ? "true" : "false");
 }
 
+static int do_print_default_include(char *buf, int sz, union opt_limits *limits) {
+    (void)buf, (void)sz, (void)limits;
+    return 0;
+}
+
 static int do_print_default_color(char *buf, int sz, union opt_limits *limits) {
     if (limits->arg_color.dflt)
         return snprintf(buf, sz, "; #%06x", limits->arg_color.dflt);
@@ -1087,6 +1107,17 @@ e_wrong_line:
     munmap(addr, stt.st_size + 1);
     return 0;
 
+}
+
+static bool do_parse_include(const char *str, void *dst, union opt_limits *limits) {
+    if (!strcasecmp(str, "default"))
+        return true;
+    (void)limits;
+    struct instance_config *cfg = dst;
+    int fd = open(str, O_RDONLY);
+    if (fd < 0)
+        return false;
+    return do_parse_config(cfg, fd, 0) >= 0;
 }
 
 static void parse_config(struct instance_config *cfg, int allow_global) {
