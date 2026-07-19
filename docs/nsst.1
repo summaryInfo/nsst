@@ -144,6 +144,10 @@ Hide cursor during keyboard input instead of showing it
 Path of config file. Can be set to
 .Qq /dev/null
 to prevent config loading
+.It Fl \-include Ns = Ns Ar path , Fl I
+Path of included config file. Only per-instance options can be set this way.
+This works as an indirect option specification, every time this options is
+specified, config file is parsed recursively. There is no loop detection.
 .It Fl \-clone-config Ns = Ns Ar bool
 Copy existing configuration from most recently opened window instead of loading it from file.
 .It Fl \-cursor-width Ns = Ns Ar pixels
