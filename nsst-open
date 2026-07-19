@@ -4,10 +4,22 @@ HOSTNAME="$(uname -n)"
 file="${1#file://$HOSTNAME}"
 
 if [ x"${file}" != x"${1}" ]; then
-    # Decode filename if it has percent-encoded characters
-    # since they can not be parsed by xdg-open.
+    # Decode filename if it has percent-encoded characters since they
+    # can not be parsed by xdg-open.
     file="$(echo "${file}" | sed 's@+@ @g;s@%@\\x@g' | xargs -0 printf "%b")"
-    xdg-open "$file"
+
+    if [ -z "$XDG_CURRENT_DESKTOP" ] || [ "zX-Generic" = "z$XDG_CURRENT_DESKTOP" ]; then
+        # xdg-open tries to reuse existing terminal in it's generic path.
+        # This prevents terminal applications from being opened by clicking
+        # on URLs. To fix that explicitly open a new terminal ourselves.
+        mime="$(xdg-mime query filetype "$file")"
+        desktop="$XDG_DATA_HOME/applications/$(xdg-mime query default $mime)"
+        if [ -n "$(grep '^Terminal' $desktop)" ]; then
+            exec ${TERMINAL:-nsst} -- xdg-open "$file"
+        fi
+    fi
+
+    exec xdg-open "$file"
 else
-    xdg-open "$1"
+    exec xdg-open "$1"
 fi
