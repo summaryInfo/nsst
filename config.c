@@ -286,6 +286,7 @@ static struct option options[] = {
     X1(geometry, geometry, 'g', "geometry", "Window geometry, format is [=][<width>{xX}<height>][{+-}<xoffset>{+-}<yoffset>]", false),
     X(boolean, has_meta, "has-meta", "Handle meta/alt", true),
     X(string, icon_path, "icon-path", "Window icon file path", NULL),
+    X(string, save_geometry_path, "save-geometry-path", "A file to write current window geometry on exit", NULL),
     X(horizontal_border, border, "horizontal-border", "Horizontal border size (deprecated)", -1, 0, 200),
     X(color, palette[SPECIAL_ITALIC], "italic-color", "Special color of italic text", COLOR_SPECIAL_ITALIC),
     X(boolean, keep_clipboard, "keep-clipboard", "Reuse copied clipboard content instead of current selection data", false),

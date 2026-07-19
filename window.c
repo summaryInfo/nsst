@@ -11,6 +11,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -637,8 +638,41 @@ error:
     return NULL;
 }
 
+static void dump_window_geometry(struct window *win) {
+    struct extent pos = window_get_position(win);
+    struct extent size = window_get_size(win);
+    int32_t workspace = -1;
+    if (pvtbl->get_workspace)
+        workspace = pvtbl->get_workspace(win);
+
+    char path[PATH_MAX];
+    snprintf(path, sizeof path, "%s.%d", win->cfg.save_geometry_path, getpid());
+
+    FILE *tmp = fopen(path, "w");
+    if (!tmp) {
+        warn("Failed to create '%s'", path);
+        return;
+    }
+
+    fprintf(tmp, "# This file contains Nsst window geometry.\n");
+    fprintf(tmp, "# It has been automatically generated.\n\n");
+    fprintf(tmp, "geometry=%dx%d+%d+%d\n", size.width, size.height, pos.width, pos.height);
+    if (workspace != -1)
+        fprintf(tmp, "workspace=%d\n", workspace);
+    fclose(tmp);
+
+    int result = rename(path, win->cfg.save_geometry_path);
+    if (result) {
+        warn("Failed to rename '%s' to '%s': %s", path, win->cfg.save_geometry_path, strerror(errno));
+        unlink(path);
+    }
+}
 
 void free_window(struct window *win) {
+
+    if (win->cfg.save_geometry_path)
+        dump_window_geometry(win);
+
     poller_unset(&win->frame_timer);
     poller_unset(&win->smooth_scroll_timer);
     poller_unset(&win->blink_timer);
