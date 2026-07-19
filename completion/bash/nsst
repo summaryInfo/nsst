@@ -110,7 +110,7 @@ _nsst() {
 	done
 
 	local fullopt="${COMP_WORDS[COMP_CWORD]}"
-	local shortopts=( "-C" "-d" "-D" "-e" "-f" "-g" "-G" "-h" "-H" "-L" "-o" "-s" "-t" "-T" "-v" "-V" )
+	local shortopts=( "-C" "-d" "-D" "-e" "-f" "-g" "-G" "-h" "-H" "-L" "-o" "-s" "-t" "-T" "-v" "-V" "-I")
 	local longopts=(
 		"--allow-alternate" "--allow-blinking" "--allow-modify-edit-keypad" "--allow-modify-function"
 		"--allow-modify-keypad" "--allow-modify-misc" "--alpha" "--alternate-scroll" "--answerback-string"
@@ -145,7 +145,7 @@ _nsst() {
 		"--wait-for-configure-delay" "--window-class" "--window-ops" "--word-break" "--workspace"
 		"--pointer-hide-on-input" "--pointer-hide-time" "--icon-path" "--keep-on-exit" "--key-jump-top"
 		"--key-jump-bottom" "--key-select-all" "--key-page-up" "--key-page-down" "--page-amount"
-		"--save-geometry-path"
+		"--save-geometry-path" "--include"
 	)
 
 	[[ "${COMP_WORDS[0]}" == nsstc ]] && longopts+=("--quit")
@@ -193,7 +193,7 @@ _nsst() {
 	(--cwd=)
 		COMPREPLY=( $(compgen -P "${prefix}" -A directory -- "${optvalue}") )
 		;;
-	(-[Cos]=|--config=|--printer-file=|--socket=|--icon-path=|--save-geometry-path=)
+	(-[ICos]=|--config=|--printer-file=|--socket=|--icon-path=|--save-geometry-path=|--include=)
 		COMPREPLY=( $(compgen -P "${prefix}" -A file -- "${optvalue}") )
 		;;
 	(--luit-path=|--open-cmd=|--print-command=|--shell=)

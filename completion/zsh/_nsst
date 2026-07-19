@@ -68,6 +68,7 @@ _arguments \
 	"--horizontal-border=[Horizontal border size (deprecated)]:dim:()" \
 	"(-H --scrollback-size=)"{-H,--scrollback-size=}"[Number of saved lines]:int:()" \
 	"--icon-path=[Window icon file path]:file:_files" \
+	"(-I --include=)"{-I,--include=}"[Included configuration file path]:config:_files" \
 	"--italic-color=[Special color of italic text]:color:()" \
 	"--keep-clipboard=[Reuse copied clipboard content instead of current selection data]:bool:(true false default)" \
 	"--keep-on-exit=[Don't close the window when application terminates]:mode:(never key always default)" \

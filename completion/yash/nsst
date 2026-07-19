@@ -72,6 +72,7 @@ function completion/nsst {
 		"--horizontal-border:;Horizontal border size (deprecated)"
 		"H: --scrollback-size:;Number of saved lines"
 		"--icon-path:;Window icon file path"
+		"I: --include:;Included configuration file path"
 		"--italic-color:;Special color of italic text"
 		"--keep-clipboard::;Reuse copied clipboard content instead of current selection data"
 		"--keep-on-exit:;Don't close the window when application terminates"
@@ -232,7 +233,7 @@ function completion/nsst {
 	(--cwd)
 		complete -P "$PREFIX" --directory -- default
 		;;
-	(C|--config|o|--printer-file|s|--socket|--icon-path|--save-geometry-path)
+	(C|--config|o|--printer-file|s|--socket|--icon-path|--save-geometry-path|I|--include)
 		complete -P "$PREFIX" --file -- default
 		;;
 	(--luit-path|--open-cmd|--print-command|--shell)
