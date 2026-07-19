@@ -335,6 +335,19 @@ struct extent x11_get_screen_size(struct window *win) {
     return (struct extent) { ctx.screen->width_in_pixels, ctx.screen->height_in_pixels };
 }
 
+static int32_t x11_get_workspace(struct window *win) {
+    xcb_get_property_cookie_t c = xcb_get_property(con, 0, get_plat(win)->wid, ctx.atom._NET_WM_DESKTOP, XCB_ATOM_CARDINAL, 0, 1);
+    xcb_get_property_reply_t *rep = xcb_get_property_reply(con, c, NULL);
+    if (!rep) {
+        warn("Failed to get _NET_WM_DESKTOP property");
+        return -1;
+    }
+
+    uint32_t result = *(uint32_t *)xcb_get_property_value(rep);
+    free(rep);
+    return result;
+}
+
 static void x11_get_pointer(struct window *win, struct extent *p, int32_t *pmask) {
     xcb_query_pointer_cookie_t c = xcb_query_pointer(con, get_plat(win)->wid);
     xcb_query_pointer_reply_t *qre = xcb_query_pointer_reply(con, c, NULL);
@@ -1164,6 +1177,7 @@ static void x11_free(void) {
 
 static struct platform_vtable x11_vtable = {
     .get_screen_size = x11_get_screen_size,
+    .get_workspace = x11_get_workspace,
     .has_error = x11_has_error,
     .get_opaque_size = x11_get_opaque_size,
     .flush = x11_flush,

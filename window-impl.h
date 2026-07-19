@@ -360,6 +360,7 @@ struct platform_vtable {
 
     /* Platform dependent functions */
     struct extent (*get_screen_size)(struct window *win);
+    int32_t (*get_workspace)(struct window *win);
     bool (*has_error)(void);
     ssize_t (*get_opaque_size)(void);
     void (*flush)(void);
