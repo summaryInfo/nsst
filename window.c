@@ -811,6 +811,12 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
     case shortcut_scroll_down:
         term_scroll_view(win->term, -win->cfg.scroll_amount);
         return;
+    case shortcut_scroll_up_long:
+        term_scroll_view(win->term, win->cfg.page_amount == -1 ? win->c.height : win->cfg.page_amount);
+        return;
+    case shortcut_scroll_down_long:
+        term_scroll_view(win->term, -(win->cfg.page_amount == -1 ? win->c.height : win->cfg.page_amount));
+        return;
     case shortcut_font_up:
     case shortcut_font_down:
     case shortcut_font_default:;

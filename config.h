@@ -26,6 +26,8 @@ enum shortcut_action {
     shortcut_numlock,
     shortcut_scroll_up,
     shortcut_scroll_down,
+    shortcut_scroll_up_long,
+    shortcut_scroll_down_long,
     shortcut_font_up,
     shortcut_font_down,
     shortcut_font_default,
@@ -193,6 +195,7 @@ struct instance_config {
     int16_t font_spacing;
     int16_t line_spacing;
     int16_t scroll_amount;
+    int16_t page_amount;
 
     uint8_t margin_bell_high_volume;
     uint8_t margin_bell_low_volume;
