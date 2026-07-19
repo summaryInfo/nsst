@@ -308,8 +308,6 @@ static struct option options[] = {
     X(string, key[shortcut_font_default], "key-reset-font", "Reset font size hotkey", "T-M"),
     X(string, key[shortcut_reset], "key-reset", "Terminal reset hotkey", "T-R"),
     X(string, key[shortcut_reverse_video], "key-reverse-video", "Toggle reverse video mode hotkey", "T-I"),
-    X(string, key[shortcut_scroll_down], "key-scroll-down", "Scroll down hotkey", "T-Down"),
-    X(string, key[shortcut_scroll_up], "key-scroll-up", "Scroll up hotkey", "T-Up"),
     X(string, key[shortcut_scroll_down], "key-scroll-down", "Scroll down (short) hotkey", "T-Down"),
     X(string, key[shortcut_scroll_up], "key-scroll-up", "Scroll up (short) hotkey", "T-Up"),
     X(string, key[shortcut_scroll_down_long], "key-page-down", "Scroll down (long) hotkey", "T-Page_Down"),
