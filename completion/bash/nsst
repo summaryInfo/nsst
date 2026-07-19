@@ -39,7 +39,7 @@ _nsst() {
 		--select-to-clipboard|--smooth-resize|--smooth-scroll|--special-blink|--special-bold|\
 		--special-italic|--special-reverse|--special-underlined|--substitute-fonts|--trace-characters|\
 		--trace-controls|--trace-events|--trace-fonts|--trace-input|--trace-misc|--unique-uris|\
-		--urgent-on-bell|--use-utf8|--visual-bell|--window-ops|--version|--help|--cursor-hide-on-input\
+		--urgent-on-bell|--use-utf8|--visual-bell|--window-ops|--version|--help|--cursor-hide-on-input|\
 		--no-allow-alternate|--no-allow-blinking|--no-allow-modify-edit-keypad|--no-allow-modify-function|\
 		--no-allow-modify-keypad|--no-allow-modify-misc|--no-alternate-scroll|--no-appcursor|--no-appkey|\
 		--no-autorepeat|--no-autowrap|--no-backspace-is-del|--no-blend-all-background|--no-blend-foreground|\
