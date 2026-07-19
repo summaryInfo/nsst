@@ -215,9 +215,9 @@ This is recognized only if URI support is compiled in
 .It Fl \-key-paste Ns = Ns Ar key
 Paste from clipboard hotkey, initial value is T-V
 .It Fl \-key-dec-font Ns = Ns Ar key
-Decrement font size hotkey, initial value is T-Page_Down
+Decrement font size hotkey, initial value is T-<
 .It Fl \-key-inc-font Ns = Ns Ar key
-Increment font size hotkey, initial value is T-Page_Up
+Increment font size hotkey, initial value is T->
 .It Fl \-key-new-window Ns = Ns Ar key
 Create new window hotkey, initial value is T-N
 .It Fl \-key-numlock Ns = Ns Ar key
@@ -227,13 +227,17 @@ Reload config hotkey, initial value is T-C
 .It Fl \-key-reset Ns = Ns Ar key
 Terminal reset hotkey, initial value is T-R
 .It Fl \-key-reset-font Ns = Ns Ar key
-Reset font size hotkey, initial value is T-Home
+Reset font size hotkey, initial value is T-M
 .It Fl \-key-reverse-video Ns = Ns Ar key
 Toggle reverse video mode hotkey, initial value is T-I
 .It Fl \-key-scroll-down Ns = Ns Ar key
 Scroll down hotkey, initial value is T-Down
 .It Fl \-key-scroll-up Ns = Ns Ar key
 Scroll up hotkey, initial value is T-Up
+.It Fl \-key-page-down Ns = Ns Ar key
+Scroll down by a larger amount hotkey, initial value is T-Page_Down
+.It Fl \-key-page-up Ns = Ns Ar key
+Scroll up by a larger amount hotkey, initial value is T-Page_Up
 .It Fl \-key-select-all Ns = Ns Ar key
 Select whole scrollback buffer, initial value is T-A
 .It Fl \-key-jump-next-cmd Ns = Ns Ar key
@@ -297,6 +301,12 @@ format is same as for
 Don't force window size to be aligned on character size.
 .It Fl \-scroll-amount Ns = Ns Ar lines
 Number of lines scrolled in a time
+.It Fl \-page-amount Ns = Ns Ar lines
+Number of lines scrolled in a time by
+.Fl \-key-page-up
+and
+.Fl \-key-page-down
+. Default value is a screen height, i.e. a page.
 .It Fl \-scroll-on-input Ns = Ns Ar bool
 Scroll view to bottom on key press
 .It Fl \-scroll-on-output Ns = Ns Ar bool
