@@ -65,6 +65,14 @@ void mouse_handle_input(struct term *term, struct mouse_event ev);
 void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask);
 void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, iparam_t ye);
 
+enum snap {
+    snap_none,
+    snap_word,
+    snap_line,
+    snap_command,
+    snap_all,
+};
+
 struct selection_state {
     struct window *win;
     struct screen *screen;
@@ -77,13 +85,7 @@ struct selection_state {
     struct line_handle end;
     bool rectangular;
 
-    enum {
-        snap_none,
-        snap_word,
-        snap_line,
-        snap_command,
-        snap_all,
-    } snap;
+    enum snap snap_start, snap_end;
 
     enum {
         state_sel_none,

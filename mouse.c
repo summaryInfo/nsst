@@ -326,12 +326,12 @@ static inline bool is_separator(uint32_t ch, char *seps) {
     return strstr(seps, (char *)cbuf);
 }
 
-static struct line_span snap_backward(struct selection_state *sel, struct line_span pos) {
+static struct line_span snap_backward(struct selection_state *sel, struct line_span pos, enum snap snap) {
     char *seps = window_cfg(sel->win)->word_separators;
 
     assert(pos.line);
 
-    if (sel->snap == snap_all) {
+    if (snap == snap_all) {
         pos.offset = 0;
         struct line *prev_line;
         for (;;) {
@@ -339,7 +339,7 @@ static struct line_span snap_backward(struct selection_state *sel, struct line_s
             if (!prev_line) break;
             pos.line = prev_line;
         }
-    } else if (sel->snap == snap_command) {
+    } else if (snap == snap_command) {
         pos.offset = 0;
         struct line *prev_line;
         for (;;) {
@@ -349,7 +349,7 @@ static struct line_span snap_backward(struct selection_state *sel, struct line_s
                 pos.line->sh_ps1_start) break;
             pos.line = prev_line;
         }
-    } else if (sel->snap == snap_line) {
+    } else if (snap == snap_line) {
         pos.offset = 0;
         struct line *prev_line;
         for (;;) {
@@ -357,7 +357,7 @@ static struct line_span snap_backward(struct selection_state *sel, struct line_s
             if (!prev_line || !prev_line->wrapped) break;
             pos.line = prev_line;
         }
-    } else if (sel->snap == snap_word) {
+    } else if (snap == snap_word) {
         struct line *line = pos.line, *prev;
         if (pos.offset >= line->size) {
             pos.offset = line->size;
@@ -403,10 +403,10 @@ out:
     return pos;
 }
 
-static struct line_span snap_forward(struct selection_state *sel, struct line_span pos) {
+static struct line_span snap_forward(struct selection_state *sel, struct line_span pos, enum snap snap) {
     char *seps = window_cfg(sel->win)->word_separators;
 
-    if (sel->snap == snap_all) {
+    if (snap == snap_all) {
         struct line *next = pos.line, *line, *nonemptyline = pos.line;
         do {
             line = next;
@@ -416,7 +416,7 @@ static struct line_span snap_forward(struct selection_state *sel, struct line_sp
         } while (next);
         pos.line = nonemptyline;
         pos.offset = SNAP_RIGHT;
-    } else if (sel->snap == snap_command) {
+    } else if (snap == snap_command) {
         struct line *next = pos.line, *line;
         do line = next, next = line->next;
         while (next &&
@@ -424,13 +424,13 @@ static struct line_span snap_forward(struct selection_state *sel, struct line_sp
                !line->sh_cmd_start);
         pos.line = line;
         pos.offset = SNAP_RIGHT;
-    } else if (sel->snap == snap_line) {
+    } else if (snap == snap_line) {
         struct line *next = pos.line, *line;
         do line = next, next = line->next;
         while (next && line->wrapped);
         pos.line = line;
         pos.offset = SNAP_RIGHT;
-    } else if (sel->snap == snap_word) {
+    } else if (snap == snap_word) {
         struct line *line = pos.line, *next;
         if (pos.offset >= line->size) {
             pos.offset = SNAP_RIGHT;
@@ -658,12 +658,15 @@ static struct segments **clone_segments(struct segments **prev_heads, size_t pre
 static void apply_selection_change(struct selection_state *sel, struct screen *scr, bool keep_old) {
     struct line_span nstart = sel->start.s;
     struct line_span nend = sel->end.s;
+    enum snap sstart = sel->snap_start, send = sel->snap_end;
 
-    if (line_span_cmp(&nstart, &nend) > 0)
+    if (line_span_cmp(&nstart, &nend) > 0) {
         SWAP(nstart, nend);
+        SWAP(sstart, send);
+    }
 
-    nstart = snap_backward(sel, nstart);
-    nend = snap_forward(sel, nend);
+    nstart = snap_backward(sel, nstart, sstart);
+    nend = snap_forward(sel, nend, send);
 
     struct segments **prev_heads = sel->seg;
     size_t prev_size = sel->seg_size;
@@ -692,24 +695,27 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
     assert(pos.line);
 
     if (state == state_sel_pressed) {
-        /* Keep the first anchor unchanged if shift is held */
-        if ((modifiers & mask_shift) && sel->start.s.line)
-            state = state_sel_progress;
-        else
-            replace_handle(&sel->start, &pos);
-
         struct timespec now;
         clock_gettime(CLOCK_TYPE, &now);
 
         if (ts_diff(&sel->click1, &now) < cfg->triple_click_time)
-            sel->snap = rectangular ? snap_command : snap_line;
+            sel->snap_end = rectangular ? snap_command : snap_line;
         else if (ts_diff(&sel->click0, &now) < cfg->double_click_time)
-            sel->snap = snap_word;
+            sel->snap_end = snap_word;
         else
-            sel->snap = snap_none;
+            sel->snap_end = snap_none;
 
         sel->click1 = sel->click0;
         sel->click0 = now;
+
+        /* Keep the first anchor unchanged if shift is held */
+        if ((modifiers & mask_shift) && sel->start.s.line) {
+            state = state_sel_progress;
+        } else {
+            replace_handle(&sel->start, &pos);
+            sel->snap_start = sel->snap_end;
+        }
+
     } else if (!sel->start.s.line) {
         /* If top line has been reset due to
          * the limited size of scrollback, we
@@ -722,7 +728,7 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
     /* If we have not moved a mouse but have double/tripple clicked,
      * change the state of selection to state_sel_progress anyways,
      * since we have selected something. */
-    sel->state = sel->snap != snap_none && state == state_sel_pressed ? state_sel_progress : state;
+    sel->state = sel->snap_start != snap_none && state == state_sel_pressed ? state_sel_progress : state;
     sel->rectangular = rectangular;
     replace_handle(&sel->end, &pos);
 
@@ -799,7 +805,8 @@ void selection_select_all(struct selection_state *sel, struct screen *scr) {
     struct line_span start = screen_view(scr);
     replace_handle(&sel->start, &start);
     replace_handle(&sel->end, &start);
-    sel->snap = snap_all;
+    sel->snap_end = snap_all;
+    sel->snap_start = snap_all;
     sel->rectangular = false;
     sel->state = state_sel_released;
     apply_selection_change(sel, scr, false);
