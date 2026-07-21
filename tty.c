@@ -507,19 +507,36 @@ static bool flush_deferred(struct tty *tty) {
     return true;
 }
 
+static ssize_t compact_buffer(struct tty *tty) {
+    /* Always keep last MAX_PROTOCOL_LEN bytes in buffer for URL parsing matching */
+    ssize_t sz = tty->end - tty->start;
+    ssize_t tail = MAX(sz, MAX_PROTOCOL_LEN);
+    memmove(tty->fd_buf, tty->start - (tail - sz), tail);
+    tty->start = tty->fd_buf + tail - sz;
+    tty->end = tty->fd_buf + tail;
+    return tail;
+}
+
+ssize_t tty_refill_from(struct tty *tty, const char *str, const char *end) {
+    ssize_t sz = tty->end - tty->start;
+    if (sz && tty->start != tty->fd_buf + MAX_PROTOCOL_LEN)
+        sz = compact_buffer(tty);
+
+    ssize_t space = (tty->fd_buf + sizeof tty->fd_buf) - tty->end;
+    space = MIN(space, end - str);
+    memcpy(tty->end, str, space);
+    tty->end += space;
+    return space;
+}
+
 ssize_t tty_refill(struct tty *tty) {
     if (UNLIKELY(tty->w.fd < 0)) return -1;
 
-    ssize_t inc = 0, sz = tty->end - tty->start, inctotal = 0;
+    ssize_t inc = 0, inctotal = 0;
+    ssize_t sz = tty->end - tty->start;
 
-    if (tty->start != tty->fd_buf + MAX_PROTOCOL_LEN) {
-        /* Always keep last MAX_PROTOCOL_LEN bytes in buffer for URL parsing matching */
-        ssize_t tail = MAX(sz, MAX_PROTOCOL_LEN);
-        memmove(tty->fd_buf, tty->start - (tail - sz), tail);
-        tty->start = tty->fd_buf + tail - sz;
-        tty->end = tty->fd_buf + tail;
-        sz = tail;
-    }
+    if (sz && tty->start != tty->fd_buf + MAX_PROTOCOL_LEN)
+        sz = compact_buffer(tty);
 
     ssize_t space = (tty->fd_buf + sizeof tty->fd_buf) - tty->end;
     errno = 0;
