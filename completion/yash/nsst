@@ -75,6 +75,7 @@ function completion/nsst {
 		"--italic-color:;Special color of italic text"
 		"--keep-clipboard::;Reuse copied clipboard content instead of current selection data"
 		"--keep-on-exit:;Don't close the window when application terminates"
+		"--on-exit-message:;Message to be printed when application has terminated"
 		"--keep-selection::;Don't clear X11 selection when not highlighted"
 		"--keyboard-dialect:;National replacement character set to be used in non-UTF-8 mode"
 		"--keyboard-mapping:;Initial keyboard mapping"

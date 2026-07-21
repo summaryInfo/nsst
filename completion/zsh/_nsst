@@ -71,6 +71,7 @@ _arguments \
 	"--italic-color=[Special color of italic text]:color:()" \
 	"--keep-clipboard=[Reuse copied clipboard content instead of current selection data]:bool:(true false default)" \
 	"--keep-on-exit=[Don't close the window when application terminates]:mode:(never key always default)" \
+	"--on-exit-message=[Message to be printed when application has terminated]:string:()" \
 	"--keep-selection=[Don't clear X11 selection when not highlighted]:bool:(true false default)" \
 	"--keyboard-dialect=[National replacement character set to be used in non-UTF-8 mode]:dialect:()" \
 	"--keyboard-mapping=[Initial keyboard mapping]:mapping:(legacy vt220 hp sun sco default)" \
