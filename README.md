@@ -131,6 +131,7 @@ Default keybindings:
     key-copy=T-C
     key-copy-uri=T-U
     key-paste=T-V
+    key-force-mouse=T-S
     key-jump-next-cmd=T-F
     key-jump-prev-cmd=T-B
     key-jump-top=T-T
