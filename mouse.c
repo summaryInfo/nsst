@@ -969,12 +969,10 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
     struct screen *scr = term_screen(term);
     sel->pending_scroll = 0;
 
-    uint32_t force_mask = window_cfg(term_window(term))->force_mouse_mask;
-
     // TODO Cleanup
 
     /* Report mouse */
-    if ((loc->locator_enabled | loc->locator_filter) && (ev.mask & mask_mod_mask) != force_mask &&
+    if ((loc->locator_enabled | loc->locator_filter) && !loc->force_mouse &&
             !term_get_kstate(term)->keyboard_vt52) {
         if (loc->locator_filter) {
             if (ev.x < loc->filter.x || ev.x >= loc->filter.x + loc->filter.width ||
@@ -1000,7 +998,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
             }
         }
     } else if (loc->mouse_mode != mouse_mode_none &&
-            (ev.mask & mask_mod_mask) != force_mask && !term_get_kstate(term)->keyboard_vt52) {
+               !loc->force_mouse && !term_get_kstate(term)->keyboard_vt52) {
         enum mouse_mode md = loc->mouse_mode;
 
         adj_coords(term_window(term), &ev.x, &ev.y, loc->mouse_format == mouse_format_pixel);

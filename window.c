@@ -912,6 +912,9 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
     case shortcut_select_all:
         term_select_all(win->term);
         return;
+    case shortcut_force_mouse:
+        term_toggle_force_mouse_mode(win->term);
+        return;
     case shortcut_MAX:
     case shortcut_none:;
     }

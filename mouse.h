@@ -35,6 +35,7 @@ struct mouse_state {
     bool locator_pixels : 1;
     bool locator_report_press : 1;
     bool locator_report_release : 1;
+    bool force_mouse : 1;
 
     struct rect filter;
 

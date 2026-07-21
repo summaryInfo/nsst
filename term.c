@@ -3670,6 +3670,10 @@ bool term_is_nrcs_enabled(struct term *term) {
     return term->mode.enable_nrcs;
 }
 
+void term_toggle_force_mouse_mode(struct term *term) {
+    term->mstate.force_mouse ^= true;
+}
+
 bool term_is_bell_urgent_enabled(struct term *term) {
     return term->mode.bell_urgent;
 }

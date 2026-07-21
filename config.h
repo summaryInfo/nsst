@@ -43,6 +43,7 @@ enum shortcut_action {
     shortcut_view_top,
     shortcut_view_bottom,
     shortcut_select_all,
+    shortcut_force_mouse,
     shortcut_MAX
 };
 
@@ -153,7 +154,6 @@ struct instance_config {
     char *font_name;
     char *config_path;
     char *term_mod;
-    char *force_mouse_mod;
     char *shell;
     char *uri_click_mod;
     char *normal_pointer;

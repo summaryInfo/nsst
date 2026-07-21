@@ -98,5 +98,6 @@ bool term_is_bell_raise_enabled(struct term *term);
 bool term_is_utf8_enabled(struct term *term);
 bool term_is_nrcs_enabled(struct term *term);
 bool term_is_reverse(struct term *term);
+void term_toggle_force_mouse_mode(struct term *term);
 
 #endif
