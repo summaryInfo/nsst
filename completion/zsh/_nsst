@@ -53,7 +53,6 @@ _arguments \
 	"--font-size=[Font size in points]:dim:()" \
 	"--font-size-step=[Font size step in points]:dim:()" \
 	"--font-spacing=[Additional spacing for individual symbols]:dim:()" \
-	"--force-mouse-mod=[Modifier to force mouse action]:binding:()" \
 	"--force-nrcs=[Enable NRCS translation when UTF-8 mode is enabled]:bool:(true false default)" \
 	"--force-scalable=[Do not search for pixmap fonts]:bool:(true false default)" \
 	"--force-wayland-csd=[Don't request SSD]:bool:(true false default)" \
