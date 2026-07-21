@@ -1160,7 +1160,8 @@ void init_instance_config(struct instance_config *cfg, const char *config_path, 
 }
 
 const char *usage_string(char buffer[static MAX_OPTION_DESC + 1], ssize_t idx) {
-#define APPEND(...) pbuf += snprintf(pbuf, MAX_OPTION_DESC - (pbuf - buffer), __VA_ARGS__)
+    char *end = buffer + MAX_OPTION_DESC;
+#define APPEND(...) pbuf += snprintf(pbuf, end - pbuf, __VA_ARGS__)
     char *pbuf = buffer;
 
     if (!idx) {
@@ -1182,7 +1183,7 @@ const char *usage_string(char buffer[static MAX_OPTION_DESC + 1], ssize_t idx) {
         while (pbuf - buffer < max_help_line_len) *pbuf++ = ' ';
 
         APPEND("(%s", opt->description);
-        pbuf += type->print_default(pbuf, MAX_OPTION_DESC - (pbuf - buffer), &opt->limits);
+        pbuf += type->print_default(pbuf, end - pbuf, &opt->limits);
         APPEND(")\n");
         return buffer;
     } else if (idx == LEN(options) + 1) {
