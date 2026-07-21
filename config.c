@@ -906,7 +906,13 @@ static int do_print_default_double(char *buf, int sz, union opt_limits *limits) 
 }
 
 static int do_print_default_enum(char *buf, int sz, union opt_limits *limits) {
-    return snprintf(buf, sz, "; '%s'", limits->arg_enum.values[limits->arg_enum.dflt - limits->arg_enum.start]);
+    char *end = buf + sz,  *buf0 = buf;
+    const char **elem = limits->arg_enum.values;
+    buf += snprintf(buf, end - buf, "; ");
+    while (*elem)
+        buf += snprintf(buf, end - buf, "%s%s", *elem, ("/") + !elem[1]), elem++;
+    buf += snprintf(buf, end - buf, "; '%s'", limits->arg_enum.values[limits->arg_enum.dflt - limits->arg_enum.start]);
+    return buf - buf0;
 }
 
 static int do_print_default_geometry(char *buf, int sz, union opt_limits *limits) {
