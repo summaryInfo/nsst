@@ -124,7 +124,7 @@ _nsst() {
 		"--force-scalable" "--force-wayland-csd" "--foreground" "--fork" "--fps" "--frame-wait-delay"
 		"--geometry" "--has-meta" "--help" "--horizontal-border" "--italic-color" "--keep-clipboard"
 		"--keep-selection" "--keyboard-dialect" "--keyboard-mapping" "--key-break" "--key-copy"
-		"--key-copy-uri" "--key-dec-font" "--key-inc-font" "--key-jump-next-cmd" "--key-jump-prev-cmd"
+		"--key-copy-uri" "--key-dec-font" "--key-force-mouse" "--key-inc-font" "--key-jump-next-cmd" "--key-jump-prev-cmd"
 		"--key-new-window" "--key-numlock" "--key-paste" "--key-reload-config" "--key-reset"
 		"--key-reset-font" "--key-reverse-video" "--key-scroll-down" "--key-scroll-up" "--left-border"
 		"--line-spacing" "--lock-keyboard" "--log-level" "--luit" "--luit" "--luit-path" "---margin-bell"

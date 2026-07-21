@@ -78,6 +78,7 @@ _arguments \
 	"--key-copy=[Copy to clipboard hotkey]:binding:()" \
 	"--key-copy-uri=[Copy selected URI to clipboard hotkey]:binding:()" \
 	"--key-dec-font=[Decrement font size hotkey]:binding:()" \
+	"--key-force-mouse=[Toggle forced terminal mouse interaction]:binding:()" \
 	"--key-inc-font=[Increment font size hotkey]:binding:()" \
 	"--key-jump-bottom=[Jump to the bottom of the scrollback buffer]:binding:()" \
 	"--key-jump-next-cmd=[Jump to next command beginning hotkey]:binding:()" \

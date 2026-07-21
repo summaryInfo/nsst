@@ -82,6 +82,7 @@ function completion/nsst {
 		"--key-copy:;Copy to clipboard hotkey"
 		"--key-copy-uri:;Copy selected URI to clipboard hotkey"
 		"--key-dec-font:;Decrement font size hotkey"
+		"--key-force-mouse:;Toggle forced terminal mouse interaction"
 		"--key-inc-font:;Increment font size hotkey"
 		"--key-jump-bottom:;Jump to the bottom of the scrollback buffer"
 		"--key-jump-next-cmd:;Jump to next command beginning hotkey"
