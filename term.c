@@ -3925,7 +3925,7 @@ bool term_hang(struct term *term) {
             const char *exit_message = window_cfg(win)->exit_string;
             if (!exit_message) {
                 if (keep == keep_until_input)
-                    exit_message = "\r\n\033[?25l\033[0;31;6;1mApplication has terminated.\nPress any key to exit.\033[m";
+                    exit_message = "\r\n\033[?25l\033[0;31;6;1mApplication has terminated.\n\rPress any key to exit.\033[m";
                 else
                     exit_message =  "\r\n\033[?25l\033[0;31;6;1mApplication has terminated.\033[m";
             }
