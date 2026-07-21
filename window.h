@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2026, Evgeniy Baskov. All rights reserved */
 
 #ifndef WINDOW_H_
 #define WINDOW_H_ 1
@@ -36,7 +36,9 @@ enum modifier_mask {
     mask_button_4 = 1 << 11,
     mask_button_5 = 1 << 12,
     mask_state_mask = 0x1FFF,
-    mask_mod_mask = 0xFF,
+    mask_mod_mask_full = 0xFF,
+    /* Ignore numlock and caps lock in modifiers */
+    mask_mod_mask = (0xFF & ~(mask_mod_2 | mask_lock)),
 };
 
 enum clip_target {
