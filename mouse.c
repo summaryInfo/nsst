@@ -6,6 +6,7 @@
 #include "input.h"
 #include "mouse.h"
 #include "poller.h"
+#include "screen.h"
 #include "term.h"
 #include "time.h"
 #include "window.h"
@@ -986,8 +987,19 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
     /* Scroll view */
     } else if (ev.event == mouse_event_press && (ev.button == 3 || ev.button == 4)) {
         ssize_t direction = 2 *(ev.button == 3) - 1;
-        if (ev.mask & mask_mod_1) term_scroll_view_to_cmd(term, direction);
-        else term_scroll_view(term, direction * window_cfg(sel->win)->scroll_amount);
+        if ((ev.mask & mask_mod_1) == mask_mod_1) {
+            term_scroll_view_to_cmd(term, direction);
+        } else {
+            int16_t amount;
+            if ((ev.mask & mask_shift) == mask_shift) {
+                amount = window_cfg(sel->win)->page_amount;
+                if (amount == -1)
+                    amount = screen_height(term_screen(term));
+            } else {
+                amount = window_cfg(sel->win)->scroll_amount;
+            }
+            term_scroll_view(term, direction * amount);
+        }
     /* Paste */
     } else if (ev.button == 1 && ev.event == mouse_event_release) {
         window_paste_clip(term_window(term), clip_primary);
