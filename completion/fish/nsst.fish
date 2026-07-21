@@ -157,6 +157,7 @@ complete -c nsst -l "trace-events" -x -a "true false default" -d "Trace received
 complete -c nsst -l "trace-fonts" -x -a "true false default" -d "Log font related information"
 complete -c nsst -l "trace-input" -x -a "true false default" -d "Trace user input"
 complete -c nsst -l "trace-misc" -x -a "true false default" -d "Trace miscellaneous information"
+complete -c nsst -l "trace-poller" -x -a "true false default" -d "Trace poller events"
 complete -c nsst -l "triple-click-time" -r -d "Time gap in microseconds in witch tree mouse presses will be considered triple"
 complete -c nsst -l "underlined-color" -r -d "Special color of underlined text"
 complete -c nsst -l "underline-width" -r -d "Text underline width"

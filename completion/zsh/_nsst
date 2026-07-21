@@ -160,6 +160,7 @@ _arguments \
 	"--trace-fonts=[Log font related information]:bool:(true false default)" \
 	"--trace-input=[Trace user input]:bool:(true false default)" \
 	"--trace-misc=[Trace miscellaneous information]:bool:(true false default)" \
+	"--trace-poller=[Trace poller events]:bool:(true false default)" \
 	"--triple-click-time=[Time gap in microseconds in witch tree mouse presses will be considered triple]:time:()" \
 	"(-T --title=)"{-T,--title=}"[Initial window title]:text:()" \
 	"(-t --vt-version=)"{-t,--vt-version=}"[Emulated VT version]:int:()" \

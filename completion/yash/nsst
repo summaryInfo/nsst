@@ -164,6 +164,7 @@ function completion/nsst {
 		"--trace-fonts::;Log font related information"
 		"--trace-input::;Trace user input"
 		"--trace-misc::;Trace miscellaneous information"
+		"--trace-poller::;Trace poller events"
 		"--triple-click-time:;Time gap in microseconds in witch tree mouse presses will be considered triple"
 		"T: --title:;Initial window title"
 		"t: --vt-version:;Emulated VT version"
@@ -249,7 +250,7 @@ function completion/nsst {
 	 --scroll-on-input|--scroll-on-output|--select-to-clipboard|--smooth-scroll|--special-blink|\
 	 --special-bold|--special-italic|--special-reverse|--special-underlined|--substitute-fonts|\
 	 --trace-characters|--trace-controls|--trace-events|--trace-fonts|--trace-input|\
-	 --trace-misc|--urgent-on-bell|--use-utf8|--visual-bell|--window-ops|--smooth-resize|--clone-config|\
+	 --trace-misc|--trace-poller|--urgent-on-bell|--use-utf8|--visual-bell|--window-ops|--smooth-resize|--clone-config|\
 	 --pointer-hide-on-input|--cursor-hide-on-input)
 		complete -P "$PREFIX" -- true false default
 		;;
