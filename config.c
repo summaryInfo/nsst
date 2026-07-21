@@ -351,7 +351,7 @@ static struct option options[] = {
     X(boolean, numlock, "numlock", "Initial numlock state", 1),
     X(string, open_command, "open-cmd", "A command used for opening URIs when clicked", "nsst-open"),
     X(boolean, override_boxdraw, "override-boxdrawing", "Use built-in box drawing characters", false),
-    X(enum, pixel_mode, "pixel-mode", "Subpixel rendering config; mono, bgr, rgb, bgrv, or rgbv", pixmode_mono, pixmode_mono, XENUM("mono", "bgr", "rgb", "bgrv", "rgbv")),
+    X(enum, pixel_mode, "pixel-mode", "Subpixel rendering config", pixmode_mono, pixmode_mono, XENUM("mono", "bgr", "rgb", "bgrv", "rgbv")),
     X(string, normal_pointer, "pointer-shape", "Default mouse pointer shape", NULL),
     X(boolean, pointer_hide_on_input, "pointer-hide-on-input", "Hide mouse pointer during typing", false),
     X(time, pointer_inhibit_time, "pointer-hide-time", "Mouse pointer hiding duration", SEC/2, 500000, 10*SEC),
