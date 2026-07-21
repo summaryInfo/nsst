@@ -360,6 +360,7 @@ static struct option options[] = {
     X1(string, printer_file, 'o', "printer-file", "File to which CSI MC output goes", NULL),
     X(boolean, raise_on_bell, "raise-on-bell", "Raise terminal window on bell", false),
     X(string, resize_pointer, "resize-pointer-shape", "Mouse pointer shape for window resizing", NULL),
+    X(string, exit_string, "on-exit-message", "Message to be printed when application has terminated", NULL),
     X(color, palette[SPECIAL_REVERSE], "reversed-color", "Special color of reversed text", COLOR_SPECIAL_REVERSE),
     X(boolean, reverse_video, "reverse-video", "Initial reverse video setting", false),
     X(dim, border.right, "right-border", "Right border size", 8, 0, 200),

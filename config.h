@@ -163,6 +163,7 @@ struct instance_config {
     char *notify_command;
     char *icon_path;
     char *save_geometry_path;
+    char *exit_string;
 
     enum keyboard_mapping mapping;
     enum cursor_type cursor_shape;

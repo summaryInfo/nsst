@@ -3912,17 +3912,25 @@ bool term_exited(struct term *term) {
 
 bool term_hang(struct term *term) {
     struct window *win = term_window(term);
-    if (window_cfg(win)->on_exit != keep_close) {
-        /* Completely read input buffer before
-         * closing the PTY, so that whole output
-         * is visible. */
-        while (term_read(term));
+    enum keep_on_exit keep = window_cfg(win)->on_exit;
+    if (keep != keep_close) {
+        if (term->tty.w.fd >= 0) {
+            /* Completely read input buffer before
+             * closing the PTY, so that whole output
+             * is visible. */
+            while (term_read(term));
 
-        tty_hang(&term->tty);
+            tty_hang(&term->tty);
 
-        /* Don't show cursor after exit */
-        screen_damage_cursor(term_screen(term));
-        term->scr.mode.hide_cursor = true;
+            const char *exit_message = window_cfg(win)->exit_string;
+            if (!exit_message) {
+                if (keep == keep_until_input)
+                    exit_message = "\r\n\033[?25l\033[0;31;6;1mApplication has terminated.\nPress any key to exit.\033[m";
+                else
+                    exit_message =  "\r\n\033[?25l\033[0;31;6;1mApplication has terminated.\033[m";
+            }
+            term_inject_string(term, exit_message);
+        }
         return false;
     } else {
         /* We cannot free window from here, so add a timer callback,
