@@ -3483,10 +3483,7 @@ static inline void apply_matched_uri(struct term *term) {
 #endif
 
 HOT
-bool term_read(struct term *term) {
-    if (tty_refill(&term->tty) < 0 ||
-        !tty_has_data(&term->tty)) return false;
-
+static void do_read(struct term *term) {
     term->requested_resize = false;
     printer_intercept(screen_printer(&term->scr), (const uint8_t **)&term->tty.start, term->tty.end);
 
@@ -3552,8 +3549,23 @@ bool term_read(struct term *term) {
 
 finish:
     screen_drain_scrolled(&term->scr);
+}
 
+HOT
+bool term_read(struct term *term) {
+    if (tty_refill(&term->tty) < 0 ||
+        !tty_has_data(&term->tty)) return false;
+
+    do_read(term);
     return true;
+}
+
+static void term_inject_string(struct term *term, const char *buffer) {
+    const char *end = buffer + strlen(buffer);
+    do {
+        buffer += tty_refill_from(&term->tty, buffer, end);
+        do_read(term);
+    } while (end != buffer);
 }
 
 static inline bool is_osc52_reply(struct term *term) {
