@@ -610,13 +610,18 @@ static void apply_selection_change(struct selection_state *sel, struct screen *s
     damage_changed(sel, prev_heads, prev_size);
 }
 
-static void selection_changed(struct selection_state *sel, struct screen *scr, uint8_t state, bool rectangular) {
+static void selection_changed(struct selection_state *sel, struct screen *scr, uint8_t state, uint32_t modifiers) {
+    bool rectangular = modifiers & mask_mod_1;
     struct instance_config *cfg = window_cfg(sel->win);
     struct line_span pos = absolute_pos(scr, sel->pointer_x, sel->pointer_y);
     assert(pos.line);
 
     if (state == state_sel_pressed) {
-        replace_handle(&sel->start, &pos);
+        /* Keep the first anchor unchanged if shift is held */
+        if ((modifiers & mask_shift) && sel->start.s.line)
+            state = state_sel_progress;
+        else
+            replace_handle(&sel->start, &pos);
 
         struct timespec now;
         clock_gettime(CLOCK_TYPE, &now);
@@ -730,7 +735,7 @@ void selection_select_all(struct selection_state *sel, struct screen *scr) {
 
 void selection_view_scrolled(struct selection_state *sel, struct screen *scr) {
     if (sel->state == state_sel_progress || sel->state == state_sel_pressed)
-        selection_changed(sel, scr, state_sel_progress, sel->rectangular);
+        selection_changed(sel, scr, state_sel_progress, sel->rectangular*mask_mod_1);
 }
 
 static inline void adj_coords(struct window *win, int16_t *x, int16_t *y, bool pixel) {
@@ -1022,7 +1027,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
         sel->pointer_x = ev.x;
         sel->pointer_y = ev.y;
 
-        selection_changed(sel, scr, ev.event + 1, ev.mask & mask_mod_1);
+        selection_changed(sel, scr, ev.event + 1, ev.mask);
         pending_scroll(sel, scr, y, ev.event);
 
         if (ev.event == mouse_event_release) {
