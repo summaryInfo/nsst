@@ -518,9 +518,8 @@ static ssize_t compact_buffer(struct tty *tty) {
 }
 
 ssize_t tty_refill_from(struct tty *tty, const char *str, const char *end) {
-    ssize_t sz = tty->end - tty->start;
-    if (sz && tty->start != tty->fd_buf + MAX_PROTOCOL_LEN)
-        sz = compact_buffer(tty);
+    if (tty->start != tty->fd_buf + MAX_PROTOCOL_LEN)
+        compact_buffer(tty);
 
     ssize_t space = (tty->fd_buf + sizeof tty->fd_buf) - tty->end;
     space = MIN(space, end - str);
@@ -535,7 +534,7 @@ ssize_t tty_refill(struct tty *tty) {
     ssize_t inc = 0, inctotal = 0;
     ssize_t sz = tty->end - tty->start;
 
-    if (sz && tty->start != tty->fd_buf + MAX_PROTOCOL_LEN)
+    if (tty->start != tty->fd_buf + MAX_PROTOCOL_LEN)
         sz = compact_buffer(tty);
 
     ssize_t space = (tty->fd_buf + sizeof tty->fd_buf) - tty->end;
