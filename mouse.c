@@ -55,12 +55,24 @@ static inline struct segments *alloc_head(struct selection_state *sel, struct li
     adjust_buffer((void **)&sel->seg, &sel->seg_caps, sel->seg_size + 2, sizeof *sel->seg);
     struct segments *head = xalloc(sizeof *head + sizeof *head->segs * SEGS_INIT_SIZE);
 
-    line->selection_index = sel->seg_size;
-    sel->seg[sel->seg_size++] = head;
     head->line = line;
     head->size = 0;
     head->caps = SEGS_INIT_SIZE;
     head->new_line_flag = 1;
+
+    size_t index = sel->seg_size++;
+    for (;;) {
+        struct segments *segx = sel->seg[index - 1];
+        if (!segx || segx->line->seq < line->seq) break;
+        sel->seg[index] = segx;
+        struct line *segline = segx->line;
+        assert(segline->selection_index == index - 1);
+        segline->selection_index = index;
+        index--;
+    }
+
+    sel->seg[index] = head;
+    line->selection_index = index;
 
     return head;
 }
@@ -82,7 +94,6 @@ static inline void adjust_head(struct selection_state *sel, struct segments **ph
 #define SNAP_RIGHT INT16_MAX
 
 static void append_segment(struct selection_state *sel, struct line *line, ssize_t x0, ssize_t x1) {
-
     struct segments *head = seg_head(sel, line);
 
     x0 = MIN(line->size, x0);
@@ -90,16 +101,61 @@ static void append_segment(struct selection_state *sel, struct line *line, ssize
 
     if (!head && !(head = alloc_head(sel, line))) return;
 
-    foreach_segment_indexed(seg, last_i, head);
+    struct segment *x0_seg = NULL;
+    ssize_t x0_idx = 0;
+    foreach_segment_indexed(seg, x_i, head) {
+        if (!x0_seg) {
+            /* If we have found x0 inside the segment,
+             * we will extend it if needed */
+            if (x_i + seg->length >= x0) {
+                assert(x_i - seg->offset >= 0);
+                assert(x_i - seg->offset <= x0);
+                if (x_i > x0) {
+                    seg->offset -= (x_i - x0);
+                    seg->length += (x_i - x0);
+                    x_i = x0;
+                }
+                x0_seg = seg;
+                x0_idx = x_i;
+                /* Check if we don't need to update the segment */
+                if (x_i + seg->length >= x1) return;
+            }
+        } else {
+            if (x_i > x1) {
+                assert(x_i - seg->offset < x1);
+                assert(seg == x0_seg + 1);
+                seg->offset = (x_i - x1);
+                x0_seg->length = x1 - x0_idx;
+                /* We have to delete segments [x0_seg + 1, seg) */
+                if (seg > (x0_seg + 1)) {
+                    memmove(x0_seg + 1, seg, ((head->segs + head->size) - seg) * sizeof *seg);
+                    head->size -= seg - (x0_seg + 1);
+                }
+                return;
+            } else if (x_i + seg->length >= x1) {
+                /* Extend the current segment */
+                if (seg->length == SNAP_RIGHT)
+                    x0_seg->length = SNAP_RIGHT;
+                else
+                    x0_seg->length = x_i + seg->length - x0_idx;
+                /* We have to delete segments [x0_seg + 1, seg] */
+                if (seg != head->segs + head->size - 1) {
+                    memmove(x0_seg + 1, seg + 1, (head->segs + head->size - (seg + 1)) * sizeof *seg);
+                    head->size -= seg - (x0_seg + 1) + 1;
+                }
+                return;
+            }
+        }
+    }
 
-    if (last_i >= SNAP_RIGHT) return;
+    if (x0_seg) {
+        x0_seg->length = x1 - x0_idx;
+        return;
+    }
 
-    if (last_i == x0 && head->size) {
-        head->segs[head->size - 1].length += x1 - x0;
-    } else if (last_i <= x0) {
-        adjust_head(sel, &head, 1);
-        head->segs[head->size++] = (struct segment) {x0 - last_i, x1 - x0 };
-    } else assert(0);
+    assert(x_i < x0 || !x_i);
+    adjust_head(sel, &head, 1);
+    head->segs[head->size++] = (struct segment) {x0 - x_i, x1 - x0 };
 }
 
 void selection_concat(struct selection_state *sel, struct line *dst, struct line *src) {
@@ -585,7 +641,21 @@ clear:
     selection_clear(sel);
 }
 
-static void apply_selection_change(struct selection_state *sel, struct screen *scr) {
+static struct segments **clone_segments(struct segments **prev_heads, size_t prev_size) {
+    struct segments **tmp = xalloc(sizeof *prev_heads * prev_size);
+    /* First segment is always NULL */
+    tmp[0] = NULL;
+    for (size_t i = 1; i < prev_size; i++) {
+        struct segments *segs = prev_heads[i];
+        assert(segs);
+        size_t sz = sizeof segs->segs[0] * segs->caps + sizeof *segs;
+        tmp[i] = xalloc(sz);
+        memcpy(tmp[i], segs, sz);
+    }
+    return tmp;
+}
+
+static void apply_selection_change(struct selection_state *sel, struct screen *scr, bool keep_old) {
     struct line_span nstart = sel->start.s;
     struct line_span nend = sel->end.s;
 
@@ -598,10 +668,16 @@ static void apply_selection_change(struct selection_state *sel, struct screen *s
     struct segments **prev_heads = sel->seg;
     size_t prev_size = sel->seg_size;
 
-    for (size_t i = 1; i < prev_size; i++)
-        prev_heads[i]->line->selection_index = 0;
+    if (!keep_old) {
+        for (size_t i = 1; i < prev_size; i++)
+            prev_heads[i]->line->selection_index = 0;
+        init_selection(sel, sel->win, scr);
+    } else {
+        /* If we keep previous selection we have to copy
+         * previous ones for the damage calculation. */
+        prev_heads = clone_segments(prev_heads, prev_size);
+    }
 
-    init_selection(sel, sel->win, scr);
     if (sel->state == state_sel_progress || sel->state == state_sel_released)
         decompose(sel, scr, nstart, nend);
 
@@ -650,7 +726,7 @@ static void selection_changed(struct selection_state *sel, struct screen *scr, u
     sel->rectangular = rectangular;
     replace_handle(&sel->end, &pos);
 
-    apply_selection_change(sel, scr);
+    apply_selection_change(sel, scr, modifiers & mask_control);
 }
 
 struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_span *view) {
@@ -726,7 +802,7 @@ void selection_select_all(struct selection_state *sel, struct screen *scr) {
     sel->snap = snap_all;
     sel->rectangular = false;
     sel->state = state_sel_released;
-    apply_selection_change(sel, scr);
+    apply_selection_change(sel, scr, false);
 
     sel->targ = sel->select_to_clipboard ? clip_clipboard : clip_primary;
     window_set_clip(sel->win, selection_data(sel), sel->targ);
