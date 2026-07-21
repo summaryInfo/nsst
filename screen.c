@@ -1648,7 +1648,7 @@ bool screen_load_config(struct screen *scr, bool reset) {
 
     if (reset) {
         free_selection(&scr->sstate);
-        if (!init_selection(&scr->sstate, screen_window(scr), scr)) return 0;
+        init_selection(&scr->sstate, screen_window(scr), scr);
 
         scr->mode = (struct screen_mode) {
             .disable_altscreen = !cfg->allow_altscreen,

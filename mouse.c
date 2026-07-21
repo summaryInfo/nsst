@@ -538,13 +538,12 @@ static void decompose(struct selection_state *sel, struct screen *scr, struct li
     }
 }
 
-bool init_selection(struct selection_state *sel, struct window *win, struct screen *scr) {
+void init_selection(struct selection_state *sel, struct window *win, struct screen *scr) {
     sel->seg_caps = 4;
     sel->win = win;
     sel->screen = scr;
     sel->seg_size = 1;
     sel->seg = xzalloc(sel->seg_caps * sizeof *sel->seg);
-    return sel->seg;
 }
 
 void free_selection(struct selection_state *sel) {
