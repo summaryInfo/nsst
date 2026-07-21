@@ -80,6 +80,8 @@ Usage: configure [options]
     --disable-boxdrawing    Disable built-in box drawing characters
     --enable-uri            Enable URI handling features [set]
     --disable-uri           Disable URI handling features
+    --enable-png            Enable libpng image loading for icons [set]
+    --disable-png           Disable libpng image loading for icons
     --enable-precompose     Enable unicode combining characters precomposition [set]
     --disable-precompose    Disable unicode combining characters precomposition
     --enable-posix-shm      Enable posix shared memory functions usage
