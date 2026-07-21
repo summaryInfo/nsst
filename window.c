@@ -919,8 +919,7 @@ void handle_keydown(struct window *win, struct xkb_state *state, xkb_keycode_t k
     case shortcut_none:;
     }
 
-    if (UNLIKELY(term_should_exit_on_input(win->term) &&
-                 !(key.mask & (mask_mod_1 | mask_mod_4 | mask_shift | mask_control)))) {
+    if (UNLIKELY(term_should_exit_on_input(win->term) && key.utf32)) {
         free_window(win);
         return;
     }
