@@ -92,6 +92,7 @@ struct global_config {
     bool trace_fonts;
     bool trace_input;
     bool trace_misc;
+    bool trace_poller;
     bool want_luit;
     bool fork;
     bool log_color;

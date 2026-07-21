@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -147,12 +147,12 @@ static struct event *alloc_event(void) {
     struct event *evt =  poller.event_free_list;
     if (!evt) {
         evt = xzalloc(sizeof (struct event));
-        if (gconfig.trace_misc)
+        if (gconfig.trace_poller)
             info("Event[%p] alloc", (void *)evt);
         return evt;
     }
 
-    if (gconfig.trace_misc)
+    if (gconfig.trace_poller)
         info("Event[%p] alloc cached", (void *)evt);
 
     assert(poller.event_free_count);
@@ -164,7 +164,7 @@ static struct event *alloc_event(void) {
 }
 
 static void free_event(struct event *evt) {
-    if (gconfig.trace_misc)
+    if (gconfig.trace_poller)
         info("Event[%p] free", (void *)evt);
     if (evt->pptr)
         *evt->pptr = NULL;
@@ -333,7 +333,7 @@ void poller_remove(struct event *evt) {
     /* If we are currently handling `evt' we must
      * delay freeing it until we return from the callback. */
     if (evt == poller.current_event) {
-        if (gconfig.trace_misc)
+        if (gconfig.trace_poller)
             info("Removing event[%p] from its callback", (void *)evt);
         if (evt->pptr) {
             *evt->pptr = NULL;
@@ -432,7 +432,7 @@ void poller_run(void) {
         for (ssize_t i = 0; i < poller.pollfd_array_caps; i++) {
             if (poller.pollfd_array[i].fd >= 0 && poller.pollfd_array[i].revents) {
                 struct event *evt = poller.pollfd_array_events[i];
-                if (gconfig.trace_misc || evt->state != evt_state_fd) {
+                if (gconfig.trace_poller || evt->state != evt_state_fd) {
                     info("File[%p, %d, %d] %p(%p, %x)", (void *)evt, evt->state, poller.pollfd_array[evt->fd.index].fd,
                          (void *)(uintptr_t)evt->fd.cb, evt->fd.arg, poller.pollfd_array[i].revents);
                 }
@@ -455,7 +455,7 @@ void poller_run(void) {
             struct event *evt = poller.timer_heap[0];
             if (ts_leq(&now2, &evt->timer.current)) break;
 
-            if (gconfig.trace_misc || evt->state != evt_state_timer) {
+            if (gconfig.trace_poller || evt->state != evt_state_timer) {
                 info("Timer[%p, %d, %f] %p(%p)", (void *)evt, evt->state, poller.now.tv_sec + poller.now.tv_nsec*1e-9,
                      (void *)(uintptr_t)evt->timer.cb, evt->timer.arg);
             }
@@ -480,7 +480,7 @@ void poller_run(void) {
         }
 
         poller.tick_cb(poller.tick_arg);
-        if (gconfig.trace_misc)
+        if (gconfig.trace_poller)
             info("Tick");
     }
 }

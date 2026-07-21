@@ -396,6 +396,7 @@ static struct option options[] = {
     G(boolean, trace_fonts, "trace-fonts", "Log font related information", false),
     G(boolean, trace_input, "trace-input", "Trace user input", false),
     G(boolean, trace_misc, "trace-misc", "Trace miscellaneous information", false),
+    G(boolean, trace_poller, "trace-poller", "Trace poller events", false),
     X(time, triple_click_time, "triple-click-time", "Maximum time between second and third button presses of the triple click", 600000000, 0, 10*SEC),
     X(color, palette[SPECIAL_UNDERLINE], "underlined-color", "Special color of underlined text", COLOR_SPECIAL_UNDERLINE),
     X(dim, underline_width, "underline-width", "Text underline width", 1, 0, 16),
