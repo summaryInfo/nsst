@@ -143,14 +143,16 @@ For `key-jump-next-cmd`/`key-jump-prev-cmd` see shell integration section.
 ## Mouse support
 
 If you are not using an application that enables mouse reporting, you can use built-in mouse interactions.
-If application enables mouse reporting, built-in interactions can be forces with mouse pressing Ctrl+Shift (Can be configured with `force-mouse-mod` option).
-Built-in mouse interactions:
+If application enables mouse reporting, built-in interactions can be forced with `key-force-mouse` (Ctrl-Shift-S),
+which toggles the override. Built-in mouse interactions:
 
 * Scroll with mouse wheel.
 * Jump between commands with Alt+mouse wheel (if your shell supports it more on shell integration below).
 * Select with left click, select snapping on words on double left click, select snapping on lines on triple left click.
 * Select rectangular area with Alt+left click (double click will snap to words).
 * Select whole command output with Alt+triple click (requires shell integration).
+* Shift+click changes last selection end.
+* Ctrl+click adds to the current selection.
 
 ### Wayland CSD
 
