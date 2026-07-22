@@ -632,7 +632,7 @@ void x11_update_window_props(struct window *win) {
     }
 
     if (win->cfg.icon_path) {
-        uint32_t *prop = load_png_card(win->cfg.icon_path);
+        uint32_t *prop = load_image_card(win->cfg.icon_path);
         if (prop) {
             xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, ctx.atom._NET_WM_ICON, XCB_ATOM_CARDINAL, 32, prop[0]*prop[1] + 2, prop);
             free(prop);

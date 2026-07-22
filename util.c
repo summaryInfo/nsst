@@ -394,7 +394,7 @@ uint8_t *base64_encode(uint8_t *dst, const uint8_t *buf, const uint8_t *end) {
     return dst;
 }
 
-uint32_t *load_png_card(const char *path) {
+uint32_t *load_image_card(const char *path) {
 #if USE_PNG
     FILE *fp = fopen(path, "rb");
     if (!fp)
