@@ -447,7 +447,7 @@ uint32_t *load_png_card(const char *path) {
     if (!prop)
         goto error_read;
 
-    png_bytep *rows = calloc(sizeof(png_bytep), h);
+    png_bytep *rows = calloc(h, sizeof(png_bytep));
     for (int y = 0; y < h; y++) {
         rows[y] = malloc(png_get_rowbytes(png, info));
         if (!rows[y]) {
