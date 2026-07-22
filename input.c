@@ -749,8 +749,7 @@ enum shortcut_action keyboard_find_shortcut(struct instance_config *cfg, struct 
     enum shortcut_action action = shortcut_none + 1;
     for (; action < shortcut_MAX; action++)
         if ((cfg->cshorts[action].ksym == k.sym || cfg->cshorts[action].ksym == k.ascii) &&
-                ((k.mask & mask_mod_mask) == cfg->cshorts[action].mask ||
-                (k.mask & mask_mod_mask) == cfg->cshorts[action].mask))
+                (k.mask & mask_mod_mask) == (cfg->cshorts[action].mask & mask_mod_mask))
             return action;
     return shortcut_none;
 }
