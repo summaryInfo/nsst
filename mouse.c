@@ -965,7 +965,7 @@ static void update_active_uri(struct screen *scr, struct window *win, struct mou
     window_set_active_uri(win, uri, is_button1_down(ev, uri_mask));
 
     if (uri && ev->event == mouse_event_release && ev->button == 0 &&
-            (ev->mask & mask_mod_mask) == uri_mask)
+            (ev->mask & mask_mod_mask) == (uri_mask & mask_mod_mask))
         uri_open(window_cfg(win)->open_command, uri);
 }
 #endif
