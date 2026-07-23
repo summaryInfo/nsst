@@ -1123,8 +1123,10 @@ static bool do_parse_include(const char *str, void *dst, union opt_limits *limit
     (void)limits;
     struct instance_config *cfg = dst;
     int fd = open(str, O_RDONLY);
-    if (fd < 0)
-        return false;
+    if (fd < 0) {
+        warn("Include file '%s' is absent", str);
+        return true;
+    }
     return do_parse_config(cfg, fd, 0) >= 0;
 }
 
