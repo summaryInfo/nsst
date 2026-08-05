@@ -617,14 +617,21 @@ struct wm_hints {
     uint32_t icon_mask;
 };
 
+static void set_class(struct window *win) {
+    size_t class_len = sizeof(NSST_CLASS);
+    size_t instance_len = strlen(win->cfg.window_class) + 1;
+    char *wmclass = xalloc(instance_len + class_len);
+    memcpy(wmclass, NSST_CLASS, class_len);
+    memcpy(wmclass + class_len, win->cfg.window_class, instance_len);
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, instance_len + class_len, wmclass);
+    free(wmclass);
+}
+
 void x11_update_window_props(struct window *win) {
     uint32_t pid = getpid();
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, ctx.atom._NET_WM_PID, XCB_ATOM_CARDINAL, 32, 1, &pid);
     xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, ctx.atom.WM_PROTOCOLS, XCB_ATOM_ATOM, 32, 1, &ctx.atom.WM_DELETE_WINDOW);
-    const char *extra;
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(NSST_CLASS), NSST_CLASS);
-    if ((extra = win->cfg.window_class))
-        xcb_change_property(con, XCB_PROP_MODE_APPEND, get_plat(win)->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, strlen(extra), extra);
+    set_class(win);
 
     if (win->cfg.workspace >= 0) {
         uint32_t desktop = win->cfg.workspace;
