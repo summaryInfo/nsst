@@ -15,8 +15,6 @@
 #include <stdbool.h>
 #include <xkbcommon/xkbcommon.h>
 
-#define NSST_CLASS "nsst"
-
 struct cellspec {
     color_t fg;
     color_t bg;

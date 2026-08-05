@@ -618,12 +618,12 @@ struct wm_hints {
 };
 
 static void set_class(struct window *win) {
-    size_t class_len = sizeof(NSST_CLASS);
-    size_t instance_len = strlen(win->cfg.window_class) + 1;
-    char *wmclass = xalloc(instance_len + class_len);
-    memcpy(wmclass, NSST_CLASS, class_len);
-    memcpy(wmclass + class_len, win->cfg.window_class, instance_len);
-    xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, instance_len + class_len, wmclass);
+    size_t instance_len = strlen(win->cfg.window_name) + 1;
+    size_t class_len = strlen(win->cfg.window_class) + 1;
+    char *wmclass = xalloc(class_len + instance_len);
+    memcpy(wmclass, win->cfg.window_name, instance_len);
+    memcpy(wmclass + instance_len, win->cfg.window_class, class_len);
+    xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, class_len + instance_len, wmclass);
     free(wmclass);
 }
 

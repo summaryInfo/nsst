@@ -151,6 +151,7 @@ struct instance_config {
     char *answerback_string;
     char *title;
     char *window_class;
+    char *window_name;
     char *font_name;
     char *config_path;
     char *term_mod;

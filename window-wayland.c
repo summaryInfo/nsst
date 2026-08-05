@@ -1,4 +1,4 @@
-/* Copyright (c) 2024-2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2024-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -438,9 +438,8 @@ static void wayland_get_title(struct window *win, enum title_target which, char 
 }
 
 void wayland_update_window_props(struct window *win) {
-    // NOTE: Wayland does not support multiple window classes
-    xdg_toplevel_set_app_id(get_plat(win)->xdg_toplevel,
-                            win->cfg.window_class ? win->cfg.window_class : NSST_CLASS);
+    // NOTE: Wayland does not support instance names
+    xdg_toplevel_set_app_id(get_plat(win)->xdg_toplevel, win->cfg.window_class);
     xdg_toplevel_set_min_size(get_plat(win)->xdg_toplevel,
                               win->cfg.border.left + win->cfg.border.right + 2*win->char_width,
                               win->cfg.border.top + win->cfg.border.bottom + win->char_depth + win->char_height);

@@ -415,6 +415,7 @@ static struct option options[] = {
     X1(int16, vt_version, 'V', "vt-version", "Emulated VT version", 420, 0, 999),
     X(time, wait_for_configure_delay, "wait-for-configure-delay", "Duration terminal waits for application output before redraw after window resize", 2000000, 0, 10*SEC),
     X1(string, window_class, 'c', "window-class", "X11 Window class", "Nsst"),
+    X1(string, window_name, 'N', "window-name", "X11 Window instance", "nsst"),
     X(boolean, allow_window_ops, "window-ops", "Allow window manipulation with escape sequences", true),
     X(string, word_separators, "word-break", "Symbols treated as word separators when snapping mouse selection", " \t!$^*()+={}[]\\\"'|,;<>~`"),
     X(int16, workspace, "workspace", "Workspace to spawn window on (X11-only)", -1, 0, 1000),
