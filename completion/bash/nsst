@@ -142,7 +142,7 @@ _nsst() {
 		"--trace-poller" "--triple-click-time" "--underlined-color" "--underline-width" "--unique-uris" "--urgent-on-bell"
 		"--uri-click-mod" "--uri-color" "--uri-mode" "--uri-underline-color" "--use-utf8"
 		"--version" "--vertical-border" "--visual-bell" "--visual-bell-time" "--vt-version"
-		"--wait-for-configure-delay" "--window-class" "--window-ops" "--word-break" "--workspace"
+		"--wait-for-configure-delay" "--window-class" "--window-name" "--window-ops" "--word-break" "--workspace"
 		"--pointer-hide-on-input" "--pointer-hide-time" "--icon-path" "--keep-on-exit" "--on-exit-message" "--key-jump-top"
 		"--key-jump-bottom" "--key-select-all" "--key-page-up" "--key-page-down" "--page-amount"
 		"--save-geometry-path" "--include"

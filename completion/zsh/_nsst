@@ -71,7 +71,6 @@ _arguments \
 	"--italic-color=[Special color of italic text]:color:()" \
 	"--keep-clipboard=[Reuse copied clipboard content instead of current selection data]:bool:(true false default)" \
 	"--keep-on-exit=[Don't close the window when application terminates]:mode:(never key always default)" \
-	"--on-exit-message=[Message to be printed when application has terminated]:string:()" \
 	"--keep-selection=[Don't clear X11 selection when not highlighted]:bool:(true false default)" \
 	"--keyboard-dialect=[National replacement character set to be used in non-UTF-8 mode]:dialect:()" \
 	"--keyboard-mapping=[Initial keyboard mapping]:mapping:(legacy vt220 hp sun sco default)" \
@@ -116,6 +115,8 @@ _arguments \
 	"--modify-other-fmt=[Format of encoding modifiers]:fmt:(xterm csi-u default)" \
 	"--nrcs=[Enable NRCSs support]:bool:(true false default)" \
 	"--numlock=[Initial numlock state]:bool:(true false default)" \
+	"(-N --window-name=)"{-N,--window-name=}"[X11 Window instance]:text:()" \
+	"--on-exit-message=[Message to be printed when application has terminated]:string:()" \
 	"--open-cmd=[A command used to open URIs when clicked]:executable:_files" \
 	"(-o --printer-file=)"{-o,--printer-file=}"[File where CSI MC output to]:file:_files" \
 	"--override-boxdrawing=[Use built-in box drawing characters]:bool:(true false default)" \
