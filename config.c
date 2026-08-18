@@ -110,8 +110,9 @@ char *default_config_path;
     T(int16,             "int",            int16_t,         int64_t dflt; int64_t min; int64_t max;  ) \
     T(dim,               "dim",            int16_t,         int64_t dflt; int64_t min; int64_t max;  ) \
     T(int64,             "int",            int64_t,         int64_t dflt; int64_t min; int64_t max;  ) \
-    T(nrcs,              "charset string", enum charset,    enum charset dflt;                       ) \
+    T(nrcs,              "charset-string", enum charset,    enum charset dflt;                       ) \
     T(string,            "str",            char *,          const char *dflt;                        ) \
+    T(escstring,         "escaped-string", char *,          const char *dflt;                        ) \
     T(include,           "path",           struct instance_config, int dummy;                        ) \
     T(uint8,             "int",            uint8_t,         int64_t dflt; int64_t min; int64_t max;  ) \
     T(border,            "dim",            struct border,   int64_t dflt; int64_t min; int64_t max;  ) \
@@ -808,10 +809,28 @@ static bool do_parse_enum(const char *str, void *dst, union opt_limits *limits) 
 
 static bool do_parse_string(const char *str, void *dst, union opt_limits *limits) {
     char *result = NULL, **pdst = dst;
-    if (!strcasecmp(str, "default")) {
-        const char *r = limits->arg_string.dflt;
-        if (r) result = strdup(r);
-    } else result = strdup(str);
+    if (!strcasecmp(str, "default"))
+        str = limits->arg_string.dflt;
+    if (str)
+        result = strdup(str);
+
+    if (*pdst) free(*pdst);
+    *pdst = result;
+    return true;
+}
+
+static bool do_parse_escstring(const char *str, void *dst, union opt_limits *limits) {
+    char *result = NULL, **pdst = dst;
+    if (!strcasecmp(str, "default"))
+        str = limits->arg_escstring.dflt;
+
+    if (str) {
+        ssize_t len = unescape_check(str);
+        if (len < 0)
+            return false;
+        result = xalloc(len + 1);
+        unescape(result, str);
+    }
 
     if (*pdst) free(*pdst);
     *pdst = result;
@@ -947,6 +966,12 @@ static int do_print_default_nrcs(char *buf, int sz, union opt_limits *limits) {
 }
 
 static int do_print_default_string(char *buf, int sz, union opt_limits *limits) {
+    if (limits->arg_string.dflt)
+        return snprintf(buf, sz, "; '%s'", limits->arg_string.dflt);
+    return 0;
+}
+
+static int do_print_default_escstring(char *buf, int sz, union opt_limits *limits) {
     if (limits->arg_string.dflt)
         return snprintf(buf, sz, "; '%s'", limits->arg_string.dflt);
     return 0;
