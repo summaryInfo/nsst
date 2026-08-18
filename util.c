@@ -238,7 +238,7 @@ static inline uint8_t tohexdigit(uint8_t c) {
 static inline uint8_t fromhexdigit(uint8_t c) {
     if (c - (unsigned)'0' < 10U)
         return c - '0';
-    else if ((c | 0x20) - (unsigned)'a' < 6U)
+    else if ((c |= 0x20) - (unsigned)'a' < 6U)
         return  10 + c - 'a';
     return -1;
 }
