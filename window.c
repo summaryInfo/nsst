@@ -642,8 +642,12 @@ static void dump_window_geometry(struct window *win) {
     struct extent pos = window_get_position(win);
     struct extent size = window_get_size(win);
     int32_t workspace = -1;
-    if (pvtbl->get_workspace)
+    if (pvtbl->get_workspace) {
         workspace = pvtbl->get_workspace(win);
+        win->geometry_changed |= workspace != win->cfg.workspace && win->cfg.workspace != -1;
+    }
+
+    if (win->cfg.save_geometry_if_changed && !win->geometry_changed) return;
 
     char path[PATH_MAX];
     snprintf(path, sizeof path, "%s.%d", win->cfg.save_geometry_path, getpid());

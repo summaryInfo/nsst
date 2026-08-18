@@ -528,8 +528,12 @@ void handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, u
 
     xdg_surface_ack_configure(xdg_surface, serial);
 
-    uint32_t width = get_plat(win)->pending_configure.width ? get_plat(win)->pending_configure.width : win->w.width;
-    uint32_t height = get_plat(win)->pending_configure.height ? get_plat(win)->pending_configure.height : win->w.height;
+    bool width_changed = get_plat(win)->pending_configure.width;
+    bool height_changed = get_plat(win)->pending_configure.height;
+    win->geometry_changed |= width_changed | height_changed;
+
+    uint32_t width = width_changed ? get_plat(win)->pending_configure.width : win->w.width;
+    uint32_t height = height_changed ? get_plat(win)->pending_configure.height : win->w.height;
     bool exact = get_plat(win)->is_maximized || get_plat(win)->is_fullscreen || get_plat(win)->is_tiled || win->cfg.smooth_resize;
 
     handle_resize(win, width, height, exact);
@@ -729,6 +733,7 @@ static bool wayland_init_window(struct window *win) {
     }
 
     wayland_reload_cursors(win);
+    win->has_been_mapped = true;
 
     return true;
 }

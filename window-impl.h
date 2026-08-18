@@ -68,6 +68,8 @@ struct window {
     bool mapped : 1;
     bool pointer_is_hidden : 1;
     bool pointer_inhibit : 1;
+    bool has_been_mapped : 1;
+    bool geometry_changed : 1;
 
     int16_t damaged_y0;
     int16_t damaged_y1;

@@ -248,6 +248,7 @@ struct instance_config {
     bool print_attr;
     bool raise_on_bell;
     bool reverse_video;
+    bool save_geometry_if_changed;
     bool scroll_on_input;
     bool scroll_on_output;
     bool select_to_clipboard;

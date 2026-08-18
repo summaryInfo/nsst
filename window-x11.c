@@ -940,6 +940,9 @@ static bool do_handle_events(bool can_read) {
                         ev->window, ev->x, ev->y, ev->width, ev->height, ev->border_width,
                         ev->override_redirect, ev->above_sibling, ev->event);
             }
+
+            win->geometry_changed |= win->has_been_mapped;
+
             if (ev->width != win->w.width || ev->height != win->w.height)
                 handle_resize(win, ev->width, ev->height, false);
             break;
@@ -1084,6 +1087,11 @@ static bool do_handle_events(bool can_read) {
                 info("Event: event=MapNotify window=0x%x", ev->window);
             }
             win->mapped = true;
+            if (!win->has_been_mapped) {
+                win->has_been_mapped = true;
+                if (win->cfg.workspace == -1)
+                    win->cfg.workspace = x11_get_workspace(win);
+            }
             break;
         }
         case XCB_VISIBILITY_NOTIFY: {
