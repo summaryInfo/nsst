@@ -187,6 +187,9 @@ static inline int uwidth(uint32_t x) {
 size_t utf8_encode(uint32_t u, uint8_t *buf, uint8_t *end);
 bool utf8_decode(uint32_t *res, const uint8_t **buf, const uint8_t *end);
 
+ssize_t unescape_check(const char *src);
+void unescape(char *dst, const char *src);
+
 /* *_decode returns source buffer end */
 /* *_encode returns destination buffer end */
 uint8_t *hex_encode(uint8_t *dst, const uint8_t *str, const uint8_t *end);

@@ -237,13 +237,18 @@ static inline uint8_t tohexdigit(uint8_t c) {
 
 static inline uint8_t fromhexdigit(uint8_t c) {
     if (c - (unsigned)'0' < 10U)
-        return  c - '0';
-    else if (c - (unsigned)'A' < 6U)
-        return  10 + c - 'A';
-    else if (c - (unsigned)'a' < 6U)
+        return c - '0';
+    else if ((c | 0x20) - (unsigned)'a' < 6U)
         return  10 + c - 'a';
-    else
-        return 0;
+    return -1;
+}
+
+static inline uint8_t isoctdigit(uint8_t c) {
+    return c - (unsigned)'0' < 8U;
+}
+
+static inline uint8_t fromoctdigit(uint8_t c) {
+    return c - '0';
 }
 
 static inline int32_t frombase64digit(uint8_t b) {
@@ -254,8 +259,6 @@ static inline int32_t frombase64digit(uint8_t b) {
     if (b == '/') return 63;
     return -1;
 }
-
-
 
 color_t parse_color(const uint8_t *str, const uint8_t *end) {
     if (*str == '#') {
@@ -392,6 +395,110 @@ uint8_t *base64_encode(uint8_t *dst, const uint8_t *buf, const uint8_t *end) {
     while (pad--)  *dst++ = '=';
 
     return dst;
+}
+
+static const char *is_escaped(const char **dst) {
+    char ch = **dst;
+    switch(ch) {
+    case '\0':
+        return "Unexpected end of file";
+    case '0': case '1': case '2': case '3':
+    case '4': case '5': case '6': case '7':;
+        uint32_t acc = 0;
+        do acc = (acc << 3) | fromoctdigit(**dst);
+        while ((unsigned)*++(*dst) - '0' < 8);
+        if (acc > 255)
+            return "Constant is too large";
+        return NULL;
+    case 'x':
+        for (ssize_t i = 0; i < 2; i++)
+            if (!isxdigit((unsigned)*++*dst))
+                return "Expected hex digit";
+        break;
+    case 'u':
+    case 'U':
+        for (ssize_t i = 0; i < 4*(1 + (ch == 'U')); i++)
+            if (!isxdigit((unsigned)*++*dst))
+                return "Expected hex digit";
+        break;
+    case 'a': case 'b': case 'e':
+    case 'f': case 'n': case 'r':
+    case 't': case 'v': case '\\':
+    case 's':
+        break;
+    default:
+        return "Invalid escape code";
+    }
+    ++*dst;
+    return NULL;
+}
+
+ssize_t unescape_check(const char *src) {
+    ssize_t dstlen = 0;
+    const char *src0 = src;
+    for (char ch; (ch = *src++); dstlen++) {
+        if (ch != '\\') continue;
+        const char *error = is_escaped(&src);
+        if (error) {
+            warn("%s:", error);
+            warn("\t%s", src0);
+            warn("\t%*c", (int)(src - src0 + 1), '^');
+            return -1;
+        }
+    }
+    return dstlen;
+}
+
+static void unescape_one(char **dst, const char **src) {
+    char ch = **src;
+    uint32_t acc = 0;
+    switch(ch) {
+    case '0': case '1': case '2': case '3':
+    case '4': case '5': case '6': case '7':;
+        do acc = (acc << 3) | fromoctdigit(**src);
+        while (isoctdigit(*++*src));
+        goto out;
+    case 'x':
+        for (ssize_t i = 0; i < 2; i++)
+            acc = fromhexdigit((unsigned)*++*src) | (acc << 4);
+        ++*src;
+        break;
+    case 'u':
+    case 'U':;
+        for (ssize_t i = 0; i < 4*(1 + (ch == 'U')); i++)
+            acc = fromhexdigit((unsigned)*++*src) | (acc << 4);
+        dst += utf8_encode(acc, (uint8_t *)dst, (uint8_t *)dst + UTF8_MAX_LEN);
+        ++*src;
+        return;
+        break;
+    case 'a': acc = '\a'; break;
+    case 'b': acc = '\b'; break;
+    case 'f': acc = '\f'; break;
+    case 'n': acc = '\n'; break;
+    case 'r': acc = '\r'; break;
+    case 't': acc = '\t'; break;
+    case 'v': acc = '\v'; break;
+    case '\\': acc = '\\'; break;
+    /* These two are not in C */
+    case 'e': acc = '\033'; break;
+    case 's': acc = ' '; break;
+    default:
+        assert(false);
+    }
+
+    ++*src;
+out:
+    *(*dst)++ = acc;
+}
+
+void unescape(char *dst, const char *src) {
+    for (char ch; (ch = *src++); ) {
+        if (ch == '\\')
+            unescape_one(&dst, &src);
+        else
+            *dst++ = ch;
+    }
+    *dst = '\0';
 }
 
 uint32_t *load_image_card(const char *path) {
