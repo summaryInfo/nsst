@@ -923,7 +923,7 @@ static bool do_handle_events(bool can_read) {
             xcb_expose_event_t *ev = (xcb_expose_event_t *)event;
             if (!(win = window_for_xid(ev->window))) break;
             if (gconfig.trace_events) {
-                info("Event: event=Expose win=0x%x x=%x y=%d width=%d height=%d",
+                info("Event: event=Expose win=0x%x x=%d y=%d width=%d height=%d",
                         ev->window, ev->x, ev->y, ev->width, ev->height);
             }
             struct rect damage = {ev->x, ev->y, ev->width, ev->height}, win_rect = window_rect(win);
@@ -935,7 +935,7 @@ static bool do_handle_events(bool can_read) {
             xcb_configure_notify_event_t *ev = (xcb_configure_notify_event_t *)event;
             if (!(win = window_for_xid(ev->window))) break;
             if (gconfig.trace_events) {
-                info("Event: event=ConfigureWindow win=0x%x x=%x y=%d width=%d"
+                info("Event: event=ConfigureWindow win=0x%x x=%d y=%d width=%d"
                         " height=%d border=%d redir=%d above_win=0x%x event_win=0x%x",
                         ev->window, ev->x, ev->y, ev->width, ev->height, ev->border_width,
                         ev->override_redirect, ev->above_sibling, ev->event);
