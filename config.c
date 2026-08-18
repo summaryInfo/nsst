@@ -1228,7 +1228,11 @@ const char *usage_string(char buffer[static MAX_OPTION_DESC + 1], ssize_t idx) {
                 "\t--no-<X>, --<X>=no, --<X>=n, --<X>=false\n"
             "are equivalent to --<X>=0,\n"
             "where 'yes', 'y', 'true', 'no', 'n' and 'false' are case independent.\n"
-            "Time options accept units 's', 'ms', 'us' and 'ns'. If unit is not specified 'us' is implied\n"
+            "--word-break and --on-exit-message values can be quoted, in which case it supports\n"
+            "\\t, \\v, \\n, \\e, \\f, \\a, \\b, \\r, \\s, \\\\ and \\o, \\oo, \\ooo, \\XX, \\uXXXX, \\UXXXXXXXX\n"
+            "with any octal digits 'o' and hex digits 'X'. Octal constants must fit into one byte.\n"
+            "\\e is an escape character and \\s is a space.\n"
+            "Time options accept units 's', 'ms', 'us' and 'ns'. If unit is not specified 'us' is implied.\n"
             "All options also accept special value 'default' to reset to built-in default.\n";
     } else return NULL;
 #undef APPEND

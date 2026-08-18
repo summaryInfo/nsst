@@ -43,6 +43,13 @@ is equivalent to
 .Ar \&No , Ar n , Ar false
 (case independent) can be used to disable it.
 .Pp
+.Fl \-word-break
+and
+.Fl \-on-exit-message
+values can be quoted, in which case it supports \\t, \\v, \\n, \\e, \\f, \\a, \\b, \\r, \\s, \\\\ and \\o, \\oo, \\ooo, \\XX, \\uXXXX, \\UXXXXXXXX
+with any octal digits 'o' and hex digits 'X', octal constants must fit into one byte.
+\\e is an escape character and \\s is a space.
+.Pp
 All options with type
 .Ar time
 support 's', 'ms', 'us' and 'ns' units and decimal point for values.
@@ -441,7 +448,8 @@ X11 Window instance name, ignored on Wayland
 .It Fl \-window-ops Ns = Ns Ar bool
 Allow window manipulation with escape sequences
 .It Fl \-word-break Ns = Ns Ar separators
-Symbols treated as word separators when snapping mouse selection
+Symbols treated as word separators when snapping mouse selection.
+This is an escaped strings.
 .El
 .Pp
 The following are advanced options that are used to alter terminal emulation behaviour.
