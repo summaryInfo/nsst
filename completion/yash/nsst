@@ -136,6 +136,7 @@ function completion/nsst {
 		"--reversed-color:;Special color of reversed text"
 		"--reverse-video::;Initial reverse video setting"
 		"--right-border:;Right border size"
+		"--save-geometry-if-changed::;Only save geometry if it has been changed from the initial"
 		"--save-geometry-path:;A file to write current window geometry on exit"
 		"--scroll-amount:;Number of lines scrolled in a time"
 		"--scroll-on-input::;Scroll view to bottom on key press"
@@ -253,7 +254,7 @@ function completion/nsst {
 	 --special-bold|--special-italic|--special-reverse|--special-underlined|--substitute-fonts|\
 	 --trace-characters|--trace-controls|--trace-events|--trace-fonts|--trace-input|\
 	 --trace-misc|--trace-poller|--urgent-on-bell|--use-utf8|--visual-bell|--window-ops|--smooth-resize|--clone-config|\
-	 --pointer-hide-on-input|--cursor-hide-on-input)
+	 --pointer-hide-on-input|--cursor-hide-on-input|--save-geometry-if-changed)
 		complete -P "$PREFIX" -- true false default
 		;;
 	(''|e)

@@ -140,7 +140,7 @@ _nsst() {
 		"--tab-width" "--term-mod" "--term-name" "--title" "--top-border" "--trace-characters"
 		"--trace-controls" "--trace-events" "--trace-fonts" "--trace-input" "--trace-misc"
 		"--trace-poller" "--triple-click-time" "--underlined-color" "--underline-width" "--unique-uris" "--urgent-on-bell"
-		"--uri-click-mod" "--uri-color" "--uri-mode" "--uri-underline-color" "--use-utf8"
+		"--uri-click-mod" "--uri-color" "--uri-mode" "--uri-underline-color" "--use-utf8" "--save-geometry-if-changed"
 		"--version" "--vertical-border" "--visual-bell" "--visual-bell-time" "--vt-version"
 		"--wait-for-configure-delay" "--window-class" "--window-name" "--window-ops" "--word-break" "--workspace"
 		"--pointer-hide-on-input" "--pointer-hide-time" "--icon-path" "--keep-on-exit" "--on-exit-message" "--key-jump-top"
@@ -210,7 +210,8 @@ _nsst() {
 	 --special-bold=|--special-italic=|--special-reverse=|--special-underlined=|--substitute-fonts=|\
 	 --trace-characters=|--trace-controls=|--trace-events=|--trace-fonts=|--trace-input=|\
 	 --trace-misc=|--trace-poller=|--urgent-on-bell=|--use-utf8=|--visual-bell=|--window-ops=|--smooth-resize=|\
-	 --clone-config=|--pointer-hide-on-input=|--cursor-hide-on-input=|--pointer-hide-time=)
+	 --clone-config=|--pointer-hide-on-input=|--cursor-hide-on-input=|--pointer-hide-time=|\
+	 --save-geometry-if-changed=)
 		COMPREPLY=( $(compgen -P "${prefix}" -W "true false default" -- "${optvalue}") )
 		;;
 	(--*)
