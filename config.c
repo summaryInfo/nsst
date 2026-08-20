@@ -291,6 +291,7 @@ static struct option options[] = {
     G(int64, font_cache_size, "font-cache-size", "Number of cached glyphs", 5000, 200, 10000000),
     X1(string, font_name, 'f', "font", "Comma-separated list of fontconfig font patterns", "mono"),
     X(boolean, force_utf8_nrcs, "force-nrcs", "Enable NRCS translation when UTF-8 mode is enabled", false),
+    X(string, force_mouse_mod, "force-mouse-mod", "Modifier to force mouse action", NULL),
     X(boolean, force_scalable, "force-scalable", "Do not search for pixmap fonts", false),
     X(boolean, force_wayland_csd, "force-wayland-csd", "Don't request SSD", false),
     X(color, palette[SPECIAL_FG], "foreground", "Default foreground color", COLOR_SPECIAL_FG),

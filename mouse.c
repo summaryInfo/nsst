@@ -976,11 +976,17 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
     struct screen *scr = term_screen(term);
     sel->pending_scroll = 0;
 
+    uint32_t force_mouse_mask = window_cfg(term_window(term))->force_mouse_mask;
+
     // TODO Cleanup
 
+    bool force_mouse_by_mod = force_mouse_mask != UINT32_MAX && (ev.mask & force_mouse_mask) == force_mouse_mask;
+    bool force_mouse = force_mouse_by_mod || loc->force_mouse || term_get_kstate(term)->keyboard_vt52;
+    bool override_active = force_mouse_by_mod && ((loc->locator_enabled | loc->locator_filter) || loc->mouse_mode != mouse_mode_none) &&
+            !term_get_kstate(term)->keyboard_vt52;
+
     /* Report mouse */
-    if ((loc->locator_enabled | loc->locator_filter) && !loc->force_mouse &&
-            !term_get_kstate(term)->keyboard_vt52) {
+    if ((loc->locator_enabled | loc->locator_filter) && !force_mouse) {
         if (loc->locator_filter) {
             if (ev.x < loc->filter.x || ev.x >= loc->filter.x + loc->filter.width ||
                     ev.y < loc->filter.y || ev.y >= loc->filter.y + loc->filter.height) {
@@ -1004,8 +1010,7 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
                 mouse_report_locator(term, 2 + ev.button * 2 + (ev.event == mouse_event_release), ev.x, ev.y, ev.mask);
             }
         }
-    } else if (loc->mouse_mode != mouse_mode_none &&
-               !loc->force_mouse && !term_get_kstate(term)->keyboard_vt52) {
+    } else if (loc->mouse_mode != mouse_mode_none && !force_mouse) {
         enum mouse_mode md = loc->mouse_mode;
 
         adj_coords(term_window(term), &ev.x, &ev.y, loc->mouse_format == mouse_format_pixel);
@@ -1106,6 +1111,9 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
         adj_coords(sel->win, &ev.x, &ev.y, 0);
         sel->pointer_x = ev.x;
         sel->pointer_y = ev.y;
+
+        if (override_active && force_mouse_mask != UINT32_MAX)
+            ev.mask &= ~force_mouse_mask;
 
         selection_changed(sel, scr, ev.event + 1, ev.mask);
         pending_scroll(sel, scr, y, ev.event);

@@ -741,6 +741,8 @@ void keyboard_parse_config(struct instance_config *cfg) {
         }
     }
 
+    cfg->force_mouse_mask = cfg->force_mouse_mod ? decode_mask(cfg->force_mouse_mod,
+            cfg->force_mouse_mod + strlen(cfg->force_mouse_mod), cfg->term_mod) : UINT32_MAX;
     cfg->uri_click_mask = decode_mask(cfg->uri_click_mod,
             cfg->uri_click_mod + strlen(cfg->uri_click_mod), cfg->term_mod);
 }
