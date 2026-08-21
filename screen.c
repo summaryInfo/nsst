@@ -292,7 +292,7 @@ void screen_free_scrollback(struct screen *scr, ssize_t max_size) {
     if (screen_top) {
 
         if (screen_top->line->prev)
-            screen_reset_view(scr, false);
+            screen_reset_view(scr, true);
 
         free_line_list_until(scr, &scr->main_screen, scr->top_line.s.line, screen_top->line);
 
