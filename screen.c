@@ -255,7 +255,7 @@ static inline void screen_wrap(struct screen *scr, bool hard) {
 
     /* If this and the next line are already the same,
      * avoid reallocation and do nothing. */
-    // FIXME: Check if this can actually happend right now and make it possible if not.
+    // FIXME: Check if this can actually happened right now and make it possible if not.
 
     if (scr->screen[scr->c.y].offset) return;
 
@@ -1970,7 +1970,7 @@ static inline void print_buffer(struct screen *scr, const uint32_t *bstart, cons
 
     /* NOTE: screen_adjust_line_ex() does not fill line with correct values after resizing
      * here. So we should not try dereferencing attributes of undefined cells.
-     * That is why attriubte allocation is performed above. */
+     * That is why attribute allocation is performed above. */
 
     /* Shift characters to the left if insert mode is enabled */
     if (UNLIKELY(scr->mode.insert) && max_cx < max_tx && cx < line->width) {
@@ -1993,7 +1993,7 @@ static inline void print_buffer(struct screen *scr, const uint32_t *bstart, cons
     scr->c.pending = cx == max_tx;
     scr->c.x = cx - scr->c.pending;
 
-    /* Put charaters, with fast path for ASCII-only */
+    /* Put characters, with fast path for ASCII-only */
     if (astart) {
         copy_ascii_to_cells(cell, astart, astart + totalw, attrid);
         if (UNLIKELY(gconfig.trace_characters)) {
@@ -2179,7 +2179,7 @@ partial2:          /* If we have encountered a partial UTF-8, print all we have 
             scr->c.gl_ss = scr->c.gl;
 
             if (UNLIKELY(iscombining_compact(ch))) {
-                /* Don't put zero-width charactes to predecode buffer */
+                /* Don't put zero-width characters to predecode buffer */
                 if (UNLIKELY(pbuf == scr->predec_buf))
                     screen_precompose_at_cursor(scr, ch);
                 else {
@@ -2228,7 +2228,7 @@ partial2:          /* If we have encountered a partial UTF-8, print all we have 
 
 ssize_t screen_dispatch_rep(struct screen *scr, int32_t rune, ssize_t rep) {
     if (iscombining(rune)) {
-        /* Don't put zero-width charactes to predecode buffer */
+        /* Don't put zero-width characters to predecode buffer */
         screen_precompose_at_cursor(scr, rune);
         return 0;
     }
