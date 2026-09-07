@@ -32,7 +32,7 @@
 #define LEN(x) (sizeof(x)/sizeof((x)[0]) + MUST_BE_(IS_ARRAY_(x)))
 
 #define LIKELY(x) (__builtin_expect(!!(x), 1))
-#define UNLIKELY(x) (__builtin_expect((x), 0))
+#define UNLIKELY(x) (__builtin_expect(!!(x), 0))
 #define ASSUME(x) do { if(!(x)) __builtin_unreachable(); }while(0)
 #define PACKED __attribute__((packed))
 #define HOT __attribute__((hot))
