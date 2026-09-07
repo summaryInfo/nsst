@@ -52,15 +52,15 @@ static uint32_t insert_attr(struct line_attr *tab, const struct attr *attr, uint
         struct attr *pattr = &tab->data[i];
         if (attr_empty(pattr)) {
             *pattr = *attr;
-            return i + 1;
+            return i + ATTRID_FIRST_REAL;
         } else if (attr_eq_prot(pattr, attr)) {
-            return i + 1;
+            return i + ATTRID_FIRST_REAL;
         }
 
         if (++i >= caps) i -= caps;
     } while (i0 != i);
 
-    return 0;
+    return ATTRID_DEFAULT;
 }
 
 void free_attrs(struct line_attr *attrs) {
@@ -122,7 +122,10 @@ void free_line(struct screen_storage *screen, struct line *line) {
 }
 
 static uint32_t move_one_attr(struct line_attr *dst, struct line *src, uint32_t id) {
-    struct attr *at = &src->attrs->data[id - 1];
+#if DEBUG_LINES
+    assert(src->attrs && (unsigned)(id - ATTRID_FIRST_REAL) < src->attrs->caps);
+#endif
+    struct attr *at = &src->attrs->data[id - ATTRID_FIRST_REAL];
     if (UNLIKELY(!attr_empty(at))) {
         at->bg = insert_attr(dst, at, attr_hash(at));
         at->fg = 0;
@@ -134,16 +137,10 @@ static uint32_t move_one_attr(struct line_attr *dst, struct line *src, uint32_t 
 static void move_attrtab(struct line_attr *dst, struct line *src) {
     for (ssize_t i = 0; i < src->size; i++) {
         uint32_t old_id = src->cell[i].attrid;
-        if (!is_real_attribute(old_id)) continue;
-#if DEBUG_LINES
-        assert(old_id <= src->attrs->caps);
-#endif
-        src->cell[i].attrid = move_one_attr(dst, src, old_id);
+        if (is_real_attribute(old_id))
+            src->cell[i].attrid = move_one_attr(dst, src, old_id);
     }
 
-#if DEBUG_LINES
-    assert(src->pad_attrid <= src->attrs->caps);
-#endif
     if (is_real_attribute(src->pad_attrid))
         src->pad_attrid = move_one_attr(dst, src, src->pad_attrid);
 
@@ -259,14 +256,14 @@ static void optimize_attributes(struct line *line) {
 
     used[line->pad_attrid / LONG_BITS] |= 1ULL << (line->pad_attrid % LONG_BITS);
 #if DEBUG_LINES
-    assert(line->pad_attrid == ATTRID_DEFAULT || line->pad_attrid <= line->attrs->caps);
+    assert(line->pad_attrid < ATTRID_FIRST_REAL || line->pad_attrid <= line->attrs->caps);
 #endif
 
     for (ssize_t i = 0; i < line->size; i++) {
         uint64_t id = line->cell[i].attrid;
         used[id / LONG_BITS] |= 1ULL << (id % LONG_BITS);
 #if DEBUG_LINES
-        assert(id == ATTRID_DEFAULT || (int64_t)id <= line->attrs->caps);
+        assert(id < ATTRID_FIRST_REAL || (int64_t)id <= line->attrs->caps);
 #endif
     }
 
@@ -447,7 +444,7 @@ void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, s
             c.drawn = 0;
             if (is_real_attribute(c.attrid)) {
                 if (UNLIKELY(c.attrid != previd))
-                    newid = alloc_attr(dst, &src->attrs->data[c.attrid - 1]);
+                    newid = alloc_attr(dst, &src->attrs->data[c.attrid - ATTRID_FIRST_REAL]);
                 c.attrid = newid;
             }
             *dc++ = c;

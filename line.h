@@ -40,6 +40,7 @@ extern const struct attr default_attr__;
 #define MKCELL(c, a) ((struct cell) {.ch = (c), .attrid = (a)})
 #define ATTRID_MAX 4096
 #define ATTRID_DEFAULT 0
+#define ATTRID_FIRST_REAL 1
 #define URI_BITS 22
 #define URI_MAX (1 << URI_BITS)
 
@@ -263,11 +264,11 @@ static inline void attr_mask_set(struct attr *a, uint32_t mask) {
 }
 
 static inline bool is_real_attribute(uint32_t attrid) {
-    return attrid != ATTRID_DEFAULT;
+    return attrid >= ATTRID_FIRST_REAL;
 }
 
 static inline const struct attr *line_attr(struct line *ln, uint32_t attrid) {
-    return is_real_attribute(attrid) ? &ln->attrs->data[attrid - 1] : &ATTR_DEFAULT;
+    return is_real_attribute(attrid) ? &ln->attrs->data[attrid - ATTRID_FIRST_REAL] : &ATTR_DEFAULT;
 }
 
 static inline const struct attr *attr_pad(struct line *ln) {
