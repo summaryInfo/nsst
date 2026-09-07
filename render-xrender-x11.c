@@ -115,7 +115,7 @@ static void free_cached_id(uint32_t id) {
     rctx.free_ids[rctx.id_count++] = id;
 }
 
-static void register_glyph(struct window *win, uint32_t ch, struct glyph *glyph) {
+void x11_xrender_register_glyph(struct window *win, struct glyph *glyph) {
     if (glyph->pixmode == pixmode_bgra) {
         glyph->id = alloc_cached_id();
 
@@ -132,6 +132,7 @@ static void register_glyph(struct window *win, uint32_t ch, struct glyph *glyph)
         xcb_free_pixmap(con, get_plat(win)->glyph_pid);
 
     } else {
+        uint32_t ch = glyph->g;
         xcb_render_glyphinfo_t spec = {
             .width = glyph->width, .height = glyph->height,
             .x = glyph->x - win->cfg.font_spacing/2, .y = glyph->y - win->cfg.line_spacing/2,
@@ -231,16 +232,16 @@ bool x11_xrender_reload_font(struct window *win, bool need_free) {
         for (uint32_t i = ' '; i <= '~'; i++) {
             struct glyph *glyph = glyph_cache_fetch(win->font_cache, i, face_normal, NULL);
             glyph->x_off = win->char_width;
-            register_glyph(win, i, glyph);
+            x11_xrender_register_glyph(win, glyph);
         }
 
-        register_glyph(win, GLYPH_UNDERCURL, win->undercurl_glyph);
+        x11_xrender_register_glyph(win, win->undercurl_glyph);
     }
 
     if (need_free) {
         handle_resize(win, win->w.width, win->w.height, true);
     } else {
-        /* We need to resize window here if it's size is specified in chracters */
+        /* We need to resize window here if it's size is specified in characters */
         x11_apply_geometry(win, &win->cfg.geometry);
         struct extent bx = win_image_size(win);
 
@@ -566,6 +567,7 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                      win->cfg.special_reverse || win->cfg.special_italic || win->cfg.blend_all_bg || selection_active(term_get_sstate(win->term));
     bool has_blinking = false;
 
+    struct glyph_register_cb reg_cb = { win, x11_xrender_register_glyph };
     struct screen *scr = term_screen(win->term);
     struct line_span span = screen_view(scr);
     struct line *prev_line = NULL;
@@ -627,10 +629,7 @@ static bool prepare_multidraw(struct window *win, int16_t cur_x, ssize_t cur_y, 
                 spec = describe_cell(cel, &attr, &win->cfg, &win->rcstate, selected, slow_path);
                 g =  spec.ch | (spec.face << 24);
 
-                bool is_new = false;
-                if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face, &is_new);
-
-                if (UNLIKELY(is_new) && glyph) register_glyph(win, g, glyph);
+                if (spec.ch) glyph = glyph_cache_fetch(win->font_cache, spec.ch, spec.face, &reg_cb);
 
                 g_wide = glyph && glyph->x_off > win->char_width - win->cfg.font_spacing;
             }

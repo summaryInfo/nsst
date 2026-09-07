@@ -1344,6 +1344,7 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
         x11_vtable.resize = x11_xrender_resize;
         x11_vtable.copy = x11_xrender_copy;
         x11_vtable.submit_screen = x11_xrender_submit_screen;
+        x11_vtable.register_glyph = x11_xrender_register_glyph;
         ctx.renderer_recolor_border = x11_xrender_recolor_border;
         ctx.renderer_free = x11_xrender_free;
         ctx.renderer_free_context = x11_xrender_free_context;

@@ -790,11 +790,10 @@ static struct glyph *make_undercurl(int16_t width, int16_t depth, int16_t underl
 /* We don't cache ASCII characters */
 #define LRU_MIN_CACHED 128
 
-struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face, bool *is_new) {
+struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face, struct glyph_register_cb *cb) {
     struct glyph dummy = mkglyphkey(ch | (face << 24));
     ht_head_t **h = ht_lookup_ptr(&cache->glyphs, (ht_head_t *)&dummy);
-    if (*h) {
-        if (is_new) *is_new = false;
+    if (LIKELY(*h)) {
         struct glyph *g = CONTAINEROF(*h, struct glyph, head);
         if (g->g >= LRU_MIN_CACHED) {
             list_remove(&g->lru);
@@ -802,8 +801,6 @@ struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum fac
         }
         return g;
     }
-
-    if (is_new) *is_new = true;
 
     struct glyph *new;
 #if USE_BOXDRAWING
@@ -821,6 +818,9 @@ struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum fac
 
     new->g = dummy.g;
     new->head = dummy.head;
+
+    if (cb)
+        cb->register_glyph(cb->arg, new);
 
     ht_insert_hint(&cache->glyphs, h, &new->head);
 

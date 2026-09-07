@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #ifndef FONT_H_
 #define FONT_H_ 1
@@ -59,10 +59,17 @@ void free_font(struct font *font);
 struct font *font_ref(struct font *font);
 int16_t font_get_size(struct font *font);
 
+struct window;
+
+struct glyph_register_cb {
+    struct window *arg;
+    void (*register_glyph)(struct window *win, struct glyph *glyph);
+};
+
 struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmode, int16_t vspacing, int16_t hspacing, int16_t underline_width, bool boxdraw, bool force_aligned);
 struct glyph_cache *glyph_cache_ref(struct glyph_cache *ref);
 void free_glyph_cache(struct glyph_cache *cache);
 void glyph_cache_get_dim(struct glyph_cache *cache, int16_t *w, int16_t *h, int16_t *d);
-struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face, bool *is_new);
+struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face, struct glyph_register_cb *cb);
 
 #endif

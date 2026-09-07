@@ -104,6 +104,7 @@ void x11_xrender_resize(struct window *win, int16_t new_w, int16_t new_h, int16_
 void x11_xrender_copy(struct window *win, struct rect dst, int16_t sx, int16_t sy);
 void x11_xrender_recolor_border(struct window *win);
 bool x11_xrender_submit_screen(struct window *win, int16_t cur_x, ssize_t cur_y, bool cursor, bool marg);
+void x11_xrender_register_glyph(struct window *win, struct glyph *glyph);
 #endif
 
 void x11_update_window_props(struct window *win);
