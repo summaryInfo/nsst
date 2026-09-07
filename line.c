@@ -134,7 +134,7 @@ static uint32_t move_one_attr(struct line_attr *dst, struct line *src, uint32_t 
 static void move_attrtab(struct line_attr *dst, struct line *src) {
     for (ssize_t i = 0; i < src->size; i++) {
         uint32_t old_id = src->cell[i].attrid;
-        if (old_id == ATTRID_DEFAULT) continue;
+        if (!is_real_attribute(old_id)) continue;
 #if DEBUG_LINES
         assert(old_id <= src->attrs->caps);
 #endif
@@ -144,7 +144,7 @@ static void move_attrtab(struct line_attr *dst, struct line *src) {
 #if DEBUG_LINES
     assert(src->pad_attrid <= src->attrs->caps);
 #endif
-    if (src->pad_attrid != ATTRID_DEFAULT)
+    if (is_real_attribute(src->pad_attrid))
         src->pad_attrid = move_one_attr(dst, src, src->pad_attrid);
 
     free_attrs(src->attrs);
@@ -445,7 +445,7 @@ void HOT copy_line(struct line *dst, ssize_t dx, struct line *src, ssize_t sx, s
         for (ssize_t i = 0; i < len; i++) {
             c = *sc++;
             c.drawn = 0;
-            if (UNLIKELY(c.attrid)) {
+            if (is_real_attribute(c.attrid)) {
                 if (UNLIKELY(c.attrid != previd))
                     newid = alloc_attr(dst, &src->attrs->data[c.attrid - 1]);
                 c.attrid = newid;

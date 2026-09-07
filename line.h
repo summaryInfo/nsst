@@ -262,8 +262,12 @@ static inline void attr_mask_set(struct attr *a, uint32_t mask) {
     a->mask = (a->mask & ~ATTR_MASK) | (mask & ATTR_MASK);
 }
 
+static inline bool is_real_attribute(uint32_t attrid) {
+    return attrid != ATTRID_DEFAULT;
+}
+
 static inline const struct attr *line_attr(struct line *ln, uint32_t attrid) {
-    return attrid ? &ln->attrs->data[attrid - 1] : &ATTR_DEFAULT;
+    return is_real_attribute(attrid) ? &ln->attrs->data[attrid - 1] : &ATTR_DEFAULT;
 }
 
 static inline const struct attr *attr_pad(struct line *ln) {
