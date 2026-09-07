@@ -30,6 +30,10 @@ static inline const struct attr *view_attr_at(struct line_span *view, ssize_t x)
     return attr_at(view->line, view->offset + x);
 }
 
+static inline uint32_t view_attrid_at(struct line_span *view, ssize_t x) {
+    return attrid_at(view->line, view->offset + x);
+}
+
 static inline const struct attr *view_attr(struct line_span *view, uint32_t attrid) {
     return line_attr(view->line, attrid);
 }

@@ -275,9 +275,12 @@ static inline const struct attr *attr_pad(struct line *ln) {
     return line_attr(ln, ln->pad_attrid);
 }
 
+static inline uint32_t attrid_at(struct line *ln, ssize_t x) {
+    return x >= ln->size ? ln->pad_attrid : ln->cell[x].attrid;
+}
+
 static inline const struct attr *attr_at(struct line *ln, ssize_t x) {
-    if (x >= ln->size) return attr_pad(ln);
-    return line_attr(ln, ln->cell[x].attrid);
+    return line_attr(ln, attrid_at(ln, x));
 }
 
 static inline void adjust_wide_left(struct line *line, ssize_t x) {
