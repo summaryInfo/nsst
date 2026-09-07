@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -27,40 +27,13 @@ static void draw_rect(struct glyph * glyph, bool lcd, int16_t xs, int16_t ys, in
     }
 }
 
-static void put(struct glyph *glyph, bool lcd, int16_t x, int16_t y, uint8_t val) {
-    if (!lcd) glyph->data[glyph->stride * y + x] = val;
-    else for (size_t i = 0; i < 4; i++)
-        glyph->data[glyph->stride*y + 4*x + i] = val;
-}
-
 struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t depth, enum pixel_mode pixmode, int16_t hspacing, int16_t vspacing, bool force_aligned) {
     if (!is_boxdraw(c)) return NULL;
 
     bool lcd = pixmode != pixmode_mono;
-    size_t stride;
-
-    if (force_aligned) {
-        /* X11 MIT-SHM requires 16 byte alignment */
-        stride = ROUNDUP(width, 4);
-        if (lcd) stride *= 4;
-    } else {
-        /* X11 XRender backend requires all glyphs
-         * to be in the same format (i.e. subpixel or not) */
-        stride = lcd ? width * 4U : ROUNDUP(width, 4);
-    }
-
-    struct glyph *glyph = aligned_alloc(_Alignof(struct glyph), sizeof(struct glyph) +
-            ROUNDUP(stride * (height + depth) * sizeof(uint8_t), _Alignof(struct glyph)));
-    if (!glyph) return NULL;
-
-    glyph->y_off = 0;
-    glyph->x = hspacing/2;
-    glyph->y = height + vspacing/2;
-    glyph->height = height + depth;
-    glyph->x_off = glyph->width = width;
-    glyph->stride = stride;
-    glyph->pixmode = pixmode;
-    memset(glyph->data, 0, stride * (height + depth));
+    struct glyph *glyph = make_empty_glyph(width, height, depth, pixmode, hspacing, vspacing, force_aligned);
+    if (!glyph)
+        return NULL;
 
     enum {
         NOC = 1 << 1, /* No center */
@@ -138,14 +111,14 @@ struct glyph *make_boxdraw(uint32_t c, int16_t width, int16_t height, int16_t de
         if (desc & VR) draw_rect(glyph, lcd, w*(7 - (desc & 7))/8, 0, w, h, 0xFF);
         if (desc & LX)
             for (int16_t i = 0; i < h; i++)
-                put(glyph, lcd, (w*i/h), i, 0xFF);
+                glyph_put(glyph, lcd, (w*i/h), i, 0xFF);
         if (desc & RX)
             for (int16_t i = 0; i < h; i++)
-                put(glyph, lcd, w - 1 - (w*i/h), i, 0xFF);
+                glyph_put(glyph, lcd, w - 1 - (w*i/h), i, 0xFF);
         if (dt1 | dt2)
             for (int16_t i = 0; i < h; i += (1 + dt1))
                 for (int16_t j = i & (1 + dt1); j < w;  j+= 2*(1 + dt1))
-                    put(glyph, lcd, j, i, 0xFF * !(desc & H));
+                    glyph_put(glyph, lcd, j, i, 0xFF * !(desc & H));
     } else {
 
         if (cur) draw_rect(glyph, lcd, x0+lw*(2*rl-1), y0+lw*(2*bl-1), x0+lw*2*rl, y0+lw*2*bl, 0xFF);

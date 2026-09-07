@@ -731,39 +731,51 @@ void free_glyph_cache(struct glyph_cache *cache) {
     }
 }
 
-static inline void put(struct glyph *glyph, bool lcd, int16_t x, int16_t y, uint8_t val) {
+void glyph_put(struct glyph *glyph, bool lcd, int16_t x, int16_t y, uint8_t val) {
     y = MIN(glyph->height - 1, y);
     if (!lcd) glyph->data[glyph->stride * y + x] = val;
     else for (size_t i = 0; i < 4; i++)
         glyph->data[glyph->stride*y + 4*x + i] = val;
 }
 
-static struct glyph *make_undercurl(int16_t width, int16_t depth, int16_t underline_width, enum pixel_mode pixmode, int16_t hspacing, bool force_aligned) {
+struct glyph *make_empty_glyph(int16_t width, int16_t height, int16_t depth, enum pixel_mode pixmode, int16_t hspacing, int16_t vspacing, bool force_aligned) {
     bool lcd = pixmode != pixmode_mono;
-    size_t stride;
+    size_t stride = width;
 
     if (force_aligned) {
-        /* X11 MIT-SHM requires 16 byte alignment */
-        stride = ROUNDUP(width, 4);
+         /* Soft renderer backend requires subpixel glyphs
+         * to be aligned on 16 bytes */
+        stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
         if (lcd) stride *= 4;
     } else {
-        /* X11 XRender backend requires all glyphs
-         * to be in the same format (i.e. subpixel or not) */
-        stride = lcd ? width * 4U : ROUNDUP(width, 4);
+        /* XRender requires stride to be aligned exactly to 4,
+         * software renderer wants stride to be aligned to 4/16
+         * depending on whether subpixel rendering is off or on. */
+        if (lcd) stride *= 4;
+        stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
     }
 
     struct glyph *glyph = aligned_alloc(_Alignof(struct glyph), sizeof(struct glyph) +
-            ROUNDUP(stride * depth * sizeof(uint8_t), _Alignof(struct glyph)));
+            ROUNDUP(stride * (height + depth) * sizeof(uint8_t), _Alignof(struct glyph)));
     if (!glyph) return NULL;
 
     glyph->y_off = 0;
-    glyph->y = 0;
     glyph->x = hspacing/2;
-    glyph->height = depth;
+    glyph->y = height + vspacing/2;
+    glyph->height = height + depth;
     glyph->x_off = glyph->width = width;
     glyph->stride = stride;
     glyph->pixmode = pixmode;
-    memset(glyph->data, 0x00, stride * depth);
+    memset(glyph->data, 0, stride * (height + depth));
+
+    return glyph;
+}
+
+static struct glyph *make_undercurl(int16_t width, int16_t depth, int16_t underline_width, enum pixel_mode pixmode, int16_t hspacing, bool force_aligned) {
+    bool lcd = pixmode != pixmode_mono;
+
+    struct glyph *glyph = make_empty_glyph(width, 0, depth, pixmode, hspacing, 0, force_aligned);
+    if (!glyph) return NULL;
 
     double underline = MAX(depth/4., MIN(underline_width, depth - 2));
 
@@ -775,12 +787,12 @@ static struct glyph *make_undercurl(int16_t width, int16_t depth, int16_t underl
         if (y0 != y1) {
             bool offset_0 = ceil(y0f) != y0;
             if (offset_0)
-                put(glyph, lcd, x, y0, MIN(255, 255*(1 - (y0f - y0))));
+                glyph_put(glyph, lcd, x, y0, MIN(255, 255*(1 - (y0f - y0))));
             for (ssize_t i = y0 + offset_0; i < y1; i++)
-                put(glyph, lcd, x, i, 255);
-            put(glyph, lcd, x, y1, MIN(255, 255*(y1f - y1)));
+                glyph_put(glyph, lcd, x, i, 255);
+            glyph_put(glyph, lcd, x, y1, MIN(255, 255*(y1f - y1)));
         } else {
-            put(glyph, lcd, x, y0, 255*underline);
+            glyph_put(glyph, lcd, x, y0, 255*underline);
         }
     }
 

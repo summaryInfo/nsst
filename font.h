@@ -66,6 +66,8 @@ struct glyph_register_cb {
     void (*register_glyph)(struct window *win, struct glyph *glyph);
 };
 
+void glyph_put(struct glyph *glyph, bool lcd, int16_t x, int16_t y, uint8_t val);
+struct glyph *make_empty_glyph(int16_t width, int16_t height, int16_t depth, enum pixel_mode pixmode, int16_t hspacing, int16_t vspacing, bool force_aligned);
 struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmode, int16_t vspacing, int16_t hspacing, int16_t underline_width, bool boxdraw, bool force_aligned);
 struct glyph_cache *glyph_cache_ref(struct glyph_cache *ref);
 void free_glyph_cache(struct glyph_cache *cache);
