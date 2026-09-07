@@ -31,7 +31,7 @@ static inline const struct attr *view_attr_at(struct line_span *view, ssize_t x)
 }
 
 static inline const struct attr *view_attr(struct line_span *view, uint32_t attrid) {
-    return attrid ? &view->line->attrs->data[attrid - 1] : &ATTR_DEFAULT;
+    return line_attr(view->line, attrid);
 }
 
 static inline void view_adjust_wide_right(struct line_span *view, ssize_t x) {
