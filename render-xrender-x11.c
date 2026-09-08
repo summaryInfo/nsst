@@ -132,7 +132,7 @@ void x11_xrender_register_glyph(struct window *win, struct glyph *glyph) {
         xcb_free_pixmap(con, get_plat(win)->glyph_pid);
 
     } else {
-        uint32_t ch = glyph->g;
+        uint32_t ch = glyph->head.g;
         xcb_render_glyphinfo_t spec = {
             .width = glyph->width, .height = glyph->height,
             .x = glyph->x - win->cfg.font_spacing/2, .y = glyph->y - win->cfg.line_spacing/2,

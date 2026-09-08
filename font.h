@@ -34,15 +34,19 @@ enum pixel_mode {
 
 #define GLYPH_ALIGNMENT MAX(16, MALLOC_ALIGNMENT)
 
-struct glyph {
+struct glyph_head {
     ht_head_t head;
+    uint32_t g;
     struct list_head lru;
+};
+
+struct glyph {
+    struct glyph_head head;
 
 #ifdef USE_XRENDER
     uint32_t id;
 #endif
 
-    uint32_t g;
     uint16_t width, height;
     int16_t x, y;
     int16_t x_off, y_off;

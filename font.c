@@ -457,7 +457,7 @@ static struct glyph *downsample_glyph(struct glyph *glyph, uint32_t targ_width, 
     nglyph->x_off = nearbyint(glyph->x_off * x_scale);
     nglyph->stride = stride;
     nglyph->pixmode = glyph->pixmode;
-    nglyph->g = glyph->g;
+    nglyph->head.g = glyph->head.g;
     nglyph->id = 0;
 
     for (ssize_t i = 0; i < targ_height; i++) {
@@ -662,11 +662,11 @@ struct glyph_cache {
     hashtable_t glyphs;
 };
 
-#define mkglyphkey(gl) ((struct glyph){ .head = { .hash = uint_hash32(gl)}, .g = (gl) })
+#define mkglyphkey(gl) ((struct glyph_head){ .head = { .hash = uint_hash32(gl)}, .g = (gl) })
 
 static bool glyph_cmp(const ht_head_t *a, const ht_head_t *b) {
-    const struct glyph *ga = (const struct glyph *)a;
-    const struct glyph *gb = (const struct glyph *)b;
+    const struct glyph_head *ga = (const struct glyph_head *)a;
+    const struct glyph_head *gb = (const struct glyph_head *)b;
     return ga->g == gb->g;
 }
 
@@ -803,13 +803,13 @@ static struct glyph *make_undercurl(int16_t width, int16_t depth, int16_t underl
 #define LRU_MIN_CACHED 128
 
 struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face, struct glyph_register_cb *cb) {
-    struct glyph dummy = mkglyphkey(ch | (face << 24));
+    struct glyph_head dummy = mkglyphkey(ch | (face << 24));
     ht_head_t **h = ht_lookup_ptr(&cache->glyphs, (ht_head_t *)&dummy);
     if (LIKELY(*h)) {
-        struct glyph *g = CONTAINEROF(*h, struct glyph, head);
-        if (g->g >= LRU_MIN_CACHED) {
-            list_remove(&g->lru);
-            list_insert_after(&cache->lru_list, &g->lru);
+        struct glyph *g = CONTAINEROF(*h, struct glyph, head.head);
+        if (g->head.g >= LRU_MIN_CACHED) {
+            list_remove(&g->head.lru);
+            list_insert_after(&cache->lru_list, &g->head.lru);
         }
         return g;
     }
@@ -828,28 +828,27 @@ struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum fac
         new = font_render_glyph(cache->font, cache->pixmode, ch, face, cache->force_aligned, cache->char_width*2);
     if (!new) return NULL;
 
-    new->g = dummy.g;
-    new->head = dummy.head;
+    new->head = dummy;
 
     if (cb)
         cb->register_glyph(cb->arg, new);
 
-    ht_insert_hint(&cache->glyphs, h, &new->head);
+    ht_insert_hint(&cache->glyphs, h, &new->head.head);
 
     if (dummy.g >= LRU_MIN_CACHED) {
         if (cache->lru_size >= gconfig.font_cache_size) {
-            struct glyph *old = CONTAINEROF(cache->lru_list.prev, struct glyph, lru);
+            struct glyph *old = CONTAINEROF(cache->lru_list.prev, struct glyph, head.lru);
             assert(old != new);
-            list_remove(&old->lru);
+            list_remove(&old->head.lru);
 #if USE_XRENDER
             x11_xrender_release_glyph(old);
 #endif
-            ht_erase(&cache->glyphs, &old->head);
+            ht_erase(&cache->glyphs, &old->head.head);
             free(old);
         } else {
             cache->lru_size++;
         }
-        list_insert_after(&cache->lru_list, &new->lru);
+        list_insert_after(&cache->lru_list, &new->head.lru);
     }
 
     return new;
