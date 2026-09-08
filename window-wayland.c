@@ -283,6 +283,8 @@ static inline struct cursor *ref_cursor(struct cursor *csr) {
     return csr;
 }
 
+HT_DEFINE_CMP(cursor, cursor_cmp)
+
 static struct cursor *get_cursor(const char *name, bool complain) {
     if (!ctx.cursor_theme) return NULL;
 
@@ -291,7 +293,7 @@ static struct cursor *get_cursor(const char *name, bool complain) {
         .link.hash = hash64(name, strlen(name)),
     };
 
-    ht_head_t **it = ht_lookup_ptr(&ctx.cursors, &dummy.link);
+    ht_head_t **it = ht_lookup_ptr_cursor(&ctx.cursors, &dummy.link);
     if (*it) {
         struct cursor *found = (struct cursor *)*it;
         found->refcount++;
@@ -355,7 +357,7 @@ static inline struct cursor *get_any_cursor(ssize_t count, const char **names) {
 static void unref_cursor(struct cursor *csr) {
     if (!csr) return;
     if (!--csr->refcount) {
-        ht_erase(&ctx.cursors, &csr->link);
+        ht_erase_cursor(&ctx.cursors, &csr->link);
         wl_surface_destroy(csr->cursor_surface);
         /* NOTE: cursor_buffer and cursor and owned by cursor_theme */
         free(csr->name);
@@ -2356,7 +2358,7 @@ static void load_cursor_theme(void) {
     const char *size_string = getenv("XCURSOR_SIZE");
     ssize_t size = 24;
 
-    ht_init(&ctx.cursors, HT_INIT_CAPS, cursor_cmp);
+    ht_init(&ctx.cursors, HT_INIT_CAPS);
 
     if (size_string) {
         errno = 0;

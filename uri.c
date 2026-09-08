@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2022,2025, Evgeniy Baskov. All rights reserved */
+/* Copyright (c) 2019-2022,2025-2026, Evgeniy Baskov. All rights reserved */
 
 #include "feature.h"
 
@@ -429,6 +429,8 @@ static bool uri_cmp(const ht_head_t *a, const ht_head_t *b) {
     return !strcmp(ua->id, ub->id) && !strcmp(ua->uri, ub->uri);
 }
 
+HT_DEFINE_CMP(uri, uri_cmp)
+
 /* If URI is invalid returns EMPTY_URI */
 uint32_t uri_add(const char *uri, const char *id) {
     static size_t id_counter = 0;
@@ -440,7 +442,7 @@ uint32_t uri_add(const char *uri, const char *id) {
     }
 
     if (!idtab.slots)
-        ht_init(&uritab, HT_INIT_CAPS, uri_cmp);
+        ht_init(&uritab, HT_INIT_CAPS);
 
     /* Generate internal identifier
      * if not explicitly provided */
@@ -461,7 +463,7 @@ uint32_t uri_add(const char *uri, const char *id) {
 
     /* First, lookup URI in hash table */
     const struct uri dummy = mkurikey((char *)id, id_len, (char *)uri, uri_len);
-    ht_head_t **h = ht_lookup_ptr(&uritab, (ht_head_t *)&dummy);
+    ht_head_t **h = ht_lookup_ptr_uri(&uritab, (ht_head_t *)&dummy);
     if (*h) {
         struct uri *new = (struct uri *)*h;
         uri_ref(new->slot);
@@ -521,7 +523,7 @@ void uri_unref(uint32_t id) {
         if (gconfig.trace_misc)
             info("URI free %d", id);
 
-        ht_erase(&uritab, (ht_head_t *)uri);
+        ht_erase_uri(&uritab, (ht_head_t *)uri);
         free_slot(slot);
         free(uri);
 

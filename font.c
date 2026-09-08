@@ -69,12 +69,28 @@ struct pattern_holder {
 
 static struct font_context global;
 
+static bool face_cmp(const ht_head_t *a, const ht_head_t *b) {
+    const struct face *af = CONTAINEROF(a, const struct face, head);
+    const struct face *bf = CONTAINEROF(b, const struct face, head);
+    if (af->len != bf->len) return false;
+    if (af->index != bf->index) return false;
+    if (af->size != bf->size) return false;
+    if (af->has_transform != bf->has_transform) return false;
+    if (af->transform.xx != bf->transform.xx) return false;
+    if (af->transform.xy != bf->transform.xy) return false;
+    if (af->transform.yx != bf->transform.yx) return false;
+    if (af->transform.yy != bf->transform.yy) return false;
+    return !strcmp(af->file, bf->file);
+}
+
+HT_DEFINE_CMP(face, face_cmp)
+
 void free_font(struct font *font) {
     if (--font->refs == 0) {
         for (size_t i = 0; i < face_MAX; i++) {
             for (size_t j = 0; j < font->face_types[i].length; j++) {
                 struct face *face = font->face_types[i].faces[j];
-                ht_erase(&font->face_types[i].face_ht, &face->head);
+                ht_erase_face(&font->face_types[i].face_ht, &face->head);
                 FT_Done_Face(face->face);
                 free(face);
             }
@@ -137,7 +153,7 @@ static bool load_append_fonts(struct font *font, struct face_list *faces, struct
         }
 
         newface->head.hash = hash64((char *)&newface->len, newface->len);
-        ht_head_t **pfound = ht_lookup_ptr(&faces->face_ht, &newface->head);
+        ht_head_t **pfound = ht_lookup_ptr_face(&faces->face_ht, &newface->head);
         if (gconfig.trace_fonts)
             info("Font file: %s:%d found=%d total=%zd", file.u.s, index.u.i, !!*pfound, faces->length);
 
@@ -275,20 +291,6 @@ static bool load_face_list(struct font *font, struct face_list* faces, const cha
     return has_svg;
 }
 
-static bool face_cmp(const ht_head_t *a, const ht_head_t *b) {
-    const struct face *af = CONTAINEROF(a, const struct face, head);
-    const struct face *bf = CONTAINEROF(b, const struct face, head);
-    if (af->len != bf->len) return false;
-    if (af->index != bf->index) return false;
-    if (af->size != bf->size) return false;
-    if (af->has_transform != bf->has_transform) return false;
-    if (af->transform.xx != bf->transform.xx) return false;
-    if (af->transform.xy != bf->transform.xy) return false;
-    if (af->transform.yx != bf->transform.yx) return false;
-    if (af->transform.yy != bf->transform.yy) return false;
-    return !strcmp(af->file, bf->file);
-}
-
 struct font *create_font(const char* descr, double size, double dpi, double gamma, bool force_scalable, bool allow_subst) {
     if (global.fonts++ == 0) {
         if (FcInit() == FcFalse)
@@ -310,7 +312,7 @@ struct font *create_font(const char* descr, double size, double dpi, double gamm
 
     bool has_svg = false;
     for (size_t i = 0; i < face_MAX; i++) {
-        ht_init(&font->face_types[i].face_ht, HT_INIT_CAPS, face_cmp);
+        ht_init(&font->face_types[i].face_ht, HT_INIT_CAPS);
         has_svg |= load_face_list(font, &font->face_types[i], descr, i, size);
     }
 
@@ -694,7 +696,7 @@ struct glyph_cache *create_glyph_cache(struct font *font, enum pixel_mode pixmod
     cache->override_boxdraw = boxdraw;
     cache->force_aligned = force_aligned;
     cache->pixmode = pixmode;
-    ht_init(&cache->glyphs, HASH_INIT_CAP, glyph_cmp);
+    ht_init(&cache->glyphs, HASH_INIT_CAP);
     list_init(&cache->lru_list);
 
     int16_t total = 0, maxd = 0, maxh = 0;
@@ -797,12 +799,14 @@ static struct glyph *make_undercurl(int16_t width, int16_t depth, int16_t underl
     return glyph;
 }
 
+HT_DEFINE_CMP(glyph, glyph_cmp)
+
 /* We don't cache ASCII characters */
 #define LRU_MIN_CACHED 128
 
 struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum face_name face, struct glyph_register_cb *cb) {
     struct glyph_head dummy = mkglyphkey(ch | (face << 24));
-    ht_head_t **h = ht_lookup_ptr(&cache->glyphs, (ht_head_t *)&dummy);
+    ht_head_t **h = ht_lookup_ptr_glyph(&cache->glyphs, &dummy.head);
     if (LIKELY(*h)) {
         struct glyph *g = CONTAINEROF(*h, struct glyph, head.head);
         if (g->head.g >= LRU_MIN_CACHED) {
@@ -841,7 +845,7 @@ struct glyph *glyph_cache_fetch(struct glyph_cache *cache, uint32_t ch, enum fac
 #if USE_XRENDER
             x11_xrender_release_glyph(old);
 #endif
-            ht_erase(&cache->glyphs, &old->head.head);
+            ht_erase_glyph(&cache->glyphs, &old->head.head);
             free(old);
         } else {
             cache->lru_size++;

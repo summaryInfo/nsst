@@ -624,26 +624,37 @@ void adjust_buffer(void **buf, size_t *caps, size_t size, size_t elem) {
 #define HT_LOAD_FACTOR(x) (15*(x)/16)
 #define HT_CAPS_STEP(x) (2*(x))
 
+static void rehash(struct hashtable *src, intptr_t new_caps) {
+    struct hashtable tmp = {
+        .caps = new_caps,
+        .data = HT_CALLOC(new_caps * sizeof *src->data),
+        .size = src->size,
+    };
+
+    for (ht_head_t **b_it = src->data, **b_end = src->data + src->caps; b_it != b_end; b_it++) {
+        for (ht_head_t *cur = *b_it, *next; cur; cur = next) {
+            next = cur->next;
+            ht_head_t **cand = &tmp.data[cur->hash & (new_caps - 1)];
+            cur->next = *cand;
+            *cand = cur;
+        }
+    }
+
+    free(src->data);
+    *src = tmp;
+}
+
 void ht_adjust(struct hashtable *ht, intptr_t inc) {
     ht->size += inc;
 
-    if (UNLIKELY(ht->size > HT_LOAD_FACTOR(ht->caps))) {
-        struct hashtable tmp = {
-            .cmpfn = ht->cmpfn,
-            .caps = HT_CAPS_STEP(ht->caps),
-            .data = xzalloc(HT_CAPS_STEP(ht->caps) * sizeof *ht->data),
-        };
+    if (LIKELY(ht->size <= HT_LOAD_FACTOR(ht->caps)))
+        return;
 
-        ht_iter_t it = ht_begin(ht);
-        while (ht_current(&it))
-            ht_insert(&tmp, ht_erase_current(&it));
-        free(ht->data);
-        *ht = tmp;
-    }
+    rehash(ht, HT_CAPS_STEP(ht->caps));
 }
 
 void ht_shrink(struct hashtable *ht) {
-    ssize_t new_caps = ht->caps;
+    intptr_t new_caps = ht->caps;
     while (ht->size <= HT_LOAD_FACTOR(new_caps)/2 &&
            new_caps > HT_INIT_CAPS)
         new_caps /= 2;
@@ -651,18 +662,9 @@ void ht_shrink(struct hashtable *ht) {
     if (ht->caps == new_caps)
         return;
 
-    struct hashtable tmp = {
-        .cmpfn = ht->cmpfn,
-        .caps = new_caps,
-        .data = xzalloc(new_caps * sizeof *ht->data),
-    };
-
-    ht_iter_t it = ht_begin(ht);
-    while (ht_current(&it))
-        ht_insert(&tmp, ht_erase_current(&it));
-    free(ht->data);
-    *ht = tmp;
+    rehash(ht, new_caps);
 }
+
 
 #if USE_PRECOMPOSE
 

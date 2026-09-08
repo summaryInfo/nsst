@@ -383,13 +383,15 @@ static bool cursor_cmp(const ht_head_t *a, const ht_head_t *b) {
     return !strcmp(ua->name, ub->name);
 }
 
+HT_DEFINE_CMP(cursor, cursor_cmp)
+
 static struct cursor *get_cursor(const char *name, bool complain) {
     struct cursor dummy = {
         .name = (char *)name,
         .link.hash = hash64(name, strlen(name)),
     };
 
-    ht_head_t **it = ht_lookup_ptr(&ctx.cursors, &dummy.link);
+    ht_head_t **it = ht_lookup_ptr_cursor(&ctx.cursors, &dummy.link);
     if (*it) {
         struct cursor *found = (struct cursor *)*it;
         found->refcount++;
@@ -435,7 +437,7 @@ static inline struct cursor *get_any_cursor(ssize_t count, const char **names) {
 static void unref_cursor(struct cursor *csr) {
     if (!csr) return;
     if (!--csr->refcount) {
-        ht_erase(&ctx.cursors, &csr->link);
+        ht_erase_cursor(&ctx.cursors, &csr->link);
         xcb_free_cursor(con, csr->xcursor);
         free(csr->name);
         free(csr);
@@ -1300,7 +1302,7 @@ const struct platform_vtable *platform_init_x11(struct instance_config *cfg) {
         warn("Can't create cursor context: %d", result);
         ctx.cursor_ctx = NULL;
     } else {
-        ht_init(&ctx.cursors, HT_INIT_CAPS, cursor_cmp);
+        ht_init(&ctx.cursors, HT_INIT_CAPS);
     }
     do_create_hidden_cursor();
 

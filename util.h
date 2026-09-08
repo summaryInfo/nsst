@@ -35,6 +35,7 @@
 #define UNLIKELY(x) (__builtin_expect(!!(x), 0))
 #define ASSUME(x) do { if(!(x)) __builtin_unreachable(); }while(0)
 #define PACKED __attribute__((packed))
+#define UNUSED __attribute__((unused))
 #define HOT __attribute__((hot))
 #define FORCEINLINE __attribute__((always_inline))
 #define ALIGNED(n) __attribute__((aligned(n)))

@@ -468,6 +468,8 @@ void free_options(void) {
     free(default_config_path);
 }
 
+HT_DEFINE_CMP(opt, option_eq)
+
 void init_options(const char *config_path) {
     if (config_path)
         default_config_path = strdup(config_path);
@@ -480,7 +482,7 @@ void init_options(const char *config_path) {
     gconfig.log_color = isatty(STDERR_FILENO) && !getenv("NO_COLOR");
 
     /* Preprocess options metadata */
-    ht_init(&options_hashtable, 2 * LEN(options), option_eq);
+    ht_init(&options_hashtable, 2 * LEN(options));
 
     const size_t short_opt_len = strlen(", -X<>");
     const size_t long_opt_len = strlen("\t --=<>");
@@ -489,7 +491,7 @@ void init_options(const char *config_path) {
         /* Build fast lookup hash table */
         struct option *opt = &options[i];
         opt->head.hash = hash64(opt->name, strlen(opt->name));
-        ht_insert(&options_hashtable, &opt->head);
+        ht_insert_opt(&options_hashtable, &opt->head);
 
         /* Build fast lookup table for short options */
         size_t n_short = 0;
@@ -577,7 +579,7 @@ struct option *find_option_entry(const char *name, bool need_warn) {
     opt.name = name;
     opt.head.hash = hash64(name, strlen(name));
 
-    struct option *result = (struct option *)ht_find(&options_hashtable, &opt.head);
+    struct option *result = (struct option *)ht_find_opt(&options_hashtable, &opt.head);
     if (need_warn && !result)
         warn("Unknown option: '--%s'", name);
     return result;
