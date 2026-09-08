@@ -2458,7 +2458,7 @@ static void term_dispatch_csi(struct term *term) {
     case C('m'): /* SGR */
         term_decode_sgr(term, 0, &(struct attr){0}, screen_sgr(scr));
         break;
-    case C('n') | P('>'): /* Disable key modifires, xterm */ {
+    case C('n') | P('>'): /* Disable key modifiers, xterm */ {
             uparam_t p = term->esc.param[0];
             if (p == 0) {
                 term->kstate.modkey_legacy_allow_keypad = 0;
@@ -3162,7 +3162,7 @@ static void term_dispatch_vt52(struct term *term, uint32_t ch) {
     case 'W': /* Enable printer controller mode */
         term_dispatch_mc(term, 0, 5);
         break;
-    case 'X': /* Disable printer printer controller mdoe */
+    case 'X': /* Disable printer printer controller mode */
         /* This is never reached... */
         term_dispatch_mc(term, 0, 4);
         break;
