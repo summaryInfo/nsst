@@ -438,27 +438,52 @@ static inline color_t image_sample(struct glyph *glyph, double x0, double x1, do
         (MIN(alpha, 255)));
 }
 
+static size_t glyph_stride(size_t width, bool full_color, bool force_aligned) {
+    if (force_aligned) {
+         /* Soft renderer backend requires subpixel glyphs
+         * to be aligned on 16 bytes */
+        width = ROUNDUP(width, GLYPH_STRIDE_ALIGNMENT);
+        if (full_color) width *= 4;
+    } else {
+        /* XRender requires width to be aligned exactly to 4,
+         * software renderer wants width to be aligned to 4/16
+         * depending on whether subpixel rendering is off or on. */
+        if (full_color) width *= 4;
+        width = ROUNDUP(width, GLYPH_STRIDE_ALIGNMENT);
+    }
+
+    return width;
+}
+
+/* Pass targ_height/targ_width and x_scale/y_scale separately to avoid rounding errors */
+static struct glyph *create_scaled_glyph(struct glyph *glyph, uint32_t targ_width, double x_scale, uint32_t targ_height, double y_scale, bool force_aligned) {
+    ssize_t stride = glyph_stride(targ_width*sizeof(color_t), glyph->pixmode != pixmode_mono, force_aligned);
+    struct glyph *nglyph = aligned_alloc(_Alignof(struct glyph), ROUNDUP(sizeof(*glyph) + stride * targ_height, _Alignof(struct glyph)));
+    assert(nglyph);
+
+    nglyph->width = targ_width;
+    nglyph->height = targ_height;
+    nglyph->stride = stride;
+
+    nglyph->x = nearbyint(glyph->x * x_scale);
+    nglyph->y = nearbyint(glyph->y * y_scale);
+    nglyph->y_off = nearbyint(glyph->y_off * y_scale);
+    nglyph->x_off = nearbyint(glyph->x_off * x_scale);
+
+    nglyph->pixmode = glyph->pixmode;
+    nglyph->head.g = glyph->head.g;
+    nglyph->id = 0;
+
+    return nglyph;
+}
+
 HOT
 static struct glyph *downsample_glyph(struct glyph *glyph, uint32_t targ_width, bool force_aligned, double gamma) {
     double x_scale = targ_width/(double)glyph->width;
     double y_scale = x_scale;
-
-    ssize_t stride = targ_width*sizeof(color_t);
-    if (!force_aligned) stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
-    else stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT*sizeof(color_t));
-
     ssize_t targ_height = nearbyint(glyph->height * y_scale);
-    struct glyph *nglyph = aligned_alloc(_Alignof(struct glyph), ROUNDUP(sizeof(*glyph) + stride * targ_height, _Alignof(struct glyph)));
-    nglyph->x = nearbyint(glyph->x * x_scale);
-    nglyph->y = nearbyint(glyph->y * y_scale);
-    nglyph->width = targ_width;
-    nglyph->height = targ_height;
-    nglyph->y_off = nearbyint(glyph->y_off * y_scale);
-    nglyph->x_off = nearbyint(glyph->x_off * x_scale);
-    nglyph->stride = stride;
-    nglyph->pixmode = glyph->pixmode;
-    nglyph->head.g = glyph->head.g;
-    nglyph->id = 0;
+    struct glyph *nglyph = create_scaled_glyph(glyph, targ_width, x_scale, targ_height, y_scale, force_aligned);
+    ssize_t stride = nglyph->stride;
 
     for (ssize_t i = 0; i < targ_height; i++) {
         for (ssize_t j = 0; j < targ_width; j++) {
@@ -516,19 +541,7 @@ static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, u
         ord = pixmode_bgra;
     }
 
-    if (force_aligned) {
-         /* Soft renderer backend requires subpixel glyphs
-         * to be aligned on 16 bytes */
-        stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
-        if (lcd) stride *= 4;
-    } else {
-        /* XRender requires stride to be aligned exactly to 4,
-         * software renderer wants stride to be aligned to 4/16
-         * depending on whether subpixel rendering is off or on.
-         */
-        if (lcd) stride *= 4;
-        stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
-    }
+    stride = glyph_stride(stride, lcd, force_aligned);
 
     struct glyph *glyph = aligned_alloc(_Alignof(struct glyph), ROUNDUP(sizeof(*glyph) + stride * face->glyph->bitmap.rows, _Alignof(struct glyph)));
     glyph->x = -face->glyph->bitmap_left;
@@ -739,22 +752,7 @@ void glyph_put(struct glyph *glyph, bool lcd, int16_t x, int16_t y, uint8_t val)
 }
 
 struct glyph *make_empty_glyph(int16_t width, int16_t height, int16_t depth, enum pixel_mode pixmode, int16_t hspacing, int16_t vspacing, bool force_aligned) {
-    bool lcd = pixmode != pixmode_mono;
-    size_t stride = width;
-
-    if (force_aligned) {
-         /* Soft renderer backend requires subpixel glyphs
-         * to be aligned on 16 bytes */
-        stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
-        if (lcd) stride *= 4;
-    } else {
-        /* XRender requires stride to be aligned exactly to 4,
-         * software renderer wants stride to be aligned to 4/16
-         * depending on whether subpixel rendering is off or on. */
-        if (lcd) stride *= 4;
-        stride = ROUNDUP(stride, GLYPH_STRIDE_ALIGNMENT);
-    }
-
+    size_t stride = glyph_stride(width, pixmode != pixmode_mono, force_aligned);
     struct glyph *glyph = aligned_alloc(_Alignof(struct glyph), sizeof(struct glyph) +
             ROUNDUP(stride * (height + depth) * sizeof(uint8_t), _Alignof(struct glyph)));
     if (!glyph) return NULL;
