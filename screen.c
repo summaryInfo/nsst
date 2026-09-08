@@ -1581,7 +1581,7 @@ void screen_delete_columns(struct screen *scr, int16_t n) {
         screen_scroll_horizontal(scr, scr->c.x, n);
 }
 
-void screen_index_horizonal(struct screen *scr) {
+void screen_index_horizontal(struct screen *scr) {
     if (scr->c.x == screen_max_x(scr) - 1 && screen_cursor_in_region(scr)) {
         screen_scroll_horizontal(scr, screen_min_x(scr), 1);
         screen_reset_pending(scr);
@@ -1589,7 +1589,7 @@ void screen_index_horizonal(struct screen *scr) {
         screen_move_to(scr, scr->c.x + 1, scr->c.y);
 }
 
-void screen_rindex_horizonal(struct screen *scr) {
+void screen_rindex_horizontal(struct screen *scr) {
     if (scr->c.x == screen_min_x(scr) && screen_cursor_in_region(scr)) {
         screen_scroll_horizontal(scr, screen_min_x(scr), -1);
         screen_reset_pending(scr);

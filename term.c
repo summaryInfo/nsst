@@ -2914,7 +2914,7 @@ static void term_dispatch_esc(struct term *term) {
         return;
     case E('6'): /* DECBI */
         CHK_VT(4);
-        screen_rindex_horizonal(scr);
+        screen_rindex_horizontal(scr);
         break;
     case E('7'): /* DECSC */
         screen_save_cursor(scr, 1);
@@ -2924,7 +2924,7 @@ static void term_dispatch_esc(struct term *term) {
         break;
     case E('9'): /* DECFI */
         CHK_VT(4);
-        screen_index_horizonal(scr);
+        screen_index_horizontal(scr);
         break;
     case E('='): /* DECKPAM */
         term->kstate.appkey = 1;
