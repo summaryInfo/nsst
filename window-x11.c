@@ -243,9 +243,32 @@ static void send_wm_client_event(xcb_window_t win, uint32_t type, uint32_t data0
 #define _NET_WM_STATE_ADD 1
 #define _NET_WM_STATE_TOGGLE 2
 
+static struct extent x11_get_position_raw(struct window *win) {
+    xcb_translate_coordinates_cookie_t tc = xcb_translate_coordinates(con, get_plat(win)->wid, ctx.screen->root, 0, 0);
+    xcb_translate_coordinates_reply_t *t_rep = xcb_translate_coordinates_reply(con, tc, NULL);
+    struct extent res = {0, 0};
+    if (t_rep) {
+        res.width = t_rep->dst_x;
+        res.height = t_rep->dst_y;
+    }
+    free(t_rep);
+    return res;
+}
+
+static uint16_t x11_get_boder(struct window *win) {
+    xcb_get_geometry_cookie_t gc = xcb_get_geometry(con, get_plat(win)->wid);
+    xcb_get_geometry_reply_t *g_rep = xcb_get_geometry_reply(con, gc, NULL);
+    if (!g_rep)
+        return 0;
+
+    uint16_t border = g_rep->border_width;
+    free(g_rep);
+    return border;
+}
+
 static inline void save_pos(struct window *win) {
     if (get_plat(win)->saved.width > 0) {
-        struct extent p = window_get_position(win);
+        struct extent p = x11_get_position_raw(win);
         struct extent s = window_get_size(win);
         get_plat(win)->saved = (struct rect) { p.width, p.height, s.width, s.height };
         assert(s.width > 0);
@@ -319,17 +342,11 @@ static bool x11_window_action(struct window *win, enum window_action act) {
 }
 
 static struct extent x11_get_position(struct window *win) {
-    xcb_get_geometry_cookie_t gc = xcb_get_geometry(con, get_plat(win)->wid);
-    xcb_translate_coordinates_cookie_t tc = xcb_translate_coordinates(con, get_plat(win)->wid, ctx.screen->root, 0, 0);
-    xcb_get_geometry_reply_t *g_rep = xcb_get_geometry_reply(con, gc, NULL);
-    xcb_translate_coordinates_reply_t *t_rep = xcb_translate_coordinates_reply(con, tc, NULL);
-    struct extent res = {0, 0};
-    if (g_rep && t_rep) {
-        res.width = t_rep->dst_x - g_rep->border_width;
-        res.height = t_rep->dst_y - g_rep->border_width;
-    }
-    free(g_rep);
-    free(t_rep);
+    uint16_t border = x11_get_boder(win);
+    struct extent res = x11_get_position_raw(win);
+
+    res.height -= border;
+    res.width -= border;
     return res;
 }
 
