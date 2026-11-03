@@ -319,14 +319,17 @@ static bool x11_window_action(struct window *win, enum window_action act) {
 }
 
 static struct extent x11_get_position(struct window *win) {
-    xcb_translate_coordinates_cookie_t gc = xcb_translate_coordinates(con, get_plat(win)->wid, ctx.screen->root, 0, 0);
-    xcb_translate_coordinates_reply_t *rep = xcb_translate_coordinates_reply(con, gc, NULL);
+    xcb_get_geometry_cookie_t gc = xcb_get_geometry(con, get_plat(win)->wid);
+    xcb_translate_coordinates_cookie_t tc = xcb_translate_coordinates(con, get_plat(win)->wid, ctx.screen->root, 0, 0);
+    xcb_get_geometry_reply_t *g_rep = xcb_get_geometry_reply(con, gc, NULL);
+    xcb_translate_coordinates_reply_t *t_rep = xcb_translate_coordinates_reply(con, tc, NULL);
     struct extent res = {0, 0};
-    if (rep) {
-        res.width = rep->dst_x;
-        res.height = rep->dst_y;
-        free(rep);
+    if (g_rep && t_rep) {
+        res.width = t_rep->dst_x - g_rep->border_width;
+        res.height = t_rep->dst_y - g_rep->border_width;
     }
+    free(g_rep);
+    free(t_rep);
     return res;
 }
 
