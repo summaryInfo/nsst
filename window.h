@@ -123,7 +123,13 @@ void window_pop_title(struct window *win, enum title_target which);
 /* Both at the same time are not supported */
 void window_get_title(struct window *win, enum title_target which, char **name, bool *utf8);
 
+#if USE_URI
 void window_set_active_uri(struct window *win, uint32_t uri, bool pressed);
+#else
+static inline void window_set_active_uri(struct window *win, uint32_t uri, bool pressed) {
+    (void)win, (void)uri, (void)pressed;
+}
+#endif
 void window_set_mouse(struct window *win, bool enabled);
 void window_set_colors(struct window *win, color_t bg, color_t cursor_fg);
 void window_get_pointer(struct window *win, int16_t *px, int16_t *py, uint32_t *pmask);

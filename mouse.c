@@ -848,45 +848,27 @@ void selection_load_config(struct selection_state *sel) {
     poller_unset(&sel->scroll_timer);
 }
 
-static void pending_scroll(struct selection_state *sel, struct screen *scr, int16_t y, enum mouse_event_type event) {
+static void update_pending_scroll(struct selection_state *sel, struct screen *scr, int16_t y) {
     struct extent c = window_get_cell_size(sel->win);
     struct border b = window_get_border(sel->win);
     struct extent g = window_get_grid_size(sel->win);
 
-    if (event == mouse_event_motion) {
-        if (y - b.top>= g.height) sel->pending_scroll = MIN(-1, (g.height + b.top - y - c.height + 1) / c.height / 2);
-        else if (y < b.top) sel->pending_scroll = MAX(1, (b.top - y + c.height - 1) / c.height / 2);
+    if (y - b.top>= g.height) sel->pending_scroll = MIN(-1, (g.height + b.top - y - c.height + 1) / c.height / 2);
+    else if (y < b.top) sel->pending_scroll = MAX(1, (b.top - y + c.height - 1) / c.height / 2);
 
-        if (!sel->scroll_timer && sel->pending_scroll) {
-            sel->pending_scroll *= CHAR_BIT*sizeof(sel->pending_scroll) - __builtin_clz(sel->pending_scroll);
+    if (!sel->scroll_timer && sel->pending_scroll) {
+        sel->pending_scroll *= CHAR_BIT*sizeof(sel->pending_scroll) - __builtin_clz(abs(sel->pending_scroll));
 
-            struct instance_config *cfg = window_cfg(sel->win);
-            poller_set_timer(&sel->scroll_timer, handle_pending_scroll, sel, cfg->select_scroll_time);
-            screen_scroll_view(scr, sel->pending_scroll);
-            window_reset_delayed_redraw(sel->win);
-        } else if (sel->scroll_timer && !sel->pending_scroll) {
-            poller_unset(&sel->scroll_timer);
-        }
+        struct instance_config *cfg = window_cfg(sel->win);
+        poller_set_timer(&sel->scroll_timer, handle_pending_scroll, sel, cfg->select_scroll_time);
+        screen_scroll_view(scr, sel->pending_scroll);
+        window_reset_delayed_redraw(sel->win);
+    } else if (sel->scroll_timer && !sel->pending_scroll) {
+        poller_unset(&sel->scroll_timer);
     }
 }
 
-#define THRESHOLD (3*3)
-
-static inline bool significantly_moved(struct selection_state *sel, struct mouse_event *ev) {
-    return (sel->pointer_x_raw - ev->x)*(sel->pointer_x_raw - ev->x) +
-           (sel->pointer_y_raw - ev->y)*(sel->pointer_y_raw - ev->y) > THRESHOLD;
-}
-
-static inline bool is_selection_event(struct selection_state *sel, struct mouse_event *ev) {
-    return (ev->event == mouse_event_press && ev->button == 0) ||
-           (ev->event == mouse_event_motion && ev->mask & mask_button_1 &&
-            (sel->state == state_sel_progress ||
-             (sel->state == state_sel_pressed && significantly_moved(sel, ev)))) ||
-           (ev->event == mouse_event_release && ev->button == 0 && sel->state == state_sel_progress);
-}
-
 void mouse_report_locator(struct term *term, uint8_t evt, int16_t x, int16_t y, uint32_t mask) {
-
     uint32_t lmask = 0;
     if (mask & mask_button_3) lmask |= 1;
     if (mask & mask_button_2) lmask |= 2;
@@ -968,7 +950,137 @@ static void update_active_uri(struct screen *scr, struct window *win, struct mou
             (ev->mask & mask_mod_mask) == (uri_mask & mask_mod_mask))
         uri_open(window_cfg(win)->open_command, uri);
 }
+#else
+static void update_active_uri(struct screen *scr, struct window *win, struct mouse_event *ev) {
+    (void)scr, (void)win, (void)ev;
+}
 #endif
+
+static int report_locator_event(struct term *term, struct mouse_event ev, struct mouse_state *loc) {
+    if (loc->locator_filter) {
+        if (ev.x < loc->filter.x || ev.x >= loc->filter.x + loc->filter.width ||
+                ev.y < loc->filter.y || ev.y >= loc->filter.y + loc->filter.height) {
+            if (ev.event == mouse_event_press) ev.mask |= 1 << (ev.button + 8);
+            mouse_report_locator(term, 10, ev.x, ev.y, ev.mask);
+            loc->locator_filter = 0;
+            window_set_mouse(term_window(term), loc->mouse_mode == mouse_mode_motion || USE_URI);
+            return 1;
+        }
+    }
+
+    if (loc->locator_enabled) {
+        if (ev.event == mouse_event_motion) return 0;
+        if (ev.event == mouse_event_press && !loc->locator_report_press) return 0;
+        if (ev.event == mouse_event_release && !loc->locator_report_release) return 0;
+
+        if (ev.button < 3) {
+            if (loc->locator_oneshot) {
+                loc->locator_enabled = 0;
+                loc->locator_oneshot = 0;
+            }
+
+            if (ev.event == mouse_event_press) ev.mask |= 1 << (ev.button + 8);
+            mouse_report_locator(term, 2 + ev.button * 2 + (ev.event == mouse_event_release), ev.x, ev.y, ev.mask);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+int report_mouse_event(struct term *term, struct mouse_event ev) {
+    struct mouse_state *loc = term_get_mstate(term);
+
+    if (loc->locator_enabled | loc->locator_filter)
+        return report_locator_event(term, ev, loc);
+
+    if (loc->mouse_mode == mouse_mode_none)
+        return 0;
+
+    int reported = 1;
+    enum mouse_mode md = loc->mouse_mode;
+
+    if (md == mouse_mode_x10 && ev.button > 2) return 0;
+
+    adj_coords(term_window(term), &ev.x, &ev.y, loc->mouse_format == mouse_format_pixel);
+
+    if (ev.event == mouse_event_motion) {
+        if (md != mouse_mode_motion && md != mouse_mode_drag) return 0;
+        if (!(ev.mask & ~mask_mod_mask)) {
+            if (md == mouse_mode_drag) return 0;
+            ev.button = 32 + 3;
+        } else {
+            ev.button = 32 + loc->reported_button;
+        }
+
+        /* We should not consume this suppressed event by mouse selection */
+        if (ev.x == loc->reported_x && ev.y == loc->reported_y) return 2;
+
+        reported = 2;
+    } else {
+        if (ev.button > 6) ev.button += 128 - 7;
+        else if (ev.button > 2) ev.button += 64 - 3;
+
+        if (ev.event == mouse_event_release) {
+            if (md == mouse_mode_x10) return 0;
+            /* Don't report wheel release events */
+            if (ev.button == 64 || ev.button == 65) return 0;
+            /* 3 is `release` for every mode except SGR */
+            if (loc->mouse_format != mouse_format_sgr) ev.button = 3;
+        } else {
+            loc->reported_button = ev.button;
+        }
+    }
+
+    if (md != mouse_mode_x10) {
+        if (ev.mask & mask_shift) ev.button |= 4;
+        if (ev.mask & mask_mod_1) ev.button |= 8;
+        if (ev.mask & mask_control) ev.button |= 16;
+    }
+
+    switch (loc->mouse_format) {
+    case mouse_format_sgr:
+    case mouse_format_pixel:
+        term_answerback(term, CSI"<%"PRIu8";%"PRIu16";%"PRIu16"%c",
+                ev.button, ev.x + 1, ev.y + 1, ev.event == mouse_event_release ? 'm' : 'M');
+        break;
+    case mouse_format_utf8:;
+        size_t off = 0;
+        uint8_t buf[UTF8_MAX_LEN * 3 + 3];
+        off += utf8_encode(ev.button + ' ', buf + off, buf + sizeof buf);
+        off += utf8_encode(ev.x + 1 + ' ', buf + off, buf + sizeof buf);
+        utf8_encode(ev.y + 1 + ' ', buf + off, buf + sizeof buf);
+        term_answerback(term, CSI"%s%s",
+                term_get_kstate(term)->keyboard_mapping == keymap_sco ? ">M" : "M", buf);
+        break;
+    case mouse_format_uxvt:
+        term_answerback(term, CSI"%"PRIu8";%"PRIu16";%"PRIu16"M", ev.button + ' ', ev.x + 1, ev.y + 1);
+        break;
+    case mouse_format_default:
+        if (ev.x > 222 || ev.y > 222) return reported;
+        term_answerback(term, CSI"%s%c%c%c",
+                term_get_kstate(term)->keyboard_mapping == keymap_sco ? ">M" : "M",
+                ev.button + ' ', ev.x + 1 + ' ', ev.y + 1 + ' ');
+    }
+
+    loc->reported_x = ev.x;
+    loc->reported_y = ev.y;
+    return reported;
+}
+
+#define THRESHOLD (3*3)
+
+static inline bool significantly_moved(struct selection_state *sel, struct mouse_event *ev) {
+    return (sel->pointer_x_raw - ev->x)*(sel->pointer_x_raw - ev->x) +
+           (sel->pointer_y_raw - ev->y)*(sel->pointer_y_raw - ev->y) > THRESHOLD;
+}
+
+static void update_selection(struct screen *scr, struct selection_state *sel, struct mouse_event ev) {
+    adj_coords(sel->win, &ev.x, &ev.y, 0);
+    sel->pointer_x = ev.x;
+    sel->pointer_y = ev.y;
+    selection_changed(sel, scr, ev.event + 1, ev.mask);
+}
 
 void mouse_handle_input(struct term *term, struct mouse_event ev) {
     struct mouse_state *loc = term_get_mstate(term);
@@ -977,155 +1089,86 @@ void mouse_handle_input(struct term *term, struct mouse_event ev) {
     sel->pending_scroll = 0;
 
     uint32_t force_mouse_mask = window_cfg(term_window(term))->force_mouse_mask;
-
-    // TODO Cleanup
-
     bool force_mouse_by_mod = force_mouse_mask != UINT32_MAX && (ev.mask & force_mouse_mask) == force_mouse_mask;
-    bool force_mouse = force_mouse_by_mod || loc->force_mouse || term_get_kstate(term)->keyboard_vt52;
+    bool force_mouse = force_mouse_by_mod || loc->force_mouse || term_get_kstate(term)->keyboard_vt52 || sel->state == state_sel_progress;
     bool override_active = force_mouse_by_mod && ((loc->locator_enabled | loc->locator_filter) || loc->mouse_mode != mouse_mode_none) &&
             !term_get_kstate(term)->keyboard_vt52;
 
-    /* Report mouse */
-    if ((loc->locator_enabled | loc->locator_filter) && !force_mouse) {
-        if (loc->locator_filter) {
-            if (ev.x < loc->filter.x || ev.x >= loc->filter.x + loc->filter.width ||
-                    ev.y < loc->filter.y || ev.y >= loc->filter.y + loc->filter.height) {
-                if (ev.event == mouse_event_press) ev.mask |= 1 << (ev.button + 8);
-                mouse_report_locator(term, 10, ev.x, ev.y, ev.mask);
-                loc->locator_filter = 0;
-                window_set_mouse(term_window(term), loc->mouse_mode == mouse_mode_motion);
-            }
-        } else if (loc->locator_enabled) {
-            if (loc->locator_oneshot) {
-                loc->locator_enabled = 0;
-                loc->locator_oneshot = 0;
-            }
+    int reported = 0;
+    if (!force_mouse)
+        reported = report_mouse_event(term, ev);
 
-            if (ev.event == mouse_event_motion) return;
-            else if (ev.event == mouse_event_press && !loc->locator_report_press) return;
-            else if (ev.event == mouse_event_release && !loc->locator_report_release) return;
-
-            if (ev.button < 3) {
-                if (ev.event == mouse_event_press) ev.mask |= 1 << (ev.button + 8);
-                mouse_report_locator(term, 2 + ev.button * 2 + (ev.event == mouse_event_release), ev.x, ev.y, ev.mask);
-            }
-        }
-    } else if (loc->mouse_mode != mouse_mode_none && !force_mouse) {
-        enum mouse_mode md = loc->mouse_mode;
-
-        adj_coords(term_window(term), &ev.x, &ev.y, loc->mouse_format == mouse_format_pixel);
-
-        if (md == mouse_mode_x10 && ev.button > 2) return;
-
-        if (ev.event == mouse_event_motion) {
-            if (ev.x == loc->reported_x && ev.y == loc->reported_y) return;
-            if (md != mouse_mode_motion && md != mouse_mode_drag) return;
-            if (!(ev.mask & ~mask_mod_mask)) {
-                if (md == mouse_mode_drag) return;
-                ev.button = 32 + 3;
+    if (ev.event == mouse_event_release && !reported) {
+        /* Scroll view */
+        if (ev.button == 3 || ev.button == 4) {
+            ssize_t direction = 2 *(ev.button == 3) - 1;
+            if (ev.mask & mask_mod_1) {
+                term_scroll_view_to_cmd(term, direction);
             } else {
-                ev.button = 32 + loc->reported_button;
+                int16_t amount;
+                if (ev.mask & mask_shift) {
+                    amount = window_cfg(sel->win)->page_amount;
+                    if (amount == -1)
+                        amount = screen_height(term_screen(term));
+                } else {
+                    amount = window_cfg(sel->win)->scroll_amount;
+                }
+                term_scroll_view(term, direction * amount);
             }
-        } else {
-            if (ev.button > 6) ev.button += 128 - 7;
-            else if (ev.button > 2) ev.button += 64 - 3;
-
-            if (ev.event == mouse_event_release) {
-                if (md == mouse_mode_x10) return;
-                /* Don't report wheel release events */
-                if (ev.button == 64 || ev.button == 65) return;
-                /* 3 is `release` for every mode except SGR */
-                if (loc->mouse_format != mouse_format_sgr) ev.button = 3;
-            } else {
-                loc->reported_button = ev.button;
-            }
+            return;
         }
 
-        if (md != mouse_mode_x10) {
-            if (ev.mask & mask_shift) ev.button |= 4;
-            if (ev.mask & mask_mod_1) ev.button |= 8;
-            if (ev.mask & mask_control) ev.button |= 16;
+        /* Paste */
+        if (ev.button == 1) {
+            window_paste_clip(term_window(term), clip_primary);
+            return;
         }
+    }
 
-        switch (loc->mouse_format) {
-        case mouse_format_sgr:
-        case mouse_format_pixel:
-            term_answerback(term, CSI"<%"PRIu8";%"PRIu16";%"PRIu16"%c",
-                    ev.button, ev.x + 1, ev.y + 1, ev.event == mouse_event_release ? 'm' : 'M');
-            break;
-        case mouse_format_utf8:;
-            size_t off = 0;
-            uint8_t buf[UTF8_MAX_LEN * 3 + 3];
-            off += utf8_encode(ev.button + ' ', buf + off, buf + sizeof buf);
-            off += utf8_encode(ev.x + 1 + ' ', buf + off, buf + sizeof buf);
-            utf8_encode(ev.y + 1 + ' ', buf + off, buf + sizeof buf);
-            term_answerback(term, CSI"%s%s",
-                    term_get_kstate(term)->keyboard_mapping == keymap_sco ? ">M" : "M", buf);
-            break;
-        case mouse_format_uxvt:
-            term_answerback(term, CSI"%"PRIu8";%"PRIu16";%"PRIu16"M", ev.button + ' ', ev.x + 1, ev.y + 1);
-            break;
-        case mouse_format_default:
-            if (ev.x > 222 || ev.y > 222) return;
-            term_answerback(term, CSI"%s%c%c%c",
-                    term_get_kstate(term)->keyboard_mapping == keymap_sco ? ">M" : "M",
-                    ev.button + ' ', ev.x + 1 + ' ', ev.y + 1 + ' ');
-        }
+    if (!override_active || force_mouse_mask == UINT32_MAX)
+        force_mouse_mask = 0;
+    if (reported == 2)
+        return;
 
-        loc->reported_x = ev.x;
-        loc->reported_y = ev.y;
-    /* Scroll view */
-    } else if (ev.event == mouse_event_press && (ev.button == 3 || ev.button == 4)) {
-        ssize_t direction = 2 *(ev.button == 3) - 1;
-        if (ev.mask & mask_mod_1) {
-            term_scroll_view_to_cmd(term, direction);
-        } else {
-            int16_t amount;
-            if (ev.mask & mask_shift) {
-                amount = window_cfg(sel->win)->page_amount;
-                if (amount == -1)
-                    amount = screen_height(term_screen(term));
-            } else {
-                amount = window_cfg(sel->win)->scroll_amount;
-            }
-            term_scroll_view(term, direction * amount);
-        }
-    /* Paste */
-    } else if (ev.button == 1 && ev.event == mouse_event_release) {
-        window_paste_clip(term_window(term), clip_primary);
-    /* Clear selection if it just a click */
-    } else if (ev.event == mouse_event_release && ev.button == 0 && sel->state == state_sel_pressed) {
-        sel->state = state_sel_none;
-#if USE_URI
-        update_active_uri(scr, sel->win, &ev);
-#endif
-    /* Select */
-    } else if (is_selection_event(sel, &ev)) {
-#if USE_URI
-        if (ev.event == mouse_event_press && ev.button == 0) update_active_uri(scr, sel->win, &ev);
-        else window_set_active_uri(term_window(term), EMPTY_URI, 0);
-#endif
-        int16_t y = ev.y;
-        sel->pointer_x_raw = ev.x;
-        sel->pointer_y_raw = ev.y;
-        adj_coords(sel->win, &ev.x, &ev.y, 0);
-        sel->pointer_x = ev.x;
-        sel->pointer_y = ev.y;
+    switch (ev.event) {
+    case mouse_event_press:
+        if (ev.button == 0) {
+            update_active_uri(scr, sel->win, &ev);
 
-        if (override_active && force_mouse_mask != UINT32_MAX)
+            sel->pointer_x_raw = ev.x;
+            sel->pointer_y_raw = ev.y;
+
             ev.mask &= ~force_mouse_mask;
-
-        selection_changed(sel, scr, ev.event + 1, ev.mask);
-        pending_scroll(sel, scr, y, ev.event);
-
-        if (ev.event == mouse_event_release) {
-            sel->targ = sel->select_to_clipboard ? clip_clipboard : clip_primary;
-            window_set_clip(sel->win, selection_data(sel), sel->targ);
+            update_selection(scr, sel, ev);
         }
-#if USE_URI
-    } else {
-        /* Update URI */
-        update_active_uri(scr, sel->win, &ev);
-#endif
+        break;
+    case mouse_event_release:
+        if (ev.button == 0) {
+            if (sel->state == state_sel_progress) {
+                window_set_active_uri(term_window(term), EMPTY_URI, 0);
+
+                ev.mask &= ~force_mouse_mask;
+                update_selection(scr, sel, ev);
+
+                sel->targ = sel->select_to_clipboard ? clip_clipboard : clip_primary;
+                window_set_clip(sel->win, selection_data(sel), sel->targ);
+            } else {
+                update_active_uri(scr, sel->win, &ev);
+                sel->state = state_sel_none;
+            }
+        }
+        break;
+    case mouse_event_motion:
+        if ((ev.mask & mask_button_1) && (sel->state == state_sel_progress ||
+                                          (sel->state == state_sel_pressed && significantly_moved(sel, &ev)))) {
+            window_set_active_uri(term_window(term), EMPTY_URI, 0);
+
+            ev.mask &= ~force_mouse_mask;
+            update_selection(scr, sel, ev);
+            update_pending_scroll(sel, scr, ev.y);
+        } else {
+            update_active_uri(scr, sel->win, &ev);
+        }
+        break;
     }
 }
