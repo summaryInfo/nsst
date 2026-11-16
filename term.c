@@ -1483,8 +1483,8 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
             term->mode.inband_resize = set;
             if (set) {
                 struct extent grid_size = window_get_size(term_window(term));
-                term_answerback(term, CSI"48;%zu;%zu;%u;%ut", screen_width(&term->scr),
-                                screen_height(&term->scr), grid_size.width, grid_size.height);
+                term_answerback(term, CSI"48;%zu;%zu;%u;%ut", screen_height(&term->scr),
+                                screen_width(&term->scr), grid_size.height, grid_size.width);
             }
             break;
         default:
@@ -3857,7 +3857,7 @@ bool term_is_requested_resize(struct term *term) {
 
 void term_notify_resize(struct term *term, int16_t width, int16_t height, int16_t cw, int16_t ch) {
     if (term->mode.inband_resize)
-        term_answerback(term, CSI"48;%u;%u;%u;%ut", cw, ch, width, height);
+        term_answerback(term, CSI"48;%u;%u;%u;%ut", ch, cw, height, width);
     tty_set_winsz(&term->tty, cw, ch, width, height);
 }
 
