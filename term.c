@@ -3799,12 +3799,15 @@ void term_answerback(struct term *term, const char *str, ...) {
     ssize_t res = vsnprintf((char *)csi, sizeof(csi), (char *)fmt, vl);
     va_end(vl);
 
+    if (UNLIKELY(res < 0)) return;
+    res = MIN(res, (ssize_t)sizeof(csi) - 1);
+
     tty_write(&term->tty, csi, res, term->mode.crlf);
 
     if (gconfig.trace_input) {
         ssize_t j = MAX_REPORT;
         csi[--j] = 0;
-        for (size_t i = res; i; i--) {
+        for (ssize_t i = res; i && j > 3; i--) {
             if (IS_C0(csi[i - 1]) || IS_DEL(csi[i - 1]))
                 csi[--j] = csi[i - 1] ^ 0x40, csi[--j] = '^';
             else if (IS_C1(csi[i - 1]))
