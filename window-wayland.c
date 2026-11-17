@@ -1780,7 +1780,7 @@ static void handle_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
     if (!win) return;
 
     win->any_event_happened = true;
-    win_ptr_ping(&seat->keyboard.wptr);
+    win_ptr_ping(&seat->pointer.wptr);
     window_reset_pointer_inhibit_timer(win);
 
     int32_t x = wl_fixed_to_int(seat->pointer.surface_x);
