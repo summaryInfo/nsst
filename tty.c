@@ -631,7 +631,7 @@ void tty_set_winsz(struct tty *tty, int16_t width, int16_t height, int16_t wwidt
 void printer_print_string(struct printer *pr, const uint8_t *str, ssize_t size) {
     ssize_t wri = 0, res;
     do {
-        res = write(pr->w.fd, str, size);
+        res = write(pr->w.fd, str + wri, size - wri);
         if (res < 0) {
             warn("Printer error");
             if (pr->w.fd != STDOUT_FILENO)
