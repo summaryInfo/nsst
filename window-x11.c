@@ -363,7 +363,10 @@ static int32_t x11_get_workspace(struct window *win) {
         return -1;
     }
 
-    uint32_t result = *(uint32_t *)xcb_get_property_value(rep);
+    int32_t result = -1;
+    if (xcb_get_property_value_length(rep) >= (int)sizeof(uint32_t))
+        result = *(uint32_t *)xcb_get_property_value(rep);
+
     free(rep);
     return result;
 }
