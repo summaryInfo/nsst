@@ -409,7 +409,7 @@ static const char *is_escaped(const char **dst) {
         uint32_t acc = 0;
         int len = 4;
         do acc = (acc << 3) | fromoctdigit(**dst);
-        while (--len > 0 || (unsigned)*++(*dst) - '0' < 8);
+        while (--len > 0 && (unsigned)*++(*dst) - '0' < 8);
         if (acc > 255 || !len)
             return "Constant is too large";
         return NULL;
