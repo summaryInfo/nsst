@@ -422,7 +422,7 @@ void poller_run(void) {
             poller.skip_wait = false;
             timeout = 0;
         } else if (poller.timer_heap_size) {
-            timeout = MAX(0, ts_diff(&now, &poller.timer_heap[0]->timer.current)/(SEC/1000));
+            timeout = MAX(0, ts_diff(&poller.now, &poller.timer_heap[0]->timer.current)/(SEC/1000));
         }
         if (poll(poller.pollfd_array, poller.pollfd_array_caps, timeout) < 0 && errno != EINTR)
             warn("Poll error: %s", strerror(errno));
