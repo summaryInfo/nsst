@@ -932,7 +932,7 @@ static void update_active_uri(struct screen *scr, struct window *win, struct mou
     struct extent g = window_get_grid_size(win);
 
     uint32_t uri = EMPTY_URI;
-    if ((ev->x >= b.left && ev->x < g.width + b.left) && (ev->y >= b.top || ev->y < g.height + b.top)) {
+    if ((ev->x >= b.left && ev->x < g.width + b.left) && (ev->y >= b.top && ev->y < g.height + b.top)) {
         int16_t x = (ev->x - b.left) / c.width;
         int16_t y = (ev->y - b.top) / c.height;
 
