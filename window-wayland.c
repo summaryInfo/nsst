@@ -1422,9 +1422,11 @@ static bool handle_autorepeat(void *seat_) {
 }
 
 static inline void seat_start_autorepeat(struct seat *seat, uint32_t key) {
-    if (seat->keyboard.autorepeat_timer)
-        poller_remove(seat->keyboard.autorepeat_timer);
-    seat->keyboard.autorepeat_timer = poller_add_timer(handle_autorepeat, seat, seat->keyboard.autorepeat_initial);
+    if (seat->keyboard.autorepeat_repeat) {
+        if (seat->keyboard.autorepeat_timer)
+            poller_remove(seat->keyboard.autorepeat_timer);
+        seat->keyboard.autorepeat_timer = poller_add_timer(handle_autorepeat, seat, seat->keyboard.autorepeat_initial);
+    }
     seat->keyboard.last_key = key;
 }
 
@@ -1511,7 +1513,7 @@ static void handle_keyboard_repeat_info(void *data, struct wl_keyboard *wl_keybo
         info("Event[%p]: keyboard.repeat_info(rate=%d, delay=%d)", data, rate, delay);
 
     seat->keyboard.autorepeat_initial = delay*(SEC/1000);
-    seat->keyboard.autorepeat_repeat = SEC / rate;
+    seat->keyboard.autorepeat_repeat = rate > 0 ? SEC / rate : 0;
 }
 
 static struct wl_keyboard_listener keyboard_listener = {
