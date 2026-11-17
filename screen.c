@@ -960,8 +960,8 @@ static inline void prep_lines(struct screen *scr, ssize_t xs, ssize_t ys, ssize_
 
 FORCEINLINE
 static inline void screen_rect_pre(struct screen *scr, int16_t *xs, int16_t *ys, int16_t *xe, int16_t *ye, bool erase) {
-    *xs = MAX(screen_min_oy(scr), MIN(*xs, screen_max_ox(scr) - 1));
-    *xe = MAX(screen_min_oy(scr), MIN(*xe, screen_max_ox(scr)));
+    *xs = MAX(screen_min_ox(scr), MIN(*xs, screen_max_ox(scr) - 1));
+    *xe = MAX(screen_min_ox(scr), MIN(*xe, screen_max_ox(scr)));
     *ys = MAX(screen_min_oy(scr), MIN(*ys, screen_max_oy(scr) - 1));
     *ye = MAX(screen_min_oy(scr), MIN(*ye, screen_max_oy(scr)));
 
