@@ -1720,7 +1720,7 @@ char *encode_sgr(char *dst, char *end, const struct attr *attr) {
     if (color_idx(attr->bg) < 8) FMT(";%u", 40 + color_idx(attr->bg));
     else if (color_idx(attr->bg) < 16) FMT(";%u", 100 + color_idx(attr->bg) - 8);
     else if (color_idx(attr->bg) < PALETTE_SIZE - SPECIAL_PALETTE_SIZE) FMT(";48:5:%u", color_idx(attr->bg));
-    else if (color_idx(attr->bg) == SPECIAL_FG) /* FMT(";49") -- default, skip */;
+    else if (color_idx(attr->bg) == SPECIAL_BG) /* FMT(";49") -- default, skip */;
     else if (is_direct_color(attr->bg)) FMT(";48:2:1:%u:%u:%u", color_r(attr->bg), color_g(attr->bg), color_b(attr->bg));
 
     /* Encode underline color */
