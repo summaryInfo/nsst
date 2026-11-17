@@ -697,7 +697,7 @@ static inline bool term_parse_tabs_report(struct term *term, const uint8_t *dstr
     screen_clear_tabs(&term->scr);
     for (ssize_t tab = 0; dstr <= dend; dstr++) {
         if (*dstr == '/' || dstr == dend) {
-            if (tab - 1 < screen_width(&term->scr))
+            if (tab > 0 && tab - 1 < screen_width(&term->scr))
                 screen_set_tab(&term->scr, tab - 1, 1);
             tab = 0;
         } else if (isdigit(*dstr)) {
