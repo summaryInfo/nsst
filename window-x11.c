@@ -891,16 +891,17 @@ static void receive_selection_data(struct window *win, xcb_atom_t prop, bool pno
         left = rep->bytes_after;
 
         if (pnotify && !rep->value_len && !left) {
-           get_plat(win)->ev_mask &= ~XCB_EVENT_MASK_PROPERTY_CHANGE;
-           xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_EVENT_MASK, &get_plat(win)->ev_mask);
+            get_plat(win)->ev_mask &= ~XCB_EVENT_MASK_PROPERTY_CHANGE;
+            xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_EVENT_MASK, &get_plat(win)->ev_mask);
         }
 
         if (rep->type == ctx.atom.INCR) {
-           get_plat(win)->ev_mask |= XCB_EVENT_MASK_PROPERTY_CHANGE;
-           xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_EVENT_MASK, &get_plat(win)->ev_mask);
-           xcb_delete_property(con, get_plat(win)->wid, prop);
-           xcb_flush(con);
-           continue;
+            get_plat(win)->ev_mask |= XCB_EVENT_MASK_PROPERTY_CHANGE;
+            xcb_change_window_attributes(con, get_plat(win)->wid, XCB_CW_EVENT_MASK, &get_plat(win)->ev_mask);
+            xcb_delete_property(con, get_plat(win)->wid, prop);
+            xcb_flush(con);
+            free(rep);
+            continue;
         }
 
         ssize_t size = rep->format * rep->value_len / 8;
