@@ -1812,10 +1812,12 @@ void screen_tabs(struct screen *scr, int16_t n) {
             screen_wrap(scr, false);
         while (scr->c.x < screen_max_x(scr) - 1 && n--) {
             /* If current cell is empty, put \t over there */
-            struct cell *c = view_cell(&scr->screen[scr->c.y], scr->c.x);
-            if (scr->screen[scr->c.y].width <= scr->c.x || !c->ch) {
+            if (scr->screen[scr->c.y].width <= scr->c.x ||
+                    !view_cell(&scr->screen[scr->c.y], scr->c.x)->ch) {
                 screen_adjust_line(scr, scr->c.y, scr->c.x + 1);
-                c->ch = '\t';
+                /* Re-fetch cell pointer, as line may have been reallocated,
+                 * although it would not change the address with MPA. */
+                view_cell(&scr->screen[scr->c.y], scr->c.x)->ch = '\t';
             }
 
             do scr->c.x++;
