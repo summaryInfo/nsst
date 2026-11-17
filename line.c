@@ -45,6 +45,20 @@ static inline bool attr_empty(struct attr *attr) {
     return attr->fg == 0;
 }
 
+static struct line_attr *xzalloc_attrtab(size_t caps) {
+    struct line_attr *tab = xzalloc(sizeof *tab + caps * sizeof *tab->data);
+    tab->caps = caps;
+
+    /* At max size the last slot would map to ATTRID_MAX, which wraps around
+     * to ATTRID_DEFAULT when stored - and only the default attribute itself
+     * could ever match it, while it never gets inserted. So keep the default
+     * attribute there to reserve the slot without a per-probe check. */
+    if (UNLIKELY(caps == ATTRID_MAX))
+        tab->data[ATTRID_MAX - 1] = ATTR_DEFAULT;
+
+    return tab;
+}
+
 static uint32_t insert_attr(struct line_attr *tab, const struct attr *attr, uint32_t hash) {
     size_t i = hash & (tab->caps - 1);
     size_t i0 = i, caps = tab->caps;
@@ -154,8 +168,7 @@ uint32_t alloc_attr(struct line *line, const struct attr *attr) {
     uint32_t hash = attr_hash(attr);
 
     if (!line->attrs) {
-        line->attrs = xzalloc(sizeof *line->attrs + INIT_CAP * sizeof *line->attrs->data);
-        line->attrs->caps = INIT_CAP;
+        line->attrs = xzalloc_attrtab(INIT_CAP);
     }
 
 #if USE_URI
@@ -169,9 +182,7 @@ uint32_t alloc_attr(struct line *line, const struct attr *attr) {
 #if DEBUG_LINES
     assert(!(new_caps & (new_caps - 1)));
 #endif
-    struct line_attr *new = xzalloc(sizeof *new + new_caps * sizeof *new->data);
-
-    new->caps = new_caps;
+    struct line_attr *new = xzalloc_attrtab(new_caps);
 
     move_attrtab(new, line);
 
@@ -273,8 +284,7 @@ static void optimize_attributes(struct line *line) {
 
     if (cnt) {
         cnt = ceil_power_of_2(cnt);
-        struct line_attr *new = xzalloc(sizeof *new + cnt*sizeof *new->data);
-        new->caps = cnt;
+        struct line_attr *new = xzalloc_attrtab(cnt);
 
         move_attrtab(new, line);
     } else {
