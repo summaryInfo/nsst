@@ -2752,7 +2752,8 @@ static void term_dispatch_csi(struct term *term) {
     case C('w') | I0('\''): /* DECEFR */ {
         int16_t x, y;
         window_get_pointer(screen_window(scr), &x, &y, NULL);
-        mouse_set_filter(term, PARAM(1, y), PARAM(0, x), PARAM(3, y), PARAM(4, x));
+        /* DECEFR: top;left;bottom;right */
+        mouse_set_filter(term, PARAM(1, x), PARAM(3, x), PARAM(0, y), PARAM(2, y));
         break;
     }
     case C('z') | I0('\''): /* DECELR */
