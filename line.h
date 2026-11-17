@@ -126,7 +126,7 @@ struct line {
     int32_t size;
     int32_t caps;
     uint32_t selection_index;
-    uint16_t pad_attrid;
+    uint16_t pad_attrid : 12;
     bool force_damage;
     bool wrapped : 1;
     bool sh_ps1_start : 1;
