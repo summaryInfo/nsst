@@ -106,7 +106,7 @@ static xcb_atom_t intern_atom(const char *atom) {
         warn("Can't intern atom: %s", atom);
         free(err);
     }
-    at = reply->atom;
+    at = reply ? reply->atom : XCB_ATOM_NONE;
     free(reply);
     return at;
 }
