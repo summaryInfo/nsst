@@ -840,13 +840,14 @@ static void x11_paste(struct window *win, enum clip_target target) {
 }
 
 static void send_selection_data(struct window *win, xcb_window_t req, xcb_atom_t sel, xcb_atom_t target, xcb_atom_t prop, xcb_timestamp_t time) {
-    xcb_selection_notify_event_t ev;
-    ev.property = XCB_NONE;
-    ev.requestor = req;
-    ev.response_type = XCB_SELECTION_NOTIFY;
-    ev.selection = sel;
-    ev.target = target;
-    ev.time = time;
+    xcb_selection_notify_event_t ev = {
+        .property = XCB_NONE,
+        .requestor = req,
+        .response_type = XCB_SELECTION_NOTIFY,
+        .selection = sel,
+        .target = target,
+        .time = time,
+    };
 
     if (prop == XCB_NONE) prop = target;
 
