@@ -657,7 +657,7 @@ void init_printer(struct printer *pr, struct instance_config *cfg) {
 
     /* Printer command is more prioritized that file */
     if (cfg->printer_cmd) {
-        int pip[2];
+        int pip[2] = {-1, -1};
         if (pipe(pip) >= 0 && (pr->w.child = fork()) >= 0) {
             if (!pr->w.child) {
                 dup2(pip[0], 0);
@@ -673,7 +673,7 @@ void init_printer(struct printer *pr, struct instance_config *cfg) {
                 pr->w.fd = pip[1];
             }
         } else {
-            if (pr->w.child) {
+            if (pr->w.child && pip[0] >= 0) {
                 close(pip[0]);
                 close(pip[1]);
             }
