@@ -1946,8 +1946,9 @@ static inline void print_buffer(struct screen *scr, const uint32_t *bstart, cons
 
     ssize_t max_cx = scr->c.x + totalw, cx = scr->c.x;
     ssize_t max_tx = screen_max_x(scr);
+    ssize_t orig_width = line->width;
 
-    if (max_cx < line->width)
+    if (max_cx < orig_width)
         view_adjust_wide_right(line, max_cx - 1);
 
     view_adjust_wide_left(line, cx);
@@ -1973,9 +1974,9 @@ static inline void print_buffer(struct screen *scr, const uint32_t *bstart, cons
      * That is why attribute allocation is performed above. */
 
     /* Shift characters to the left if insert mode is enabled */
-    if (UNLIKELY(scr->mode.insert) && max_cx < max_tx && cx < line->width) {
-        ssize_t max_new_size = MIN(max_tx, line->width + totalw);
-        if (line->width < max_new_size)
+    if (UNLIKELY(scr->mode.insert) && max_cx < max_tx && cx < orig_width) {
+        ssize_t max_new_size = MIN(max_tx, orig_width + totalw);
+        if (orig_width < max_new_size)
             screen_adjust_line_ex(scr, get_current_screen(scr), scr->c.y, cx, max_new_size);
 
         cell = view_cell(line, cx);
@@ -1983,7 +1984,7 @@ static inline void print_buffer(struct screen *scr, const uint32_t *bstart, cons
         for (struct cell *c = cell; c < view_cell(line, max_tx - max_cx); c++) c->drawn = 0;
         memmove(cell + totalw, cell, (max_tx - max_cx)*sizeof(*cell));
     } else {
-        if (line->width < max_cx)
+        if (orig_width < max_cx)
             screen_adjust_line_ex(scr, get_current_screen(scr), scr->c.y, cx, max_cx);
         cell = view_cell(line, cx);
     }
