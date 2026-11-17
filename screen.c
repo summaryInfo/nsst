@@ -1691,9 +1691,13 @@ bool init_screen(struct screen *scr, struct window *win) {
 }
 
 char *encode_sgr(char *dst, char *end, const struct attr *attr) {
-#define FMT(...) dst += snprintf(dst, end - dst, __VA_ARGS__)
-#define MAX_SGR_LEN 54
-    /* Maximal length sequence is "0;1;2;3;4;6;7;8;9;38:2:255:255:255;48:2:255:255:255" */
+#define FMT(...) do { \
+        dst += snprintf(dst, end - dst, __VA_ARGS__); \
+        assert(dst <= end); \
+    } while (0)
+#define MAX_SGR_LEN 80
+    /* Maximal length sequence is
+     * "0;1;2;3;4:255;6;7;8;9;38:2:1:255:255:255;48:2:1:255:255:255;58:2:1:255:255:255" */
 
     /* Reset everything */
     FMT("0");
