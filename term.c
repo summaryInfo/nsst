@@ -1606,7 +1606,7 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             val = MODSTATE(term->mode.preserve_display_132);
             break;
         case 1000: /* X11 Mouse tracking */
-            val = MODSTATE(term->mstate.mouse_mode == mouse_mode_x10);
+            val = MODSTATE(term->mstate.mouse_mode == mouse_mode_button);
             break;
         case 1001: /* Highlight mouse tracking */
             val = modstate_aways_disabled;
