@@ -564,7 +564,7 @@ void handle_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel
     uint32_t states_mask = 0;
     enum xdg_toplevel_state *it;
     wl_array_for_each(it, states) {
-        states_mask = 1U << *it;
+        states_mask |= 1U << *it;
         switch (*it) {
         case XDG_TOPLEVEL_STATE_MAXIMIZED:
             get_plat(win)->is_maximized = true;
