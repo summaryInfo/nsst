@@ -383,13 +383,13 @@ static void x11_get_pointer(struct window *win, struct extent *p, int32_t *pmask
 static void x11_set_urgency(struct window *win, bool set) {
     xcb_get_property_cookie_t c = xcb_get_property(con, 0, get_plat(win)->wid, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 0, WM_HINTS_LEN);
     xcb_get_property_reply_t *rep = xcb_get_property_reply(con, c, NULL);
-    if (rep) {
+    if (rep && xcb_get_property_value_length(rep) >= WM_HINTS_LEN * (int)sizeof(uint32_t)) {
         uint32_t *hints = xcb_get_property_value(rep);
         if (set) *hints |= 256; /* UrgentcyHint */
         else *hints &= ~256; /* UrgentcyHint */
         xcb_change_property(con, XCB_PROP_MODE_REPLACE, get_plat(win)->wid, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 32, WM_HINTS_LEN, hints);
-        free(rep);
     }
+    free(rep);
 }
 
 static void x11_bell(struct window *win, uint8_t vol) {
