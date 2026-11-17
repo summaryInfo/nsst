@@ -398,7 +398,7 @@ static struct line_span snap_backward(struct selection_state *sel, struct line_s
     }
 
 out:
-    pos.offset -= !pos.line->cell[pos.offset].ch && pos.offset && cell_wide(pos.line->cell + pos.offset - 1);
+    pos.offset -= pos.offset && !pos.line->cell[pos.offset].ch && cell_wide(pos.line->cell + pos.offset - 1);
 
     return pos;
 }
