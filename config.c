@@ -1030,7 +1030,7 @@ void copy_config(struct instance_config *dst, struct instance_config *src) {
     src->argv = NULL;
 
     for (size_t i = 0; i < LEN(options); i++) {
-        if (options[i].global || options[i].type != option_type_string) continue;
+        if (options[i].global || (options[i].type != option_type_string && options[i].type != option_type_escstring)) continue;
         char *dst1 = (char *)dst + options[i].offset, *value;
         memcpy(&value, dst1, sizeof value);
         if (value) value = strdup(value);
@@ -1040,7 +1040,7 @@ void copy_config(struct instance_config *dst, struct instance_config *src) {
 
 void free_config(struct instance_config *src) {
     for (size_t i = 0; i < LEN(options); i++) {
-        if (options[i].global || options[i].type != option_type_string) continue;
+        if (options[i].global || (options[i].type != option_type_string && options[i].type != option_type_escstring)) continue;
         char *src1 = (char *)src + options[i].offset, *value;
         memcpy(&value, src1, sizeof value);
         free(value);
