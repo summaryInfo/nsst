@@ -624,17 +624,22 @@ static bool do_parse_double(const char *str, void *dst, union opt_limits *limits
 static bool do_parse_nrcs(const char *str, void *dst, union opt_limits *limits) {
     enum charset result, *pdst = dst;
     if (!strcasecmp(str, "default")) result = limits->arg_nrcs.dflt;
-    else if (!str[1] && str[0] > 0x2F && str[0] < 0x7F) {
-        uint32_t sel = E(str[0]);
-        result = nrcs_parse(sel, 0, 5, 1);
-        if (result < 0) result = nrcs_parse(sel, 1, 5, 1);
-    } else if (str[0] >= 0x20 && str[0] < 0x30 &&
-               str[1] > 0x2F && str[1] < 0x7F && !str[3]) {
-        uint32_t sel = E(str[1]) | I0(str[0]);
-        result = nrcs_parse(sel, 0, 5, 1);
-        if (result == nrcs_invalid) result = nrcs_parse(sel, 1, 5, 1);
-        if (result == nrcs_invalid) return false;
-    } else return false;
+    else {
+        uint32_t sel;
+        if (!str[1] && str[0] > 0x2F && str[0] < 0x7F) {
+            sel = E(str[0]);
+        } else if (str[0] >= 0x20 && str[0] < 0x30 &&
+                   str[1] > 0x2F && str[1] < 0x7F && !str[3]) {
+            sel = E(str[1]) | I0(str[0]);
+        } else return false;
+
+        result = nrcs_parse(sel, false, 5, true);
+        if (result == nrcs_invalid) {
+            result = nrcs_parse(sel, true, 5, true);
+            if (result == nrcs_invalid)
+                return false;
+        }
+    }
 
     *pdst = result;
     return true;
@@ -777,7 +782,7 @@ static bool do_parse_int16(const char *str, void *dst, union opt_limits *limits)
     int16_t *pdst = dst;
     if (!do_parse_int64(str, &val64, limits))
         return false;
-    *pdst = val64;
+    *pdst = MIN(MAX(val64, INT16_MIN), INT16_MAX);
     return true;
 }
 
