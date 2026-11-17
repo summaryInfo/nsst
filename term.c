@@ -3633,7 +3633,7 @@ void term_paste(struct term *term, uint8_t *data, ssize_t size, bool utf8, bool 
                 if (!is_last) {
                     term->paste.leftover_len = size % 3;
                     if (term->paste.leftover_len > 0) term->paste.leftover[0] = data[size - term->paste.leftover_len], size--;
-                    if (term->paste.leftover_len > 1) term->paste.leftover[1] = data[size - 1], size--;
+                    if (term->paste.leftover_len > 1) term->paste.leftover[1] = data[size], size--;
                 }
 
                 size = base64_encode(buf2 + pre, data, data + size) - buf2;
