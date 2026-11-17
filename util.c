@@ -56,10 +56,12 @@ static void do_log(int level, const char *fmt, va_list args) {
     }
 
     len += vsnprintf(log_buffer + len, LOG_BUFFER_SIZE - len, fmt, args);
+    len = MIN(len, LOG_BUFFER_SIZE);
+
     log_buffer[len++] = '\n';
 
     for (size_t written = 0, res; written < len; written += res)
-        if ((res = write(STDERR_FILENO, log_buffer, len - written)) <= 0)
+        if ((res = write(STDERR_FILENO, log_buffer + written, len - written)) <= 0)
             break;
 }
 
