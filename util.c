@@ -552,7 +552,7 @@ uint32_t *load_image_card(const char *path) {
     h = png_get_image_height(png, info);
     color_type = png_get_color_type(png, info);
 
-    prop = malloc((2 + w * h) * sizeof(uint32_t));
+    prop = malloc((2 + (ssize_t)w * h) * sizeof(uint32_t));
     if (!prop)
         goto error_read;
 
