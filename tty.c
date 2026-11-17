@@ -653,6 +653,7 @@ void free_printer(struct printer *pr) {
 
 void init_printer(struct printer *pr, struct instance_config *cfg) {
     pr->w.fd = -1;
+    pr->w.child = -1;
 
     /* Printer command is more prioritized that file */
     if (cfg->printer_cmd) {
