@@ -1164,6 +1164,12 @@ static bool do_set_clipboard(struct window *win) {
     wl_data_source_offer(source, "text/plain;charset=utf-8");
 
     struct seat *seat = find_first_seat(win);
+    if (!seat) {
+        wl_data_source_destroy(source);
+        get_plat(win)->data_source = NULL;
+        return false;
+    }
+
     wl_data_device_set_selection(seat->selection.data_device, source, seat->keyboard.serial);
     return true;
 }
@@ -1185,6 +1191,12 @@ static bool do_set_primary(struct window *win) {
     zwp_primary_selection_source_v1_offer(source, "text/plain;charset=utf-8");
 
     struct seat *seat = find_first_seat(win);
+    if (!seat) {
+        zwp_primary_selection_source_v1_destroy(source);
+        get_plat(win)->primary_selection_source = NULL;
+        return false;
+    }
+
     zwp_primary_selection_device_v1_set_selection(seat->primary_selection.primary_selection_device, source, seat->keyboard.serial);
     return true;
 }
