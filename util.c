@@ -407,9 +407,10 @@ static const char *is_escaped(const char **dst) {
     case '0': case '1': case '2': case '3':
     case '4': case '5': case '6': case '7':;
         uint32_t acc = 0;
+        int len = 4;
         do acc = (acc << 3) | fromoctdigit(**dst);
-        while ((unsigned)*++(*dst) - '0' < 8);
-        if (acc > 255)
+        while (--len > 0 || (unsigned)*++(*dst) - '0' < 8);
+        if (acc > 255 || !len)
             return "Constant is too large";
         return NULL;
     case 'x':
