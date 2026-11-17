@@ -219,7 +219,7 @@ static inline void screen_adjust_line_ex(struct screen *scr, struct screen_stora
 
 #if DEBUG_LINES
     /* When we are resizing continuation line we need
-     * to ensure all wrapped parts are withing the line (sic)
+     * to ensure all wrapped parts are within the line (sic)
      * and are wrapped to the screen width. */
     if (UNLIKELY(view->offset) && y > 0) {
         assert(screen->begin[y].offset <= old_size);
