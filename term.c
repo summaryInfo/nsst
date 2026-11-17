@@ -49,7 +49,7 @@
 
 #define TABSR_INIT_CAP 48
 #define TABSR_CAP_STEP(x) (4*(x)/3)
-#define TABSR_MAX_ENTRY 6
+#define TABSR_MAX_ENTRY 8
 
 #define STR_CAP_STEP(x) (4*(x)/3)
 #define PARAM(i, d) (term->esc.param[i] > 0 ? (uparam_t)term->esc.param[i] : (uparam_t)(d))
@@ -2077,7 +2077,7 @@ static void term_report_tabs(struct term *term) {
                 tabs = xrealloc(tabs, caps, TABSR_CAP_STEP(caps));
                 caps = TABSR_CAP_STEP(caps);
             }
-            len += snprintf(tabs + len, caps, len ? "/%u" : "%u", i + 1);
+            len += snprintf(tabs + len, caps - len, len ? "/%u" : "%u", i + 1);
         }
     }
 
