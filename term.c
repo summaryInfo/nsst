@@ -3320,7 +3320,7 @@ static inline bool term_dispatch(struct term *term, const uint8_t **start, const
             for (;;) {
                 if (ch <= 0x39) {
                     last_arg = (ch - 0x30) +
-                        last_arg * 10 * (last_arg > 0);
+                        (uparam_t)last_arg * 10 * (last_arg > 0);
                 } else if (LIKELY(term->esc.i < ESC_MAX_PARAM - 1)) {
                     term->esc.param[term->esc.i++] = last_arg;
                     last_arg = -1;
@@ -3384,7 +3384,7 @@ static inline bool term_dispatch(struct term *term, const uint8_t **start, const
         /* fallthrough */
     case esc_osc_1:
         if (0x30 <= ch && ch <= 0x39)
-            term->esc.selector = (ch - 0x30) + term->esc.selector * 10;
+            term->esc.selector = (ch - 0x30) + (uparam_t)term->esc.selector * 10;
         else
         /* fallthrough */
     case esc_osc_2:
