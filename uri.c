@@ -184,7 +184,10 @@ void init_proto_tree(void) {
         node = child_index(node, file[i]);
     proto_tree.file_leaf = node - proto_tree.node_heads;
 
-    for (ssize_t sz; (sz = getline(&line, &len, services)) != -1; ) {
+    if (!services)
+        warn("Can't open /etc/services");
+
+    for (ssize_t sz; services && (sz = getline(&line, &len, services)) != -1; ) {
         char  *it = line;
 
         while (isspace(*it))
@@ -198,7 +201,7 @@ void init_proto_tree(void) {
         while (!isspace(*it))
             it++;
 
-        if (line - it >= MAX_PROTOCOL_LEN) {
+        if (it - proto >= MAX_PROTOCOL_LEN) {
             warn("Skipping too long protocol name '%s'", it);
             continue;
         }
@@ -207,7 +210,8 @@ void init_proto_tree(void) {
     }
 
     free(line);
-    fclose(services);
+    if (services)
+        fclose(services);
 }
 
 const uint8_t *match_reverse_proto_tree(struct uri_match_state *stt, const uint8_t *str, ssize_t len) {
