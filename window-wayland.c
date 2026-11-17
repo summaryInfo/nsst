@@ -1469,6 +1469,8 @@ static void handle_keyboard_key(void *data, struct wl_keyboard *wl_keyboard, uin
     if (gconfig.trace_events)
         info("Event[%p]: keyboard.key(serial=%x, time=%x, key=%x, state=%x)", data, serial, time, key, state);
 
+    if (!win) return;
+
     win->any_event_happened = true;
     win_ptr_ping(&seat->keyboard.wptr);
 
