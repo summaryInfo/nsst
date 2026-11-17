@@ -3760,7 +3760,7 @@ void term_select_all(struct term *term) {
 void term_scroll_view(struct term *term, int16_t amount) {
     if (screen_altscreen(&term->scr)) {
         if (term->mode.altscreen_scroll)
-            term_answerback(term, CSI"%u%c", abs(amount), amount > 0 ? 'A' : 'D');
+            term_answerback(term, CSI"%u%c", abs(amount), amount > 0 ? 'A' : 'B');
         return;
     }
 
