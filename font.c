@@ -792,7 +792,7 @@ static struct glyph *make_undercurl(int16_t width, int16_t depth, int16_t underl
                 glyph_put(glyph, lcd, x, i, 255);
             glyph_put(glyph, lcd, x, y1, MIN(255, 255*(y1f - y1)));
         } else {
-            glyph_put(glyph, lcd, x, y0, 255*underline);
+            glyph_put(glyph, lcd, x, y0, 255*MIN(1, underline));
         }
     }
 
