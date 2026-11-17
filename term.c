@@ -643,7 +643,7 @@ static inline bool term_parse_cursor_report(struct term *term, char *dstr) {
 
     /* G0 - G3 sizes */
     char c96 = *dstr++;
-    if ((flags & 0xF0) != 0x40 || *dstr++ != ';') return 0;
+    if ((c96 & 0xF0) != 0x40 || *dstr++ != ';') return 0;
 
     /* G0 - G3 */
     enum charset gn[4];
