@@ -2133,12 +2133,10 @@ static void handle_registry_global(void *data, struct wl_registry *wl_registry, 
             output->id = name;
             output->output = wl_output;
             wl_output_add_listener(wl_output, &output_listener, output);
+            list_insert_after(&ctx.outputs, &output->link);
             if (ctx.output_manager) {
-                list_insert_after(&ctx.outputs, &output->link);
                 output->xdg_output = zxdg_output_manager_v1_get_xdg_output(ctx.output_manager, wl_output);
                 zxdg_output_v1_add_listener(output->xdg_output, &xdg_output_listener, output);
-            } else {
-                free(output);
             }
         }
     } else if (!strcmp(interface, wl_seat_interface.name)) {
