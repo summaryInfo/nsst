@@ -1222,9 +1222,9 @@ static bool do_paste_chunk(struct active_paste *paste) {
 
     if (n < 0) n = 0;
 
-    bool done = (n2 == 0 || (n2 < 0 && errno != EINTR));
+    bool done = (n2 == 0 || (n2 < 0 && errno != EINTR && errno != EAGAIN));
 
-    if (paste->tail || n)
+    if (n || (done && paste->tail))
         term_paste(paste->wptr.win->term, buf, n, paste->utf8, false, done);
 
     paste->tail = true;
