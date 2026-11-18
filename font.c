@@ -459,7 +459,7 @@ static size_t glyph_stride(size_t width, bool full_color, bool force_aligned) {
 
 /* Pass targ_height/targ_width and x_scale/y_scale separately to avoid rounding errors */
 static struct glyph *create_scaled_glyph(struct glyph *glyph, uint32_t targ_width, double x_scale, uint32_t targ_height, double y_scale, bool force_aligned) {
-    ssize_t stride = glyph_stride(targ_width*sizeof(color_t), glyph->pixmode != pixmode_mono, force_aligned);
+    ssize_t stride = glyph_stride(targ_width, glyph->pixmode != pixmode_mono, force_aligned);
     struct glyph *nglyph = aligned_alloc(_Alignof(struct glyph), ROUNDUP(sizeof(*glyph) + stride * targ_height, _Alignof(struct glyph)));
     assert(nglyph);
 
