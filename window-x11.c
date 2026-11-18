@@ -508,7 +508,10 @@ static void do_create_hidden_cursor(void) {
     c = xcb_create_pixmap_checked(con, 1, pm, ctx.screen->root, 1, 1);
     if (check_void_cookie(c)) return;
     c = xcb_create_cursor_checked(con, ctx.hidden_cursor, pm, pm, 0, 0, 0, 0, 0, 0, 0, 0);
-    if (check_void_cookie(c)) return;
+    if (check_void_cookie(c)) {
+        xcb_free_pixmap(con, pm);
+        return;
+    }
     xcb_free_pixmap(con, pm);
 }
 
