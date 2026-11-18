@@ -505,6 +505,8 @@ static struct glyph *downsample_glyph(struct glyph *glyph, uint32_t targ_width, 
 
 static struct glyph *font_render_glyph(struct font *font, enum pixel_mode ord, uint32_t ch, enum face_name attr, bool force_aligned, uint32_t targ_width) {
     struct face_list *faces = &font->face_types[attr];
+    if (UNLIKELY(!faces->length)) return NULL;
+
     int glyph_index = 0;
     FT_Face face = faces->faces[0]->face;
     for (size_t i = 0; !glyph_index && i < faces->length; i++)
