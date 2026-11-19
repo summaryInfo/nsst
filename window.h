@@ -110,6 +110,7 @@ void window_bell(struct window *win, uint8_t vol);
 void window_reset_delayed_redraw(struct window *win);
 
 struct extent window_get_position(struct window *win);
+struct extent window_get_frame_position(struct window *win);
 struct extent window_get_grid_position(struct window *win);
 struct extent window_get_grid_size(struct window *win);
 struct extent window_get_screen_size(struct window *win);

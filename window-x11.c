@@ -341,12 +341,47 @@ static bool x11_window_action(struct window *win, enum window_action act) {
     return false;
 }
 
-static struct extent x11_get_position(struct window *win) {
-    uint16_t border = x11_get_boder(win);
-    struct extent res = x11_get_position_raw(win);
+static xcb_window_t x11_get_top_level(xcb_window_t wid) {
+    xcb_window_t cur = wid;
 
-    res.height -= border;
-    res.width -= border;
+    for (;;) {
+        xcb_query_tree_reply_t *q = xcb_query_tree_reply(con, xcb_query_tree(con, cur), NULL);
+        if (!q) break;
+
+        xcb_window_t parent = q->parent;
+        free(q);
+
+        if (parent == ctx.screen->root) break;
+        cur = parent;
+    }
+
+    return cur;
+}
+
+static struct extent x11_get_position(struct window *win, bool include_frame) {
+    struct extent res = {0, 0};
+    xcb_window_t target = include_frame
+        ? x11_get_top_level(get_plat(win)->wid)
+        : get_plat(win)->wid;
+
+    xcb_translate_coordinates_cookie_t cookie = xcb_translate_coordinates(con, target, ctx.screen->root, 0, 0);
+    xcb_translate_coordinates_reply_t *t = xcb_translate_coordinates_reply(con, cookie, NULL);
+    if (t) {
+        res.width = t->dst_x;
+        res.height = t->dst_y;
+        free(t);
+    }
+
+    if (include_frame) {
+        xcb_get_geometry_cookie_t gcookie = xcb_get_geometry(con, target);
+        xcb_get_geometry_reply_t *g = xcb_get_geometry_reply(con, gcookie, NULL);
+        if (g) {
+            res.width -= g->border_width;
+            res.height -= g->border_width;
+            free(g);
+        }
+    }
+
     return res;
 }
 
@@ -694,8 +729,6 @@ void x11_update_window_props(struct window *win) {
 
     if (win->cfg.geometry.has_position)
         nhints.flags |= HINT_USPOSITION | HINT_PWINGRAVITY;
-    else
-        nhints.flags |= HINT_PPOSITION;
 
     if (win->cfg.geometry.has_extent)
         nhints.flags |= HINT_USSIZE;

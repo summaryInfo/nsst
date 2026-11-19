@@ -385,11 +385,15 @@ void window_set_pointer_shape(struct window *win, const char *shape) {
 }
 
 struct extent window_get_position(struct window *win) {
-    return pvtbl->get_position(win);
+    return pvtbl->get_position(win, false);
+}
+
+struct extent window_get_frame_position(struct window *win) {
+    return pvtbl->get_position(win, true);
 }
 
 struct extent window_get_grid_position(struct window *win) {
-    struct extent res = pvtbl->get_position(win);
+    struct extent res = pvtbl->get_position(win, false);
     res.width += win->cfg.border.left;
     res.height += win->cfg.border.top;
     return res;
@@ -639,7 +643,7 @@ error:
 }
 
 static void dump_window_geometry(struct window *win) {
-    struct extent pos = window_get_position(win);
+    struct extent pos = window_get_frame_position(win);
     struct extent size = window_get_size(win);
     int32_t workspace = -1;
     if (pvtbl->get_workspace) {

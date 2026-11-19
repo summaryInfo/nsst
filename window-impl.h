@@ -365,7 +365,7 @@ struct platform_vtable {
     ssize_t (*get_opaque_size)(void);
     void (*flush)(void);
 
-    struct extent (*get_position)(struct window *win);
+    struct extent (*get_position)(struct window *win, bool include_frame);
     bool (*init_window)(struct window *win);
     void (*free_window)(struct window *win);
     void (*register_glyph)(struct window *win, struct glyph *glyph);

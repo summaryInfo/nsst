@@ -244,8 +244,8 @@ static bool wayland_window_action(struct window *win, enum window_action act) {
     return false;
 }
 
-static struct extent wayland_get_position(struct window *win) {
-    (void)win;
+static struct extent wayland_get_position(struct window *win, bool include_frame) {
+    (void)win; (void)include_frame;
     // NOTE Wayland does not support querying window position
     return (struct extent) {0, 0};
 }
