@@ -255,17 +255,6 @@ static struct extent x11_get_position_raw(struct window *win) {
     return res;
 }
 
-static uint16_t x11_get_boder(struct window *win) {
-    xcb_get_geometry_cookie_t gc = xcb_get_geometry(con, get_plat(win)->wid);
-    xcb_get_geometry_reply_t *g_rep = xcb_get_geometry_reply(con, gc, NULL);
-    if (!g_rep)
-        return 0;
-
-    uint16_t border = g_rep->border_width;
-    free(g_rep);
-    return border;
-}
-
 static inline void save_pos(struct window *win) {
     if (get_plat(win)->saved.width > 0) {
         struct extent p = x11_get_position_raw(win);
