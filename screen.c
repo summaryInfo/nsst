@@ -33,7 +33,7 @@ static inline void free_line_list_until(struct screen *scr, struct screen_storag
     while (line != until) {
         next = line->next;
         if (line->selection_index)
-            selection_clear(&scr->sstate);
+            selection_clear(&scr->sstate, false);
         free_line(screen, line);
         line = next;
     }
@@ -403,7 +403,7 @@ bool free_extra_lines(struct screen *scr) {
         if (UNLIKELY(top == scr->view_pos.s.line))
             view_moved |= line_segments(top, scr->view_pos.s.offset, scr->width);
         if (UNLIKELY(top->selection_index))
-            selection_clear(&scr->sstate);
+            selection_clear(&scr->sstate, false);
 
         free_line(&scr->main_screen, top);
     }
@@ -988,7 +988,7 @@ static inline void screen_erase_pre(struct screen *scr, int16_t *xs, int16_t *ys
         ssize_t offset = scr->screen[y].offset;
         if (selection_intersects(&scr->sstate, scr->screen[y].line, *xs + offset, *xe + offset)) {
             screen_damage_selection(scr);
-            selection_clear(&scr->sstate);
+            selection_clear(&scr->sstate, false);
             break;
         }
     }
@@ -1295,7 +1295,7 @@ void screen_save_cursor(struct screen *scr, bool mode) {
 }
 
 static void screen_swap_screen(struct screen *scr) {
-    selection_clear(&scr->sstate);
+    selection_clear(&scr->sstate, true);
     if (!scr->mode.altscreen)
         scr->last_scr_c = scr->c;
     scr->mode.altscreen ^= 1;
@@ -1510,7 +1510,7 @@ void screen_insert_cells(struct screen *scr, int16_t n) {
 
         if (view_selection_intersects(&scr->sstate, line, max_x - n, max_x)) {
             screen_damage_selection(scr);
-            selection_clear(&scr->sstate);
+            selection_clear(&scr->sstate, false);
         }
     }
 
@@ -1552,7 +1552,7 @@ void screen_delete_cells(struct screen *scr, int16_t n) {
 
         if (view_selection_intersects(&scr->sstate, line, scr->c.x, scr->c.x + n)) {
             screen_damage_selection(scr);
-            selection_clear(&scr->sstate);
+            selection_clear(&scr->sstate, false);
         }
     }
 
@@ -1963,7 +1963,7 @@ static inline void print_buffer(struct screen *scr, const uint32_t *bstart, cons
     if (UNLIKELY(selection_active(&scr->sstate)) && UNLIKELY(line->line->selection_index) &&
         view_selection_intersects(&scr->sstate, line, cx, scr->mode.insert ? max_tx : max_cx)) {
         screen_damage_selection(scr);
-        selection_clear(&scr->sstate);
+        selection_clear(&scr->sstate, false);
     }
 
     if (UNLIKELY(scr->mode.margin_bell)) {

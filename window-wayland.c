@@ -852,7 +852,7 @@ static void handle_primary_selection_source_cancelled(void *data, struct zwp_pri
     zwp_primary_selection_source_v1_destroy(primary_selection_source);
 
     screen_damage_selection(term_screen(win->term));
-    selection_clear(term_get_sstate(win->term));
+    selection_clear(term_get_sstate(win->term), false);
 }
 
 static struct zwp_primary_selection_source_v1_listener primary_selection_source_listener = {
@@ -962,7 +962,7 @@ static void handle_data_source_cancelled(void *data, struct wl_data_source *wl_d
     wl_data_source_destroy(wl_data_source);
 
     screen_damage_selection(term_screen(win->term));
-    selection_clear(term_get_sstate(win->term));
+    selection_clear(term_get_sstate(win->term), false);
 }
 
 static void handle_data_source_target(void *data, struct wl_data_source *wl_data_source, const char *mime_type) {

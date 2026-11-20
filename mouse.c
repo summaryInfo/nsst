@@ -266,9 +266,9 @@ void selection_relocated(struct selection_state *sel, struct line *line) {
     }
 }
 
-void selection_clear(struct selection_state *sel) {
+void selection_clear(struct selection_state *sel, bool force) {
     if (sel->state == state_sel_none ||
-        sel->state == state_sel_pressed) return;
+        (!force && sel->state == state_sel_pressed)) return;
 
     line_handle_remove(&sel->start);
     line_handle_remove(&sel->end);
@@ -638,7 +638,7 @@ void selection_scrolled(struct selection_state *sel, struct screen *scr, ssize_t
     return;
 
 clear:
-    selection_clear(sel);
+    selection_clear(sel, false);
 }
 
 static struct segments **clone_segments(struct segments **prev_heads, size_t prev_size) {

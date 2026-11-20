@@ -1077,7 +1077,7 @@ static bool do_handle_events(bool can_read) {
             }
             /* Clear even if set keep? */
             screen_damage_selection(term_screen(win->term));
-            selection_clear(term_get_sstate(win->term));
+            selection_clear(term_get_sstate(win->term), false);
             break;
         }
         case XCB_PROPERTY_NOTIFY: {

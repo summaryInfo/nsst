@@ -121,7 +121,7 @@ void selection_select_all(struct selection_state *sel, struct screen *scr);
 struct mouse_selection_iterator selection_begin_iteration(struct selection_state *sel, struct line_span *view);
 bool is_selected_prev(struct mouse_selection_iterator *it, struct line_span *view, int16_t x);
 
-void selection_clear(struct selection_state *sel);
+void selection_clear(struct selection_state *sel, bool force);
 void selection_damage(struct selection_state *sel, struct line *line);
 void selection_concat(struct selection_state *sel, struct line *dst, struct line *src);
 void selection_split(struct selection_state *sel, struct line *line, struct line *tail);
