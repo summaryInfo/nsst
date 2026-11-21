@@ -281,7 +281,7 @@ static inline void screen_wrap(struct screen *scr, bool hard) {
         selection_relocated(&scr->sstate, new);
 }
 
-void screen_ensure_new_paragaph(struct screen *scr) {
+void screen_ensure_new_paragraph(struct screen *scr) {
     if (screen_cursor_x(scr) > screen_min_x(scr))
         screen_wrap(scr, true);
     screen_split_line_before(scr, scr->c.y);

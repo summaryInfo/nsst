@@ -211,7 +211,7 @@ void screen_set_margin_bell_volume(struct screen *scr, uint8_t vol);
 uint8_t screen_get_margin_bell_volume(struct screen *scr);
 bool screen_dispatch_print(struct screen *scr, const uint8_t **start, const uint8_t *end, bool utf8, bool nrcs);
 ssize_t screen_dispatch_rep(struct screen *scr, int32_t rune, ssize_t rep);
-void screen_ensure_new_paragaph(struct screen *scr);
+void screen_ensure_new_paragraph(struct screen *scr);
 void screen_cursor_line_set_prompt(struct screen *scr);
 void screen_cursor_line_set_cmd_start(struct screen *scr);
 void screen_print_all(struct screen *scr);

@@ -1217,8 +1217,8 @@ static void term_dispatch_osc(struct term *term) {
         switch (dstr[0]) {
         case 'A': /* Prompt start */
         case 'D': /* Command finished */
-            /* Make sure shell plays well with re-wraping */
-            screen_ensure_new_paragaph(scr);
+            /* Make sure shell plays well with re-wrapping */
+            screen_ensure_new_paragraph(scr);
             if (dstr[0] == 'A')
                 screen_cursor_line_set_prompt(scr);
             break;
