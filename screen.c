@@ -941,10 +941,34 @@ static inline void prep_lines(struct screen *scr, ssize_t xs, ssize_t ys, ssize_
         for (ssize_t i = ys; i < ye; i++) {
             screen_split_line_after(scr, i);
             struct line_span *view = &scr->screen[i];
-            if (view->width <= xe_val && attr_eq(attr_pad(view->line), &scr->sgr)) {
-                if (view->width > xs_val) {
-                    screen_realloc_line(scr, view->line, view->offset + xs_val, get_current_screen(scr));
-                    view->width = xs_val;
+            if (view->width <= xe_val) {
+                if (xe_val == screen_width(scr)) {
+                    if (view->width > xs_val) {
+                        if (!attr_eq(attr_pad(view->line), &scr->sgr))
+                            view->line->pad_attrid = alloc_attr(view->line, &scr->sgr);
+                        screen_realloc_line(scr, view->line, view->offset + xs_val, get_current_screen(scr));
+                        view->width = xs_val;
+                    } else if (!attr_eq(attr_pad(view->line), &scr->sgr)) {
+                        if (view->width < xs_val) {
+                            screen_realloc_line(scr, view->line, view->offset + xs_val, get_current_screen(scr));
+                            struct cell c = { .attrid = view->line->pad_attrid };
+                            fill_cells(view_cell(view, view->width), c, xs_val - view->width);
+                            view->line->size = view->offset + view->offset;
+                            view->width = xs_val;
+                        } else {
+                            view->line->force_damage = true;
+                        }
+                        view->line->pad_attrid = alloc_attr(view->line, &scr->sgr);
+                    }
+                } else {
+                    if (attr_eq(attr_pad(view->line), &scr->sgr)) {
+                        if (view->width > xs_val) {
+                            screen_realloc_line(scr, view->line, view->offset + xs_val, get_current_screen(scr));
+                            view->width = xs_val;
+                        }
+                    } else {
+                        screen_adjust_line(scr, i, xe);
+                    }
                 }
             } else {
                 screen_adjust_line(scr, i, xe);
