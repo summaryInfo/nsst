@@ -1006,7 +1006,7 @@ int report_mouse_event(struct term *term, struct mouse_event ev) {
 
     if (ev.event == mouse_event_motion) {
         if (md != mouse_mode_motion && md != mouse_mode_drag) return 0;
-        if (!(ev.mask & ~mask_mod_mask)) {
+        if (!(ev.mask & ~mask_mod_mask_full)) {
             if (md == mouse_mode_drag) return 0;
             ev.button = 32 + 3;
         } else {
