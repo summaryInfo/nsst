@@ -953,7 +953,7 @@ static inline void prep_lines(struct screen *scr, ssize_t xs, ssize_t ys, ssize_
                             screen_realloc_line(scr, view->line, view->offset + xs_val, get_current_screen(scr));
                             struct cell c = { .attrid = view->line->pad_attrid };
                             fill_cells(view_cell(view, view->width), c, xs_val - view->width);
-                            view->line->size = view->offset + view->offset;
+                            view->line->size = view->offset + xs_val;
                             view->width = xs_val;
                         } else {
                             view->line->force_damage = true;
