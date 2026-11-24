@@ -459,7 +459,7 @@ static void term_esc_dump(struct term *term, bool use_info) {
                 buf[pos++] = '<' + ((term->esc.selector & P_MASK) >> 6) - 1;
             for (size_t i = 0; i < term->esc.i; i++) {
                 pos += snprintf(buf + pos, ESC_DUMP_MAX - pos, "%u", term->esc.param[i]);
-                if (i < term->esc.i - 1) buf[pos++] = term->esc.subpar_mask & (1 << (i + 1)) ? ':' : ';' ;
+                if (i < term->esc.i - 1) buf[pos++] = term->esc.subpar_mask & (1u << (i + 1)) ? ':' : ';' ;
             }
             if (term->esc.selector & I0_MASK)
                 buf[pos++] = 0x20 + ((term->esc.selector & I0_MASK) >> 9) - 1;
@@ -3326,7 +3326,7 @@ static inline bool term_dispatch(struct term *term, const uint8_t **start, const
                 } else if (LIKELY(term->esc.i < ESC_MAX_PARAM - 1)) {
                     term->esc.param[term->esc.i++] = last_arg;
                     last_arg = -1;
-                    term->esc.subpar_mask |= (ch == 0x3A) << term->esc.i;
+                    term->esc.subpar_mask |= (uint32_t)(ch == 0x3A) << term->esc.i;
                 }
                 if (UNLIKELY(*start >= end)) {
                     term->esc.param[term->esc.i] = last_arg;
