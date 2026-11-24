@@ -2150,7 +2150,7 @@ static void term_decode_sgr(struct term *term, size_t i, struct attr *mask, stru
             sgr->underlined = 2;
             break;
         case 4:
-            if (i < term->esc.i && (term->esc.subpar_mask >> (i + 1)) & 1)
+            if (i + 1 < term->esc.i && (term->esc.subpar_mask >> (i + 1)) & 1)
                 sgr->underlined = term->esc.param[++i];
             else sgr->underlined = 1;
             mask->underlined = 1;
