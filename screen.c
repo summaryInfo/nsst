@@ -902,9 +902,12 @@ bool screen_redraw(struct screen *scr, bool blink_committed) {
 }
 
 void screen_set_tb_margins(struct screen *scr, int16_t top, int16_t bottom) {
+    top = MAX(0, MIN(scr->height - 1, top));
+    bottom = MAX(0, MIN(scr->height - 1, bottom));
+
     if (top < bottom) {
-        scr->top = MAX(0, MIN(scr->height - 1, top));
-        scr->bottom = MAX(0, MIN(scr->height - 1, bottom));
+        scr->top = top;
+        scr->bottom = bottom;
     } else {
         scr->top = 0;
         scr->bottom = scr->height - 1;
@@ -914,9 +917,12 @@ void screen_set_tb_margins(struct screen *scr, int16_t top, int16_t bottom) {
 bool screen_set_lr_margins(struct screen *scr, int16_t left, int16_t right) {
     if (!scr->mode.lr_margins) return 0;
 
+    left = MAX(0, MIN(scr->width - 1, left));
+    right = MAX(0, MIN(scr->width - 1, right));
+
     if (left < right) {
-        scr->left = MAX(0, MIN(scr->width - 1, left));
-        scr->right = MAX(0, MIN(scr->width - 1, right));
+        scr->left = left;
+        scr->right = right;
     } else {
         scr->left = 0;
         scr->right = scr->width - 1;
