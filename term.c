@@ -1438,6 +1438,9 @@ static bool term_srm(struct term *term, bool private, uparam_t mode, bool set) {
         case 1044: /* Don't clear X11 CLIPBOARD selection */
             term->mode.keep_clipboard = set;
             break;
+        case 1045: /* Reverse wrap, legacy behaviour */
+            smode->reverse_wrap2 = set;
+            break;
         case 1046: /* Allow altscreen */
             if (!set) screen_set_altscreen(scr, 0, 0, 0);
             smode->disable_altscreen = !set;
@@ -1669,6 +1672,9 @@ static enum mode_status term_get_mode(struct term *term, bool private, uparam_t 
             break;
         case 1044: /* Don't clear X11 CLIPBOARD */
             val = MODSTATE(term->mode.keep_clipboard);
+            break;
+        case 1045: /* Reverse wrap, legacy behaviour */
+            val = MODSTATE(smode->reverse_wrap2);
             break;
         case 1046: /* Allow altscreen */
             val = MODSTATE(!smode->disable_altscreen);

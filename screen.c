@@ -949,6 +949,7 @@ static inline void prep_lines(struct screen *scr, ssize_t xs, ssize_t ys, ssize_
             struct line_span *view = &scr->screen[i];
             if (view->width <= xe_val) {
                 if (xe_val == screen_width(scr)) {
+                    view->line->wrapped = false;
                     if (view->width > xs_val) {
                         if (!attr_eq(attr_pad(view->line), &scr->sgr))
                             view->line->pad_attrid = alloc_attr(view->line, &scr->sgr);
@@ -1228,6 +1229,7 @@ void screen_erase_fast(struct screen *scr, int16_t ys, int16_t ye, struct attr *
 
         screen_realloc_line(scr, view->line, 0, get_current_screen(scr));
         view->line->pad_attrid = alloc_attr(view->line, attr);
+        view->line->wrapped = false;
         view->width = 0;
 
         view = &scr->screen[++ys];
@@ -1281,23 +1283,41 @@ void screen_move_left(struct screen *scr, int16_t amount) {
     int16_t x = scr->c.x, y = scr->c.y,
         first_left = x < screen_min_x(scr) ? 0 : screen_min_x(scr);
 
+    bool rev2 = scr->mode.reverse_wrap2;
 
-    /* This is a hack that allows using proper line editing with reverse wrap
-     * mode while staying compatible with VT100 wrapping mode */
-    if (scr->mode.reverse_wrap) x += scr->c.pending;
+    if (scr->mode.reverse_wrap || rev2) {
+        /* This is a hack that allows using proper line editing with reverse
+         * wrap mode while staying compatible with VT100 wrapping mode */
+        x += scr->c.pending;
 
-    if (amount > x - first_left && scr->mode.wrap && scr->mode.reverse_wrap) {
-        bool in_tbm = screen_min_y(scr) <= scr->c.y && scr->c.y < screen_max_y(scr);
-        int16_t height = in_tbm ? screen_max_y(scr) - screen_min_y(scr) : scr->height;
-        int16_t top = in_tbm ? screen_min_y(scr) : 0;
+        if (amount > x - first_left && scr->mode.wrap) {
+            amount -= x - first_left;
+            x = screen_max_x(scr);
+            y -= 1 + amount/(screen_max_x(scr) - screen_min_x(scr));
+            amount %= screen_max_x(scr) - screen_min_x(scr);
 
-        amount -= x - first_left;
-        x = screen_max_x(scr);
-        y -= 1 + amount/(screen_max_x(scr) - screen_min_x(scr));
-        amount %= screen_max_x(scr) - screen_min_x(scr);
+            if (rev2) {
+                /* xterm mode 1045, legacy mode 45: unconditionally wrap back */
+                bool in_tbm = screen_min_y(scr) <= scr->c.y && scr->c.y < screen_max_y(scr);
+                int16_t height = in_tbm ? screen_max_y(scr) - screen_min_y(scr) : scr->height;
+                int16_t top = in_tbm ? screen_min_y(scr) : 0;
 
-        y = (y - top) % height + top;
-        if (y < top) y += height;
+                y = (y - top) % height + top;
+                if (y < top) y += height;
+            } else {
+                int16_t yy = scr->c.y;
+
+                while (yy > y && yy > 0 &&
+                       (scr->screen[yy - 1].line == scr->screen[yy].line ||
+                        scr->screen[yy - 1].line->wrapped))
+                    yy--;
+
+                if (yy > y) {
+                    y = yy;
+                    x = first_left + amount;
+                }
+            }
+        }
     }
 
     (scr->c.x >= screen_min_x(scr) ? screen_bounded_move_to : screen_move_to)(scr, x - amount, y);

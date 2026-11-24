@@ -49,6 +49,7 @@ struct screen_mode {
     bool wrap : 1;
     bool insert : 1;
     bool reverse_wrap : 1;
+    bool reverse_wrap2 : 1;
     bool xterm_more_hack : 1;
     bool print_extend : 1;
     bool print_auto : 1;
