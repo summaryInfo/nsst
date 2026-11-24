@@ -2071,8 +2071,9 @@ static void term_report_cursor(struct term *term) {
 static void term_report_tabs(struct term *term) {
     size_t caps = TABSR_INIT_CAP, len = 0;
     char *tabs = xalloc(caps);
+    tabs[0] = '\0';
 
-    for (int16_t i = 0; tabs && i < screen_width(&term->scr); i++) {
+    for (int16_t i = 0; i < screen_width(&term->scr); i++) {
         if (screen_has_tab(&term->scr, i)) {
             if (len + TABSR_MAX_ENTRY > caps) {
                 tabs = xrealloc(tabs, caps, TABSR_CAP_STEP(caps));
@@ -2082,7 +2083,7 @@ static void term_report_tabs(struct term *term) {
         }
     }
 
-    term_answerback(term, DCS"2$u%s"ST, tabs ? tabs : "");
+    term_answerback(term, DCS"2$u%s"ST, tabs);
     free(tabs);
 }
 
