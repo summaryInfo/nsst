@@ -261,7 +261,7 @@ static void optimize_attributes(struct line *line) {
     if (!line->attrs) return;
 
     unsigned long used[(MAX_EXTRA_PALETTE + 1)/LONG_BITS];
-    ssize_t max_elem = (line->attrs->caps + LONG_BITS - 1)/LONG_BITS;
+    ssize_t max_elem = (line->attrs->caps + 1 + LONG_BITS - 1)/LONG_BITS;
 
     memset(used, 0, max_elem*sizeof *used);
 
