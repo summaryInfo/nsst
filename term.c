@@ -702,7 +702,8 @@ static inline bool term_parse_tabs_report(struct term *term, const uint8_t *dstr
                 screen_set_tab(&term->scr, tab - 1, 1);
             tab = 0;
         } else if (isdigit(*dstr)) {
-            tab = 10 * tab + *dstr - '0';
+            if (tab < INT16_MAX)
+                tab = 10 * tab + *dstr - '0';
         } else return 0;
     }
     return 1;
