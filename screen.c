@@ -1970,7 +1970,7 @@ static inline const uint8_t *find_chunk(const uint8_t *start, const uint8_t *end
 
 static inline void print_buffer(struct screen *scr, const uint32_t *bstart, const uint8_t *astart, ssize_t totalw) {
     if (scr->mode.wrap) {
-        if (scr->c.pending || (bstart && scr->c.x == screen_max_x(scr) - 1 && totalw > 1 && !bstart[1]))
+        if (scr->c.pending || (bstart && totalw > 1 && !bstart[1] && (scr->c.x == screen_max_x(scr) - 1 || scr->c.x == screen_width(scr) - 1)))
             screen_wrap(scr, false);
     } else {
         ssize_t avail = screen_max_x(scr) - scr->c.x;
