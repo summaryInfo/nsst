@@ -2024,7 +2024,10 @@ static inline void print_buffer(struct screen *scr, const uint32_t *bstart, cons
 
     cx += totalw;
 
-    scr->c.pending = cx == max_tx;
+    /* Right margin is active only if cursor is within it */
+    ssize_t right = cx - totalw >= max_tx ? screen_width(scr) : max_tx;
+
+    scr->c.pending = cx == right;
     scr->c.x = cx - scr->c.pending;
 
     /* Put characters, with fast path for ASCII-only */
