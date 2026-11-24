@@ -1966,7 +1966,10 @@ static inline void print_buffer(struct screen *scr, const uint32_t *bstart, cons
     if (scr->mode.wrap) {
         if (scr->c.pending || (bstart && scr->c.x == screen_max_x(scr) - 1 && totalw > 1 && !bstart[1]))
             screen_wrap(scr, false);
-    } else scr->c.x = MIN(scr->c.x, screen_max_x(scr) - totalw);
+    } else {
+        ssize_t avail = screen_max_x(scr) - scr->c.x;
+        if (avail < totalw) totalw = MAX(avail, 0);
+    }
 
     struct line_span *line = &scr->screen[scr->c.y];
     struct cell *cell = NULL;
