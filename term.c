@@ -3955,6 +3955,8 @@ bool term_should_exit_on_input(struct term *term) {
 void free_term(struct term *term) {
     tty_hang(&term->tty);
 
+    term_esc_finish_string(term);
+
 #if USE_URI
     uri_match_reset(&term->uri_match, false);
 #endif
