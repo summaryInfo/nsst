@@ -292,10 +292,11 @@ static void term_set_vt52(struct term *term, bool set) {
             .focused = term->mode.focused,
             .reverse_video = term->mode.reverse_video,
         };
+        screen_set_altscreen(&term->scr, 0, 0, 0);
+
         *smode  = (struct screen_mode) {
             .wrap = 1
         };
-        screen_set_altscreen(&term->scr, 0, 0, 0);
         term_esc_start_seq(term);
     } else {
         term->kstate.keyboard_vt52 = 0;
