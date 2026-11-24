@@ -395,7 +395,7 @@ static void term_do_reset(struct term *term, bool hard) {
 
     if (term->mode.columns_132)
         term_set_132(term, false);
-    screen_set_altscreen(scr, false, false, false);
+    screen_set_altscreen(scr, false, hard, false);
 
     ssize_t cx, cy;
     bool cpending;
