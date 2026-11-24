@@ -891,25 +891,32 @@ void mouse_set_filter(struct term *term, iparam_t xs, iparam_t xe, iparam_t ys, 
     if (xs > xe) SWAP(xs, xe);
     if (ys > ye) SWAP(ys, ye);
 
-    xe++, ye++;
-
     struct mouse_state *loc = term_get_mstate(term);
     struct window *win = term_window(term);
-    struct extent c = window_get_cell_size(win);
-    struct border b = window_get_border(win);
-    struct extent g = window_get_grid_size(win);
 
-    if (!loc->locator_pixels) {
+    if (loc->locator_pixels) {
+        struct extent g = window_get_grid_size(win);
+        xs = MAX(0, MIN(xs, (iparam_t)g.width));
+        xe = MAX(0, MIN(xe, (iparam_t)g.width - 1)) + 1;
+        ys = MAX(0, MIN(ys, (iparam_t)g.height));
+        ye = MAX(0, MIN(ye, (iparam_t)g.height - 1)) + 1;
+    } else {
+        struct screen *scr = term_screen(term);
+        iparam_t w = screen_width(scr);
+        iparam_t h = screen_height(scr);
+
+        xs = MAX(0, MIN(xs, w));
+        xe = MAX(0, MIN(xe, w - 1)) + 1;
+        ys = MAX(0, MIN(ys, h));
+        ye = MAX(0, MIN(ye, h - 1)) + 1;
+
+        struct extent c = window_get_cell_size(win);
+        struct border b = window_get_border(win);
         xs = xs * c.width + b.left;
         xe = xe * c.width + b.left;
         ys = ys * c.height + b.top;
         ye = ye * c.height + b.top;
     }
-
-    xs = MIN(xs, b.left + g.width - 1);
-    xe = MIN(xe, b.left + g.width);
-    ys = MIN(ys, b.top + g.height - 1);
-    ye = MIN(ye, b.top + g.height);
 
     loc->filter = (struct rect) { xs, ys, xe - xs, ye - ys };
     loc->locator_filter = 1;
